@@ -74,6 +74,9 @@ undone import marks each such object *Deleted* and links to where it is put back
 If the source file has since been deleted, the row says so; if the import created nothing, it
 says that too.
 
+> Uploads from a **phone** are listed here too, and are undone the same way. See
+> [Mobile and offline sync](mobile-sync.md).
+
 ---
 
 ## Exporting
@@ -82,6 +85,11 @@ The other direction lives on the list pages and the map, not here. Caves, featur
 geodata files export as:
 
 **GeoJSON · GPX · KML · CSV · zipped shapefile**
+
+An export from the cave registry or the feature list holds **everything the list's filter finds**,
+not only the page on screen — see [Search and filters](search-and-filters.md#filtering-on-list-pages).
+Caves can also be exported for interchange as
+[KarstLink](caves-and-entrances.md#sharing-caves-in-the-interchange-format).
 
 An export carries only what you may read, with the same location protection as the screen.
 

@@ -12,12 +12,30 @@ The cave record is the densest thing in the application. This page walks its who
 
 ## The cave list
 
-**Cadastre → Caves.** A server-side table: search by name or toponym, filter by type, sort
-by any column, page through. Columns include name, code, type, region, surveyed length,
-depth, entrance count and visibility.
+**Cadastre → Caves**, the cave registry. A server-side table you page through. Columns: name,
+code, type, region, surveyed length, depth, entrance count and visibility; sort by name, region,
+length or depth. A row opens the cave — from the keyboard, **Tab** to its name and press
+**Enter**.
 
-From here: **New cave**, **Edit**, **Delete**, and **Export** (GeoJSON, GPX, KML, CSV,
-zipped shapefile).
+Above the table sit its filter controls — **Search name or toponym…**, **All types**,
+**Region**, **Length (m)**, **Filter by tag…** — with **Advanced filter…** for anything they
+cannot say, and saved filters. The page's address carries the whole question, so a link opens
+it again. All of it is described under
+[The cave registry's filter](search-and-filters.md#the-cave-registrys-filter).
+
+From here:
+
+| Control | Does |
+|---|---|
+| **New cave** | Opens an empty cave form |
+| **Show these on the map** | Opens the map drawing the caves this filter finds |
+| **Select all found (n) on the map** | Makes the result, up to 200, the map's selection |
+| **Export** | GeoJSON, GPX, KML, CSV or zipped shapefile — and [KarstLink](#sharing-caves-in-the-interchange-format) — of everything the filter finds, not only this page |
+| **Deleted caves and features** | [Puts back](#deleted-caves-and-features) what you may restore |
+
+Opened from the map's **List the caves in view**, the registry is cut to what the map showed,
+and says *"Only caves in the map's view"* with **Show caves everywhere** beside it. See
+[Between a list and the map](search-and-filters.md#between-a-list-and-the-map).
 
 There is also a **Distributions** view over the caves on the page — length histogram, length
 against depth, rank–size with a power-law fit, and a breakdown by type. See
@@ -128,18 +146,22 @@ Under the surface a cave is one kind of [feature](surface-features.md), which is
 
 Alongside the map formats, the cave list's **Export** menu offers **KarstLink (JSON-LD)** — a
 description of the caves in the shared speleological vocabulary published by the UIS, so somebody
-using different software can read them. It exports the caves the list is currently showing, with the
-same search, type and tag filters applied.
+using different software can read them. It exports every cave the registry's filter finds — the
+quick controls and the advanced conditions alike — not only the page on screen. While the
+registry is cut to the map's view it is unavailable: *"Not while the list is cut to the map's
+window — clear the window to export the whole filtered list."* One file holds at most 5,000 caves;
+a larger set is refused, and the dialog asks you to narrow the filters and export in parts rather
+than handing over a file that stopped at a limit.
 
 **It asks one question first, and it matters.** If any of the caves in the export has a
 protected location, the dialog says how many, and asks what the file should
 say about them. There are three answers:
 
-- **Include the cave without a position** — everything else about the cave travels, no coordinates
+- **Include them with no coordinates** — everything else about the cave travels, no coordinates
   at all.
-- **Leave those caves out of the file entirely.**
-- **Include them at the approximate position** — the same rounded position the map shows to people
-  who may not see the exact one.
+- **Leave them out of the file.**
+- **Place them on the protection grid** — the same rounded position the map shows to people who
+  may not see the exact one.
 
 **The exact position is not offered, to anybody.** Not to an administrator, and not to the person who
 recorded the cave. A file goes on existing after the permissions that produced it have changed, so
@@ -150,8 +172,10 @@ position was rounded, how far it may be from the truth; a header says how many c
 and how many were deliberately left out — so nobody counting the caves in the file mistakes it for a
 count of the register.
 
-Tick **Remember my answer** and you will not be asked again on this browser; a second menu item lets
-you change it, and if the server refuses a request the dialog comes back rather than failing quietly.
+Tick **Remember this answer, and stop asking me** and you will not be asked again — the answer
+follows your account to every browser. A second menu item, **KarstLink (JSON-LD) — change my
+answer…**, lets you change it, and if the server refuses a request the dialog comes back rather than
+failing quietly.
 
 Every interchange export is recorded in the [history and audit trail](history-and-audit.md), together
 with which caves were exported and how their positions were treated.

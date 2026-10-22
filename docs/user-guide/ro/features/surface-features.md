@@ -74,14 +74,30 @@ Un capăt de legătură pe care nu aveți voie să-l citiți este afișat ca *In
 
 ## Lista de elemente
 
-**Cadastru → Elemente.** Căutați după nume; filtrați după fel, categorie și tip. Coloane: nume,
-tip, geometrie, vizibilitate, descriere, actualizat.
+**Cadastru → Elemente.** Câmpurile ei — **Caută după denumire…**, **Toate felurile**, **Toate
+tipurile**, **Toate categoriile** și **Filtrează după etichetă…** — formează un singur filtru,
+păstrat în adresa paginii, cu controalele pentru filtre salvate alături (**Aplicați un filtru
+salvat…**, **Salvați ca filtru…**, **Filtre salvate** și filtrele rapide). Vedeți
+[Filtrarea pe paginile de listă](search-and-filters.md#filtrarea-pe-paginile-de-listă). Când nu
+este pus nimic, sunt listate toate felurile. Coloane: nume, fel, tip, geometrie, vizibilitate,
+actualizat.
 
 Fiecare rând oferă **Arată pe hartă**, **Deschide**, **Editează**, **Șterge**. Un rând de
 peșteră, intrare sau poligonație oferă și **Deschide pagina completă** — pagina lui specifică, nu
-pagina generică de element.
+pagina generică de element. De la tastatură, **Tab** ajunge la numele unui rând și **Enter** îl
+deschide.
 
-Export ca GeoJSON, GPX, KML, CSV sau shapefile arhivat.
+Deasupra listei:
+
+| Control | Ce face |
+|---|---|
+| **Arată-le pe hartă** | Deschide harta desenând ce găsește acest filtru |
+| **Selectează pe hartă tot ce s-a găsit (n)** | Face din rezultat, până la 200, selecția hărții — vedeți [Între o listă și hartă](search-and-filters.md#între-o-listă-și-hartă) |
+| **Exportă** | GeoJSON, GPX, KML, CSV sau shapefile arhivat cu tot ce găsește filtrul, nu doar pagina aceasta |
+| **Peșteri și elemente șterse** | [Readuce](caves-and-entrances.md#peșteri-și-elemente-șterse) ce aveți voie să restaurați |
+
+Cu harta deschisă lângă listă, indicarea unui rând încercuiește acel element pe hartă, iar
+alegerea lui pe hartă îi marchează rândul.
 
 ## Vizibilitate și protecție
 

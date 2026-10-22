@@ -18,7 +18,7 @@ detail those walkthroughs link into.
 | [3D view](3d-view.md) | The globe, surveys in place, cutaway, camera, walls |
 | [Terrain](terrain.md) | Real relief under the 3D scene, and what an installation must do for it |
 | [Work areas](work-areas.md) | The ground your club actually works, as a browsable tree |
-| [Saved views, panels and multi-window](saved-views-and-windows.md) | Saving a map, popping panels into their own windows |
+| [Saved views, panels and multi-window](saved-views-and-windows.md) | Saving and sharing a map, popping panels into their own windows, arrangements that follow your account |
 | [Coordinates and the converter](coordinates.md) | The formats positions are written in, their settings, typing a position, converting many at once |
 
 ## The cadastre
@@ -61,7 +61,7 @@ detail those walkthroughs link into.
 | [People, cavers and clubs](people-and-clubs.md) | Accounts, the roster, caving groups, announcements |
 | [Your account and settings](account-and-settings.md) | Profile, email, security, accessibility, saved filters, sync |
 | [Notifications](notifications.md) | What you are told, where, and how to change it |
-| [Search and filters](search-and-filters.md) | The search box, filters and the condition editor, saved filters |
+| [Search and filters](search-and-filters.md) | The search box, filters and the condition editor, position conditions, saved filters, moving between a list and the map |
 
 ## Reaching outside
 

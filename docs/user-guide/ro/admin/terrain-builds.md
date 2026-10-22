@@ -29,8 +29,10 @@ iar pagina Relief vă arată exact ce să faceți — singurul rând de adăugat
 lângă fișierele de instalare, și comanda de rulat din acel dosar.
 
 Observați și ce mai spune: tot ce a fost înainte de acel pas **s-a întâmplat totuși**, iar ce a
-obținut și a pregătit generarea este încă pe disc sub ea — dar **acea generare anume nu poate fi
-dusă mai departe**. Porniți una nouă odată ce serviciul rulează.
+obținut și a pregătit generarea este încă pe disc sub ea. După ce serviciul rulează, apăsați
+**Rulează din nou** pe generarea oprită: continuă de la generarea dalelor, fără să mai obțină sau să
+mai pregătească nimic a doua oară. Nimic nu o repune singur la coadă — doar un om știe că serviciul
+este acum acolo.
 
 ---
 
@@ -38,7 +40,7 @@ dusă mai departe**. Porniți una nouă odată ce serviciul rulează.
 
 ### 1. Desenați dreptunghiul
 
-**Desenează dreptunghi**, trageți-l pe hartă. Raportează extinderea (vest, sud, est, nord) și
+**Trasează dreptunghi**, trageți-l pe hartă. Raportează extinderea (vest, sud, est, nord) și
 suprafața în grade pătrate.
 
 Există un maxim. Un dreptunghi mai mare decât generează instalarea dintr-o dată este refuzat —
@@ -52,14 +54,26 @@ Trei surse, care se pot combina:
 toată suprafața uscatului, aduse de aplicație. *„Marea nu returnează nimic, ceea ce este un
 răspuns normal, nu o eroare."*
 
-**Rastere de pe acest calculator.** Lăsați rastere de elevație înăuntru, până la 512 MB fiecare.
-Orice mai mare aparține unui dosar de pe server. Formularul nu vă lasă să porniți o generare cât
-timp încărcările sunt încă în drum — numește fișierele care nu au sosit încă.
+**Rastre de pe acest calculator.** Lăsați rastere de elevație înăuntru, până la 512 MB fiecare.
+Orice mai mare aparține unui director de pe server. Fiecare fișier este trimis în clipa în care îl
+alegeți, iar formularul nu vă lasă să porniți o generare cât timp încărcările sunt încă în drum —
+numește fișierele care nu au sosit încă. Un raster trimis și apoi lăsat în afara oricărei generări
+este șters după o zi (instalarea poate stabili alt interval); unul pe care îl numește o generare —
+la coadă, în curs, încheiată sau oprită — se păstrează cât timp există acea generare.
 
-**Un dosar de pe server.** Unul pe care operatorul l-a listat ca lizibil, sau unul de sub el. Se
-citește tot ce din el arată a raster de elevație. Dacă nu este configurat niciunul, o spune.
+**Director pe server.** Unul pe care operatorul l-a listat ca lizibil, sau unul de sub el. Se
+citește tot ce din el arată a raster de elevație. Dacă nu este configurat niciunul, o spune. Doar un
+**Administrator complet** poate numi unul.
 
-### 3. Creditul
+Rasterele dintr-un director de pe server sunt **citite acolo unde sunt, niciodată copiate și
+niciodată scrise** — o măsurătoare națională aflată deja pe mașină nu merită ținută de două ori, iar
+nimic din ce face generarea, nici chiar ștergerea ei, nu atinge acel director. Generarea păstrează
+în schimb o listă a ce a găsit acolo prima dată. Dacă este rulată din nou mai târziu și între timp
+un raster a fost adăugat, scos sau schimbat, se oprește în loc să continue peste rastere din care nu
+a fost făcută: puneți directorul înapoi cum era și rulați-o din nou, sau porniți o generare nouă,
+care citește directorul așa cum este acum.
+
+### 3. Sursa datelor
 
 **Cui aparțin datele.**
 
@@ -99,6 +113,13 @@ a nivelului mării față de elipsoid.
 
 **Pornește generarea.** Se pune la coadă.
 
+Lângă buton, o notă spune ce hotărăște cât de fin poate ieși rezultatul:
+
+> *„Memoria hotărăște cât de fin poate fi relieful. Unealta care face dalele folosește jumătate din
+> memoria propriului container — 8 GB, dacă instalarea nu setează SILEXGIS_TERRAIN_WORKER_MEMORY —
+> iar când nu îi ajunge nu eșuează: face un relief mai grosier decât s-a cerut. O generare care a
+> rămas fără memorie se oprește și spune asta, iar setarea poate fi apoi mărită."*
+
 ---
 
 ## Adăugarea unui raster la o generare pe care o aveți deja
@@ -130,34 +151,84 @@ dale sunt încă acolo de unde se servește terenul poate fi extinsă; una care 
 
 ## Urmărirea unei generări
 
-Stare: **În așteptare · În rulare · Terminată · Eșuată.**
+Stare: **La coadă · În curs · Încheiată · Eșuată** — iar pentru o generare pe care cineva a
+oprit-o, **Se anulează** până se oprește și **Anulată** după aceea, nu un eșec roșu.
 
 Faze, în ordine:
 
 | Fază | |
 |---|---|
-| *Își așteaptă rândul* | Nimic nu a început |
+| *Așteaptă să îi vină rândul* | Nimic nu a început |
 | **Obținere** | Se aduce acoperirea |
 | **Pregătire** | Se convertesc rasterele |
 | **Generare** | Se fac dalele — pasul care are nevoie de serviciul suplimentar |
 | **Verificare** | Se recitesc dalele și se verifică dacă sunt întregi |
 | **Publicare** | |
 
-Pagina de detaliu a unei generări arată din **ce a fost făcută** și **ce a spus unealta** —
-jurnalul, unde o eroare se explică singură.
+Pagina de detaliu a unei generări arată din ce a fost făcută (**Făcută din**) și **Ce a spus
+unealta** — jurnalul, unde o eroare se explică singură.
+
+### Oprirea unei generări și rularea ei din nou
+
+**Oprește**, pe o generare la coadă sau în curs, întreabă printr-o confirmare: *„Ce a obținut și a
+pregătit deja se păstrează, așa că poate fi rulată din nou mai târziu, de unde s-a oprit."* O
+generare la coadă se oprește imediat. Una în curs se oprește la primul punct la care poate —
+între două fișiere sau, cât timp se fac dalele, după ce unealta care face dalele a confirmat că
+s-a oprit — și apare ca *Se anulează* până atunci. Dalele pe care le scrisese acea generare sunt
+aruncate, ca nimic făcut pe jumătate să nu fie luat drept o suprafață terminată. O generare care a
+început publicarea se termină; o generare oprită nu este publicată niciodată.
+
+**Rulează din nou**, pe orice generare oprită — anulată sau oprită din alt motiv — o pune înapoi la
+coadă și continuă de la primul pas a cărui muncă nu este deja pe disc: o generare oprită la
+generarea dalelor face dale și nimic altceva. O generare a dalelor care a mers prost și-a aruncat
+dalele, așa că se face din nou. **Rulează din nou** este refuzat, cu o propoziție care spune de ce,
+cât timp o altă generare a aceluiași dreptunghi nu s-a terminat, pentru o generare care a extins o
+generare ștearsă între timp și — pentru scurt timp — pentru o generare oprită în timp ce făcea dale,
+a cărei unealtă nu a confirmat încă oprirea; răspunsul vine imediat ce serviciul de dale rulează.
+
+Ambele au nevoie de același drept care pornește o generare: **execuție** asupra reliefului.
+
+### Două limite pe care le poate atinge generarea dalelor
+
+**Memoria.** Când unealta care face dalele rămâne fără memorie nu eșuează — face un relief mai
+grosier decât adâncimea aleasă, lucru pe care nimic de pe hartă nu l-ar semnala vreodată. Aplicația
+citește raportul uneltei după fiecare generare, așa că o asemenea generare nu este publicată: se
+oprește cu *Unealta care face dalele a rămas fără memorie, așa că relieful ar fi ieșit mai grosier
+decât s-a cerut*, dalele îi sunt aruncate, iar pagina dă singurul rând de adăugat în fișierul de
+mediu și comanda care îl aplică. Apoi apăsați **Rulează din nou**.
+
+**Timpul.** O generare a dalelor poate rula douăsprezece ore, dacă instalarea nu permite mai mult.
+Una care atinge limita — una care nu mai înainta, sau o zonă mare care avea pur și simplu nevoie de
+mai mult — este oprită, dalele îi sunt aruncate, iar generarea spune cât a rulat și față de ce
+limită: *Limita de timp a fost atinsă după 12 h (limita: 12 h)*, cu setarea care o mărește. Setarea
+este în secunde; semnul întrebării de lângă ea — *Cât înseamnă asta în secunde?* — listează duratele
+obișnuite:
+
+| | Secunde |
+|---|---|
+| 1 oră | 3600 |
+| 12 ore (valoarea implicită) | 43200 |
+| 1 zi | 86400 |
+| 2 zile | 172800 |
+| 1 săptămână (cel mai lung permis) | 604800 |
+
+Setați-o, reporniți aplicația și apăsați **Rulează din nou**; ce a obținut și a pregătit generarea
+se păstrează.
 
 ---
 
 ## Administrarea generărilor
 
-Lista **Generări** arată starea, care este **cea desenată**, suprafața, adâncimea, când a fost
-trimisă și **mărimea pe disc** — *„tot ce a lăsat în urmă generarea: dalele publicate și rasterele
+Lista **Generări** arată starea, care **Se desenează**, suprafața, adâncimea, când a fost
+trimisă și mărimea **Pe disc** — *„tot ce a lăsat în urmă generarea: dalele publicate și rasterele
 convertite păstrate lângă ele."*
 
 | Acțiune | |
 |---|---|
-| **Desenează asta** | Scena desenează acum această generare |
-| **Oprește desenarea** | Scena desenează din nou teren gol |
+| **Desenează aceasta** | Scena desenează acum această generare |
+| **Nu mai desena** | Scena desenează din nou teren gol |
+| **Oprește** | Oprește o generare la coadă sau în curs, păstrând ce a obținut și a pregătit |
+| **Rulează din nou** | Pune o generare oprită înapoi la coadă, continuând de unde s-a oprit |
 | **Șterge** | Elimină generarea și spațiul pe care îl ține |
 
 Două refuzuri de reținut:
@@ -165,7 +236,7 @@ Două refuzuri de reținut:
 - **Nu puteți șterge generarea pe care o desenează scena.** Alegeți alt relief sau opriți
   desenarea ei mai întâi.
 - **Nu puteți șterge o generare în curs.** Fișierele ei se scriu chiar acum; poate fi eliminată
-  după ce se oprește, indiferent cum se oprește.
+  după ce se oprește, indiferent cum se oprește — **Oprește** o oprește.
 
 O stare de reținut, pentru că nimic nu o refuză: **dacă configurația instalării numește o adresă
 de relief proprie** (`SILEXGIS__Terrain__Url`), acea adresă are prioritate față de orice generare
@@ -227,7 +298,11 @@ Setările, pe feluri:
   și 20 dacă nu spuneți altfel — numărați de la nivelul mării, fiecare a cincea curbă fiind
   desenată mai gros. Curbele sunt o imagine ca toate celelalte, transparentă între linii, și nu
   date: de-a lungul lor nu se poate măsura, nu pot fi selectate sau exportate și nicio curbă nu
-  își poartă înălțimea.
+  își poartă înălțimea. Imaginea este desenată de patru ori mai fin decât altitudinile (cam șapte
+  metri pe punct din date de o secundă de arc), așa că liniile rămân netede până când harta este
+  apropiată dincolo de circa 1:4.000; mai aproape de atât își arată treptele. O imagine calculată
+  înainte de 2026-10-21 a fost desenată de două ori mai fin — cereți-o din nou pentru cea mai
+  netedă.
 - Orice fel în afară de curbele de nivel: dacă celulele de la margine se calculează din vecinii pe
   care îi au. Oprit, fiecare rastru al generării se întâlnește cu vecinul lui printr-o linie goală
   prin imagine.
@@ -287,6 +362,11 @@ ceva care le seamănă.
 | *O dală de elevație spune unde se află doar prin cum se numește* | Un `.hgt` trebuie numit ca `N45E024.hgt`, pentru pătratul al cărui colț este 45°N 24°E |
 | *Acel dreptunghi nu este un dreptunghi pe Pământ* | Desenați-l din nou |
 | *Acea generare nu are suprafață de desenat* | Dalele ei nu au fost recitite și găsite întregi, sau nu mai sunt de unde se servește relieful |
+| *O extensie se construiește la adâncimea generării pe care o extinde* | Cereți nivelul bazei sau porniți o generare nouă |
+| *O altă generare care o extinde pe aceasta nu s-a terminat și încă îi citește dalele* | Așteptați ca acea generare să se oprească, indiferent cum, înainte s-o ștergeți pe aceasta |
+| *Generarea s-a oprit deja, așa că nu mai este nimic de anulat* | S-a încheiat sau a eșuat singură, mai înainte |
+| *Doar o generare oprită poate fi rulată din nou* | Este încă la coadă sau în curs, ori s-a încheiat |
+| *Generarea a fost anulată în timp ce i se făceau dalele, iar unealta care face dalele nu a confirmat încă oprirea* | Porniți serviciul de dale; răspunde imediat, iar apoi generarea poate fi rulată din nou |
 
 ---
 

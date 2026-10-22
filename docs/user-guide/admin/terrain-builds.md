@@ -29,8 +29,9 @@ page then shows you exactly what to do — the one line to add to the environmen
 the deployment's compose files, and the command to run from that directory.
 
 Note what it also says: everything before that step **still happened**, and what the build
-obtained and prepared is still on disk under it — but **that particular build cannot be taken
-further**. You start a new one once the service is running.
+obtained and prepared is still on disk under it. Once the service is running, press **Run again**
+on the stopped build: it carries on from the bake, without obtaining or preparing anything a second
+time. Nothing re-queues it on its own — only a person knows the service is now there.
 
 ---
 
@@ -53,12 +54,22 @@ surface, fetched by the application. *"Sea returns nothing, which is a normal an
 than a failure."*
 
 **Rasters from this computer.** Drop elevation rasters in, up to 512 MB each. Anything larger
-belongs in a directory on the server. The form will not let you start a build while uploads
-are still in flight — it names the files that have not arrived yet.
+belongs in a directory on the server. Each file is sent the moment you choose it, and the form will
+not let you start a build while uploads are still in flight — it names the files that have not
+arrived yet. A raster you sent and then left out of every build is deleted after a day (the
+installation can set another time); one that any build names — queued, running, finished or
+stopped — is kept as long as that build is.
 
 **A directory on the server.** One the operator has listed as readable, or one below it.
 Everything in it that looks like an elevation raster is read. If no directories are
-configured it says so.
+configured it says so. Only a **Full Administrator** may name one.
+
+The rasters in a server directory are **read where they are, never copied and never written to** —
+a national survey already on the machine is not worth holding twice, and nothing the build does,
+including deleting it, touches that directory. What the build keeps instead is a list of what it
+found there the first time. If it is run again later and a raster has since been added, removed or
+changed, it stops rather than carrying on over rasters it was not made from: put the directory back
+as it was and run it again, or start a new build, which reads the directory as it now is.
 
 ### 3. Credit
 
@@ -99,6 +110,13 @@ above the ellipsoid there.
 
 **Start build.** It is queued.
 
+Beside the button, a note says what decides how fine the result can be:
+
+> *"Memory decides how fine the terrain can be. The tile maker uses half of its own container's
+> memory — 8 GB unless this installation sets SILEXGIS_TERRAIN_WORKER_MEMORY — and when that is not
+> enough it does not fail: it makes coarser terrain than was asked for. A build that ran short stops
+> and says so, and the setting can then be raised."*
+
 ---
 
 ## Adding a raster to a build you already have
@@ -131,7 +149,8 @@ has had its tiles removed is refused, and the message says which.
 
 ## Watching a build
 
-Status: **Queued · Running · Finished · Failed.**
+Status: **Queued · Running · Finished · Failed** — and, for a build somebody called off, **Being
+cancelled** until it stops and **Cancelled** after, rather than a red failure.
 
 Phases, in order:
 
@@ -147,6 +166,52 @@ Phases, in order:
 A build's detail page shows what it was **made from**, and **what the tool said** — the log,
 which is where a failure explains itself.
 
+### Calling a build off, and running it again
+
+**Call off**, on a queued or running build, asks behind a confirmation: *"What it has already
+obtained and prepared is kept, so it can be run again later from where it stopped."* A queued build
+stops at once. A running one stops at the first point it can — between two files, or, while tiles
+are being made, once the tile maker has said it stopped — and is shown as *Being cancelled* until
+then. Whatever tiles that bake had written are thrown away, so nothing half-made is left to be taken
+for a finished surface. A build that has started publishing finishes; a called-off build is never
+published.
+
+**Run again**, on any stopped build — called off, or stopped for any other reason — puts it back on
+the queue, and it carries on from the first step whose work is not already on disk: a build that
+stopped at the bake makes tiles and nothing else. A bake that went wrong had its tiles thrown away,
+so it is baked again. Run again is refused, with a sentence saying why, while another build of the
+same rectangle is unfinished, for a build that extended a build since deleted, and — briefly — for a
+build called off while making tiles whose tile maker has not yet confirmed it stopped; that answer
+arrives as soon as the tile-making service is running.
+
+Both need the same right that starts a build: **execute** on terrain.
+
+### Two limits a bake can reach
+
+**Memory.** When the tile maker runs short of memory it does not fail — it makes coarser terrain
+than the depth you chose, which nothing on the map would ever point out. The application reads the
+tool's report after every bake, so such a build is not published: it stops with *The tile maker ran
+short of memory, so the terrain would have been coarser than asked for*, its tiles are discarded,
+and the page gives the one line to add to the environment file and the command that applies it.
+Then press **Run again**.
+
+**Time.** One bake may run for twelve hours unless the installation allows longer. A bake that
+reaches the limit — one that stopped making progress, or a large area that simply needed longer —
+is stopped, its tiles are discarded, and the build says how long it ran against which limit:
+*Time limit reached after 12 h (limit 12 h)*, with the setting that raises it. The setting is in
+seconds; the question mark beside it — *How long is that in seconds?* — lists the usual lengths:
+
+| | Seconds |
+|---|---|
+| 1 hour | 3600 |
+| 12 hours (the default) | 43200 |
+| 1 day | 86400 |
+| 2 days | 172800 |
+| 1 week (the longest allowed) | 604800 |
+
+Set it, restart the application, and press **Run again**; what the build obtained and prepared is
+kept.
+
 ---
 
 ## Managing builds
@@ -159,6 +224,8 @@ the converted rasters kept beside them."*
 |---|---|
 | **Draw this** | The scene now draws this build |
 | **Stop drawing** | The scene draws bare ground again |
+| **Call off** | Stops a queued or running build, keeping what it obtained and prepared |
+| **Run again** | Puts a stopped build back on the queue, carrying on from where it stopped |
 | **Delete** | Removes the build and the disk it is keeping |
 
 Two refusals worth knowing:
@@ -166,7 +233,7 @@ Two refusals worth knowing:
 - **You cannot delete the build the scene is drawing.** Choose other terrain, or stop drawing
   it first.
 - **You cannot delete a running build.** Its files are being written right now; it can be
-  removed once it has stopped, whichever way it stops.
+  removed once it has stopped, whichever way it stops — **Call off** stops it.
 
 One state worth knowing about, because nothing refuses it: **if the installation's configuration
 names a terrain address of its own** (`SILEXGIS__Terrain__Url`), that address wins over whichever
@@ -284,8 +351,11 @@ that resembles them.
 | *An elevation tile says where it is only by what it is called* | An `.hgt` must be named like `N45E024.hgt` for the square whose corner is 45°N 24°E |
 | *That rectangle is not a rectangle on the Earth* | Draw it again |
 | *That build has no surface to draw* | Its tiles were never read back and found whole, or they are no longer where terrain is served from |
-| *The build to add to was made to level N* | An extension is made at its base's depth; ask for that level, or start a fresh build |
-| *Another build is adding rasters to this one* | Wait for that build to stop, whichever way it stops, before deleting this one |
+| *An extension is built to the depth of the build it extends* | Ask for the base's level, or start a fresh build |
+| *Another build that extends this one has not finished and still reads its tiles* | Wait for that build to stop, whichever way it stops, before deleting this one |
+| *That build has already stopped, so there is nothing to call off* | It finished or failed on its own first |
+| *Only a build that has stopped can be run again* | It is still queued or running, or it finished |
+| *That build was called off while its tiles were being made, and the tile maker has not yet said it stopped* | Start the tile-making service; it answers at once, and the build can then be run again |
 
 ---
 

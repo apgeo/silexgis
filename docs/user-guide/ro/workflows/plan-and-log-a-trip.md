@@ -214,24 +214,28 @@ conține: este deschisă de toți cei care pot citi tura. Detalii:
 [Harta din descărcare](../features/trips.md#harta-din-descărcare).
 
 Nu există adresă publică pentru un raport: se descarcă de cineva autentificat care poate citi
-tura.
+tura. Acolo unde instalarea are convertorul de documente, **Descarcă PDF** dă aceeași redactare
+ca PDF; copia clasată pe tură este întotdeauna un document Word.
 
 Un club poate scrie **propriul model**: descărcați-l pe cel standard (un fișier text scurt care
-se explică singur), editați-l, încărcați-l la Configurare → Modele de raport și alegeți-l. Un
-model poate cere doar lucruri care i-au fost deja date cititorului, iar un rând al cărui conținut
-se dovedește gol pur și simplu dispare.
+se explică singur), editați-l, încărcați-l la Configurare → Modele de raport și alegeți-l — sau
+dați-l unui singur scop de tură, ca fiecare tură cu acel scop să fie redactată în el. Un model
+propriu poate tipări și jurnalul de urmărire al turei și lista de stații a ridicării, pentru o
+tură [urmărită de la suprafață](../features/live-tracking.md). Un model poate cere doar lucruri
+care i-au fost deja date cititorului, iar un rând al cărui conținut se dovedește gol pur și simplu
+dispare. Detalii: [Redactarea](../features/trips.md#redactarea).
 
 ---
 
 ## După aceea
 
-- **Fotografii** — tura are o galerie și o imagine principală, iar fotografiile clasate pe ea
+- **Fotografii** — tura are o galerie și o fotografie reprezentativă, iar fotografiile clasate pe ea
   pot [deveni locuri pe hartă](photographs-to-places.md).
 - **Turele proprii** — *Jurnale de tură → Turele mele* răspunde la *pe ce merg și când*: cele
   mai apropiate întâi, inclusiv turele la care ați fost întrebat și nu ați refuzat. Se calculează
   din cine este autentificat și nu poate fi cerută despre altcineva.
-- **Statistici** — o persoană, o peșteră și un club își primesc fiecare totalurile, numărate
-  peste turele pe care le puteți citi. Vedeți
+- **Statistici** — o persoană, o peșteră, un club și o tabără își primesc fiecare totalurile,
+  numărate peste turele pe care le puteți citi. Vedeți
   [Măsurători și statistici](../features/measurements-and-statistics.md).
 
 ---

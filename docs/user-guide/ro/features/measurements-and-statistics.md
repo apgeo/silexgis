@@ -124,6 +124,37 @@ Refuză în trei cazuri, fiecare numit:
 
 ---
 
+## Roca de deasupra
+
+Câtă rocă se află deasupra galeriilor unei peșteri, de-a lungul lor. Pe pagina peșterii.
+
+Graficul are **distanța de-a lungul galeriei** pe orizontală și **grosimea rocii de deasupra** pe
+verticală, cu roca hașurată între ele. Apăsați un punct de pe curbă și locul unde a fost luată
+citirea este marcat — pe hartă și în vizualizarea 3D — și numit sub grafic: distanța, grosimea și
+segmentul traseului care a răspuns.
+
+> **Distanța de-a lungul nu este un drum de la intrare.** O ridicare topografică este o rețea, nu
+> un traseu. Axa este lungimea cumulată, în ordinea în care o înregistrează traseul.
+
+**O întrerupere a curbei este un loc pentru care nimeni nu a măsurat terenul**, nu un loc în care
+galeria ajunge la suprafață. Unde datele de elevație nu acoperă galeria, nu există linie — iar
+cifrele de sub grafic (**Cea mai subțire**, **Cea mai groasă**, **Medie**) sunt calculate doar pe
+citirile acoperite, cu numărul lor afișat, astfel încât o peșteră acoperită parțial să nu fie
+raportată ca mai puțin adâncă decât este.
+
+Spune asta direct, în loc să nu deseneze nimic, în patru cazuri diferite: peștera nu are traseu;
+ridicarea a fost desenată în plan, fără adâncimi, deci nu există din ce să se scadă; pe această
+instalare nu au fost pregătite deloc date de elevație; sau au fost, dar niciuna nu ajunge la
+această peșteră. Acestea sunt probleme diferite, pentru oameni diferiți.
+
+O peșteră lungă este eșantionată mai rar, nu răspunsă mai încet: citirile sunt distribuite la un
+interval egal, niciodată mai apropiate de 2 m și niciodată mai mult de 400.
+
+Aveți nevoie de dreptul de a citi datele de elevație, pe lângă dreptul de a vedea exact unde este
+peștera. Cereți-l unui administrator dacă panoul nu apare.
+
+---
+
 ## Distribuții carstice
 
 Peste peșterile de pe o pagină de listă: **Distribuții**.
@@ -142,18 +173,29 @@ pagină care au o lungime cartată. **Peșterile fără una lipsesc, nu sunt num
 
 ## Tot registrul, explorat
 
-La **Statistici** în bara laterală, trei ecrane pun întrebări registrului însuși, nu unei singure
-peșteri sau unei pagini de peșteri.
+La **Statistici** în bara laterală, patru ecrane pun întrebări registrului însuși, nu unei
+singure peșteri sau unei pagini de peșteri.
 
 | Ecran | La ce răspunde |
 |---|---|
-| **Distribuție** | Cum se repartizează o măsurătoare — intervale, domeniu, percentile și două ajustări |
-| **Corelație** | Cum se mișcă împreună două măsurători — panta, R² și corelația însăși |
-| **Pe regiuni** | Câte peșteri stau sub fiecare regiune |
+| **Distribuții** | Cum se repartizează o măsurătoare — intervale, domeniu, percentile și două ajustări |
+| **Corelații** | Cum se mișcă împreună două măsurători — panta, R² și corelația însăși |
+| **Regiuni** | Câte peșteri stau sub fiecare regiune |
+| **Categorii** | Cum se compară o măsurătoare între tipurile de peșteră sau între tipurile de rocă |
 
-Toate trei acceptă aceleași restrângeri — tip de peșteră, tip de rocă, regiune — iar întrebarea
-întreagă stă în adresă, așa că un link reproduce exact ce vedeați. Fiecare ecran salvează ca foaie
-de calcul exact ce arată în acel moment; fișierul este același răspuns, nu un al doilea.
+Primele trei acceptă aceleași restrângeri — tip de peșteră, tip de rocă, regiune — iar
+**Categorii**, care este grupat chiar după tip, acceptă regiunea. Întrebarea întreagă stă în
+adresă, așa că un link reproduce exact ce vedeați. Primele trei salvează ca foaie de calcul
+exact ce arată în acel moment; fișierul este același răspuns, nu un al doilea.
+
+**Categorii** desenează câte o cutie pentru fiecare grupă: *„Fiecare cutie merge de la percentila
+25 la 75, cu mediana în interior și mustăți până la percentilele 10 și 90."* Nu cea mai mică și
+cea mai mare valoare — acelea sunt cifrele unor peșteri anume. Fiecare grupă este listată în tabel
+cu câte peșteri are și câte dintre ele înregistrează măsurătoarea, inclusiv peșterile fără tip
+înregistrat, la **Neînregistrat**. O grupă măsurată pe mai puțin de șase peșteri își păstrează
+numărătorile și nu are cutie — *Prea puține peșteri măsurate pentru o cutie* — pentru că
+percentilele ei ar fi aproape cifrele propriilor peșteri, gata de citit. Este păstrată, nu omisă,
+ca numărătorile să se adune tot la peșterile din domeniu.
 
 Citiți frazele pe care le tipăresc aceste ecrane, pentru că fac o treabă reală:
 

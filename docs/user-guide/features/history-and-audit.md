@@ -44,6 +44,13 @@ rather than being exposed.
 That matters more than it sounds: a change history is exactly the sort of side door through
 which a withheld coordinate escapes, and it is closed.
 
+### Large shapes are summarised
+
+A small shape — an entrance's point, a feature's outline — is recorded in full, so a moved point
+can be read and put back. A large one, such as a survey's whole line work, is recorded as a
+summary: **"Geometry of n points (too large to record in full)"**. A summary is never offered for
+restore, and it carries no coordinate, so it cannot place a protected cave either.
+
 ### Fields with readable names
 
 The history names fields in words, not columns: Name, Description, Location, Altitude,

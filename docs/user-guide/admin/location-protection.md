@@ -54,7 +54,7 @@ not a protection.
 | **The map** | An approximate position, labelled *"Approximate location — exact coordinates are protected"*, or *"Location withheld"* for a geometry |
 | **Tables and lists** | Precise-location fields withheld |
 | **Exports** (GeoJSON, GPX, KML, CSV, shapefile) | The same protection as the screen |
-| **Share links and shared views** | The same protection. Sharing is not a route around it |
+| **Share links and shared views** | The same protection. Sharing is not a route around it. A [shared view's link](../features/saved-views-and-windows.md#saved-views) goes further: it draws **no protected cave or feature at all** — not approximately, not counted in a cluster — even where every account may see it exactly, because nothing granted to accounts follows a link |
 | **Photographs** | The **original** of a photo whose capture point would place the cave is refused. The rendering is shown |
 | **Trip pages and reports** | Caves you may not open are **not named**; you are told *how many* are not named. A trip's generated write-up withholds a station and a depth the same way — but see the limit below for a write-up **already filed** |
 | **Notification emails** | **Never name a cave.** Not trip mail, not the overdue-party alarm |

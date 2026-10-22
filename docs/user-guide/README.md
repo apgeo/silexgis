@@ -54,7 +54,9 @@ linking out to the reference pages for detail.
 [Surveys, centerlines and 3D models](features/surveys-and-models.md) ·
 [Measurements and statistics](features/measurements-and-statistics.md) ·
 [Geodata files](features/geodata.md) ·
-[Georeferenced raster maps](features/georeferenced-maps.md)
+[Georeferenced raster maps](features/georeferenced-maps.md) ·
+[The national cave catalogue](features/cave-catalogue.md) ·
+[Coordinates and the converter](features/coordinates.md)
 
 **The library**
 [Photographs and albums](features/photographs.md) ·
@@ -89,7 +91,7 @@ linking out to the reference pages for detail.
 Pages for whoever holds administrative rights. Still user documentation — the server-side
 install is in [INSTALL.md](../INSTALL.md) and [DEPLOY-SERVER.md](../DEPLOY-SERVER.md).
 
-- [Administration index](admin/README.md)
+- [Administration index](admin/README.md) — including [Accounts](admin/README.md#accounts)
 - [Permissions explained](admin/permissions.md)
 - [Location protection](admin/location-protection.md)
 - [Vocabularies your club owns](admin/vocabularies.md)

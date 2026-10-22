@@ -66,14 +66,39 @@ Un capăt de legătură poate fi o **ancoră** într-o parte a unui lucru:
 | **Întregul** | Implicit |
 | **O pagină** / **un interval de pagini** | Dintr-un document |
 | **Un pasaj de text** | Selectat în document |
-| **O regiune dintr-o imagine** | |
+| **O regiune dintr-o imagine** | Desenată chiar pe imagine — un dreptunghi, un cerc, un contur sau un punct. Când citiți una, toate regiunile deja desenate pe imagine sunt pictate, cea pe care ați urmat-o mai apăsat decât restul. Atât desenarea, cât și alegerea merg și [de la tastatură](#regiunile-unei-imagini-de-la-tastatură) |
 | **Un moment** / **o secvență dintr-o înregistrare** | În secunde |
 | **O stație topografică** / **un șir de stații** / **o topografie** / **un șir de topografii** | Dintr-un model 3D |
 | **Un punct din model** | |
 | **Un punct de traseu** / **un șir de puncte** | Dintr-un fișier de geodate |
+| **Un moment al turei** | Al unei ture [urmărite de la suprafață](live-tracking.md#echipa-pe-ridicare) — felul în care o fotografie este pusă pe un moment al reluării ei. O legătură care spune că o fotografie *documentează* un moment al turei cere dreptul de a **edita** acea tură, pentru că hotărăște ce arată reluarea turei |
 
 Unele dintre acestea au nevoie de un vizualizator care le poate selecta, iar fereastra o spune
 limpede: *„Indicarea acestui fel de parte sosește odată cu vizualizatorul care o poate selecta."*
+
+### Regiunile unei imagini de la tastatură
+
+O regiune poate fi desenată și aleasă fără mouse.
+
+**Desenarea.** Apăsați **Tab** până când imaginea primește focusul; în mijlocul ei apare un
+cursor.
+
+| Tastă | Ce face |
+|---|---|
+| **Săgețile** | Mută cursorul cu un pas mic pe imagine |
+| **Shift** + săgeată | Un pas mai mare |
+| **Enter** sau **Space** | Apasă aici: fixează un **punct**; prima și a doua apăsare dau cele două colțuri opuse ale unui **dreptunghi**, sau centrul unui **cerc** și apoi un loc pe marginea lui; la un **contur**, fiecare apăsare adaugă un colț |
+| **Enter** din nou pe ultimul colț | Închide conturul |
+| **Backspace** | Renunță la ultimul colț al unui contur |
+| **Escape** | Renunță la forma începută. Dacă nu e nimic început, închide fereastra în care se află imaginea |
+
+Rândul de ajutor de sub alegerea formei spune același lucru cu cuvintele ecranului. O regiune
+desenată de la tastatură este exact regiunea pe care ar fi desenat-o aceeași tragere cu mouse-ul.
+
+**Alegerea.** Când citiți o imagine, fiecare regiune deja desenată pe ea este în ordinea **Tab**,
+numită după relația ei (sau *Regiunea n* când nu are una). Regiunea cu focus este desenată mai
+apăsat; **Enter** sau **Space** o deschide la fel ca un clic. O regiune desenată în interiorul
+alteia vine după ea, așa că cea din interior poate fi mereu atinsă.
 
 ### Ancorele de text supraviețuiesc editării
 
@@ -98,6 +123,12 @@ Fiecare înregistrare arată **Elemente legate (n)**. Fiecare rând numește mem
 - Un membru pe care nu aveți voie să-l citiți apare ca **Element restricționat**: *„Această
   legătură numește ceva ce nu aveți voie să citiți."*
 - Dacă nimic dintr-o legătură nu vă este vizibil, o spune.
+- Un membru care este o fotografie, o peșteră sau o persoană arată **o imagine mică** —
+  fotografia, fotografia reprezentativă a peșterii, portretul persoanei. Celelalte feluri nu arată
+  niciuna, pentru că o imagine a unei vederi salvate, a unui fișier de geodate sau a unui model
+  topografic ar trebui să deseneze poziții.
+- Urmarea unei legături către o stație topografică sau o topografie **mută vizualizarea 3D**
+  acolo, în loc să reîncarce topografia, așa că păstrați locul la care vă uitați.
 
 > **O legătură nu este niciodată lucrul care divulgă o peșteră protejată.** Arată fiecărui
 > cititor doar capetele pe care are voie să le vadă.
@@ -107,7 +138,9 @@ raport, care deschide pagina legăturii.
 
 ## Crearea uneia
 
-**Leagă…** pe orice înregistrare. Alegeți felul elementului, găsiți-l, alegeți relația, adăugați
+**Leagă…** pe orice înregistrare. Alegeți felul elementului, găsiți-l — în selectorul descris la
+[Căutare și filtre](search-and-filters.md#selectorul), care ajunge și la dulapuri, modele
+topografice și fișiere de geodate —, alegeți relația, adăugați
 opțional o **notă** („De ce aparțin împreună") și o **descriere**, și spuneți din ce element se
 citește relația, dacă este direcțională.
 

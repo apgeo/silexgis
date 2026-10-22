@@ -43,6 +43,14 @@ protejată)"**, în loc să fie expusă.
 Contează mai mult decât pare: un istoric de modificări este exact ușa laterală prin care scapă o
 coordonată reținută, și este închisă.
 
+### Formele mari sunt rezumate
+
+O formă mică — punctul unei intrări, conturul unui element — este înregistrată integral, astfel
+încât un punct mutat poate fi citit și pus la loc. Una mare, cum este întreaga linie topografică a
+unei ridicări, este înregistrată ca rezumat: **„Geometrie cu n puncte (prea mare pentru a fi
+înregistrată integral)"**. Un rezumat nu este oferit niciodată pentru restaurare și nu conține
+nicio coordonată, deci nici el nu poate localiza o peșteră protejată.
+
 ### Câmpuri cu nume lizibile
 
 Istoricul numește câmpurile în cuvinte, nu în coloane: Nume, Descriere, Locație, Altitudine,

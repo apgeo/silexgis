@@ -31,7 +31,7 @@ happens to what it sends back.
 | Field | |
 |---|---|
 | **Name** | |
-| **Caves** | Searched by name and added to the selection |
+| **Caves** | Chosen in a search box: type a name and tick the cave. Caves already chosen stay listed and ticked above whatever the search finds, so a cave is taken off the phone by unticking it |
 | **New records are visible to** | What a device's own records get when it sends them back |
 | **Caving group** | Required if the upload visibility is *caving group* |
 
@@ -136,6 +136,46 @@ entrance as a natural entrance, a place inside a cave as a place.
 And each created row is told about **the nearest few things already in the registry**, so a
 caver deciding whether they have just re-entered a cave the club already holds gets the nearest
 handful — not a census of the massif.
+
+---
+
+## Importing a trip recorded on a phone
+
+**Activity → Import a recording** reads a trip a phone recorded underground — its scans of the
+markers fixed in the cave — into a trip's [tracking log](live-tracking.md). It is offered to
+anybody who may record trips.
+
+1. **Drop the SpeleoLoc export** — the archive the phone makes, or the database inside it. The
+   photographs it carries are never opened, and nothing is written until you have seen what it
+   would do. An archive you have already uploaded is recognised: **Resume that review** rather
+   than starting a second one.
+2. **Which recording.** An export holds the phone's whole database, so it usually holds every
+   trip that phone ever recorded; choose the one this is about, by its start, end and number of
+   scans.
+3. **Where the positions go** — **Onto a trip that already exists** or **Into a trip this import
+   creates**. The trip is chosen in a search box that lists your trips newest first, with each
+   trip's date beneath it, because the trip a recording belongs to is nearly always one just
+   walked. An existing trip is not rewritten: the positions are added to its log, and only
+   somebody already on its roster can be given one. A new trip is made from the recording's title
+   and its two moments, with exactly the people you name on its roster, and you say who may read
+   it and its organising group.
+4. **Which survey the positions are in.** A position is a station of a survey model, so choose
+   the **Cave** (in the same kind of search box) and then one of its **Survey models**. Choosing
+   another cave clears the model. A cave whose exact position you may not be told lists none.
+5. **Who was scanning.** A device account is a login on a phone, not a person, so nothing is
+   guessed: say who each account is. A scan made by an account nobody has named is left out.
+6. **Review the scans.** Each scan's marker depth is offered as the nearest stations of the
+   survey, nearest first; take the scan or set it aside, and pick another of the offered stations
+   if the first is wrong. A scan marked **Several stations at that depth** is one where that choice
+   matters most. A scan nothing can be proposed for — it names no marker, the marker carries no
+   depth, no station is at that depth — says why on its row and is left out.
+7. **Record the positions.** Confirming records the taken scans as **one batch**.
+
+**Taking it back.** The import is listed under **Geodata → Imports**, and **Undo** there removes
+the positions it recorded onto an existing trip; a trip the import created is deleted with it
+instead, and can be restored from *Deleted trips*. See
+[Correcting and deleting reports](live-tracking.md#correcting-and-deleting-reports) for what can
+and cannot be corrected one row at a time afterwards.
 
 ---
 

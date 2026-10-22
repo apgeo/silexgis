@@ -8,11 +8,24 @@
 ---
 
 **Administrare → Mesagerie** configurează unde ajung e-mailurile și mesajele text, ce cere
-autentificarea și un comutator de protecție a locațiilor. **Administrare → Trimiterea mesajelor**
-arată dacă ceva din toate acestea chiar funcționează.
+autentificarea și alte câteva răspunsuri valabile pentru toată instalarea. **Administrare →
+Trimiterea mesajelor** arată dacă ceva din toate acestea chiar funcționează.
 
 > Acestea pot fi stabilite și din mediul de instalare, iar pagina o spune. Stabilirea lor aici
 > este calea care nu are nevoie de repornire.
+
+Pagina are opt file:
+
+| Fila | Ce hotărăște | Mai jos |
+|---|---|---|
+| **E-mail** | Serverul de e-mail | [E-mail](#e-mail) |
+| **SMS** | Poarta SMS | [Mesaje text](#mesaje-text) |
+| **Politică de autentificare** | Adresele confirmate, ce factori secundari se oferă, cât trăiește un cod | [Politica de autentificare](#politica-de-autentificare) |
+| **Protecția locației** | Două comutatoare despre cât de departe ajung locurile protejate și datele clubului | [Protecția locațiilor](#protecția-locațiilor) |
+| **Import vectorial** | Dacă un import poate sări peste verificare și cum se caută duplicatele | [Import vectorial](#import-vectorial) |
+| **Notificări** | Cât se păstrează notificările și cât poate costa un anunț | [Păstrare](#păstrare) · [Garda de cheltuială](#garda-de-cheltuială) |
+| **Fototeci** | Oprirea și repornirea folosirii unei fototeci pe care instalarea o are deja | [Fototeci](#fototeci) |
+| **Hărți în documente** | Ce fundaluri de hartă pot fi copiate într-un document | [Hărți în documente](#hărți-în-documente) |
 
 ---
 
@@ -58,21 +71,60 @@ Stabiliți plafonul având asta în minte și spuneți-i cui scrie anunțuri.
 ## Politica de autentificare
 
 Ce cere autentificarea — inclusiv ce metode de autentificare în doi pași oferă această instalare.
+
+| | |
+|---|---|
+| **Trimiteți un mesaj de confirmare la crearea unui cont** | |
+| **Cereți o adresă confirmată pentru autentificare** | Un cont neconfirmat este refuzat la autentificare și i se oferă un nou mesaj de confirmare. *„Nu are efect până când nu este configurat un server de e-mail — altfel nimeni nu ar putea confirma."* |
+| **Permiteți aplicații de autentificare** · **Permiteți coduri prin e-mail** · **Permiteți coduri prin SMS** | Codurile prin e-mail au nevoie de un server de e-mail, cele prin SMS de o poartă SMS. *„Cea mai slabă dintre cele trei: un număr poate fi mutat pe altă cartelă convingând operatorul de telefonie."* |
+| **Valabilitatea codului (minute)** · **Pauză între coduri (secunde)** | Pentru codurile prin e-mail și prin SMS |
+
 Metodele neactivate aici sunt marcate *„Neactivată pe această instalare"* pe paginile de securitate
 ale membrilor.
 
+Aceleași coduri sunt cerute și după o autentificare printr-un furnizor extern: un furnizor
+dovedește cine este cineva la furnizor, nu că deține al doilea factor al contului.
+
 ## Protecția locațiilor
 
-Un singur comutator, descris integral la
-[Protecția locațiilor](location-protection.md#setarea-de-asociere-a-atașamentelor):
+Două comutatoare, descrise amândouă integral la [Protecția locațiilor](location-protection.md):
 
 **„Arată atașamentele peșterilor protejate tuturor celor care le pot citi."**
+([detalii](location-protection.md#setarea-de-asociere-a-atașamentelor))
 
 Documentele atașate unei peșteri protejate sunt **întotdeauna servite** — nu sunt niciodată ascunse
 sau scoase. Ce controlează acest comutator este dacă se divulgă *asocierea* dintre document și acea
 peșteră anume.
 
 Pornirea lui **nu dezvăluie niciodată o poziție**: urmărirea linkului tot dă vederea protejată.
+
+**„Permite membrilor să se aboneze la calendarul lor din exterior."**
+([detalii](location-protection.md#setarea-fluxului-de-calendar)) Oprit implicit. Pornit, fiecare
+membru poate crea adrese secrete pe care un calendar de pe telefon sau de pe calculator le
+interoghează fără autentificare; oprirea lui din nou oprește toate adresele deja date. Vedeți
+[Abonarea la calendar](../features/calendar-feed.md).
+
+## Import vectorial
+
+Un fișier importat este [verificat](../features/geodata.md#importuri) înainte să se creeze ceva.
+Aici acest pas poate fi eliminat și tot aici se stabilește cât de departe caută implicit
+detectarea duplicatelor.
+
+| | |
+|---|---|
+| **Permite unui utilizator de încredere să creeze obiecte fără verificare** | Dezactivat implicit. Activarea nu lărgește cine poate crea — cel care importă are în continuare nevoie de dreptul de a crea elemente — ci doar elimină pasul intermediar |
+| **Caută ceva deja existent pe o rază de** | Raza de pornire pentru o verificare nouă; cel care importă o poate schimba. Se măsoară doar față de obiectele a căror poziție exactă o poate vedea cel care verifică |
+| **Numele se consideră identice peste** | Cât de asemănătoare trebuie să fie două nume, de la 0 la 1, pentru ca un obiect din apropiere să fie considerat același lucru, nu doar aproape |
+
+## Fototeci
+
+Pentru o instalare care are alături o fototecă, fiecare fototecă are un singur comutator:
+**Oprește folosirea acestei fototeci**. Cât timp este pornit, nimic din aplicație nu întreabă
+fototeca nimic — fără strat pe hartă, fără răsfoire, fără căutare și fără fotografii. Nu schimbă
+nimic din ce conține fototeca însăși sau cine se poate autentifica direct în ea.
+
+Comutatorul nu poate *conecta* o fototecă: ce fototeci are o instalare se hotărăște la
+implementare, iar pagina o spune — sau spune că nu este nimic de oprit.
 
 ## Hărți în documente
 
@@ -139,8 +191,10 @@ Deci o reîncercare nu este o redare. Este o trimitere nouă, sub regulile curen
 
 ### Păstrare
 
-Cât timp se păstrează notificările este un număr pe care un administrator îl poate schimba, peste
-ce a configurat instalarea.
+Cât timp se păstrează notificările — **Păstrează notificările (zile)**, în fila **Notificări** —
+este un număr pe care un administrator îl poate schimba, peste ce a configurat instalarea. O
+notificare este ștearsă după acest interval, citită sau nu, iar evidența felului în care a fost
+trimisă dispare odată cu ea.
 
 ---
 

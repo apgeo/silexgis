@@ -163,6 +163,14 @@ Fiecare obiect are o filă **Permisiuni** (acolo unde aveți voie să administra
 Adăugați o regulă care numește un **utilizator** sau un **grup de speologie**, un efect, acțiuni și
 un cuprins de **doar acest obiect** sau **acest obiect și tot ce conține**.
 
+**O regulă pleacă odată cu ce numește.** Ștergerea unei înregistrări, a unui grup de speologie, a
+unui set de elemente, a unui dulap sau a unui cont elimină regulile care o numesc, iar fiecare
+eliminare apare în istoricul de audit — așa că un lucru șters nu rămâne niciodată ca acordare în
+lista de drepturi a cuiva. O înregistrare doar *mutată la coș* — o tură, un document sau o peșteră
+care încă pot fi restaurate — își păstrează regulile, iar restaurarea ei dă înapoi același acces.
+Un grup de speologie cu un refuz scris pe el și un set de elemente sau un dulap prin care încă
+ajunge o regulă sunt refuzate la ștergere, ca înainte.
+
 ### Deschis despre cineva
 
 Mesajul care spune că cineva invitat pe o tură nu poate deschide o peșteră duce la
@@ -219,6 +227,11 @@ Pentru fiecare acțiune spune **Permis** sau **Refuzat** și numește motivul:
 
 Aceasta este unealta pentru fiecare discuție „dar de ce nu poate Maria să deschidă aia?".
 Începeți de aici.
+
+Pentru a vedea **din ce grupuri de permisiuni face parte un cont** — numit direct sau ajuns acolo
+printr-unul dintre grupurile lui de speologie — deschideți rândul lui la
+[Administrare → Conturi](README.md#conturi). Lista vine din aceeași citire a apartenențelor după
+care se decid drepturile însele, deci nu poate fi în dezacord cu ele.
 
 ---
 

@@ -27,7 +27,8 @@ altceva.
 
 ## Linkuri de partajare
 
-Pe un element, o peșteră sau o vedere salvată: **Partajare → Creează link**.
+Pe o peșteră sau pe un element: **Partajează → Creează link**. O vedere salvată are un link
+propriu — vedeți [Vederi partajate](#vederi-partajate).
 
 | Alegere | |
 |---|---|
@@ -52,8 +53,17 @@ loc să nu-i arate nimic.
 
 ## Vederi partajate
 
-Vedeți [Vederi salvate](saved-views-and-windows.md#vederi-salvate). Același jeton afișat o
-singură dată, aceeași revocare, aceleași protecții.
+**Link de partajare** al unei vederi salvate dă vederea cuiva fără cont: linkul ei de copiat și
+același link ca cod QR. Se deosebește de un link de partajare în două privințe:
+
+- **Nu este afișat o singură dată.** O vedere își păstrează linkul, arătat din nou de fiecare
+  dată când apăsați **Link de partajare**.
+- **Se încheie când vederea este ștearsă.** Nu există un control separat pentru retragerea lui.
+
+Ce vede vizitatorul este strict mărginit: doar înregistrări care sunt Public prin ele însele, doar
+în zona proprie a vederii, **nimic dintr-o peșteră sau un element protejat** — nici măcar o
+poziție aproximativă — și nicio peșteră sau element pentru o vedere restrânsă de un filtru. Lista
+completă este la [Vederi salvate](saved-views-and-windows.md#vederi-salvate).
 
 ---
 

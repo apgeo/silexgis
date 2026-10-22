@@ -3,12 +3,13 @@
 🇬🇧 **English** · 🇷🇴 [Română](../ro/features/account-and-settings.md)
 
 [← Feature reference](README.md) · Related: [Notifications](notifications.md) ·
-[Mobile and offline sync](mobile-sync.md)
+[Coordinates](coordinates.md) · [Mobile and offline sync](mobile-sync.md)
 
 ---
 
-**Settings** has nine pages: Profile · Account · Emails · Notifications · Security ·
-Accessibility · Saved filters · Sync · Advanced.
+**Settings** has ten pages: Profile · Account · Emails · Notifications · Security ·
+Accessibility · Saved filters · Coordinates · Sync · Advanced. It is reached from the account
+menu at the top right, which is also where you **Sign out**.
 
 ---
 
@@ -31,6 +32,13 @@ helmet, headlamp, rope, karst, stalactite, compass, sump.
 Your phone number is changed under **Security**, because a code is texted to the new number
 first.
 
+**Caving club** is picked from the installation's list of caving groups; typing narrows it,
+ignoring case and accents. If your club is not listed yet, the list offers **Create «name»** —
+choosing it adds the club to the caving groups and selects it, without leaving the form. A name
+that differs from an existing club only in case or punctuation is not a new club: the existing
+one is offered instead. The offer is made to anybody who may add caving groups — every account,
+unless your installation has taken that right away.
+
 ### Addresses
 
 Where you can be reached. Each address carries a **label**, **country**, **city**, **street
@@ -52,8 +60,8 @@ you are listed.
 **Accounts are not deleted from here.** *"Anything you have added stays with the club, so ask
 an administrator."*
 
-**Export your data** — a copy of your profile, addresses, settings and a list of what you
-have added. Queued, prepared in the background, then downloadable.
+**Export your data** — a copy of your profile, addresses, settings, saved filters and a list of
+what you have added. Queued, prepared in the background, then downloadable.
 
 **Calendar feed** — shown only when an administrator has switched feeds on. Creates the secret
 address a phone or desktop calendar subscribes to, lists the ones you have by name and date, and
@@ -80,6 +88,18 @@ See [Notifications](notifications.md) — it has its own page.
 
 ## Security
 
+### Password
+
+Change the password you sign in with: your **Current password**, then the new one twice. A
+password needs at least 10 characters.
+
+> *"Changing your password signs you out everywhere, including here. You then sign in again with
+> the new one."*
+
+An account that signs in only through an external provider has no password here, and the card
+says so. You are sent an email whenever your password is changed or reset — once — so a change
+you did not make does not go unnoticed.
+
 ### Two-factor authentication
 
 Ask for a second proof of identity when you sign in. Three methods:
@@ -99,6 +119,11 @@ code it shows.
 
 **Recovery codes** are shown **once**. Store them then. The page tells you how many are left.
 
+Lost both the authenticator and the recovery codes? An administrator who manages accounts can
+**reset your second factor**: every method is switched off, you are signed out everywhere and
+told by email, and you sign in with your password alone and set a second factor up again. See
+[Accounts](../admin/README.md#accounts).
+
 Too many wrong codes locks the account for a while.
 
 ### Phone number
@@ -106,8 +131,11 @@ Too many wrong codes locks the account for a while.
 Add or change your number — a code is texted to it and you confirm. Enter it in international
 form (`+40712345678`). It is used **only for sign-in codes**.
 
-Removing your number switches texted codes off with it, and says so. If the installation has
-no SMS gateway, texted codes are simply unavailable and the page says why.
+Removing your number switches texted codes off with it, and says so. **If texted codes are your
+only second factor**, it asks a second time — *"Remove your only second factor?"* — because
+two-factor sign-in then goes off and your password alone protects the account; you get an email
+saying so. If the installation has no SMS gateway, texted codes are simply unavailable and the
+page says why.
 
 ### Losing a device
 
@@ -128,6 +156,9 @@ See [Mobile and offline sync](mobile-sync.md#signing-a-device-in-and-taking-it-b
 If your installation offers external providers, sign in with **Google, GitHub or another
 OIDC provider** in addition to your password. Link and unlink from here.
 
+A provider proves who you are at the provider and nothing more: **with two-factor sign-in on,
+you are still asked for your code** after signing in through one.
+
 ---
 
 ## Accessibility
@@ -139,6 +170,13 @@ OIDC provider** in addition to your password. Link and unlink from here.
 | **Theme** | Match my system · Light · Dark |
 | **Density** | Comfortable · Compact |
 | **Reduce motion** | Turns off animations and map fly-to movement |
+| **Overview map on the map** | The small inset showing where the map's view lies in a wider area |
+| **Language** | English · Română — the same choice as the switch in the top bar; see [Language](#language) |
+
+Both themes use the interface library's own colours. Moving through a page with the keyboard
+draws a ring around the control that has the focus, in the light theme and the dark alike; the
+first press of Tab offers **Skip to main content**, and on the map page **Skip to map**. Press
+**?** for the list of keyboard shortcuts.
 
 ### This browser only
 
@@ -150,7 +188,7 @@ OIDC provider** in addition to your password. Link and unlink from here.
 | **Hide the on-map controls** | |
 
 **Reset these** puts back the two settings above together with the theme, the density and
-reduced motion. It leaves the language alone, and it does not touch the numbers under
+reduced motion. It leaves the language and the overview map alone, and it does not touch the numbers under
 [Advanced](#advanced) — those have their own way back there.
 
 ---
@@ -167,6 +205,24 @@ to every device. Sharing gives others the question only — each of them is answ
 themselves may see. If the caving group chosen here is no longer one you can share with, new
 filters start out private until you choose again. See
 [Saved filters](search-and-filters.md#saved-filters).
+
+---
+
+## Coordinates
+
+How positions are written wherever one is shown or copied. *"These settings follow your
+account."*
+
+| | |
+|---|---|
+| **Coordinates shown as** | The format every position is written in — decimal degrees, degrees and minutes, degrees–minutes–seconds, UTM, MGRS, Stereo 70, the Swiss grids or Plus Code |
+| **Also listed under "Other formats"** | The formats a position shown in detail — a selected entrance, a cave's entrances — can also be opened in, each with its own copy button |
+| **Settings of each format** | For instance the UTM zone kept near a zone's edge, with a note on how far each format can be trusted |
+
+A sample point shows every chosen format live as you change them. A format with no reference for
+a place — a national grid outside its country — is left out there. Everything about the formats,
+protected positions and typing a position in any of them is on
+[Coordinates and the converter](coordinates.md).
 
 ---
 
@@ -240,9 +296,43 @@ These two bound the flat map only: the 3D view draws survey lines by the install
 
 ---
 
+## What follows your account, and what stays in this browser
+
+Most of what you arrange is kept **with your account**, so it is there when you sign in on
+another computer:
+
+- the appearance — theme, density, reduced motion, the overview map — and the language;
+- the coordinate formats, and who new saved filters are shared with;
+- how the workspace is arranged: panel arrangements, named layouts, the docks, the feature types
+  you pinned.
+
+A few things stay **in this browser only**, because a phone and a workstation want different
+answers: where the application opens, hiding the on-map controls, and every number under
+[Advanced](#advanced). A named layout your account's stored preferences had no room for is kept
+in this browser too, and the layouts menu marks it **This browser only** — delete a layout you no
+longer use and it goes to your account with that change.
+
+A change made just before you close the page, or in a [popped-out window](saved-views-and-windows.md#pop-out-panels),
+is still written to your account. **Another member signing in on the same browser starts from the
+defaults**, not from your arrangement.
+
+---
+
+## Signing out
+
+**Sign out**, in the account menu, ends your sign-in on the server as well as in the page:
+opening the application again asks for your email address and password. Nothing of yours is
+handed to whoever signs in next on that browser.
+
+To sign out **everywhere** — a lost phone, a shared computer you cannot reach — change your
+password; see [Losing a device](#losing-a-device).
+
+---
+
 ## Language
 
-The language switch is in the top bar. English and Romanian ship with the application.
+The language switch is in the top bar, and the same choice is under
+[Accessibility](#accessibility). English and Romanian ship with the application.
 
 **The language follows your account**, so the messages the system sends you arrive in it too,
 not only the screens. If the change cannot be saved to your account you are told — because
@@ -253,5 +343,5 @@ you are reading in, and **start the week on the day that language does**.
 
 ---
 
-Related: [Notifications](notifications.md) ·
+Related: [Notifications](notifications.md) · [Coordinates and the converter](coordinates.md) ·
 [People and clubs](people-and-clubs.md) · [Mobile sync](mobile-sync.md)

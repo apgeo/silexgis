@@ -37,7 +37,7 @@ Ways of reaching you: **In the app · Email · Text message.**
 | Someone comments on something of mine | |
 | Someone writes to a caving group I am in | An announcement |
 | My uploads finish processing | |
-| **Security alerts** | Cannot be switched off |
+| **Security alerts** | Cannot be switched off. Your password changed or reset, your email address changed, two-factor sign-in switched off — including when removing your phone number or an administrator's reset switches it off |
 | **A trip I am on is overdue** | Cannot be switched off, never held for a summary |
 
 The two comment settings are **deliberately separate**, so switching off traffic on a busy

@@ -85,6 +85,12 @@ fișierele de geodate se exportă ca:
 
 **GeoJSON · GPX · KML · CSV · shapefile arhivat**
 
+Un export din registrul peșterilor sau din lista de elemente cuprinde **tot ce găsește filtrul
+listei**, nu doar pagina de pe ecran — vedeți
+[Căutare și filtre](search-and-filters.md#filtrarea-pe-paginile-de-listă). Peșterile se pot
+exporta și pentru interschimb, ca
+[KarstLink](caves-and-entrances.md#partajarea-peșterilor-în-formatul-de-interschimb).
+
 Un export poartă doar ce aveți voie să citiți, cu aceeași protecție a locațiilor ca ecranul.
 
 ---

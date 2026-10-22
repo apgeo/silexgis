@@ -20,7 +20,7 @@ O tură se înregistrează **pe zilele în care s-a desfășurat efectiv**, nu p
 | | |
 |---|---|
 | **Titlu** · **Scop de tură** · **Date** · **Loc** | |
-| **Grup de speologie organizator** | |
+| **Grupul organizator** | Ales dintre grupurile de speologie. Un club care nu este încă în listă poate fi adăugat de aici — tastarea numelui lui oferă **Creează «nume»** |
 | **Ora de intrare / ieșire** și **timpul în subteran** | Calculat peste câte zile a durat |
 | **Vizibilitate** | Cine are voie să citească tura |
 | **Locuri** | Câți oameni încap. Gol înseamnă fără limită |

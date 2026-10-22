@@ -74,14 +74,28 @@ A link end you may not read is shown as *Not accessible* rather than named.
 
 ## The feature list
 
-**Cadastre → Features.** Search by name; filter by kind, category and type. Columns: name,
-type, geometry, visibility, description, updated.
+**Cadastre → Features.** Its controls — **Search by name…**, **All kinds**, **All types**,
+**All categories** and **Filter by tag…** — are one filter, kept in the page's address, with the
+saved-filter controls beside them (**Apply a saved filter…**, **Save as filter…**, **Saved
+filters** and the quick filters). See
+[Filtering on list pages](search-and-filters.md#filtering-on-list-pages). With nothing set, every
+kind is listed. Columns: name, kind, type, geometry, visibility, updated.
 
 Each row offers **Show on map**, **Open**, **Edit**, **Delete**. A cave, entrance or
 centerline row also offers **Open full page** — its own typed page rather than the generic
-feature page.
+feature page. From the keyboard, **Tab** reaches a row's name and **Enter** opens it.
 
-Export as GeoJSON, GPX, KML, CSV or zipped shapefile.
+Above the list:
+
+| Control | Does |
+|---|---|
+| **Show these on the map** | Opens the map drawing what this filter finds |
+| **Select all found (n) on the map** | Makes the result, up to 200, the map's selection — see [Between a list and the map](search-and-filters.md#between-a-list-and-the-map) |
+| **Export** | GeoJSON, GPX, KML, CSV or zipped shapefile of everything the filter finds, not only this page |
+| **Deleted caves and features** | [Puts back](caves-and-entrances.md#deleted-caves-and-features) what you may restore |
+
+With the map open beside the list, pointing at a row rings that feature on the map, and picking
+it on the map marks its row.
 
 ## Visibility and protection
 

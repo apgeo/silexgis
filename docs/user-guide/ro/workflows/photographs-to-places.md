@@ -106,7 +106,7 @@ Ajung în [galerie](../features/photographs.md). De acolo puteți:
   (CC0, familia CC BY, sau toate drepturile rezervate),
 - să le puneți în **albume**, să le aranjați ordinea, să alegeți o copertă,
 - să le **rotiți**, în masă,
-- să marcați una cu stea ca **imagine principală** a unei peșteri sau a unei ture,
+- să marcați una cu stea ca **fotografie reprezentativă** a unei peșteri sau a unei ture,
 - să **publicați** fotografii individuale în galeria publică a instalării, ceea ce este o
   decizie separată de cine are voie să le citească.
 
@@ -142,6 +142,14 @@ fotografie — corectați ulterior un raport și fotografia se mută odată cu e
 nu vă spune o stație pe care nu o puteați vedea deja: acolo unde poziția peșterii vă este
 ascunsă, rândul spune asta. Rândurile sunt explicate unul câte unul la
 [Echipa pe ridicare](../features/live-tracking.md#echipa-pe-ridicare).
+
+**Sau dați-i o stație pentru totdeauna.** Când știți unde în subteran a fost făcută o fotografie,
+iar ea ține de peșteră, nu de o singură tură, legați-o de acea stație: deschideți topografia
+(**Vezi în 3D** pe pagina peșterii), dați clic pe stație, apoi **Leagă asta…**, și legați
+fotografia. Stația poartă apoi un mic aparat foto în vizualizatorul topografic și în vizualizarea
+3D, iar apăsarea lui arată fotografiile făcute acolo. Vedeți
+[Topografii și modele](../features/surveys-and-models.md#modele-topo-3d) și
+[Legături](../features/links.md).
 
 ---
 

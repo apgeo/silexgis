@@ -22,7 +22,9 @@ explicație și un link către harta 2D, nu o pânză neagră moartă.
 **Nu se contactează niciun serviciu extern.** Fără relief străin, fără imagini străine, fără
 geocodare străină. Motorul 3D este servit de propria dumneavoastră instalare, iar fundalul este
 format din hărțile de bază pe care le-ați configurat — deci o instalare fără ieșire la internet
-are nevoie de o hartă de bază la care poate ajunge.
+are nevoie de o hartă de bază la care poate ajunge. Un **serviciu de hărți** (WMS sau WMTS) pe
+care instalarea îl listează este oferit și în panoul de straturi al scenei, exact ca pe
+[hartă](map-workspace.md#hărți-suprapuse).
 
 Dacă browserul eliberează resursele grafice ale vizualizării de două ori la rând, vizualizarea se
 oprește și oferă o reîncărcare, în loc să rămână stricată.
@@ -108,9 +110,26 @@ acolo unde topografia conține schițe sau dimensiuni de galerie măsurate din c
   așteptări diferite, nu aceeași tăcere. Odată desenați, se arată și mărimea, și numărul de
   triunghiuri. Un model convertit înainte ca serverul să înceapă să măsoare mărimile este descris
   doar prin numărul de triunghiuri.
+- **Pereții mari sunt întâi întrebați.** Pereții mai mari de 50 MB — un cost real pe abonamentul
+  de date al unui telefon — nu se descarcă la selectare: scena spune *Acești pereți au 54.7 MB de
+  descărcat.* cu un buton **Descarcă-i**, și nu se aduce nimic până nu îl apăsați. Odată acceptați,
+  aceiași pereți nu mai sunt întrebați cât timp pagina rămâne deschisă. Mărimea este valoarea
+  implicită a administratorului, iar dumneavoastră o puteți stabili pe a dumneavoastră pentru acest
+  browser în [Setări › Avansat](account-and-settings.md#avansat), la **Întreabă peste (MB)** (0
+  întreabă înaintea fiecărei descărcări).
 
 Vedeți [Topografii, poligonații și modele 3D](surveys-and-models.md#pereții-peșterii-stl) pentru
 încărcare și pentru declarația de coordonate de care are nevoie un `.stl`.
+
+## Fotografii la stațiile lor
+
+Pentru **peștera selectată**, fiecare fotografie legată de o stație a uneia dintre topografiile ei
+este marcată la acea stație cu un aparat foto — aceleași locuri pe care le marchează
+vizualizatorul de topografii — la adâncimea stației, așa că stă printre liniile topografiei acolo
+unde a fost făcută fotografia. Apăsați un aparat foto pentru a deschide fotografiile acelei stații;
+selecția rămâne pe peșteră. Comutatorul **Fotografii la stațiile lor** din lista de straturi le
+stinge, iar rândul de sub el spune câte sunt. Se arată doar fotografiile și pozițiile topografice
+pe care aveți voie să le vedeți.
 
 ## Pereții tuturor peșterilor din vedere
 
@@ -143,6 +162,13 @@ limite sunt setări ale instalării; vedeți `SILEXGIS__Map__MeshesInView…` î
 schimba pentru propriul browser, până la plafonul instalării, în
 [Setări › Avansat](account-and-settings.md#avansat) — panoul trimite acolo cât timp acest mod
 este ales.
+
+## Urmarea filtrului hărții
+
+Scena citește filtrul hărții, ca harta plană: sub un filtru desenează intrările, elementele de
+suprafață, poligonațiile și pereții peșterilor pe care filtrul le păstrează, și pe nicio alta. Un
+filtru care nu mai funcționează cât priviți golește ce a restrâns, în loc să lase vechiul desen în
+picioare. Vedeți [Filtre pe hartă](search-and-filters.md#filtre-pe-hartă).
 
 ---
 

@@ -39,6 +39,19 @@ lui, o reluare în curs — este exact cum l-ați lăsat când dialogul se înch
 Un film se face pe **o singură ridicare**. Turele urmărite pe altă ridicare a aceleiași peșteri
 nu sunt oferite în același film.
 
+**Butonul răspunde întotdeauna.** Realizarea filmului se aduce doar când o cere cineva, așa că pe o
+conexiune lentă dialogul spune întâi *Se deschide realizarea filmului…*. Dacă nu se poate deschide,
+un dialog separat spune *Realizarea filmului nu s-a putut deschide.*, cu motivul dat de browser —
+sau, când aplicația a fost actualizată după ce pagina a fost deschisă, că pagina trebuie
+reîncărcată ca să folosească versiunea nouă. Pagina turei din spate rămâne cum era, iar o nouă
+apăsare pe buton încearcă din nou.
+
+**Previzualizarea spune cât a sosit din model.** Citește același fișier de ridicare ca
+vizualizatorul aflat deja pe pagină — o singură descărcare, nu două — și îl numără pe măsură ce
+sosește: *Se încarcă modelul pentru previzualizare… 12.4 MB din 31.0 MB*. Dacă timp de 45 de
+secunde nu mai sosește nimic, descărcarea este abandonată, cu un mesaj care spune asta și un buton
+**Încearcă din nou**.
+
 ---
 
 ## Alegerea turelor

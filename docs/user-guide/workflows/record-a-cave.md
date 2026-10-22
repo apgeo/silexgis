@@ -63,7 +63,9 @@ winner. See [Measurements and statistics](../features/measurements-and-statistic
 
 From the cave's page: **Add entrance**. Each entrance carries:
 
-- its own **coordinates** (drawn on the map or typed),
+- its own **coordinates** — drawn on the map, or typed or pasted into **Type or paste a
+  position** in any of the [coordinate formats](../features/coordinates.md) (UTM, Stereo 70,
+  degrees and minutes…), which fills the longitude and latitude that are saved,
 - **altitude**,
 - an **entrance type**,
 - a **position quality** — unknown, GPS, from map, estimated — which is worth being honest
@@ -78,10 +80,13 @@ Once the cave exists, its page grows sections as you feed it:
 - **Photographs and documents** — drag them onto the page. A photograph can be starred as
   the cave's *headline picture*. See [Photographs](../features/photographs.md).
 - **Centerlines and 3D models** — upload Therion `.lox`, Survex `.3d`, or walls as `.stl`.
-  See [Surveys, centerlines and 3D models](../features/surveys-and-models.md).
+  The first of each kind becomes the cave's current model; when a later upload is a corrected
+  survey, the upload dialog offers to make it current once it has been read. See
+  [Surveys, centerlines and 3D models](../features/surveys-and-models.md).
 - **Survey sources** — archive the `.th`, `.th2`, `.thconfig`, `.svx`, compilation `.log` or
-  survey-app `.zip` the compiled survey was made from. Nothing reads them; they are kept so
-  the survey can be compiled again when the tools have moved on.
+  survey-app `.zip` the compiled survey was made from. Only a compilation log is read, for the
+  loop errors it reports; the rest are kept as they are, so the survey can be compiled again
+  when the tools have moved on.
 - **Tags** — free-form, and filterable on tables and map layers.
 - **Links** — to the report that describes it, to the cave next door, to the record that
   turned out to be the same hole. See [Links](../features/links.md).

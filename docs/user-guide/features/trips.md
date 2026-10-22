@@ -20,7 +20,7 @@ A trip is logged **over the days it actually ran**, not on a single date.
 | | |
 |---|---|
 | **Title** · **Trip purpose** · **Dates** · **Location** | |
-| **Organizing caving group** | |
+| **Organizing caving group** | Picked from the caving groups. A club not listed yet can be added from here — typing its name offers **Create «name»** |
 | **Entry / exit time** and **underground time** | Worked out over however many days it ran |
 | **Visibility** | Who may read the trip at all |
 | **Places** | How many people it has room for. Empty means no limit |

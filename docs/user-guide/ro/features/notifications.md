@@ -37,7 +37,7 @@ Feluri de a vă ajunge: **În aplicație · E-mail · Mesaj text.**
 | Cineva comentează la ceva de-al meu | |
 | Cineva scrie unui grup de speologie din care fac parte | Un anunț |
 | Încărcările mele termină de procesat | |
-| **Alerte de securitate** | Nu pot fi oprite |
+| **Alerte de securitate** | Nu pot fi oprite. Parola schimbată sau resetată, adresa de e-mail schimbată, autentificarea în doi pași oprită — inclusiv când o oprește ștergerea numărului de telefon sau resetarea făcută de un administrator |
 | **O tură pe care sunt a întârziat** | Nu poate fi oprită, nu este niciodată reținută pentru un rezumat |
 
 Cele două setări de comentarii sunt **separate în mod deliberat**, ca oprirea traficului de pe un

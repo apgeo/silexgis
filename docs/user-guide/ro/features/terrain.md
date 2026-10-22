@@ -25,6 +25,31 @@ Dacă instalarea are relief, veți observa că:
 
 Dacă nu are, vizualizarea 3D funcționează în continuare. O spune limpede, în loc să eșueze.
 
+Acolo unde instalarea are mai multe generări — una grosieră peste regiune și una mai fină peste un
+masiv, de pildă — vizualizarea 3D vă lasă să alegeți pe care o desenează și vă oferă una mai fină
+când vă opriți deasupra terenului pe care îl acoperă. Vedeți
+[Alegerea între generări](3d-view.md#alegerea-între-generări).
+
+## Imagini ale terenului pe hartă
+
+Relieful nu este doar pentru glob. Un administrator poate cere ca o generare încheiată să fie
+transformată în **imagini ale terenului** — relief umbrit, pantă, orientare, asperitate, poziție
+topografică, rugozitate, un relief colorat sau curbe de nivel — iar oricine are dreptul de a citi
+relieful le găsește apoi în lista de straturi a hărții plane, la **Imagini ale terenului**. Activați
+una și se desenează sub peșteri.
+
+- Fiecare imagine este listată după numele ei, cu felul imaginii și spațiul pe care îl ocupă pe disc
+  alături, așa că o hartă a pantei și una a orientării cu același nume pot fi totuși deosebite. O
+  imagine care încă se calculează apare în listă, dar nu poate fi activată încă.
+- **Depășită** lângă o imagine înseamnă că terenul de sub ea s-a schimbat de când a fost calculată —
+  instalarea desenează acum altă generare, sau modul în care se calculează acel fel de imagine a
+  fost între timp corectat. Se desenează în continuare, pentru că un relief umbrit vechi este de
+  obicei mai bun decât niciunul; indicați eticheta ca să aflați care dintre cele două motive este.
+  Nu citiți o nepotrivire între o asemenea imagine și peșteri ca pe o greșeală în datele peșterii.
+- **Sunt imagini, nu date.** De-a lungul unei curbe de nivel nu se poate măsura, ea nu poate fi
+  selectată sau exportată și nicio curbă nu își poartă înălțimea. Curbele de nivel rămân netede până
+  când harta este apropiată dincolo de circa 1:4.000; mai aproape de atât își arată treptele.
+
 ## Ce costă să-l ai
 
 Relieful este generat de un administrator, un dreptunghi pe rând. Acoperirea gratuită de 30 de
@@ -36,7 +61,8 @@ Două lucruri de știut ca ne-administrator:
 1. **Generarea dalelor are nevoie de un serviciu suplimentar** pe care o instalare obișnuită nu îl
    rulează. Dacă a dumneavoastră nu îl rulează, generările se opresc la acel pas, iar pagina
    Relief explică exact asta, împreună cu singurul rând de adăugat în fișierul de mediu al
-   instalării.
+   instalării. După ce serviciul rulează, generarea oprită este rulată din nou de unde s-a oprit,
+   nu luată de la capăt.
 2. **Adâncimea este un compromis.** Fiecare nivel aproximativ împătrește și dalele scrise, și
    timpul necesar. Nivelul 13 este cam ce conține efectiv acoperirea de 30 de metri; a cere mai
    mult de la acele date nu adaugă decât spațiu pe disc.
@@ -56,4 +82,6 @@ poziționată pe verticală.
 
 ---
 
-Pentru fluxul complet de generare, vedeți [Generarea reliefului](../admin/terrain-builds.md).
+Pentru fluxul complet de generare și pentru cererea imaginilor terenului, vedeți
+[Generarea reliefului](../admin/terrain-builds.md). Înrudite: [Vizualizarea 3D](3d-view.md) ·
+[Spațiul de lucru al hărții](map-workspace.md)

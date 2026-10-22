@@ -141,7 +141,9 @@ Two things follow:
   outbound request at the moment a survey is read.
 - **National grids work.** Romanian Stereo70 (EPSG:31700) is the obvious case: it is not
   hard-coded in the viewer, and on an installation that had to fetch definitions it would lose
-  its georeferencing or fail to load at all.
+  its georeferencing or fail to load at all. It is placed with the Romanian seven-parameter datum
+  shift — the same one the map and the [coordinate formats](coordinates.md) use — so a Stereo 70
+  survey in the viewer sits where the map puts the cave, not a hundred-odd metres beside it.
 
 If you are used to surveys quietly losing their position on a self-hosted system, this is why
 that does not happen here.
@@ -192,6 +194,41 @@ the same coordinate system.
 Comparing is a way of looking. Nothing about it is saved, and it does not change which model is
 current.
 
+### Scanned maps beside the model
+
+A survey's drawn plan or profile — a scan or a photograph of the sheet, filed as an image
+[document](documents-and-cabinets.md) — can be shown beside its model. In the window a model opens
+in, the strip above the viewer holds a **3D** tab and one tab per map. **Add map**, the **+** at
+the end of the strip, declares one: choose the **Map image document** and its **View** — **Plan**,
+**Profile** or **Other view**. **Map settings** changes the view, or **Remove map from this
+model**: only the declaration goes, and the document and its points stay.
+
+The picture needs no coordinates. What ties it to the survey is its **points**. Press
+**Define points**, then press a station in the 3D view or find it by name — the strip says
+*Placing A12 — click its point on the map* — and click where that station is drawn on the sheet.
+A station that already has a point asks before it gets a second one (**Move it here**); press a
+point to **Move** or **Delete** it, and **Done** when you have finished. A point belongs to the
+exact scan it was placed on: after a newer scan of the same map is uploaded, the old points are not
+drawn on the new picture — the tab says *Points placed on an older scan of this map: N*, and while
+defining they are listed to **Re-place**. Changing a map needs the right to edit its document, and
+a point made by a link you may not edit says *You may not correct this point*.
+
+**A tracked trip uses the points.** On a trip's tracking panel and on a published trip's page,
+each declared sheet is a tab beside the 3D view, and the party is drawn on it at every station that
+has a point, through the same replay. Somebody at a station with no point on that sheet is not
+placed on it by a guess: their card says *No point on this map*, and the 3D view still shows them.
+
+A georeferenced sheet — one that has a position on the earth — is a different thing, drawn on the
+map itself: see [Georeferenced raster maps](georeferenced-maps.md).
+
+### A second viewer on trial
+
+The window a model opens in (**View in 3D**) has, beside its **3D** tab, a **LochViewer (trial)**
+tab: the same file, shown by a second survey viewer that is being tried out. It is loaded only when
+you open that tab, and it is a separate application — its settings, measurements and sharing are its
+own and nothing done in it is saved here. Where the tab stays empty, your installation does not let
+it be shown inside the page; **Open in a new window** shows it on its own.
+
 ---
 
 ## Cave walls (`.stl`)
@@ -216,7 +253,8 @@ level.
 
 Once converted, the walls are drawn in the [3D scene](3d-view.md#walls-of-the-selected-cave)
 for the selected cave only. The model list shows the converted mesh's size in megabytes beside
-its triangle count, and the scene names the size while it fetches, so a fifty-megabyte mesh on a
+its triangle count, and the scene names the size while it fetches — and, above a set size,
+[asks before it fetches](3d-view.md#walls-of-the-selected-cave) — so a fifty-megabyte mesh on a
 metered connection is a choice rather than a surprise.
 
 ---
@@ -258,7 +296,10 @@ A cave's line work, projected onto the map surface and drawn at depth in 3D.
 **Upload centerline**, or let one be **extracted** from a compiled survey — the *Source*
 column says which.
 
-Each centerline shows its **length** and its number of **paths**. One can be made the cave's
+Each centerline shows its **length** and its number of **paths**. An uploaded centerline's length is
+measured along the passage, not along the shots fired at the walls, which in a survey export can
+add up to many times the passage; one uploaded before its length was measured this way keeps the
+length it was given until it is uploaded again. One can be made the cave's
 **default shape**, which is what other things use when they need "the shape of this cave".
 
 On the map, centerlines are the expensive layer and have their own detail and budget

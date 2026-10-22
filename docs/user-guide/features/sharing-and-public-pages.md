@@ -26,7 +26,8 @@ An installation that publishes nothing shows a visitor **the sign-in page** and 
 
 ## Share links
 
-On a feature, a cave or a saved view: **Share → Create link**.
+On a cave or a feature: **Share → Create link**. A saved view has a link of its own — see
+[Shared views](#shared-views).
 
 | Choice | |
 |---|---|
@@ -51,8 +52,17 @@ nothing.
 
 ## Shared views
 
-See [Saved views](saved-views-and-windows.md#saved-views). Same once-only token, same
-revocation, same protections.
+A saved view's **Share link** hands the view to somebody with no account: its link to copy, and
+the same link as a QR code. It differs from a share link in two ways:
+
+- **It is not shown only once.** A view keeps the same link, shown again each time you press
+  **Share link**.
+- **It ends when the view is deleted.** There is no separate control for withdrawing it.
+
+What the visitor sees is bounded hard: only records that are Public in their own right, only
+inside the view's own area, **nothing at all of a protected cave or feature** — not even an
+approximate position — and no caves or features at all for a view narrowed by a filter. The full
+list is under [Saved views](saved-views-and-windows.md#saved-views).
 
 ---
 

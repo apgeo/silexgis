@@ -56,7 +56,8 @@ here, and why"**, which names the rule that decided it.
 
 ## 2. A share link — one record, revocable
 
-On a feature, a cave, a saved view: **Share → Create link**.
+On a cave or a feature: **Share → Create link**. (A saved view has a link of its own — see the
+next section.)
 
 You choose:
 
@@ -76,10 +77,23 @@ Existing links are listed with when they were created and whether they are *Acti
 ## 3. A shared map view
 
 Save the current map — its extent, its layers, its filters — as a named **saved view**
-(*Saved views → Save current view*). Then **Copy share link**.
+(*Saved views → Save current view*). Then press **Share link** on it: you get the link to copy,
+and the same link as a QR code.
 
-Someone opening that link gets the map as you configured it, with protections intact. Useful
-for "here is the area we are talking about" without giving anybody an account.
+Someone opening that link gets the area as you configured it, over a public background, with
+protections holding harder than for any account. Useful for "here is the area we are talking
+about" without giving anybody an account. Know what it leaves out:
+
+- **Only what is Public in its own right** is drawn, and **nothing of a protected cave or
+  feature** — not even an approximate position.
+- **A view narrowed by a filter shows no caves or features** through its link, because a link
+  has nobody to run the filter as; layers drawn from saved filters never show. The share dialog
+  says so before you send it. A view narrowed only by the layer panel's tag still shows what the
+  tag lets through.
+- **A place typed into the map's filter is never saved in a view**, so it cannot travel by link.
+
+The link stays the same for as long as the view exists; to end it, delete the view. See
+[Saved views](../features/saved-views-and-windows.md#saved-views).
 
 You can also **Export map image** for a picture to paste into a document.
 

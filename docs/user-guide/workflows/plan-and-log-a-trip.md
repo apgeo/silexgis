@@ -207,12 +207,16 @@ opened by everybody who may read the trip. Details:
 [The map in the download](../features/trips.md#the-map-in-the-download).
 
 There is no public address for a report. It is downloaded by somebody signed in who may read
-the trip.
+the trip. Where your installation runs its document converter, **Download PDF** gives the same
+write-up as a PDF; the copy filed against the trip is always a Word document.
 
 Your club can write **its own layout**: download the standard one (a short, self-explaining
-text file), edit it, upload it under Configuration → Report layouts, and choose it. A layout
-can only ask for things the reader was already given, and a line whose contents turn out
-empty simply disappears.
+text file), edit it, upload it under Configuration → Report layouts, and choose it — or give
+it to one trip purpose, so that every trip of that purpose is written up in it. A layout of
+your own can also print the trip's tracking journal and the survey's station list, for a trip
+that was [followed from the surface](../features/live-tracking.md). A layout can only ask for
+things the reader was already given, and a line whose contents turn out empty simply
+disappears. Details: [The write-up](../features/trips.md#the-write-up).
 
 ---
 
@@ -223,8 +227,8 @@ empty simply disappears.
 - **Your own trips** — *Trip logs → My trips* answers *what am I going on, and when*:
   soonest first, including trips you have been asked about and not turned down. It is worked
   out from whoever is signed in and cannot be asked about anybody else.
-- **Statistics** — a person, a cave and a club each get their totals, counted over the trips
-  you may read. See [Measurements and statistics](../features/measurements-and-statistics.md).
+- **Statistics** — a person, a cave, a club and a camp each get their totals, counted over the
+  trips you may read. See [Measurements and statistics](../features/measurements-and-statistics.md).
 
 ---
 

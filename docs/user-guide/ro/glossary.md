@@ -11,6 +11,9 @@ mai îngust decât în vorbirea speologică obișnuită, se spune.
 
 ---
 
+**Administratori deplini** — Singurul grup al cărui *drept vine din apartenența însăși*, decis
+înaintea consultării oricărei reguli. Nu are reguli.
+
 **Album** — Un aranjament îngrijit și ordonat de fotografii, cu o copertă, partajabil printr-un
 link propriu. Ștergerea lui nu șterge fotografiile.
 → [Fotografii](features/photographs.md#albume)
@@ -27,6 +30,10 @@ pe care l-a ales.
 și ora la care se dă alarma dacă nimeni nu a anunțat.
 → [Liste de verificare și apelul de urgență](features/checklists-and-callout.md#apelul-de-urgență)
 
+**Categorii** *(statistici)* — Ecranul de sub **Statistici** care compară o măsurătoare între
+tipuri de peșteri sau între tipuri de rocă, cu câte o cutie pentru fiecare grupă.
+→ [Măsurători și statistici](features/measurements-and-statistics.md#tot-registrul-explorat)
+
 **Ciornă** — O tură sau un eveniment care nu a anunțat pe nimeni. Nu o înregistrare *ascunsă*:
 cine este admis de vizibilitatea ei o poate citi deja.
 
@@ -38,9 +45,19 @@ tabere, cu un grad de promisiune și o stare.
 
 **Cont** — Cineva care se poate autentifica. Distinct de un **speolog**.
 
+**Cea mai mică distanță** — Cea mai scurtă distanță dintre liniile topografice a două peșteri, cu
+componentele ei orizontală și verticală — *cele două părți ale aceleiași linii*, nu două măsurători
+separate. → [Măsurători](features/measurements-and-statistics.md#cea-mai-mică-distanță)
+
 **Cod tipărit** — O etichetă QR prinsă la o peșteră. Scanarea ei confirmă doar că acel cod este
 înregistrat.
 → [Partajare](features/sharing-and-public-pages.md#coduri-qr-tipărite)
+
+**Condiție de poziție** — O condiție de filtru despre locul unui lucru: *în raza* unei distanțe de
+un obiect, un punct sau rezultatele unui filtru salvat, ori *în interiorul* unei zone numite sau al
+unui poligon lipit. Primește răspuns după pozițiile care vă sunt arătate, niciodată după poziții
+reținute de la dumneavoastră.
+→ [Căutare și filtre](features/search-and-filters.md#condiții-de-poziție)
 
 **Dulap** — Un raft din arborele de clasare în care trăiesc documentele, și unitatea pe care se
 acordă permisiuni. Un document poate sta în mai multe deodată.
@@ -52,6 +69,20 @@ dintre *Element, Peșteră, Intrare în peșteră, Poligonație*.
 
 **Element principal** — Într-o legătură direcțională, elementul *din care* se citește relația.
 
+**Filtru** — O întrebare despre înregistrările dumneavoastră: ce feluri de obiecte, ce condiții
+trebuie să îndeplinească și în ce ordine vine răspunsul. I se răspunde întotdeauna cu ce are voie să
+vadă cel care întreabă — restrânge, nu lărgește niciodată.
+→ [Căutare și filtre](features/search-and-filters.md#filtre)
+
+**Filtru rapid** — Un filtru salvat fixat ca buton de un clic pe hartă, în registrul peșterilor și
+pe lista de elemente. Cel mult șase; vă urmează contul.
+→ [Căutare și filtre](features/search-and-filters.md#filtre-rapide)
+
+**Filtru salvat** — Un filtru păstrat sub un nume, pentru dumneavoastră, pentru un grup de speologie
+sau pentru toți cei autentificați. Partajarea lui dă doar întrebarea și nu păstrează niciodată un
+loc de la care se măsoară.
+→ [Căutare și filtre](features/search-and-filters.md#filtre-salvate)
+
 **Fișier de geodate** — Un fișier vectorial încărcat (GPX, KML, shapefile…). Devine un strat de
 hartă și apoi poate fi verificat spre înregistrări de cadastru.
 → [Geodate](features/geodata.md)
@@ -60,12 +91,27 @@ hartă și apoi poate fi verificat spre înregistrări de cadastru.
 circularitate, direcția axei lungi…). A nu se confunda cu **morfometria** unei peșteri, care
 înseamnă cifrele declarate.
 
-**Imagine principală** — Fotografia marcată cu stea care reprezintă o peșteră sau o tură.
+**Fotografie reprezentativă** — Fotografia marcată cu stea care reprezintă o peșteră sau o tură.
+
+**Grup de speologie** — Un club, un grup sau o organizație. Contează pentru vizibilitate, pentru
+delimitarea permisiunilor și pentru anunțuri. Nu este același lucru cu un **grup de permisiuni**.
+
+**Invitație** *(cont)* — Felul în care un cont este deschis de altcineva: **Invitați pe cineva**
+din *Administrare → Conturi* cere un nume și o adresă de e-mail, iar titularul primește un link
+pentru a-și alege singur parola. Linkul funcționează o singură dată și timp de 24 de ore. Nu este
+același lucru cu invitarea la o tură, care nu acordă nimic. → [Conturi](admin/README.md#conturi)
 
 **Istoric** — Firul de modificări al unei singure înregistrări, cu restaurare pe câmp. Valorile
 protejate se citesc *„Valoare ascunsă"*. Distinct de **istoricul de modificări**, care este vederea
 pe toată instalarea.
 → [Istoric și modificări](features/history-and-audit.md)
+
+**Istoric modificări** — Evidența la nivelul întregii instalări a ce s-a întâmplat. Distinctă de
+**istoricul** propriu al unei înregistrări. → [Istoric și modificări](features/history-and-audit.md)
+
+**Link de partajare** — Un link revocabil către o singură înregistrare, public sau doar cu
+autentificare. Afișat o singură dată. Nu dezvăluie niciodată o locație protejată.
+→ [Partajare](features/sharing-and-public-pages.md)
 
 **Legătură** — O relație numită între două sau mai multe lucruri de orice fel, care poate indica o
 parte în loc de întreg. Distinctă de **conținere**. → [Legături](features/links.md)
@@ -76,8 +122,17 @@ orientativă** — nimic nu este refuzat vreodată pentru că un rând nu este b
 
 **Locație protejată** — Vedeți *Protecția locațiilor*.
 
+**Morfometrie** — Din păcate, două lucruri diferite. La o **peșteră**, cifrele declarate pe care
+le-a scris cineva (lungime, adâncime, volum…). La un **element de tip zonă**, *forma măsurată*
+calculată din contur (suprafață, circularitate, direcția axei lungi…).
+
 **Model de raport** — Un model scris de club pentru documentul Word pe care îl generează o tură.
 Poate cere doar lucruri care i-au fost deja date cititorului.
+
+**Nume scurt** *(al unui speolog)* — Cum i se spune cuiva în echipă — numele cu care este scris
+un jurnal de suprafață. Apare la turele publicate în locul numelui întreg și este recunoscut
+întreg când o foaie de rapoarte numește pe cineva prin el. Gol, se folosește numele întreg.
+→ [Persoane, speologi și cluburi](features/people-and-clubs.md#lista-de-speologi)
 
 **Poligonație** — Linia topografică a unei peșteri, proiectată pe hartă și desenată la adâncime în
 3D. Fie încărcată, fie extrasă dintr-o topografie compilată.
@@ -92,6 +147,21 @@ Poate cere doar lucruri care i-au fost deja date cititorului.
 
 **Calitatea poziției** — Cum au fost obținute coordonatele unei intrări: necunoscută, GPS, de pe
 hartă, estimată. Diferența dintre „mergi aici" și „caută pe versantul ăsta".
+
+**Regulă de detectare** — Ce decide că un punct numit `P. Ursilor` este propus ca peșteră numită
+*Ursilor*. → [Vocabulare](admin/vocabularies.md#configurare--reguli-de-detectare)
+
+**Resetarea celui de-al doilea factor** — Ce face un administrator pentru un membru care și-a
+pierdut *și* aplicația de autentificare, *și* codurile de recuperare: **Resetează al doilea
+factor** dezactivează toți factorii secundari, oprește codurile de recuperare, deconectează
+membrul de pe toate dispozitivele și îl anunță prin e-mail. Apoi acesta se autentifică doar cu
+parola și își configurează din nou un al doilea factor. Refuzată pentru propriul cont.
+→ [Conturi](admin/README.md#conturi) ·
+[Autentificare în doi pași](features/account-and-settings.md#autentificare-în-doi-pași)
+
+**Selecție** *(hartă)* — Ce este selectat pe hartă: un lucru sau mai multe. Se umple prin clic sau
+— până la 200 — din *Selectează pe hartă tot ce s-a găsit* al unei liste. Ține cât sesiunea și nu
+este un **set de elemente**. → [Spațiul de lucru al hărții](features/map-workspace.md#selectarea-lucrurilor)
 
 **Selecție** *(sincronizare)* — Setul de peșteri pe care le poartă un telefon offline. Numește
 peșteri, nu le preia. → [Sincronizare](features/mobile-sync.md)
@@ -119,6 +189,15 @@ rol. Nu este persoana: cine are două roluri, sau cine a plecat și s-a întors,
 
 **Tabără** *(expediție)* — Un efort de mai multe zile și mai multe ture, cu listă proprie, zonă de
 lucru și panou de continuări. → [Tabere](features/camps.md)
+
+**Tip de document** — Ce este un document (autorizație, raport topografic, buletin…) și **ce
+detalii li se cer documentelor de acel tip**.
+
+**Tip de obiect** — Ce înregistrează un obiect pe hartă — dolină, izvor, puț, bivuac, zonă
+carstică… — și odată cu el formele în care poate fi desenat, cum apare când locația îi este
+protejată și ce detalii cere. Se ține în *Configurare → Tipuri de obiecte*, unde un club își poate
+adăuga propriile tipuri. Mai îngust decât cele patru feluri de mai sus (element, peșteră, intrare,
+poligonație). → [Vocabulare](admin/vocabularies.md#configurare--tipuri-de-obiecte)
 
 **Text adnotat cu legături** — Un document ale cărui pasaje sunt evidențiate și în care urmărirea
 unui pasaj mută harta, scena 3D și vizualizatoarele deschise.

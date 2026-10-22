@@ -67,7 +67,9 @@ deosebite prin culoare și denumite pe hartă, cu nivelul de dedesubt la un clic
 | **Zone înăuntru: n** | Vi se spune *înainte* să se ceară formele acelui nivel, ca să știți că mai există un nivel de deschis |
 
 Numele sunt desenate cu un halou, pentru că stau la fel de des peste imagini aeriene ca peste un
-fundal simplu.
+fundal simplu. Harta de ansamblu desenează doar fundaluri obișnuite din dale; un serviciu de hărți
+(WMS sau WMTS) oferit de instalare apare în [spațiul de lucru al hărții](map-workspace.md#hărți-suprapuse)
+și în vizualizarea 3D, nu aici.
 
 ### Un lucru care arată a defect și nu este
 

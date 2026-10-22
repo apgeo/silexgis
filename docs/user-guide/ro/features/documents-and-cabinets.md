@@ -257,28 +257,15 @@ pasaj dintr-o relatare tastată — vedeți
 
 ## Cine a citit un document
 
-Două suprafețe, cu reguli intenționat diferite.
+**Proprietarul** unui document, sau cineva cu dreptul asupra istoricului de audit, poate vedea
+cine a luat o copie din el.
 
-**Propriul istoric de lectură** — documentele din care ați luat o copie, cele mai noi întâi. Nu
-are nevoie de nicio permisiune în afară de a fi dumneavoastră.
+Faptul că aveți voie să *citiți* un document **nu** face ca cititorii lui să vă aparțină — un
+membru de club ar putea altfel afla care alți membri s-au uitat la o anumită topografie, ceea ce
+este un fapt despre ei.
 
-**Cine a citit acest document** — pentru **proprietarul** documentului sau pentru cineva cu
-dreptul asupra istoricului de modificări.
-
-> **A avea voie să citiți un document nu face ca cititorii lui să vă aparțină.** Un membru de club
-> ar putea altfel afla care alți membri s-au uitat la o anumită topografie, ceea ce este un fapt
-> despre *ei* și pe care nu au fost niciodată de acord să-l publice.
-
-Proprietarul documentului este inclus pentru că răspunde de ce a pus înăuntru și poate întreba în
-mod rezonabil cine a luat o copie.
-
-**Nimeni nu poate obține istoricul de lectură al altcuiva numindu-l.** Vederea per document este
-singurul mod în care lectura unei persoane este vizibilă alteia, și este limitată la un document
-pe care aceasta îl administrează deja.
-
-Un document pe care nu aveți voie să-l citiți răspunde *„nu a fost găsit"*, nu *„interzis"* —
-pentru că un istoric care ar răspunde altfel pentru un document care există i-ar divulga
-existența.
+Propriul istoric de lectură este în contul dumneavoastră. **Nimeni nu îl poate obține pe al
+altcuiva numindu-l.** Mai multe la [Istoric și audit](history-and-audit.md#istoricul-de-acces--cine-a-citit-un-document).
 
 ---
 

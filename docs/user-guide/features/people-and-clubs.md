@@ -27,6 +27,7 @@ cannot answer an invitation. They have to be reached another way.
 | Field | |
 |---|---|
 | **Name** · **Email** · **Phone** | |
+| **Short name** | *"What the party calls them — the name a surface log is written in."* Shown on [published trips](live-tracking.md#what-a-follower-sees) in place of the full name, and matched whole when a [sheet of reports](live-tracking.md#importing-a-spreadsheet-of-reports) names somebody by it. Empty, the full name is used |
 | **Caving groups** | Which clubs they belong to |
 | **Notes** | *"Only people who keep the roster can read these."* |
 
@@ -155,15 +156,18 @@ If nobody on the roster holds an account, it tells you there is nobody to tell.
 
 ## Accounts
 
-Accounts are created by whoever runs the installation, unless open registration has been
-switched on.
+Accounts are opened by an administrator — **Invite someone** on
+[Administration → Accounts](../admin/README.md#accounts), which mails the person a link to
+choose their own password — unless open registration has been switched on. Either way the
+account gets an entry on the caver roster.
 
 **Accounts are not deleted from the settings page.** *"Anything you have added stays with the
-club, so ask an administrator."* — because deleting an account would orphan the record of
-what that person did.
+club, so ask an administrator."* An administrator who deletes an account shuts the person out;
+**their entry on the roster and the trips they were on stay**, because deleting those would
+orphan the record of what that person did.
 
-You can **export your own data**: a copy of your profile, addresses, settings and a list of
-what you have added. It is prepared in the background and downloaded when ready.
+You can **export your own data**: a copy of your profile, addresses, settings, saved filters and
+a list of what you have added. It is prepared in the background and downloaded when ready.
 
 See [Your account and settings](account-and-settings.md).
 

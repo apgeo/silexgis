@@ -8,11 +8,24 @@
 ---
 
 **Administration → Messaging** configures where email and text messages go, what signing in
-requires, and one location-protection switch. **Administration → Message delivery** shows
-whether any of it is actually working.
+requires, and a handful of other installation-wide answers. **Administration → Message
+delivery** shows whether any of it is actually working.
 
 > These can also be set from the deployment's environment, and the page says so. Setting them
 > here is the route that does not need a restart.
+
+The page has eight tabs:
+
+| Tab | Decides | Below |
+|---|---|---|
+| **Email** | The mail server | [Email](#email) |
+| **Text messages** | The SMS gateway | [Text messages](#text-messages) |
+| **Sign-in policy** | Confirmed addresses, which second factors are offered, how long a code lives | [Sign-in policy](#sign-in-policy) |
+| **Location protection** | Two switches about how far protected places and the club's dates travel | [Location protection](#location-protection) |
+| **Vector import** | Whether an import may skip its review, and how duplicates are looked for | [Vector import](#vector-import) |
+| **Notifications** | How long notifications are kept, and what an announcement may cost | [Retention](#retention) · [The money guard](#the-money-guard) |
+| **Photo libraries** | Stopping and restarting the use of a photo library the installation already has | [Photo libraries](#photo-libraries) |
+| **Maps in documents** | Which map backgrounds a document may copy | [Maps in documents](#maps-in-documents) |
 
 ---
 
@@ -56,21 +69,59 @@ Set the ceiling with that in mind, and tell whoever writes announcements.
 ## Sign-in policy
 
 What signing in requires — including which two-factor methods this installation offers.
+
+| | |
+|---|---|
+| **Send a confirmation message when an account is created** | |
+| **Require a confirmed address to sign in** | An unconfirmed account is refused at sign-in and offered a new confirmation message. *"Has no effect until a mail server is configured — otherwise nobody could ever confirm."* |
+| **Allow authenticator apps** · **Allow emailed codes** · **Allow texted codes** | Emailed codes need a mail server, texted codes an SMS gateway. *"The weakest of the three: a number can be moved to another SIM by persuading the mobile operator."* |
+| **Code lifetime (minutes)** · **Wait between codes (seconds)** | For emailed and texted codes |
+
 Methods not enabled here are marked *"Not enabled on this installation"* on members' security
 pages.
 
+The same codes are asked for after a sign-in through an external provider: a provider proves
+who somebody is at the provider, not that they hold the account's second factor.
+
 ## Location protection
 
-One switch, described in full under
-[Location protection](location-protection.md#the-attachment-association-setting):
+Two switches, both described in full under [Location protection](location-protection.md):
 
 **"Show attachments of protected caves to everyone who can read them."**
+([more](location-protection.md#the-attachment-association-setting))
 
 Documents attached to a protected cave are **always served** — they are never hidden or
 stripped out. What this switch controls is whether the *association* between the document and
 that particular cave is disclosed.
 
 Turning it on **never reveals a position**: following the link still gives the protected view.
+
+**"Let members subscribe to their calendar from outside."**
+([more](location-protection.md#the-calendar-feed-setting)) Off by default. On, each member can
+create secret addresses a phone or desktop calendar polls without signing in; switching it off
+again stops every address already handed out. See
+[Subscribing to your calendar](../features/calendar-feed.md).
+
+## Vector import
+
+An imported file is [reviewed](../features/geodata.md#imports) before anything is created. This
+tab is where that step can be removed, and how far duplicate detection looks by default.
+
+| | |
+|---|---|
+| **Let a trusted user create objects without reviewing them** | Off by default. Turning it on never widens who may create — the importer still needs the right to create features — it only removes the step in between |
+| **Look for something already there within** | The starting radius for a new review; the importer can change it. Only objects whose exact position the reviewer may see are ever measured against |
+| **Names count as the same above** | How alike two names must be, 0 to 1, before a nearby object is called the same thing rather than merely close to it |
+
+## Photo libraries
+
+For an installation that runs a photo library beside it, each library has one switch: **Stop
+using this photo library**. While it is on, nothing in the application asks the library
+anything — no map layer, no browsing, no search and no pictures. It changes nothing about what
+the library itself holds or who can sign in to it directly.
+
+The switch cannot *connect* a library: which libraries an installation has is decided when it is
+deployed, and the page says so — or says that there is nothing to stop.
 
 ## Maps in documents
 
@@ -138,8 +189,10 @@ So a retry is not a replay. It is a fresh send under current rules.
 
 ### Retention
 
-How long notifications are kept is a number an administrator can change, over whatever the
-deployment configured.
+How long notifications are kept — **Keep notifications for (days)**, on the **Notifications**
+tab — is a number an administrator can change, over whatever the deployment configured. A
+notification is deleted after it, read or unread alike, and the record of how it was sent goes
+with it.
 
 ---
 

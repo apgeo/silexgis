@@ -18,7 +18,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | [Vizualizarea 3D](3d-view.md) | Globul, topografiile la locul lor, decuparea, camera, pereții |
 | [Relief](terrain.md) | Relieful real sub scena 3D și ce trebuie să facă o instalare pentru el |
 | [Zone de lucru](work-areas.md) | Terenul pe care lucrează efectiv clubul, ca arbore navigabil |
-| [Vederi salvate, panouri și ferestre multiple](saved-views-and-windows.md) | Salvarea unei hărți, desprinderea panourilor în ferestre proprii |
+| [Vederi salvate, panouri și ferestre multiple](saved-views-and-windows.md) | Salvarea și partajarea unei hărți, desprinderea panourilor în ferestre proprii, aranjări care vă urmează contul |
 | [Coordonate și convertorul](coordinates.md) | Formatele în care sunt scrise pozițiile, setările lor, scrierea unei poziții, convertirea mai multora deodată |
 
 ## Cadastrul
@@ -61,7 +61,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | [Persoane, speologi și cluburi](people-and-clubs.md) | Conturi, lista de speologi, grupuri, anunțuri |
 | [Contul și setările](account-and-settings.md) | Profil, e-mail, securitate, accesibilitate, filtre salvate, sincronizare |
 | [Notificări](notifications.md) | Ce vi se comunică, unde și cum schimbați |
-| [Căutare și filtre](search-and-filters.md) | Caseta de căutare, filtrele și editorul de condiții, filtrele salvate |
+| [Căutare și filtre](search-and-filters.md) | Caseta de căutare, filtrele și editorul de condiții, condițiile de poziție, filtrele salvate, trecerea între o listă și hartă |
 
 ## În afara instalării
 

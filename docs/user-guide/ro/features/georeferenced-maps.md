@@ -30,6 +30,12 @@ Fiecare hartă raster poartă:
 O hartă raster poate fi **legată de o peșteră**, așa ajungând o topografie scanată lângă peștera
 pe care o desenează.
 
+Un plan sau un profil scanat al unei peșteri este desenat în cadrul propriu al topografiei, nu pe
+un caroiaj de hartă — un profil nici nu poate fi așezat pe teren — așa că de obicei este mai bine arătat **lângă
+topografia 3D** decât pe hartă: acolo nu are nevoie de georeferențiere, ci doar de câteva stații
+arătate pe el, iar o echipă urmărită este desenată și pe el. Vedeți
+[Hărți scanate lângă model](surveys-and-models.md#hărți-scanate-lângă-model).
+
 ## Folosirea lor pe hartă
 
 Rasterele gata apar în arborele de straturi la **Hărți georeferențiate** / **Hărți raster**.

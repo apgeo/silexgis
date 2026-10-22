@@ -38,6 +38,17 @@ progress — is exactly as you left it when the dialog closes.
 A movie is made on **one survey**. Trips tracked on another survey of the same cave are not
 offered in the same movie.
 
+**The button always answers.** The movie maker is fetched only when somebody asks for it, so on
+a slow connection the dialog first says *Opening the movie maker…*. If it cannot open, a dialog of
+its own says *The movie maker could not open.*, with the browser's reason — or, when the
+application was updated after the page was opened, that the page has to be reloaded to use the new
+version. The trip page behind it stays as it was, and pressing the button again tries again.
+
+**The preview says how much of the model has arrived.** It reads the same survey file as the
+viewer already on the page — one download, not two — and counts it in: *Loading the model for the
+preview… 12.4 MB of 31.0 MB*. If nothing more arrives for 45 seconds, the download is given up with
+a message saying so and a **Try again** button.
+
 ---
 
 ## Choosing the trips

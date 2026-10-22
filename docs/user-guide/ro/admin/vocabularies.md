@@ -30,6 +30,41 @@ poate spune fiecare document de acel tip.
 
 ---
 
+## Configurare → Tipuri de obiecte
+
+**Ce guvernează:** tipurile de [elemente](../features/surface-features.md) pe care instalarea le
+înregistrează pe hartă — dolină, izvor, puț, bivuac, zonă carstică și celelalte — iar pentru
+fiecare:
+
+| | |
+|---|---|
+| **Denumire**, **Descriere**, **Ordine** | Cum este listat tipul și în ce ordine |
+| **Cod** | Litere mici, cifre și liniuțe de subliniere. *„Instalările schimbă obiecte după acest cod, deci păstrați-l stabil."* |
+| **Categorie** | Suprafață · Subteran · Zonă · Structură |
+| **Forme în care poate fi desenat** | Punct · Linie · Contur · Mai multe puncte · Mai multe linii · Mai multe contururi |
+| **Când este protejat** | *Arătat aliniat la grilă (doar punctele)* sau *Nu este arătat deloc* — cum apare un element de acest tip cuiva fără vedere exactă. Vedeți [Protecția locațiilor](location-protection.md) |
+| **Doar în interiorul altui obiect** | Pentru tipuri care n-au sens singure, cum este un loc din interiorul unei peșteri |
+| **Simbol pe hartă** | Ales din simbolurile pe care le are aplicația, sau niciunul |
+| **Ajustări de stil pe hartă** | Opțional; gol păstrează stilul implicit |
+| **Schema detaliilor** | Ce i se cere unui element de acest tip. În formular apar doar câmpuri simple de text, număr, da/nu și alegere, iar fereastra arată dinainte câmpurile pe care le va oferi formularul |
+
+**Adaugă un tip** pentru ceva ce înregistrează clubul și nu descrie niciun tip livrat. Tipurile
+care vin cu produsul sunt marcate **Livrat cu produsul**: codul, categoria, afișarea protejată și
+nevoia de părinte rămân cum au fost livrate, își păstrează toate formele cu care vin și nu pot fi
+șterse — dar denumirea, simbolul, ordinea și detaliile lor sunt ale dumneavoastră.
+
+Odată ce există elemente de un tip (inclusiv șterse), tipul poate fi doar **lărgit**: categoria
+rămâne, nicio formă nu mai poate fi scoasă și nu poate începe să ceară un părinte, pentru că
+elementele salvate n-ar mai fi în acord cu el. Un tip poate fi șters doar cât timp nu-l folosește
+niciun element.
+
+Are nevoie de **scriere** pe vocabulare, ca tipurile de documente: un tip de obiect decide în ce
+forme poate fi desenat fiecare element al lui și cum este arătat unul protejat.
+
+Înrudit: [Elemente](../features/surface-features.md)
+
+---
+
 ## Configurare → Scopuri de tură
 
 **Ce guvernează:** trei lucruri deodată.
@@ -85,6 +120,11 @@ Descărcați-l pe cel standard pentru felul dorit — un fișier text scurt care
 propriile comentarii — editați-l, încărcați-l și alegeți-l. Un model de tabără are un rând al său,
 `accounts`, care tipărește ce a scris fiecare tură din tabără despre ea însăși; scoateți rândul
 pentru un document mai scurt.
+
+Un model poate fi și **al unui singur scop de tură** — buletinul de cartare, de pildă: o tură
+înregistrată sub acel scop este redactată în el dacă nu alege cineva altul, înaintea modelului
+ales pentru tot restul. Un model pe scop; lăsați scopul gol pentru un model pe care îl poate
+folosi orice tură.
 
 Două proprietăți care fac asta sigur:
 
@@ -177,10 +217,7 @@ Accesibile din înregistrările care le folosesc, nu dintr-o pagină proprie:
 
 - **Tipuri de peșteri**, **tipuri de intrări**, **tipuri de rocă** — pe formularele de peșteră și
   de intrare.
-- **Tipuri de elemente**, cu simbolurile și proprietățile lor tipizate — pe formularele de element.
 - **Feluri de hărți georeferențiate** — geologică, topografică, turistică, hartă de peșteră, altele.
-- **Roluri în tabără** — membru, organizator, bucătar, tabără de bază, șofer, medic, echipament,
-  invitat.
 - **Feluri de evenimente** — ședință de club, instruire, zi de lucru, verificare de echipament,
   conferință, termen limită.
 - **Etichete** — libere, create pe măsură ce le folosiți, filtrabile peste tot.

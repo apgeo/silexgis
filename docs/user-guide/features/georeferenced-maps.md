@@ -30,6 +30,11 @@ Each raster map carries:
 A raster map can be **linked to a cave**, which is how a scanned survey sheet ends up beside
 the cave it draws.
 
+A scanned cave plan or profile is drawn in the survey's own frame rather than on a map grid — a
+profile cannot be laid on the ground at all — so it is usually better shown **beside the 3D survey** than on the map: there it needs
+no georeferencing, only a few stations pointed out on it, and a tracked party is drawn on it too.
+See [Scanned maps beside the model](surveys-and-models.md#scanned-maps-beside-the-model).
+
 ## Using them on the map
 
 Ready rasters appear in the layer tree under **Georeferenced maps** / **Raster maps**. Each

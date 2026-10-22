@@ -56,7 +56,8 @@ dumneavoastră aici și motivul lui"**, care numește regula care a decis.
 
 ## 2. Un link de partajare — o înregistrare, revocabil
 
-Pe un element, o peșteră, o vedere salvată: **Partajare → Creează link**.
+Pe o peșteră sau pe un element: **Partajează → Creează link**. (O vedere salvată are un link
+propriu — vedeți secțiunea următoare.)
 
 Alegeți:
 
@@ -76,12 +77,27 @@ Linkurile existente sunt listate cu data creării și cu starea *Activ* sau *Rev
 ## 3. O vedere de hartă partajată
 
 Salvați harta curentă — extinderea, straturile, filtrele ei — ca **vedere salvată** (*Vederi
-salvate → Salvează vederea curentă*). Apoi **Copiază linkul de partajare**.
+salvate → Salvează vederea curentă*). Apoi apăsați pe ea **Link de partajare**: primiți linkul de
+copiat și același link ca cod QR.
 
-Cine deschide linkul primește harta așa cum ați configurat-o, cu protecțiile intacte. Util pentru
-„iată zona despre care vorbim" fără să dați cont nimănui.
+Cine deschide linkul primește zona așa cum ați configurat-o, peste un fundal public, cu
+protecțiile ținând mai strâns decât pentru orice cont. Util pentru „iată zona despre care
+vorbim" fără să dați cont nimănui. Știți ce lasă afară:
 
-Puteți și **Exporta imaginea hărții**, pentru o poză de lipit într-un document.
+- **Doar ce este Public prin sine** se desenează, și **nimic dintr-o peșteră sau un element
+  protejat** — nici măcar o poziție aproximativă.
+- **O vedere restrânsă de un filtru nu arată prin link nicio peșteră și niciun element**, pentru
+  că în spatele unui link nu este nimeni ca care să ruleze filtrul; straturile desenate din filtre
+  salvate nu apar niciodată. Dialogul de partajare o spune înainte să trimiteți linkul. O vedere
+  restrânsă doar de eticheta din panoul de straturi arată în continuare ce lasă eticheta să
+  treacă.
+- **Un loc scris în filtrul hărții nu se salvează niciodată într-o vedere**, așa că nu poate
+  călători printr-un link.
+
+Linkul rămâne același cât timp există vederea; ca să-l încheiați, ștergeți vederea. Vedeți
+[Vederi salvate](../features/saved-views-and-windows.md#vederi-salvate).
+
+Puteți folosi și **Exportă imaginea hărții**, pentru o poză de lipit într-un document.
 
 ## 4. Fotografii: galeria publică și albumele partajate
 

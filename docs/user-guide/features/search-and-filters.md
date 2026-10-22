@@ -12,14 +12,17 @@ In the top bar, and on the map. One box, several kinds of answer, grouped:
 
 | Group | |
 |---|---|
-| **Caves** | |
-| **Features** | |
-| **Trip logs** | |
-| **Camps** | |
-| **Places** | Place names from an external geocoder (Nominatim) |
-| **In document text** | What is written *inside* your documents |
+| **Features** | Caves, entrances and every other feature — picking one opens its page |
+| **Trip logs** | Picking one opens the trip |
+| **Camps** | Picking one opens the camp |
+| **In document text** | What is written *inside* your documents — picking one opens the document at the matching page |
+| **Places** | Place names from an external geocoder (Nominatim) — picking one moves the map there |
 
-Each result offers **Zoom to** or **Open** as appropriate.
+Under a name, a quieter line says **what the hit is and where it belongs**, so two things of the
+same name can be told apart: a cave gives its type and region; any other feature gives its type
+and the name and region of the cave it belongs to — that cave named only if you may read it; a
+document gives its type and the cabinets it is filed in. The line never carries a coordinate, an
+altitude, an address or a location note.
 
 ### Searching inside documents
 
@@ -44,7 +47,8 @@ document's page **at the page the phrase was found on** (or sheet, or slide).
 
 A filter is a **question** about your records: which kinds of object it is about, the
 conditions they have to meet, and how the answer is sorted. You build one on a list screen —
-the [cave registry](#the-cave-registrys-filter) and the
+the [cave registry](#the-cave-registrys-filter), the
+[feature list](#filtering-on-list-pages) and the
 [gallery](photographs.md#conditions-and-saved-gallery-views) today — and you can keep it as a
 [saved filter](#saved-filters).
 
@@ -65,7 +69,8 @@ Which fields are offered depends on the kind of object. Among them:
   photographs) or a **Name** (everything else);
 - for every kind except cabinets and survey models: **Owner · Caving group · Visibility**;
 - for features and caves: **Kind · Category · Type · Tag · Protected location · Region · Rock
-  type · Surveyed length (m) · Depth (m) · Cave type · Other names**, and the
+  type · Surveyed length (m) · Depth (m) · Cave type · Other names**, **Position** (see
+  [Position conditions](#position-conditions)), and the
   [typed properties](#property-conditions) a feature type declares;
 - for trips: **Trip type · Trip date · Had an incident · State · Organising group**;
 - for documents: **Type · Language**;
@@ -82,7 +87,8 @@ the refusal never tells you what is there.
 **Added · Changed · Name · Owner · Date · Nearest**
 
 If nothing being searched can be sorted a given way, it tells you rather than sorting
-arbitrarily.
+arbitrarily. **Nearest** is offered only where there is a place to measure from — today the
+cave registry's advanced filter; see [Nearest first](#nearest-first).
 
 ### Limits, stated
 
@@ -116,8 +122,11 @@ choice* appears once something is chosen.
 
 ## Filters on the map
 
-The map reads the same filters. A saved filter, or a filter built in the cave registry, narrows
-the map's cave entrances, surface features, survey lines and — in the 3D view — the cave walls.
+The map reads the same filters. A saved filter — picked in the
+[selector beside the search box](#the-selector-beside-the-maps-search-box), a quick filter, or a
+saved view — or a filter handed over from the cave registry or the feature list with **Show these
+on the map** ([Between a list and the map](#between-a-list-and-the-map)) narrows the map's cave
+entrances, surface features, survey lines and — in the 3D view — the cave walls.
 A filter about caves keeps those caves' entrances; a filter about entrances keeps those entrances.
 It only ever takes away from what you can already see.
 
@@ -150,10 +159,10 @@ them.
 ### Quick filters
 
 Pin up to six saved filters — yours or ones shared with you — from **Saved filters** (*"Pin as a
-quick filter"*). They appear as one-click chips on the map and in the cave registry's toolbar,
-on every browser you sign in to. A chip applies its filter; pressing it again lifts it. A chip
-whose filter is no longer there, or cannot be run, is greyed out and says so until you unpin
-it, from the chip or from **Saved filters**.
+quick filter"*). They appear as one-click chips on the map, in the cave registry's toolbar and on
+the feature list, on every browser you sign in to. A chip applies its filter; pressing it again
+lifts it. A chip whose filter is no longer there, or cannot be run, is greyed out and says so
+until you unpin it, from the chip or from **Saved filters**.
 
 ---
 
@@ -173,15 +182,54 @@ list."* — with **Edit them** and **Remove them**.
 Next to the controls:
 
 - **Save as filter…** keeps the current question as a [saved filter](#saved-filters);
-- **Apply a saved filter…** picks one of yours, or one shared with your caving group;
+- **Apply a saved filter…** picks one you may use — yours, or one shared with you;
 - **Saved filters** opens the list of them.
 
 While a saved filter is applied, the page says *"Saved filter: name"*, and *"changed since"*
 once you change the controls. **Stop naming this saved filter** keeps the question and forgets
 the name.
 
+**Save as filter…** is unavailable, and says why when you point at it, while the question holds a
+typed point, a pasted polygon or a place to measure *Nearest* from — a saved filter never keeps
+one. See [Position conditions](#position-conditions).
+
 If a link's filter cannot be read, the page says so and shows every cave rather than guessing;
 ask whoever sent it for a fresh link.
+
+---
+
+## Between a list and the map
+
+The cave registry, the feature list and the map hand a question to each other, so you can look
+at the same set both ways.
+
+| Control | Where | Does |
+|---|---|---|
+| **Show these on the map** | Cave registry, feature list | Opens the map on the list's own filter, so it draws the rows listed |
+| **Select all found (n) on the map** | Cave registry, feature list | Puts the list's whole result — not just the page on screen — into the map's selection and opens the map on it |
+| **List the caves in view** | Map, in the row under the search box beside the quick filters | Opens the cave registry on the map's filter, cut to what the map is showing |
+
+**Select all found** takes at most **200**. When the list found more, it says so with both
+numbers — *"Selected the first 200 of 1,234 on the map — that is as many as a selection holds."*
+— and the selection keeps saying *"The first 200 of 1,234 found by the list."* The count is only
+of rows you may read, in the order the list shows them. While the selection is still exactly that
+result, it offers **Save as a filter…**, which saves *the filter that found it*, not the objects:
+run later, it finds whatever matches then. It is not offered for a result cut to the map's view,
+because a saved filter never keeps a place.
+
+**List the caves in view** marks the registry *"Only caves in the map's view"*, with **Show caves
+everywhere** to lift that. What is in view is decided by the server from the map's window, not
+from the markers the map happens to hold. The registry's exports and its Distributions panel
+take the same window; the **KarstLink (JSON-LD)** export does not, so it is unavailable until
+you lift the window — *"Not while the list is cut to the map's window…"*. If the map's filter is a
+saved filter that cannot be read, the map says so and opens nothing; a link naming a window that
+is not a valid area opens the registry on caves everywhere and says so.
+
+**Rows and the map point at each other.** With the map open beside the list — a registry popped
+into a window of its own, or a second browser window — pointing at a row rings that cave's
+entrance, or that feature, on the map, and picking something on the map marks its row and
+scrolls it into view. The map rings only what it has already drawn, at the position it drew,
+and never a cluster, so nothing you were not already shown is revealed.
 
 ---
 
@@ -253,6 +301,45 @@ AND group** — the editor says so under the row. A property of a type you may n
 offered, and is refused like a field that does not exist. Caves themselves carry no feature
 type, so a type or property condition never matches a cave.
 
+### Position conditions
+
+Where caves and features are filtered, the editor offers **Position**, with two comparisons:
+
+| Comparison | Takes |
+|---|---|
+| **within** | A **Distance in metres** (1 to 200,000), then what it is **Measured from**: **an object** picked with the [selector](#the-selector), **a point** typed as **Longitude** and **Latitude**, or **a saved filter's results** |
+| **inside** | An **Outline**: **a named area** picked with the selector, or **a pasted polygon** — a GeoJSON Polygon, or a Feature holding one, of at most 2,000 positions |
+
+**A position condition is answered on the positions you are shown.** A record you may see exactly
+is measured where it is; a protected point you may not is measured at the rounded position the
+map shows you; a protected line or outline you may not see exactly never matches. So the
+condition never tells you more about where something is than the map already does.
+
+- An object you may not see exactly cannot be measured from. It is refused with the same
+  sentence as one that does not exist — *"What this condition measures from is not available to
+  you."* — so the refusal does not tell you which it is.
+- **a saved filter's results** lists only saved filters about the same kind of object that are
+  ready to run. One that itself measures from a saved filter cannot be used, and one that finds
+  more than 1,000 objects is refused as too many.
+- A pasted polygon that is not a single valid polygon is explained under the box before anything
+  is sent.
+
+**A typed point, a pasted polygon or a place to measure nearest first from is never saved** —
+not in a saved filter, and not in a saved view. *"Use an object or a named area instead."* A
+condition measured from an object or inside a named area can be saved.
+
+### Nearest first
+
+In the cave registry's advanced filter, **Order** chooses how the answer is sorted: **Changed**
+or **Nearest**. **Nearest** asks for a place to measure from — a point or an object — and the
+count and **Apply** wait until it has one: *"Nearest first needs a place to measure from: type a
+point or pick an object."*
+
+Only caves you may see exactly are ranked by distance. Every other cave the filter keeps comes
+after them, most recently changed first, so a protected cave is never placed by where it falls
+in the list. The order stays as you turn pages, and is carried in the page's address — but the
+place it measures from is not passed to exports or to *Save as filter…*.
+
 ### When a filter is refused
 
 If the server cannot run a filter, it says why, **on the row it is about** — for example
@@ -308,10 +395,27 @@ version cannot read — shows as **Cannot be read** and cannot be applied.
 
 ---
 
-## Scopes
+## The selector beside the map's search box
 
-Where a scope selector appears, it narrows to: **Caves · Entrances · All features ·
-Documents · Trips · Views**.
+Beside the map's search box sits a [selector](#the-selector) for *"which of these things do I
+mean"*, with a button for each kind it can look among:
+
+| Button | Typed first | Picking one |
+|---|---|---|
+| **Caves** | `#` | Selects it and moves the map to it |
+| **Entrances** · **All features** | | Selects it and moves the map to it |
+| **Documents** | `@` | Opens the document |
+| **Trips** | `!` | Opens the trip |
+| **Views** | | Applies the saved view |
+| **Photographs** | | Opens the photograph |
+| **Saved filters** | | Makes it the [map's filter](#filters-on-the-map) |
+
+A character typed first — `#`, `@`, `!` — narrows to that kind, and only at the very start, so a
+name that contains one is still found. A feature the map cannot place for you — never placed, or
+one whose position you may not see — opens its page instead, which says which. A saved filter
+that asks nothing about features, or that you cannot run, is not applied: *"That saved filter
+does not ask about features, or cannot be run with your access, so it was not applied to the
+map."* A saved filter's row shows its description under its name.
 
 ---
 
@@ -321,7 +425,21 @@ Every list page has its own quick filters as well — search by name, filter by 
 category, filter by tag. The cave list, feature list, trip list, event list, camp list and
 document lists all work this way, with server-side paging and sorting.
 
+**The feature list's controls are one filter too** — **Search by name…**, **All kinds**, **All
+types**, **All categories** and **Filter by tag…**. Like the cave registry's, they are kept in
+the page's address, and every export from the list carries the same question, so the file holds
+what the table shows. The list has the same saved-filter controls — **Apply a saved filter…**,
+**Save as filter…**, **Saved filters** and the quick filters — but no condition editor: a saved
+filter with conditions these controls cannot show keeps them, says so, and offers **Remove
+them**. A saved filter that is not about features is refused: *"That saved filter is not about
+features."*
+
+**From the keyboard**, the name in each row of the cave registry, the feature list, the map's
+**In view** list, the trip lists, events, camps and the calendar's table is a link or a button:
+**Tab** reaches it and **Enter** opens it.
+
 ---
 
 Related: [Documents and cabinets](documents-and-cabinets.md#searching-inside-documents) ·
-[Map workspace](map-workspace.md#search)
+[Map workspace](map-workspace.md#search) · [Caves and entrances](caves-and-entrances.md#the-cave-list) ·
+[Surface features](surface-features.md#the-feature-list)

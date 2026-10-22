@@ -8,8 +8,11 @@
 
 ## Obținerea unui cont
 
-Nu vă înscrieți singur. Cineva care administrează instalarea vă creează contul sau deschide
-anume înregistrarea și vă spune. Dacă vi s-a dat doar o adresă și nimic altceva, întrebați-i.
+Nu vă înscrieți singur. Cineva care administrează instalarea vă **invită** sau deschide anume
+înregistrarea și vă spune. O invitație sosește ca e-mail cu un link pentru a vă **alege parola** —
+sau, dacă instalarea nu trimite e-mailuri, ca același link dat direct dumneavoastră. Funcționează o
+singură dată și timp de o zi; dacă a expirat, cereți să vi se trimită din nou invitația. Dacă vi
+s-a dat doar o adresă și nimic altceva, întrebați-i.
 
 Odată ce aveți un cont, vă autentificați cu **adresa de e-mail** și parola. Numele de
 utilizator este felul în care *apăreți în liste*, nu felul în care vă autentificați —
@@ -20,8 +23,12 @@ face, butoanele sunt pe pagina de autentificare. O autentificare externă se lea
 local obișnuit; nu creează un al doilea fel de utilizator.
 
 Dacă autentificarea în doi pași este activă pe contul dumneavoastră, vi se cere un cod după
-parolă — dintr-o aplicație de autentificare, prin e-mail sau prin SMS. Vedeți
+parolă — dintr-o aplicație de autentificare, prin e-mail sau prin SMS — și tot așa după
+autentificarea printr-un furnizor extern. Vedeți
 [Contul și setările](features/account-and-settings.md).
+
+**Deconectare** este în meniul contului, în dreapta sus. Vă încheie autentificarea pe server,
+așa că următoarei persoane din acel browser i se cere să se autentifice.
 
 ## Ce vedeți întâi
 
@@ -51,31 +58,42 @@ puteți deschide pur și simplu nu este desenat, în loc să se deschidă spre n
 | **Zone de lucru** | Terenul pe care lucrează efectiv clubul — vedeți [Zone de lucru](features/work-areas.md) |
 
 **Cadastru** — [Peșteri](features/caves-and-entrances.md) ·
-[Elemente](features/surface-features.md) · [Geodate](features/geodata.md)
+[Elemente](features/surface-features.md) · [Geodate](features/geodata.md) ·
+[Catalogul peșterilor](features/cave-catalogue.md) (pentru cine poate crea elemente)
+
+**Statistici** — [Distribuții · Corelații · Regiuni · Categorii](features/measurements-and-statistics.md#tot-registrul-explorat)
 
 **Bibliotecă** — [Fotografii](features/photographs.md) ·
 [Albume](features/photographs.md#albume) ·
-[Dulapuri](features/documents-and-cabinets.md) · [Încărcări](features/uploads.md)
+[Dulapuri](features/documents-and-cabinets.md) · [Încărcări](features/uploads.md) ·
+*Fototeca*, acolo unde instalarea are una alături
 
 **Activitate** — [Calendar](features/events-and-calendar.md) ·
 [Evenimente](features/events-and-calendar.md) · [Jurnale de tură](features/trips.md) ·
-[Liste de verificare](features/checklists-and-callout.md) · [Tabere](features/camps.md)
+[Importă ture](features/trips.md#importul-unui-tabel-al-clubului) ·
+[Importă o înregistrare](features/mobile-sync.md#importul-unei-ture-înregistrate-pe-telefon) ·
+[Liste de verificare](features/checklists-and-callout.md) · [Tabere](features/camps.md) — cele
+două importuri pentru cine poate înregistra ture
 
 **Persoane** — [Grupuri de speologie](features/people-and-clubs.md) ·
 [Speologi](features/people-and-clubs.md#lista-de-speologi)
 
-**Administrare** — [Istoric modificări](features/history-and-audit.md) ·
+**Unelte** — [Convertor de coordonate](features/coordinates.md#convertorul-de-coordonate)
+
+**Administrare** — [Istoric](features/history-and-audit.md) ·
+[Conturi](admin/README.md#conturi) ·
 [Grupuri de permisiuni](admin/permissions.md) · [Mesagerie](admin/messaging.md) ·
 [Trimiterea mesajelor](admin/messaging.md#urmărirea-plecării-mesajelor) ·
-[Relief](admin/terrain-builds.md)
+[Relief](admin/terrain-builds.md) ·
+[Ture publicate](features/live-tracking.md#tot-ce-este-publicat-pentru-administratorii-deplini)
 
 **Configurare** — [Seturi de elemente](admin/permissions.md#seturi-de-elemente) ·
-[Tipuri de documente, scopuri de tură, roluri în tură, modele de raport, relații între
-elemente, reguli de detectare](admin/vocabularies.md)
+[Tipuri de documente, tipuri de obiecte, scopuri de tură, roluri în tură, roluri în tabără,
+modele de raport, relații între elemente, reguli de detectare, texte mesaje](admin/vocabularies.md)
 
 ## Prima oră: o ordine recomandată
 
-1. **Alegeți-vă limba.** Bara de sus. Aplicația vine cu engleză și română, iar alegerea
+1. **Alegeți-vă limba.** Bara de sus sau Setări → Accesibilitate. Aplicația vine cu engleză și română, iar alegerea
    **urmează contul** — deci și mesajele pe care vi le trimite sosesc în ea, nu doar ecranele.
 2. **Completați-vă profilul.** Setări → Profil. În special un **nume afișat**: fără el apăreți
    lângă tot ce adăugați sub un nume generat. Fiecare câmp are propria pictogramă de audiență —
@@ -111,6 +129,10 @@ fiecare să citească. Nu este o defecțiune, iar aplicația vă spune de obicei
   panoul de selecție, scena 3D și vizualizatorul topografic fac toate asta și rămân
   sincronizate. Vedeți
   [Vederi salvate, panouri și ferestre multiple](features/saved-views-and-windows.md).
+- **Folosiți tastatura.** Prima apăsare pe Tab oferă **Sari la conținutul principal** (iar pe
+  pagina hărții, **Sari la hartă**); un rând din listele de peșteri, de elemente și din lista
+  celor aflate în vedere se deschide cu Enter; iar **?** arată toate scurtăturile de tastatură
+  ale ecranului pe care vă aflați.
 
 ---
 

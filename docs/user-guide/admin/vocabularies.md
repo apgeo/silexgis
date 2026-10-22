@@ -30,6 +30,40 @@ Related: [Documents and cabinets](../features/documents-and-cabinets.md)
 
 ---
 
+## Configuration → Feature kinds
+
+**What it governs:** the kinds of [feature](../features/surface-features.md) the installation
+records on the map — sinkhole, spring, pitch, bivouac, karst area and the rest — and for each:
+
+| | |
+|---|---|
+| **Name**, **Description**, **Sort order** | How the kind is listed and in what order |
+| **Code** | Lower-case letters, digits and underscores. *"Installations exchange features by this code, so keep it stable."* |
+| **Category** | Surface · Underground · Area · Structure |
+| **Shapes it may be drawn as** | Point · Line · Outline · Several points · Several lines · Several outlines |
+| **When protected** | *Shown snapped to the grid (points only)* or *Not shown at all* — how a feature of this kind appears to somebody without exact view. See [Location protection](location-protection.md) |
+| **Only inside another feature** | For kinds that make no sense on their own, such as a place inside a cave |
+| **Map symbol** | Chosen from the symbols the application carries, or none |
+| **Map style overrides** | Optional; empty keeps the default style |
+| **Details schema** | What a feature of this kind is asked for. Only flat text, number, yes/no and choice fields appear on the form, and the dialog previews the fields the feature form will offer |
+
+**Add a kind** for something your club records that nothing shipped describes. The kinds that
+ship with the product are marked **Ships with the product**: their code, category, protected
+display and need for a parent stay as shipped, they keep every shape they ship with, and they
+cannot be deleted — but their wording, symbol, order and details are yours.
+
+Once features of a kind exist (deleted ones included), the kind can only be **loosened**: its
+category stays, no shape can be taken away and it cannot start needing a parent, because the
+stored features would stop agreeing with it. A kind can be deleted only while no feature uses
+it.
+
+Needs **write** on taxonomies, like document kinds: a feature kind decides what every feature
+of it may be drawn as and how a protected one is shown.
+
+Related: [Features](../features/surface-features.md)
+
+---
+
 ## Configuration → Trip purposes
 
 **What it governs:** three things at once.
@@ -179,9 +213,7 @@ Related: [Messaging](messaging.md) · [Notifications](../features/notifications.
 Reached from the records that use them rather than from a page of their own:
 
 - **Cave types**, **entrance types**, **rock types** — on the cave and entrance forms.
-- **Feature types**, with their symbols and their typed properties — on the feature forms.
 - **Georeferenced map kinds** — geological, topographic, tourist, cave map, other.
-- **Camp roster roles** — member, organiser, cook, base camp, driver, medic, equipment, guest.
 - **Event kinds** — club meeting, training, working day, gear check, conference, deadline.
 - **Tags** — free-form, created as you use them, filterable everywhere.
 

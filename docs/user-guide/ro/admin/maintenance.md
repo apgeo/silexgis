@@ -104,7 +104,12 @@ pas. Dacă o topografie nu poate fi citită de data aceasta, păstrează citirea
 - **Niciuna nu primește vreo intrare proprie.** Munca este o proprietate a rândurilor instalării,
   deci singurul lucru care variază este care operațiune rulați.
 - **Se pun la coadă ca sarcini de fundal**, ca un import sau o conversie raster. Nu blochează pe
-  nimeni.
+  nimeni: o operațiune este luată doar când nu așteaptă nicio altă muncă, deci un import pe care
+  cineva tocmai l-a confirmat nu rămâne în urma unei treceri peste toate fișierele stocate.
+- **O eroare trecătoare este încercată din nou de la sine.** O operațiune întreruptă de ceva din
+  jurul ei — baza de date care repornește, o depășire de timp, o eroare de rețea — se întoarce în
+  coadă și este luată din nou după 30 de secunde, apoi după 2 minute: trei încercări în total. O
+  eroare care s-ar repeta la fel nu este reîncercată.
 - **Au nevoie de dreptul de *Rulare* pe domeniul Jobs** — vedeți
   [Permisiuni](permissions.md#acțiuni).
 - **Se pot rula de mai multe ori în siguranță.** O operațiune face munca nefăcută; nu reface munca
@@ -137,6 +142,28 @@ Prin contrast, acestea nu au nevoie de întreținere:
 Acesta este un tipar deliberat: **acolo unde o cifră se poate deduce, se deduce.** Operațiunile
 există doar pentru munca ce chiar trebuie făcută o dată și stocată — citirea unui fișier,
 conversia unui fișier, sau scoaterea unei coordonate dintr-unul.
+
+---
+
+## Erorile văzute în browserele oamenilor
+
+Când ceva merge prost în browserul unei persoane autentificate — o eroare pe care pagina nu a
+tratat-o — browserul trimite un scurt raport chiar instalării, care îl scrie în jurnalul
+serverului ca avertisment care începe cu **Browser error**. Fiecare apariție a aceluiași defect
+poartă aceeași amprentă, așa că un defect văzut de douăzeci de oameni se citește ca un singur
+defect, de douăzeci de ori.
+
+| | |
+|---|---|
+| **Cine raportează** | Doar conturile autentificate. Un browser în care nu s-a autentificat nimeni — de pildă un vizitator care citește o pagină publicată — nu raportează nimic |
+| **Unde ajunge** | În jurnalul instalării și nicăieri altundeva — niciun serviciu din afară, niciun cont de configurat |
+| **Cât** | Cel mult 30 de rapoarte pe minut pentru fiecare cont și 50 de erori deodată, așa că o pagină prinsă într-o buclă este oprită în loc să umple jurnalul |
+| **Ce lasă deoparte** | Adresa paginii este scrisă fără partea ei de interogare, deci un jeton de partajare sau o căutare tastată nu ajunge niciodată în jurnal |
+
+Nu este nimic de pornit și nicio pagină în interfață: cine administrează serverul citește
+jurnalul. Cum se citește este în [INSTALL.md](../../../INSTALL.md#errors-peoples-browsers-see).
+Când un membru spune *„a mers prost"*, ora pe care o dă este de ajuns pentru a găsi rândul
+potrivit.
 
 ---
 

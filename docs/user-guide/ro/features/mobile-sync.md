@@ -32,7 +32,7 @@ dispozitiv, și ce se întâmplă cu ce trimite înapoi.
 | Câmp | |
 |---|---|
 | **Nume** | |
-| **Peșteri** | Căutate după nume și adăugate în selecție |
+| **Peșteri** | Alese într-o casetă de căutare: tastați un nume și bifați peștera. Peșterile deja alese rămân listate și bifate deasupra rezultatelor căutării, așa că o peșteră este scoasă de pe telefon debifând-o |
 | **Înregistrările noi sunt vizibile pentru** | Ce primesc înregistrările proprii ale unui dispozitiv când le trimite înapoi |
 | **Grup de speologie** | Obligatoriu dacă vizibilitatea de încărcare este *grup de speologie* |
 
@@ -138,6 +138,50 @@ ca peșteră, o intrare ca intrare naturală, un loc din interiorul unei peșter
 Iar fiecare rând creat este informat despre **cele mai apropiate câteva lucruri deja aflate în
 cadastru**, ca un speolog care decide dacă tocmai a reintrat într-o peșteră pe care clubul o are
 deja să primească vecinii cei mai apropiați — nu un recensământ al masivului.
+
+---
+
+## Importul unei ture înregistrate pe telefon
+
+**Activitate → Importă o înregistrare** citește o tură pe care un telefon a înregistrat-o în
+subteran — scanările marcajelor fixate în peșteră — în [jurnalul de urmărire](live-tracking.md) al
+unei ture. Este oferită oricui poate înregistra ture.
+
+1. **Trageți exportul SpeleoLoc** — arhiva pe care o face telefonul sau baza de date din ea.
+   Fotografiile pe care le poartă nu sunt deschise niciodată și nu se scrie nimic până nu vedeți ce
+   ar face. O arhivă pe care ați încărcat-o deja este recunoscută: **Reia acea recenzie**, în loc
+   să porniți una a doua.
+2. **Care înregistrare.** Un export conține întreaga bază de date a telefonului, deci de obicei
+   toate turele pe care le-a înregistrat vreodată; alegeți-o pe cea despre care este vorba, după
+   început, sfârșit și numărul de scanări.
+3. **Unde ajung pozițiile** — **Pe o tură care există deja** sau **Într-o tură creată de acest
+   import**. Tura se alege într-o casetă de căutare care vă listează turele de la cea mai nouă, cu
+   data fiecăreia dedesubt, pentru că tura căreia îi aparține o înregistrare este aproape
+   întotdeauna una tocmai parcursă. O tură existentă nu este rescrisă: pozițiile se adaugă în
+   jurnalul ei și pot fi atribuite doar cuiva aflat deja pe lista ei de participanți. O tură nouă
+   este făcută din titlul înregistrării și din cele două momente ale ei, cu exact persoanele pe
+   care le numiți pe lista de participanți, iar dumneavoastră spuneți cine o poate citi și care
+   este grupul organizator.
+4. **În ce ridicare topografică sunt pozițiile.** O poziție este o stație a unui model topografic,
+   deci alegeți **Peștera** (în același fel de casetă de căutare) și apoi unul dintre **modelele
+   topografice** ale ei. Alegerea altei peșteri golește modelul. O peșteră a cărei poziție exactă
+   nu vă poate fi spusă nu listează niciunul.
+5. **Cine a scanat.** Un cont de dispozitiv este o autentificare pe un telefon, nu o persoană, deci
+   nu se ghicește nimic: spuneți cine este fiecare cont. O scanare făcută de un cont pe care nu l-a
+   numit nimeni este lăsată deoparte.
+6. **Verificați scanările.** Adâncimea marcajului fiecărei scanări este oferită ca cele mai
+   apropiate stații ale ridicării, cea mai apropiată întâi; luați scanarea sau lăsați-o deoparte și
+   alegeți altă stație dintre cele oferite dacă prima este greșită. O scanare marcată **Mai multe
+   stații la acea adâncime** este una la care alegerea contează cel mai mult. O scanare pentru care
+   nu se poate propune nimic — nu numește niciun marcaj, marcajul nu are adâncime, nicio stație nu
+   este la acea adâncime — spune de ce pe rândul ei și este lăsată deoparte.
+7. **Înregistrați pozițiile.** Confirmarea înregistrează scanările luate ca **un singur lot**.
+
+**Anularea.** Importul este listat la **Geodate → Importuri**, iar **Anulează** de acolo elimină
+pozițiile înregistrate pe o tură existentă; o tură creată de import este în schimb ștearsă
+împreună cu el și poate fi restaurată din *Ture șterse*. Vedeți
+[Corectarea și ștergerea rapoartelor](live-tracking.md#corectarea-și-ștergerea-rapoartelor)
+pentru ce se poate și ce nu se poate corecta rând cu rând după aceea.
 
 ---
 

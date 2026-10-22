@@ -30,9 +30,11 @@ odată cu ea — și apoi paginile.
 | Library | Bibliotecă |
 | Photographs | Fotografii |
 | Albums | Albume |
+| Photo library | Fototeca |
 | Cabinets | Dulapuri |
 | Uploads | Încărcări |
 | Activity | Activitate |
+| Import a recording | Importă o înregistrare |
 | Calendar | Calendar |
 | Events | Evenimente |
 | Trip logs | Jurnale de tură |
@@ -45,21 +47,27 @@ odată cu ea — și apoi paginile.
 | Caving groups | Grupuri de speologie |
 | Cavers | Speologi |
 | Administration | Administrare |
+| Accounts | Conturi |
 | Audit | Istoric modificări |
 | Permission groups | Grupuri de permisiuni |
 | Messaging | Mesagerie |
 | Message delivery | Trimiterea mesajelor |
+| Vector import (a Messaging tab) | Import vectorial |
+| Maps in documents (a Messaging tab) | Hărți în documente |
 | Terrain | Relief |
 | Configuration | Configurare |
 | Feature sets | Seturi de elemente |
+| Feature kinds | Tipuri de obiecte |
 | Document kinds | Tipuri de documente |
 | Trip purposes | Scopuri de tură |
 | Trip roles | Roluri în tură |
+| Camp roles | Roluri în tabără |
 | Report layouts | Modele de raport |
 | Link relations | Relații între elemente |
 | Detection rules | Reguli de detectare |
 | Message texts | Texte mesaje |
 | Settings | Setări |
+| Categories (under Statistics) | Categorii |
 
 ## Obiecte
 
@@ -77,6 +85,7 @@ odată cu ea — și apoi paginile.
 | Trip | Tură |
 | Camp / expedition | Tabără |
 | Caver | Speolog |
+| Short name (a caver's) | Nume scurt |
 | Caving group | Grup de speologie |
 | Cabinet | Dulap |
 | Document | Document |
@@ -265,6 +274,67 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Saved gallery view | Vizualizare salvată a galeriei |
 | Save as view… | Salvează ca vizualizare… |
 | Apply a saved gallery view… | Aplică o vizualizare salvată a galeriei… |
+| Position (a filter field) · within · inside | Poziție · în raza · în interiorul |
+| Distance in metres · Measured from · Outline | Distanța în metri · Măsurat de la · Contur |
+| an object · a point · a saved filter's results | un obiect · un punct · rezultatele unui filtru salvat |
+| a named area · a pasted polygon | o zonă numită · un poligon lipit |
+| Order · Changed · Nearest | Ordine · Modificat · Cel mai apropiat |
+| Cave registry | Registrul peșterilor |
+| Show these on the map | Arată-le pe hartă |
+| Select all found (n) on the map | Selectează pe hartă tot ce s-a găsit (n) |
+| Save as a filter… (from a selection) | Salvează ca filtru… |
+| List the caves in view | Listează peșterile din vedere |
+| Only caves in the map's view · Show caves everywhere | Doar peșterile din vederea hărții · Arată peșterile de peste tot |
+| Pin as a quick filter (a quick filter) | Fixați ca filtru rapid (filtru rapid) |
+| Add a layer from a saved filter… | Adaugă un strat dintr-un filtru salvat… |
+| Map filtered by … · Clear the map's filter | Hartă filtrată după … · Goliți filtrul hărții |
+| Go to… (the selector beside the map's search) | Mergi la… |
+
+## Harta și ferestrele
+
+| Engleză | Română |
+|---|---|
+| Selection · In view (the details panel's tabs) | Selecție · În vedere |
+| Zoom to selected · Zoom to all · Clear the selection · Tag all | Zoom la selecție · Încadrează-le pe toate · Golește selecția · Etichetează-le pe toate |
+| Readable here · Mixed | Lizibile aici · Amestecate |
+| Zoom here (a cluster) | Apropie aici |
+| Zoom to (a result) | Centrează |
+| Cave centerlines · Entrance heatmap | Poligonații peșteri · Hartă de căldură (intrări) |
+| Saved arrangements · This browser only | Aranjări salvate · Doar în acest browser |
+| Push the map aside · Float over the map · Spacing | Împinge harta lateral · Plutește peste hartă · Spațiere |
+| Share link (a saved view) | Link de partajare |
+| Save current view · Export map image | Salvează vederea curentă · Exportă imaginea hărții |
+| Skip to map · Skip to main content | Sari la hartă · Sari la conținutul principal |
+
+## Cont și securitate
+
+| Engleză | Română |
+|---|---|
+| Password | Parolă |
+| Sign out | Deconectare |
+| Invite someone | Invitați pe cineva |
+| Reset second factor | Resetează al doilea factor |
+| Coordinates (a settings section; also an entrance's field) | Coordonate |
+| This browser only (the accessibility settings kept on one device) | Doar acest browser |
+
+## Relief, topografii și hărți scanate
+
+| Engleză | Română |
+|---|---|
+| Call off (a terrain build) | Oprește |
+| Run again (a terrain build) | Rulează din nou |
+| Being cancelled / Cancelled (a terrain build) | Se anulează / Anulată |
+| Ground pictures | Imagini ale terenului |
+| Out of date (a ground picture) | Depășită |
+| Photographs at their stations (a 3D view layer) | Fotografii la stațiile lor |
+| Download them (cave walls in the 3D view) | Descarcă-i |
+| Ask above (MB) | Întreabă peste (MB) |
+| Link this… (a part of a survey) | Leagă asta… |
+| Make current (a survey model) | Setează ca model curent |
+| Waiting its turn (a survey model) | Așteaptă la rând |
+| LochViewer (trial) | LochViewer (de probă) |
+| Add map / Define points / Re-place (a georeferenced map) | Adaugă hartă / Definește puncte / Replasează |
+| Plan / Profile / Other view (what a scanned map shows) | Plan / Profil / Altă vedere |
 
 ## Alte
 
@@ -288,6 +358,7 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Measure distance | Măsoară distanța |
 | Discussion | Discuție |
 | Printed codes | Coduri tipărite |
+| Headline picture / Use as the headline picture | Fotografie reprezentativă / Folosește ca fotografie reprezentativă |
 | Two-factor authentication | Autentificare în doi pași |
 | Sync | Sincronizare |
 | Export | Exportă |

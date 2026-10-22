@@ -27,6 +27,7 @@ nu poate răspunde la o invitație. Trebuie contactat altfel.
 | Câmp | |
 |---|---|
 | **Nume** · **E-mail** · **Telefon** | |
+| **Nume scurt** | *„Cum i se spune în echipă — numele cu care este scris un jurnal de suprafață."* Apare la [turele publicate](live-tracking.md#ce-vede-cineva-care-urmărește) în locul numelui întreg și este recunoscut întreg când o [foaie de rapoarte](live-tracking.md#importul-unei-foi-de-rapoarte) numește pe cineva prin el. Gol, se folosește numele întreg |
 | **Grupuri de speologie** | De ce cluburi aparțin |
 | **Note** | *„Doar cei care țin lista le pot citi."* |
 
@@ -34,7 +35,8 @@ Marcați **Fără cont** acolo unde nu există autentificare în spatele fișei.
 
 **Cluburile din care face parte cineva se pot schimba din fișa persoanei.** *Editare* arată
 grupurile de speologie și vă lasă să adăugați sau să scoateți oricare dintre ele; persoana intră
-ca membru obișnuit, iar cine conduce un club se stabilește în continuare pe pagina clubului. De
+ca membru obișnuit, iar cine conduce un club se stabilește în continuare pe
+[pagina clubului](#membri-și-roluri). De
 îndată ce alegerea diferă de ce este salvat, formularul spune ce înseamnă: *„Apartenența la un
 grup este cea care dă contului unei persoane drepturile grupului: membrii citesc și modifică ce
 împarte grupul și văd poziția exactă a peșterilor pe care acesta le protejează, și sunt anunțați
@@ -120,7 +122,8 @@ Grupurile contează din trei motive:
 ### Membri și roluri
 
 Membrii dețin un rol în grup: **Membru · Administrator · Proprietar**. Administrați lista din
-pagina grupului.
+pagina grupului — sau puneți o persoană într-un club ori scoateți-o de acolo din
+[fișa ei din lista de speologi](#lista-de-speologi).
 
 > **A avea voie să editați lista unui club nu este același lucru cu a avea voie să scrieți
 > tuturor celor de pe ea.** Cele două drepturi se acordă separat. Fondatorul unui club poate
@@ -156,15 +159,18 @@ Dacă nimeni de pe listă nu are cont, vă spune că nu are cui să spună.
 
 ## Conturi
 
-Conturile sunt create de cine administrează instalarea, dacă nu a fost pornită înregistrarea
-deschisă.
+Conturile sunt deschise de un administrator — **Invitați pe cineva** la
+[Administrare → Conturi](../admin/README.md#conturi), care îi trimite persoanei un link pentru a-și
+alege singură parola — dacă nu a fost pornită înregistrarea deschisă. În ambele cazuri contul
+primește o înregistrare în lista de speologi.
 
 **Conturile nu se șterg din pagina de setări.** *„Tot ce ați adăugat rămâne la club, așa că
-întrebați un administrator."* — pentru că ștergerea unui cont ar lăsa orfană evidența a ce a făcut
-acea persoană.
+întrebați un administrator."* Un administrator care șterge un cont îi închide persoanei accesul;
+**înregistrarea ei din registru și turele la care a participat rămân**, pentru că ștergerea lor
+ar lăsa orfană evidența a ce a făcut acea persoană.
 
-Vă puteți **exporta propriile date**: o copie a profilului, adreselor, setărilor și o listă a ce
-ați adăugat. Se pregătește în fundal și se descarcă atunci când este gata.
+Vă puteți **exporta propriile date**: o copie a profilului, adreselor, setărilor, filtrelor salvate
+și o listă a ce ați adăugat. Se pregătește în fundal și se descarcă atunci când este gata.
 
 Vedeți [Contul și setările](account-and-settings.md).
 

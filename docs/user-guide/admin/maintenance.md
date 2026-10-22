@@ -101,7 +101,12 @@ survey cannot be read this time, it keeps the reading it had.
 - **Each takes no input of its own.** The work is a property of the installation's own rows, so
   the only thing that varies is which sweep you run.
 - **They are queued as background jobs**, like an import or a raster conversion. They do not
-  block anybody.
+  block anybody: a sweep is taken only when no other work is waiting, so an import somebody has
+  just confirmed is not left standing behind a pass over every stored file.
+- **A passing failure is tried again by itself.** A sweep cut short by something around it — the
+  database restarting, a timeout, a network error — goes back in the queue and is taken again
+  30 seconds later, then 2 minutes later: three attempts in all. A failure that would happen
+  again the same way is not retried.
 - **They need the *Run* right on the Jobs domain** — see
   [Permissions](permissions.md#actions).
 - **They are safe to run more than once.** A sweep does work that has not been done; it does
@@ -133,6 +138,26 @@ For contrast, these need no maintenance:
 That is a deliberate pattern: **where a figure can be derived, it is derived.** The sweeps
 exist only for work that genuinely has to be done once and stored — reading a file, converting
 a file, or lifting a coordinate out of one.
+
+---
+
+## Errors seen in people's browsers
+
+When something goes wrong in a signed-in person's browser — an error the page did not handle —
+the browser sends a short report to the installation itself, which writes it into the
+server's log as a warning beginning **Browser error**. Every occurrence of the same fault carries
+the same fingerprint, so a fault seen by twenty people reads as one fault twenty times.
+
+| | |
+|---|---|
+| **Who reports** | Signed-in accounts only. A browser nobody has signed in on — a visitor reading a published page, say — reports nothing |
+| **Where it goes** | The installation's own log, and nowhere else — no outside service, no account to set up |
+| **How much** | At most 30 reports a minute per account and 50 errors at a time, so a page caught in a loop is stopped rather than filling the log |
+| **What it leaves out** | The page address is written without its query, so a share token or a typed search never reaches the log |
+
+There is nothing to switch on and no page in the interface: whoever runs the server reads the
+log. How to read it is in [INSTALL.md](../../INSTALL.md#errors-peoples-browsers-see). When a
+member says *"it went wrong"*, the time they give is enough to find the matching line.
 
 ---
 

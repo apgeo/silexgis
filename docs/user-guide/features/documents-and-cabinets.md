@@ -259,7 +259,7 @@ member could otherwise learn which other members had been looking at a particula
 which is a fact about them.
 
 Your own reading history is under your account. **Nobody can fetch somebody else's by naming
-them.**
+them.** More in [History and audit](history-and-audit.md#access-history--who-has-read-a-document).
 
 ---
 

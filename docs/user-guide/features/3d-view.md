@@ -22,7 +22,8 @@ and a link to the 2D map, rather than a dead black canvas.
 **No vendor service is contacted.** No third-party terrain, no third-party imagery, no
 third-party geocoding. The 3D engine is served by your own installation and the basemap is
 whichever base layers you configured — so an air-gapped installation needs a base layer it
-can actually reach.
+can actually reach. A **map service** (WMS or WMTS) your installation lists is offered in the
+scene's layer panel as well, exactly as on the [map](map-workspace.md#overlay-maps).
 
 If the browser releases the view's graphics resources twice in quick succession, the view
 stops and offers a reload rather than sitting there broken.
@@ -152,6 +153,13 @@ limits are settings of the installation; see `SILEXGIS__Map__MeshesInView…` in
 their own browser, up to the installation's ceiling, under
 [Settings › Advanced](account-and-settings.md#advanced) — the panel links there while this mode
 is chosen.
+
+## Following the map's filter
+
+The scene reads the map's filter, as the flat map does: under a filter it draws the entrances,
+surface features, survey lines and walls of the caves the filter keeps, and no others. A filter that
+stops working while you look empties what it narrowed rather than leaving the old drawing standing.
+See [Filters on the map](search-and-filters.md#filters-on-the-map).
 
 ---
 

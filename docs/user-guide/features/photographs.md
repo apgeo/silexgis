@@ -17,9 +17,12 @@ photographs are *browsed* and paperwork is *filed*.
 
 ## The gallery
 
-Search **captions and places**. Filter to those **without a position**, or to a **position**
-— and if you arrived from the map, it says *"Showing photographs inside the map extent you
-came from"*.
+Search **captions and places** — accents do not matter, so a word typed without its
+diacritics finds the word written with them. Filter to those **without a position**, or to a
+**position** — and if you arrived from the map, it says *"Showing photographs inside the map
+extent you came from"*. An extent holding more photographs than one search carries says so rather
+than looking complete: *"Not every photo in this map extent is listed here — it holds more than one
+search can carry. Zoom in on the map to see the rest."*
 
 Open one and you get a viewer with **previous / next**, **zoom in / out**, and an
 **About this photograph** panel: the photographer, the place, the licence, and what the
@@ -126,12 +129,59 @@ ones on the trips it gathers that you may read — again *"the photographs you m
 a trip you may not open contributes none. *Open in the gallery* narrows the gallery the same way.
 Albums about the camp are on its *Files* tab.
 
-**On the map.** The **Geotagged photos** layer draws photographs that carry a position.
+**On the map.** The **Geotagged photos** layer draws photographs that carry a position. Where a
+view holds more than the layer draws at once, the layer panel says *"Not every photo is shown here
+— zoom in to see the rest."* while the layer is on.
+
+**In a cave's survey.** A photograph taken underground has no position of its own, so its place is
+the survey station it is linked to. The survey viewer and the 3D view mark each such station with a
+camera; press it to see that station's photographs. See
+[Surveys and models](surveys-and-models.md#3d-survey-models) and
+[3D view](3d-view.md#photographs-at-their-stations).
 
 **As places.** A memory card can become records on the map — see
 [Turn a trip's photographs into places](../workflows/photographs-to-places.md). That
 workflow reads the camera's fix, matches unplaced pictures against a track by time, draws the
 direction the camera was facing, and offers what is already nearby.
+
+---
+
+## The photo library
+
+Some installations run a separate photo library beside them — **Immich** or **PhotoPrism**, a
+product of its own with its own accounts. **Library → Photo library** looks through it from
+inside SilexGIS. Nothing there is copied into the gallery above: the pictures stay in that
+library, under that library's rules.
+
+**Who sees it.** The page is in the sidebar only when the installation has a photo library it
+is currently using, and only for the accounts the installation lets reach it. That is one
+installation-wide setting, not a permission rule: as shipped it is
+[Full Administrators](../glossary.md) only, and it can be opened to every signed-in account
+(the `SILEXGIS__PhotoLibraries__Audience` setting in the
+[configuration reference](../../INSTALL.md#configuration-reference)). An administrator can stop
+the installation using a library for a while — see
+[Messaging → Photo libraries](../admin/messaging.md#photo-libraries).
+
+**What you can do there.**
+
+| | |
+|---|---|
+| **Choose the library** | Only when more than one is connected |
+| **Search** | The box says what the library does with your words: *Search titles, captions and labels* looks the words up in what somebody wrote down; *Describe the picture* puts the whole library in order of how close each picture is to your description, so there is no count of what matches. The sentence under the box says which |
+| **Narrow to an album** | *The whole library*, or one of the albums the library keeps. A search always goes to the whole library, and the page says so when an album is chosen |
+| **Page through** | **Previous** · **Next**, with how many photographs the library holds when it says |
+| **Open a photograph** | Its title, when it was taken, the camera, lens, aperture, exposure, ISO and focal length, and which library holds it. A video shows only a still |
+
+> *"Where these pictures were taken is not shown here. The map is where a library's photographs
+> are placed."*
+
+**Elsewhere.** The same library also appears as a map layer, **Photo library (…)**, which draws
+the pictures that carry a position and offers **Create a feature here** from one of them to whoever may create features; and on
+a trip, as **Photographs from the photo library** — the pictures it holds from the days the trip
+was out, a day either side included because a camera's clock has a time zone and a trip's dates
+do not.
+
+If the library does not answer, the page says so rather than showing an empty grid.
 
 ---
 

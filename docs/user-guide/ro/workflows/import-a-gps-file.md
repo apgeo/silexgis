@@ -26,7 +26,12 @@ Acceptate: **GPX, KML, KMZ, GeoJSON, shapefile arhivat, WKT și CSV cu coloane d
 
 Fișierul este importat în fundal. Starea trece *În așteptare → Se importă… → Importat*. Din acel
 moment este un strat pe care îl puteți aprinde în arborele de straturi al hărții — geometria
-este pe hartă, dar nimic nu a intrat încă în cadastru.
+este pe hartă, iar traseele lui sunt desenate și în vizualizarea 3D, dar nimic nu a intrat încă în
+cadastru.
+
+> **Un traseu pe unde a mers echipa într-o singură tură** își are locul pe acea tură, nu în
+> cadastru: folosiți în schimb **Importă traseul (GPX)** de pe pagina turei, care face din traseu
+> schița turei. Vedeți [Schița turei](../features/trips.md#schița-turei).
 
 ## Pasul 2 — Deschideți verificarea
 
@@ -63,7 +68,9 @@ ce alte reguli l-au mai pretins.
 - **Caută ceva deja existent în raza de** *n* metri — fiecare candidat spune apoi dacă
   cadastrul are deja ceva în apropiere. Se compară doar cu obiectele a căror poziție exactă
   aveți voie s-o vedeți; o peșteră protejată pe care nu o puteți localiza nu este folosită tacit
-  ca potrivire.
+  ca potrivire. Distanța de pornire și cât de asemănătoare trebuie să fie două nume ca să conteze
+  drept același lucru se stabilesc pentru toată instalarea la
+  [Mesagerie → Import vectorial](../admin/messaging.md#import-vectorial).
 - **Altitudine GPS** — păstrați ce spune fișierul, lăsați gol, sau decideți per candidat. Nu se
   ia nimic dintr-un model de elevație: o grilă publică lângă o faleză nu este o îmbunătățire
   față de un număr măsurat.
@@ -115,7 +122,9 @@ Selectați rânduri individual, toate de pe pagină, toate de pe toate paginile,
 Fie **Creează *n* obiecte** pentru rândurile selectate, fie **Creează tot ce au pretins
 regulile**, dacă aveți încredere în corespondență în bloc.
 
-**Nimic nu se creează până nu apăsați asta.** După aceea primiți un raport: ce s-a creat, ce a
+**Nimic nu se creează până nu apăsați asta.** O confirmare mare arată cât a înaintat — *„n din m
+rânduri parcurse"* — și, dacă a întrerupt-o o eroare trecătoare, că se reia în scurt timp. După
+aceea primiți un raport: ce s-a creat, ce a
 fost recunoscut ca deja existent, ce s-a sărit și — dacă vreun rând a eșuat — de ce, ca să
 puteți repara și confirma separat.
 

@@ -52,13 +52,14 @@ protecție.
 | **Harta** | O poziție aproximativă, marcată *„Locație aproximativă — coordonatele exacte sunt protejate"*, sau *„Locație nedivulgată"* pentru o geometrie |
 | **Tabele și liste** | Câmpurile de localizare precisă sunt reținute |
 | **Exporturi** (GeoJSON, GPX, KML, CSV, shapefile) | Aceeași protecție ca ecranul |
-| **Linkuri și vederi partajate** | Aceeași protecție. Partajarea nu este o cale de ocolire |
+| **Linkuri și vederi partajate** | Aceeași protecție. Partajarea nu este o cale de ocolire. [Linkul unei vederi partajate](../features/saved-views-and-windows.md#vederi-salvate) merge mai departe: nu desenează **deloc o peșteră sau un element protejat** — nici aproximativ, nici numărat într-un grup — chiar și acolo unde orice cont îl poate vedea exact, pentru că nimic din ce li se acordă conturilor nu urmează un link |
 | **Fotografii** | **Originalul** unei poze al cărei punct de capturare ar localiza peștera este refuzat. Randarea se arată |
 | **Pagini și rapoarte de tură** | Peșterile pe care nu le puteți deschide **nu sunt numite**; vi se spune *câte* nu sunt numite. Raportul generat al unei ture reține la fel o stație și o adâncime — dar vedeți limita de mai jos pentru un raport **deja clasat** |
 | **E-mailuri de notificare** | **Nu numesc niciodată o peșteră.** Nici mesajele de tură, nici alarma de echipă întârziată |
 | **Calendarul** | Un rând **nu numește niciodată o peșteră**, nici un număr de peșteri omise |
 | **Istoricul modificărilor** | O valoare protejată se citește *„Valoare ascunsă (locație protejată)"* |
 | **Cea mai mică distanță** | Refuzată dacă nu puteți localiza **ambele** peșteri |
+| **Roca de deasupra** | Refuzată **în întregime** dacă nu puteți localiza peștera — nu o curbă goală, nimic. Curba este poziția galeriei desenată față de terenul de deasupra ei. Are nevoie și de dreptul de a citi datele de elevație |
 | **Verificarea duplicatelor la import** | Se compară doar cu obiectele a căror poziție exactă o puteți vedea |
 | **Originea unui `.stl`** | Originea precompletată spune că este deliberat aproximativă și cere punctul adevărat |
 | **Paginile QR** | Nicio peșteră, niciun loc, nicio poziție — pentru nimeni, cu sau fără cont |

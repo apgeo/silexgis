@@ -67,7 +67,9 @@ colour and named on the map, with the level beneath each one a click away.
 | **Areas inside: n** | Told *before* the shapes for that level are fetched, so you know there is another level to open |
 
 Names are drawn with a halo, because they sit over aerial imagery as often as over a plain
-background.
+background. The overview draws ordinary tile backgrounds only; a map service (WMS or WMTS) your
+installation offers appears in the [map workspace](map-workspace.md#overlay-maps) and the 3D view,
+not here.
 
 ### One thing that looks like a bug and is not
 

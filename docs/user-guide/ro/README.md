@@ -58,7 +58,9 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Topografii, poligonații și modele 3D](features/surveys-and-models.md) ·
 [Măsurători și statistici](features/measurements-and-statistics.md) ·
 [Fișiere de geodate](features/geodata.md) ·
-[Hărți raster georeferențiate](features/georeferenced-maps.md)
+[Hărți raster georeferențiate](features/georeferenced-maps.md) ·
+[Catalogul național al peșterilor](features/cave-catalogue.md) ·
+[Coordonate și convertorul](features/coordinates.md)
 
 **Biblioteca**
 [Fotografii și albume](features/photographs.md) ·
@@ -94,7 +96,7 @@ Pagini pentru cine deține drepturi de administrare. Tot documentație de utiliz
 instalarea propriu-zisă se află în [INSTALL.md](../../INSTALL.md) și
 [DEPLOY-SERVER.md](../../DEPLOY-SERVER.md).
 
-- [Cuprinsul administrării](admin/README.md)
+- [Cuprinsul administrării](admin/README.md) — inclusiv [Conturi](admin/README.md#conturi)
 - [Permisiunile explicate](admin/permissions.md)
 - [Protecția locațiilor](admin/location-protection.md)
 - [Vocabularele care aparțin clubului](admin/vocabularies.md)

@@ -12,12 +12,30 @@ Fișa peșterii este cel mai dens lucru din aplicație. Pagina aceasta îi parcu
 
 ## Lista de peșteri
 
-**Cadastru → Peșteri.** Un tabel servit de server: căutați după nume sau toponim, filtrați după
-tip, sortați după orice coloană, paginați. Coloanele includ numele, codul, tipul, regiunea,
-lungimea cartată, denivelarea, numărul de intrări și vizibilitatea.
+**Cadastru → Peșteri**, registrul peșterilor. Un tabel servit de server, pe care îl parcurgeți
+pe pagini. Coloane: nume, cod, tip, regiune, lungime cartată, denivelare, număr de intrări și
+vizibilitate; sortați după nume, regiune, lungime sau denivelare. Un rând deschide peștera — de la
+tastatură, **Tab** până la numele ei și **Enter**.
 
-De aici: **Peșteră nouă**, **Editează**, **Șterge** și **Exportă** (GeoJSON, GPX, KML, CSV,
-shapefile arhivat).
+Deasupra tabelului stau câmpurile lui de filtrare — **Caută denumire sau toponim…**, **Toate
+tipurile**, **Regiune**, **Lungime (m)**, **Filtrează după etichetă…** — cu **Filtru avansat…**
+pentru tot ce ele nu pot spune, plus filtrele salvate. Adresa paginii poartă toată întrebarea,
+așa că un link o redeschide. Totul este descris la
+[Filtrul registrului peșterilor](search-and-filters.md#filtrul-registrului-peșterilor).
+
+De aici:
+
+| Control | Ce face |
+|---|---|
+| **Peșteră nouă** | Deschide un formular de peșteră gol |
+| **Arată-le pe hartă** | Deschide harta desenând peșterile găsite de acest filtru |
+| **Selectează pe hartă tot ce s-a găsit (n)** | Face din rezultat, până la 200, selecția hărții |
+| **Exportă** | GeoJSON, GPX, KML, CSV sau shapefile arhivat — și [KarstLink](#partajarea-peșterilor-în-formatul-de-interschimb) — cu tot ce găsește filtrul, nu doar pagina aceasta |
+| **Peșteri și elemente șterse** | [Readuce](#peșteri-și-elemente-șterse) ce aveți voie să restaurați |
+
+Deschis din **Listează peșterile din vedere** al hărții, registrul este restrâns la ce arăta
+harta și spune *„Doar peșterile din vederea hărții"*, cu **Arată peșterile de peste tot** alături.
+Vedeți [Între o listă și hartă](search-and-filters.md#între-o-listă-și-hartă).
 
 Există și o vedere **Distribuții** peste peșterile de pe pagină — histogramă de lungimi, lungime
 față de adâncime, rang–mărime cu ajustare de tip lege de putere, și o defalcare pe tipuri.
@@ -129,16 +147,20 @@ Sub suprafață, o peșteră este un fel de [element](surface-features.md), moti
 
 Pe lângă formatele de hartă, meniul **Export** din lista de peșteri oferă **KarstLink (JSON-LD)** — o
 descriere a peșterilor în vocabularul speologic comun publicat de UIS, astfel încât cineva care
-folosește alt program să le poată citi. Exportă peșterile afișate în listă, cu aceleași filtre de
-căutare, tip și etichetă.
+folosește alt program să le poată citi. Exportă toate peșterile pe care le găsește filtrul
+registrului — câmpurile rapide și condițiile avansate deopotrivă — nu doar pagina de pe ecran. Cât
+timp registrul este restrâns la vederea hărții, nu este disponibil: *„Nu cât timp lista este
+restrânsă la fereastra hărții — elimină fereastra pentru a exporta toată lista filtrată."* Un
+fișier cuprinde cel mult 5.000 de peșteri; un set mai mare este refuzat, iar dialogul vă cere să
+restrângeți filtrele și să exportați pe părți, în loc să predea un fișier oprit la o limită.
 
 **Întâi pune o întrebare, și asta contează.** Dacă vreuna dintre peșterile exportate are locația
 protejată, dialogul spune câte sunt și întreabă ce trebuie să scrie fișierul despre ele. Sunt trei
 răspunsuri:
 
-- **Include peștera fără poziție** — tot restul călătorește, fără nicio coordonată.
-- **Lasă acele peșteri complet în afara fișierului.**
-- **Include-le la poziția aproximativă** — aceeași poziție rotunjită pe care harta o arată celor care
+- **Include-le fără coordonate** — tot restul călătorește, fără nicio coordonată.
+- **Lasă-le complet în afara fișierului.**
+- **Așază-le pe grila de protecție** — aceeași poziție rotunjită pe care harta o arată celor care
   nu au voie să vadă poziția exactă.
 
 **Poziția exactă nu este oferită nimănui.** Nici unui administrator, nici celui care a înregistrat
@@ -150,9 +172,10 @@ această aplicație nu scrie o poziție protejată într-unul.
 sunt în fișier și câte au fost lăsate deoparte în mod deliberat — ca nimeni să nu confunde numărul de
 peșteri din fișier cu numărul din registru.
 
-Bifați **Ține minte răspunsul meu** și nu veți mai fi întrebat pe acest browser; un al doilea element
-de meniu vă lasă să îl schimbați, iar dacă serverul refuză o cerere, dialogul revine în loc să eșueze
-în tăcere.
+Bifați **Ține minte acest răspuns și nu mă mai întreba** și nu veți mai fi întrebat — răspunsul vă
+urmează contul în orice browser. Un al doilea element de meniu, **KarstLink (JSON-LD) — schimbă
+răspunsul meu…**, vă lasă să îl schimbați, iar dacă serverul refuză o cerere, dialogul revine în loc
+să eșueze în tăcere.
 
 Fiecare export de interschimb este înregistrat în [istoric și jurnalul de
 audit](history-and-audit.md), împreună cu peșterile exportate și felul în care le-au fost tratate

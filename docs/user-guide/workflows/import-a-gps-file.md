@@ -25,7 +25,11 @@ Accepted: **GPX, KML, KMZ, GeoJSON, zipped shapefile, WKT, and CSV with coordina
 
 The file is imported in the background. Its status goes *Queued → Importing… → Imported*. At
 that point it is a layer you can switch on in the map's layer tree — its geometry is on the
-map, but nothing has entered the registry yet.
+map, and its tracks are drawn in the 3D view as well, but nothing has entered the registry yet.
+
+> **A track of where your party walked on one trip** belongs on that trip, not in the registry:
+> use **Import track (GPX)** on the trip's page instead, which makes the track the trip's
+> sketch. See [The trip sketch](../features/trips.md#the-trip-sketch).
 
 ## Step 2 — Open the review
 
@@ -60,6 +64,8 @@ other rules also claimed it.
 - **Look for something already there within** *n* metres — each candidate then says whether
   the registry already holds something nearby. Only objects whose exact position you may see
   are measured against; a protected cave you cannot locate is not silently used as a match.
+  The starting distance, and how alike two names must be to count as the same thing, are set
+  for the installation under [Messaging → Vector import](../admin/messaging.md#vector-import).
 - **GPS altitude** — keep what the file says, leave it empty, or decide per candidate.
   Nothing is taken from an elevation model: a public grid beside a cliff is not an
   improvement on a recorded number.
@@ -111,7 +117,9 @@ Select rows individually, all on the page, all across every page, or invert.
 Either **Create *n* objects** for the rows you selected, or **Create everything the rules
 claimed** if you trust the mapping wholesale.
 
-**Nothing is created until you press this.** Afterwards you get a report: what was created,
+**Nothing is created until you press this.** A large confirmation shows how far it has got —
+*"n of m rows reached"* — and, if a passing failure interrupted it, that it will be tried again
+shortly. Afterwards you get a report: what was created,
 what was recognised as already there, what was skipped, and — if any rows failed — why, so
 you can fix and confirm those on their own.
 

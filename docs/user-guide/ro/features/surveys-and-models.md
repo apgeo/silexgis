@@ -20,7 +20,7 @@ Tot ce urmează trăiește pe **pagina unei peșteri**.
 **Încarcă model.** Acceptate: **Therion `.lox`**, **Survex `.3d`**, sau **pereți de peșteră ca
 `.stl` binar** — până la 100 MB.
 
-Stare: *În așteptare → În curs → Gata*, sau *Nu a putut fi procesat*.
+Stare: *Așteaptă la rând → În curs → Gata*, sau *Nu a putut fi procesat*.
 
 Un model este desenat în **vizualizatorul topografic** (CaveView.js) și, pentru pereți, în
 [scena 3D](3d-view.md). Pereții sunt fie un `.stl` pe care îl încărcați, fie — acolo unde
@@ -35,6 +35,14 @@ coloană la marginea stângă a modelului, la jumătate din mărimea pe care o a
 unde nu acoperă nicio galerie; descrierea unei fotografii apare când o indicați și în
 vizualizatorul în care se deschide. Când mai mulți oameni dintr-o tură urmărită sunt la stații
 apropiate pe ecran, etichetele cu numele lor sunt puse una sub alta, nu una peste alta.
+
+**Locul în care au fost făcute fotografiile este marcat peste model.** O fotografie nu are în
+subteran o poziție proprie — într-o peșteră nu există semnal de satelit — așa că locul ei este
+stația de care este legată: legați o fotografie de o stație (clic pe stație, apoi **Leagă asta…**)
+și deasupra acelei stații apare un mic aparat foto, cu numărul de fotografii acolo unde sunt mai
+multe. Apăsați aparatul pentru a arăta fotografiile acelei stații; apăsați una dintre ele pentru
+a o deschide. O fotografie legată de o galerie sau de o topografie întreagă, nu de o stație, nu
+este marcată, pentru că nu are un singur loc.
 
 **Mărimea numelor de stații o alegeți dumneavoastră.** Împreună cu bara de unelte a
 vizualizatorului apare, în colțul din dreapta sus al modelului, un mic control **Aa**: 40 %, 60 %,
@@ -56,6 +64,16 @@ modelul care trebuie să preia, după ce s-a terminat procesarea. Pentru o polig
 face și din poligonația ei forma peșterii pe hartă, iar setarea poligonației unei topografii ca
 implicită face același lucru din cealaltă parte: harta și cifrele descriu întotdeauna aceeași
 topografie. Ștergerea modelului curent trece marcajul la cel mai nou rămas.
+
+**Alegerea lui la încărcare.** Când peștera are deja un model curent de felul pe care îl încărcați,
+dialogul de încărcare oferă să facă noul fișier cel curent **după ce a fost citit** (pentru pereți,
+după ce au fost convertiți) — *Fă-l planul de linii curent după ce a fost citit, în locul lui „…”*.
+Până atunci modelul pe care îl are peștera rămâne curent — dintr-un fișier care nu a fost citit nu
+se poate măsura și desena nimic — iar lista mută singură marcajul când citirea se încheie. Două
+lucruri lasă marcajul unde este: un fișier care nu poate fi citit și cineva care alege alt model
+cât timp al dumneavoastră era citit, pentru că alegerea lui este cea mai recentă. Citirea din nou,
+mai târziu, a unui model nu îl face din nou curent; pentru asta folosiți **Setează ca model
+curent**.
 
 ### Citirea unei topografii în rânduri
 
@@ -130,7 +148,10 @@ Rezultă două lucruri:
   cerere externă în momentul citirii unei topografii.
 - **Grilele naționale funcționează.** Stereo70 (EPSG:31700) este cazul evident: nu este
   precodificat în vizualizator, iar pe o instalare care ar fi trebuit să aducă definiții și-ar
-  pierde georeferențierea sau n-ar mai putea fi încărcat deloc.
+  pierde georeferențierea sau n-ar mai putea fi încărcat deloc. Este plasat cu transformarea
+  românească în șapte parametri — aceeași pe care o folosesc harta și
+  [formatele de coordonate](coordinates.md) — așa că o topografie în Stereo 70 stă în vizualizator
+  acolo unde harta pune peștera, nu la vreo sută de metri alături.
 
 Dacă sunteți obișnuit ca topografiile să-și piardă tăcut poziția pe un sistem găzduit propriu,
 iată de ce aici nu se întâmplă.
@@ -186,6 +207,45 @@ sau în același sistem de coordonate.
 
 Compararea este un fel de a privi. Nimic din ea nu se salvează și nu schimbă modelul curent.
 
+### Hărți scanate lângă model
+
+Planul sau profilul desenat al unei topografii — o scanare sau o fotografie a planșei, păstrată ca
+[document](documents-and-cabinets.md) imagine — poate fi arătat lângă modelul ei. În fereastra în
+care se deschide un model, banda de deasupra vizualizatorului are o filă **3D** și câte o filă
+pentru fiecare hartă. **Adaugă hartă**, butonul **+** de la capătul benzii, declară una: alegeți
+**Documentul cu imaginea hărții** și **Vedere** — **Plan**, **Profil** sau **Altă vedere**.
+**Setările hărții** schimbă vederea, sau **Elimină harta de pe acest model**: dispare doar
+declararea, iar documentul și punctele lui rămân.
+
+Imaginea nu are nevoie de coordonate. Ce o leagă de topografie sunt **punctele** ei. Apăsați
+**Definește puncte**, apoi apăsați o stație în vederea 3D sau căutați-o după nume — banda spune
+*Se plasează A12 — apăsați punctul ei pe hartă* — și dați clic acolo unde este desenată acea stație
+pe planșă. O stație care are deja un punct întreabă înainte să primească un al doilea (**Mută-l
+aici**); apăsați un punct pentru **Mută** sau **Șterge**, iar la sfârșit **Gata**. Un
+punct aparține exact scanării pe care a fost pus: după ce se încarcă o scanare mai nouă a aceleiași
+hărți, punctele vechi nu sunt desenate pe noua imagine — fila spune *Puncte plasate pe o scanare mai
+veche a acestei hărți: N*, iar cât definiți puncte sunt listate, fiecare cu **Replasează**.
+Schimbarea unei hărți cere dreptul de a modifica documentul ei, iar un punct făcut printr-o
+legătură pe care nu o puteți edita spune *Nu puteți corecta acest punct*.
+
+**O tură urmărită folosește punctele.** Pe panoul de urmărire al unei ture și pe pagina unei ture
+publicate, fiecare planșă declarată este o filă lângă vederea 3D, iar echipa este desenată pe ea la
+fiecare stație care are un punct, în aceeași reluare. Cineva aflat la o stație fără punct pe acea
+planșă nu este pus pe ea prin ghicire: fișa lui spune *Fără punct pe această hartă*, iar vederea 3D
+îl arată în continuare.
+
+O foaie georeferențiată — una care are o poziție pe Pământ — este altceva și se desenează pe harta
+însăși: vedeți [Hărți raster georeferențiate](georeferenced-maps.md).
+
+### Un al doilea vizualizator, de probă
+
+Fereastra în care se deschide un model (**Vezi în 3D**) are, lângă fila **3D**, o filă
+**LochViewer (de probă)**: același fișier, arătat de un al doilea vizualizator topografic care este
+încercat. Se încarcă doar când deschideți acea filă și este o aplicație separată — setările,
+măsurătorile și partajarea lui sunt ale lui, iar nimic din ce faceți în el nu se salvează aici.
+Dacă fila rămâne goală, instalarea nu permite ca el să fie arătat în interiorul paginii;
+**Deschide într-o fereastră nouă** îl arată separat.
+
 ---
 
 ## Pereții peșterii (`.stl`)
@@ -210,7 +270,8 @@ de la nivelul mării.
 
 Odată convertiți, pereții sunt desenați în [scena 3D](3d-view.md#pereții-peșterii-selectate)
 numai pentru peștera selectată. Lista de modele arată mărimea rețelei convertite în megaocteți
-lângă numărul de triunghiuri, iar scena spune mărimea cât timp o descarcă, așa că o rețea de
+lângă numărul de triunghiuri, iar scena spune mărimea cât timp o descarcă (iar peste o anumită
+mărime [întreabă înainte să descarce](3d-view.md#pereții-peșterii-selectate)), așa că o rețea de
 cincizeci de megaocteți pe o conexiune contorizată este o alegere, nu o surpriză.
 
 ---
@@ -255,7 +316,10 @@ Linia topografică a unei peșteri, proiectată pe suprafața hărții și desen
 **Încarcă poligonație**, sau lăsați ca una să fie **extrasă** dintr-o topografie compilată —
 coloana *Sursă* spune care.
 
-Fiecare poligonație își arată **lungimea** și numărul de **trasee**. Una poate fi făcută **forma
+Fiecare poligonație își arată **lungimea** și numărul de **trasee**. Lungimea unei poligonații
+încărcate este măsurată de-a lungul galeriei, nu de-a lungul vizelor trase la pereți, care într-un
+export topografic pot însuma de multe ori lungimea galeriei; una încărcată înainte ca lungimea să
+fie măsurată așa își păstrează lungimea primită până când este încărcată din nou. Una poate fi făcută **forma
 implicită** a peșterii, care este ce folosesc alte lucruri când au nevoie de „forma acestei
 peșteri".
 

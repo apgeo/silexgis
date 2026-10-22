@@ -137,8 +137,8 @@ chart: the distance, the thickness, and which piece of line work answered.
 
 **A break in the curve is a place nobody has measured the ground for**, not a place where the
 passage reaches the surface. Where elevation data does not cover the passage, there is no line
-— and the figures beneath the chart (least, greatest, average) are worked out over the covered
-readings only, with the number of them shown, so a partly covered cave is not reported as
+— and the figures beneath the chart (**Thinnest**, **Thickest**, **Mean**) are worked out over
+the covered readings only, with the number of them shown, so a partly covered cave is not reported as
 shallower than it is.
 
 It says so plainly rather than drawing nothing, in four different cases: the cave has no line
@@ -172,18 +172,29 @@ carry a surveyed length. **Caves without one are absent rather than counted as z
 
 ## The whole registry, explored
 
-Under **Statistics** in the sidebar, three screens ask questions of the registry itself rather
+Under **Statistics** in the sidebar, four screens ask questions of the registry itself rather
 than of one cave or one page of caves.
 
 | Screen | What it answers |
 |---|---|
-| **Distribution** | How one measurement is spread — intervals, range, percentiles, and two fits |
-| **Correlation** | How two measurements move together — slope, R², and the correlation itself |
-| **By region** | How many caves stand under each region |
+| **Distributions** | How one measurement is spread — intervals, range, percentiles, and two fits |
+| **Correlations** | How two measurements move together — slope, R², and the correlation itself |
+| **Regions** | How many caves stand under each region |
+| **Categories** | How one measurement compares across cave types, or across rock types |
 
-All three take the same narrowings — cave type, rock type, region — and the whole question lives
-in the address, so a link reproduces exactly what you were looking at. Each screen saves what it
-is currently showing as a spreadsheet; the file is the same answer, not a second one.
+The first three take the same narrowings — cave type, rock type, region — and **Categories**,
+which is itself grouped by type, takes the region. The whole question lives in the address, so a
+link reproduces exactly what you were looking at. The first three save what they are currently
+showing as a spreadsheet; the file is the same answer, not a second one.
+
+**Categories** draws one box per group: *"Each box runs from the 25th to the 75th percentile,
+with the median across it and whiskers to the 10th and 90th."* Not the least and greatest —
+those are single caves' own figures. Every group is listed in the table with how many caves it
+holds and how many of them record the measurement, caves with no type recorded included under
+**None recorded**. A group measured on fewer than six caves keeps its counts and has no box —
+*Too few measured caves to draw* — because its percentiles would be its caves' own figures near
+enough to read off. It is kept rather than dropped, so the counts still add up to the caves in
+scope.
 
 Read the sentences these screens print, because they are doing real work:
 

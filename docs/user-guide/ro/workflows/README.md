@@ -23,11 +23,12 @@ Parcurgeri ale unor sarcini întregi, de la cap la coadă. Fiecare trimite la
 O ordine rezonabilă pentru prima lună:
 
 1. **Întâi oamenii.** Creați [grupurile de speologie](../features/people-and-clubs.md),
-   adăugați lista de speologi (inclusiv persoane fără cont), creați conturile.
+   adăugați lista de speologi (inclusiv persoane fără cont) și invitați-i pe cei care se vor
+   autentifica, de la [Administrare → Conturi](../admin/README.md#conturi).
 2. **Hotărâți-vă grupurile de permisiuni** înainte să aveți date de stricat.
    Vedeți [Permisiunile explicate](../admin/permissions.md).
 3. **Pregătiți vocabularele** de care știți că aveți nevoie — tipuri de peșteri, tipuri de
-   elemente, tipuri de documente, scopuri de tură. Vedeți
+   obiecte, tipuri de documente, scopuri de tură. Vedeți
    [Vocabulare](../admin/vocabularies.md).
 4. **Introduceți cadastrul.** De obicei prin [importul fișierelor GPS](import-a-gps-file.md)
    mai degrabă decât prin tastare, apoi corectând.

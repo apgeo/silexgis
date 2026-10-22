@@ -64,7 +64,9 @@ câștigător. Vedeți
 
 Din pagina peșterii: **Adaugă intrare**. Fiecare intrare poartă:
 
-- **coordonatele** proprii (desenate pe hartă sau tastate),
+- **coordonatele** proprii — desenate pe hartă, sau scrise ori lipite în **Scrieți sau lipiți o
+  poziție** în oricare dintre [formatele de coordonate](../features/coordinates.md) (UTM, Stereo 70,
+  grade și minute…), care completează longitudinea și latitudinea ce se salvează,
 - **altitudinea**,
 - un **tip de intrare**,
 - o **calitate a poziției** — necunoscută, GPS, de pe hartă, estimată — despre care merită să
@@ -78,13 +80,16 @@ Din pagina peșterii: **Adaugă intrare**. Fiecare intrare poartă:
 Odată ce peștera există, pagina ei crește secțiuni pe măsură ce o hrăniți:
 
 - **Fotografii și documente** — trageți-le pe pagină. O fotografie poate fi marcată cu stea ca
-  *imagine principală*. Vedeți [Fotografii](../features/photographs.md).
+  *fotografie reprezentativă*. Vedeți [Fotografii](../features/photographs.md).
 - **Poligonații și modele 3D** — încărcați Therion `.lox`, Survex `.3d` sau pereți ca `.stl`.
+  Primul model de fiecare fel devine modelul curent al peșterii; când o încărcare ulterioară este
+  o topografie corectată, dialogul de încărcare oferă să o facă curentă după ce a fost citită.
   Vedeți [Topografii, poligonații și modele 3D](../features/surveys-and-models.md).
 - **Surse topografice** — arhivați fișierele `.th`, `.th2`, `.thconfig`, `.svx`, `.log` de
   compilare sau `.zip`-ul unei aplicații de topografie din care a fost făcută topografia
-  compilată. Nimic nu le citește; sunt păstrate ca să se poată recompila când uneltele care au
-  produs exportul vor fi mers mai departe.
+  compilată. Doar jurnalul de compilare este citit, pentru erorile de buclă pe care le raportează;
+  restul se păstrează așa cum este, ca să se poată recompila când uneltele care au produs exportul
+  vor fi mers mai departe.
 - **Etichete** — libere, și filtrabile în tabele și pe straturile hărții.
 - **Legături** — spre raportul care o descrie, spre peștera de alături, spre înregistrarea care
   s-a dovedit a fi aceeași gaură. Vedeți [Legături](../features/links.md).

@@ -11,6 +11,13 @@ something narrower here than in ordinary caving speech, that is said.
 
 ---
 
+**Account** — Somebody who can sign in. Distinct from a **caver**.
+
+**Account invitation** — How an account is opened by somebody else: **Invite someone** on
+*Administration → Accounts* takes a name and an email address, and the owner receives a link to
+choose their own password. The link works once and for 24 hours. Not the same as being asked onto
+a trip, which grants nothing. → [Accounts](admin/README.md#accounts)
+
 **Album** — A curated, ordered arrangement of photographs, with a cover, shareable by its own
 link. Deleting one does not delete the photographs.
 → [Photographs](features/photographs.md#albums)
@@ -34,6 +41,10 @@ raise the alarm if nobody has said so.
 
 **Camp** *(expedition)* — A multi-day, multi-trip effort that gathers trips, with its own
 roster, working area and leads board. → [Camps](features/camps.md)
+
+**Categories** *(statistics)* — The screen under **Statistics** that compares one measurement
+across cave types, or across rock types, drawing one box per group. → [Measurements and
+statistics](features/measurements-and-statistics.md#the-whole-registry-explored)
 
 **Caver** — An entry in the club's roster. **May or may not have an account.** A caver with no
 account can be named on trips but cannot be granted access or sent anything.
@@ -66,9 +77,19 @@ documents of that kind are asked for**.
 **Draft** — A trip or event that has told nobody. Not a *hidden* record: whoever its
 visibility admits can already read it.
 
+**Filter** — A question about your records: which kinds of object, the conditions they must
+meet, and the order of the answer. Always answered with what the person asking may see — it narrows,
+never widens. → [Search and filters](features/search-and-filters.md#filters)
+
 **Feature** — The single model everything on the map shares. Its **kind** is one of *Feature,
 Cave, Cave entrance, Centerline*.
 → [Core concepts](core-concepts.md#1-everything-on-the-map-is-a-feature)
+
+**Feature kind** — What a feature records on the map — sinkhole, spring, pitch, bivouac, karst
+area… — and with it the shapes it may be drawn as, how it shows when its location is protected,
+and what details it asks for. Kept on *Configuration → Feature kinds*, where a club can add its
+own. Narrower than the four kinds above (feature, cave, entrance, centerline).
+→ [Vocabularies](admin/vocabularies.md#configuration--feature-kinds)
 
 **Feature set** — A named set of features that access rules can be scoped to. The way to say
 "these particular caves". → [Permissions](admin/permissions.md#feature-sets)
@@ -110,10 +131,19 @@ computed from the outline (area, circularity, long-axis bearing…).
 **Position quality** — How an entrance's coordinates were obtained: unknown, GPS, from map,
 estimated. The difference between "walk here" and "search this slope".
 
+**Position condition** — A filter condition on where something is: *within* a distance of an
+object, a point or a saved filter's results, or *inside* a named area or a pasted polygon. Answered
+on the positions you are shown, never on positions withheld from you.
+→ [Search and filters](features/search-and-filters.md#position-conditions)
+
 **Printed code** — A QR label bolted at a cave. Scanning it confirms only that the code is
 registered. → [Sharing](features/sharing-and-public-pages.md#printed-qr-codes)
 
 **Protected location** — See *Location protection*.
+
+**Quick filter** — A saved filter pinned as a one-click chip on the map, the cave registry and
+the feature list. Up to six; they follow your account.
+→ [Search and filters](features/search-and-filters.md#quick-filters)
 
 **Report layout** — A club-authored template for the Word document a trip generates. Can only
 ask for things the reader was already given.
@@ -121,11 +151,35 @@ ask for things the reader was already given.
 **Rule set** *(detection)* — A named, ordered set of detection rules, owned by the
 installation, a caving group, or you. Exportable as a file.
 
+**Saved filter** — A filter kept under a name, for yourself, a caving group or everyone signed in.
+Sharing one gives the question only, and it never keeps a place to measure from.
+→ [Search and filters](features/search-and-filters.md#saved-filters)
+
+**Saved view** — A named map configuration: extent, layers, filters. Shareable by a link that
+shows only what is public in its own right.
+→ [Saved views](features/saved-views-and-windows.md#saved-views)
+
+**Second factor reset** — What an administrator does for a member who has lost both their
+authenticator and their recovery codes: **Reset second factor** switches every second factor
+off, stops the recovery codes working, signs the member out everywhere and tells them by email.
+They then sign in with their password alone and set one up again. Refused on your own account.
+→ [Accounts](admin/README.md#accounts) ·
+[Two-factor authentication](features/account-and-settings.md#two-factor-authentication)
+
+**Selection** *(map)* — What is selected on the map: one thing, or several. Filled by clicking,
+or — up to 200 — from a list's *Select all found on the map*. It lasts for the session and is not
+a **feature set**. → [Map workspace](features/map-workspace.md#selecting-things)
+
 **Selection** *(sync)* — The set of caves a phone carries offline. Naming caves, not taking
 them over. → [Mobile sync](features/mobile-sync.md)
 
 **Share link** — A revocable link to one record, public or sign-in-only. Shown once. Never
 reveals a protected location. → [Sharing](features/sharing-and-public-pages.md)
+
+**Short name** *(a caver's)* — What the party calls somebody — the name a surface log is
+written in. Shown on published trips in place of the full name, and matched whole when a sheet
+of reports names somebody by it. Empty, the full name is used.
+→ [People, cavers and clubs](features/people-and-clubs.md#the-caver-roster)
 
 **Stay** — One stretch of days somebody was at a [camp](features/camps.md), in one role. It is
 not the person: somebody in two roles, or somebody who left and came back, has two stays.

@@ -142,6 +142,14 @@ tells you a station you could not already see: where the cave's location is with
 the line says so. The lines are explained one by one under
 [The party on the survey](../features/live-tracking.md#the-party-on-the-survey).
 
+**Or give it a station for good.** When you know where underground a photograph was taken, and it
+belongs to the cave rather than to one trip, link it to that station: open the survey
+(**View in 3D** on the cave's page), click the station, then **Link this…**, and link the
+photograph. The station then carries a small camera in the survey viewer and in the 3D view, and
+pressing it shows the photographs taken there. See
+[Surveys and models](../features/surveys-and-models.md#3d-survey-models) and
+[Links](../features/links.md).
+
 ---
 
 Next: [Plan and log a trip](plan-and-log-a-trip.md) ·

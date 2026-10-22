@@ -64,14 +64,38 @@ A link end can be an **anchor** into part of a thing:
 | **The whole thing** | Default |
 | **A page** / **a range of pages** | Of a document |
 | **A passage of text** | Selected in the document |
-| **A region of an image** | |
+| **A region of an image** | Drawn on the picture itself — a rectangle, a circle, an outline or a point. Every region already drawn on a picture is painted when you read one, the one you followed heavier than the rest. Both drawing and picking also work [from the keyboard](#regions-of-a-picture-from-the-keyboard) |
 | **A moment** / **a stretch of a recording** | In seconds |
 | **A survey station** / **a run of stations** / **a survey** / **a run of surveys** | Of a 3D model |
 | **A point in the model** | |
 | **A waypoint** / **a run of waypoints** | Of a geodata file |
+| **A moment of the trip** | Of a trip [followed from the surface](live-tracking.md#the-party-on-the-survey) — how a photograph is hung on a moment of its replay. A link saying a photograph *documents* a trip's moment needs the right to **edit** that trip, because it decides what the trip's replay shows |
 
 Some of these need a viewer that can select them, and the dialog says so plainly: *"Pointing
 at this kind of part arrives with the viewer that can select it."*
+
+### Regions of a picture from the keyboard
+
+A region can be drawn and picked without a mouse.
+
+**Drawing.** Press **Tab** until the picture has focus; a cursor appears in its middle.
+
+| Key | What it does |
+|---|---|
+| **Arrow keys** | Move the cursor a small step across the picture |
+| **Shift** + arrow | A larger step |
+| **Enter** or **Space** | Press here: places a **point**; the first and second press give a **rectangle**'s two opposite corners, or a **circle**'s centre and then a spot on its edge; for an **outline**, each press adds a corner |
+| **Enter** again on the last corner | Closes the outline |
+| **Backspace** | Takes back the last corner of an outline |
+| **Escape** | Abandons the shape in progress. With nothing in progress, it closes the dialog the picture is in |
+
+The help line under the shape choice says the same in the screen's words. A region drawn
+from the keyboard is exactly the region the same drag would have drawn.
+
+**Picking.** When you read a picture, each region already drawn on it is in the **Tab** order,
+named by its relation (or *Region n* when it has none). The focused region is drawn heavier;
+**Enter** or **Space** opens it as a click would. A region drawn inside another comes after it,
+so the inner one can always be reached.
 
 ### Text anchors survive editing
 
@@ -96,6 +120,11 @@ Each record shows **Linked items (n)**. Each link row names its members and its 
 - A member you may not read shows as **Restricted item**: *"This link names something you may
   not read."*
 - If nothing in a link is visible to you, it says so.
+- A member that is a photograph, a cave or a person shows **a small picture** — the photograph,
+  the cave's headline picture, the person's portrait. The other kinds show none, since a picture
+  of a saved view, a geodata file or a survey model would have to draw positions.
+- Following a link to a survey station or a survey **moves the 3D view** there rather than
+  loading the survey again, so you keep the place you were looking at.
 
 > **A link is never the thing that discloses a protected cave.** It shows each reader only the
 > ends they are allowed to see.
@@ -105,7 +134,9 @@ report, which opens the link's own page.
 
 ## Making one
 
-**Link…** on any record. Choose the kind of item, find it, pick the relation, optionally add
+**Link…** on any record. Choose the kind of item, find it — in the search selector described
+under [Search and filters](search-and-filters.md#the-selector), which also reaches cabinets,
+survey models and geodata files — pick the relation, optionally add
 a **note** ("Why these belong together") and a **description**, and say which item the
 relation reads from if it is directed.
 

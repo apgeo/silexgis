@@ -160,6 +160,13 @@ Every object has a **Permissions** tab (where you may manage permissions on it).
 Add a rule naming a **user** or a **caving group**, an effect, actions, and a scope of
 **this object only** or **this object and everything inside**.
 
+**A rule goes with what it names.** Deleting a record, a caving group, a feature set, a cabinet
+or an account removes the rules that name it, and each removal is in the audit trail — so a
+deleted thing never lingers as a grant on somebody's list of rights. A record that is only
+*moved to the bin* — a trip, a document or a cave that can still be restored — keeps its rules, and
+restoring it gives back the same access. A caving group with a deny written on it, and a feature
+set or cabinet a rule still reaches through, are refused deletion as before.
+
 ### Opened about somebody
 
 The message saying that somebody asked onto a trip cannot open a cave links to that cave's
@@ -216,6 +223,11 @@ For each action it says **Allowed** or **Denied**, and names the reason:
 | *No rule grants this.* | |
 
 This is the tool for every "but why can't Maria open that?" conversation. Start here.
+
+To see **which permission groups an account belongs to** — named directly, or reached through
+one of its caving groups — open its row under [Administration → Accounts](README.md#accounts).
+That list comes from the same reading of memberships the rights themselves are decided by, so
+it cannot disagree with them.
 
 ---
 

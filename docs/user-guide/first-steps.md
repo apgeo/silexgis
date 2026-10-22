@@ -8,9 +8,11 @@
 
 ## Getting an account
 
-You do not sign yourself up. Somebody who runs the installation creates your account, or
-opens registration deliberately and tells you. If you have been given an address and nothing
-else, ask them.
+You do not sign yourself up. Somebody who runs the installation **invites** you, or opens
+registration deliberately and tells you. An invitation arrives as an email with a link to
+**choose your password** — or, if the installation sends no mail, as that same link handed to you
+directly. It works once and for a day; if it has run out, ask for the invitation to be sent
+again. If you have been given an address and nothing else, ask them.
 
 Once you have an account you sign in with your **email address** and password. Your username
 is how you are *listed*, not how you sign in — changing it later changes nothing about
@@ -21,8 +23,11 @@ the buttons are on the sign-in page. An external login federates into a normal l
 it does not create a second kind of user.
 
 If two-factor authentication is switched on for your account, you are asked for a code after
-your password — from an authenticator app, or emailed, or texted. See
-[Your account and settings](features/account-and-settings.md).
+your password — from an authenticator app, or emailed, or texted — and after signing in through
+an external provider too. See [Your account and settings](features/account-and-settings.md).
+
+**Sign out** is in the account menu at the top right. It ends your sign-in on the server, so
+the next person at that browser is asked to sign in.
 
 ## What you see first
 
@@ -52,33 +57,44 @@ at all, rather than opening onto nothing.
 | **Work areas** | The ground your club actually works — see [Work areas](features/work-areas.md) |
 
 **Cadastre** — [Caves](features/caves-and-entrances.md) ·
-[Features](features/surface-features.md) · [Geodata](features/geodata.md)
+[Features](features/surface-features.md) · [Geodata](features/geodata.md) ·
+[Cave catalogue](features/cave-catalogue.md) (for whoever may create features)
+
+**Statistics** — [Distributions · Correlations · Regions · Categories](features/measurements-and-statistics.md#the-whole-registry-explored)
 
 **Library** — [Photographs](features/photographs.md) ·
 [Albums](features/photographs.md#albums) ·
-[Cabinets](features/documents-and-cabinets.md) · [Uploads](features/uploads.md)
+[Cabinets](features/documents-and-cabinets.md) · [Uploads](features/uploads.md) · *Photo
+library*, where the installation runs one beside it
 
 **Activity** — [Calendar](features/events-and-calendar.md) ·
 [Events](features/events-and-calendar.md) · [Trip logs](features/trips.md) ·
-[Checklists](features/checklists-and-callout.md) · [Camps](features/camps.md)
+[Import trips](features/trips.md#importing-a-club-spreadsheet) ·
+[Import a recording](features/mobile-sync.md#importing-a-trip-recorded-on-a-phone) ·
+[Checklists](features/checklists-and-callout.md) · [Camps](features/camps.md) — the two imports
+for whoever may record trips
 
 **People** — [Caving groups](features/people-and-clubs.md) ·
 [Cavers](features/people-and-clubs.md#the-caver-roster)
 
+**Tools** — [Coordinate converter](features/coordinates.md#the-coordinate-converter)
+
 **Administration** — [Audit](features/history-and-audit.md) ·
+[Accounts](admin/README.md#accounts) ·
 [Permission groups](admin/permissions.md) · [Messaging](admin/messaging.md) ·
 [Message delivery](admin/messaging.md#watching-the-mail-go-out) ·
-[Terrain](admin/terrain-builds.md)
+[Terrain](admin/terrain-builds.md) ·
+[Published trips](features/live-tracking.md#everything-published-for-full-administrators)
 
 **Configuration** — [Feature sets](admin/permissions.md#feature-sets) ·
-[Document kinds, trip purposes, trip roles, report layouts, link relations, detection
-rules, message texts](admin/vocabularies.md)
+[Document kinds, feature kinds, trip purposes, trip roles, camp roles, report layouts, link
+relations, detection rules, message texts](admin/vocabularies.md)
 
 ## Your first hour: a suggested order
 
-1. **Set your language.** Top bar. English and Romanian ship with the application, and the
-   choice follows your account — so the emails it sends you arrive in it too, not just the
-   screens.
+1. **Set your language.** Top bar, or Settings → Accessibility. English and Romanian ship with
+   the application, and the choice follows your account — so the emails it sends you arrive in
+   it too, not just the screens.
 2. **Fill in your profile.** Settings → Profile. A **display name** in particular: without
    one you appear beside everything you add under a generated name. Each field carries its
    own small audience icon — only you, your caving groups, or everybody signed in.
@@ -113,6 +129,9 @@ happening.
 - **Pop a panel out** into its own window if you have two monitors — the registry, the
   selection panel, the 3D scene and the survey viewer all do this, and they stay in sync.
   See [Saved views, panels and multi-window](features/saved-views-and-windows.md).
+- **Use the keyboard.** The first press of Tab offers **Skip to main content** (and, on the map
+  page, **Skip to map**); a row of the cave, feature and in-view lists opens with Enter; and
+  **?** lists every keyboard shortcut for the screen you are on.
 
 ---
 
