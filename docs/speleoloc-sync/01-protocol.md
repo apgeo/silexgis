@@ -599,26 +599,36 @@ else — field names, field order, nesting, and every value not in that list —
 
 ## 10. Generating a client from the served description
 
-The server publishes its own description at `/openapi/v1.json`. Two things in it matter to whoever
-generates code from it, and both are recent:
+The server publishes its own description at `/openapi/v1.json`. Four things in it matter to whoever
+generates code from it:
 
-- **The bearer scheme is declared, document-wide.** Until it was, the description said nothing about
-  authentication at all — the requirement lives on the route group rather than on any per-route
-  metadata a describer can see — so a generator reading it would have emitted calls carrying no
-  credential. It is declared once and required for the whole document, and the short allow-list of
-  deliberately open routes takes the requirement back off itself with an empty per-operation
-  `security`, which OpenAPI defines as "no requirement here". That half matters most on the sign-in
-  calls: a generated client must not demand a token on the one call whose purpose is to obtain one.
-  No sync route is on that allow-list.
-- **The sync operations are named**, and almost nothing else on this server is. The names are
-  `syncCapabilities`, `syncListSets`, `syncCreateSet`, `syncGetSet`, `syncReplaceSet`,
-  `syncDeleteSet`, `syncDownload` and `syncUpload`. An unnamed operation gets a name invented by the generator
-  from its path, which then moves whenever a path is tidied; these are chosen deliberately and are
-  part of the contract. Naming the rest of the server's operations is a larger change than this one
-  and has not been made, so do not expect an identifier on any operation outside this slice.
+- **The bearer scheme is declared, document-wide.** The requirement lives on the route group rather
+  than on any per-route metadata a describer can see, so it is declared once and required for the
+  whole document, and the short allow-list of deliberately open routes takes the requirement back
+  off itself with an empty per-operation `security`, which OpenAPI defines as "no requirement here".
+  That half matters most on the sign-in calls: a generated client must not demand a token on the one
+  call whose purpose is to obtain one. No sync route is on that allow-list.
+- **Every operation is named.** The sync names are `syncCapabilities`, `syncListSets`,
+  `syncCreateSet`, `syncGetSet`, `syncReplaceSet`, `syncDeleteSet`, `syncDownload` and
+  `syncUpload`; they are chosen deliberately, are pinned by the server's own tests, and are part of
+  the contract. Every other operation on the server is named too, after the code that handles it,
+  so a generated client no longer invents a name from a path — but only the sync names are
+  promised not to move.
+- **The problem document is declared with its `code`.** The published problem shape carries the
+  `code` member beside `type`, `title`, `status`, `detail` and `instance`, so a generated client
+  types it rather than dropping it. The *values* it may take are not enumerated there; section 9
+  of the errors document says why.
+- **What a request always needs is marked required.** A member a request's validator refuses to do
+  without is published as required and not nullable, and one that may not be empty carries a
+  minimum length or item count, so a generated client cannot build a request that is always
+  refused without a type error to warn it. Rules that hold only when something else does, or that
+  apply to each item of a list, are not published, because they say nothing about whether the
+  member is present.
 
 Failure statuses are declared alongside those names, which is what puts the sync failures into the
-description at all. **The declaration is orientation, not a contract**: it is incomplete in at least
-one place — the delete route declares the `404` it can answer and not the `409` it can also answer —
-and it never carries the `code`, which is a value rather than a type. The errors document is the
+description at all; the `401` is declared on every route that needs a token and the `429` on every
+route a rate limit applies to. **The declaration is orientation, not a contract**: it is incomplete
+in at least one place — the delete route declares the `404` it can answer and not the `409` it can
+also answer — and it never says which `code` a status arrives with, because that is a value rather
+than a type. The errors document is the
 authority for both, and it says what each code means and what the client is supposed to do about it.

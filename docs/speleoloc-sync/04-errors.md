@@ -284,8 +284,8 @@ so that a gap is not mistaken for an omission.
 
 The server's own description at `/openapi/v1.json` declares, for each sync operation, statuses it
 can answer with. The body is always the problem document in section 1, so the declared schema is the
-same for all of them; **the `code` is not in the description** and cannot be, because it is a value
-rather than a type. This document is the list of codes, and it is written as each one is added
+same for all of them, and it declares the `code` member; **which codes a status can carry is not in
+the description** and cannot be, because a code is a value rather than a type. This document is the list of codes, and it is written as each one is added
 rather than assembled afterwards.
 
 **The declaration is not a complete list of statuses either**, and this document is the authority
@@ -294,13 +294,14 @@ Treat the description as machine-readable orientation and this file as the contr
 
 Two further practical consequences:
 
-- A generated client will give you a typed problem body with `type`, `title`, `status`, `detail` and
-  `instance`. `code` arrives as an extra member on the same object; read it from the raw JSON if
-  your generator drops unknown members.
-- The sync operations are the only ones on this server with stable names in the description
-  (`syncCapabilities`, `syncListSets`, `syncCreateSet`, `syncGetSet`, `syncReplaceSet`,
-  `syncDeleteSet`, `syncDownload`, `syncUpload`). Error handling written against those names will
-  not move.
+- A generated client will give you a typed problem body with `type`, `title`, `status`, `detail`,
+  `instance` and `code`, typed as a string. A server older than the one that declared it sends the
+  same member undeclared; read it from the raw JSON if your generator drops unknown members and you
+  must talk to one.
+- Every operation on this server is named in the description, but the sync names are the ones
+  chosen deliberately and pinned (`syncCapabilities`, `syncListSets`, `syncCreateSet`, `syncGetSet`,
+  `syncReplaceSet`, `syncDeleteSet`, `syncDownload`, `syncUpload`). Error handling written against
+  those names will not move; a name elsewhere follows the code that handles the route.
 
 ## 10. Three refusals recorded as bytes
 

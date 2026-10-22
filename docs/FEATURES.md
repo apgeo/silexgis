@@ -17,8 +17,45 @@ feature and walkthroughs of whole jobs.
   features, survey lines and 3D walls, travels in the map's address and in saved views, can be
   drawn as a layer of its own in its own colour and symbol, and up to six can be pinned to the
   account as one-click quick filters on the map and the registry.
+  The backgrounds and overlays come from a catalogue the installation edits — tile addresses, and
+  WMS and WMTS services, which the 3D view draws as well; an entry whose access key was not given
+  is not offered rather than offered broken. Zoomed out, entrances are drawn as counts over a fixed
+  grid, below a zoom the installation chooses. The map has an overview inset, a scale box that
+  takes a typed scale, the selection kept in its address, and QR codes in its share dialogs.
+  **List the caves in view** opens the cave registry narrowed to the map's window, and a list opens
+  the map on its own filter; hovering a row rings what the map has drawn for it, and picking on the
+  map marks the row. A list's result can fill the map's **working set** — up to 200 objects, and it
+  says when that cut the result short.
+- **Questions you can save, share and ask everywhere** — the cave registry, the feature list, the
+  map and the object selector read one kind of filter: conditions on a record's fields, grouped as
+  *all of* or *any of*, nested and negated, built in a condition editor; a number typed with signs
+  (`>= 100`) is read as the comparison it means. A filter can ask **where** — within a distance of a
+  point, an outline, a feature, a named area or another saved filter's result, or inside an outline
+  — and a list can be ordered **nearest first**. Both are answered on the position each reader is
+  shown, never on the stored one: a protected cave a reader may not place is measured at the grid
+  point they are shown, and never ranked by distance at all. A filter is saved by name, **private,
+  for one caving group or for everyone signed in**, and sharing it grants nothing: each reader runs
+  it under their own access and sees their own rows. A saved filter never stores a typed point,
+  outline or nearest-first anchor; a feature, area or filter it names is read again on every run.
+  The feature list and its exports are driven by the same document, so the table and the file hold
+  the same rows, and photographs, geofiles, georeferenced maps, survey models and cabinets can be
+  filtered the same way.
+- **Positions in the format you work in** — a position is shown, copied and typed in nine formats:
+  decimal degrees, degrees and decimal minutes, degrees-minutes-seconds, UTM, MGRS, Stereo 70 (the
+  Romanian national grid, with its datum shift), the Swiss LV95 and LV03 grids where they apply,
+  and Plus Codes. Each account chooses the format it reads in, which others are listed beside it
+  and how each is written. Wherever a position is typed — an entrance, a point picked for a map —
+  it can be pasted in any of them, the reading is said back, and a text that could mean two places
+  offers both. A protected position is never written finer than the grid it was blurred to, in any
+  format. A **coordinate converter** writes one position, or a whole list or spreadsheet of them,
+  in every format at once — entirely in the browser: nothing typed there reaches the server, and
+  only its optional map fetches a background, from OpenStreetMap. Surveys in Stereo 70 are placed
+  in the survey viewer and on published trips with the same datum shift the database uses.
 - **Surface features, files & media** — typed symbols and properties, photo galleries,
-  documents, audio and video, and georeferenced raster (COG) map overlays. A document has a
+  documents, audio and video, and georeferenced raster (COG) map overlays. The kinds of feature
+  are the installation's own: an administrator adds kinds and changes the wording, order, symbol,
+  style and details each one asks for. A shipped kind keeps its code and shapes, and a kind already
+  in use keeps the shapes its features have. A document has a
   kind (survey report, permit, trip report, …) and each kind decides which details its
   documents are asked for, so an archive can be organized the way its club actually files
   things. Uploads are accepted up to 512 MB by default, and the limit is a setting. The text
@@ -104,7 +141,10 @@ feature and walkthroughs of whole jobs.
   system, or plain metres about a point, which is normally the cave's own entrance and is
   offered pre-filled — and the installation converts it into a model the 3D view draws in place,
   under the terrain, beside that cave's centerlines. By default it is loaded only for the cave
-  you select, and its size is shown before it is fetched. The layer list can instead draw the
+  you select, and its size is shown before it is fetched; walls larger than a size the
+  installation sets — 50 MB unless it says otherwise — are not downloaded on selection at all: the
+  view says how large they are and asks first, and each person can set their own size for their
+  browser. The layer list can instead draw the
   walls of **every cave in view**: once you are zoomed in far enough, nearest the middle of the
   view first, up to a number of caves and a total download size the installation sets — and it
   says how many of the caves in view it drew and what kept the rest out, never a silent subset.
@@ -119,7 +159,12 @@ feature and walkthroughs of whole jobs.
   after a reading that failed, or after an upgrade that reads surveys better — without uploading
   it a second time, and an administrator can ask the same of every line plot at once. A station
   the file gives no name is kept under the label the drawing gives it, so on a Therion survey it
-  can be pressed and reported at like any other.
+  can be pressed and reported at like any other. An upload can ask to become the cave's current
+  survey once it has been read, so a corrected re-export needs no second visit. A photograph linked
+  to a station of a survey is placed at that station: the survey viewer marks every station holding
+  photographs with a camera, and the 3D view marks the selected cave's the same way, each opening
+  the pictures taken there. A second survey viewer, LochViewer, is offered on trial beside the
+  usual one.
 - **Survey closure** — archive the compilation log beside the model and the cave page reports how
   well the survey closes, in the compiler's own words: every loop it found, with both its relative
   error and its absolute error in metres, its length, its stations and its per-axis components. The
@@ -150,13 +195,16 @@ feature and walkthroughs of whole jobs.
   offers a finer build when the camera moves over one — offers, never swaps, because changing the
   ground under somebody mid-pan moves every cave on screen. A new survey over ground already baked
   does not cost the region again: a build can **extend a finished one**, adding only the new
-  rasters to a copy of its tiles.
+  rasters to a copy of its tiles. A build can be **called off**, and a stopped one run again from
+  the first step whose work is not already done; a bake that runs past the installation's time
+  limit is stopped and says how long it ran.
 - **Pictures drawn from that elevation** — shaded relief, steepness, facing, ruggedness,
   topographic position, roughness, a colour relief or contour lines, requested from the terrain
   page, computed once from a finished build and shown to everyone who may read terrain as ordinary
   map layers. Steepness and facing are measured on the ground rather than on the grid of degrees
   the elevation is held in, so a hillside facing east reads as steep as the same hillside facing
-  north. Each one belongs to the build it was
+  north. Contour pictures are drawn four times as fine as the elevation they are traced from, so
+  their lines stay smooth down to about 1:4,000. Each one belongs to the build it was
   drawn from, so **activating a different build marks every picture of the old one as out of date**,
   where the reader sees it rather than in a log — a shaded relief that disagrees with the heights
   beneath it otherwise looks like a fault in the cave data. They live under their build and are
@@ -268,6 +316,12 @@ feature and walkthroughs of whole jobs.
   Where a trip counts into more than one bar — it went to two areas, it had four people — the page
   says so, and where there are more names than bars it says how many it is showing out of how many
   there are.
+- **The registry, explored** — four screens ask questions of the cave registry itself: how one
+  measurement is spread, how two move together, how many caves stand under each region, and how
+  one measurement compares across cave types or rock types — drawn as the middle of each group (the
+  10th to the 90th percentile) rather than its extremes, which are single caves' own figures, and
+  with no box at all for a group measured on fewer than six caves. Everything is counted over the
+  caves you may read, and the whole question lives in the address.
 - **Years of trips typed up in a spreadsheet become trips** — the club's centralizator is uploaded
   and read on a review screen, not imported blind: every row says what it would create, which people
   and caves it matched, and what it could not settle, and nothing is written until you confirm.
@@ -330,6 +384,11 @@ feature and walkthroughs of whole jobs.
   the trip itself to see where it went. You have to say which days you want, the span is capped, and if
   a window somehow holds more than the page will return it tells you **how many rows it left out**
   rather than quietly showing you less than there is.
+- **Your dates in the calendar you already use** — where an administrator switches it on, a member
+  creates a secret address that a phone or desktop calendar polls, and their trips, camps and
+  events follow them there as they move. A feed carries titles, dates and links and never a place,
+  and is revoked from the account page. It is off on a fresh installation, because offering it is a
+  decision about how far a club's dates may travel.
 - **Checklists — what a party settles before it sets off** — anyone can write a list (permit, key
   collected, gear booked, whatever the club actually checks), keep it to themselves, share it with their
   club or make it readable by everyone; an administrator's published default is nothing more than a list
@@ -413,7 +472,8 @@ feature and walkthroughs of whole jobs.
   alarm; that is the callout's job. A cave can declare what its depths mean — that 96 m is the
   Meander, at this station — so a depth phoned out lands on the station people mean rather than
   on whichever one arithmetic finds nearest, and the report card warns when a depth sits far from
-  the station it will land on. Wherever a station is typed — declaring a place, reporting,
+  the station it will land on. A cave can also name a station without a depth — with a note, and
+  whether the drawing itself names it. Wherever a station is typed — declaring a place, reporting,
   correcting — the survey's own station names are offered as the name is typed, and a declared
   place whose station the survey no longer has is marked rather than silently passed over. A
   watch moved to a corrected survey part-way through a trip leaves its earlier reports marked
@@ -599,6 +659,11 @@ feature and walkthroughs of whole jobs.
   can be granted nothing; they have to be reached another way.
 - **A trip has a gallery and a cover** — the photographs taken on it, the albums made of them, and a
   headline picture chosen with the same star that names a cave's.
+- **Camps** — a multi-day, multi-trip effort, a summer expedition or a training camp, gathers trips
+  rather than replacing them: everything a trip records stays on the trip, and the camp reads
+  across them. It has its own page, roster, working area, photographs and write-up, goes through
+  the states a trip does, and appears on the calendar's map on the days it runs. Sharing a camp
+  shares the trips it gathers that its organiser may administer, and says which it skipped.
 - **A trip writes itself up** — every trip has a report view: the whole trip laid out as a document,
   with a print stylesheet over it, and a **Word document** you can download or file against the trip
   itself. The write-up is built from *your* reading of the trip and nothing else, so it can never
@@ -652,9 +717,29 @@ feature and walkthroughs of whole jobs.
   trip's text is exactly what that trip's own write-up would show the same reader, decided in one
   place for both documents, so a camp's write-up can never print what a trip's withholds; the copy
   filed against the camp carries each trip only as any account may read it.
-- **Tags, saved & shareable map views**, and **multi-window** pop-out panels.
+- **Tags, saved & shareable map views**, and **multi-window** pop-out panels. A shared view's
+  link opens for somebody with no account over the background it was saved with and — if the view
+  had them on — the cave entrances and surface features that are public in their own right, only
+  inside the view's own area and narrowed as the view was. Every protected cave and feature is left
+  off entirely, not drawn approximately and not counted in a cluster, and an installation can
+  switch data on shared views off altogether.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.
+- **The national cave catalogue, and Grottocenter** — where an administrator has set a key, the
+  cave catalogue searches speologie.org, the Romanian community register of published caves, and
+  brings the caves you pick into your own registry without re-typing them; searching creates
+  nothing. Where the lookup is switched on, a cave can also be matched to its entry in
+  Grottocenter, the international database, and keep that entry's identifier.
+- **Photo libraries beside the application** — an Immich or a PhotoPrism library the club runs
+  next to SilexGIS can be read in place: its located photographs on the map, and a page to browse
+  and search it, with the pictures passed through this application so no page names the library's
+  host. Who sees them is the installation's choice — Full Administrators only unless it opens them
+  to everyone signed in — and an administrator can suspend either library at once.
+- **A phone app that works underground** — SpeleoLoc, a cave-navigation application, carries a
+  chosen selection of caves offline and writes its edits back through a row-level sync, with the
+  server arbitrating every row; a position the phone's account may not see exactly never reaches
+  the phone at all. A code printed on a cave's label opens a public landing address. The protocol
+  is documented for anybody writing such a client in [speleoloc-sync](speleoloc-sync/README.md).
 - **Works on a phone** — the map workspace adapts to touch, including full geometry editing by
   finger, and the app installs to a home screen.
 - **Accounts & permissions** — editable permission groups instead of fixed roles: named
@@ -670,6 +755,14 @@ feature and walkthroughs of whole jobs.
   protected cave's documents readable while withholding the fact that they point at *that*
   cave (an administrator can switch that disclosure on), and never hands out a photo whose
   own capture point would place the cave.
+  Accounts can be opened by **invitation**, which is the way in on an installation that does not let
+  people register themselves: an accounts page opens an account for a name and an address, and its owner chooses a password
+  through a single-use link — mailed, or shown once for the administrator to hand over when there
+  is no mail server. The same page searches the account register, says of each account whether it
+  can sign in and has chosen a password, locks, unlocks and deletes, and can reset the second
+  factor of somebody who has lost both their authenticator and their recovery codes — which signs
+  them out everywhere and tells them. Everybody changes their own password from their security
+  settings, which signs them out everywhere too.
 - **Email and SMS that an operator controls** — any SMTP server, any SMS gateway that speaks
   HTTP, and the wording of every message editable per language from the admin pages. Configure
   nothing and the app still runs: links and codes go to the server log instead.
@@ -683,6 +776,17 @@ feature and walkthroughs of whole jobs.
   a daily summary gets it in their summary, and every such act is recorded against the person who
   made it. How long notifications are kept is a number an administrator can change, over whatever
   the deployment configured.
+- **Usable from the keyboard, in light or dark** — a skip link and named landmarks on every page, a
+  map that takes focus and pans and zooms from the keyboard, the list of shortcuts behind **?**,
+  list rows that open with Enter, and a picture's regions drawn and picked with the arrow keys. A
+  light theme, a dark one, or whichever the system uses, with a keyboard focus ring that stays
+  visible on both.
+- **Looking after itself, and saying so** — background work that failed for a passing reason, a
+  database restart or a timeout, is tried again by itself; a long import says how far it has got;
+  and sweeps and backfills wait behind work somebody is waiting for. An error a signed-in person's
+  browser did not handle is reported to the installation's own log, the same fault under the same
+  fingerprint and the page's address without its query, and nowhere else: there is no outside
+  service.
 - **English and Romanian** throughout — and the language you pick follows your account, so the
   messages the system sends you arrive in it too, not only the screens. Dates included: calendars
   and date pickers show the month and weekday names of the language you are reading in, and start
