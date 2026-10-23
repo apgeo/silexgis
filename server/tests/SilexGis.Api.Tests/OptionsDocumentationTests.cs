@@ -67,6 +67,7 @@ public class OptionsDocumentationTests
     private static readonly string[] ReadByKey =
     [
         "Auth:RateLimitPerMinute",
+        "Db:DisableJit",
         "Qr:RateLimitPerMinute",
         "TripTracking:PublicRateLimitPerMinute",
         "CalendarFeed:RateLimitPerMinute",

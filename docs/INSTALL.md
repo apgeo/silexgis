@@ -2130,6 +2130,7 @@ the reasoning beside each one.
 |---|---|---|
 | `SILEXGIS__Db__ConnectionString` | — | PostgreSQL connection string |
 | `SILEXGIS__Db__AutoMigrate` | `true` | run migrations on start |
+| `SILEXGIS__Db__DisableJit` | `false` | `true` switches PostgreSQL's JIT compiler off for every connection the application opens (it is passed as the connection's `-c jit=off` startup option, beside any `Options` already in the connection string). Left `false`, the server's own setting applies; the map's cluster statement switches JIT off for itself either way, and no other route was measured to need it. Set it if the database log or `EXPLAIN ANALYZE` shows wide map or filter questions spending most of their time in `JIT:` compilation — typical on a large register whose access rules make the planner price ordinary questions high |
 | `SILEXGIS__PublicUrl` | `http://localhost:8080` | public URL (sign-in redirects derive from it) |
 | `SILEXGIS__Admin__Email` | — | first-run administrator: the address it signs in with. The packaged stack sets it from `SILEXGIS_ADMIN_EMAIL` in `.env` |
 | `SILEXGIS__Admin__Password` | — | first-run administrator: its password. The packaged stack sets it from `SILEXGIS_ADMIN_PASSWORD` in `.env` |

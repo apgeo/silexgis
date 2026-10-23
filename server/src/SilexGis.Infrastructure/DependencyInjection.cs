@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Npgsql;
 using SilexGis.Domain;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Settings;
@@ -20,6 +21,36 @@ namespace SilexGis.Infrastructure;
 
 public static class DependencyInjection
 {
+    /// <summary>
+    /// The connection string, with PostgreSQL's JIT compiler switched off for every session it
+    /// opens when <paramref name="disableJit"/> is set — and untouched otherwise.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Set through the session's startup options rather than per statement, so every connection
+    /// the application opens is covered — EF's and the raw statements' alike, which share the pool
+    /// — and a setting that comes back with a pooled connection cannot be lost by a reset. Options
+    /// already in the string are kept, with this one after them.
+    /// </para>
+    /// <para>
+    /// Off by default: the statements measured to pay for JIT switch it off for themselves, inside
+    /// their own transaction, whatever this says, and no other route was measured to need it. The
+    /// switch is for an installation whose own data makes the planner price other wide questions
+    /// high enough to compile them.
+    /// </para>
+    /// </remarks>
+    public static string WithJitSwitch(string connectionString, bool disableJit)
+    {
+        if (!disableJit)
+        {
+            return connectionString;
+        }
+
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
+        builder.Options = string.IsNullOrWhiteSpace(builder.Options) ? "-c jit=off" : $"{builder.Options} -c jit=off";
+        return builder.ConnectionString;
+    }
+
     public static IServiceCollection AddSilexGisPersistence(
         this IServiceCollection services, IConfiguration configuration)
     {
@@ -30,6 +61,8 @@ public static class DependencyInjection
                 "Database connection string is not configured. " +
                 "Set Db:ConnectionString (environment: SILEXGIS__Db__ConnectionString).");
         }
+
+        connectionString = WithJitSwitch(connectionString, configuration.GetValue("Db:DisableJit", false));
 
         // Defaults for a process with no request behind its work (the seeder, a command-line tool).
         // TryAdd, so a host that has already said who the caller is keeps its answer whichever of
