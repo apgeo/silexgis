@@ -490,7 +490,9 @@ public sealed class PhotoCommitService(
         public static async Task<Taxonomies> LoadAsync(SilexGisDbContext db, CancellationToken ct) => new(
             await db.CaveTypes.AsNoTracking().ToDictionaryAsync(t => t.Code, t => t.Id, StringComparer.OrdinalIgnoreCase, ct),
             await db.EntranceTypes.AsNoTracking().ToDictionaryAsync(t => t.Code, t => t.Id, StringComparer.OrdinalIgnoreCase, ct),
-            await db.FeatureTypes.AsNoTracking().ToDictionaryAsync(t => t.Code, t => t.Id, StringComparer.OrdinalIgnoreCase, ct));
+            await db.FeatureTypes.AsNoTracking()
+                .Where(t => t.BoundKind == FeatureKind.Generic)
+                .ToDictionaryAsync(t => t.Code, t => t.Id, StringComparer.OrdinalIgnoreCase, ct));
 
         public long CaveType(string? code) => Resolve(CaveTypes, code ?? DefaultCaveTypeCode, "cave type");
 

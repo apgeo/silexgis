@@ -181,7 +181,7 @@ and re-read the set from the beginning periodically; a full read is always corre
 |---|---|
 | `id` | The row's identity on the server, stable for its lifetime |
 | `kind` | `cave`, `caveEntrance`, `centerline` or `generic` — **treat an unknown value as a row to store and ignore, never as an error** |
-| `featureTypeCode` | The kind's stable code — `cave_place`, `cave_area`, `surface_area` and others. **This is not a closed list**, and **never resolve a kind by a numeric id**: ids belong to whichever installation seeded the table |
+| `featureTypeCode` | The kind's stable code — `cave_place`, `cave_area`, `surface_area` and others. **This is not a closed list**, and **never resolve a kind by a numeric id**: ids belong to whichever installation seeded the table. A `cave` row carries `cave` here too — the type every cave has, which holds a club's own cave fields; read a row by its `kind` first, and never send `cave` as the type of a `generic` row (it is refused with `sync.type_unknown`) |
 | `category`, `name`, `description` | As stored |
 | `geometry` | GeoJSON, SRID 4326. Exact or absent — see §6 |
 | `properties` | The property document, verbatim. Where the device's own identifiers live |

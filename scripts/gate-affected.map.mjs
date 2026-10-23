@@ -132,6 +132,8 @@ export const groups = {
     'CaveWindowEntranceTests',
     // A protected cave's display on every outward path, held fixed across caves carrying a type.
     'CaveProtectionParityTests',
+    // Caves carry the shipped cave feature type: every creation path, the locks, the filter.
+    'CaveFeatureTypeTests',
   ],
   cavers: ['CaverRosterTests', 'ProfileVisibilityTests'],
   cavingGroups: [
@@ -508,11 +510,12 @@ export const crossCutting = {
     'AccessAnchorCleanupTests', 'AccessHistoryTests', 'AclAndCavingGroupTests',
     'AreaKarstStatisticsTests', 'AssociationDisclosureTests', 'AttachmentReachListingTests',
     'CalendarTests', 'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests',
-    'CaveMeshesInViewTests', 'CaveOverburdenTests', 'CavePassageShapeTests',
-    'CaveProtectionParityTests', 'CaveRegistryFilterTests', 'CaveSurveyStatisticsTests',
-    'CaveWindowEntranceTests', 'CenterlineColdCacheMeasurementTests', 'CenterlineTests',
-    'ClosestApproachTests', 'ConcurrencyTests', 'DashboardTests', 'DemoSeedIdempotencyTests',
-    'DocumentAccessApiTests', 'DocumentCommentNotificationTests', 'DocumentContentSearchTests',
+    'CaveFeatureTypeTests', 'CaveMeshesInViewTests', 'CaveOverburdenTests',
+    'CavePassageShapeTests', 'CaveProtectionParityTests', 'CaveRegistryFilterTests',
+    'CaveSurveyStatisticsTests', 'CaveWindowEntranceTests',
+    'CenterlineColdCacheMeasurementTests', 'CenterlineTests', 'ClosestApproachTests',
+    'ConcurrencyTests', 'DashboardTests', 'DemoSeedIdempotencyTests', 'DocumentAccessApiTests',
+    'DocumentCommentNotificationTests', 'DocumentContentSearchTests',
     'DocumentSurfaceProtectionSweepTests', 'DocumentViewerBytesTests',
     'EntrancePlacementGuardTests', 'EnumBindingTests', 'ExpeditionDeleteCleanupTests',
     'ExpeditionLeadsTests', 'ExpeditionMapTests', 'ExpeditionReportTests',

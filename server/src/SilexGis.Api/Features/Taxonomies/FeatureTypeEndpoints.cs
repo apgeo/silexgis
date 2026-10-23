@@ -173,5 +173,5 @@ public static class FeatureTypeEndpoints
         t.Id, t.Code, t.Name, t.Description, t.SortOrder,
         t.Category, t.AcceptedGeometryClasses, t.RequiresParent, t.PropertiesSchemaVersion,
         t.ProtectedDisplay, t.SymbolFile, t.Style, t.PropertiesSchema,
-        FeatureTypeWriteService.IsShipped(t.Code));
+        FeatureTypeWriteService.IsShipped(t.Code), t.BoundKind);
 }

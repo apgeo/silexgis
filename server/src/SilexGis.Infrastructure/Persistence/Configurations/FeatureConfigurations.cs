@@ -13,10 +13,13 @@ public sealed class FeatureConfiguration : IEntityTypeConfiguration<Feature>
     {
         builder.ToTable("features", t =>
         {
-            // Generic rows carry the data-level kind; subtyped kinds keep their own taxonomies.
+            // Generic rows must carry a type. Any other row may carry one only when the type is
+            // bound to its own kind, which the composite foreign key below holds — a check cannot
+            // read the other table — so a cave can carry the cave type and nothing else, and an
+            // entrance or a centreline, having no type bound to its kind, can carry none.
             t.HasCheckConstraint(
                 "ck_features_generic_type",
-                "(kind = 0) = (feature_type_id IS NOT NULL)");
+                "kind <> 0 OR feature_type_id IS NOT NULL");
 
             // Per-kind geometry class floors. geometrytype() ignores the Z flag, so PointZ
             // passes 'POINT'. Generic kinds are validated against their feature type's
@@ -62,7 +65,16 @@ public sealed class FeatureConfiguration : IEntityTypeConfiguration<Feature>
         // impossible at the database level (each subtype table FKs it with its kind CHECKed).
         builder.HasAlternateKey(x => new { x.Id, x.Kind });
 
-        builder.HasOne<FeatureType>().WithMany().HasForeignKey(x => x.FeatureTypeId).OnDelete(DeleteBehavior.Restrict);
+        // Against the type's (id, bound kind) rather than its id alone: the pair is what makes a
+        // generic row carrying the cave type, or a cave carrying a sinkhole's, impossible in the
+        // database rather than merely refused by the write path. Null type, no check (MATCH SIMPLE).
+        builder.HasOne<FeatureType>().WithMany()
+            .HasForeignKey(x => new { x.FeatureTypeId, x.Kind })
+            .HasPrincipalKey(t => new { t.Id, t.BoundKind })
+            .HasConstraintName("fk_features_feature_types_feature_type_id_kind")
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => new { x.FeatureTypeId, x.Kind })
+            .HasDatabaseName("ix_features_feature_type_id_kind");
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.CavingGroupId).OnDelete(DeleteBehavior.SetNull);
 

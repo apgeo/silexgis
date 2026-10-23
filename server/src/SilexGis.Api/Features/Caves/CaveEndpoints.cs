@@ -459,11 +459,8 @@ public static class CaveEndpoints
 
         try
         {
+            // Stamps the cave type and checks the property document against its schema.
             await writer.CreateCaveAsync(feature, cave, parents, ct);
-            if (request.Properties is { ValueKind: JsonValueKind.Object })
-            {
-                await writer.ValidatePropertiesAsync(feature, ct);
-            }
         }
         catch (FeatureWriteException ex)
         {

@@ -131,6 +131,10 @@ public sealed class FeatureTypeConfiguration : IEntityTypeConfiguration<FeatureT
                     v => v.ToArray()))
             .HasColumnType("smallint[]");
         builder.Property(x => x.ProtectedDisplay).HasConversion<short>();
+        builder.Property(x => x.BoundKind).HasConversion<short>();
+        // The target of the features' (type, kind) foreign key.
+        builder.HasAlternateKey(x => new { x.Id, x.BoundKind })
+            .HasName("ak_feature_types_id_bound_kind");
         builder.Property(x => x.SymbolFile).HasMaxLength(100);
         builder.Property(x => x.Style).HasColumnType("jsonb");
         builder.Property(x => x.PropertiesSchema).HasColumnType("jsonb");

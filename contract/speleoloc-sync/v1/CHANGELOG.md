@@ -101,6 +101,28 @@ Recorded exchanges written in this entry: none — neither refusal is recorded h
 Codes: `auth.unauthenticated` and `rate.limited` appeared. They are written by the server itself
 when an answer would otherwise leave without a code, so every refusal of this API now carries one.
 
+## 2026-10-23 — a cave row names its type
+
+**Contract version: 1, unchanged. A build pinned to it keeps working.** A row of kind `cave` now
+carries `featureTypeCode: "cave"` where it carried `null`, and a `propertiesSchemaVersion` once its
+property document has been checked against that type's schema. Both are fields a client already
+receives on every other row; a client that reads a row by its `kind` first, as this protocol has
+always asked, sees no difference.
+
+Why: every cave now carries one feature type, bound to the cave kind, so that a club can give caves
+fields of its own that are validated and filterable like any other kind's. The schema of that type
+declares the keys a device writes on a cave (`speleolocCaveLocalIndex`, `speleolocSchemaVersion`)
+with the types the cave-place schema already gives them, and stays open to keys it does not list.
+
+One thing a client must not do: send `featureTypeCode: "cave"` on a row of kind `generic`. That row
+is refused with `sync.type_unknown`, the same as any type this installation does not have for
+generic rows; caves arrive as caves and are given their type on creation.
+
+Recorded exchanges re-written in this entry: `07-download-first-page`,
+`10-download-protected-withheld` — the cave row in each now shows the two fields above.
+
+Codes: none changed.
+
 ## 2026-10-24 — a locked account can no longer refresh, and a server restart no longer signs devices out
 
 **Contract version: 1, unchanged. A build pinned to it keeps working.** No sync route, field or

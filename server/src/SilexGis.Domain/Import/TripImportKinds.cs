@@ -32,7 +32,9 @@ public static class TripImportKinds
 
     /// <summary>
     /// The area kinds a massif or sub-area column may be taken for. Narrower than "anything
-    /// filed under the area category", which is what makes a work area unreachable from here.
+    /// filed under the area category", which is what makes a work area unreachable from here. A
+    /// hill is in it because it is the same kind of outline as a massif, and a sheet naming one in
+    /// its massif column means that row.
     /// </summary>
-    public static readonly string[] Areas = [Massif, SubArea, CaveSystem];
+    public static readonly string[] Areas = [Massif, SubArea, CaveSystem, Features.FeatureTypeSeeds.Hill];
 }

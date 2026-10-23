@@ -90,7 +90,9 @@ public static class FeatureContextLines
             if (row.Kind == FeatureKind.Cave)
             {
                 var known = readableCaves.TryGetValue(row.Id, out var own);
-                parts = [row.TypeName ?? (known ? own.Type : null), known ? own.Region : null];
+                // A cave's own classification ("Pit / Aven") says more than the type every cave
+                // carries, so it comes first.
+                parts = [(known ? own.Type : null) ?? row.TypeName, known ? own.Region : null];
             }
             else
             {

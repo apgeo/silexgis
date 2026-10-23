@@ -271,12 +271,27 @@ public class TripTypeSchema
 }
 
 /// <summary>
-/// Data-level feature-kind registry: every generic feature names its kind here (subtyped
-/// kinds — caves, entrances, centerlines — keep their own taxonomies instead). Adding a
-/// feature kind is a row, not DDL.
+/// Data-level feature-kind registry: every generic feature names its kind here. Adding a
+/// feature kind is a row, not DDL. One shipped row is bound to the cave kind instead (see
+/// <see cref="BoundKind"/>), so a club can give caves fields of its own the same way it gives a
+/// sinkhole its diameter; entrances and centrelines carry no type.
 /// </summary>
 public class FeatureType : TaxonomyBase
 {
+    /// <summary>
+    /// The kind of feature rows of this type are. <see cref="FeatureKind.Generic"/> for every
+    /// type an installation adds and for every shipped one but the cave type, which is bound
+    /// to <see cref="FeatureKind.Cave"/>. Set when the row is seeded and never changed: a
+    /// feature's (type, kind) pair is a foreign key against (id, bound kind), so a cave can
+    /// only ever carry the cave type and a generic row only a generic one.
+    /// <para>
+    /// A bound type's own settings — its protected display above all — decide nothing about
+    /// the rows of its kind: how a protected cave is shown is decided by the kind, and the
+    /// bound type's display is locked to match it.
+    /// </para>
+    /// </summary>
+    public FeatureKind BoundKind { get; set; } = FeatureKind.Generic;
+
     public FeatureCategory Category { get; set; } = FeatureCategory.Surface;
 
     /// <summary>OGC geometry classes rows of this kind may carry (incl. Multi* variants, opt-in).</summary>

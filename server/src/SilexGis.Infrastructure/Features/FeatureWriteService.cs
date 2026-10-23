@@ -44,6 +44,14 @@ public sealed class FeatureWriteException(string code, IReadOnlyList<string> err
 public sealed class FeatureWriteService(
     SilexGisDbContext db, ITypedPropertiesValidator propertiesValidator, ICurrentUser currentUser)
 {
+    /// <summary>
+    /// A generic row was handed a type bound to another kind — the cave type, today. Refused by
+    /// name rather than left to the foreign key, which would answer the same request with a fault.
+    /// </summary>
+    public const string TypeBoundCode = "feature.type_bound";
+
+    private long? caveTypeId;
+
     // ---------- creation ----------
 
     public async Task<Feature> CreateGenericAsync(
@@ -65,11 +73,20 @@ public sealed class FeatureWriteService(
         return feature;
     }
 
+    /// <summary>
+    /// Creates a cave. Every cave carries the shipped cave type and has its property document
+    /// checked against that type's schema here, whichever door it came in by — the cave form, a
+    /// catalogue import, a file import, a device upload, a photograph — so "type is cave" and a
+    /// club's own cave fields hold for every cave, not only for the ones a form made.
+    /// </summary>
     public async Task<Feature> CreateCaveAsync(
         Feature feature, Cave cave, IReadOnlyList<ParentSpec> parents, CancellationToken ct = default)
     {
         feature.Kind = FeatureKind.Cave;
         feature.Category = FeatureCategory.Underground;
+        var caveType = await CaveTypeAsync(ct);
+        feature.FeatureTypeId = caveType.Id;
+        await ValidatePropertiesAsync(feature, caveType, ct);
         cave.Id = feature.Id;
         db.Features.Add(feature);
         db.Caves.Add(cave);
@@ -192,9 +209,10 @@ public sealed class FeatureWriteService(
                 .Select(f => f.FeatureTypeId)
                 .FirstOrDefaultAsync(ct);
 
-            // Caves name no feature type, so a missing type is not a refusal here. That is no
-            // licence to re-root anything freely: an entrance or a centreline never reaches this
-            // line — an empty list is not its one edge to its own cave, and is refused above.
+            // Entrances and centrelines name no feature type, and a cave's type needs no parent,
+            // so neither is refused here. That is no licence to re-root anything freely: an
+            // entrance or a centreline never reaches this line — an empty list is not its one
+            // edge to its own cave, and is refused above.
             if (featureTypeId is not null)
             {
                 var requiredKind = await db.FeatureTypes
@@ -777,8 +795,39 @@ public sealed class FeatureWriteService(
         var featureType = feature.FeatureTypeId is null
             ? null
             : await db.FeatureTypes.FirstOrDefaultAsync(t => t.Id == feature.FeatureTypeId, ct);
-        return featureType
-            ?? throw new FeatureWriteException("feature.type_required", ["a generic feature names its kind"]);
+        if (featureType is null)
+        {
+            throw new FeatureWriteException("feature.type_required", ["a generic feature names its kind"]);
+        }
+
+        if (featureType.BoundKind != FeatureKind.Generic)
+        {
+            throw new FeatureWriteException(TypeBoundCode,
+                [$"kind '{featureType.Code}' is the type of every {featureType.BoundKind} and of nothing else"]);
+        }
+
+        return featureType;
+    }
+
+    /// <summary>
+    /// The shipped type bound to the cave kind. Its absence is a broken installation rather than a
+    /// refusable request — the migration that introduced caves' type inserted it, and the seeder
+    /// restores it — so it fails loudly instead of letting a cave be created without one.
+    /// </summary>
+    private async Task<FeatureType> CaveTypeAsync(CancellationToken ct)
+    {
+        var type = caveTypeId is { } id
+            ? await db.FeatureTypes.FirstOrDefaultAsync(t => t.Id == id, ct)
+            : await db.FeatureTypes.FirstOrDefaultAsync(
+                t => t.Code == FeatureTypeSeeds.Cave && t.BoundKind == FeatureKind.Cave, ct);
+        if (type is null)
+        {
+            throw new InvalidOperationException(
+                $"The feature type '{FeatureTypeSeeds.Cave}' bound to caves is missing; seeding has not run.");
+        }
+
+        caveTypeId = type.Id;
+        return type;
     }
 
     private void ValidateGeometry(Geometry? geometry, FeatureType featureType)

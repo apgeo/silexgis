@@ -390,6 +390,13 @@ public static class FeatureEndpoints
             return ApiProblems.BadRequest("feature.type_required", "Unknown feature type.");
         }
 
+        if (featureType.BoundKind != FeatureKind.Generic)
+        {
+            return ApiProblems.BadRequest(
+                FeatureWriteService.TypeBoundCode,
+                $"Kind '{featureType.Code}' is the type of every {featureType.BoundKind} and of nothing else.");
+        }
+
         if (request.CavingGroupId is not null
             && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.Features, request.CavingGroupId.Value))
         {

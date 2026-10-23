@@ -78,7 +78,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
     /// schema, so what this case is about is the right and not whether that kind's attributes will
     /// hold the two lines saying where the position came from.
     /// </summary>
-    private const string NarrowedKindCode = "pit";
+    private const string NarrowedKindCode = "pitch";
 
     /// <summary>An invented rectangle whose four numbers all differ, so a transposition shows.</summary>
     private const string Bbox = "21.5,45.125,24.25,46.75";

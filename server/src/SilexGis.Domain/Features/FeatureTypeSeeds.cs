@@ -68,4 +68,19 @@ public static class FeatureTypeSeeds
     /// one that finds no faults anywhere and says so plausibly.
     /// </summary>
     public const string FractureLine = "fracture_line";
+
+    /// <summary>
+    /// The one shipped type bound to the cave kind rather than to generic rows. Every cave carries
+    /// it, which is what lets "type is cave" and a club's own cave fields work in the same filter
+    /// and the same typed-properties schema as every other kind. Resolved by this code by the write
+    /// service that stamps it on every new cave and by the migration that gave it to existing ones.
+    /// </summary>
+    public const string Cave = "cave";
+
+    /// <summary>
+    /// A hill: an outline on the surface, an area kind exactly like <see cref="Massif"/> and with no
+    /// relation to caves beyond what any surface feature has. Listed beside the massif wherever the
+    /// area kinds are resolved by code, so the two answer alike.
+    /// </summary>
+    public const string Hill = "hill";
 }

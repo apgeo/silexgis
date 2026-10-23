@@ -57,6 +57,7 @@ public sealed class FeatureTypeWriteService(SilexGisDbContext db, ITypedProperti
     public const string InUseCode = "feature_type.in_use";
     public const string InvalidSchemaCode = "feature_type.schema_invalid";
     public const string InvalidStyleCode = "feature_type.style_invalid";
+    public const string BoundSchemaCode = "feature_type.bound_schema_locked";
 
     /// <summary>Whether a kind with this code ships with the software.</summary>
     public static bool IsShipped(string code) => TaxonomySeeder.ShippedFeatureTypeCodes.Contains(code);
@@ -153,6 +154,10 @@ public sealed class FeatureTypeWriteService(SilexGisDbContext db, ITypedProperti
 
         var schema = NormalizeSchema(input.PropertiesSchema);
         var style = NormalizeStyle(input.Style);
+        if (type.BoundKind != FeatureKind.Generic)
+        {
+            RequireOpenBoundSchema(type.Code, schema);
+        }
 
         type.Code = code;
         type.Name = input.Name.Trim();
@@ -217,6 +222,79 @@ public sealed class FeatureTypeWriteService(SilexGisDbContext db, ITypedProperti
         }
 
         return text;
+    }
+
+    /// <summary>
+    /// What a club may do to the schema of a type bound to a kind — the cave type: add fields of its
+    /// own, and reword or reorder the ones it ships with, but nothing that would refuse a row of
+    /// that kind that is valid today.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every cave carries this type and every door a cave comes in by — the catalogue import, a file
+    /// import, a device upload, a photograph — checks the cave's document against it. So the keys it
+    /// ships with keep their declarations and their JSON types: they are what those importers write,
+    /// and taking one away or retyping it would refuse the next imported cave and every stored one
+    /// on its next edit. For the same reason the schema stays open (no
+    /// <c>"additionalProperties": false</c>), because caves already stored carry whatever their
+    /// source sent, and names no required field, which no importer can supply.
+    /// </para>
+    /// <para>
+    /// An ordinary type has none of these limits: its rows come from people drawing them, who can
+    /// be asked.
+    /// </para>
+    /// </remarks>
+    private static void RequireOpenBoundSchema(string code, string? schema)
+    {
+        var shipped = TaxonomySeeder.ShippedPropertiesSchema(code);
+        if (shipped is null)
+        {
+            return;
+        }
+
+        if (schema is null)
+        {
+            throw new FeatureTypeWriteException(
+                BoundSchemaCode, "This type's schema keeps the fields it ships with; it cannot be removed.");
+        }
+
+        using var proposed = JsonDocument.Parse(schema);
+        using var original = JsonDocument.Parse(shipped);
+        var root = proposed.RootElement;
+
+        if (root.TryGetProperty("additionalProperties", out var additional)
+            && additional.ValueKind == JsonValueKind.False)
+        {
+            throw new FeatureTypeWriteException(
+                BoundSchemaCode, "This type's schema stays open to fields it does not declare.");
+        }
+
+        if (root.TryGetProperty("required", out var required)
+            && required.ValueKind == JsonValueKind.Array && required.GetArrayLength() > 0)
+        {
+            throw new FeatureTypeWriteException(
+                BoundSchemaCode, "This type's schema cannot make a field required.");
+        }
+
+        var declared = root.TryGetProperty("properties", out var properties)
+            && properties.ValueKind == JsonValueKind.Object
+                ? properties
+                : default;
+        foreach (var field in original.RootElement.GetProperty("properties").EnumerateObject())
+        {
+            var shippedType = field.Value.GetProperty("type").GetString();
+            if (declared.ValueKind != JsonValueKind.Object
+                || !declared.TryGetProperty(field.Name, out var kept)
+                || kept.ValueKind != JsonValueKind.Object
+                || !kept.TryGetProperty("type", out var keptType)
+                || keptType.ValueKind != JsonValueKind.String
+                || keptType.GetString() != shippedType)
+            {
+                throw new FeatureTypeWriteException(
+                    BoundSchemaCode,
+                    $"This type's schema keeps the field '{field.Name}' it ships with, as a {shippedType}.");
+            }
+        }
     }
 
     /// <summary>A style is a JSON object of overrides the map reads; anything else is refused here.</summary>

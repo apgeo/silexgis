@@ -279,8 +279,11 @@ public static class AccessEntryMapping
             return await db.Features.AnyAsync(f => f.Id == featureId, ct);
         }
 
+        // A rule narrows by a generic kind's type; the cave type is not offered, because "every
+        // cave" is already the cave kind and a second spelling of it would grant creation and
+        // editing through two different doors.
         if (entry.FeatureTypeId is { } typeId
-            && !await db.FeatureTypes.AnyAsync(t => t.Id == typeId, ct))
+            && !await db.FeatureTypes.AnyAsync(t => t.Id == typeId && t.BoundKind == FeatureKind.Generic, ct))
         {
             return false;
         }

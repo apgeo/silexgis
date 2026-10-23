@@ -41,7 +41,13 @@ public class Feature : IProtectedEntity, ITimestamped, IAuditable
 
     public FeatureKind Kind { get; set; }
 
-    /// <summary>Data-level kind; required for <see cref="FeatureKind.Generic"/> rows, null for subtyped kinds.</summary>
+    /// <summary>
+    /// Data-level kind. Required for <see cref="FeatureKind.Generic"/> rows; a subtyped row may
+    /// carry one only when the type is bound to its own kind (a cave carries the shipped cave
+    /// type, which the write service sets on every cave it creates), and entrances and
+    /// centrelines carry none. The database holds the pairing: the foreign key is
+    /// (<c>feature_type_id</c>, <c>kind</c>) against the type's (<c>id</c>, <c>bound_kind</c>).
+    /// </summary>
     public long? FeatureTypeId { get; set; }
 
     /// <summary>

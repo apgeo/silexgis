@@ -2865,9 +2865,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_features_deleted_at")
                         .HasFilter("deleted_at IS NULL");
 
-                    b.HasIndex("FeatureTypeId")
-                        .HasDatabaseName("ix_features_feature_type_id");
-
                     b.HasIndex("Kind")
                         .HasDatabaseName("ix_features_kind");
 
@@ -2881,6 +2878,9 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_features_search_vector");
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
+
+                    b.HasIndex("FeatureTypeId", "Kind")
+                        .HasDatabaseName("ix_features_feature_type_id_kind");
 
                     b.HasIndex(new[] { "Geom" }, "ix_features_geom")
                         .HasDatabaseName("ix_features_geom");
@@ -2905,7 +2905,7 @@ namespace SilexGis.Infrastructure.Migrations
 
                             t.HasCheckConstraint("ck_features_entrance_geom", "kind <> 2 OR (geom IS NOT NULL AND geometrytype(geom) = 'POINT')");
 
-                            t.HasCheckConstraint("ck_features_generic_type", "(kind = 0) = (feature_type_id IS NOT NULL)");
+                            t.HasCheckConstraint("ck_features_generic_type", "kind <> 0 OR feature_type_id IS NOT NULL");
 
                             t.HasCheckConstraint("ck_features_geom_srid", "geom IS NULL OR st_srid(geom) = 4326");
                         });
@@ -3209,6 +3209,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("smallint[]")
                         .HasColumnName("accepted_geometry_classes");
 
+                    b.Property<short>("BoundKind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("bound_kind");
+
                     b.Property<short>("Category")
                         .HasColumnType("smallint")
                         .HasColumnName("category");
@@ -3269,6 +3273,9 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_feature_types");
+
+                    b.HasAlternateKey("Id", "BoundKind")
+                        .HasName("ak_feature_types_id_bound_kind");
 
                     b.HasIndex("Code")
                         .IsUnique()
@@ -8699,18 +8706,19 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_features_caving_groups_caving_group_id");
 
-                    b.HasOne("SilexGis.Domain.Entities.FeatureType", null)
-                        .WithMany()
-                        .HasForeignKey("FeatureTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_features_feature_types_feature_type_id");
-
                     b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
                         .WithMany()
                         .HasForeignKey("OwnerUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_features_users_owner_user_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.FeatureType", null)
+                        .WithMany()
+                        .HasForeignKey("FeatureTypeId", "Kind")
+                        .HasPrincipalKey("Id", "BoundKind")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_features_feature_types_feature_type_id_kind");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.FeatureAncestor", b =>

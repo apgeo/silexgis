@@ -20,11 +20,16 @@ public sealed record TaxonomyDto(long Id, string Code, string Name, string? Desc
 /// protection. <c>IsSeeded</c> says the kind ships with the software, so a client can say which
 /// of its settings stay fixed without keeping its own copy of the shipped list.
 /// </summary>
+/// <param name="BoundKind">
+/// The kind of feature rows of this type are: <c>generic</c> for every type but the shipped cave
+/// type, which every cave carries and which no generic feature can be given. A picker offering
+/// types for a new or edited generic feature offers only the generic ones.
+/// </param>
 public sealed record FeatureTypeDto(
     long Id, string Code, string Name, string? Description, int SortOrder,
     FeatureCategory Category, IReadOnlyList<GeometryClass> AcceptedGeometryClasses,
     bool RequiresParent, int PropertiesSchemaVersion, ProtectedDisplay ProtectedDisplay,
-    string? SymbolFile, string? Style, string? PropertiesSchema, bool IsSeeded);
+    string? SymbolFile, string? Style, string? PropertiesSchema, bool IsSeeded, FeatureKind BoundKind);
 
 /// <summary>
 /// Link-kind taxonomy. <c>Locating</c> is fail-closed metadata (admin-only, audited edits):

@@ -374,12 +374,34 @@ public static class TaxonomySeeder
     }
 
     /// <summary>
+    /// Kinds that once shipped and no longer do. Their entries stay in the list below, because a
+    /// row's sort order is its position there and removing one would renumber every kind after it
+    /// on a fresh database while an existing one kept the old numbers. The seeder steps over them:
+    /// it neither inserts one nor touches one an installation still has.
+    /// <para>
+    /// <c>pit</c> was a surface point kind that meant the same thing as the cave classification
+    /// "Pit / Aven", so there were two pits. The migration that retired it deleted the row wherever
+    /// no feature and no permission entry used it; where something did, the row stays as one of the
+    /// installation's own kinds, editable and deletable like any other once its rows are retyped.
+    /// </para>
+    /// <para>Declared above the shipped set, which reads it while the class initialises.</para>
+    /// </summary>
+    private static readonly IReadOnlySet<string> RetiredFeatureTypeCodes =
+        new HashSet<string>(StringComparer.Ordinal) { "pit" };
+
+    /// <summary>
     /// The codes of the feature kinds this software ships, read off the same list the seeder
     /// writes from, so "is this kind one of ours" has one answer. A shipped kind keeps its code:
     /// behaviours resolve kinds by code, and installations exchange features under them.
     /// </summary>
     public static IReadOnlySet<string> ShippedFeatureTypeCodes { get; } =
-        ShippedFeatureTypes().Select(x => x.Code).ToHashSet(StringComparer.Ordinal);
+        ShippedFeatureTypes().Select(x => x.Code)
+            .Where(code => !RetiredFeatureTypeCodes.Contains(code))
+            .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>The properties schema a shipped kind ships with, before any installation edits it.</summary>
+    public static string? ShippedPropertiesSchema(string code) =>
+        ShippedFeatureTypes().FirstOrDefault(x => x.Code == code).Schema;
 
     private static async Task SeedFeatureTypesAsync(SilexGisDbContext db, CancellationToken ct)
     {
@@ -389,6 +411,11 @@ public static class TaxonomySeeder
         foreach (var (code, name, category, classes, requiresParent, protectedDisplay, symbol, schema) in items)
         {
             sort += 10;
+            if (RetiredFeatureTypeCodes.Contains(code))
+            {
+                continue;
+            }
+
             if (existing.TryGetValue(code, out var row))
             {
                 // Backfill a schema only where none was ever set — a non-null value
@@ -421,6 +448,7 @@ public static class TaxonomySeeder
                     SymbolFile = symbol,
                     SortOrder = sort,
                     PropertiesSchema = schema,
+                    BoundKind = code == FeatureTypeSeeds.Cave ? FeatureKind.Cave : FeatureKind.Generic,
                 });
             }
         }
@@ -501,6 +529,39 @@ public static class TaxonomySeeder
             },"additionalProperties":false}
             """;
 
+        // The keys something other than a person already writes into a cave's bag, declared so a
+        // club's own fields sit beside them and the bag is validated rather than read blind. Open -
+        // no "additionalProperties": false - because caves imported or synced before this schema
+        // existed carry whatever their source sent, and a closed schema would refuse every one of
+        // them on its next edit. Each key is declared with the JSON type its writer emits, which a
+        // test holds against the writers themselves, and marked read-only so the cave form leaves
+        // it alone: a catalogue code or a device index is the source's, not the reader's, to edit.
+        //
+        // None of them is locating, and none may ever be: the bag goes out unfiltered to every
+        // reader of the row, on the share path too. The locality and the altitude the catalogue
+        // publishes go to the cave's redacted columns instead, never here.
+        const string caveSchema =
+            """
+            {"type":"object","properties":{
+              "speologieId":{"type":"string","title":"Catalogue id","readOnly":true},
+              "speologieSlug":{"type":"string","title":"Catalogue slug","readOnly":true},
+              "speologieUrl":{"type":"string","title":"Catalogue page","readOnly":true},
+              "speologieJudet":{"type":"string","title":"Catalogue county code","readOnly":true},
+              "speologieNrHidro":{"type":"string","title":"Catalogue hydrographic number","readOnly":true},
+              "speologieBazinHidroId":{"type":"integer","title":"Catalogue basin id","readOnly":true},
+              "speologieRoca":{"type":"string","title":"Catalogue rock code","readOnly":true},
+              "speologieScufundabila":{"type":"boolean","title":"Catalogue: sump","readOnly":true},
+              "speologieStiinta":{"type":"string","title":"Catalogue: scientific interest","readOnly":true},
+              "speologieCodAp":{"type":"string","title":"Catalogue protected-area code","readOnly":true},
+              "speologieDisparuta":{"type":"boolean","title":"Catalogue: vanished","readOnly":true},
+              "speologieRetrievedAt":{"type":"string","title":"Read from the catalogue at","readOnly":true},
+              "photoLibrarySource":{"type":"string","title":"Photo library","readOnly":true},
+              "photoLibraryReference":{"type":"string","title":"Photo library reference","readOnly":true},
+              "speleolocCaveLocalIndex":{"type":"string","title":"Cave local index","readOnly":true},
+              "speleolocSchemaVersion":{"type":"integer","title":"Device schema version","readOnly":true}
+            }}
+            """;
+
         const ProtectedDisplay snap = ProtectedDisplay.SnapPoint;
         const ProtectedDisplay withhold = ProtectedDisplay.Withhold;
 
@@ -513,6 +574,7 @@ public static class TaxonomySeeder
             // has only a GPS fix still records a point, and one that has walked the rim records
             // the rim.
             (FeatureTypeSeeds.Sinkhole, "Sinkhole / Doline", FeatureCategory.Surface, [.. point, .. area], false, snap, "sinkhole.png", sinkholeSchema),
+            // Retired - see RetiredFeatureTypeCodes. Kept in place for the numbering after it.
             ("pit", "Pit", FeatureCategory.Surface, point, false, snap, "pit.png", null),
             ("pitch", "Pitch", FeatureCategory.Surface, point, false, snap, "pitch.png", null),
             ("chimney", "Chimney", FeatureCategory.Surface, point, false, snap, "chimney.png", null),
@@ -575,6 +637,15 @@ public static class TaxonomySeeder
             ("cave_place", "Cave place", FeatureCategory.Underground, point, true, withhold, "generic_feature.png", cavePlaceSchema),
             ("surface_area", "Surface area", FeatureCategory.Area, any, false, snap, null, surfaceAreaSchema),
 
+            // The type every cave carries, bound to the cave kind rather than to generic rows (the
+            // seeder sets that on insert, and the migration that introduced it inserted it first,
+            // at this same position, so it could give the type to the caves already stored). Its
+            // display matches what the kind decides - a cave is snapped - and it is locked there,
+            // though nothing reads it for a cave: display is decided by kind.
+            (FeatureTypeSeeds.Cave, "Cave", FeatureCategory.Underground, point, false, snap, null, caveSchema),
+
+            // A hill is an outline on the surface and nothing more, exactly like a massif.
+            (FeatureTypeSeeds.Hill, "Hill", FeatureCategory.Area, area, false, snap, null, null),
         ];
     }
 }

@@ -315,7 +315,11 @@ public static class SearchEndpoints
                 h.Id,
                 h.Kind,
                 h.Name,
-                h.FeatureTypeId is { } typeId && types.TryGetValue(typeId, out var type) ? type.Code : null,
+                // Generic rows only, as the contract says: a cave carries a type too, but its kind
+                // already names it.
+                h.Kind == FeatureKind.Generic && h.FeatureTypeId is { } typeId && types.TryGetValue(typeId, out var type)
+                    ? type.Code
+                    : null,
                 context.GetValueOrDefault(h.Id)))],
             trips,
             expeditions,

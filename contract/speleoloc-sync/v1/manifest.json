@@ -17,15 +17,15 @@
     "manifest.json"
   ],
   "fileCount": 35,
-  "digest": "6333bf6be62933d6773274790b69210edd1e189f17146614ed84f1029125592c",
+  "digest": "ae4ad939206eefc5ad7e52d39a85e99dd97cd854843a67f245c210e2172a0ffb",
   "files": {
     "07-download-first-page/request.txt": {
       "bytes": 37,
       "sha256": "bf6af286d71ac6a7c0e27b52707c909f7d4cf13fcca61458eb15fe0d6f2e1a72"
     },
     "07-download-first-page/response.json": {
-      "bytes": 1358,
-      "sha256": "bb64a2fd4dd79a86565a879eb93c4727db3d85b2eacc24b52bcf687b6528b05e"
+      "bytes": 1357,
+      "sha256": "b510ead0f1fc52d76a149ee23ef9c186be35f439fc9a49b0b1c5be86f799af13"
     },
     "08-download-cursor-restart/request.txt": {
       "bytes": 64,
@@ -48,8 +48,8 @@
       "sha256": "bf6af286d71ac6a7c0e27b52707c909f7d4cf13fcca61458eb15fe0d6f2e1a72"
     },
     "10-download-protected-withheld/response.json": {
-      "bytes": 1331,
-      "sha256": "9648a4fe828a76309c2a2fcd6a79b26d841744f1d3c22657e6e23c71cf4f55b4"
+      "bytes": 1330,
+      "sha256": "d1fb75786fcc232e4afec186319640209557dc20f73d90ae2ee46a18d0a5cacb"
     },
     "11-upload-create/request.json": {
       "bytes": 464,
@@ -152,8 +152,8 @@
       "sha256": "b5250d764721aa67681630221c6398cdaecb4cc961bf39d4b84764036242a3d8"
     },
     "CHANGELOG.md": {
-      "bytes": 6267,
-      "sha256": "ce4abc275d6b52c5b064678ee96d364d126ab8db3fb1046e74588968307dc9f2"
+      "bytes": 9040,
+      "sha256": "4de183f918641a3f3a91ae6eed2765a562169e54917ec9ed98e32ed03759937c"
     },
     "README.md": {
       "bytes": 8990,

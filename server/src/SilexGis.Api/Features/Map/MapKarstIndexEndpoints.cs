@@ -38,10 +38,11 @@ public static class MapKarstIndexEndpoints
     private const string DeclaredBasis = "declared";
 
     /// <summary>
-    /// The area kinds the index is published for: karst areas and the massifs they sit in. Other
+    /// The area kinds the index is published for: karst areas and the massifs and hills they sit in. Other
     /// outlines — a work area, a cave system's footprint — are not karst units to rank.
     /// </summary>
-    private static readonly string[] AreaTypeCodes = [FeatureTypeSeeds.KarstArea, FeatureTypeSeeds.Massif];
+    private static readonly string[] AreaTypeCodes =
+        [FeatureTypeSeeds.KarstArea, FeatureTypeSeeds.Massif, FeatureTypeSeeds.Hill];
 
     public static RouteGroupBuilder MapMapKarstIndexEndpoints(this RouteGroupBuilder api)
     {

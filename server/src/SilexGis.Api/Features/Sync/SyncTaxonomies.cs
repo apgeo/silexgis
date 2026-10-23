@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Sync;
@@ -32,7 +33,10 @@ public sealed record SyncTaxonomies(
             .ToDictionaryAsync(t => t.Code, t => t.Id, StringComparer.OrdinalIgnoreCase, ct),
         await db.EntranceTypes.AsNoTracking()
             .ToDictionaryAsync(t => t.Code, t => t.Id, StringComparer.OrdinalIgnoreCase, ct),
+        // Generic kinds only: a row a device sends as generic may name any of those, and the cave
+        // type is not one of them — a cave arrives as a cave and is given its type on creation.
         await db.FeatureTypes.AsNoTracking()
+            .Where(t => t.BoundKind == FeatureKind.Generic)
             .ToDictionaryAsync(t => t.Code, t => t.Id, StringComparer.OrdinalIgnoreCase, ct),
         (await db.FeatureTypes.AsNoTracking()
             .Where(t => t.RequiresParent)

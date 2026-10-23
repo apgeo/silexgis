@@ -144,9 +144,9 @@ public sealed class FeatureTypeWriteTests : IAsyncLifetime, IDisposable, IClassF
         (await editor.PostAsJsonAsync("/api/v1/feature-types", Kind(Code())))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        var pit = await ShippedAsync("pit");
-        var id = pit.GetProperty("id").GetInt64();
-        (await editor.PutAsJsonAsync($"/api/v1/feature-types/{id}", Kind("pit", name: "Shaft")))
+        var pitch = await ShippedAsync("pitch");
+        var id = pitch.GetProperty("id").GetInt64();
+        (await editor.PutAsJsonAsync($"/api/v1/feature-types/{id}", Kind("pitch", name: "Shaft")))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         var club = await CreateAsync(Kind(Code()));
@@ -180,7 +180,7 @@ public sealed class FeatureTypeWriteTests : IAsyncLifetime, IDisposable, IClassF
         (await CodeOf(notAnObject)).ShouldBe("feature_type.style_invalid");
 
         // A shipped code is taken even by the kind it names, and so is a club's own.
-        (await CodeOf(await admin.PostAsJsonAsync("/api/v1/feature-types", Kind("pit"))))
+        (await CodeOf(await admin.PostAsJsonAsync("/api/v1/feature-types", Kind("pitch"))))
             .ShouldBe("feature_type.code_taken");
         var code = Code();
         _ = await CreateAsync(Kind(code));
