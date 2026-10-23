@@ -2123,9 +2123,8 @@ otherwise) and `--web-server none`. What that covers, and what it does not:
 All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. **This table is the
 list to read**: `server/src/SilexGis.Api/appsettings.json` carries only the settings whose default
 depends on the deployment, and the rest take their defaults from the code, so a key can be entirely
-valid and absent from that file. `deploy/.env.example` explains the settings an installation most
-often changes at greater length, with the reasoning beside each one; it does not list every key
-this table does.
+valid and absent from that file. `deploy/.env.example` names the same settings at greater length, with
+the reasoning beside each one.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -2213,6 +2212,7 @@ this table does.
 | `SILEXGIS__Announcements__DailyPaidMessageCap` | `100` | how much this installation will send in a day on a charging channel before it refuses, counted in the **segments** a gateway bills for rather than in messages — one Romanian diacritic makes a message cost two of them, so this buys a Romanian installation about half as many messages as an English one. Counted over what is already committed today, including copies still waiting to go out, because money committed is money spent. An announcement that has been accepted and not yet handed out is charged what its wording was weighed at when it was accepted — the club's own name in it, in whichever language costs most — so a long club name is projected as the expensive thing it is; anything else queued without being weighed is charged a floor of two segments apiece until it is sent. Values of zero or less are ignored in favour of the default — the switch above is how an installation sends none. Also editable in **Admin → Messaging → Notifications** |
 | `SILEXGIS__About__InstanceName` | `SilexGIS` | name used in the messages this installation sends |
 | `SILEXGIS__About__SourceUrl` | `https://github.com/apgeo/silexgis` | where the source code of what this installation runs can be had; the **About** page links to it. An installation running a modified copy must point this at its own source — that is what section 13 of the licence asks of whoever offers a modified version over a network |
+| `SILEXGIS__Interface__PanelDefaults` | `{}` | the arrangement of panels a person starts from until they choose their own, as the browser client's own preferences document (JSON). A default, never a policy: it fills in what somebody has not chosen and never overrides what they have. `{}` means the built-in arrangement; the document's keys belong to the client and change with it, so copy one the client wrote rather than composing it by hand. What is saved through the application replaces this |
 | `SILEXGIS__Auth__DefaultPermissionGroups` | *(empty)* | comma-separated permission-group slugs (e.g. `editors`) every new account joins at registration or first external sign-in |
 | `SILEXGIS__Map__CenterlineDetailZoom` | `18` | zoom at which cave centerlines switch from passage outlines to full survey detail |
 | `SILEXGIS__Map__CenterlineMaxPaths` | `25000` | line budget per centerline request; over it, outlines are served instead |
@@ -2293,6 +2293,7 @@ this table does.
 | `SILEXGIS__Grottocenter__MaxCandidates` | `10` | how many candidates one lookup offers |
 | `SILEXGIS__Grottocenter__UserAgent` | `SilexGIS` | what this installation calls itself when it asks |
 | `SILEXGIS__PhotoLibraries__Audience` | `Administrators` | who sees the photographs of a neighbouring photo library: `Administrators` (Full Administrators only) or `SignedIn` (every signed-in account). That library's own rules govern its pictures, not this application's, so opening them to everybody is a decision rather than a default |
+| `SILEXGIS__PhotoLibrarySuspension__ImmichSuspended` / `SILEXGIS__PhotoLibrarySuspension__PhotoPrismSuspended` | `false` / `false` | whether a configured library starts out suspended: the map layer, the browsing page, the search and the pictures stop and no request goes to it. Suspending is normally done by an administrator in the installation settings while everything runs, and what is saved there replaces these values; they are only the position before anybody has saved one. A saved decision that cannot be read means both suspended |
 | `SILEXGIS__PhotoLibraries__Immich__Enabled` / `__BaseUrl` / `__ApiKey` | `false` / — / — | an Immich library beside this installation (see *Photo libraries*): whether it is deployed, where it answers on the internal network (never sent to a browser — pictures are passed through this application), and the key of an account made for this purpose. Written out: `SILEXGIS__PhotoLibraries__Immich__BaseUrl`, `SILEXGIS__PhotoLibraries__Immich__ApiKey`. The key carries that account's whole reach and does not expire |
 | `SILEXGIS__PhotoLibraries__Immich__TimeoutSeconds` / `SILEXGIS__PhotoLibraries__Immich__MaxRetries` | `20` / `1` | how long one call may take, and how often a failed question is asked again. A request for a picture is never retried |
 | `SILEXGIS__PhotoLibraries__Immich__PositionCacheSeconds` | `300` | how long one reading of the whole library's photograph positions is used before it is read again. That library cannot be asked what lies inside a rectangle, so every position is held in memory; `0` reads the whole library for every map view |

@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using Shouldly;
 using SilexGis.Api.Common;
+using SilexGis.Domain.Settings;
 
 namespace SilexGis.Api.Tests;
 
@@ -21,8 +22,12 @@ namespace SilexGis.Api.Tests;
 /// the kind of setting that must be findable.
 /// </para>
 /// <para>
-/// <b>What it reads.</b> Every class of the API's own assembly that carries a section name, and
-/// every public property of it that can be set — which is what the configuration binder fills.
+/// <b>What it reads.</b> Every class that carries a section name in the API's assembly and in
+/// every assembly of the application the API references — the infrastructure layer binds options
+/// classes of its own — plus the settings an administrator can change at run time, whose
+/// configured values are the starting point and whose section is named where they are read rather
+/// than on the class. Of each, every public property that can be set, which is what the
+/// configuration binder fills.
 /// Each must appear in both documents under the name an operator would type,
 /// <c>SILEXGIS__Section__Property</c>, written out in full: a shorthand such as "<c>…__Email</c>
 /// / <c>__Password</c>" cannot be searched for and does not count. A list is named by an
@@ -39,9 +44,9 @@ namespace SilexGis.Api.Tests;
 /// </para>
 /// <para>
 /// <b>What it does not read.</b> The handful of settings read by key rather than through a class
-/// are listed here by hand. The
-/// options classes of the layer underneath are not covered. And this checks that a name is
-/// present, not that what is said about it is true.
+/// are listed here by hand, and so are the run-time sections, so a new one of either kind is
+/// covered only once it is added here. And this checks that a name is present, not that what is
+/// said about it is true.
 /// </para>
 /// <para>
 /// When it fails, the fix is a row and a paragraph in the documents. The list of exemptions is
@@ -68,6 +73,24 @@ public class OptionsDocumentationTests
         "Map:SharedViewRateLimitPerMinute",
         TrustedProxies.HopsKey,
         TrustedProxies.NetworksKey + ":0",
+    ];
+
+    /// <summary>
+    /// Sections an administrator can change while the application runs, whose configured values
+    /// are the default before anyone does. Their classes carry no section name: the section is
+    /// named where the stored settings are read.
+    /// </summary>
+    private static readonly (string Section, Type Type)[] AdministeredSections =
+    [
+        ("Mail", typeof(MailSettings)),
+        ("Sms", typeof(SmsSettings)),
+        ("Security", typeof(SecuritySettings)),
+        ("Protection", typeof(ProtectionSettings)),
+        ("Import", typeof(ImportSettings)),
+        ("Interface", typeof(InterfaceSettings)),
+        ("Notifications", typeof(NotificationSettings)),
+        ("Announcements", typeof(AnnouncementSettings)),
+        ("PhotoLibrarySuspension", typeof(PhotoLibrarySuspensionSettings)),
     ];
 
     public static TheoryData<string> Documents() => new()
@@ -102,9 +125,13 @@ public class OptionsDocumentationTests
     public void The_settings_found_include_ones_known_to_exist()
     {
         // If the reflection below ever found nothing — a renamed constant, a moved assembly — the
-        // test above would pass on an empty list. These are settings of four different shapes that
-        // must be among what it finds.
+        // test above would pass on an empty list. These are settings of four different shapes, and
+        // from each source it reads, that must be among what it finds.
         var settings = Settings();
+
+        settings.ShouldContain("SILEXGIS__Files__MaxArchiveEntries");
+        settings.ShouldContain("SILEXGIS__PhotoLibraries__Immich__PositionCacheSeconds");
+        settings.ShouldContain("SILEXGIS__Mail__TimeoutSeconds");
 
         settings.ShouldContain("SILEXGIS__TripTracking__ShareLifetime");
         settings.ShouldContain("SILEXGIS__TripPastTracks__Retention");
@@ -195,12 +222,17 @@ public class OptionsDocumentationTests
     {
         var found = new SortedSet<string>(StringComparer.Ordinal);
 
-        foreach (var type in typeof(Program).Assembly.GetTypes())
+        foreach (var type in Assemblies().SelectMany(assembly => assembly.GetTypes()))
         {
             var section = type.GetField("SectionName", BindingFlags.Public | BindingFlags.Static);
             if (!type.IsClass || section is not { IsLiteral: true } || section.FieldType != typeof(string)) continue;
 
             Collect(found, Variable((string)section.GetRawConstantValue()!), type);
+        }
+
+        foreach (var (section, type) in AdministeredSections)
+        {
+            Collect(found, Variable(section), type);
         }
 
         foreach (var key in ReadByKey)
@@ -209,6 +241,19 @@ public class OptionsDocumentationTests
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// The API's assembly and every assembly of the application it references — the layers
+    /// underneath bind options classes of their own.
+    /// </summary>
+    private static IEnumerable<Assembly> Assemblies()
+    {
+        var api = typeof(Program).Assembly;
+        return api.GetReferencedAssemblies()
+            .Where(name => name.Name?.StartsWith("SilexGis.", StringComparison.Ordinal) == true)
+            .Select(Assembly.Load)
+            .Prepend(api);
     }
 
     private static string Variable(string key) => "SILEXGIS__" + key.Replace(":", "__", StringComparison.Ordinal);
