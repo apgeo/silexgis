@@ -60,6 +60,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useDeleteCaveDepthPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useEntrances: () => ({ data: entrances }),
   useCaveTypes: () => ({ data: [] }),
+  useFeatureTypes: () => ({ data: [] }),
   useRockTypes: () => ({ data: [] }),
   useEntranceTypes: () => ({ data: [{ id: 1, code: 'shaft', name: 'Shaft' }] }),
   useDeleteCave: () => ({ mutateAsync: vi.fn() }),

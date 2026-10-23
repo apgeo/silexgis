@@ -33,6 +33,28 @@ export function useFeatureTypes() {
   });
 }
 
+type FeatureTypeRow = components['schemas']['FeatureTypeDto'];
+
+/**
+ * Whether a generic feature may be given this type. Every type is, except the one bound to the
+ * cave kind: every cave carries it and nothing else may, and the server refuses it for anything
+ * else. Lists that only describe or filter by type keep it; pickers that give a type to a new or
+ * edited generic feature, an import's surface features or a permission rule leave it out.
+ */
+export function isGenericFeatureType(type: Pick<FeatureTypeRow, 'boundKind'>): boolean {
+  return type.boundKind === 'generic';
+}
+
+/** The types a generic feature may be given — the same cached list, without the cave type. */
+export function useGenericFeatureTypes() {
+  return useQuery({
+    queryKey: queryKeys.taxonomy('feature-types'),
+    queryFn: () => unwrap(api.GET('/api/v1/feature-types')),
+    staleTime: 5 * 60_000,
+    select: (types: FeatureTypeRow[]) => types.filter(isGenericFeatureType),
+  });
+}
+
 export type FeatureTypeWrite = components['schemas']['FeatureTypeRequest'];
 
 function useInvalidateFeatureTypes() {

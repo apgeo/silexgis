@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
   useCreateFeatureFromLibraryPhoto,
-  useFeatureTypes,
+  useGenericFeatureTypes,
   type LibraryPhotoFeatureCreated,
   type LibraryPhotoSource,
 } from '../../api/hooks.ts';
@@ -121,7 +121,7 @@ export default function LibraryPhotoFeatureModal({
   const [form] = Form.useForm<FormValues>();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
 
-  const { data: featureTypes } = useFeatureTypes();
+  const { data: featureTypes } = useGenericFeatureTypes();
   const create = useCreateFeatureFromLibraryPhoto();
   const [saving, setSaving] = useState(false);
   const [created, setCreated] = useState<LibraryPhotoFeatureCreated | null>(null);

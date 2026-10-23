@@ -31,6 +31,18 @@ vi.mock('../../api/hooks.ts', () => ({
       },
     ],
   }),
+  useGenericFeatureTypes: () => ({
+    data: [
+      {
+        id: 1,
+        name: 'Sinkhole',
+        code: 'sinkhole',
+        acceptedGeometryClasses: ['point'],
+        symbolFile: null,
+        sortOrder: 0,
+      },
+    ],
+  }),
   createFeature: vi.fn(),
   fetchFeature: vi.fn(),
   updateFeature: vi.fn(),

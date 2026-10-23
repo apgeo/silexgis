@@ -6,7 +6,7 @@ import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import {
   useCaveTypes,
   useEntranceTypes,
-  useFeatureTypes,
+  useGenericFeatureTypes,
   type ImportCandidate,
   type ImportDecision,
   type ImportOptions,
@@ -63,7 +63,7 @@ export default function CandidateTable({
   const formatPosition = useCoordinateFormatter();
   const caveTypes = useCaveTypes();
   const entranceTypes = useEntranceTypes();
-  const featureTypes = useFeatureTypes();
+  const featureTypes = useGenericFeatureTypes();
 
   const decisionOf = (row: ImportCandidate) => decisions[String(row.sourceId)];
 

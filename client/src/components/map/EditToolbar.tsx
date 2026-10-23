@@ -24,7 +24,7 @@ import {
   createFeature,
   fetchFeature,
   updateFeature,
-  useFeatureTypes,
+  useGenericFeatureTypes,
 } from '../../api/hooks.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import {
@@ -67,7 +67,7 @@ export default function EditToolbar({ controller, mayModify = true, rightsPendin
   const { t } = useTranslation();
   const { message } = App.useApp();
   const isMobile = useIsMobile();
-  const { data: featureTypes } = useFeatureTypes();
+  const { data: featureTypes } = useGenericFeatureTypes();
   const [state, setState] = useState<EditState>({
     mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0, created: 0, sketchActive: false,
   });

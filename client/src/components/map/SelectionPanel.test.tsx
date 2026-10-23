@@ -86,6 +86,9 @@ vi.mock('../../api/hooks.ts', () => ({
   useFeatureTypes: () => ({
     data: [{ id: 1, code: 'fracture', name: 'Fracture', propertiesSchema: null }],
   }),
+  useGenericFeatureTypes: () => ({
+    data: [{ id: 1, code: 'fracture', name: 'Fracture', propertiesSchema: null }],
+  }),
   useCan: (_domain: string, action: string) => holdsInstallationWide(action),
   useDeleteFeature: () => ({ mutateAsync: deleteFeature, isPending: false }),
   useUpdateFeature: () => ({ mutateAsync: updateFeature, isPending: false }),

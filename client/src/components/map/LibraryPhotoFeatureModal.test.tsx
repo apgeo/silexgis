@@ -57,6 +57,33 @@ vi.mock('../../api/hooks.ts', () => ({
       },
     ],
   }),
+  useGenericFeatureTypes: () => ({
+    data: [
+      {
+        id: 12,
+        code: 'spring',
+        name: 'Spring',
+        requiresParent: false,
+        acceptedGeometryClasses: ['point'],
+      },
+      // Neither of these may be offered: one cannot hold a point, and one cannot exist without
+      // something above it — and this dialogue creates with nothing above it.
+      {
+        id: 13,
+        code: 'massif',
+        name: 'Massif',
+        requiresParent: false,
+        acceptedGeometryClasses: ['polygon'],
+      },
+      {
+        id: 14,
+        code: 'in_cave_place',
+        name: 'Place in a cave',
+        requiresParent: true,
+        acceptedGeometryClasses: ['point'],
+      },
+    ],
+  }),
   useFilterVocabulary: () => ({
     data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] },
   }),

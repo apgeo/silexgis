@@ -22,7 +22,7 @@ import {
   useCaveTypes,
   useCreateTermRuleSet,
   useEntranceTypes,
-  useFeatureTypes,
+  useGenericFeatureTypes,
   useTermRuleSet,
   useUpdateTermRuleSet,
   type TermRule,
@@ -66,7 +66,7 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
   const update = useUpdateTermRuleSet();
   const caveTypes = useCaveTypes();
   const entranceTypes = useEntranceTypes();
-  const featureTypes = useFeatureTypes();
+  const featureTypes = useGenericFeatureTypes();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');

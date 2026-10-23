@@ -2,7 +2,7 @@
 import { useEffect, useMemo } from 'react';
 import { Checkbox, Divider, Form, Input, InputNumber, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useFeatureTypes, type FeatureDetail, type FeatureType } from '../../api/hooks.ts';
+import { useGenericFeatureTypes, type FeatureDetail, type FeatureType } from '../../api/hooks.ts';
 import type { SelectorScope } from '../../filters/selection.ts';
 import DialogHost from '../DialogHost.tsx';
 import ObjectSelector from '../selector/ObjectSelector.tsx';
@@ -90,7 +90,7 @@ export default function FeatureEditModal({
 }: FeatureEditModalProps) {
   const { t } = useTranslation();
   const [form] = Form.useForm<FormValues>();
-  const { data: featureTypes } = useFeatureTypes();
+  const { data: featureTypes } = useGenericFeatureTypes();
 
   const typeOptions = useMemo(
     () =>

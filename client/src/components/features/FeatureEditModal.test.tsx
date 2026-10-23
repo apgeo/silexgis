@@ -27,6 +27,9 @@ vi.mock('../../api/hooks.ts', () => ({
   useFeatureTypes: () => ({
     data: [featureType('1', 'Spring', false), featureType('2', 'Passage marker', false)],
   }),
+  useGenericFeatureTypes: () => ({
+    data: [featureType('1', 'Spring', false), featureType('2', 'Passage marker', false)],
+  }),
   useFilterVocabulary: () => ({ data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] } }),
   useFilterQuery: (body: unknown, enabled: boolean) => {
     queryCalls.push({ body, enabled });

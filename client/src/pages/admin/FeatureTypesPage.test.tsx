@@ -22,6 +22,7 @@ const featureTypes: FeatureType[] = [
     style: null,
     propertiesSchema: null,
     isSeeded: true,
+    boundKind: 'generic',
   },
   {
     id: 2,
@@ -38,6 +39,24 @@ const featureTypes: FeatureType[] = [
     style: null,
     propertiesSchema: null,
     isSeeded: false,
+    boundKind: 'generic',
+  },
+  {
+    id: 3,
+    code: 'cave',
+    name: 'Cave',
+    description: null,
+    sortOrder: 320,
+    category: 'underground',
+    acceptedGeometryClasses: ['point', 'multiPoint'],
+    requiresParent: false,
+    propertiesSchemaVersion: 1,
+    protectedDisplay: 'snapPoint',
+    symbolFile: null,
+    style: null,
+    propertiesSchema: '{"type":"object","properties":{"speologieId":{"type":"string","readOnly":true}}}',
+    isSeeded: true,
+    boundKind: 'cave',
   },
 ];
 
@@ -79,8 +98,8 @@ describe('FeatureTypesPage', () => {
 
     expect(screen.getByText('Cave place')).toBeInTheDocument();
     expect(screen.getByText('Not shown at all')).toBeInTheDocument();
-    expect(screen.getByText('Several points')).toBeInTheDocument();
-    expect(screen.getAllByText('Ships with the product')).toHaveLength(1);
+    expect(screen.getAllByText('Several points')).toHaveLength(2);
+    expect(screen.getAllByText('Ships with the product')).toHaveLength(2);
     expect(screen.getByText('v3')).toBeInTheDocument();
     // A shipped kind cannot be deleted, so it is not offered; the club's own can.
     expect(screen.getAllByText('Delete')).toHaveLength(1);
@@ -117,6 +136,22 @@ describe('FeatureTypesPage', () => {
     expect(sent.style).toBeNull();
     expect(sent.propertiesSchema).toBeNull();
     expect(sent.acceptedGeometryClasses).toEqual(['point']);
+  });
+
+  it('marks the type every cave carries and names the refusal of a schema that would drop its fields', async () => {
+    updateMutate.mockRejectedValueOnce(
+      new ApiError(400, 'feature_type.bound_schema_locked', 'This type keeps its fields.'),
+    );
+    renderPage();
+
+    expect(screen.getByText('Every cave')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByText('Edit')[2]);
+    await waitFor(() => expect(screen.getByLabelText('Code')).toHaveValue('cave'));
+    expect(screen.getByTestId('feature-type-bound-note')).toBeInTheDocument();
+    expect(screen.getByLabelText('Code')).toBeDisabled();
+    fireEvent.click(screen.getByText('Save'));
+
+    expect(await screen.findByText(/keeps the fields it ships with/)).toBeInTheDocument();
   });
 
   it('names the refusal when features already use the kind', async () => {

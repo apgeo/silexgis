@@ -139,6 +139,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useCaveTypes: () => ({ data: [{ id: 1, code: 'cave', name: 'Cave' }] }),
   useEntranceTypes: () => ({ data: [{ id: 1, code: 'natural', name: 'Natural' }] }),
   useFeatureTypes: () => ({ data: [{ id: 1, code: 'sinkhole', name: 'Sinkhole' }] }),
+  useGenericFeatureTypes: () => ({ data: [{ id: 1, code: 'sinkhole', name: 'Sinkhole' }] }),
   useCavingGroups: () => ({ data: [], isLoading: false }),
 }));
 

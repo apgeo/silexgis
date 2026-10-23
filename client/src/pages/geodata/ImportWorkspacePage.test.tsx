@@ -113,6 +113,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useCaveTypes: () => ({ data: [{ id: 1, code: 'cave', name: 'Cave' }] }),
   useEntranceTypes: () => ({ data: [{ id: 1, code: 'natural', name: 'Natural' }] }),
   useFeatureTypes: () => ({ data: [{ id: 1, code: 'sinkhole', name: 'Sinkhole', acceptedGeometryClasses: ['point'] }] }),
+  useGenericFeatureTypes: () => ({ data: [{ id: 1, code: 'sinkhole', name: 'Sinkhole', acceptedGeometryClasses: ['point'] }] }),
   useCavingGroups: () => ({ data: [], isLoading: false }),
   useGeofileColumns: () => ({ data: undefined }),
   // A confirmation is queued and its objects are created by a job, so the page watches that job

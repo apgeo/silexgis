@@ -26,11 +26,23 @@ describe('parsePropertiesSchema', () => {
     }));
 
     expect(fields).toEqual([
-      { key: 'depth_m', label: 'Depth (m)', kind: 'number', required: true, enumValues: undefined, min: 0, max: 500 },
-      { key: 'station_count', label: 'station_count', kind: 'integer', required: false, enumValues: undefined, min: undefined, max: undefined },
-      { key: 'notes', label: 'Notes', kind: 'string', required: false, enumValues: undefined, min: undefined, max: undefined },
-      { key: 'active', label: 'Active', kind: 'boolean', required: false, enumValues: undefined, min: undefined, max: undefined },
+      { key: 'depth_m', label: 'Depth (m)', kind: 'number', required: true, readOnly: false, enumValues: undefined, min: 0, max: 500 },
+      { key: 'station_count', label: 'station_count', kind: 'integer', required: false, readOnly: false, enumValues: undefined, min: undefined, max: undefined },
+      { key: 'notes', label: 'Notes', kind: 'string', required: false, readOnly: false, enumValues: undefined, min: undefined, max: undefined },
+      { key: 'active', label: 'Active', kind: 'boolean', required: false, readOnly: false, enumValues: undefined, min: undefined, max: undefined },
     ]);
+  });
+
+  it('marks a field another system writes as read-only, and leaves it in the list', () => {
+    const fields = parsePropertiesSchema(JSON.stringify({
+      type: 'object',
+      properties: {
+        speologieId: { type: 'string', title: 'Catalogue id', readOnly: true },
+        rigging: { type: 'number', title: 'Rope (m)' },
+      },
+    }));
+
+    expect(fields.map((f) => [f.key, f.readOnly])).toEqual([['speologieId', true], ['rigging', false]]);
   });
 
   it('maps string enums to select fields and skips unsupported property shapes', () => {

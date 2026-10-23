@@ -35,7 +35,8 @@ export default function AreaKarstStatisticsCard({
 
   // Only the kinds that stand for a tract of karst. A building or a marker has an outline too, and
   // caves per square kilometre of a building is not a reading anybody wants offered.
-  const enabled = featureTypeCode === 'karst_area' || featureTypeCode === 'massif';
+  const enabled =
+    featureTypeCode === 'karst_area' || featureTypeCode === 'massif' || featureTypeCode === 'hill';
   const { data, isLoading, isError } = useAreaKarstStatistics(featureId, enabled);
 
   // A refusal and an area nobody may read answer identically, so there is nothing honest to show.

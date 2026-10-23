@@ -57,7 +57,8 @@ export default function AreaPointPatternCard({
 
   // Only the kinds that stand for a tract of karst, matching the statistics card beside this one.
   // Caves per square kilometre of a building is not a reading anybody wants offered.
-  const enabled = featureTypeCode === 'karst_area' || featureTypeCode === 'massif';
+  const enabled =
+    featureTypeCode === 'karst_area' || featureTypeCode === 'massif' || featureTypeCode === 'hill';
   const box = useMemo(() => (enabled ? boxOf(geometry) : null), [enabled, geometry]);
   const bbox = box ? densityBboxParam(box) : null;
 

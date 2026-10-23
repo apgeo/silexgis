@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { App, Card, Collapse, Flex, Form, Input, InputNumber, Select, Switch, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
@@ -8,10 +8,13 @@ import {
   useCave,
   useCaveTypes,
   useCreateCave,
+  useFeatureTypes,
   useRockTypes,
   useUpdateCave,
   type CaveWrite,
 } from '../../api/hooks.ts';
+import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
+import TypedField from '../../components/typedProperties/TypedField.tsx';
 
 type CaveFormValues = Omit<CaveWrite, 'cavingGroupId'>;
 
@@ -27,14 +30,38 @@ export default function CaveFormPage() {
   const { data: cave } = useCave(id);
   const { data: caveTypes } = useCaveTypes();
   const { data: rockTypes } = useRockTypes();
+  const { data: featureTypes } = useFeatureTypes();
   const createCave = useCreateCave();
   const updateCave = useUpdateCave(id ?? '');
+
+  // The fields a club has added to the type every cave carries. The ones the type ships with are
+  // written by imports and devices and are not offered here; they ride along in the stored document.
+  const clubFields = useMemo(
+    () =>
+      parsePropertiesSchema(featureTypes?.find((type) => type.boundKind === 'cave')?.propertiesSchema).filter(
+        (field) => !field.readOnly,
+      ),
+    [featureTypes],
+  );
+  const [extra, setExtra] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     if (cave && isEdit) {
       form.setFieldsValue(cave as unknown as CaveFormValues);
+      setExtra((cave.properties as Record<string, unknown> | null) ?? {});
     }
   }, [cave, isEdit, form]);
+
+  const setExtraValue = (key: string, value: unknown) =>
+    setExtra((current) => {
+      const next = { ...current };
+      if (value === undefined || value === null || value === '') {
+        delete next[key];
+      } else {
+        next[key] = value;
+      }
+      return next;
+    });
 
   const onFinish = async (values: CaveFormValues) => {
     const body: CaveWrite = {
@@ -44,9 +71,10 @@ export default function CaveFormPage() {
       explorationStatus: values.explorationStatus ?? 'unknown',
       visibility: values.visibility ?? 'private',
       cavingGroupId: cave?.cavingGroupId ?? null,
-      // Not editable here yet: round-trip the typed-properties document and keep the cave
-      // under its current primary parent (the write DTO addresses containment by parent id).
-      properties: cave?.properties ?? null,
+      // The stored document with the club's own fields as edited here; every key this form does
+      // not offer is sent back unchanged. The cave stays under its current primary parent (the
+      // write DTO addresses containment by parent id).
+      properties: { ...((cave?.properties as Record<string, unknown> | null) ?? {}), ...extra },
       parentId: cave?.parents.find((p) => p.isPrimary)?.id ?? null,
     };
     try {
@@ -72,7 +100,7 @@ export default function CaveFormPage() {
       <Card>
         <Form<CaveFormValues> form={form} layout="vertical" onFinish={(v) => void onFinish(v)} requiredMark>
           <Collapse
-            defaultActiveKey={['identification', 'localization', 'access']}
+            defaultActiveKey={['identification', 'localization', 'access', 'clubFields']}
             items={[
               {
                 key: 'identification',
@@ -237,6 +265,28 @@ export default function CaveFormPage() {
                   </Flex>
                 ),
               },
+              ...(clubFields.length > 0
+                ? [
+                    {
+                      key: 'clubFields',
+                      label: t('caves.sections.clubFields'),
+                      children: (
+                        <Flex gap={16} wrap data-testid="cave-club-fields">
+                          {clubFields.map((field) => (
+                            <Form.Item key={field.key} label={field.label} required={field.required} style={{ width: 280 }}>
+                              <TypedField
+                                field={field}
+                                value={extra[field.key]}
+                                onChange={(value) => setExtraValue(field.key, value)}
+                                data-testid={`cave-club-field-${field.key}`}
+                              />
+                            </Form.Item>
+                          ))}
+                        </Flex>
+                      ),
+                    },
+                  ]
+                : []),
             ]}
           />
           <Flex gap={8} justify="end" style={{ marginTop: 16 }}>

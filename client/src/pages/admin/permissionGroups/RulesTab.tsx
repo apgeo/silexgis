@@ -17,7 +17,7 @@ import {
   type AccessScopeKind,
   type FeatureKind,
   type PermissionGroup,
-  useFeatureTypes,
+  useGenericFeatureTypes,
 } from '../../../api/hooks.ts';
 import { joinActions } from '../../../components/permissions/accessDisplay.ts';
 import RuleAnchorPicker from './RuleAnchorPicker.tsx';
@@ -60,7 +60,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
   const { token } = theme.useToken();
   const { data: entries, isPending } = usePermissionGroupEntries(group.id);
   const replaceEntries = useReplacePermissionGroupEntries(group.id);
-  const { data: featureTypes } = useFeatureTypes();
+  const { data: featureTypes } = useGenericFeatureTypes();
   const [drafts, setDrafts] = useState<DraftRule[]>([]);
   const nextKey = useRef(0);
 

@@ -15,6 +15,12 @@ export interface SchemaField {
   label: string;
   kind: 'string' | 'number' | 'integer' | 'boolean' | 'enum';
   required: boolean;
+  /**
+   * Declared <code>readOnly</code>: a value some other system writes — a catalogue code, a device's
+   * index — that a form shows nowhere for editing. The server stores the document verbatim either
+   * way; this only keeps a form from offering a box for it.
+   */
+  readOnly: boolean;
   enumValues?: string[];
   min?: number;
   max?: number;
@@ -73,6 +79,7 @@ export function parsePropertiesSchema(schemaJson: string | null | undefined): Sc
       label,
       kind,
       required: required.has(key),
+      readOnly: spec.readOnly === true,
       enumValues: kind === 'enum' ? enumValues : undefined,
       min: typeof spec.minimum === 'number' ? spec.minimum : undefined,
       max: typeof spec.maximum === 'number' ? spec.maximum : undefined,

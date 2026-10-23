@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   useCaveTypes,
   useEntranceTypes,
-  useFeatureTypes,
+  useGenericFeatureTypes,
   type ImportTargetKind,
   type PhotoCandidate,
   type PhotoDecision,
@@ -54,7 +54,7 @@ export default function PhotoCandidateTable({
   const { t } = useTranslation();
   const caveTypes = useCaveTypes();
   const entranceTypes = useEntranceTypes();
-  const featureTypes = useFeatureTypes();
+  const featureTypes = useGenericFeatureTypes();
 
   const decisionOf = (row: PhotoCandidate) => decisions[row.key];
   const effectiveKind = (row: PhotoCandidate): ImportTargetKind =>

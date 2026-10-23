@@ -48,6 +48,7 @@ export const specs = {
     'filter-spatial.spec.ts',
     'object-selector-pickers.spec.ts',
     'map-filter-layers.spec.ts',
+    'cave-club-fields.spec.ts',
   ],
   cavingGroups: [
     'announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts', 'caver-caving-groups.spec.ts',

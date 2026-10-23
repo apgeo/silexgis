@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   useCavingGroups,
   useEntranceTypes,
-  useFeatureTypes,
+  useGenericFeatureTypes,
   useGeofileColumns,
   useTermRuleSets,
   type ImportOptions,
@@ -30,7 +30,7 @@ interface Props {
 export default function ImportOptionsPanel({ options, onChange, geofileId, isDelimited }: Props) {
   const { t } = useTranslation();
   const ruleSets = useTermRuleSets();
-  const featureTypes = useFeatureTypes();
+  const featureTypes = useGenericFeatureTypes();
   const entranceTypes = useEntranceTypes();
   const cavingGroups = useCavingGroups();
   // Asked only of a delimited upload. Everything else names its fields inside its own rows, and

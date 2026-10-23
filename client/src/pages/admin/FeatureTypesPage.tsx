@@ -67,6 +67,7 @@ const refusals: Record<string, string> = {
   'feature_type.code_taken': 'admin.featureTypes.codeTaken',
   'feature_type.seeded_immutable': 'admin.featureTypes.seededImmutable',
   'feature_type.in_use': 'admin.featureTypes.inUse',
+  'feature_type.bound_schema_locked': 'admin.featureTypes.boundSchemaLocked',
 };
 
 /**
@@ -100,6 +101,7 @@ export default function FeatureTypesPage() {
 
   const open = editing !== null || creating;
   const shipped = editing?.isSeeded === true;
+  const bound = editing !== null && editing.boundKind !== 'generic';
 
   useEffect(() => {
     if (open) {
@@ -215,6 +217,7 @@ export default function FeatureTypesPage() {
               <>
                 <Tag>{code}</Tag>
                 {type.isSeeded && <Tag color="blue">{t('admin.featureTypes.seeded')}</Tag>}
+                {type.boundKind === 'cave' && <Tag color="purple">{t('admin.featureTypes.boundToCaves')}</Tag>}
               </>
             ),
           },
@@ -288,6 +291,15 @@ export default function FeatureTypesPage() {
         <Form form={form} layout="vertical" initialValues={emptyDraft}>
           {shipped && (
             <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t('admin.featureTypes.shippedNote')} />
+          )}
+          {bound && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              title={t('admin.featureTypes.boundNote')}
+              data-testid="feature-type-bound-note"
+            />
           )}
           <Form.Item name="name" label={t('admin.featureTypes.name')} rules={[{ required: true, max: 100 }]}>
             <Input />

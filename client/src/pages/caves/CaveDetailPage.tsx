@@ -32,6 +32,7 @@ import {
   useCave,
   useCaveSummary,
   useCaveTypes,
+  useFeatureTypes,
   useDeleteCave,
   useDeleteEntrance,
   useEntranceTypes,
@@ -65,6 +66,7 @@ import CaveTopologyPanel from '../../components/statistics/CaveTopologyPanel.tsx
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
 import QrPublicationModal from '../../components/qr/QrPublicationModal.tsx';
+import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import { printedCode } from '../../components/qr/printedCode.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
 import CaveClosestApproachSection from './CaveClosestApproachSection.tsx';
@@ -88,6 +90,7 @@ export default function CaveDetailPage() {
   const { data: summary } = useCaveSummary(id);
   const { data: entrances } = useEntrances(id);
   const { data: caveTypes } = useCaveTypes();
+  const { data: featureTypes } = useFeatureTypes();
   const { data: rockTypes } = useRockTypes();
   const { data: entranceTypes } = useEntranceTypes();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
@@ -148,6 +151,12 @@ export default function CaveDetailPage() {
   }
 
   const caveTypeName = caveTypes?.find((x) => x.id === cave.caveTypeId)?.name;
+  // The club's own cave fields, shown beside the record's own; the ones the type ships with are
+  // catalogue and device codes, read where they are used rather than listed here.
+  const clubFields = parsePropertiesSchema(
+    featureTypes?.find((type) => type.boundKind === 'cave')?.propertiesSchema,
+  ).filter((field) => !field.readOnly);
+  const storedProperties = (cave.properties as Record<string, unknown> | null) ?? {};
   const rockTypeName = rockTypes?.find((x) => x.id === cave.rockTypeId)?.name;
   const entranceTypeName = (typeId: number) => entranceTypes?.find((x) => x.id === typeId)?.name ?? '';
 
@@ -326,6 +335,7 @@ export default function CaveDetailPage() {
           <Descriptions.Item label={t('caves.visibility')}>
             <Tag>{t(`caves.visibilityValues.${cave.visibility}`)}</Tag>
           </Descriptions.Item>
+          {clubFields.map((field) => detailItem(field.label, storedProperties[field.key]))}
         </Descriptions>
         {cave.description && (
           <Typography.Paragraph style={{ marginTop: 12, marginBottom: 0 }}>

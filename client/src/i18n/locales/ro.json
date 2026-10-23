@@ -739,7 +739,8 @@
       "morphometry": "Morfometrie",
       "status": "Stare",
       "discovery": "Descoperire",
-      "access": "Acces"
+      "access": "Acces",
+      "clubFields": "Câmpurile clubului"
     },
     "fields": {
       "otherToponyms": "Alte toponime",
@@ -4308,6 +4309,9 @@
       "styleInvalid": "Stilul trebuie să fie un obiect JSON.",
       "codeTaken": "Un alt tip folosește deja acest cod.",
       "seededImmutable": "Un tip livrat cu produsul își păstrează codul, categoria, afișarea protejată, nevoia de părinte și formele, și nu poate fi șters.",
+      "boundToCaves": "Toate peșterile",
+      "boundNote": "Fiecare peșteră are acest tip și nimic altceva nu-l poate avea. Adaugă în schema lui câmpurile proprii ale clubului pentru peșteri; câmpurile cu care vine sunt cele scrise de importuri și rămân cum sunt.",
+      "boundSchemaLocked": "Schema acestui tip își păstrează câmpurile cu care vine, rămâne deschisă altor câmpuri și nu poate face un câmp obligatoriu.",
       "inUse": "Există obiecte de acest tip, așa că categoria, formele și nevoia de părinte pot fi doar relaxate, iar tipul nu poate fi șters."
     },
     "tripTypes": {

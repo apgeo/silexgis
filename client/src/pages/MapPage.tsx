@@ -33,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { useSearchParams } from 'react-router-dom';
 import {
+  isGenericFeatureType,
   useCan,
   useFeatureTypes,
   useGeofiles,
@@ -1741,7 +1742,7 @@ export default function MapPage() {
           )}
           <MapContextMenu
             target={contextTarget}
-            featureTypes={featureTypes ?? []}
+            featureTypes={(featureTypes ?? []).filter(isGenericFeatureType)}
             canEdit={canEdit}
             onClose={() => {
               // A menu the keyboard opened hands focus back to the map it was opened from; a

@@ -10068,6 +10068,7 @@ export interface components {
             style: null | string;
             propertiesSchema: null | string;
             isSeeded: boolean;
+            boundKind: components["schemas"]["FeatureKind"];
         };
         FeatureTypeRequest: {
             code: string;

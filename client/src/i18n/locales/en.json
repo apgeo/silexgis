@@ -739,7 +739,8 @@
       "morphometry": "Morphometry",
       "status": "Status",
       "discovery": "Discovery",
-      "access": "Access"
+      "access": "Access",
+      "clubFields": "Club fields"
     },
     "fields": {
       "otherToponyms": "Other toponyms",
@@ -4295,6 +4296,9 @@
       "styleInvalid": "The style must be a JSON object.",
       "codeTaken": "Another kind already uses that code.",
       "seededImmutable": "A kind that ships with the product keeps its code, category, protected display, need for a parent and shapes, and cannot be deleted.",
+      "boundToCaves": "Every cave",
+      "boundNote": "Every cave carries this type, and nothing else can. Add your club's own cave fields to its schema; the fields it ships with are what imports write and stay as they are.",
+      "boundSchemaLocked": "This type's schema keeps the fields it ships with, stays open to other fields and cannot make a field required.",
       "inUse": "Features of this kind exist, so its category, shapes and need for a parent can only be loosened, and it cannot be deleted."
     },
     "tripTypes": {
