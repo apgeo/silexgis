@@ -130,6 +130,8 @@ export const groups = {
     'CaveRegistryFilterTests',
     // The registry cut to the map's window lists a cave by any entrance the reader is shown.
     'CaveWindowEntranceTests',
+    // A protected cave's display on every outward path, held fixed across caves carrying a type.
+    'CaveProtectionParityTests',
   ],
   cavers: ['CaverRosterTests', 'ProfileVisibilityTests'],
   cavingGroups: [
@@ -507,10 +509,10 @@ export const crossCutting = {
     'AreaKarstStatisticsTests', 'AssociationDisclosureTests', 'AttachmentReachListingTests',
     'CalendarTests', 'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests',
     'CaveMeshesInViewTests', 'CaveOverburdenTests', 'CavePassageShapeTests',
-    'CaveRegistryFilterTests', 'CaveSurveyStatisticsTests', 'CaveWindowEntranceTests',
-    'CenterlineColdCacheMeasurementTests', 'CenterlineTests', 'ClosestApproachTests',
-    'ConcurrencyTests', 'DashboardTests', 'DemoSeedIdempotencyTests', 'DocumentAccessApiTests',
-    'DocumentCommentNotificationTests', 'DocumentContentSearchTests',
+    'CaveProtectionParityTests', 'CaveRegistryFilterTests', 'CaveSurveyStatisticsTests',
+    'CaveWindowEntranceTests', 'CenterlineColdCacheMeasurementTests', 'CenterlineTests',
+    'ClosestApproachTests', 'ConcurrencyTests', 'DashboardTests', 'DemoSeedIdempotencyTests',
+    'DocumentAccessApiTests', 'DocumentCommentNotificationTests', 'DocumentContentSearchTests',
     'DocumentSurfaceProtectionSweepTests', 'DocumentViewerBytesTests',
     'EntrancePlacementGuardTests', 'EnumBindingTests', 'ExpeditionDeleteCleanupTests',
     'ExpeditionLeadsTests', 'ExpeditionMapTests', 'ExpeditionReportTests',
