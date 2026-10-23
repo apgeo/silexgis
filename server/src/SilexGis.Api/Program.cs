@@ -241,6 +241,9 @@ try
         .Validate(
             o => o.KarstIndexMaxAreas >= 1,
             "Map:KarstIndexMaxAreas must be at least 1.")
+        .Validate(
+            o => o.SelectionMax is >= 1 and <= MapOptions.SelectionMaxCeiling,
+            $"Map:SelectionMax must be from 1 to {MapOptions.SelectionMaxCeiling}.")
         .ValidateOnStart();
     builder.Services.AddOptions<MapLayerOptions>()
         .BindConfiguration(MapLayerOptions.SectionName);

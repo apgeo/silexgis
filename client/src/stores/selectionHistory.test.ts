@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { beforeEach, describe, expect, it } from 'vitest';
-import { MAX_SELECTION_SET, showsWorkingSet, useWorkspaceStore } from './workspaceStore.ts';
+import { DEFAULT_SELECTION_SET_MAX, showsWorkingSet, useWorkspaceStore } from './workspaceStore.ts';
 
 const feature = (id: string) => ({ kind: 'feature' as const, featureId: id });
 
@@ -100,7 +100,7 @@ describe('multi-selection', () => {
     useWorkspaceStore.getState().setSelectionSetFromResult(refs, { document, total: 1234 });
 
     const state = useWorkspaceStore.getState();
-    expect(state.selectionSet).toHaveLength(MAX_SELECTION_SET);
+    expect(state.selectionSet).toHaveLength(DEFAULT_SELECTION_SET_MAX);
     expect(state.selectionSetSource).toEqual({ document, total: 1234 });
 
     // Changed by hand, the set is no longer what the filter found, so it no longer names one.
@@ -110,6 +110,32 @@ describe('multi-selection', () => {
     useWorkspaceStore.getState().setSelectionSetFromResult(refs, { document, total: 1234 });
     useWorkspaceStore.getState().clearSelectionSet();
     expect(useWorkspaceStore.getState().selectionSetSource).toBeNull();
+  });
+
+  it("follows the installation's ceiling, cutting a set that is already larger", () => {
+    const refs = Array.from({ length: 10 }, (_, i) => ({ kind: 'cave' as const, id: `c${i}` }));
+    try {
+      useWorkspaceStore.getState().setSelectionSet(refs);
+      useWorkspaceStore.getState().setSelectionSetMax(4);
+      expect(useWorkspaceStore.getState().selectionSet).toHaveLength(4);
+
+      useWorkspaceStore.getState().setSelectionSet(refs);
+      expect(useWorkspaceStore.getState().selectionSet).toHaveLength(4);
+      useWorkspaceStore.getState().toggleInSelectionSet({ kind: 'cave', id: 'extra' });
+      expect(useWorkspaceStore.getState().selectionSet).toHaveLength(4);
+
+      // A value that is no ceiling is ignored rather than emptying the set.
+      useWorkspaceStore.getState().setSelectionSetMax(0);
+      expect(useWorkspaceStore.getState().selectionSetMax).toBe(4);
+
+      useWorkspaceStore.getState().setSelectionSetMax(500);
+      useWorkspaceStore.getState().setSelectionSet(
+        Array.from({ length: 450 }, (_, i) => ({ kind: 'cave' as const, id: `c${i}` })),
+      );
+      expect(useWorkspaceStore.getState().selectionSet).toHaveLength(450);
+    } finally {
+      useWorkspaceStore.getState().setSelectionSetMax(DEFAULT_SELECTION_SET_MAX);
+    }
   });
 });
 

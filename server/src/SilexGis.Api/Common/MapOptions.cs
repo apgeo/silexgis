@@ -160,6 +160,29 @@ public sealed class MapOptions
     public long MeshAskAboveBytes { get; set; } = 50L * 1024 * 1024;
 
     /// <summary>
+    /// The most objects one selection on the map holds — what "Select all found" takes from a list,
+    /// and what a modifier-click can add up to — and so the most objects one request for the
+    /// selection's summary may name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A bound on one gesture rather than on the data. Every action offered for a selection writes
+    /// object by object through the ordinary gates, so a selection of this many objects is this
+    /// many separate writes in one bulk action — slower the larger it is — and the summary beside
+    /// it asks about this many objects at once. The default keeps both quick; raise it only for an
+    /// installation whose members really work through larger results in one go.
+    /// </para>
+    /// <para>
+    /// Refused at start outside 1 to <see cref="SelectionMaxCeiling"/>: "Select all found" reads
+    /// the selection as one page of the list, and a page holds at most that many rows.
+    /// </para>
+    /// </remarks>
+    public int SelectionMax { get; set; } = 200;
+
+    /// <summary>The highest <see cref="SelectionMax"/> accepted: the largest page a list serves.</summary>
+    public const int SelectionMaxCeiling = Paging.MaxPageSize;
+
+    /// <summary>
     /// Simplification tolerance in screen pixels. Nearly a no-op on splay-heavy surveys, whose
     /// components are single shots with no interior vertices to drop, but it does thin ordinary
     /// imported line work.

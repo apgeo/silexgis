@@ -5,10 +5,15 @@ import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Button from '../Button.tsx';
-import { fetchWorkingSetRows, type WorkingSetList, type WorkingSetQuery } from '../../api/hooks/workingSet.ts';
+import {
+  fetchWorkingSetRows,
+  useSelectionSetMax,
+  type WorkingSetList,
+  type WorkingSetQuery,
+} from '../../api/hooks/workingSet.ts';
 import { mapAddressForList } from '../../filters/tableMapHandoff.ts';
 import { resultQuestion, takeIntoWorkingSet } from '../../filters/workingSet.ts';
-import { MAX_SELECTION_SET, useWorkspaceStore } from '../../stores/workspaceStore.ts';
+import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 
 interface SelectResultButtonProps {
   list: WorkingSetList;
@@ -24,7 +29,7 @@ interface SelectResultButtonProps {
  * opens on the list's filter with it.
  *
  * The set is capped, and the page says so with both numbers when the cap bit — a working set that
- * silently held the first two hundred of twelve hundred would make every bulk action afterwards a
+ * silently held the first few hundred of twelve hundred would make every bulk action afterwards a
  * quiet lie about "all". The result is read again through the list's own route rather than taken
  * from the rows on screen, which are only one page.
  */
@@ -39,12 +44,13 @@ export default function SelectResultButton({
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const count = total ?? 0;
+  const cap = useSelectionSetMax();
 
   const take = async () => {
     setBusy(true);
     try {
-      const { rows, total: found } = await fetchWorkingSetRows(list, query, MAX_SELECTION_SET);
-      const result = takeIntoWorkingSet(rows, found, MAX_SELECTION_SET);
+      const { rows, total: found } = await fetchWorkingSetRows(list, query, cap);
+      const result = takeIntoWorkingSet(rows, found, cap);
       // A result cut to the map's window cannot be saved as a filter: a saved filter keeps the
       // question and never a place, so the window would fall away and the filter would find more.
       // Nor can one whose question names a point or an outline, and the place a nearest-first

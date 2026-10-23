@@ -11002,6 +11002,8 @@ export interface components {
             meshesInViewMaxBytesLimit: number;
             /** Format: int64 */
             meshAskAboveBytes: number;
+            /** Format: int32 */
+            selectionMax: number;
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";

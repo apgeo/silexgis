@@ -191,7 +191,8 @@ public sealed record MapConfigDto(
     long MeshesInViewMaxBytes,
     int MeshesInViewMaxCavesLimit,
     long MeshesInViewMaxBytesLimit,
-    long MeshAskAboveBytes);
+    long MeshAskAboveBytes,
+    int SelectionMax);
 
 /// <summary>One entrance the point branch of the entrance layer considers, before it is shaped.</summary>
 public sealed record EntrancePointRow(
@@ -315,7 +316,8 @@ public static class MapEndpoints
             options.MeshesInViewBytes(),
             options.MeshesInViewMaxCavesLimit,
             options.MeshesInViewMaxBytesLimit,
-            Math.Max(0, options.MeshAskAboveBytes)));
+            Math.Max(0, options.MeshAskAboveBytes),
+            options.SelectionMax));
     }
 
     /// <summary>

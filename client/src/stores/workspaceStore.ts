@@ -87,6 +87,14 @@ interface WorkspaceState {
   selectionSetSource: SelectionSetSource | null;
   setSelectionSetFromResult: (refs: SelectedRef[], source: SelectionSetSource) => void;
   /**
+   * How many objects the working set holds at most: the installation's setting, published in the
+   * map configuration, and `DEFAULT_SELECTION_SET_MAX` until that has been read. The server bounds
+   * the summary's request by the same number, so the two cannot disagree once it has arrived.
+   */
+  selectionSetMax: number;
+  /** Takes the installation's ceiling; a set already larger is cut to it. */
+  setSelectionSetMax: (max: number) => void;
+  /**
    * Recently selected objects, so following a link and coming back is one press.
    *
    * Recorded inside `setSelection` rather than by whoever calls it: map clicks, the bus, the
@@ -198,6 +206,13 @@ interface WorkspaceState {
 }
 
 /**
+ * The ceiling on how many objects can be picked at once until the installation's own has been
+ * read — the server's default. Bulk actions write per object through the ordinary gates, so the
+ * ceiling is what keeps one gesture from becoming hundreds of requests.
+ */
+export const DEFAULT_SELECTION_SET_MAX = 200;
+
+/**
  * How far back the panel can go. Long enough to retrace an afternoon's clicking, short enough
  * that the list is never something a person scrolls.
  */
@@ -244,22 +259,32 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }),
   selectionSet: [],
   setSelectionSet: (refs) =>
-    set({ selectionSet: refs.slice(0, MAX_SELECTION_SET), selectionSetSource: null }),
+    set((state) => ({ selectionSet: refs.slice(0, state.selectionSetMax), selectionSetSource: null })),
   selectionSetSource: null,
   setSelectionSetFromResult: (refs, source) =>
-    set({ selectionSet: refs.slice(0, MAX_SELECTION_SET), selectionSetSource: source }),
+    set((state) => ({ selectionSet: refs.slice(0, state.selectionSetMax), selectionSetSource: source })),
   toggleInSelectionSet: (ref) =>
     set((state) => {
       const without = state.selectionSet.filter((x) => !(x.kind === ref.kind && x.id === ref.id));
       return {
         selectionSet:
           without.length === state.selectionSet.length
-            ? [...state.selectionSet, ref].slice(0, MAX_SELECTION_SET)
+            ? [...state.selectionSet, ref].slice(0, state.selectionSetMax)
             : without,
         selectionSetSource: null,
       };
     }),
   clearSelectionSet: () => set({ selectionSet: [], selectionSetSource: null }),
+  selectionSetMax: DEFAULT_SELECTION_SET_MAX,
+  setSelectionSetMax: (max) =>
+    set((state) => {
+      if (!Number.isInteger(max) || max < 1 || max === state.selectionSetMax) {
+        return {};
+      }
+      return state.selectionSet.length > max
+        ? { selectionSetMax: max, selectionSet: state.selectionSet.slice(0, max) }
+        : { selectionSetMax: max };
+    }),
   selectionHistory: [],
   selectionCursor: -1,
   goBackSelection: () =>
@@ -331,9 +356,3 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set((state) => ({ baseOpacity: { ...state.baseOpacity, [id]: opacity } })),
   resetBaseOpacity: (opacities) => set({ baseOpacity: opacities }),
 }));
-
-/**
- * A ceiling on how many objects can be picked at once. Bulk actions write per object through the
- * ordinary gates, so this is what keeps one gesture from becoming two hundred requests.
- */
-export const MAX_SELECTION_SET = 200;

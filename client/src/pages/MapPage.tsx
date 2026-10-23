@@ -170,6 +170,7 @@ import {
 } from '../map/filterLayerList.ts';
 import { detachFilterLayers, onFilterLayerRefusal, syncFilterLayers } from '../map/filterLayers.ts';
 import { useSavedFilters } from '../api/hooks/savedFilters.ts';
+import { useSelectionSetMax } from '../api/hooks/workingSet.ts';
 import type { FilterLayerRowInfo } from '../components/map/FilterLayerRow.tsx';
 import { attachViewSync2d, type ViewSync2dHandle } from '../map/viewSync2d.ts';
 import { openModelWindow } from '../caveview/openModelWindow.ts';
@@ -792,6 +793,9 @@ export default function MapPage() {
   const [filterLayers, setFilterLayers] = useState<FilterLayerSpec[]>([]);
   const [refusedFilterLayers, setRefusedFilterLayers] = useState<ReadonlySet<string>>(() => new Set());
   const { data: savedFilters } = useSavedFilters();
+  // The installation's ceiling on the working set, so a modifier-click stops where the server's
+  // summary request does.
+  useSelectionSetMax();
   useEffect(
     () =>
       onFilterLayerRefusal((savedFilterId) =>

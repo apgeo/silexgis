@@ -55,6 +55,7 @@ beforeEach(() => {
     meshesInViewMaxCavesLimit: 60,
     meshesInViewMaxBytesLimit: 512 * MB,
     meshAskAboveBytes: 50 * MB,
+    selectionMax: 200,
     centerlineDetailZoom: 18,
     centerlineMaxPaths: 25000,
     centerlineMaxPathsLimit: 100000,

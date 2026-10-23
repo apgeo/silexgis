@@ -26,12 +26,6 @@ namespace SilexGis.Api.Features.Features;
 /// </summary>
 public static class FeatureEndpoints
 {
-    /// <summary>
-    /// The most objects one request may name. Matches the ceiling on a multi-selection, because
-    /// that is what asks: past it the URL itself becomes the problem before the query does.
-    /// </summary>
-    private const int MaxIdFilter = 200;
-
     public static RouteGroupBuilder MapFeatureEndpoints(this RouteGroupBuilder api)
     {
         var features = api.MapGroup("/features").WithTags("Features");
@@ -72,6 +66,7 @@ public static class FeatureEndpoints
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
         IOptions<AccessOptions> accessOptions,
+        IOptions<MapOptions> mapOptions,
         SurfaceFilters surfaceFilters,
         string? filter,
         Guid? savedFilterId,
@@ -108,10 +103,13 @@ public static class FeatureEndpoints
         // not a row, and must not be distinguishable from naming one that does not exist.
         if (ids is { Length: > 0 })
         {
-            if (ids.Length > MaxIdFilter)
+            // The most objects one request may name is the ceiling on a selection, because a
+            // selection's summary is what asks.
+            var maxIds = mapOptions.Value.SelectionMax;
+            if (ids.Length > maxIds)
             {
                 return ApiProblems.BadRequest(
-                    "feature.too_many_ids", $"At most {MaxIdFilter} objects can be asked about at once.");
+                    "feature.too_many_ids", $"At most {maxIds} objects can be asked about at once.");
             }
 
             query = query.Where(f => ids.Contains(f.Id));

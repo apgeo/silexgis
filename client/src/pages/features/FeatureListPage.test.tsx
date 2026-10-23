@@ -65,6 +65,12 @@ vi.mock('../../api/download.ts', async () => {
 });
 
 // The map's own module builds a map; the list only ever asks it to frame something.
+vi.mock('../../api/hooks/workingSet.ts', async () => {
+  const actual = await vi.importActual<typeof import('../../api/hooks/workingSet.ts')>('../../api/hooks/workingSet.ts');
+  // The installation's selection ceiling is read from the map configuration; these tests stand up no
+  // query client, so the shipped default stands in.
+  return { ...actual, useSelectionSetMax: () => 200 };
+});
 vi.mock('../../map/mapContext.ts', () => ({ fitGeoJsonGeometry: vi.fn() }));
 vi.mock('../../components/ConfigureLink.tsx', () => ({ default: () => null }));
 

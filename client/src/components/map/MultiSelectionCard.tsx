@@ -4,8 +4,9 @@ import { AimOutlined, ClearOutlined, SaveOutlined, TagsOutlined } from '@ant-des
 import { App, Descriptions, Empty, Flex, Form, Input, Modal, Tag, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { useFeatures, type FeatureListItem } from '../../api/hooks.ts';
+import type { FeatureListItem } from '../../api/hooks.ts';
 import { useCreateSavedFilter } from '../../api/hooks/savedFilters.ts';
+import { useSelectionSummary } from '../../api/hooks/workingSet.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { viewFitGeometry } from '../../workspace/viewCamera.ts';
 
@@ -56,7 +57,7 @@ export default function MultiSelectionCard() {
   };
 
   const ids = selectionSet.map((ref) => ref.id);
-  const { data } = useFeatures({ ids, pageSize: ids.length || 1 }, ids.length > 0);
+  const { data } = useSelectionSummary(ids);
   const items = data?.items ?? [];
 
   const shared = <K extends keyof FeatureListItem>(key: K): FeatureListItem[K] | undefined => {
