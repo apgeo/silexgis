@@ -125,6 +125,19 @@ html[data-theme='dark'] .map-workspace-panel {
   min-width: 0;
 }
 
+/* On a phone a dozen chips wrapping down the screen would hide the map: there the row stays one
+   line and scrolls sideways. */
+.map-search-overlay-mobile .map-quick-filters {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 2px;
+}
+
+.map-search-overlay-mobile .map-quick-filters .quick-filter-chip {
+  flex: 0 0 auto;
+}
+
 /* Over the map the unpin button needs a ground of its own to be seen against the tiles. */
 .map-quick-filters .quick-filter-chip {
   background: var(--ant-color-bg-container, #fff);

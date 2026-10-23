@@ -13,6 +13,17 @@
   gap: 0;
 }
 
+/* With a dozen chips a row of whole names would cover the map; each is cut to a fixed width and
+   says the whole name on hover, while its accessible name stays the whole of it. */
+.quick-filter-chip-label {
+  display: inline-block;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
 .quick-filter-chip-unpin {
   min-width: 24px;
 }

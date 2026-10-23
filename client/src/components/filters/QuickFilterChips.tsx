@@ -97,7 +97,8 @@ export default function QuickFilterChips({ activeId, onApply, onRelease, classNa
               aria-pressed={usable ? pressed : undefined}
               disabled={!usable}
               icon={usable || status === 'loading' ? undefined : <WarningOutlined />}
-              title={status === 'stale' ? t('savedFilters.staleHint') : undefined}
+              // The name may be cut short on screen; the whole of it is said on hover.
+              title={status === 'stale' ? t('savedFilters.staleHint') : label}
               data-quick-chip={id}
               data-testid={`quick-filter-apply-${id}`}
               onClick={() => {
@@ -109,7 +110,7 @@ export default function QuickFilterChips({ activeId, onApply, onRelease, classNa
                 }
               }}
             >
-              {label}
+              <span className="quick-filter-chip-label">{label}</span>
             </Button>
             <Button
               size="small"

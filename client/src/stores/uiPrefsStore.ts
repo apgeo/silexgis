@@ -238,9 +238,11 @@ export type AccountClaim = 'same' | 'reset';
 
 /**
  * How many saved filters one account may pin as quick chips. Few on purpose: a chip row is for the
- * three or four filters used every day, and every pinned filter is one more name to read past.
+ * filters used every day, and every pinned filter is one more name to read past. Twelve is what
+ * the row still holds without taking the map over: a chip's name is cut to a fixed width, so the
+ * row wraps to two or three lines on a desktop map and scrolls sideways in one line on a phone.
  */
-export const MAX_PINNED_FILTERS = 6;
+export const MAX_PINNED_FILTERS = 12;
 
 /** The part of the state that is the account's rather than the browser's. */
 export interface AccountPrefsState {

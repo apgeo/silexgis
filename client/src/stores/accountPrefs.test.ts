@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { accountPrefDefaults } from './uiPrefsStore.ts';
+import { accountPrefDefaults, MAX_PINNED_FILTERS } from './uiPrefsStore.ts';
 import {
   ACCOUNT_PREF_DEFAULTS,
   ACCOUNT_PREF_KEYS,
@@ -218,7 +218,7 @@ describe('planAccountWrite held to the limit', () => {
 
   it('holds a realistic full workspace well inside the server limit', () => {
     // Every account preference set, at the sizes a heavy user reaches: three panels arranged, six
-    // named layouts, a dozen selectors, a dozen pinned types.
+    // named layouts, a dozen selectors, a dozen pinned types, every quick filter pinned.
     const panel = {
       order: ['details', 'tags', 'attachments', 'links', 'text', 'history'],
       collapsed: ['history'],
@@ -241,6 +241,10 @@ describe('planAccountWrite held to the limit', () => {
       ),
       docks: { leftHidden: true, rightHidden: false },
       pinnedTypeIds: Array.from({ length: 12 }, (_, n) => n + 1),
+      pinnedFilterIds: Array.from(
+        { length: MAX_PINNED_FILTERS },
+        (_, n) => `01a16a67-8718-72e3-b214-${n.toString(16).padStart(12, '0')}`,
+      ),
       coordinateFormat: 'utm',
       overviewMap: true,
     });
@@ -311,9 +315,10 @@ describe('sanitizeAccountPrefs', () => {
     const id = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
     expect(sanitizeAccountPrefs({ pinnedFilterIds: [id(1), 'not-an-id'] })).toEqual({});
     expect(sanitizeAccountPrefs({ pinnedFilterIds: 'everything' })).toEqual({});
-    expect(
-      sanitizeAccountPrefs({ pinnedFilterIds: [id(1), id(1).toUpperCase(), id(2), id(3), id(4), id(5), id(6), id(7)] }),
-    ).toEqual({ pinnedFilterIds: [id(1), id(2), id(3), id(4), id(5), id(6)] });
+    const many = Array.from({ length: MAX_PINNED_FILTERS + 1 }, (_, n) => id(n + 1));
+    expect(sanitizeAccountPrefs({ pinnedFilterIds: [id(1), id(1).toUpperCase(), ...many.slice(1)] })).toEqual({
+      pinnedFilterIds: many.slice(0, MAX_PINNED_FILTERS),
+    });
     expect(accountPrefsIn({ pinnedFilterIds: [id(9)] })).toEqual({ pinnedFilterIds: [id(9)] });
     expect(ACCOUNT_PREF_KEYS).toContain('pinnedFilterIds');
   });
