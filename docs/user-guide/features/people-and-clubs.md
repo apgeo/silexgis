@@ -157,7 +157,7 @@ If nobody on the roster holds an account, it tells you there is nobody to tell.
 ## Accounts
 
 Accounts are opened by an administrator — **Invite someone** on
-[Administration → Accounts](../admin/README.md#accounts), which mails the person a link to
+[Administration → Accounts](../admin/accounts.md), which mails the person a link to
 choose their own password — unless open registration has been switched on. Either way the
 account gets an entry on the caver roster.
 

@@ -91,7 +91,8 @@ linking out to the reference pages for detail.
 Pages for whoever holds administrative rights. Still user documentation — the server-side
 install is in [INSTALL.md](../INSTALL.md) and [DEPLOY-SERVER.md](../DEPLOY-SERVER.md).
 
-- [Administration index](admin/README.md) — including [Accounts](admin/README.md#accounts)
+- [Administration index](admin/README.md)
+- [Accounts](admin/accounts.md)
 - [Permissions explained](admin/permissions.md)
 - [Location protection](admin/location-protection.md)
 - [Vocabularies your club owns](admin/vocabularies.md)

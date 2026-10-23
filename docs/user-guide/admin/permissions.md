@@ -225,7 +225,7 @@ For each action it says **Allowed** or **Denied**, and names the reason:
 This is the tool for every "but why can't Maria open that?" conversation. Start here.
 
 To see **which permission groups an account belongs to** — named directly, or reached through
-one of its caving groups — open its row under [Administration → Accounts](README.md#accounts).
+one of its caving groups — open its row under [Administration → Accounts](accounts.md#the-register).
 That list comes from the same reading of memberships the rights themselves are decided by, so
 it cannot disagree with them.
 

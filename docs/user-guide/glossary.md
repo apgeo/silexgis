@@ -16,7 +16,7 @@ something narrower here than in ordinary caving speech, that is said.
 **Account invitation** — How an account is opened by somebody else: **Invite someone** on
 *Administration → Accounts* takes a name and an email address, and the owner receives a link to
 choose their own password. The link works once and for 24 hours. Not the same as being asked onto
-a trip, which grants nothing. → [Accounts](admin/README.md#accounts)
+a trip, which grants nothing. → [Accounts](admin/accounts.md)
 
 **Album** — A curated, ordered arrangement of photographs, with a cover, shareable by its own
 link. Deleting one does not delete the photographs.
@@ -163,7 +163,7 @@ shows only what is public in its own right.
 authenticator and their recovery codes: **Reset second factor** switches every second factor
 off, stops the recovery codes working, signs the member out everywhere and tells them by email.
 They then sign in with their password alone and set one up again. Refused on your own account.
-→ [Accounts](admin/README.md#accounts) ·
+→ [Accounts](admin/accounts.md) ·
 [Two-factor authentication](features/account-and-settings.md#two-factor-authentication)
 
 **Selection** *(map)* — What is selected on the map: one thing, or several. Filled by clicking,

@@ -122,7 +122,7 @@ code it shows.
 Lost both the authenticator and the recovery codes? An administrator who manages accounts can
 **reset your second factor**: every method is switched off, you are signed out everywhere and
 told by email, and you sign in with your password alone and set a second factor up again. See
-[Accounts](../admin/README.md#accounts).
+[Accounts](../admin/accounts.md#resetting-a-lost-second-factor).
 
 Too many wrong codes locks the account for a while.
 

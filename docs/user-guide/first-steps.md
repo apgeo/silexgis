@@ -80,7 +80,7 @@ for whoever may record trips
 **Tools** — [Coordinate converter](features/coordinates.md#the-coordinate-converter)
 
 **Administration** — [Audit](features/history-and-audit.md) ·
-[Accounts](admin/README.md#accounts) ·
+[Accounts](admin/accounts.md) ·
 [Permission groups](admin/permissions.md) · [Messaging](admin/messaging.md) ·
 [Message delivery](admin/messaging.md#watching-the-mail-go-out) ·
 [Terrain](admin/terrain-builds.md) ·

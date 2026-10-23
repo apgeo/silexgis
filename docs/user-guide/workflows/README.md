@@ -24,7 +24,7 @@ A reasonable order for the first month:
 
 1. **People first.** Create the [caving groups](../features/people-and-clubs.md), add the
    roster of cavers (including people with no account), and invite the people who will sign in
-   from [Administration → Accounts](../admin/README.md#accounts).
+   from [Administration → Accounts](../admin/accounts.md).
 2. **Decide your permission groups** before you have data to get wrong.
    See [Permissions explained](../admin/permissions.md).
 3. **Set up the vocabularies** you know you need — cave types, feature kinds, document
