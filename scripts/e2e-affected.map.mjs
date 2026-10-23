@@ -47,6 +47,7 @@ export const specs = {
     'table-map.spec.ts',
     'filter-spatial.spec.ts',
     'object-selector-pickers.spec.ts',
+    'map-filter-layers.spec.ts',
   ],
   cavingGroups: [
     'announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts', 'caver-caving-groups.spec.ts',
@@ -77,6 +78,7 @@ export const specs = {
     'gallery-cave-position.spec.ts',
     'object-selector-pickers.spec.ts',
     'saved-filter-audience.spec.ts',
+    'map-filter-layers.spec.ts',
   ],
   geoFeatures: [
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
@@ -95,6 +97,8 @@ export const specs = {
     'karst-layers.spec.ts', 'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
     'accessibility.spec.ts', 'workspace-state.spec.ts', 'map-filters.spec.ts', 'table-map.spec.ts',
     'coordinate-converter.spec.ts',
+    // Saved-filter layers clicked on the map and drawn in the 3D view beside it.
+    'map-filter-layers.spec.ts',
   ],
   // A shared view opened with no account: its background and the public data its link draws.
   mapViews: ['shared-view.spec.ts', 'karst-layers.spec.ts', 'map-filters.spec.ts'],
