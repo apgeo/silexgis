@@ -3166,7 +3166,7 @@
     "exportUnreadableTry": "Alegeți un fundal permis în documente, de exemplu {{name}}, opriți celelalte straturi numite aici și exportați din nou.",
     "exportUnreadableNone": "Niciunul dintre fundalurile acestei instalări nu poate fi pus într-o imagine.",
     "shareTitle": "Partajează vederea {{name}}",
-    "shareExplain": "Oricine are acest link poate deschide vederea fără cont. Arată zona spre care privește vederea, peste un fundal public, cu straturile pe care vederea le avea pornite — doar ce este public în sine, iar pozițiile protejate doar aproximativ.",
+    "shareExplain": "Oricine are acest link poate deschide vederea fără cont. Arată zona spre care privește vederea, peste un fundal public, cu straturile pe care vederea le avea pornite — doar ce este public în sine, iar peșterile și obiectele protejate lipsesc cu totul.",
     "shareWithoutData": "Această vedere este restrânsă de un filtru salvat sau de un filtru venit dintr-un link, pe care un link nu îl poate aplica — așa că linkul arată zona și fundalul ei, fără peșteri și obiecte. Nici straturile desenate din filtre salvate nu apar vreodată printr-un link.",
     "shareWithoutFilterLayers": "Straturile desenate din filtre salvate nu apar niciodată printr-un link; linkul arată celelalte straturi ale vederii.",
     "shareQr": "Linkul către vederea {{name}} ca cod QR"
