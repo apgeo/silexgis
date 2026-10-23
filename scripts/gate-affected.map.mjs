@@ -128,6 +128,8 @@ export const groups = {
     'FeatureRestoreTests',
     // The registry's list narrowed by a filter document, and its exports narrowed the same way.
     'CaveRegistryFilterTests',
+    // The registry cut to the map's window lists a cave by any entrance the reader is shown.
+    'CaveWindowEntranceTests',
   ],
   cavers: ['CaverRosterTests', 'ProfileVisibilityTests'],
   cavingGroups: [
@@ -140,6 +142,7 @@ export const groups = {
     'FeatureListFilterTests',
     // The restore routes and the rule they keep live in the feature slice itself.
     'FeatureRestoreTests',
+    'SelectionMaxConfigurationTests',
   ],
   featureSets: ['FeatureIntegrityTests', 'FeatureTests'],
   featureShares: ['FeatureShareTests'],
@@ -188,6 +191,8 @@ export const groups = {
     'MapFilterTests',
     // The catalogue's kinds as the seeder stores them and the layer list publishes them.
     'MapLayerKindTests',
+    // The ceiling on a selection, published to the client and bounding the summary's request.
+    'SelectionMaxConfigurationTests',
   ],
   // A shared view's page and the data its link draws for nobody in particular.
   mapViews: ['MapViewTests', 'SharedViewDataTests'],
@@ -244,7 +249,7 @@ export const groups = {
   crs: ['CrsTests', 'SpatialOptionsTests', 'WorkingSridBehaviourTests'],
   exports: [
     'KarstLinkExportTests', 'SpreadsheetWriterTests', 'CaveRegistryFilterTests',
-    'FeatureListFilterTests',
+    'FeatureListFilterTests', 'CaveWindowEntranceTests',
   ],
   // With the smoke test because it asks the same kind of question one step earlier: not whether
   // the application answers, but whether each test was given the application its mode promises.
@@ -502,7 +507,7 @@ export const crossCutting = {
     'AreaKarstStatisticsTests', 'AssociationDisclosureTests', 'AttachmentReachListingTests',
     'CalendarTests', 'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests',
     'CaveMeshesInViewTests', 'CaveOverburdenTests', 'CavePassageShapeTests',
-    'CaveRegistryFilterTests', 'CaveSurveyStatisticsTests',
+    'CaveRegistryFilterTests', 'CaveSurveyStatisticsTests', 'CaveWindowEntranceTests',
     'CenterlineColdCacheMeasurementTests', 'CenterlineTests', 'ClosestApproachTests',
     'ConcurrencyTests', 'DashboardTests', 'DemoSeedIdempotencyTests', 'DocumentAccessApiTests',
     'DocumentCommentNotificationTests', 'DocumentContentSearchTests',

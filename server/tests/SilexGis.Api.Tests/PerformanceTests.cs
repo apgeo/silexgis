@@ -184,6 +184,11 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             ("centerlines z14 (local)", $"/api/v1/map/cave-centerlines?bbox={Viewport}&zoom=14"),
             ("karst index z7 (country)", "/api/v1/map/karst-index?bbox=19.9,43.5,29.1,48.1&zoom=7"),
             ("caves list p1", "/api/v1/caves?pageSize=50"),
+            // The registry cut to the map's window decides a cave by its own point or any entrance
+            // the reader may read: a correlated look at the entrances per candidate cave, country-wide
+            // and local.
+            ("caves list (country bbox)", "/api/v1/caves?pageSize=50&bbox=19.9,43.5,29.1,48.1"),
+            ("caves list (local bbox)", $"/api/v1/caves?pageSize=50&bbox={Viewport}"),
             // The feature list counts every row the caller may read and pages them newest first:
             // unwindowed, and over a window wide enough to hold every seeded entrance.
             ("features list p1", "/api/v1/features?pageSize=50"),

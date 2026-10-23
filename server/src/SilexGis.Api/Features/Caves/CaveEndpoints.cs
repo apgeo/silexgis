@@ -159,18 +159,14 @@ public static class CaveEndpoints
             query = wantUnplaced ? query.Where(f => f.Geom == null) : query.Where(f => f.Geom != null);
         }
 
-        // A protected cave is in the box by the point this caller is shown — snapped when they
-        // may not place it — never by its stored one: tested on the stored point, the listing and
-        // its total would bisect a hidden position below the protection grid.
+        // A cave is in the box when any point of it this caller is shown is — its own, or any of
+        // its entrances they may read — each tested where it is shown, snapped when they may not
+        // place it, never by its stored one: tested on the stored point, the listing and its total
+        // would bisect a hidden position below the protection grid.
         if (Bbox.TryParse(bbox, out var box))
         {
-            var polygon = box.ToPolygon();
-            var protectedMembers = await WindowMembershipSql.ProtectedMembersAsync(
-                db, ctx, box.West, box.South, box.East, box.North,
-                accessOptions.Value.LocationGridMeters, [FeatureKind.Cave], ct);
-            query = query.Where(f => f.Geom != null
-                && ((!f.IsProtectedEffective && f.Geom.Intersects(polygon))
-                    || protectedMembers.Contains(f.Id)));
+            query = await CaveWindow.NarrowAsync(
+                query, db, ctx, box, accessOptions.Value.LocationGridMeters, ct);
         }
 
         // Taken before the ordering, because this is a set to report and not a page: sorting it

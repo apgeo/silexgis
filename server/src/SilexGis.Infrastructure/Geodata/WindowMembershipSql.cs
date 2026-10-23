@@ -140,6 +140,80 @@ public static class WindowMembershipSql
     }
 
     /// <summary>
+    /// Ids of the caves that have at least one entrance the caller may read inside the window by the
+    /// rule above — every entrance, protected or not, tested where the caller is shown it.
+    /// </summary>
+    /// <remarks>
+    /// One statement over the entrances, served by their GIST index on the window widened by one
+    /// protection cell, rather than a look at the entrances per candidate cave: correlated per cave,
+    /// a windowed cave list paid the visibility walk for every cave of the register, which on 100k
+    /// entrances was over two seconds for a reader who owns none of them. The answer is one id per
+    /// cave, so its length is bounded by the caves in the window, not by their entrances.
+    /// <para>
+    /// An unprotected cave whose own point is inside the window is in it already — the caller's
+    /// query tests that point itself — so its entrances are passed over before the visibility walk,
+    /// which is what keeps a country-wide window cheap. Only an unprotected cave is passed over: for
+    /// a protected one the stored point is not the shown one, and skipping its entrances on it would
+    /// let the stored point decide.
+    /// </para>
+    /// </remarks>
+    public static async Task<List<Guid>> CavesWithShownEntrancesAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        double west,
+        double south,
+        double east,
+        double north,
+        double protectionGridMeters,
+        CancellationToken ct)
+    {
+        var (sql, parameters) = BuildCavesWithShownEntrances(ctx, west, south, east, north, protectionGridMeters);
+        var ids = await db.Database.GetDbConnection().QueryAsync<Guid>(
+            new CommandDefinition(sql, parameters, cancellationToken: ct));
+        return [.. ids];
+    }
+
+    /// <summary>The statement and its parameters, exposed so a test can pin its shape.</summary>
+    public static (string Sql, DynamicParameters Parameters) BuildCavesWithShownEntrances(
+        AccessContext ctx,
+        double west,
+        double south,
+        double east,
+        double north,
+        double protectionGridMeters)
+    {
+        var (visibleSql, exactSql, parameters) = FeatureAudienceSql.Caller(ctx, "f");
+        parameters.Add("wm_west", west);
+        parameters.Add("wm_south", south);
+        parameters.Add("wm_east", east);
+        parameters.Add("wm_north", north);
+        parameters.Add("wm_cell", LocationProtection.CellDegrees(protectionGridMeters));
+        var membership = ShownPositionTest(
+            "f",
+            exactSql,
+            "wm_cell",
+            g => $"ST_Intersects({g}, ST_MakeEnvelope(@wm_west, @wm_south, @wm_east, @wm_north, 4326))");
+        var entranceKind = ((short)FeatureKind.CaveEntrance).ToString(CultureInfo.InvariantCulture);
+        var sql = $"""
+            SELECT DISTINCT ce.cave_feature_id
+            FROM features f
+            JOIN cave_entrances ce ON ce.id = f.id
+            JOIN features cave ON cave.id = ce.cave_feature_id
+            WHERE f.deleted_at IS NULL
+              AND f.kind = {entranceKind}
+              AND NOT (NOT cave.is_protected_effective
+                       AND cave.geom IS NOT NULL
+                       AND ST_Intersects(cave.geom, ST_MakeEnvelope(@wm_west, @wm_south, @wm_east, @wm_north, 4326)))
+              AND f.geom IS NOT NULL
+              AND f.geom && ST_Expand(
+                    ST_MakeEnvelope(@wm_west, @wm_south, @wm_east, @wm_north, 4326), @wm_cell)
+              AND {visibleSql}
+              AND {membership}
+            """;
+        return (sql, parameters);
+    }
+
+    /// <summary>
     /// The rule above as one SQL expression over a feature row, for any spatial test — inside a
     /// window, within a distance, inside an outline. The single statement of it: every caller that
     /// asks a spatial question of feature rows splices this in rather than writing its own.

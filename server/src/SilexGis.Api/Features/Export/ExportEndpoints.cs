@@ -147,10 +147,12 @@ public static class ExportEndpoints
                 f.Name != null && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern)));
         }
 
+        // The list's own window rule, so the file holds the caves the windowed list shows: a cave
+        // is in the box when any point of it the caller is shown is. Its row still carries the
+        // cave's own point, which may lie outside the box when a secondary entrance put it inside.
         if (window is { } box)
         {
-            query = await NarrowedToBoxAsync(
-                query, db, ctx, box, access.Value.LocationGridMeters, [FeatureKind.Cave], ct);
+            query = await CaveWindow.NarrowAsync(query, db, ctx, box, access.Value.LocationGridMeters, ct);
         }
 
         var caveTypes = await db.CaveTypes.AsNoTracking().ToDictionaryAsync(t => t.Id, t => t.Code, ct);
