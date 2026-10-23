@@ -18,6 +18,12 @@ export interface FilterLayerRowInfo {
   /** The saved filter's name, or null when this person can no longer see it. */
   name: string | null;
   status: FilterLayerStatus;
+  /**
+   * What the colour and symbol buttons step to — the next style no other layer draws with, worked
+   * out over the whole list. Without them the buttons step plainly round.
+   */
+  nextColor?: FilterLayerColor;
+  nextSymbol?: FilterLayerSymbol;
 }
 
 /** The marker a filter layer draws, small, for its row and its buttons. */
@@ -63,7 +69,7 @@ export function FilterLayerRowTitle({
         icon={<FilterLayerSwatch color={color} symbol="circle" />}
         onClick={(event) => {
           event.stopPropagation();
-          onStyleChange({ color: nextFilterLayerColor(color) });
+          onStyleChange({ color: row.nextColor ?? nextFilterLayerColor(color) });
         }}
       />
       <Button
@@ -75,7 +81,7 @@ export function FilterLayerRowTitle({
         icon={<FilterLayerSwatch color={color} symbol={symbol} />}
         onClick={(event) => {
           event.stopPropagation();
-          onStyleChange({ symbol: nextFilterLayerSymbol(symbol) });
+          onStyleChange({ symbol: row.nextSymbol ?? nextFilterLayerSymbol(symbol) });
         }}
       />
       <span className="layer-node-name filter-layer-name">{name}</span>

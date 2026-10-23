@@ -359,7 +359,8 @@ export function sameSelection(
         left.lon === right.lon &&
         left.lat === right.lat &&
         left.count === right.count &&
-        left.zoom === right.zoom
+        left.zoom === right.zoom &&
+        left.savedFilterId === right.savedFilterId
       );
     case 'trip':
       // Missing until the compiler was made to check that every kind has an arm: two picks of

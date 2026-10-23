@@ -73,6 +73,8 @@ export interface ClusterPick extends Scene3DPickChrome {
   zoom: number;
   /** The lattice cell the server summed over, as it named it. */
   cell: ClusterCell;
+  /** The saved filter whose layer drew this cluster, when it was a filter layer's. */
+  savedFilterId?: string;
 }
 
 export type Scene3DPickPayload = EntrancePick | FeaturePick | CenterlinePick | ClusterPick;
@@ -101,6 +103,7 @@ export function selectionFromPick(pick: Scene3DPick | null): WorkspaceSelection 
         count: payload.count,
         zoom: payload.zoom,
         cell: payload.cell,
+        ...(payload.savedFilterId ? { savedFilterId: payload.savedFilterId } : {}),
       };
   }
 }
@@ -133,7 +136,8 @@ export function pickMatchesSelection(
         selection.kind === 'cluster' &&
         selection.lon === payload.lon &&
         selection.lat === payload.lat &&
-        selection.zoom === payload.zoom
+        selection.zoom === payload.zoom &&
+        selection.savedFilterId === payload.savedFilterId
       );
   }
 }
@@ -162,7 +166,9 @@ export function samePickTarget(a: Scene3DPickPayload, b: Scene3DPickPayload): bo
       // A cluster has no identity of its own — it is a count over a patch of ground — so the patch
       // and the zoom that sized it are what makes two of them the same aggregation.
       const other = b as ClusterPick;
-      return a.lon === other.lon && a.lat === other.lat && a.zoom === other.zoom;
+      return (
+        a.lon === other.lon && a.lat === other.lat && a.zoom === other.zoom && a.savedFilterId === other.savedFilterId
+      );
     }
   }
 }
@@ -180,7 +186,7 @@ export function pickPayload(pick: Scene3DPick | null): Scene3DPickPayload | unde
   // Read as a bare bag rather than as the union: the four members disagree about every field but
   // `kind`, so narrowing has to come from the checks below and not from the declared type.
   const bag = id as Record<string, unknown>;
-  const { entranceId, caveId, featureId, centerlineId, lon, lat, count, zoom } = bag;
+  const { entranceId, caveId, featureId, centerlineId, lon, lat, count, zoom, savedFilterId } = bag;
   const cell = clusterCellOf(bag.cell);
   // Checked the same way as everything else here rather than passed through: what the scene hands
   // back is whatever object was attached to an item, and a later batch attaching a half-built one
@@ -211,7 +217,16 @@ export function pickPayload(pick: Scene3DPick | null): Scene3DPickPayload | unde
         typeof count === 'number' &&
         typeof zoom === 'number' &&
         cell
-        ? { kind: 'cluster', lon, lat, count, zoom, cell, ...chrome }
+        ? {
+            kind: 'cluster',
+            lon,
+            lat,
+            count,
+            zoom,
+            cell,
+            ...(typeof savedFilterId === 'string' ? { savedFilterId } : {}),
+            ...chrome,
+          }
         : undefined;
     default:
       return undefined;

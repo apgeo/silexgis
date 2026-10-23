@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import type { ClusterCell } from '../geo/cluster.ts';
 import type { FilterDocument } from '../filters/types.ts';
+import type { FilterLayerSpec } from '../map/filterLayerList.ts';
 import type { Scene3DSurfaceMode } from '../scene3d/scene3dEngine.ts';
 import type { SurveyWalls3DMode } from '../scene3d/surveyMeshesInView3d.ts';
 
@@ -34,6 +35,11 @@ export interface ClusterSelection {
   zoom: number;
   /** The lattice cell the server summed this cluster over; its members are listed from it. */
   cell: ClusterCell;
+  /**
+   * The saved filter whose layer drew this cluster, when it was a filter layer's: its members are
+   * then that filter's, not the main layer's.
+   */
+  savedFilterId?: string;
 }
 
 /** A trip picked off the map layer; the card fetches the trip and links to its page. */
@@ -94,6 +100,19 @@ interface WorkspaceState {
   selectionSetMax: number;
   /** Takes the installation's ceiling; a set already larger is cut to it. */
   setSelectionSetMax: (max: number) => void;
+  /**
+   * The layers drawn from saved filters, in the map page's order. Held here rather than in the
+   * page so the 3D scene beside the map draws the same layers, in the same colours and symbols,
+   * switched on and off together.
+   */
+  filterLayers: FilterLayerSpec[];
+  setFilterLayers: (next: FilterLayerSpec[] | ((current: FilterLayerSpec[]) => FilterLayerSpec[])) => void;
+  /**
+   * The saved filters, lower-cased, whose layers draw nothing because the filter cannot be run for
+   * this person — decided by the map page from the saved-filter list and the server's refusals.
+   */
+  unreadableFilterLayers: string[];
+  setUnreadableFilterLayers: (ids: string[]) => void;
   /**
    * Recently selected objects, so following a link and coming back is one press.
    *
@@ -275,6 +294,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       };
     }),
   clearSelectionSet: () => set({ selectionSet: [], selectionSetSource: null }),
+  filterLayers: [],
+  setFilterLayers: (next) =>
+    set((state) => ({ filterLayers: typeof next === 'function' ? next(state.filterLayers) : next })),
+  unreadableFilterLayers: [],
+  setUnreadableFilterLayers: (ids) =>
+    set((state) =>
+      state.unreadableFilterLayers.join(',') === ids.join(',') ? {} : { unreadableFilterLayers: ids },
+    ),
   selectionSetMax: DEFAULT_SELECTION_SET_MAX,
   setSelectionSetMax: (max) =>
     set((state) => {

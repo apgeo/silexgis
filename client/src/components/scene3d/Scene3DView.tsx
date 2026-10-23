@@ -34,6 +34,7 @@ import {
   type CaveData3DHandle,
   type CaveData3DState,
 } from '../../scene3d/caveData3d.ts';
+import { attachFilterLayers3d, type FilterLayers3DHandle } from '../../scene3d/filterLayers3d.ts';
 import {
   attachClosestApproach3d,
   type ClosestApproach3DHandle,
@@ -394,6 +395,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const setOverlayVisible = useWorkspaceStore((s) => s.setOverlayVisible);
   const overlayOpacity = useWorkspaceStore((s) => s.overlayOpacity);
   const setOverlayOpacity = useWorkspaceStore((s) => s.setOverlayOpacity);
+  // The layers drawn from saved filters, the same list the flat map draws, switched and faded with it.
+  const filterLayers = useWorkspaceStore((s) => s.filterLayers);
+  const unreadableFilterLayers = useWorkspaceStore((s) => s.unreadableFilterLayers);
   const surfaceMode = useWorkspaceStore((s) => s.scene3dSurfaceMode);
   const setSurfaceMode = useWorkspaceStore((s) => s.setScene3dSurfaceMode);
   const [surfaceState, setSurfaceState] = useState<Scene3DSurfaceState>();
@@ -418,6 +422,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // ---- cave data, picking and selection ----
 
   const dataRef = useRef<CaveData3DHandle | null>(null);
+  const filterLayersRef = useRef<FilterLayers3DHandle | null>(null);
   // Where two caves come closest, if a pair has been measured. Held apart from the loader above
   // for the same reason the walls are: nothing about it is camera-driven — it is drawn because
   // somebody asked a question on a cave's page, and it stays until they ask a different one.
@@ -479,6 +484,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     const surface = sceneSurfaceElement();
     const data = attachCaveData3d(engine);
     dataRef.current = data;
+    const filterLayers3d = attachFilterLayers3d(engine);
+    filterLayersRef.current = filterLayers3d;
     const mesh = attachSurveyMesh3d(engine);
     meshRef.current = mesh;
     // Each cave's top is read through the loader at the moment its walls are placed, for the
@@ -524,7 +531,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       // old name at the old place while the panel next to it states the new one. Kept rather than
       // dropped when the thing is no longer among what is drawn: that is what the camera moving
       // away from it looks like, and it is not a reason to take a label down.
-      setPicked((current) => (current ? (data.currentPick(current) ?? current) : current));
+      setPicked((current) =>
+        current ? (data.currentPick(current) ?? filterLayers3d.currentPick(current) ?? current) : current,
+      );
     });
 
     // Both views keep each other in step over the workspace bus, in references and degrees rather
@@ -581,7 +590,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // detail panel, which draws nothing itself and must not know which views exist, so it
     // announces and this view refetches the ground it is showing — otherwise a deleted marker
     // stays on screen, and stays clickable, until the camera next moves.
-    const unsubscribeChanges = onSurfaceFeaturesChanged(() => data.reload());
+    const unsubscribeChanges = onSurfaceFeaturesChanged(() => {
+      data.reload();
+      filterLayers3d.reload();
+    });
 
     // What each kind of feature is called is composed into the drawn items as they are built, so
     // features drawn before the catalog answered carry no type name at all — an unnamed sinkhole
@@ -647,6 +659,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       setTracksState(EMPTY_GEOFILE_TRACKS_3D_STATE);
       data.detach();
       dataRef.current = null;
+      filterLayers3d.detach();
+      filterLayersRef.current = null;
       // Releases the graphics memory the walls hold; a scene handed back with a mesh still on it
       // would keep tens of megabytes for a view nobody is looking at.
       mesh.detach();
@@ -1141,6 +1155,15 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       data.setLayerOpacity(layer, overlayOpacity[layer] ?? 1);
     }
   }, [overlayVisible, overlayOpacity, engineVersion]);
+
+  // Keyed on the same counter the loader is attached on, so a rebuilt scene comes back with them.
+  useEffect(() => {
+    filterLayersRef.current?.setLayers(
+      filterLayers,
+      new Set(unreadableFilterLayers),
+      new globalThis.Map(Object.entries(overlayOpacity)),
+    );
+  }, [filterLayers, unreadableFilterLayers, overlayOpacity, engineVersion, showingHere]);
 
   // Which files are drawn, keyed on the same counters the loader is attached on, so a rebuilt
   // scene — or a mount that takes the surface back — comes up with the viewer's files on it.

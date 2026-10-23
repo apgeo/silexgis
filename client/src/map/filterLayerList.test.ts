@@ -11,6 +11,8 @@ import {
   MAX_FILTER_LAYERS,
   nextFilterLayerColor,
   nextFilterLayerSymbol,
+  nextFreeFilterLayerColor,
+  nextFreeFilterLayerSymbol,
   readFilterLayers,
   removeFilterLayer,
   updateFilterLayer,
@@ -58,7 +60,45 @@ describe('the filter layer list', () => {
       full = addFilterLayer(full, id(n));
     }
     expect(full).toHaveLength(MAX_FILTER_LAYERS);
-    expect(new Set(full.map((layer) => layer.color)).size).toBe(MAX_FILTER_LAYERS);
+    expect(MAX_FILTER_LAYERS).toBe(12);
+    // Every colour in use, and no two layers drawing with both the same colour and the same symbol.
+    expect(new Set(full.map((layer) => layer.color)).size).toBe(FILTER_LAYER_COLORS.length);
+    expect(new Set(full.map((layer) => `${layer.color}|${layer.symbol}`)).size).toBe(MAX_FILTER_LAYERS);
+  });
+
+  it('keeps the first six as they always were, then repeats colours with another symbol', () => {
+    let list: FilterLayerSpec[] = [];
+    for (let n = 1; n <= 7; n++) {
+      list = addFilterLayer(list, id(n));
+    }
+    expect(list.slice(0, 6).map((layer) => layer.color)).toEqual(FILTER_LAYER_COLORS);
+    expect(list.slice(0, 6).map((layer) => layer.symbol)).toEqual([
+      'circle', 'square', 'triangle', 'diamond', 'circle', 'square',
+    ]);
+    expect(list[6].color).toBe(FILTER_LAYER_COLORS[0]);
+    expect(list[6].symbol).not.toBe(list[0].symbol);
+  });
+
+  it('steps a row to the next style no other layer has, and stays put when there is none', () => {
+    let list: FilterLayerSpec[] = [];
+    for (let n = 1; n <= 2; n++) {
+      list = addFilterLayer(list, id(n));
+    }
+    // Layer 2 is a magenta square; with layer 1 made a violet square, stepping layer 1's colour
+    // passes over magenta, which would make it layer 2's twin.
+    list = updateFilterLayer(list, id(1), { symbol: 'square' });
+    expect(list[1]).toMatchObject({ color: FILTER_LAYER_COLORS[1], symbol: 'square' });
+    expect(nextFreeFilterLayerColor(list, list[0])).toBe(FILTER_LAYER_COLORS[2]);
+    expect(nextFreeFilterLayerSymbol(list, list[0])).toBe('triangle');
+
+    // Every other colour taken in this symbol: the colour button has nowhere to go.
+    const crowded: FilterLayerSpec[] = FILTER_LAYER_COLORS.map((color, n) => ({
+      savedFilterId: id(n + 1),
+      color,
+      symbol: 'circle',
+      visible: true,
+    }));
+    expect(nextFreeFilterLayerColor(crowded, crowded[0])).toBe(crowded[0].color);
   });
 
   it('changes one layer and leaves the others alone', () => {
@@ -93,6 +133,18 @@ describe('the filter layer list', () => {
     expect(readFilterLayers({ savedFilterId: id(1) })).toEqual([]);
     const many = Array.from({ length: MAX_FILTER_LAYERS + 3 }, (_, n) => ({ savedFilterId: id(n + 1) }));
     expect(readFilterLayers(many)).toHaveLength(MAX_FILTER_LAYERS);
+    // A saved view of six from before the cap was raised reads back unchanged.
+    let six: FilterLayerSpec[] = [];
+    for (let n = 1; n <= 6; n++) {
+      six = addFilterLayer(six, id(n));
+    }
+    expect(readFilterLayers(JSON.parse(JSON.stringify(six)))).toEqual(six);
+    // Two stored entries with one style: the second is given a free one.
+    const twins = readFilterLayers([
+      { savedFilterId: id(1), color: 'violet', symbol: 'circle' },
+      { savedFilterId: id(2), color: 'violet', symbol: 'circle' },
+    ]);
+    expect(`${twins[1].color}|${twins[1].symbol}`).not.toBe('violet|circle');
   });
 });
 

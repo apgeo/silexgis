@@ -161,12 +161,13 @@ import {
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import {
   addFilterLayer,
+  nextFreeFilterLayerColor,
+  nextFreeFilterLayerSymbol,
   filterLayerCandidates,
   filterLayerSavedIdOf,
   filterLayerStatus,
   removeFilterLayer,
   updateFilterLayer,
-  type FilterLayerSpec,
 } from '../map/filterLayerList.ts';
 import { detachFilterLayers, onFilterLayerRefusal, syncFilterLayers } from '../map/filterLayers.ts';
 import { useSavedFilters } from '../api/hooks/savedFilters.ts';
@@ -790,7 +791,8 @@ export default function MapPage() {
   // list is this page's state and a saved view's; the OpenLayers layers follow it. Whether a
   // layer's filter can still be run is decided from the saved-filter list and from the server's
   // own refusals, and a layer whose filter cannot is kept as a row that says so and draws nothing.
-  const [filterLayers, setFilterLayers] = useState<FilterLayerSpec[]>([]);
+  const filterLayers = useWorkspaceStore((s) => s.filterLayers);
+  const setFilterLayers = useWorkspaceStore((s) => s.setFilterLayers);
   const [refusedFilterLayers, setRefusedFilterLayers] = useState<ReadonlySet<string>>(() => new Set());
   const { data: savedFilters } = useSavedFilters();
   // The installation's ceiling on the working set, so a modifier-click stops where the server's
@@ -810,6 +812,8 @@ export default function MapPage() {
         name:
           savedFilters?.find((filter) => filter.id.toLowerCase() === spec.savedFilterId.toLowerCase())?.name ?? null,
         status: filterLayerStatus(spec, savedFilters, refusedFilterLayers),
+        nextColor: nextFreeFilterLayerColor(filterLayers, spec),
+        nextSymbol: nextFreeFilterLayerSymbol(filterLayers, spec),
       })),
     [filterLayers, savedFilters, refusedFilterLayers],
   );
@@ -818,6 +822,12 @@ export default function MapPage() {
     .map((row) => row.spec.savedFilterId.toLowerCase())
     .join(',');
   useEffect(() => () => detachFilterLayers(), []);
+  // The 3D scene beside the map draws the same layers, and draws nothing for the same unreadable ones.
+  useEffect(() => {
+    useWorkspaceStore
+      .getState()
+      .setUnreadableFilterLayers(unreadableFilterLayerKey === '' ? [] : unreadableFilterLayerKey.split(','));
+  }, [unreadableFilterLayerKey]);
 
   // The saved-filter layers follow their list, their filters' readability and their transparency.
   useEffect(() => {

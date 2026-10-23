@@ -110,7 +110,11 @@ export default function SelectionPanel({ scope = 'main' }: { scope?: PanelScope 
 function ClusterCard({ selection }: { selection: ClusterSelection }) {
   const { t } = useTranslation();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
-  const { data, isPending } = useClusterEntrances(selection.cell, mapFilterParams());
+  // A filter layer's cluster lists that filter's members; the main layer's, the map filter's.
+  const { data, isPending } = useClusterEntrances(
+    selection.cell,
+    selection.savedFilterId ? { savedFilterId: selection.savedFilterId } : mapFilterParams(),
+  );
 
   const entrances = useMemo(() => {
     return (data?.features ?? [])

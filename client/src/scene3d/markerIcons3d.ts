@@ -118,6 +118,72 @@ function featureDotIcon(): MarkerIcon {
   return featureDot;
 }
 
+const filterLayerIcons = new Map<string, MarkerIcon>();
+
+/** The four symbols a layer drawn from a saved filter can take — the flat map's own four. */
+export type FilterLayerSymbol3D = 'circle' | 'square' | 'triangle' | 'diamond';
+
+/**
+ * The marker of a layer drawn from a saved filter: its symbol in its colour, ringed in white like
+ * the flat map's, dashed and a little larger for a position the reader is shown only approximately.
+ * A cluster of such a layer is the same symbol, grown with its count and with the count inside, so
+ * the layer's clusters read as that layer's and never as the main layer's teal bubbles.
+ */
+export function filterLayerIcon(
+  color: string,
+  symbol: FilterLayerSymbol3D,
+  options: { approximate?: boolean; count?: number } = {},
+): MarkerIcon {
+  const count =
+    options.count !== undefined && Number.isFinite(options.count) && options.count > 0 ? Math.round(options.count) : undefined;
+  const approximate = options.approximate === true;
+  const key = `${color}|${symbol}|${approximate ? 'a' : 'e'}|${count ?? ''}`;
+  const cached = filterLayerIcons.get(key);
+  if (cached) {
+    return cached;
+  }
+  const radius =
+    count !== undefined
+      ? Math.min(CLUSTER_MAX_RADIUS, CLUSTER_MIN_RADIUS + Math.sqrt(count))
+      : approximate
+        ? APPROXIMATE_RADIUS
+        : ENTRANCE_RADIUS;
+  // Room for the points of a triangle or diamond, which reach further than a circle's edge.
+  const reach = radius + 2;
+  const size = iconSize(reach);
+  const c = size / 2;
+  const attributes =
+    `fill='${color}' stroke='${entrancePalette.stroke}' stroke-width='${RING_WIDTH}'` +
+    (approximate ? " stroke-dasharray='2 2'" : '');
+  const shape = (() => {
+    switch (symbol) {
+      case 'square': {
+        const half = radius * 0.85;
+        return `<rect x='${c - half}' y='${c - half}' width='${2 * half}' height='${2 * half}' ${attributes}/>`;
+      }
+      case 'triangle':
+        return `<polygon points='${c},${c - reach} ${c + reach * 0.87},${c + reach / 2} ${c - reach * 0.87},${c + reach / 2}' ${attributes}/>`;
+      case 'diamond':
+        return `<polygon points='${c},${c - reach} ${c + reach},${c} ${c},${c + reach} ${c - reach},${c}' ${attributes}/>`;
+      default:
+        return `<circle cx='${c}' cy='${c}' r='${radius}' ${attributes}/>`;
+    }
+  })();
+  const label =
+    count !== undefined
+      ? `<text x='${c}' y='${c}' text-anchor='middle' dominant-baseline='central' font-family='sans-serif'` +
+        ` font-size='${CLUSTER_FONT_PIXELS}' font-weight='bold' fill='${entrancePalette.stroke}'>${count}</text>`
+      : '';
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}' viewBox='0 0 ${size} ${size}'>` +
+    shape +
+    label +
+    `</svg>`;
+  const icon: MarkerIcon = { image: svgDataUrl(svg), scale: 1 };
+  filterLayerIcons.set(key, icon);
+  return icon;
+}
+
 const photoIcons = new Map<number, MarkerIcon>();
 
 /**

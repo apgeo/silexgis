@@ -25,9 +25,10 @@ import { filterLayerPalette, type FilterLayerColor } from './markerPalette.ts';
  * own: the same two map routes as the main layers (entrances, as clusters or points, and the
  * surface features), asked with that filter's id.
  *
- * Display only. A click on one of these selects nothing, because selection, the cluster member
- * list and editing all belong to the main layers and to the map's own filter; a filter layer is a
- * way of seeing a second question answered over the first.
+ * A click on one of these answers as on the main layers (`selection.ts`): a marker selects its
+ * cave entrance or feature through the ordinary selection path — the object is one the server
+ * already handed this reader, at the point it handed it — and a cluster lists the members this
+ * layer's filter keeps.
  */
 
 const format = new GeoJSON();

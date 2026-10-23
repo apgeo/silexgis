@@ -7,6 +7,7 @@ import { clusterCellOf } from '../geo/cluster.ts';
 import type { SelectedRef, WorkspaceSelection } from '../stores/workspaceStore.ts';
 import { ENTRANCE_LAYER_ID } from './entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from './featureLayer.ts';
+import { filterLayerSavedIdOf } from './filterLayerList.ts';
 import { isHitTestable } from './hitTesting.ts';
 import { KARST_INDEX_LAYER_ID } from './karstIndexLayer.ts';
 import { TRIP_LAYER_ID } from './tripLayer.ts';
@@ -34,6 +35,10 @@ export function attachSelection(
       event.pixel,
       (feature, layer) => {
         const props = feature.getProperties();
+        const layerId = layer?.get('id') as string | undefined;
+        // A layer drawn from a saved filter answers a click as the main layers do: a marker selects
+        // its object through the same path, and a cluster lists the members that filter keeps.
+        const filterLayerOf = filterLayerSavedIdOf(layerId);
         if (props.cluster === true) {
           const geometry = feature.getGeometry() as Point | undefined;
           const cell = clusterCellOf(props.cell);
@@ -46,13 +51,14 @@ export function attachSelection(
               count: Number(props.count ?? 0),
               zoom: Math.round(map.getView().getZoom() ?? 8),
               cell,
+              ...(filterLayerOf ? { savedFilterId: filterLayerOf } : {}),
             });
           }
           handled = true;
           return true;
         }
-        const layerId = layer?.get('id') as string | undefined;
-        if (layerId === ENTRANCE_LAYER_ID && typeof props.caveId === 'string' && typeof props.id === 'string') {
+        const entranceLayer = layerId === ENTRANCE_LAYER_ID || filterLayerOf !== null;
+        if (entranceLayer && typeof props.caveId === 'string' && typeof props.id === 'string') {
           if (adding) {
             onAdd?.({ kind: 'entrance', id: props.id });
           } else {
@@ -71,7 +77,7 @@ export function attachSelection(
         // An area of the karstification index is the karst area or massif feature it was
         // computed for, so a click opens that feature, whose page carries the full statistics.
         if (
-          (layerId === SURFACE_FEATURE_LAYER_ID || layerId === KARST_INDEX_LAYER_ID) &&
+          (layerId === SURFACE_FEATURE_LAYER_ID || layerId === KARST_INDEX_LAYER_ID || filterLayerOf !== null) &&
           typeof props.id === 'string'
         ) {
           if (adding) {
