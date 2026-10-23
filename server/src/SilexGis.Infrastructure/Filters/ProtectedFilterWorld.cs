@@ -70,29 +70,43 @@ public abstract class ProtectedFilterWorld<TEntity> : FilterWorld<TEntity>
     protected override Expression<Func<TEntity, bool>> HasId(IReadOnlyCollection<Guid> ids) =>
         e => ids.Contains(e.Id);
 
-    protected override ValueTask<Expression<Func<TEntity, bool>>> CompileAsync(
+    protected override async ValueTask<Expression<Func<TEntity, bool>>> CompileAsync(
         WorldQuery query, CancellationToken ct) =>
-        ValueTask.FromResult(Compile(query.Where));
+        Compile(query.Where, await PositionsAsync(query.Caller, query.Where, ct));
 
-    private Expression<Func<TEntity, bool>> Compile(FilterNode? node) => node switch
+    /// <summary>
+    /// The position conditions in the tree, each resolved to the ids of the rows that answer it —
+    /// for a world whose own fields include <see cref="SpatialConditions.PositionField"/>, which
+    /// overrides this. A world that declares no position has nothing to resolve.
+    /// </summary>
+    protected virtual ValueTask<IReadOnlyDictionary<ConditionNode, Guid[]>> PositionsAsync(
+        AccessContext caller, FilterNode? where, CancellationToken ct) =>
+        ValueTask.FromResult(PositionConditions.None);
+
+    private Expression<Func<TEntity, bool>> Compile(
+        FilterNode? node, IReadOnlyDictionary<ConditionNode, Guid[]> positions) => node switch
     {
         null => _ => true,
         AllOfNode all => all.Of.Count == 0
             ? _ => true
-            : all.Of.Select(Compile).Aggregate((left, right) => left.And(right)),
+            : all.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.And(right)),
         // An OR of nothing matches nothing: clearing the last choice out of a group narrows to
         // nothing rather than quietly widening to everything.
         AnyOfNode any => any.Of.Count == 0
             ? _ => false
-            : any.Of.Select(Compile).Aggregate((left, right) => left.Or(right)),
-        NotNode not => Compile(not.Of).Not(),
-        ConditionNode condition => Leaf(condition),
+            : any.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.Or(right)),
+        NotNode not => Compile(not.Of, positions).Not(),
+        ConditionNode condition => Leaf(condition, positions),
         _ => throw new InvalidOperationException($"No compiler arm for {node.GetType().Name}."),
     };
 
-    private Expression<Func<TEntity, bool>> Leaf(ConditionNode condition) =>
+    private static Expression<Func<TEntity, bool>> RowIn(Guid[] ids) => e => ids.Contains(e.Id);
+
+    private Expression<Func<TEntity, bool>> Leaf(
+        ConditionNode condition, IReadOnlyDictionary<ConditionNode, Guid[]> positions) =>
         condition.Field switch
         {
+            SpatialConditions.PositionField => RowIn(PositionConditions.Of(positions, condition)),
             CommonFilterFields.Name => FilterLeaves.Text(condition, NameOf),
             CommonFilterFields.OwnerId => FilterLeaves.Guids<TEntity>(condition, e => e.OwnerUserId),
             CommonFilterFields.CavingGroupId =>
@@ -148,9 +162,10 @@ public abstract class ProtectedFilterWorld<TEntity> : FilterWorld<TEntity>
                 Title = string.IsNullOrWhiteSpace(name(row)) ? World : name(row)!,
                 Subtitle = SubtitleOf(row),
                 Symbol = Symbol,
-                // These worlds hold no position anybody is shown through a filter. A georeferenced
-                // map has a footprint and a map view has a camera, and neither is this route's to
-                // disclose.
+                // A hit is never placed from here. A georeferenced map's footprint can be asked
+                // about through a position condition, which its list already shows its reader
+                // whole; drawing it is the map list's business, and a map view's camera is not a
+                // position anybody is shown through a filter.
                 Placeable = false,
             }),
         ]);

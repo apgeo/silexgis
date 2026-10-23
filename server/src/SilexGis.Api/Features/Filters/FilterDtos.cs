@@ -113,10 +113,15 @@ public sealed record FilterFieldDto(
 /// <summary>A condition a field has to stand beside: <c>Field</c> equal to <c>Value</c>.</summary>
 public sealed record FilterFieldRequirementDto(string Field, string Value);
 
+/// <param name="MaxRadiusMeters">
+/// The largest radius a distance condition may ask about, in metres — an installation setting, so
+/// the builder learns it here rather than carrying its own copy.
+/// </param>
 public sealed record FilterLimitsDto(
     int MaxNodes,
     int MaxDepth,
     int MaxValuesPerCondition,
     int MaxWorlds,
     int MaxTextValueLength,
-    int MaxPageSize);
+    int MaxPageSize,
+    double MaxRadiusMeters);

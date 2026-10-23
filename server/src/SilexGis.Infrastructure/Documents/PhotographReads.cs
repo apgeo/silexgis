@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
@@ -86,6 +87,31 @@ public static class PhotographReads
             db, ctx, photographs.Where(d => !admitted.Contains(d.Id)).Select(d => d.Id), ct);
 
         return photographs.VisibleTo(ctx, AccessDomain.Documents, reached, (db.CabinetDocuments, db.Cabinets));
+    }
+
+    /// <summary>
+    /// The pictures hanging on any of these features or on anything inside one — a cave's pictures
+    /// include its entrances' — matched on the stored ancestry rather than by walking the
+    /// containment tree.
+    /// </summary>
+    /// <remarks>
+    /// A predicate rather than a narrowing, so the filter model can negate and combine it. Whether
+    /// the features may be asked about at all is the caller's question: the gallery's cave choice
+    /// and the filter's cave condition each ask it before they get here.
+    /// </remarks>
+    public static Expression<Func<Document, bool>> HangingUnder(SilexGisDbContext db, Guid[] featureIds)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(featureIds);
+
+        // Spelled out rather than factored further: a method call inside an expression tree is not
+        // something the database can be asked.
+        return d => db.Attachments.Any(a =>
+            a.FeatureId != null
+            && db.FeatureAncestors.Any(fa => fa.FeatureId == a.FeatureId && featureIds.Contains(fa.AncestorId))
+            && db.StoredFiles.Any(f => f.Id == a.FileId
+                && db.DocumentVersions.Any(v =>
+                    v.Id == f.DocumentVersionId && v.IsCurrent && v.DocumentId == d.Id)));
     }
 
     /// <summary>

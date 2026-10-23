@@ -72,14 +72,8 @@ public static class PhotoQueries
         // silently ran in memory instead would fetch the whole archive to filter it.
         if (query.CaveId is { } caveId)
         {
-            // The cave and everything below it, matched on the stored ancestry rather than by
-            // walking the containment tree: a cave's pictures include its entrances'.
-            photographs = photographs.Where(d => db.Attachments.Any(a =>
-                a.FeatureId != null
-                && db.FeatureAncestors.Any(fa => fa.FeatureId == a.FeatureId && fa.AncestorId == caveId)
-                && db.StoredFiles.Any(f => f.Id == a.FileId
-                    && db.DocumentVersions.Any(v =>
-                        v.Id == f.DocumentVersionId && v.IsCurrent && v.DocumentId == d.Id))));
+            // The cave and everything below it: a cave's pictures include its entrances'.
+            photographs = photographs.Where(PhotographReads.HangingUnder(db, [caveId]));
         }
 
         if (query.FeatureId is { } featureId)

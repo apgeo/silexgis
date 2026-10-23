@@ -57,12 +57,119 @@ public class SpatialConditionsTests
     {
         Validate(Within(new NumberValue(0), Somewhere)).ShouldNotBeEmpty();
         Validate(Within(new NumberValue(-5), Somewhere)).ShouldNotBeEmpty();
-        Validate(Within(new NumberValue(SpatialConditions.MaxRadiusMeters + 1), Somewhere)).ShouldNotBeEmpty();
-        Validate(Within(new NumberValue(SpatialConditions.MaxRadiusMeters), Somewhere)).ShouldBeEmpty();
+        Validate(Within(new NumberValue(SpatialConditions.DefaultMaxRadiusMeters + 1), Somewhere)).ShouldNotBeEmpty();
+        Validate(Within(new NumberValue(SpatialConditions.DefaultMaxRadiusMeters), Somewhere)).ShouldBeEmpty();
         // The anchor first and the radius second is a different question, and is refused.
         Validate(Within(Somewhere, new NumberValue(500))).ShouldNotBeEmpty();
         // A radius alone is a distance from nowhere.
         Validate(Within(new NumberValue(500))).ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public void The_radius_ceiling_is_the_one_the_vocabulary_carries()
+    {
+        var raised = new Dictionary<string, WorldVocabulary>(StringComparer.Ordinal)
+        {
+            ["feature"] = Features with { MaxRadiusMeters = 500_000 },
+        };
+        var wide = Over(Within(new NumberValue(300_000), Somewhere));
+
+        // Past the shipped ceiling, refused with it as the limit...
+        var refused = FilterValidation.Validate(wide, Vocabularies).ShouldHaveSingleItem();
+        refused.Code.ShouldBe(FilterProblemCodes.RadiusOutOfRange);
+        refused.Limit.ShouldBe((int)SpatialConditions.DefaultMaxRadiusMeters);
+
+        // ...within an installation's raised one, and refused past it with that one named.
+        FilterValidation.Validate(wide, raised).ShouldBeEmpty();
+        var past = FilterValidation.Validate(Over(Within(new NumberValue(500_001), Somewhere)), raised).ShouldHaveSingleItem();
+        past.Limit.ShouldBe(500_000);
+        past.Detail.ShouldContain("500000");
+    }
+
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(200_000, true)]
+    [InlineData(1_000_000, true)]
+    [InlineData(0.5, false)]
+    [InlineData(0, false)]
+    [InlineData(-1, false)]
+    [InlineData(1_000_001, false)]
+    [InlineData(double.NaN, false)]
+    [InlineData(double.PositiveInfinity, false)]
+    public void Only_a_sane_radius_ceiling_can_be_configured(double meters, bool usable) =>
+        SpatialConditions.IsUsableMaxRadius(meters).ShouldBe(usable);
+
+    [Fact]
+    public void Every_world_measures_from_features_only()
+    {
+        // A photograph is measured from a cave, never from another photograph: the feature world is
+        // the one whose rows the placement gate places.
+        var photographs = new Dictionary<string, WorldVocabulary>(StringComparer.Ordinal)
+        {
+            [PhotographFilterFields.World] = PhotographFilterFields.Vocabulary,
+        };
+        FilterDocument About(FilterNode where) => new() { Scope = [new WorldScope(PhotographFilterFields.World, where)] };
+
+        FilterValidation.Validate(About(Within(new NumberValue(500), new ObjectValue("feature", Guid.NewGuid()))), photographs)
+            .ShouldBeEmpty();
+        FilterValidation.Validate(About(Inside(new ObjectValue("feature", Guid.NewGuid()))), photographs).ShouldBeEmpty();
+        FilterValidation.Validate(About(Within(new NumberValue(500), new ObjectValue(PhotographFilterFields.World, Guid.NewGuid()))), photographs)
+            .Select(p => p.Code).ShouldBe([FilterProblemCodes.AnchorKind]);
+    }
+
+    [Fact]
+    public void The_worlds_with_a_shown_position_declare_it_and_the_others_do_not()
+    {
+        WorldVocabulary[] placed =
+        [
+            FeatureFilterFields.Vocabulary,
+            PhotographFilterFields.Vocabulary,
+            SurveyModelFilterFields.Vocabulary,
+            TripLogFilterFields.Vocabulary,
+        ];
+        foreach (var vocabulary in placed)
+        {
+            vocabulary.Fields[^1].Key.ShouldBe(SpatialConditions.PositionField, $"{vocabulary.World} declares its position last");
+            vocabulary.Fields[^1].Kind.ShouldBe(FieldKind.Spatial);
+        }
+
+        GeoreferencedMapFilterFields.Own[^1].Key.ShouldBe(SpatialConditions.PositionField);
+        GeofileFilterFields.Own[^1].Key.ShouldBe(SpatialConditions.PositionField);
+        DocumentFilterFields.Vocabulary.Fields.ShouldNotContain(f => f.Kind == FieldKind.Spatial);
+    }
+
+    [Fact]
+    public void A_cave_condition_asks_which_caves_never_whether_there_is_one()
+    {
+        foreach (var vocabulary in new[] { PhotographFilterFields.Vocabulary, SurveyModelFilterFields.Vocabulary })
+        {
+            var cave = vocabulary.Field("cave").ShouldNotBeNull();
+            cave.Operators.ShouldBe([FilterOp.Equals, FilterOp.In]);
+            var vocabularies = new Dictionary<string, WorldVocabulary>(StringComparer.Ordinal) { [vocabulary.World] = vocabulary };
+            FilterDocument About(FilterNode where) => new() { Scope = [new WorldScope(vocabulary.World, where)] };
+
+            FilterValidation.Validate(About(new ConditionNode("cave", FilterOp.In, [new IdValue(Guid.NewGuid().ToString())])), vocabularies)
+                .ShouldBeEmpty();
+            FilterValidation.Validate(About(new ConditionNode("cave", FilterOp.IsEmpty, [])), vocabularies)
+                .Select(p => p.Code).ShouldBe([FilterProblemCodes.OpUnsupported]);
+            FilterValidation.Validate(About(new ConditionNode("cave", FilterOp.IsNotEmpty, [])), vocabularies)
+                .Select(p => p.Code).ShouldBe([FilterProblemCodes.OpUnsupported]);
+        }
+
+        // A field's own list narrows its kind's and never widens it.
+        new FieldDescriptor("x", "x", FieldKind.Text, Ops: [FilterOp.Contains, FilterOp.Within]).Operators
+            .ShouldBe([FilterOp.Contains]);
+        new FieldDescriptor("x", "x", FieldKind.Text).Operators.ShouldBe(FilterOps.For(FieldKind.Text));
+    }
+
+    [Fact]
+    public void The_spatial_conditions_of_a_tree_are_found_under_every_kind_of_node()
+    {
+        var a = Within(new NumberValue(5), Somewhere);
+        var b = Inside(Square(23.5, 46.5, 0.1));
+        var tree = new AllOfNode([new ConditionNode("name", FilterOp.Contains, [new TextValue("x")]), new NotNode(new AnyOfNode([a, b]))]);
+        SpatialConditions.ConditionsOf(tree).ShouldBe([a, b]);
+        SpatialConditions.ConditionsOf(null).ShouldBeEmpty();
     }
 
     [Fact]
@@ -110,11 +217,11 @@ public class SpatialConditionsTests
     public void Each_spatial_problem_is_named_by_a_code_on_the_condition_it_is_about()
     {
         var radius = FilterValidation.Validate(
-            Over(Within(new NumberValue(SpatialConditions.MaxRadiusMeters + 1), Somewhere)), Vocabularies).ShouldHaveSingleItem();
+            Over(Within(new NumberValue(SpatialConditions.DefaultMaxRadiusMeters + 1), Somewhere)), Vocabularies).ShouldHaveSingleItem();
         radius.Code.ShouldBe(FilterProblemCodes.RadiusOutOfRange);
         radius.Path.ShouldBe("/scope/0/where");
         radius.Field.ShouldBe("position");
-        radius.Limit.ShouldBe((int)SpatialConditions.MaxRadiusMeters);
+        radius.Limit.ShouldBe((int)SpatialConditions.DefaultMaxRadiusMeters);
 
         Validate(Within(new NumberValue(500), new PointValue(181, 46))).ShouldBe([FilterProblemCodes.PointOffGlobe]);
         Validate(Inside(new PolygonValue([[[0, 0], [1, 1], [1, 0], [0, 1], [0, 0]]])))

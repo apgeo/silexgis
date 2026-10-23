@@ -115,7 +115,7 @@ export default function SortControl({ world, sorts, value, onChange }: SortContr
           )}
           {kind === 'object' && (
             <ObjectSelector
-              scopes={anchorScopes(world, 'object')}
+              scopes={anchorScopes('object')}
               presentation="dropdown"
               sorts={[]}
               value={value.anchor?.anchor === 'object' ? value.anchor.id : null}

@@ -12,8 +12,11 @@ namespace SilexGis.Domain.Filters;
 /// somebody count the maps of a protected cave they are not entitled to locate.
 /// </para>
 /// <para>
-/// Nor is the footprint, which is a position, nor the processing state, which says something about
-/// the server's queue rather than about the map.
+/// <b>The footprint is here, as a position.</b> Every map this world returns is one whose footprint
+/// its list shows its reader whole, so a position condition is decided on the footprint itself:
+/// within a distance when any part of it is, inside an outline when all of it is. A map not yet
+/// processed has no footprint and matches no position condition. Not the processing state, which
+/// says something about the server's queue rather than about the map.
 /// </para>
 /// </remarks>
 public static class GeoreferencedMapFilterFields
@@ -26,5 +29,6 @@ public static class GeoreferencedMapFilterFields
     public static IReadOnlyList<FieldDescriptor> Own { get; } =
     [
         new FieldDescriptor(MapKind, "filters.fields.mapKind", FieldKind.Id, Options: "mapKinds"),
+        new FieldDescriptor(SpatialConditions.PositionField, "filters.fields.position", FieldKind.Spatial),
     ];
 }

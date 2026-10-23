@@ -70,7 +70,8 @@ public static class FilterEndpoints
         }
 
         var worlds = await registry.VocabulariesAsync(ctx, ct);
-        return TypedResults.Ok(new FilterVocabularyResponse([.. worlds.Select(ToDto)], Limits));
+        return TypedResults.Ok(new FilterVocabularyResponse(
+            [.. worlds.Select(ToDto)], LimitsFor(registry.WithLimits(FeatureFilterFields.Vocabulary))));
     }
 
     private static async Task<Results<Ok<FilterQueryResponse>, ProblemHttpResult>> QueryAsync(
@@ -223,7 +224,7 @@ public static class FilterEndpoints
                 f.Key,
                 f.LabelKey,
                 f.Kind,
-                FilterOps.For(f.Kind),
+                f.Operators,
                 f.Options,
                 f.Label,
                 f.Requires is { } r ? new FilterFieldRequirementDto(r.Field, r.Value) : null))],
@@ -232,11 +233,14 @@ public static class FilterEndpoints
     private static FilterHitDto ToDto(FilterHit hit) =>
         new(hit.World, hit.Id, hit.Title, hit.Subtitle, hit.Symbol, hit.Placeable);
 
-    private static FilterLimitsDto Limits { get; } = new(
+    // The radius ceiling read off a vocabulary the registry stamped, so the published number is the
+    // one every validator reads.
+    private static FilterLimitsDto LimitsFor(WorldVocabulary stamped) => new(
         FilterValidation.MaxNodes,
         FilterValidation.MaxDepth,
         FilterValidation.MaxValuesPerCondition,
         FilterValidation.MaxWorlds,
         FilterValidation.MaxTextValueLength,
-        Paging.MaxPageSize);
+        Paging.MaxPageSize,
+        stamped.MaxRadiusMeters);
 }

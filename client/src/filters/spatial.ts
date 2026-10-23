@@ -13,9 +13,14 @@ import type { FilterAnchor, FilterDocument, FilterNode, FilterValue, SpatialAnch
  * of them.
  */
 
-/** The smallest and largest radius a condition may ask about, in metres. */
+/** The smallest radius a condition may ask about, in metres. */
 export const MIN_RADIUS_METERS = 1;
-export const MAX_RADIUS_METERS = 200_000;
+
+/**
+ * The largest radius the server ships with, in metres — used only until the vocabulary arrives.
+ * The installation can set another, and publishes it as `limits.maxRadiusMeters`.
+ */
+export const DEFAULT_MAX_RADIUS_METERS = 200_000;
 
 /** Positions over all rings of one outline, and rings in it. */
 export const MAX_POLYGON_POSITIONS = 2_000;
@@ -32,10 +37,10 @@ export function isSpatialAnchor(value: FilterValue | undefined): value is Spatia
     && (value.type === 'point' || value.type === 'polygon' || value.type === 'object' || value.type === 'savedFilter');
 }
 
-/** A radius the server would accept. */
-export function isRadius(value: number | null | undefined): value is number {
+/** A radius the server would accept, under the installation's ceiling. */
+export function isRadius(value: number | null | undefined, max: number = DEFAULT_MAX_RADIUS_METERS): value is number {
   return typeof value === 'number' && Number.isFinite(value)
-    && value >= MIN_RADIUS_METERS && value <= MAX_RADIUS_METERS;
+    && value >= MIN_RADIUS_METERS && value <= max;
 }
 
 /** A longitude and a latitude on the globe. */
@@ -48,13 +53,14 @@ export function isOnGlobe(longitude: number | null | undefined, latitude: number
 /**
  * Whether a spatial row holds everything its operator needs. A radius not yet typed is held as an
  * empty number in its place and an anchor not yet chosen is simply absent, so the count alone does
- * not say the row is finished.
+ * not say the row is finished. A radius past the ceiling is written, not unfinished: the server
+ * refuses it and names its limit on the row.
  */
 export function isSpatialComplete(op: string, values: FilterValue[]): boolean {
   if (op === 'within') {
     const [radius, anchor] = values;
     return values.length === 2
-      && radius?.type === 'number' && isRadius(radius.value)
+      && radius?.type === 'number' && isRadius(radius.value, Number.POSITIVE_INFINITY)
       && (anchor?.type === 'point' || anchor?.type === 'object' || anchor?.type === 'savedFilter');
   }
   if (op === 'inside') {
@@ -182,11 +188,16 @@ function anyValue(node: FilterNode, test: (value: FilterValue) => boolean): bool
   }
 }
 
-/** What an object anchor or an area is picked from, per world. */
-export function anchorScopes(world: string, purpose: 'object' | 'area'): SelectorScope[] {
-  if (world !== 'feature') {
-    return [{ id: world, labelKey: `filters.worlds.${world}`, world, where: null }];
-  }
+/**
+ * The one world an object anchor or an area is picked from, whichever world the row filters: a
+ * feature is the only row whose position the server's placement gate decides. A photograph within
+ * 500 m of a cave is measured from the cave.
+ */
+export const ANCHOR_WORLD = 'feature';
+
+/** What an object anchor or an area is picked from — always features. */
+export function anchorScopes(purpose: 'object' | 'area'): SelectorScope[] {
+  const world = ANCHOR_WORLD;
   if (purpose === 'area') {
     return [
       { id: 'areas', labelKey: 'filters.editor.spatial.areas', world, where: { field: 'category', value: 'area' } },

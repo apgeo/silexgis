@@ -10240,6 +10240,8 @@ export interface components {
             maxTextValueLength: number;
             /** Format: int32 */
             maxPageSize: number;
+            /** Format: double */
+            maxRadiusMeters: number;
         };
         FilterNode: components["schemas"]["FilterNodeAllOfNode"] | components["schemas"]["FilterNodeAnyOfNode"] | components["schemas"]["FilterNodeNotNode"] | components["schemas"]["FilterNodeConditionNode"];
         FilterNodeAllOfNode: {

@@ -123,13 +123,53 @@ public static class SpatialConditionSql
     {
         ArgumentNullException.ThrowIfNull(ask);
         var (visibleSql, exactSql, parameters) = AccessSql.FeatureLayerFragments(ctx, "f");
+        AddReach(parameters, ask);
+        parameters.Add("sc_cell", LocationProtection.CellDegrees(protectionGridMeters));
+
+        var membership = WindowMembershipSql.ShownPositionTest("f", exactSql, "sc_cell", Test(ask, parameters));
+        var sql = $"""
+            WITH hit AS (
+                SELECT f.id
+                FROM features f
+                WHERE f.deleted_at IS NULL
+                  AND f.geom IS NOT NULL
+                  AND f.geom && ST_Expand(
+                        ST_MakeEnvelope(@sc_west, @sc_south, @sc_east, @sc_north, 4326), @sc_cell)
+                  AND {visibleSql}
+                  AND {membership}
+            )
+            SELECT hit.id FROM hit
+            UNION
+            SELECT ce.cave_feature_id FROM cave_entrances ce JOIN hit ON hit.id = ce.id
+            """;
+        return (sql, parameters);
+    }
+
+    /// <summary>
+    /// The question's reach as the four parameters <c>sc_west</c>, <c>sc_south</c>, <c>sc_east</c>
+    /// and <c>sc_north</c>, for a statement's index prefilter.
+    /// </summary>
+    public static void AddReach(DynamicParameters parameters, SpatialAsk ask)
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        ArgumentNullException.ThrowIfNull(ask);
         var reach = ask.Reach;
         parameters.Add("sc_west", reach.MinX);
         parameters.Add("sc_south", reach.MinY);
         parameters.Add("sc_east", reach.MaxX);
         parameters.Add("sc_north", reach.MaxY);
-        parameters.Add("sc_cell", LocationProtection.CellDegrees(protectionGridMeters));
+    }
 
+    /// <summary>
+    /// The question as a test over a geometry expression, its parameters added — one statement of
+    /// what "within" and "inside" mean, whichever row a world measures: a feature's shown position,
+    /// a picture's disclosed fix, a map's footprint. A radius is a geography distance; an outline
+    /// holds a row only when the row lies wholly inside it.
+    /// </summary>
+    public static Func<string, string> Test(SpatialAsk ask, DynamicParameters parameters)
+    {
+        ArgumentNullException.ThrowIfNull(ask);
+        ArgumentNullException.ThrowIfNull(parameters);
         Func<string, string> test;
         switch (ask)
         {
@@ -159,26 +199,10 @@ public static class SpatialConditionSql
                 throw new InvalidOperationException($"No statement for {ask.GetType().Name}.");
         }
 
-        var membership = WindowMembershipSql.ShownPositionTest("f", exactSql, "sc_cell", test);
-        var sql = $"""
-            WITH hit AS (
-                SELECT f.id
-                FROM features f
-                WHERE f.deleted_at IS NULL
-                  AND f.geom IS NOT NULL
-                  AND f.geom && ST_Expand(
-                        ST_MakeEnvelope(@sc_west, @sc_south, @sc_east, @sc_north, 4326), @sc_cell)
-                  AND {visibleSql}
-                  AND {membership}
-            )
-            SELECT hit.id FROM hit
-            UNION
-            SELECT ce.cave_feature_id FROM cave_entrances ce JOIN hit ON hit.id = ce.id
-            """;
-        return (sql, parameters);
+        return test;
     }
 
     // Two-dimensional on purpose: the distance and containment tests are about where on the
     // ground, and a height carried along would only make the outline a different shape to PostGIS.
-    private static byte[] Wkb(Geometry geometry) => new WKBWriter(ByteOrder.LittleEndian, false, false, false).Write(geometry);
+    internal static byte[] Wkb(Geometry geometry) => new WKBWriter(ByteOrder.LittleEndian, false, false, false).Write(geometry);
 }

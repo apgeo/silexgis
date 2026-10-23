@@ -224,6 +224,15 @@ try
     // filter's spatial conditions); read from the same option every endpoint snaps with.
     builder.Services.AddSingleton(sp => new SilexGis.Domain.Geo.LocationProtectionGrid(
         sp.GetRequiredService<IOptions<AccessOptions>>().Value.LocationGridMeters));
+    // Checked while starting: a ceiling below a metre would refuse every distance condition, one
+    // past a thousand kilometres would make every one of them visit the whole table.
+    builder.Services.AddOptions<SilexGis.Infrastructure.Filters.FilterOptions>()
+        .BindConfiguration(SilexGis.Infrastructure.Filters.FilterOptions.SectionName)
+        .Validate(
+            o => SilexGis.Domain.Filters.SpatialConditions.IsUsableMaxRadius(o.MaxRadiusMeters),
+            $"Filters:MaxRadiusMeters must be a distance from {SilexGis.Domain.Filters.SpatialConditions.MinRadiusMeters:0} "
+            + $"to {SilexGis.Domain.Filters.SpatialConditions.LargestMaxRadiusMeters:0} metres.")
+        .ValidateOnStart();
     builder.Services.AddOptions<MapOptions>()
         .BindConfiguration(MapOptions.SectionName)
         .Validate(

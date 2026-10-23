@@ -23,6 +23,13 @@ namespace SilexGis.Domain.Filters;
 /// it is where a trip went, written down.
 /// </para>
 /// <para>
+/// <b>Where a trip went is here, as a position and only through the trip's own cave list.</b> A trip
+/// answers a position condition when one of the caves its screen lists for this reader answers it —
+/// a cave the reader may read and place exactly, by the rule that list has one home for. A cave the
+/// list withholds contributes nothing, so the condition is never a way to ask about it; what it
+/// answers is a question the trip's screen and the caves' own positions already answer.
+/// </para>
+/// <para>
 /// <b>Where the write-up has got to is here, and belongs here.</b> Unlike the two above, it is a
 /// plain row fact: the same for every caller who may read the row, disclosing nothing about any
 /// other row and nothing the trip's own screen does not already say. It is also never consulted
@@ -91,6 +98,8 @@ public static class TripLogFilterFields
             new FieldDescriptor(Visibility, "filters.fields.visibility", FieldKind.Id, Options: "visibilities"),
             new FieldDescriptor(CreatedAt, "filters.fields.created", FieldKind.Instant),
             new FieldDescriptor(UpdatedAt, "filters.fields.updated", FieldKind.Instant),
+            // Declared last, once it is answered through the trip's cave list.
+            new FieldDescriptor(SpatialConditions.PositionField, "filters.fields.position", FieldKind.Spatial),
         ],
         // Occurred is the one people actually want here: a trip is found by when it happened, not
         // by when somebody got round to typing it up.

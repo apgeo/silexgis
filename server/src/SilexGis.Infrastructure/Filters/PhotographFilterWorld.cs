@@ -6,6 +6,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Filters;
@@ -22,8 +23,15 @@ namespace SilexGis.Infrastructure.Filters;
 /// </para>
 /// <para>
 /// What the gallery withholds beyond the rows is a picture's position, decided per picture by what
-/// it hangs on. This world never answers a question about position at all — no field reads it, no
-/// sort orders by it, and a hit is never placeable — so it has nothing of that rule to repeat.
+/// it hangs on. This world asks that rule, from its one home, before a position condition may match
+/// a picture: a picture whose fix the reader is not shown matches no position condition, exactly as
+/// a picture with no fix. No sort orders by position, and a hit is never placeable.
+/// </para>
+/// <para>
+/// A cave condition passes the placement gate every spatial anchor passes, because a picture can
+/// hang on a cave its reader may read but not place: "pictures of cave X" asked of such a cave is
+/// refused in the words a cave that does not exist is refused in, so neither the answer nor the
+/// refusal says which it was.
 /// </para>
 /// <para>
 /// A distinct world from documents although the rows are documents: a surface narrows with the
@@ -31,7 +39,12 @@ namespace SilexGis.Infrastructure.Filters;
 /// picture, nor offer fields that only make sense for one.
 /// </para>
 /// </remarks>
-public sealed class PhotographFilterWorld(SilexGisDbContext db) : FilterWorld<Document>
+public sealed class PhotographFilterWorld(
+    SilexGisDbContext db,
+    FeatureProtection protection,
+    PhotoPositionDisclosure disclosure,
+    FeatureFilterWorld anchors)
+    : FilterWorld<Document>
 {
     public const string Key = PhotographFilterFields.World;
 
@@ -46,27 +59,92 @@ public sealed class PhotographFilterWorld(SilexGisDbContext db) : FilterWorld<Do
     protected override Expression<Func<Document, bool>> HasId(IReadOnlyCollection<Guid> ids) =>
         d => ids.Contains(d.Id);
 
-    protected override ValueTask<Expression<Func<Document, bool>>> CompileAsync(
-        WorldQuery query, CancellationToken ct) =>
-        ValueTask.FromResult(Compile(query.Where));
+    protected override async ValueTask<Expression<Func<Document, bool>>> CompileAsync(
+        WorldQuery query, CancellationToken ct)
+    {
+        // The caves first: a refusal is the whole answer, and nothing about positions is asked of
+        // a filter that is going to be refused.
+        await GateCavesAsync(query.Caller, query.Where, ct);
+        var positions = await PositionConditions.ResolveAsync(
+            anchors, query.Caller, query.Where, ask => ShownFixesAsync(query.Caller, ask, ct), ct);
+        return Compile(query.Where, positions);
+    }
 
-    private Expression<Func<Document, bool>> Compile(FilterNode? node) => node switch
+    /// <summary>
+    /// The pictures whose fix answers the question and is one this caller is shown — the same
+    /// disclosure rule, from the same home, the gallery's map mode and the photo layer ask.
+    /// </summary>
+    private async Task<IEnumerable<Guid>> ShownFixesAsync(AccessContext caller, SpatialAsk ask, CancellationToken ct)
+    {
+        var candidates = await PositionMembershipSql.PhotoFixesAsync(db, ask, ct);
+        if (candidates.Count == 0)
+        {
+            return [];
+        }
+
+        var shown = await disclosure.DisclosableIdsAsync(caller, [.. candidates.Select(c => c.FileId)], ct);
+        return candidates.Where(c => shown.Contains(c.FileId)).Select(c => c.DocumentId);
+    }
+
+    /// <summary>
+    /// Every cave a cave condition names has to be one this caller may read and place exactly, by
+    /// the placement gate the spatial anchors pass, or the filter is refused.
+    /// </summary>
+    /// <remarks>
+    /// One refusal for a cave that does not exist, one the caller cannot read, one they cannot place
+    /// exactly and anything that is not a cave at all — the same code and sentence a spatial anchor
+    /// is refused with — and it is the whole answer, never a filter run with the condition left out.
+    /// Answering instead would say, through the count, which pictures hang on a protected cave.
+    /// </remarks>
+    private async Task GateCavesAsync(AccessContext caller, FilterNode? where, CancellationToken ct)
+    {
+        var checkedIds = new HashSet<Guid>();
+        foreach (var value in CaveValues(where))
+        {
+            if (!Guid.TryParse(value, out var id))
+            {
+                throw SpatialConditions.AnchorNotFound();
+            }
+
+            if (checkedIds.Add(id)
+                && await protection.ScopeFeatureAsync(caller, id, ct) is not { Kind: FeatureKind.Cave })
+            {
+                throw SpatialConditions.AnchorNotFound();
+            }
+        }
+    }
+
+    private static IEnumerable<string> CaveValues(FilterNode? node) => node switch
+    {
+        ConditionNode { Field: PhotographFilterFields.Cave } condition =>
+            condition.Values.OfType<IdValue>().Select(v => v.Value),
+        null => [],
+        _ => node.Children.SelectMany(CaveValues),
+    };
+
+    private Expression<Func<Document, bool>> Compile(
+        FilterNode? node, IReadOnlyDictionary<ConditionNode, Guid[]> positions) => node switch
     {
         null => _ => true,
         AllOfNode all => all.Of.Count == 0
             ? _ => true
-            : all.Of.Select(Compile).Aggregate((left, right) => left.And(right)),
+            : all.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.And(right)),
         // An OR of nothing matches nothing, so clearing the last choice narrows rather than widens.
         AnyOfNode any => any.Of.Count == 0
             ? _ => false
-            : any.Of.Select(Compile).Aggregate((left, right) => left.Or(right)),
-        NotNode not => Compile(not.Of).Not(),
-        ConditionNode condition => Leaf(condition),
+            : any.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.Or(right)),
+        NotNode not => Compile(not.Of, positions).Not(),
+        ConditionNode condition => Leaf(condition, positions),
         _ => throw new InvalidOperationException($"No compiler arm for {node.GetType().Name}."),
     };
 
-    private Expression<Func<Document, bool>> Leaf(ConditionNode condition) => condition.Field switch
+    private Expression<Func<Document, bool>> Leaf(
+        ConditionNode condition, IReadOnlyDictionary<ConditionNode, Guid[]> positions) => condition.Field switch
     {
+        // Gated above, so every id here is a cave the caller may read and place exactly.
+        PhotographFilterFields.Cave => PhotographReads.HangingUnder(
+            db, [.. condition.Values.OfType<IdValue>().Select(v => Guid.Parse(v.Value))]),
+        SpatialConditions.PositionField => DocumentIn(PositionConditions.Of(positions, condition)),
         PhotographFilterFields.Title => FilterLeaves.Text<Document>(condition, d => d.Title),
         PhotographFilterFields.Caption => FilterLeaves.Text<Document>(condition, d => db.PhotoDetails
             .Where(p => p.DocumentId == d.Id).Select(p => p.Caption).FirstOrDefault()),
@@ -95,6 +173,8 @@ public sealed class PhotographFilterWorld(SilexGisDbContext db) : FilterWorld<Do
             $"No compiler arm for '{condition.Field}'. A field the vocabulary declares must have one "
             + "here, or a validated filter would silently match everything."),
     };
+
+    private static Expression<Func<Document, bool>> DocumentIn(Guid[] documents) => d => documents.Contains(d.Id);
 
     /// <summary>
     /// Tags on the picture the document currently serves, matched by the tag's slug. Tags sit on the

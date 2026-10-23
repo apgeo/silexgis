@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.Extensions.Options;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Filters;
 
@@ -23,9 +24,11 @@ namespace SilexGis.Infrastructure.Filters;
 public sealed class FilterWorldRegistry
 {
     private readonly Dictionary<string, IFilterWorld> byKey;
+    private readonly double maxRadiusMeters;
 
-    public FilterWorldRegistry(IEnumerable<IFilterWorld> worlds)
+    public FilterWorldRegistry(IEnumerable<IFilterWorld> worlds, IOptions<FilterOptions> options)
     {
+        maxRadiusMeters = options.Value.MaxRadiusMeters;
         All = [.. worlds];
         byKey = All.ToDictionary(w => w.World, StringComparer.Ordinal);
 
@@ -45,7 +48,9 @@ public sealed class FilterWorldRegistry
         byKey.TryGetValue(world, out var found) ? found : null;
 
     /// <summary>
-    /// Every world's vocabulary for this caller.
+    /// Every world's vocabulary for this caller, each carrying the installation's radius ceiling —
+    /// stamped here, where every validator's vocabularies come from, so no path validates against
+    /// another one.
     /// </summary>
     public async ValueTask<IReadOnlyList<WorldVocabulary>> VocabulariesAsync(
         AccessContext caller, CancellationToken ct)
@@ -53,9 +58,13 @@ public sealed class FilterWorldRegistry
         var vocabularies = new List<WorldVocabulary>(All.Count);
         foreach (var world in All)
         {
-            vocabularies.Add(await world.VocabularyAsync(caller, ct));
+            vocabularies.Add(WithLimits(await world.VocabularyAsync(caller, ct)));
         }
 
         return vocabularies;
     }
+
+    /// <summary>A vocabulary read straight from a world, given the installation's limits.</summary>
+    public WorldVocabulary WithLimits(WorldVocabulary vocabulary) =>
+        vocabulary with { MaxRadiusMeters = maxRadiusMeters };
 }

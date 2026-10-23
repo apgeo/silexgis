@@ -54,7 +54,7 @@ vi.mock('../selector/ObjectSelector.tsx', () => ({
   ),
 }));
 
-let limits = { maxNodes: 200, maxDepth: 6, maxValuesPerCondition: 200, maxWorlds: 12, maxTextValueLength: 200, maxPageSize: 500 };
+let limits = { maxNodes: 200, maxDepth: 6, maxValuesPerCondition: 200, maxWorlds: 12, maxTextValueLength: 200, maxPageSize: 500, maxRadiusMeters: 200_000 };
 let queryAnswer: { data?: unknown; error?: unknown } = {};
 const queriesAsked: { body: { count: boolean; pageSize: number }; enabled: boolean }[] = [];
 

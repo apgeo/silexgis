@@ -2,12 +2,13 @@
 import { useState } from 'react';
 import { Flex, Input, InputNumber, Select, Space, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { documentOf, useSavedFilters } from '../../api/hooks.ts';
+import { documentOf, useFilterVocabulary, useSavedFilters } from '../../api/hooks.ts';
 import {
+  ANCHOR_WORLD,
   anchorScopes,
+  DEFAULT_MAX_RADIUS_METERS,
   isOnGlobe,
   isRadius,
-  MAX_RADIUS_METERS,
   MIN_RADIUS_METERS,
   parsePolygon,
   polygonText,
@@ -15,7 +16,7 @@ import {
   type PolygonProblem,
   type WithinAnchorKind,
 } from '../../filters/spatial.ts';
-import type { FilterOp, FilterValue } from '../../filters/types.ts';
+import type { FilterLimits, FilterOp, FilterValue } from '../../filters/types.ts';
 import ObjectSelector from '../selector/ObjectSelector.tsx';
 
 /**
@@ -33,7 +34,10 @@ import ObjectSelector from '../selector/ObjectSelector.tsx';
  */
 
 export interface SpatialValueInputProps {
-  /** The world the row filters: an object anchor is always one of its own rows. */
+  /**
+   * The world the row filters. What it measures from is a feature whatever the world — the one
+   * kind of row whose position the server's placement gate decides.
+   */
   world: string;
   op: FilterOp;
   values: FilterValue[];
@@ -53,8 +57,16 @@ export default function SpatialValueInput(props: SpatialValueInputProps) {
   return null;
 }
 
-function WithinInput({ world, values, onChange, testId }: SpatialValueInputProps) {
+/** The installation's radius ceiling, as the server publishes it; the shipped one until it arrives. */
+function useMaxRadius(): number {
+  const { data } = useFilterVocabulary();
+  const limits = data?.limits as FilterLimits | undefined;
+  return limits?.maxRadiusMeters ?? DEFAULT_MAX_RADIUS_METERS;
+}
+
+function WithinInput({ values, onChange, testId }: SpatialValueInputProps) {
   const { t } = useTranslation();
+  const maxRadius = useMaxRadius();
   const radiusValue = values[0]?.type === 'number' && typeof values[0].value === 'number' ? values[0].value : null;
   const anchor = values[1];
   const [kind, setKind] = useState<WithinAnchorKind>(
@@ -71,10 +83,10 @@ function WithinInput({ world, values, onChange, testId }: SpatialValueInputProps
         aria-label={t('filters.editor.spatial.radius')}
         data-testid={`${testId}-radius`}
         min={MIN_RADIUS_METERS}
-        max={MAX_RADIUS_METERS}
+        max={maxRadius}
         value={radiusValue}
         suffix={t('filters.editor.spatial.metres')}
-        status={radiusValue !== null && !isRadius(radiusValue) ? 'error' : undefined}
+        status={radiusValue !== null && !isRadius(radiusValue, maxRadius) ? 'error' : undefined}
         onChange={(n) => put(typeof n === 'number' ? n : null, anchor)}
         style={{ width: 140 }}
       />
@@ -102,18 +114,18 @@ function WithinInput({ world, values, onChange, testId }: SpatialValueInputProps
       )}
       {kind === 'object' && (
         <ObjectSelector
-          scopes={anchorScopes(world, 'object')}
+          scopes={anchorScopes('object')}
           presentation="dropdown"
           sorts={[]}
           value={anchor?.type === 'object' ? anchor.id : null}
-          onChange={(id) => put(radiusValue, typeof id === 'string' ? { type: 'object', world, id } : undefined)}
+          onChange={(id) => put(radiusValue, typeof id === 'string' ? { type: 'object', world: ANCHOR_WORLD, id } : undefined)}
           aria-label={t('filters.editor.spatial.object')}
           data-testid={`${testId}-object`}
         />
       )}
       {kind === 'savedFilter' && (
         <SavedFilterPicker
-          world={world}
+          world={ANCHOR_WORLD}
           value={anchor?.type === 'savedFilter' ? anchor.id : null}
           onChange={(id) => put(radiusValue, id === null ? undefined : { type: 'savedFilter', id })}
           testId={`${testId}-saved`}
@@ -123,7 +135,7 @@ function WithinInput({ world, values, onChange, testId }: SpatialValueInputProps
   );
 }
 
-function InsideInput({ world, values, onChange, testId }: SpatialValueInputProps) {
+function InsideInput({ values, onChange, testId }: SpatialValueInputProps) {
   const { t } = useTranslation();
   const outline = values[0];
   const [kind, setKind] = useState<InsideOutlineKind>(outline?.type === 'polygon' ? 'polygon' : 'area');
@@ -146,11 +158,11 @@ function InsideInput({ world, values, onChange, testId }: SpatialValueInputProps
       />
       {kind === 'area' && (
         <ObjectSelector
-          scopes={anchorScopes(world, 'area')}
+          scopes={anchorScopes('area')}
           presentation="dropdown"
           sorts={[]}
           value={outline?.type === 'object' ? outline.id : null}
-          onChange={(id) => onChange(typeof id === 'string' ? [{ type: 'object', world, id }] : [])}
+          onChange={(id) => onChange(typeof id === 'string' ? [{ type: 'object', world: ANCHOR_WORLD, id }] : [])}
           aria-label={t('filters.editor.spatial.area')}
           data-testid={`${testId}-area`}
         />

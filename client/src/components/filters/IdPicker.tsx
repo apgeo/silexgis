@@ -15,6 +15,8 @@ import {
   useUserSearch,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import { anchorScopes } from '../../filters/spatial.ts';
+import ObjectSelector from '../selector/ObjectSelector.tsx';
 import { CLOSED_SETS } from './closedSets.ts';
 
 /**
@@ -174,6 +176,27 @@ function UserPicker(props: IdPickerProps) {
   return <SearchedSelect {...props} options={options} loading={isFetching} onSearch={setSearch} />;
 }
 
+/**
+ * Caves are picked with the object selector, over the caves the reader may read — the same picker a
+ * spatial row measures from. Whether a cave may be asked about is the server's question: a cave the
+ * reader may not place exactly is refused there, on the row, in the words of a missing one.
+ */
+function CavePicker(props: IdPickerProps) {
+  const caves = anchorScopes('object').filter((s) => s.id === 'caves');
+  return (
+    <ObjectSelector
+      scopes={caves}
+      presentation="dropdown"
+      sorts={[]}
+      multiple={props.multiple}
+      value={props.multiple ? props.value : (props.value[0] ?? null)}
+      onChange={(next) => props.onChange(next === null ? [] : Array.isArray(next) ? next : [next])}
+      aria-label={props.ariaLabel}
+      data-testid={props.testId}
+    />
+  );
+}
+
 /** A list the client has no picker for: the identifier is typed, as the server would read it. */
 function TypedIdPicker(props: IdPickerProps) {
   return (
@@ -203,6 +226,7 @@ const PICKERS: Record<string, ComponentType<IdPickerProps>> = {
   tags: TagPicker,
   cavingGroups: CavingGroupPicker,
   users: UserPicker,
+  caves: CavePicker,
 };
 
 export default function IdPicker({ options, ...props }: IdPickerProps & { options: string | null }) {

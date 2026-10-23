@@ -31,10 +31,33 @@ public static class SpatialConditions
     public const double MinRadiusMeters = 1;
 
     /// <summary>
-    /// The largest radius, in metres. Past this the question is better asked as an area, and the
-    /// window the database prefilters on stops being a window.
+    /// The largest radius, in metres, unless the installation sets another. Past this the question
+    /// is better asked as an area, and the window the database prefilters on stops being a window:
+    /// a cost guard, not a protection — every row is measured on the position its reader is shown
+    /// whatever the radius.
     /// </summary>
-    public const double MaxRadiusMeters = 200_000;
+    public const double DefaultMaxRadiusMeters = 200_000;
+
+    /// <summary>
+    /// The most an installation may raise <see cref="DefaultMaxRadiusMeters"/> to: a thousand
+    /// kilometres, the width of a country. Past it the prefilter's box covers a continent and every
+    /// distance question visits the whole table.
+    /// </summary>
+    public const double LargestMaxRadiusMeters = 1_000_000;
+
+    /// <summary>Whether a configured ceiling is one the conditions can be asked under.</summary>
+    public static bool IsUsableMaxRadius(double meters) =>
+        double.IsFinite(meters) && meters >= MinRadiusMeters && meters <= LargestMaxRadiusMeters;
+
+    /// <summary>
+    /// The one world whose rows an object anchor or a saved-filter anchor names, whichever world the
+    /// condition filters: a feature is the only row whose position the placement gate decides. A
+    /// photograph within 500 m of a cave is measured from the cave, not from another photograph.
+    /// </summary>
+    public const string AnchorWorld = "feature";
+
+    /// <summary>The field every world with a shown position declares its spatial conditions on.</summary>
+    public const string PositionField = "position";
 
     /// <summary>Positions in one outline, over all its rings — far past anything somebody draws.</summary>
     public const int MaxPolygonPositions = 2_000;
@@ -76,7 +99,9 @@ public static class SpatialConditions
     /// with an English sentence and the limit it is about. Called once its arity and the kind of
     /// each value are known to be right.
     /// </summary>
-    public static IReadOnlyList<(string Code, string Detail, int? Limit)> Problems(ConditionNode condition, string world)
+    /// <param name="maxRadiusMeters">The installation's ceiling, from the vocabulary the condition is read with.</param>
+    public static IReadOnlyList<(string Code, string Detail, int? Limit)> Problems(
+        ConditionNode condition, double maxRadiusMeters = DefaultMaxRadiusMeters)
     {
         ArgumentNullException.ThrowIfNull(condition);
         var field = condition.Field;
@@ -85,17 +110,17 @@ public static class SpatialConditions
             case (FilterOp.Within, [NumberValue radius, var anchor]):
                 if (!double.IsFinite(radius.Value)
                     || radius.Value < MinRadiusMeters
-                    || radius.Value > MaxRadiusMeters)
+                    || radius.Value > maxRadiusMeters)
                 {
                     return [(FilterProblemCodes.RadiusOutOfRange,
-                        $"'{field}' takes a distance from {MinRadiusMeters:0} to {MaxRadiusMeters:0} metres.",
-                        (int)MaxRadiusMeters)];
+                        $"'{field}' takes a distance from {MinRadiusMeters:0} to {maxRadiusMeters:0} metres.",
+                        (int)maxRadiusMeters)];
                 }
 
                 return anchor switch
                 {
                     PointValue point => PointProblems(field, point),
-                    ObjectValue target => ObjectProblems(field, target, world),
+                    ObjectValue target => ObjectProblems(field, target),
                     SavedFilterValue => [],
                     _ => [(FilterProblemCodes.ValueKind, $"'{field}' was given a value of the wrong kind.", null)],
                 };
@@ -104,7 +129,7 @@ public static class SpatialConditions
                 return outline switch
                 {
                     PolygonValue polygon => PolygonProblems(field, polygon),
-                    ObjectValue target => ObjectProblems(field, target, world),
+                    ObjectValue target => ObjectProblems(field, target),
                     _ => [(FilterProblemCodes.ValueKind, $"'{field}' was given a value of the wrong kind.", null)],
                 };
 
@@ -174,6 +199,35 @@ public static class SpatialConditions
         return document.Scope?.Any(s => s?.Where is { } where && Any(where, v => v is PointValue or PolygonValue)) == true;
     }
 
+    /// <summary>Every spatial condition under this node, in document order.</summary>
+    public static IEnumerable<ConditionNode> ConditionsOf(FilterNode? node)
+    {
+        if (node is ConditionNode { Field: PositionField } condition)
+        {
+            yield return condition;
+            yield break;
+        }
+
+        if (node is null)
+        {
+            yield break;
+        }
+
+        foreach (var child in node.Children)
+        {
+            foreach (var found in ConditionsOf(child))
+            {
+                yield return found;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The refusal for an anchor this caller cannot use — missing, unreadable or not placeable
+    /// exactly — in the one code and sentence all three share.
+    /// </summary>
+    public static FilterRefusedException AnchorNotFound() => new(AnchorNotFoundCode, AnchorNotFoundDetail);
+
     /// <summary>Whether any condition under this node measures from another saved filter.</summary>
     public static bool MeasuresFromSavedFilter(FilterNode? node) =>
         node is not null && Any(node, v => v is SavedFilterValue);
@@ -239,10 +293,10 @@ public static class SpatialConditions
                 MaxPolygonPositions)]
             : [];
 
-    // Only an object of the condition's own world can be an anchor: it is the one world whose rows
-    // carry a position the runner may be allowed to see exactly.
-    private static IReadOnlyList<(string Code, string Detail, int? Limit)> ObjectProblems(string field, ObjectValue target, string world) =>
-        string.Equals(target.World, world, StringComparison.Ordinal) && target.Id != Guid.Empty
+    // Only a feature can be an anchor, whatever the condition filters: it is the one world whose
+    // rows carry a position the runner may be allowed to see exactly, decided by one gate.
+    private static IReadOnlyList<(string Code, string Detail, int? Limit)> ObjectProblems(string field, ObjectValue target) =>
+        string.Equals(target.World, AnchorWorld, StringComparison.Ordinal) && target.Id != Guid.Empty
             ? []
             : [(FilterProblemCodes.AnchorKind, $"'{field}' cannot be measured from that kind of object.", null)];
 

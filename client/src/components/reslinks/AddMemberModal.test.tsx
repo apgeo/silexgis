@@ -40,7 +40,7 @@ vi.mock('../../api/hooks.ts', () => ({
       ],
       limits: {
         maxNodes: 200, maxDepth: 6, maxValuesPerCondition: 200,
-        maxWorlds: 12, maxTextValueLength: 200, maxPageSize: 500,
+        maxWorlds: 12, maxTextValueLength: 200, maxPageSize: 500, maxRadiusMeters: 200_000,
       },
     },
   }),

@@ -25,17 +25,20 @@ vi.mock('../selector/ObjectSelector.tsx', () => ({
 }));
 
 let savedFilters: unknown[] = [];
+let maxRadiusMeters = 200_000;
 vi.mock('../../api/hooks.ts', () => ({
+  useFilterVocabulary: () => ({ data: { worlds: [], limits: { maxRadiusMeters } } }),
   useSavedFilters: () => ({ data: savedFilters, isLoading: false }),
   documentOf: (f: { document: unknown }) => f.document,
 }));
 
+
 const seen: FilterValue[][] = [];
 
-function show(op: 'within' | 'inside', values: FilterValue[] = []) {
+function show(op: 'within' | 'inside', values: FilterValue[] = [], world = 'feature') {
   seen.length = 0;
   render(
-    <SpatialValueInput world="feature" op={op} values={values}
+    <SpatialValueInput world={world} op={op} values={values}
       onChange={(next) => seen.push(next)} testId="v" />,
   );
 }
@@ -53,7 +56,25 @@ function pick(testId: string, label: string) {
 beforeEach(async () => {
   cleanup();
   savedFilters = [];
+  maxRadiusMeters = 200_000;
   await i18n.changeLanguage('en');
+});
+
+describe('a row of another world', () => {
+  it('measures from a feature, whichever world it filters', () => {
+    show('within', [{ type: 'number', value: 500 }], 'photograph');
+    fireEvent.change(inputOf('v-object'), { target: { value: CAVE } });
+    expect(seen.at(-1)).toEqual([{ type: 'number', value: 500 }, { type: 'object', world: 'feature', id: CAVE }]);
+  });
+
+  it('marks a radius past the ceiling the server publishes, and only past it', () => {
+    show('within', [{ type: 'number', value: 300_000 }]);
+    expect(screen.getByTestId('v-radius').closest('.ant-input-number')?.className).toContain('status-error');
+    cleanup();
+    maxRadiusMeters = 500_000;
+    show('within', [{ type: 'number', value: 300_000 }]);
+    expect(screen.getByTestId('v-radius').closest('.ant-input-number')?.className ?? '').not.toContain('status-error');
+  });
 });
 
 describe('within a distance', () => {

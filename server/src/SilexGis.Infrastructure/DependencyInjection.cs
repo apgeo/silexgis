@@ -188,7 +188,9 @@ public static class DependencyInjection
         // The filterable worlds, and the one registry everything asks. Registration order is the
         // order results are shown in, so it is the order a person reads them in rather than an
         // implementation detail. A world added here without a fixture fails the conformance suite.
-        services.AddScoped<Filters.IFilterWorld, Filters.FeatureFilterWorld>();
+        // Also by its own type: every other world with a position resolves its anchors through it.
+        services.AddScoped<Filters.FeatureFilterWorld>();
+        services.AddScoped<Filters.IFilterWorld>(sp => sp.GetRequiredService<Filters.FeatureFilterWorld>());
         services.AddScoped<Filters.IFilterWorld, Filters.TripLogFilterWorld>();
         services.AddScoped<Filters.IFilterWorld, Filters.DocumentFilterWorld>();
         services.AddScoped<Filters.IFilterWorld, Filters.MapViewFilterWorld>();

@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { condition, emptyDocument, fromGroups, withSort, withWhere } from './document.ts';
 import {
   anchorScopes,
+  DEFAULT_MAX_RADIUS_METERS,
   holdsPosition,
+  isRadius,
   isSpatialComplete,
   parsePolygon,
   polygonText,
@@ -52,7 +54,16 @@ describe('a spatial row', () => {
       { type: 'number', value: null as unknown as number }, { type: 'point', longitude: 1, latitude: 1 },
     ]))).toBe(false);
     expect(isSpatialComplete('within', [{ type: 'number', value: 0 }, { type: 'savedFilter', id: SAVED }])).toBe(false);
-    expect(isSpatialComplete('within', [{ type: 'number', value: 200_001 }, { type: 'savedFilter', id: SAVED }])).toBe(false);
+    // Past the ceiling is written, not unfinished: the server refuses it and names the limit.
+    expect(isSpatialComplete('within', [{ type: 'number', value: 200_001 }, { type: 'savedFilter', id: SAVED }])).toBe(true);
+  });
+
+  it('reads the radius ceiling it is given, the shipped one by default', () => {
+    expect(isRadius(DEFAULT_MAX_RADIUS_METERS)).toBe(true);
+    expect(isRadius(DEFAULT_MAX_RADIUS_METERS + 1)).toBe(false);
+    expect(isRadius(300_000, 500_000)).toBe(true);
+    expect(isRadius(500_001, 500_000)).toBe(false);
+    expect(isRadius(0.5, 500_000)).toBe(false);
   });
 
   it('inside takes exactly one outline: a polygon or an area', () => {
@@ -132,9 +143,11 @@ describe('a spatial filter as a link', () => {
 
 describe('what an anchor is picked from', () => {
   it('offers caves, entrances and features in the feature world, and areas for an outline', () => {
-    expect(anchorScopes('feature', 'object').map((s) => s.id)).toEqual(['caves', 'entrances', 'features']);
-    expect(anchorScopes('feature', 'area').map((s) => s.id)).toEqual(['areas', 'features']);
-    expect(anchorScopes('feature', 'area')[0].where).toEqual({ field: 'category', value: 'area' });
+    expect(anchorScopes('object').map((s) => s.id)).toEqual(['caves', 'entrances', 'features']);
+    expect(anchorScopes('area').map((s) => s.id)).toEqual(['areas', 'features']);
+    expect(anchorScopes('area')[0].where).toEqual({ field: 'category', value: 'area' });
+    // Whichever world the row filters, what it measures from is a feature.
+    expect([...anchorScopes('object'), ...anchorScopes('area')].every((s) => s.world === 'feature')).toBe(true);
   });
 });
 

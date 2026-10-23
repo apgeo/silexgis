@@ -74,6 +74,7 @@ export const specs = {
     'trip-list.spec.ts', 'trip-map.spec.ts', 'registry-statistics.spec.ts',
     'cave-registry-filters.spec.ts', 'gallery-filters.spec.ts', 'reslinks.spec.ts',
     'map-filters.spec.ts', 'table-map.spec.ts', 'filter-spatial.spec.ts',
+    'gallery-cave-position.spec.ts',
     'object-selector-pickers.spec.ts',
     'saved-filter-audience.spec.ts',
   ],
@@ -110,6 +111,7 @@ export const specs = {
   // consent means is answered by the walk that reads one as a visitor.
   photos: [
     'gallery.spec.ts', 'photo-import.spec.ts', 'cave-attachments.spec.ts', 'gallery-filters.spec.ts',
+    'gallery-cave-position.spec.ts',
     'public-trip-as-installed.spec.ts',
   ],
   qr: ['qr-landing.spec.ts'],

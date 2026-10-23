@@ -5,7 +5,9 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Infrastructure.Filters;
 
@@ -17,7 +19,8 @@ namespace SilexGis.Infrastructure.Filters;
 /// list wearing one. Everything load-bearing is inherited: the composition order, the meaning of
 /// each operator, the shape of a row. What is written here is only what a trip actually is.
 /// </remarks>
-public sealed class TripLogFilterWorld(SilexGisDbContext db) : FilterWorld<TripLog>
+public sealed class TripLogFilterWorld(
+    SilexGisDbContext db, FeatureProtection protection, FeatureFilterWorld anchors) : FilterWorld<TripLog>
 {
     public const string Key = "tripLog";
 
@@ -54,28 +57,72 @@ public sealed class TripLogFilterWorld(SilexGisDbContext db) : FilterWorld<TripL
     protected override Expression<Func<TripLog, bool>> HasId(IReadOnlyCollection<Guid> ids) =>
         t => ids.Contains(t.Id);
 
-    protected override ValueTask<Expression<Func<TripLog, bool>>> CompileAsync(
-        WorldQuery query, CancellationToken ct) =>
-        ValueTask.FromResult(Compile(query.Where));
+    protected override async ValueTask<Expression<Func<TripLog, bool>>> CompileAsync(
+        WorldQuery query, CancellationToken ct)
+    {
+        var positions = await PositionConditions.ResolveAsync(
+            anchors, query.Caller, query.Where, ask => VisitedAsync(query.Caller, ask, ct), ct);
+        return Compile(query.Where, positions);
+    }
 
-    private static Expression<Func<TripLog, bool>> Compile(FilterNode? node) => node switch
+    /// <summary>
+    /// The trips that named a cave answering the question, counting only the caves a trip's cave
+    /// list shows this caller.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The caves are decided as the feature world decides them — by an entrance's shown position —
+    /// and then through the trip cave list's own rule, readable and placeable exactly. A trip carries
+    /// its own exact geometry, so "this trip reached that place" places a guarded cave by proximity:
+    /// a cave the list withholds must not be what makes a trip match, or the condition would be the
+    /// list's question asked with its position check missing. Such a cave contributes nothing, and a
+    /// trip that visited only withheld caves answers no position condition, as a trip that named no
+    /// cave at all.
+    /// </para>
+    /// <para>
+    /// Caves only, because that is what the list holds. A trip naming a spring or a shaft by itself
+    /// is not placed by it here; naming it on the cave it belongs to is what places the trip.
+    /// </para>
+    /// </remarks>
+    private async Task<IEnumerable<Guid>> VisitedAsync(AccessContext caller, SpatialAsk ask, CancellationToken ct)
+    {
+        var answering = await anchors.MatchingFeatureIdsAsync(caller, ask, ct);
+        if (answering.Count == 0)
+        {
+            return [];
+        }
+
+        var listed = (await TripCaveDisclosure.DisclosableCaveIdsAsync(db, protection, caller, answering, ct)).ToArray();
+        if (listed.Length == 0)
+        {
+            return [];
+        }
+
+        var caves = db.Features.Where(f => listed.Contains(f.Id)).Select(f => f.Id);
+        return await TripRoleLinks.TripIdsNamingAny(db, caves).Distinct().ToListAsync(ct);
+    }
+
+    private static Expression<Func<TripLog, bool>> Compile(
+        FilterNode? node, IReadOnlyDictionary<ConditionNode, Guid[]> positions) => node switch
     {
         null => _ => true,
         AllOfNode all => all.Of.Count == 0
             ? _ => true
-            : all.Of.Select(Compile).Aggregate((left, right) => left.And(right)),
+            : all.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.And(right)),
         // An OR of nothing matches nothing, which is the reading that keeps "any of these" from
         // widening to everything when a person clears the last choice out of a group.
         AnyOfNode any => any.Of.Count == 0
             ? _ => false
-            : any.Of.Select(Compile).Aggregate((left, right) => left.Or(right)),
-        NotNode not => Compile(not.Of).Not(),
-        ConditionNode condition => Leaf(condition),
+            : any.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.Or(right)),
+        NotNode not => Compile(not.Of, positions).Not(),
+        ConditionNode condition => Leaf(condition, positions),
         _ => throw new InvalidOperationException($"No compiler arm for {node.GetType().Name}."),
     };
 
-    private static Expression<Func<TripLog, bool>> Leaf(ConditionNode condition) => condition.Field switch
+    private static Expression<Func<TripLog, bool>> Leaf(
+        ConditionNode condition, IReadOnlyDictionary<ConditionNode, Guid[]> positions) => condition.Field switch
     {
+        SpatialConditions.PositionField => TripIn(PositionConditions.Of(positions, condition)),
         TripLogFilterFields.Title => FilterLeaves.Text<TripLog>(condition, t => t.Title),
         TripLogFilterFields.Type => FilterLeaves.Longs<TripLog>(condition, t => t.TripTypeId),
         TripLogFilterFields.State =>
@@ -94,6 +141,8 @@ public sealed class TripLogFilterWorld(SilexGisDbContext db) : FilterWorld<TripL
             $"No compiler arm for '{condition.Field}'. A field the vocabulary declares must have one "
             + "here, or a validated filter would silently match everything."),
     };
+
+    private static Expression<Func<TripLog, bool>> TripIn(Guid[] trips) => t => trips.Contains(t.Id);
 
     protected override IQueryable<TripLog> Order(IQueryable<TripLog> rows, WorldQuery query)
     {

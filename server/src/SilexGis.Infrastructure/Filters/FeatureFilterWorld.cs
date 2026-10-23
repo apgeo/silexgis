@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -16,7 +17,7 @@ namespace SilexGis.Infrastructure.Filters;
 /// Caves, entrances, centrelines and everything else on the map, as a filterable world.
 /// </summary>
 public sealed class FeatureFilterWorld(
-    SilexGisDbContext db, FeatureProtection protection, LocationProtectionGrid grid)
+    SilexGisDbContext db, FeatureProtection protection, LocationProtectionGrid grid, IOptions<FilterOptions> options)
     : FilterWorld<Feature>
 {
     public const string Key = "feature";
@@ -105,6 +106,28 @@ public sealed class FeatureFilterWorld(
     // ---------- spatial conditions ----------
 
     /// <summary>
+    /// A position condition of any world, with its anchor resolved and gated: the one place an
+    /// anchor is looked up, so a photograph measured from a cave and a cave measured from a cave
+    /// pass the same placement gate and are refused in the same words. Null when the question can
+    /// match no row at all.
+    /// </summary>
+    /// <remarks>
+    /// The anchors are features whichever world asks — a point, an outline, a feature, or another
+    /// saved filter over features — so their resolution is this world's: a saved filter's result is
+    /// run under this world's visibility and narrowed to the rows the caller may place exactly.
+    /// </remarks>
+    public async Task<SpatialAsk?> ResolveAskAsync(
+        AccessContext caller, ConditionNode condition, CancellationToken ct) =>
+        await AskAsync(caller, condition, mayNest: true, ct);
+
+    /// <summary>
+    /// The features that answer a resolved question by the position this caller is shown — a cave
+    /// through its entrances — for a world whose rows are placed through features.
+    /// </summary>
+    public Task<List<Guid>> MatchingFeatureIdsAsync(AccessContext caller, SpatialAsk ask, CancellationToken ct) =>
+        SpatialConditionSql.MatchingAsync(db, caller, ask, grid.Meters, ct);
+
+    /// <summary>
     /// Every spatial condition in the tree, resolved to the ids of the rows that answer it for this
     /// caller. The anchor of each is gated here — readable and exactly placeable, or refused — and
     /// membership is decided on shown positions by <see cref="SpatialConditionSql"/>.
@@ -117,7 +140,7 @@ public sealed class FeatureFilterWorld(
         AccessContext caller, FilterNode? where, bool mayNest, CancellationToken ct)
     {
         Dictionary<ConditionNode, ResolvedSpatial>? resolved = null;
-        foreach (var condition in SpatialConditionsOf(where))
+        foreach (var condition in SpatialConditions.ConditionsOf(where))
         {
             resolved ??= [];
             if (resolved.ContainsKey(condition))
@@ -131,28 +154,6 @@ public sealed class FeatureFilterWorld(
         }
 
         return resolved;
-    }
-
-    private static IEnumerable<ConditionNode> SpatialConditionsOf(FilterNode? node)
-    {
-        if (node is ConditionNode { Field: FeatureFilterFields.Position } condition)
-        {
-            yield return condition;
-            yield break;
-        }
-
-        if (node is null)
-        {
-            yield break;
-        }
-
-        foreach (var child in node.Children)
-        {
-            foreach (var found in SpatialConditionsOf(child))
-            {
-                yield return found;
-            }
-        }
     }
 
     /// <summary>The question with its anchor resolved, or null when it can match no row at all.</summary>
@@ -220,8 +221,7 @@ public sealed class FeatureFilterWorld(
     private async Task<ScopedFeature> ScopedAnchorAsync(AccessContext caller, Guid id, CancellationToken ct) =>
         await protection.ScopeFeatureAsync(caller, id, ct) ?? throw AnchorNotFound();
 
-    private static FilterRefusedException AnchorNotFound() =>
-        new(SpatialConditions.AnchorNotFoundCode, SpatialConditions.AnchorNotFoundDetail);
+    private static FilterRefusedException AnchorNotFound() => SpatialConditions.AnchorNotFound();
 
     /// <summary>
     /// The rows of another saved filter's result that a distance may be measured from: run under
@@ -242,7 +242,8 @@ public sealed class FeatureFilterWorld(
             throw AnchorNotFound();
         }
 
-        var vocabulary = await VocabularyAsync(caller, ct);
+        // With the installation's radius ceiling, as every vocabulary the registry hands out has it.
+        var vocabulary = (await VocabularyAsync(caller, ct)) with { MaxRadiusMeters = options.Value.MaxRadiusMeters };
         var inner = new FilterDocument { Scope = [scope] };
         if (!SavedFilterRules.IsReadableBy(inner, new Dictionary<string, WorldVocabulary> { [Key] = vocabulary }))
         {

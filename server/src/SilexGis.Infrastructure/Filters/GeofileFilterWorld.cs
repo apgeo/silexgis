@@ -14,9 +14,10 @@ namespace SilexGis.Infrastructure.Filters;
 /// </summary>
 /// <remarks>
 /// The geofile list applies the visibility walk and nothing more, so this world is the walk: a
-/// geofile is not tied to a cave, and its footprint is never shown through a filter.
+/// geofile is not tied to a cave, and its list shows every reader of the file its footprint, which
+/// is therefore what a position condition is decided on.
 /// </remarks>
-public sealed class GeofileFilterWorld(SilexGisDbContext db) : ProtectedFilterWorld<Geofile>
+public sealed class GeofileFilterWorld(SilexGisDbContext db, FeatureFilterWorld anchors) : ProtectedFilterWorld<Geofile>
 {
     public const string Key = GeofileFilterFields.World;
 
@@ -36,6 +37,15 @@ public sealed class GeofileFilterWorld(SilexGisDbContext db) : ProtectedFilterWo
     protected override string? SubtitleOf(Geofile row) => row.Description;
 
     protected override IReadOnlyList<FieldDescriptor> OwnFields => GeofileFilterFields.Own;
+
+    protected override async ValueTask<IReadOnlyDictionary<ConditionNode, Guid[]>> PositionsAsync(
+        AccessContext caller, FilterNode? where, CancellationToken ct) =>
+        await PositionConditions.ResolveAsync(
+            anchors,
+            caller,
+            where,
+            async ask => await PositionMembershipSql.FootprintsAsync(db, FootprintTable.Geofiles, ask, ct),
+            ct);
 
     protected override Expression<Func<Geofile, bool>>? OwnLeaf(ConditionNode condition) =>
         condition.Field switch

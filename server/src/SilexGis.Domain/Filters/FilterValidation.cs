@@ -314,7 +314,7 @@ public static class FilterValidation
             return;
         }
 
-        if (!FilterOps.For(field.Kind).Contains(condition.Op))
+        if (!field.Operators.Contains(condition.Op))
         {
             errors.Add(About(condition, path, FilterProblemCodes.OpUnsupported,
                 $"{FieldOf(condition)} does not support that comparison."));
@@ -373,7 +373,7 @@ public static class FilterValidation
         }
 
         if (field.Kind == FieldKind.Spatial
-            && SpatialConditions.Problems(condition, vocabulary.World) is { Count: > 0 } spatial)
+            && SpatialConditions.Problems(condition, vocabulary.MaxRadiusMeters) is { Count: > 0 } spatial)
         {
             errors.AddRange(spatial.Select(p => About(condition, path, p.Code, p.Detail, p.Limit)));
             return;

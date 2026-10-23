@@ -1028,6 +1028,9 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
                 {"properties":{"on":{"type":"string","format":"date"},"at":{"type":"string","format":"date-time"}}}
                 """,
         });
+        // A cave condition names a cave the caller may read and place exactly, or the filter is
+        // refused; an open public cave is one every caller may.
+        var cave = await ConformanceSeeds.CaveAsync(db, caller.UserId, Visibility.Public, locationProtected: false);
         await db.SaveChangesAsync();
 
         foreach (var world in Worlds(scope))
@@ -1046,9 +1049,12 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
 
             foreach (var field in vocabulary.Fields)
             {
-                foreach (var op in FilterOps.For(field.Kind))
+                foreach (var op in field.Operators)
                 {
-                    var condition = new ConditionNode(field.Key, op, fixture.ValuesFor(field, op));
+                    FilterValue[] values = field.Options == "caves"
+                        ? [.. Enumerable.Repeat<FilterValue>(new IdValue(cave.Id.ToString()), FilterOps.Arity(op) ?? 2)]
+                        : fixture.ValuesFor(field, op);
+                    var condition = new ConditionNode(field.Key, op, values);
                     var query = new WorldQuery(caller, condition, SortKey.Updated, true, null, 0, 5, true);
 
                     await Should.NotThrowAsync(

@@ -20,7 +20,8 @@ namespace SilexGis.Infrastructure.Filters;
 /// same way, before the filter, the count and the page, so the filter is never a second way to ask
 /// the list's question with a more generous answer.
 /// </remarks>
-public sealed class GeoreferencedMapFilterWorld(SilexGisDbContext db, FeatureProtection protection)
+public sealed class GeoreferencedMapFilterWorld(
+    SilexGisDbContext db, FeatureProtection protection, FeatureFilterWorld anchors)
     : ProtectedFilterWorld<GeoreferencedMap>
 {
     public const string Key = GeoreferencedMapFilterFields.World;
@@ -49,6 +50,17 @@ public sealed class GeoreferencedMapFilterWorld(SilexGisDbContext db, FeaturePro
                 FilterLeaves.EnumField<GeoreferencedMap, MapKind>(condition, m => m.MapKind),
             _ => null,
         };
+
+    // Every map this world returns shows its footprint to its reader whole, so the footprint itself
+    // is what a position condition is decided on.
+    protected override async ValueTask<IReadOnlyDictionary<ConditionNode, Guid[]>> PositionsAsync(
+        AccessContext caller, FilterNode? where, CancellationToken ct) =>
+        await PositionConditions.ResolveAsync(
+            anchors,
+            caller,
+            where,
+            async ask => await PositionMembershipSql.FootprintsAsync(db, FootprintTable.GeoreferencedMaps, ask, ct),
+            ct);
 
     // The map list's own rule, from its one home, so the filter is never a second way to ask the
     // list's question with a more generous answer.

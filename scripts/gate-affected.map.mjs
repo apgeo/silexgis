@@ -149,6 +149,8 @@ export const groups = {
     'FilterWorldListParityTests',
     // Spatial conditions, decided on the positions each caller is shown.
     'FilterSpatialConditionTests',
+    // Cave and position conditions on the worlds placed through features, pictures and footprints.
+    'FilterKindPositionTests',
     // Saved filters, and the surfaces that read a filter document through the narrowing seam.
     'SavedFilterTests', 'CaveRegistryFilterTests', 'MapFilterTests', 'FeatureListFilterTests',
   ],
@@ -257,7 +259,8 @@ export const groups = {
     // restarts beside the shipped catalogue's answer.
     'MapBackgroundDocumentChoiceTests',
   ],
-  settings: ['AccountSettingsTests', 'OptionsDocumentationTests', 'TerrainOptionsTests', 'UiDefaultsTests'],
+  settings: ['AccountSettingsTests', 'OptionsDocumentationTests', 'TerrainOptionsTests', 'UiDefaultsTests',
+    'DatabaseJitSwitchTests'],
   messaging: [
     'AdminMessagingTests', 'CavingGroupAnnouncementPaidCapTests', 'NotificationDeliveryTests',
     'SmsNotificationChannelTests',
@@ -509,13 +512,14 @@ export const crossCutting = {
     'ExpeditionSurfaceLogTests', 'FeatureFilterCompilerTests', 'FeatureHierarchyTests',
     'FeatureLinkTests', 'FeatureListFilterTests', 'FeatureRestoreTests', 'FeatureShareTests',
     'FeatureTests', 'FileAccessBatchParityTests', 'FileAttachmentTests', 'FilterEndpointTests',
-    'FilterParityTests', 'FilterSpatialConditionTests', 'FilterWorldConformanceTests',
-    'FilterWorldListParityTests', 'GeofileTests', 'GeoreferencedMapTests', 'HiddenRowCapTests',
-    'HistoryTests', 'HypsometryTests', 'KarstLinkExportTests', 'MapClusterConfigurationTests',
-    'MapDensityTests', 'MapFilterTests', 'MapKarstIndexTests', 'MapPointPatternTests',
-    'MapWindowMembershipTests', 'PhotoBytesProtectionTests', 'PhotoImportTests',
-    'PolygonMorphometryTests', 'ProtectionDepthTests', 'PublicTripCachingTests',
-    'PublicTripDepthPlacesTests', 'PublicTripDiagnosticsTests', 'PublicTripMomentPicturesTests',
+    'FilterKindPositionTests', 'FilterParityTests', 'FilterSpatialConditionTests',
+    'FilterWorldConformanceTests', 'FilterWorldListParityTests', 'GeofileTests',
+    'GeoreferencedMapTests', 'HiddenRowCapTests', 'HistoryTests', 'HypsometryTests',
+    'KarstLinkExportTests', 'MapClusterConfigurationTests', 'MapDensityTests', 'MapFilterTests',
+    'MapKarstIndexTests', 'MapPointPatternTests', 'MapWindowMembershipTests',
+    'PhotoBytesProtectionTests', 'PhotoImportTests', 'PolygonMorphometryTests',
+    'ProtectionDepthTests', 'PublicTripCachingTests', 'PublicTripDepthPlacesTests',
+    'PublicTripDiagnosticsTests', 'PublicTripMomentPicturesTests',
     'PublicTripPlannedReturnTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
     'PublishedNamesNowhereTests', 'PublishedSurveyBoundsTests', 'RegistryStatisticsTests',
     'ResLinkApiTests', 'ResLinkProtectionFloorTests', 'ResLinkTargetPictureTests',

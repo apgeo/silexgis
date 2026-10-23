@@ -259,7 +259,7 @@ public sealed class FilterSpatialConditionTests : IAsyncLifetime, IDisposable, I
         var spot = Spot.Pick();
         var anchor = new PointValue(spot.TrueLon, spot.TrueLat);
         (await RefusalAsync(viewer, Within(0, anchor))).Code.ShouldBe("filter.invalid");
-        (await RefusalAsync(viewer, Within(SpatialConditions.MaxRadiusMeters + 1, anchor))).Code.ShouldBe("filter.invalid");
+        (await RefusalAsync(viewer, Within(SpatialConditions.DefaultMaxRadiusMeters + 1, anchor))).Code.ShouldBe("filter.invalid");
         (await RefusalAsync(viewer, Inside(new PolygonValue([[[0, 0], [1, 1], [1, 0], [0, 1], [0, 0]]])))).Code
             .ShouldBe("filter.invalid");
         (await RefusalAsync(viewer, Within(500, new ObjectValue("tripLog", Guid.NewGuid())))).Code
@@ -485,14 +485,14 @@ public sealed class FilterSpatialConditionTests : IAsyncLifetime, IDisposable, I
         foreach (var (lon, lat) in new[] { (25d, 0d), (25d, 46d), (25d, -70d), (25d, 85d) })
         {
             var reach = SpatialReach.Around(
-                new NetTopologySuite.Geometries.Envelope(lon, lon, lat, lat), SpatialConditions.MaxRadiusMeters);
+                new NetTopologySuite.Geometries.Envelope(lon, lon, lat, lat), SpatialConditions.DefaultMaxRadiusMeters);
             var edge = (await connection.QueryAsync<EdgePoint>(
                 """
                 SELECT ST_X(p::geometry) AS x, ST_Y(p::geometry) AS y
                 FROM generate_series(0, 355, 5) AS az,
                      LATERAL ST_Project(ST_SetSRID(ST_MakePoint(@lon, @lat), 4326)::geography, @r, radians(az)) AS p
                 """,
-                new { lon, lat, r = SpatialConditions.MaxRadiusMeters })).ToList();
+                new { lon, lat, r = SpatialConditions.DefaultMaxRadiusMeters })).ToList();
 
             edge.Count.ShouldBe(72);
             edge.ShouldAllBe(

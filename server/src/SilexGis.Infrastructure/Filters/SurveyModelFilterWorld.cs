@@ -28,7 +28,8 @@ namespace SilexGis.Infrastructure.Filters;
 /// and the owner sort that base offers would be questions with no answer.
 /// </para>
 /// </remarks>
-public sealed class SurveyModelFilterWorld(SilexGisDbContext db, FeatureProtection protection)
+public sealed class SurveyModelFilterWorld(
+    SilexGisDbContext db, FeatureProtection protection, FeatureFilterWorld anchors)
     : FilterWorld<SurveyModel>
 {
     public const string Key = SurveyModelFilterFields.World;
@@ -62,27 +63,46 @@ public sealed class SurveyModelFilterWorld(SilexGisDbContext db, FeatureProtecti
     protected override Expression<Func<SurveyModel, bool>> HasId(IReadOnlyCollection<Guid> ids) =>
         m => ids.Contains(m.Id);
 
-    protected override ValueTask<Expression<Func<SurveyModel, bool>>> CompileAsync(
-        WorldQuery query, CancellationToken ct) =>
-        ValueTask.FromResult(Compile(query.Where));
+    /// <remarks>
+    /// A model is where its cave is, and its cave is decided as the feature world decides one: it
+    /// answers when one of its entrances does, by the position the reader is shown. Every model this
+    /// world returns belongs to a cave the reader places exactly, so that is the cave's own place.
+    /// </remarks>
+    protected override async ValueTask<Expression<Func<SurveyModel, bool>>> CompileAsync(
+        WorldQuery query, CancellationToken ct)
+    {
+        var positions = await PositionConditions.ResolveAsync(
+            anchors,
+            query.Caller,
+            query.Where,
+            async ask => await anchors.MatchingFeatureIdsAsync(query.Caller, ask, ct),
+            ct);
+        return Compile(query.Where, positions);
+    }
 
-    private static Expression<Func<SurveyModel, bool>> Compile(FilterNode? node) => node switch
+    private static Expression<Func<SurveyModel, bool>> Compile(
+        FilterNode? node, IReadOnlyDictionary<ConditionNode, Guid[]> positions) => node switch
     {
         null => _ => true,
         AllOfNode all => all.Of.Count == 0
             ? _ => true
-            : all.Of.Select(Compile).Aggregate((left, right) => left.And(right)),
+            : all.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.And(right)),
         // An OR of nothing matches nothing, so clearing the last choice narrows rather than widens.
         AnyOfNode any => any.Of.Count == 0
             ? _ => false
-            : any.Of.Select(Compile).Aggregate((left, right) => left.Or(right)),
-        NotNode not => Compile(not.Of).Not(),
-        ConditionNode condition => Leaf(condition),
+            : any.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.Or(right)),
+        NotNode not => Compile(not.Of, positions).Not(),
+        ConditionNode condition => Leaf(condition, positions),
         _ => throw new InvalidOperationException($"No compiler arm for {node.GetType().Name}."),
     };
 
-    private static Expression<Func<SurveyModel, bool>> Leaf(ConditionNode condition) => condition.Field switch
+    private static Expression<Func<SurveyModel, bool>> Leaf(
+        ConditionNode condition, IReadOnlyDictionary<ConditionNode, Guid[]> positions) => condition.Field switch
     {
+        // Over the visible models only, which already belong to caves the reader may read and place,
+        // so a cave they may not place matches nothing here — as one that does not exist.
+        SurveyModelFilterFields.Cave => FilterLeaves.Guids<SurveyModel>(condition, m => m.CaveFeatureId),
+        SpatialConditions.PositionField => CaveIn(PositionConditions.Of(positions, condition)),
         CommonFilterFields.Name => FilterLeaves.Text<SurveyModel>(condition, m => m.Name),
         SurveyModelFilterFields.Format =>
             FilterLeaves.EnumField<SurveyModel, SurveyModelFormat>(condition, m => m.Format),
@@ -94,6 +114,8 @@ public sealed class SurveyModelFilterWorld(SilexGisDbContext db, FeatureProtecti
             $"No compiler arm for '{condition.Field}'. A field the vocabulary declares must have one "
             + "here, or a validated filter would silently match everything."),
     };
+
+    private static Expression<Func<SurveyModel, bool>> CaveIn(Guid[] caves) => m => caves.Contains(m.CaveFeatureId);
 
     protected override IQueryable<SurveyModel> Order(IQueryable<SurveyModel> rows, WorldQuery query)
     {

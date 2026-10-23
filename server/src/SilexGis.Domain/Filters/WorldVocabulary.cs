@@ -27,6 +27,13 @@ namespace SilexGis.Domain.Filters;
 /// field. A typed property names the type whose schema declares it, and is valid only inside a
 /// group that also fixes that type; see <see cref="FieldRequirement"/>.
 /// </param>
+/// <param name="Ops">
+/// The operators this field admits, when they are fewer than its kind's — null for nearly every
+/// field. A cave chosen from a picker is an identity, but "hangs on no cave at all" is a question
+/// about every pairing the row has, including the ones the reader is not shown, so that field
+/// admits only equality. Narrower than the kind's list, never wider: every member here must be one
+/// the kind's table holds.
+/// </param>
 /// <remarks>
 /// A field says what can be asked of it, not how results are ordered. Ordering is a
 /// <see cref="SortKey"/>, which is a small closed set precisely so that a merged list of several
@@ -39,7 +46,16 @@ public sealed record FieldDescriptor(
     FieldKind Kind,
     string? Options = null,
     string? Label = null,
-    FieldRequirement? Requires = null);
+    FieldRequirement? Requires = null,
+    IReadOnlyList<FilterOp>? Ops = null)
+{
+    /// <summary>
+    /// The operators a condition on this field may use: the field's own list when it has one,
+    /// else its kind's. The validator and the published vocabulary both read this.
+    /// </summary>
+    public IReadOnlyList<FilterOp> Operators =>
+        Ops is null ? FilterOps.For(Kind) : [.. Ops.Where(op => FilterOps.For(Kind).Contains(op))];
+}
 
 /// <summary>
 /// The condition a field is only valid beside: <paramref name="Field"/> equal to
@@ -76,7 +92,10 @@ public sealed record FieldRequirement(string Field, string Value);
 /// here — a person's real name, address or contact details, and the pairings that say which cave a
 /// trip visited or which cave a survey belongs to. Filtering, matching or sorting on such a field
 /// answers a question about a row without returning it, which is the whole shape of a disclosure:
-/// the count moves, the row does not appear, and the answer is obtained anyway.
+/// the count moves, the row does not appear, and the answer is obtained anyway. A pairing is offered
+/// only where it cannot do that: a survey model's cave, when every model returned already belongs to
+/// a cave its reader may read and place; a photograph's cave, when the cave named has to pass the
+/// placement gate first and is refused like a missing one otherwise.
 /// </para>
 /// </remarks>
 public sealed record WorldVocabulary(
@@ -85,6 +104,13 @@ public sealed record WorldVocabulary(
     IReadOnlyList<FieldDescriptor> Fields,
     IReadOnlyList<SortKey> Sorts)
 {
+    /// <summary>
+    /// The largest radius a distance condition may ask about here, in metres — the installation's
+    /// setting, stamped on every vocabulary where the worlds are composed, so the validator and the
+    /// published limits read the one value. The default is the shipped one.
+    /// </summary>
+    public double MaxRadiusMeters { get; init; } = SpatialConditions.DefaultMaxRadiusMeters;
+
     public FieldDescriptor? Field(string key) =>
         Fields.FirstOrDefault(f => string.Equals(f.Key, key, StringComparison.Ordinal));
 

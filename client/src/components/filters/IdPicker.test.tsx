@@ -33,7 +33,18 @@ vi.mock('../../api/hooks.ts', () => ({
   useMember: () => ({ data: undefined, isError: true }),
 }));
 
+const selectorProps: { scopes: { id: string; world: string }[]; multiple?: boolean; value: unknown }[] = [];
+let picked: string | string[] | null = null;
+vi.mock('../selector/ObjectSelector.tsx', () => ({
+  default: (props: { scopes: { id: string; world: string }[]; multiple?: boolean; value: unknown;
+    onChange: (v: string | string[] | null) => void; 'data-testid': string }) => {
+    selectorProps.push(props);
+    return <button data-testid={props['data-testid']} onClick={() => props.onChange(picked)}>pick</button>;
+  },
+}));
+
 beforeEach(async () => {
+  selectorProps.length = 0;
   cleanup();
   searches.length = 0;
   resolved.length = 0;
@@ -52,5 +63,26 @@ describe('the tag picker', () => {
     expect(picker).toHaveTextContent(i18n.t('savedFilters.notAvailable'));
     // The raw slug of the tag the reader cannot resolve is never printed.
     expect(picker).not.toHaveTextContent('never-seen');
+  });
+});
+
+describe('the cave picker', () => {
+  it('is the object selector over caves, and writes the chosen caves as identities', () => {
+    const seen: string[][] = [];
+    picked = ['c1', 'c2'];
+    render(<IdPicker options="caves" value={['c1']} multiple onChange={(v) => seen.push(v)} ariaLabel="Cave" testId="cave" />);
+    const props = selectorProps.at(-1)!;
+    expect(props.scopes.map((s) => [s.id, s.world])).toEqual([['caves', 'feature']]);
+    expect(props.multiple).toBe(true);
+    expect(props.value).toEqual(['c1']);
+    screen.getByTestId('cave').click();
+    expect(seen.at(-1)).toEqual(['c1', 'c2']);
+
+    cleanup();
+    picked = 'c3';
+    render(<IdPicker options="caves" value={[]} multiple={false} onChange={(v) => seen.push(v)} ariaLabel="Cave" testId="cave" />);
+    expect(selectorProps.at(-1)!.value).toBeNull();
+    screen.getByTestId('cave').click();
+    expect(seen.at(-1)).toEqual(['c3']);
   });
 });

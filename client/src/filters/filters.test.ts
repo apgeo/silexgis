@@ -33,6 +33,7 @@ const LIMITS: FilterLimits = {
   maxWorlds: 12,
   maxTextValueLength: 200,
   maxPageSize: 500,
+  maxRadiusMeters: 200_000,
 };
 
 const VOCABULARIES: WorldVocabulary[] = [

@@ -159,6 +159,8 @@ export interface FilterLimits {
   maxWorlds: number;
   maxTextValueLength: number;
   maxPageSize: number;
+  /** The largest radius a distance condition may ask about, in metres — an installation setting. */
+  maxRadiusMeters: number;
 }
 
 export interface FilterVocabulary {

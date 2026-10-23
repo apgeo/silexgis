@@ -108,7 +108,7 @@ public static class FeatureFilterFields
     /// point they may not, and never at all when it is a protected line or outline they may not —
     /// which is what makes the condition safe to bisect and to negate.
     /// </summary>
-    public const string Position = "position";
+    public const string Position = SpatialConditions.PositionField;
 
     /// <summary>The feature world's vocabulary, as the builder and the validator both read it.</summary>
     public static WorldVocabulary Vocabulary { get; } = new(
