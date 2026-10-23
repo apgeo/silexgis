@@ -12,7 +12,7 @@ feature and walkthroughs of whole jobs.
   geometry editing with snapping and undo, measurement, and search (internal + Nominatim).
   Two karst layers are computed by the server: a cave-density grid (caves per km², smoothed,
   or hot and cold spots, never finer than the location-protection grid) and the karstification
-  index of each karst area and massif in view, with a key, both kept in saved views.
+  index of each karst area, massif and hill in view, with a key, both kept in saved views.
   The map reads the same saved filters as the cave registry: a filter narrows its entrances,
   features, survey lines and 3D walls, travels in the map's address and in saved views, can be
   drawn as a layer of its own in its own colour and symbol — up to twelve, clickable, and in the

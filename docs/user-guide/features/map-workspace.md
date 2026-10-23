@@ -44,7 +44,7 @@ drawn in this map and in the [3D view](3d-view.md) only: never on the overview o
 | **Geotagged photos** | Photographs that carry a position. When a view holds more than one answer carries, the layer's row says *"Not every photo is shown here — zoom in to see the rest."* |
 | **Entrance heatmap** | Density rather than individual markers |
 | **Cave density (grid)** | How many caves lie in each cell of a grid, counted by the server |
-| **Karstification index (areas)** | Each karst area and massif in view, filled by how karstified it reads |
+| **Karstification index (areas)** | Each karst area, massif and hill in view, filled by how karstified it reads |
 
 ### Karst layers
 
@@ -58,7 +58,7 @@ under the layer list while it is on, with a key to its colours.
   and coarser when the view is wide. Colours are relative to the view — the darkest cell is the
   densest *here* — so compare two views by the key's numbers, not by colour. If the view is too
   wide even for the coarsest cell, the row says so: zoom in.
-- **Karstification index (areas)** fills each karst area and massif by its index class, from
+- **Karstification index (areas)** fills each karst area, massif and hill by its index class, from
   *very low* to *very high*; an area that cannot be measured is grey with a dashed edge. A karst
   area inside a massif is drawn over it. Point at an area for its name and class; click it to
   open the area, whose page has the full statistics. Only areas you may see exactly are drawn;

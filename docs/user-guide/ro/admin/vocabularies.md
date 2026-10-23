@@ -53,6 +53,23 @@ care vin cu produsul sunt marcate **Livrat cu produsul**: codul, categoria, afi�
 nevoia de părinte rămân cum au fost livrate, își păstrează toate formele cu care vin și nu pot fi
 șterse — dar denumirea, simbolul, ordinea și detaliile lor sunt ale tale.
 
+**Cave** (peșteră) este singurul tip marcat **Toate peșterile**: îl are fiecare peșteră, oricum ar fi
+fost creată — din formularul peșterii, dintr-un import din catalog sau din fișier, de pe telefon,
+dintr-o fotografie — și nimic altceva nu-l poate primi, de aceea nu este oferit când desenezi sau
+imporți alte obiecte. Aici pui **câmpurile proprii ale clubului** pentru peșteri („necesită
+echipare", „colonie de lilieci"): adaugă-le în schema detaliilor și apar în formularul peșterii
+la **Câmpurile clubului**, pe pagina peșterii și în filtru ca *Cave → câmp*, lângă *Tipul este
+Cave*. Câmpurile cu care vine sunt codurile scrise de importul din catalog, de telefon sau de
+o bibliotecă foto; își păstrează numele și tipurile, schema rămâne deschisă câmpurilor pe care nu
+le enumeră și niciun câmp nu poate deveni obligatoriu — altfel peșterile importate ar fi refuzate
+la prima editare. Felul în care e arătată o peșteră protejată nu depinde deloc de acest tip:
+pentru cine nu are vederea exactă, peșterile sunt arătate mereu aproximativ, aliniate la grilă.
+
+Există un singur **aven**: tipul de peșteră *Pit / Aven*. Tipul de suprafață *Pit* nu mai vine
+cu produsul; o instalare care avea deja obiecte de acest tip îl păstrează ca tip propriu, pe care
+îl poți retrage dând acelor obiecte alt tip și ștergându-l. **Hill** (deal) este un contur, ca
+*Massif / Mountain*, și e tratat la fel peste tot unde e tratat un masiv.
+
 Odată ce există obiecte de un tip (inclusiv șterse), tipul poate fi doar **lărgit**: categoria
 rămâne, nicio formă nu mai poate fi scoasă și nu poate începe să ceară un părinte, pentru că
 obiectele salvate n-ar mai fi în acord cu el. Un tip poate fi șters doar cât timp nu-l folosește

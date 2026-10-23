@@ -52,6 +52,22 @@ ship with the product are marked **Ships with the product**: their code, categor
 display and need for a parent stay as shipped, they keep every shape they ship with, and they
 cannot be deleted — but their wording, symbol, order and details are yours.
 
+**Cave** is the one kind marked **Every cave**: every cave carries it, whichever way it was
+made — the cave form, a catalogue or file import, a phone, a photograph — and nothing else can
+be given it, so it is not offered when you draw or import other features. It is where your
+club's **own cave fields** go ("rigging needed", "bat colony"): add them to its details schema
+and they appear on the cave form under **Club fields**, on the cave's page, and in the filter
+as *Cave → field*, beside *Type is Cave*. The fields it ships with are the codes a catalogue
+import, a phone or a photo library writes; they keep their names and types, the schema stays
+open to fields it does not list, and no field can be made required — otherwise imported caves
+would be refused the next time somebody edits them. How a protected cave is shown does not
+depend on this kind at all: caves are always shown snapped for somebody without exact view.
+
+There is one **pit**: the cave type *Pit / Aven*. The surface kind *Pit* no longer ships; an
+installation that already had features of that kind keeps it as one of its own kinds, which
+you can retire by giving those features another kind and deleting it. **Hill** is an outline,
+like *Massif / Mountain*, and is treated the same way everywhere a massif is.
+
 Once features of a kind exist (deleted ones included), the kind can only be **loosened**: its
 category stays, no shape can be taken away and it cannot start needing a parent, because the
 stored features would stop agreeing with it. A kind can be deleted only while no feature uses
