@@ -23,7 +23,7 @@ peșterii acolo unde a fost raportat ultima dată. O tură poate fi apoi **publi
 
 ## Pornirea și încheierea urmăririi
 
-Pe pagina turei, deschideți **Urmărire** și completați **Configurarea urmăririi**:
+Pe pagina turei, deschide **Urmărire** și completează **Configurarea urmăririi**:
 
 | Câmp | Ce decide |
 |---|---|
@@ -62,9 +62,9 @@ purta una; ștergerea unei echipe îi păstrează rapoartele și scoate doar eti
 
 Cardul **Înregistrează un raport**:
 
-1. **Bifați oamenii** despre care este raportul — se înregistrează un singur raport pentru toți
+1. **Bifează oamenii** despre care este raportul — se înregistrează un singur raport pentru toți
    deodată.
-2. Alegeți **Ce se raportează**:
+2. Alege **Ce se raportează**:
 
    | Tip | Ce poartă |
    |---|---|
@@ -78,7 +78,7 @@ Cardul **Înregistrează un raport**:
 3. Opțional o **Echipă**, o **Activitate** și o **Notă**. Activitatea este ce făceau, cu vorbele
    echipei — *echipare*, *topografie*, *somn* — o expresie scurtă, arătată ca etichetă lângă loc
    în tabel. O notă despre peșteră nu are: este despre nimeni.
-4. **Când s-a spus** — lăsat gol, raportul este marcat acum. Completați-l pentru un mesaj
+4. **Când s-a spus** — lăsat gol, raportul este marcat acum. Completează-l pentru un mesaj
    transmis mai târziu decât a fost spus. Un raport nu poate fi niciodată despre viitor. După
    ce urmărirea a fost încheiată, câmpul trebuie completat (*Scrierea unui raport după tură*,
    mai jos).
@@ -92,41 +92,41 @@ adâncime, dacă a declarat una, apoi stațiile cele mai apropiate. Dacă adânc
 stația pe care va ajunge, cardul avertizează înainte de înregistrare și spune care dintre două
 lucruri s-a întâmplat: adâncimea este pur și simplu atât de departe de cea mai apropiată stație,
 sau **peștera declară acea adâncime ca fiind acea stație**, iar ridicarea o pune la câțiva metri
-distanță — caz în care verificați numărul sau declarația peșterii.
+distanță — caz în care verifică numărul sau declarația peșterii.
 
-**Din desen.** **Arată modelul** deschide ridicarea cu toți pe ea; apăsați o stație și alegeți
-**Înregistrează aici** ca să raportați exact la acea stație.
+**Din desen.** **Arată modelul** deschide ridicarea cu toți pe ea; apasă o stație și alege
+**Înregistrează aici** ca să raportezi exact la acea stație.
 
 O stație căreia fișierul ridicării nu îi dă nume poate fi și ea apăsată, pe o ridicare Therion:
 desenul o etichetează cu numărul la care a scris-o fișierul, între paranteze drepte (`[42]`), iar
 raportul este înregistrat sub acea etichetă. Dacă cardul răspunde că ridicarea trebuie citită din
-nou, ridicarea a fost citită înainte ca astfel de stații să poată fi raportate — apăsați
-**Citește din nou** pe rândul ei, la **Modele topo 3D** pe pagina peșterii, așteptați să se
-încheie și raportați din nou. Stațiile fără nume ale unei ridicări Survex nu sunt deloc pe desen,
+nou, ridicarea a fost citită înainte ca astfel de stații să poată fi raportate — apasă
+**Citește din nou** pe rândul ei, la **Modele topo 3D** pe pagina peșterii, așteaptă să se
+încheie și raportează din nou. Stațiile fără nume ale unei ridicări Survex nu sunt deloc pe desen,
 iar o adâncime raportată nu ajunge niciodată pe una dintre ele.
 
 **Între două stații.** Vestea din peșteră este adesea „am trecut de puț, nu am ajuns încă la
 sifon", iar oricare dintre stații, luată singură, ar nota un loc pe care nu l-a raportat nimeni.
-La un raport **La o stație**, completați și **A doua stație, dacă sunt între două**; raportul se
+La un raport **La o stație**, completează și **A doua stație, dacă sunt între două**; raportul se
 citește atunci *Între A și B*. Amândouă sunt stații ale aceleiași ridicări, oferite din numele ei
-pe măsură ce scrieți, și trebuie să fie două stații diferite. Jurnalul și tabelul echipei le
+pe măsură ce scrii, și trebuie să fie două stații diferite. Jurnalul și tabelul echipei le
 arată pe amândouă. Pe model, marcajul omului stă la prima stație, iar o linie întreruptă urmează
 ridicarea până la a doua; reluarea desenează același lucru. Dacă desenul nu are nicio stație cu
 al doilea nume sau vizele ridicării nu le leagă pe cele două, linia nu poate fi desenată, iar
-cardul de peste model o spune. O corectare se deschide cu amândouă stațiile — goliți-o pe a doua
+cardul de peste model o spune. O corectare se deschide cu amândouă stațiile — golește-o pe a doua
 ca să devină un raport la o singură stație. O foaie scoasă din jurnal poartă amândouă
 stațiile — pe a doua într-o coloană a ei, care apare doar când jurnalul are un asemenea raport —
 iar citirea aceleiași foi înapoi lasă raportul așa cum era.
 
 **Un vizitator vede doar prima stație.** Pe o pagină publicată, în reluarea unei ture trecute și
 într-un cadru încorporat, omul stă la prima stație, exact ca și cum raportul ar fi numit-o doar pe
-ea; numele celei de-a doua stații nu le este trimis deloc. Acolo unde poziția unei peșteri nu vă
-este arătată, nu vedeți niciuna dintre stații.
+ea; numele celei de-a doua stații nu le este trimis deloc. Acolo unde poziția unei peșteri nu îți
+este arătată, nu vezi niciuna dintre stații.
 
 **O notă despre peșteră.** „Piatră instabilă deasupra celui de-al doilea puț", „apa a crescut în
-meandru" — lucruri despre peșteră, nu despre cine le-a transmis. Alegeți **Despre peșteră**: nu
-trebuie bifat nimeni, cuvintele sunt obligatorii, iar **stația** este opțională — lăsați-o goală
-pentru ceva despre peșteră în întregul ei. Sau apăsați stația pe model, alegeți **Înregistrează
+meandru" — lucruri despre peșteră, nu despre cine le-a transmis. Alege **Despre peșteră**: nu
+trebuie bifat nimeni, cuvintele sunt obligatorii, iar **stația** este opțională — las-o goală
+pentru ceva despre peșteră în întregul ei. Sau apasă stația pe model, alege **Înregistrează
 aici** și apoi **Despre peșteră**: nota este înregistrată la stația apăsată.
 
 Este un tip aparte, și nu o **Notă** cu oameni bifați, pentru că o notă despre oameni este un
@@ -136,10 +136,10 @@ mută pe nimeni, nu schimbă **Ultima veste** a nimănui, nu încheie niciun *Ni
 portocalie **Despre peșteră**. Pe model, fiecare notă care numește o stație stă ca un semn
 portocaliu al ei — niciodată parte din eticheta unei echipe — iar toate notele sunt trecute
 întregi sub echipă, la **Despre peșteră: N**. Într-o reluare, o notă apare din momentul în care a
-fost spusă și rămâne; un pericol nu expiră. Scoateți-o din jurnal, ca pe orice raport, când nu
+fost spusă și rămâne; un pericol nu expiră. Scoate-o din jurnal, ca pe orice raport, când nu
 mai este valabilă. Cuvintele, stația și momentul ei pot fi corectate, dar nu poate fi
 transformată într-un raport despre o persoană, nici raportul unei persoane într-o notă despre
-peșteră — scoateți-l pe unul și înregistrați-l pe celălalt.
+peșteră — scoate-l pe unul și înregistrează-l pe celălalt.
 
 **Cine poate citi o notă despre peșteră.** Oricine poate citi tura îi citește cuvintele, în
 jurnalul turei. Stația pe care o numește urmează protecția locației peșterii: cine nu vede unde
@@ -169,7 +169,7 @@ care tura nu îl numește. O pagină publicată nu îl arată.
 **Scoaterea cuiva dintr-o tură care este urmărită.** Salvarea turei trimite toată lista, așa că
 ștergerea unui rând scoate omul. Cât timp urmărirea este pornită, acest lucru este refuzat
 pentru oricine are rapoarte în jurnal — *„Cineva scos de pe listă are rapoarte în urmărirea
-acestei ture, iar urmărirea este încă pornită."* Încheiați întâi urmărirea sau păstrați persoana
+acestei ture, iar urmărirea este încă pornită."* Încheie întâi urmărirea sau păstrează persoana
 pe listă. Cineva despre care nu s-a raportat nimic poate fi scos oricând, iar schimbarea rolului
 unui om în tură nu este refuzată niciodată.
 
@@ -179,8 +179,8 @@ despre care nu s-a înregistrat nimic de trei ore primește o etichetă portocal
 sunt. Orice raport îi pune capăt, inclusiv o notă: „contact vocal, totul bine" nu numește niciun
 loc și este exact ce încheie o tăcere. Cineva care a ieșit nu este marcat niciodată, nici cineva
 despre care nu a venit nicio veste (acela are numărul lui), iar după încheierea urmăririi nu mai
-este marcat nimeni. Apăsați pe titlul **Ultima veste** pentru a aduce sus tăcerea cea mai lungă;
-pe telefon, unde tabelul nu are titluri, bifați în schimb **Cea mai lungă tăcere întâi** deasupra
+este marcat nimeni. Apasă pe titlul **Ultima veste** pentru a aduce sus tăcerea cea mai lungă;
+pe telefon, unde tabelul nu are titluri, bifează în schimb **Cea mai lungă tăcere întâi** deasupra
 lui.
 Cele trei ore sunt setarea instalării; un administrator poate schimba cifra sau poate opri
 marcajul.
@@ -195,8 +195,8 @@ stație raportată în altă parte poartă o etichetă portocalie — *În afara
 lângă loc, pe rândul omului și pe raportul din jurnal. Stația este comparată cu numele declarate
 exact așa cum este potrivită o adâncime raportată, deci `upper` cuprinde deopotrivă `upper.2` și
 `upper2.1`. Nu se marchează nimic când nu s-a declarat nimic, pentru un loc raportat pe o
-ridicare pe care urmărirea nu o mai folosește sau pentru un loc care nu vă este arătat: eticheta
-stă doar lângă o stație aflată pe ecranul dumneavoastră. O adâncime aleasă dintre locurile
+ridicare pe care urmărirea nu o mai folosește sau pentru un loc care nu îți este arătat: eticheta
+stă doar lângă o stație aflată pe ecranul tău. O adâncime aleasă dintre locurile
 declarate ale peșterii ajunge la stația declarată de peșteră, care poate fi ea însăși în afara
 părților numite de această tură — și este atunci marcată ca oricare alta.
 
@@ -206,7 +206,7 @@ iar fila o spune sub numere: *nu se trimite nimic, nu se dă nicio alarmă și n
 oprită.* Nimeni nu este anunțat, nici prin e-mail, nici altfel, iar o filă pe care nu o are
 nimeni deschisă nu spune nimănui nimic. Ora plănuită este citită de pe tură; dacă a fost stabilit
 un [apel de urgență](checklists-and-callout.md) și dacă acesta s-a declanșat nu are legătură cu
-niciunul dintre ele — dacă cineva trebuie anunțat când echipa întârzie, stabiliți apelul de
+niciunul dintre ele — dacă cineva trebuie anunțat când echipa întârzie, stabilește apelul de
 urgență. O pagină publicată nu arată niciunul dintre cele trei.
 
 ## Raportarea fără semnal
@@ -218,43 +218,43 @@ dar numai ca să spună că primește *prea multe cereri* sau că este *ocupat*:
 *„Serverul este ocupat și nu a primit raportul — nu a fost încă trimis…"*, păstrează raportul în
 aceeași listă și așteaptă cât a cerut serverul înainte să-l trimită din nou.
 
-**Ce vedeți.** Apăsați **Înregistrează pentru N selectați** ca de obicei. În loc de *„Înregistrat pentru 1."* pagina
+**Ce vezi.** Apasă **Înregistrează pentru N selectați** ca de obicei. În loc de *„Înregistrat pentru 1."* pagina
 spune *„Serverul nu a răspuns — raportul nu a fost încă trimis. Este păstrat în acest browser și
-se trimite singur când revine conexiunea."* Cardul se golește, ca după orice raport — nu scrieți
+se trimite singur când revine conexiunea."* Cardul se golește, ca după orice raport — nu scrie
 raportul din nou, altfel vor fi două. Deasupra cardului apare o notă, **Rapoarte în așteptare:
 N**, iar același număr stă pe un mic buton de încărcare din bara de sus, pe orice pagină,
 cât timp există ceva în așteptare. **Arată-le** listează fiecare raport în așteptare — când,
 cine, ce, nota — cu **Aruncă** alături. Butonul din bara de sus deschide aceeași listă pentru
 **toate** turele deodată, cu **Deschide tura** pe fiecare rând; acolo oamenii sunt numărați, nu
-numiți. Lista aceea este și singurul loc în care găsiți un raport în așteptare pentru o tură
-care nu mai poate fi deschisă — una ștearsă între timp sau una pe care nu o mai puteți citi.
+numiți. Lista aceea este și singurul loc în care găsești un raport în așteptare pentru o tură
+care nu mai poate fi deschisă — una ștearsă între timp sau una pe care nu o mai poți citi.
 
 **Când se trimite.** Singur: când browserul anunță că a revenit conexiunea, când pagina revine
 în față după ce telefonul a stat blocat, când aplicația este deschisă din nou și când serverul
 răspunde la orice altceva îi cere pagina. O trimitere rămasă fără răspuns este reîncercată după
 cinci secunde, apoi din ce în ce mai rar — cel mai rar o dată pe minut — cât timp aplicația
-rămâne deschisă. Sau apăsați **Trimite acum**, pe notă sau în lista din bara de sus. Rapoartele
+rămâne deschisă. Sau apasă **Trimite acum**, pe notă sau în lista din bara de sus. Rapoartele
 în așteptare pleacă de la cel mai vechi, câte unul, iar pagina spune *„Rapoarte în așteptare
 trimise: N."* Nota și numărul dispar când nu mai este nimic în așteptare.
 
 **Aruncarea unui raport.** **Aruncă** șterge copia din acest browser, iar acea copie nu mai este
 trimisă. **Nu** înseamnă că raportul nu a ajuns niciodată la server: „niciun răspuns" acoperă și
 trimiterea care a ajuns și al cărei răspuns s-a pierdut. Întrebarea de confirmare o spune. După
-ce aruncați un raport, uitați-vă în jurnalul turei și, dacă raportul apare acolo, ștergeți-l de
+ce arunci un raport, uită-te în jurnalul turei și, dacă raportul apare acolo, șterge-l de
 acolo.
 
 **Ajunge în jurnal la minutul despre care era.** Un raport în așteptare poartă ora telefonului
-din clipa în care ați apăsat butonul (sau momentul trecut la **Când s-a spus**), nu ora
+din clipa în care ai apăsat butonul (sau momentul trecut la **Când s-a spus**), nu ora
 la care a revenit semnalul — o echipă raportată la capul puțului la 14:05 este în jurnal la
 14:05 chiar dacă raportul a plecat la 15:30. Dacă ceasul telefonului este cu mai mult de câteva
-minute înainte, serverul refuză raportul ca fiind despre viitor; vedeți *Un raport refuzat*, mai
+minute înainte, serverul refuză raportul ca fiind despre viitor; vezi *Un raport refuzat*, mai
 jos.
 
 **Se scrie o singură dată.** „Niciun răspuns" poate însemna că raportul nu a plecat de pe
 telefon sau că a ajuns și răspunsul s-a pierdut pe drumul înapoi. Pagina nu poate ști care
 dintre ele, așa că păstrează raportul în ambele cazuri — iar fiecare raport poartă o cheie a
 lui, după care serverul recunoaște a doua trimitere a aceluiași raport și nu scrie nimic. Dacă
-apăsați **Trimite acum** de două ori, dacă aveți tura deschisă în două file sau dacă trimiterea
+apeși **Trimite acum** de două ori, dacă ai tura deschisă în două file sau dacă trimiterea
 ajunsese de fapt din prima: niciuna nu dublează un raport.
 
 **Unde este păstrat și pentru cine.** În spațiul de stocare al acestui browser, pe acest
@@ -270,14 +270,14 @@ datelor de site ale browserului șterge rapoartele în așteptare, netrimise.
 către browser. Dar aceasta nu este o aplicație care lucrează fără conexiune: fără semnal pagina
 însăși nu poate fi deschisă sau reîncărcată și nu se trimite nimic cât timp aplicația este
 închisă. Un raport în așteptare pleacă data viitoare când aplicația este deschisă, cu contul
-dumneavoastră autentificat și cu conexiune.
+tău autentificat și cu conexiune.
 
 **Un raport refuzat.** Dacă, atunci când un raport în așteptare este în sfârșit trimis, serverul
 răspunde că nu îl primește — urmărirea nu a fost pornită niciodată, omul nu mai este pe tură,
 raportul este despre viitor — raportul **nu** este aruncat și **nu** este reîncercat de la sine.
-Rămâne în notă marcat *Refuzat:*, cu motivul dat de server. Îndreptați cauza și apăsați **Trimite
-din nou**, sau apăsați **Aruncă**. (Un raport refuzat ca fiind despre viitor pentru că ceasul
-telefonului merge înainte este primit când îl trimiteți din nou după ce a trecut acel minut.)
+Rămâne în notă marcat *Refuzat:*, cu motivul dat de server. Îndreaptă cauza și apasă **Trimite
+din nou**, sau apasă **Aruncă**. (Un raport refuzat ca fiind despre viitor pentru că ceasul
+telefonului merge înainte este primit când îl trimiți din nou după ce a trecut acel minut.)
 Rapoartele aflate în așteptare după unul refuzat se trimit în continuare.
 
 **Un raport scos între timp de cineva.** Dacă raportul ajunsese totuși la server din prima și un
@@ -289,10 +289,10 @@ din nou, ca raport nou.)
 
 **Când autentificarea a expirat sau serverul este ocupat.** Rapoartele rămân în așteptare. O
 autentificare expirată în timpul unei perioade lungi fără semnal este reînnoită de pagină, iar
-raportul este trimis din nou, fără să apăsați nimic. Acolo unde nu poate fi reînnoită, pagina
+raportul este trimis din nou, fără să apeși nimic. Acolo unde nu poate fi reînnoită, pagina
 spune *„Nu mai ești autentificat"*, iar lista din bara de sus oferă **Autentifică-te din nou**:
 aceasta părăsește pagina și revine la ea, rapoartele în așteptare rămân între timp în browser și
-se trimit după ce vă întoarceți. Un raport înregistrat cât timp autentificarea este expirată
+se trimit după ce te întorci. Un raport înregistrat cât timp autentificarea este expirată
 este păstrat la fel, nu refuzat. Când serverul cere să fie lăsat un timp, pagina așteaptă cât i
 s-a cerut înainte să încerce.
 
@@ -304,8 +304,8 @@ scris este încă aici — trimite-l din nou când revine conexiunea."* și las�
 **Doar rapoartele noi sunt păstrate.** Un raport înregistrat pe card sau prin **Înregistrează
 aici** pe desen. O corectare, o ștergere, un raport pus înapoi și importul unei foi nu sunt
 păstrate niciodată — fără răspuns eșuează ca până acum, iar în jurnal nu s-a schimbat nimic. Un
-refuz pe care serverul îl dă cât încă vă uitați la card (o stație pe care nu o cunoaște, de
-pildă) este arătat ca întotdeauna și nu este păstrat nici el: cardul păstrează ce ați scris.
+refuz pe care serverul îl dă cât încă te uiți la card (o stație pe care nu o cunoaște, de
+pildă) este arătat ca întotdeauna și nu este păstrat nici el: cardul păstrează ce ai scris.
 
 ## Echipa pe ridicare
 
@@ -313,11 +313,11 @@ Panoul modelului marchează fiecare om acolo unde a fost raportat ultima dată, 
 **Ieșit** sau **Fără nicio veste** — trei stări, niciodată două: o echipă de la care nu a venit
 încă nicio veste nu este o echipă deja ieșită.
 
-| Puteți vedea | Înseamnă |
+|| Poți vedea || Înseamnă |
 |---|---|
 | **Pe altă ridicare** | Locul a fost raportat față de altă ridicare decât cea folosită acum de urmărire |
 | **Nu e pe desen** | Desenul ridicării nu are nicio stație cu acel nume |
-| **Nu îți este arătată** | Poziția există și nu vă poate fi comunicată: locația exactă a peșterii vă este ascunsă |
+| **Nu îți este arătată** | Poziția există și nu îți poate fi comunicată: locația exactă a peșterii îți este ascunsă |
 
 **Arată doar părțile declarate** — oferit deasupra modelului când configurarea spune unde a spus
 echipa că merge — scoate din desen fiecare ridicare în care nu se află nimic declarat și spune
@@ -327,11 +327,11 @@ Comutatorul rămâne oprit, și spune de ce, când desenul nu are nicio ridicare
 declarat sau când toate ridicările lui sunt declarate. Oprirea lui aduce înapoi exact ce a
 ascuns.
 
-**Reia tura** redă tot jurnalul pe ridicare, cu notele spuse pe parcurs; **Înapoi la direct** vă
+**Reia tura** redă tot jurnalul pe ridicare, cu notele spuse pe parcurs; **Înapoi la direct** te
 întoarce. Fotografiile pot fi puse pe **un moment** al turei (*Fotografii de la acest moment*),
 nu pe un raport, așa că o corectură sau o ștergere de raport nu le pierde niciodată.
 
-**Unde va fi desenată fiecare fotografie se vede înainte să o atașați.** Bifați fotografii în
+**Unde va fi desenată fiecare fotografie se vede înainte să o atașezi.** Bifează fotografii în
 dialog și fiecare primește un rând: momentul la care va fi pusă, despre cine este și unde o va
 desena reluarea. Nimic despre acel loc nu se păstrează — reluarea îl citește din jurnal la
 momentul fotografiei, pentru persoana despre care este — așa că rândul este răspunsul
@@ -340,11 +340,11 @@ jurnalului și se schimbă odată cu lucrurile de care depinde:
 | Rândul spune | Ce înseamnă | Ce îl schimbă |
 |---|---|---|
 | **Desenată la stația …** | Persoana despre care este fusese raportată la acea stație până în acel moment | — |
-| **Până atunci nu fusese raportată nicio stație pentru această persoană** | Nimic nu o plasase încă, sau doar o adâncime pentru care nimeni nu a numit o stație | De obicei ceasul aparatului: corectați **Ceasul aparatului era înainte cu** și fiecare rând se calculează din nou. Sau fotografia este despre altcineva |
+| **Până atunci nu fusese raportată nicio stație pentru această persoană** | Nimic nu o plasase încă, sau doar o adâncime pentru care nimeni nu a numit o stație | De obicei ceasul aparatului: corectează **Ceasul aparatului era înainte cu** și fiecare rând se calculează din nou. Sau fotografia este despre altcineva |
 | **Atunci era plasat(ă) pe altă ridicare** | Locul din acel moment a fost raportat pe o ridicare pe care urmărirea a părăsit-o între timp | Nimic aici; fotografia se desenează când este privită acea ridicare |
-| **Locul din acel moment nu îți este arătat** | Locul acelui raport vă este ascuns, așa că nu vi se spune nicio stație | Nimic aici — cine are voie să vadă peștera o vede desenată |
-| **Tura nu are o ridicare pe care să o poți vedea desenată** | Poziția peșterii vă este ascunsă și nu vi se spune pe ce ridicare merge urmărirea — sau acea ridicare a fost ștearsă | Nimic aici |
-| **Doar pe cronologie — numește pe cineva ca să fie plasată** | Nu este despre nimeni anume | Alegeți o persoană pe rândul ei |
+| **Locul din acel moment nu îți este arătat** | Locul acelui raport îți este ascuns, așa că nu ți se spune nicio stație | Nimic aici — cine are voie să vadă peștera o vede desenată |
+| **Tura nu are o ridicare pe care să o poți vedea desenată** | Poziția peșterii îți este ascunsă și nu ți se spune pe ce ridicare merge urmărirea — sau acea ridicare a fost ștearsă | Nimic aici |
+| **Doar pe cronologie — numește pe cineva ca să fie plasată** | Nu este despre nimeni anume | Alege o persoană pe rândul ei |
 
 **Despre**, în partea de sus a dialogului, numește o persoană pentru toate fotografiile alese;
 selectorul de pe rândul unei fotografii o face pe aceea despre altcineva — un card de memorie
@@ -358,21 +358,21 @@ atașarea funcționează în continuare.
 nu au fost înregistrate toate pe aceeași ridicare: urmărirea a fost mutată, de pildă, pe o
 ridicare corectată în timpul turei, iar rapoartele de dinainte numesc stații ale celei părăsite.
 Selectorul arată ridicarea urmăririi și fiecare altă ridicare pe care s-a înregistrat un raport
-al acestei ture, dacă mai este pe server și o puteți deschide; două ridicări cu același nume se
-deosebesc prin ziua în care a fost adăugată fiecare. Alegeți alta și marcajele, reluarea,
+al acestei ture, dacă mai este pe server și o poți deschide; două ridicări cu același nume se
+deosebesc prin ziua în care a fost adăugată fiecare. Alege alta și marcajele, reluarea,
 fotografiile de la stații și hărțile sunt cele ale rapoartelor înregistrate pe *ea* — cine are
 ultimul loc pe ridicarea urmăririi apare atunci cu *Pe altă ridicare*.
 
 **Cât timp pe ecran este altă ridicare, panoul nu înregistrează nimic, și o spune**: apăsarea
 unei stații nu oferă niciun raport și nicio fotografie nu poate fi pusă pe un moment. Un raport
 este măsurat întotdeauna față de ridicarea folosită de urmărire, așa că o stație apăsată pe o
-ridicare mai veche ar fi căutată, după nume, în cea greșită. Alegeți din nou ridicarea urmăririi
-— sau ascundeți modelul, care se redeschide mereu pe ea — ca să înregistrați. O ridicare ștearsă
-între timp, sau una a unei peșteri a cărei locație vă este ascunsă, nu apare în listă; rapoartele
+ridicare mai veche ar fi căutată, după nume, în cea greșită. Alege din nou ridicarea urmăririi
+— sau ascunde modelul, care se redeschide mereu pe ea — ca să înregistrezi. O ridicare ștearsă
+între timp, sau una a unei peșteri a cărei locație îți este ascunsă, nu apare în listă; rapoartele
 făcute pe ea rămân marcate în tabel, în cuvinte.
 
 **Fă un film**, pe același panou, salvează reluarea ca fișier — un GIF sau un video cu echipa
-mișcându-se prin ridicare, al acestei ture sau al mai multora. Vedeți
+mișcându-se prin ridicare, al acestei ture sau al mai multora. Vezi
 [Un film al unei ture urmărite](tracking-movie.md).
 
 ### Mai multe echipe deodată: numărătoarea unei tabere
@@ -393,7 +393,7 @@ Fila aceea este numărătoarea și nimic altceva:
 - **Listează doar turele pe care cititorul ei le poate citi** și numește oamenii așa cum îi
   numește pagina turei pentru acel cititor.
 
-Vedeți [Tabere → Cine e în peșteră](camps.md#cine-e-în-peșteră).
+Vezi [Tabere → Cine e în peșteră](camps.md#cine-e-în-peșteră).
 
 ---
 
@@ -403,30 +403,30 @@ Fiecare rând din **Rapoarte** oferă două comenzi, și ele înseamnă lucruri 
 
 - **Corectează** — pentru un raport notat greșit. Schimbă momentul, locul, echipa, activitatea
   sau nota, iar **raportul își păstrează locul în jurnal și tot ce e prins de el**. Persoana nu se poate
-  schimba: un raport despre altcineva este alt raport, așa că îl ștergeți pe acesta și îl
-  înregistrați pe celălalt. Dialogul spune limpede că asta schimbă ce spune jurnalul că s-a
+  schimba: un raport despre altcineva este alt raport, așa că îl ștergi pe acesta și îl
+  înregistrezi pe celălalt. Dialogul spune limpede că asta schimbă ce spune jurnalul că s-a
   întâmplat — reluarea și pagina publicată îl urmează.
 
   Titlul dialogului spune al cui este raportul și de când — *Corectează raportul despre Ana din
   12 mai, 14:05* — astfel încât rândul apăsat este rândul schimbat. **Locul este cerut cu același
-  bloc ca pe cardul de raport**: locurile declarate ale peșterii din care să alegeți, o stație
-  ale cărei nume sunt oferite pe măsură ce scrieți, sau o adâncime cu **Ce stație înseamnă?**
+  bloc ca pe cardul de raport**: locurile declarate ale peșterii din care să alegi, o stație
+  ale cărei nume sunt oferite pe măsură ce scrii, sau o adâncime cu **Ce stație înseamnă?**
   dedesubt. O adâncime aflată departe de stația pe care ajunge este semnalată **imediat ce se
   deschide dialogul**, fără ca numărul să fie atins — un raport înregistrat peste acel
   avertisment îl poartă în continuare. Un moment mai devreme decât pornirea urmăririi aduce
   *Acest moment este înainte de pornirea urmăririi*, cu ora la care a început urmărirea: este un
-  avertisment, nu o piedică, iar corectura se salvează așa cum a fost scrisă — verificați întâi
+  avertisment, nu o piedică, iar corectura se salvează așa cum a fost scrisă — verifică întâi
   ziua și ora.
 - **Șterge acest raport** — doar pentru un raport care nu ar trebui să existe deloc. Iese din
   jurnal și din tot ce se desenează din jurnal: tabelul echipei, ridicarea, o reluare, o pagină
-  publicată. **Nu este distrus** — vedeți mai jos *Punerea înapoi a unui raport șters*.
+  publicată. **Nu este distrus** — vezi mai jos *Punerea înapoi a unui raport șters*.
 
 Amândouă funcționează atât pe o urmărire **încheiată**, cât și pe una pornită.
 
 **Punerea înapoi a unui raport șters.** Mesajul care spune *Raportul a fost scos din jurnal*
 poartă, câteva secunde, **Anulează** — pentru coșul apăsat pe rândul greșit. După aceea raportul
 așteaptă sub jurnal, la **Rapoarte scoase** (titlul poartă numărul, *Rapoarte scoase: 2*, și nu
-este desenat cât timp nu există niciunul). Deschideți-l și fiecare raport scos este listat cu
+este desenat cât timp nu există niciunul). Deschide-l și fiecare raport scos este listat cu
 momentul, persoana, locul lui și momentul în care a fost scos, lângă două butoane:
 
 - **Pune înapoi** — raportul revine în jurnal exact cum era: același moment, același loc pe
@@ -439,7 +439,7 @@ momentul, persoana, locul lui și momentul în care a fost scos, lângă două b
 
 Un raport scos se păstrează cât timp există tura lui; eliminarea definitivă a turei îi ia și
 rapoartele scoase. *Rapoarte scoase* este arătat celor care pot scrie în jurnalul turei, iar un
-loc care nu vă poate fi spus în jurnal nu vă este spus nici acolo.
+loc care nu îți poate fi spus în jurnal nu îți este spus nici acolo.
 
 **Ștergerea a tot ce privește o persoană.** Când cineva cere ca ce spune jurnalul acestei ture
 despre el să fie eliminat, scoaterea rapoartelor din jurnal nu ajunge — un raport păstrat poate
@@ -450,15 +450,15 @@ fi anulată. Reluarea și orice pagină publicată a turei se schimbă odată cu
 rămâne pe lista turei până când tura este editată, iar **Istoricul** turei consemnează că
 rapoartele au fost șterse și arată în continuare ce spunea fiecare. Meniul există pentru cine
 poate scrie în jurnal, după ce urmărirea a fost pornită. Același act este oferit din
-**Persoane → Speologi** când ștergerea persoanei este refuzată — vedeți
+**Persoane → Speologi** când ștergerea persoanei este refuzată — vezi
 [Când cineva cere să fie eliminat](people-and-clubs.md#când-cineva-cere-să-fie-eliminat).
 
-**Cum ajungeți la raport.** **Rapoarte** arată câte douăzeci, cele mai recente întâi, iar în
+**Cum ajungi la raport.** **Rapoarte** arată câte douăzeci, cele mai recente întâi, iar în
 spatele lor este tot jurnalul: numerele de pagină de sub tabel sau, pe telefon, **Arată
-rapoartele mai vechi** și **Arată rapoartele mai noi**, cu o linie care spune unde sunteți
+rapoartele mai vechi** și **Arată rapoartele mai noi**, cu o linie care spune unde ești
 (*Rapoarte afișate: 21–40 din 57*). Raportul greșit este aproape întotdeauna al unei singure
 persoane, așa că selectorul de deasupra tabelului — pe el scrie **Rapoartele tuturor** —
-restrânge jurnalul la persoana pe care o alegeți din lista turei; golirea lui aduce înapoi
+restrânge jurnalul la persoana pe care o alegi din lista turei; golirea lui aduce înapoi
 rapoartele tuturor. Restrângerea pornește de fiecare dată de la cele mai recente rapoarte ale
 acelei persoane.
 
@@ -474,8 +474,8 @@ pe o ridicare pe care urmărirea nu o mai folosește — urmărirea a fost mutat
 după acel raport, sau ridicarea în care a fost măsurat a fost ștearsă. Raportul nu are nimic
 greșit: este ce s-a spus atunci. Eticheta există pentru că același nume de stație poate fi alt
 loc pe ridicarea în vigoare. Este perechea discretă a etichetei portocalii din tabelul
-oamenilor, care spune același lucru despre unde se află cineva *acum*. Ca să vedeți un astfel de
-raport acolo unde a fost făcut, deschideți modelul și folosiți **Vezi rapoartele pe** (mai sus).
+oamenilor, care spune același lucru despre unde se află cineva *acum*. Ca să vezi un astfel de
+raport acolo unde a fost făcut, deschide modelul și folosește **Vezi rapoartele pe** (mai sus).
 
 **Unele poziții importate nu pot fi corectate una câte una.** O înregistrare SpeleoLoc importată
 pe o tură care exista deja își pune pozițiile în jurnalul acelei ture și îi lasă urmărirea cum
@@ -499,20 +499,20 @@ nu poate spune pe care o au în minte oamenii prin „96 de metri". Clubul poate
 
 | Câmp | |
 |---|---|
-| **Adâncime** | Adâncimea declarată. Se păstrează cu o zecimală; semnul este ignorat. Lăsați-o goală pentru a numi un loc fără adâncime (mai jos) |
-| **Stație** | Ce stație este acea adâncime — sau acel loc. Pe măsură ce scrieți, sub casetă sunt oferite stațiile ridicării curente a peșterii ale căror nume încep așa — majusculele și diacriticele nu contează — iar alegerea uneia completează scrierea ridicării. Orice nume este primit în continuare: lista este un ajutor, nu o regulă |
+| **Adâncime** | Adâncimea declarată. Se păstrează cu o zecimală; semnul este ignorat. Las-o goală pentru a numi un loc fără adâncime (mai jos) |
+| **Stație** | Ce stație este acea adâncime — sau acel loc. Pe măsură ce scrii, sub casetă sunt oferite stațiile ridicării curente a peșterii ale căror nume încep așa — majusculele și diacriticele nu contează — iar alegerea uneia completează scrierea ridicării. Orice nume este primit în continuare: lista este un ajutor, nu o regulă |
 | **Numele locului** | Numele folosit de oameni („Meandrul"). Opțional unde există o adâncime, obligatoriu unde nu există |
 | **Notă** | Opțional — câteva cuvinte arătate lângă nume acolo unde o singură adâncime nu spune destul, de exemplu un interval de adâncimi scris ca text („601/0 - 619"). Cel mult 200 de caractere; arătată cum a fost scrisă, niciodată citită ca număr |
-| **Numit pe desen** | Bifați-o pentru un loc pe care clubul îl numește pe desenul ridicării, nu doar în lista sa de locuri. Tabelul îl marchează **Pe desen** |
+| **Numit pe desen** | Bifează-o pentru un loc pe care clubul îl numește pe desenul ridicării, nu doar în lista sa de locuri. Tabelul îl marchează **Pe desen** |
 
 Lista de sub **Stație** nu oferă nimic acolo unde peștera nu are încă nicio ridicare citită sau
-unde locația exactă a peșterii vă este ascunsă; caseta este atunci una simplă de text. Când sunt
-mai multe nume decât arată, ultimul rând spune câte — scrieți mai mult din nume.
+unde locația exactă a peșterii îți este ascunsă; caseta este atunci una simplă de text. Când sunt
+mai multe nume decât arată, ultimul rând spune câte — scrie mai mult din nume.
 
 - **O singură declarație pe adâncime.** O adâncime declarată din nou înlocuiește ce spunea.
   Modificarea unei declarații la altă adâncime o scrie pe cea nouă și apoi o retrage pe cea veche.
 - **Un loc poate fi numit și fără adâncime.** O sală, o joncțiune, un loc pe care îl numește lista
-  clubului și după care nimeni nu raportează un număr: lăsați **Adâncime** goală și dați stația și
+  clubului și după care nimeni nu raportează un număr: lasă **Adâncime** goală și dă stația și
   un nume — numele este atunci obligatoriu, pentru că o stație fără niciuna dintre ele nu declară
   nimic. Un astfel de loc apare după toate adâncimile, în ordinea în care au fost declarate
   locurile, cu **Fără adâncime** în coloana adâncimii. Numirea aceleiași stații din nou fără
@@ -535,21 +535,21 @@ mai multe nume decât arată, ultimul rând spune câte — scrieți mai mult di
   ridicarea marcată drept cea **curentă** a peșterii nu are nicio stație cu acel nume — un nume
   scris greșit, sau o ridicare exportată din nou cu stațiile redenumite și apoi **făcută cea
   curentă**. Declarația nu este urmată acolo: un raport la acea adâncime ajunge pe stația cea mai
-  apropiată. Corectați numele stației (lista le oferă pe cele ale ridicării curente) sau
-  verificați care ridicare este cea curentă a peșterii. **O ridicare doar încărcată nu este
+  apropiată. Corectează numele stației (lista le oferă pe cele ale ridicării curente) sau
+  verifică care ridicare este cea curentă a peșterii. **O ridicare doar încărcată nu este
   judecată aici**: încărcarea nu ia marcajul de la ridicarea care îl are, așa că un fișier
   corectat nu arată nicio etichetă până nu este făcut curent — iar lipsa etichetelor până atunci
   nu arată că declarațiile i se potrivesc. O urmărire îndreptată spre altă ridicare o spune ea
   însăși: cardul de raport judecă fiecare loc față de ridicarea folosită de urmărire, în lista
   lui de locuri — *Meandrul — stația nu este în această ridicare*. Lipsa etichetei nu este o
   promisiune, nici într-un sens, nici în celălalt: unde ridicarea curentă nu a fost citită (chiar
-  dacă o altă încărcare a fost), sau locația peșterii vă este ascunsă, nu se spune nimic.
+  dacă o altă încărcare a fost), sau locația peșterii îți este ascunsă, nu se spune nimic.
 - **Retrage** scoate o declarație. Rapoartele deja înregistrate păstrează stația primită.
   Retragerea unui loc numit fără adâncime doar îl scoate din lista locurilor peșterii.
 - **O stație căreia fișierul ridicării nu îi dă nume nu poate fi declarată.** Este cunoscută doar
   prin numărul la care a scris-o fișierul, iar următorul export al ridicării dă acel număr altei
   stații — așa că declarația ar ajunge să însemne alt loc fără ca cineva să o fi schimbat.
-  Declarați adâncimea la o stație care are nume.
+  Declară adâncimea la o stație care are nume.
 
 Declararea cere dreptul de scriere pe peșteră. O stație declarată este o poziție, așa că lista
 poartă protecția peșterii.
@@ -563,35 +563,35 @@ despre cine era, cât de adânc era și o notă. **Importă o foaie**, lângă r
 
 **Foaia este o treabă de birou.** Servește la trecerea unei ture în jurnal după notițe: este
 citită întreagă, verificată rând cu rând și apoi scrisă dintr-odată. Pentru un raport care
-sosește cât timp echipa este în peșteră, folosiți formularul de raport — primește câte un
+sosește cât timp echipa este în peșteră, folosește formularul de raport — primește câte un
 raport și nu suprascrie nimic. O urmărire care nu a fost pornită nu primește nicio foaie:
 citirea o spune de îndată, la fel cum ar spune-o importul.
 
 1. **Descarcă o foaie exemplu** — un șablon pe care această instalare îl citește fără nicio
    setare.
-2. **Alege un fișier CSV sau trage unul aici** — sau treceți la **Rânduri lipite** și lipiți
+2. **Alege un fișier CSV sau trage unul aici** — sau treci la **Rânduri lipite** și lipește
    rândurile copiate din foaia de calcul, cu rândul capetelor de coloană primul; pe telefon este
    calea cea mai scurtă. Caracterele și separatorul de coloane sunt deduse din foaie și arătate
    lângă ea; **Setări fișier** le poate schimba pe oricare, **Zi și lună** stabilește ordinea
    acolo unde datele foii nu pot decide care număr este ziua, iar **Fusul orar al foii** spune
-   după al cui ceas au fost scrise orele. Bifați acolo **Toate adâncimile sunt sub intrare**
+   după al cui ceas au fost scrise orele. Bifează acolo **Toate adâncimile sunt sub intrare**
    pentru o foaie care scrie adâncimile ca numere simple sau amestecă *−350* cu *350* pentru
    același loc: fiecare este citită atunci ca metri sub intrare.
-3. **Citește.** Citirea nu scrie nimic: ce primiți înapoi este exact ce ar face importul, rând
+3. **Citește.** Citirea nu scrie nimic: ce primești înapoi este exact ce ar face importul, rând
    cu rând — **Nou**, **Înlocuiește** sau refuzat — cu **Observații** lângă fiecare rând.
    Deasupra rândurilor, dialogul spune cum au fost citite orele și datele. Un loc numit în foaie
-   este arătat împreună cu stația care i-a corespuns (*Meandru → p8.98*), ca să vedeți că numele
+   este arătat împreună cu stația care i-a corespuns (*Meandru → p8.98*), ca să vezi că numele
    a fost înțeles. Un rând marcat **Înlocuiește** arată două linii: **Acum în jurnal** —
-   raportul așa cum este — și **După import**. Acolo unde locul raportului din jurnal nu vă
+   raportul așa cum este — și **După import**. Acolo unde locul raportului din jurnal nu îți
    poate fi comunicat, scrie *Nu îți este arătată*, în loc să rămână gol.
-4. **Setări coloane** — indicați un câmp către o coloană doar acolo unde detecția a greșit.
+4. **Setări coloane** — indică un câmp către o coloană doar acolo unde detecția a greșit.
    **Cuvinte pentru intrare**, **Cuvinte pentru ieșire** și **Cuvinte pentru o notă** le
    înlocuiesc pe cele obișnuite pentru partea respectivă. Orice alt cuvânt din acea coloană —
    *coborâre*, *echipare*, *somn* — este păstrat pe raport drept activitatea echipei, arătat
    lângă loc în tabel și ca etichetă în fața notei în jurnal.
-5. **Debifați** rândurile pe care nu le vreți (un rând al foii care numește mai multe persoane
-   este luat sau lăsat deoparte întreg), bifați **Suprascrie ce are deja jurnalul la aceste
-   momente** dacă asta vreți, și **Importă**.
+5. **Debifează** rândurile pe care nu le vrei (un rând al foii care numește mai multe persoane
+   este luat sau lăsat deoparte întreg), bifează **Suprascrie ce are deja jurnalul la aceste
+   momente** dacă asta vrei, și **Importă**.
 
 La sfârșit, o linie spune ce s-a întâmplat, în patru numere: **înregistrate** — rapoarte noi;
 **corectate** — rapoarte pe care jurnalul le avea deja și pe care foaia le-a schimbat; **deja
@@ -605,57 +605,57 @@ ca în exemplu), o coloană de dată lângă una de oră (`Data`, `Ora`) sau doa
 pentru o foaie ținută într-o singură zi — dialogul cere atunci ziua.
 
 **După al cui ceas sunt orele.** *14:05* dintr-o foaie este o oră de pe ceasul cuiva. Lăsat
-neschimbat, **Fusul orar al foii** o citește **Exact cum a fost scrisă (UTC)**; alegeți **Fusul
-meu orar** când foaia a fost completată după ceasul dumneavoastră sau căutați alt fus după nume.
+neschimbat, **Fusul orar al foii** o citește **Exact cum a fost scrisă (UTC)**; alege **Fusul
+meu orar** când foaia a fost completată după ceasul tău sau caută alt fus după nume.
 Alegerea se face pentru toată foaia, la fiecare citire; nimic din ea nu se păstrează pe tură.
 
 | Regulă | De ce |
 |---|---|
-| **O adâncime își păstrează semnul dacă nu spuneți altfel** | *−40* înseamnă patruzeci de metri deasupra intrării, iar *40* patruzeci dedesubt: o peșteră cu galerii deasupra intrării are nevoie de amândouă. **Toate adâncimile sunt sub intrare** citește fiecare cifră doar după mărime |
+| **O adâncime își păstrează semnul dacă nu spui altfel** | *−40* înseamnă patruzeci de metri deasupra intrării, iar *40* patruzeci dedesubt: o peșteră cu galerii deasupra intrării are nevoie de amândouă. **Toate adâncimile sunt sub intrare** citește fiecare cifră doar după mărime |
 | **Activitatea echipei este suprascrisă doar de o foaie care are acea coloană** | Ca echipa și nota: o foaie de ore și adâncimi lasă cuvântul pe care raportul îl are deja. Un jurnal scos ca foaie scrie cuvântul înapoi, deci recitirea acelei foi nu schimbă nimic |
 | **Un raport este identificat prin persoană și moment** | O foaie corectată, importată din nou, schimbă rândurile corectate în loc să le dubleze |
-| **Suprascrierea schimbă doar ce are coloană în foaie** | Acolo unde jurnalul are deja raportul, locul în care era persoana este scris atunci când rândul spune altceva decât raportul; echipa doar dacă foaia are coloană de echipă, iar nota doar dacă are coloană de notă sau de detalii — o celulă goală sub o asemenea coloană o șterge. Excepție face o celulă de echipă care este numele mai multor echipe ale turei: nu se poate decide care echipă este, așa că raportul își păstrează echipa, iar rândul spune acest lucru (dați celor două echipe nume diferite și citiți foaia din nou). O foaie cu ore și adâncimi lasă neatinsă o notă introdusă de mână. Rapoartele care spun deja ce spune foaia nu sunt scrise din nou și sunt numărate separat, ca *deja așa cum spune foaia* |
-| **Importul face ce arăta tabelul, sau nimic** | Foaia este citită din nou când apăsați **Importă**. Dacă tura s-a schimbat între timp — cineva a introdus un raport la unul dintre momentele foii sau a corectat unul pe care foaia l-ar înlocui, o echipă sau un participant s-a schimbat, un loc a fost declarat în peșteră, urmărirea a fost mutată pe altă ridicare — nu se scrie nimic, foaia este citită din nou și dialogul o spune: verificați rândurile, bifați din nou suprascrierea dacă încă o vreți și apăsați **Importă** |
-| **Aceeași foaie importată a doua oară nu scrie nimic** | Fiecare rând al ei se găsește deja în jurnal. Fără bifa de suprascriere, toate sunt *omise*; cu ea, fiecare este comparat cu raportul din jurnal și, spunând același lucru, este numărat ca *deja așa cum spune foaia* — niciun raport nu este adăugat, niciunul nu este rescris și niciunul nu devine **Corectat**. Așa că o foaie la care încă adăugați rânduri poate fi importată din nou ori de câte ori vreți: sunt scrise doar rândurile ei noi și cele schimbate |
-| **O oră scrisă fără fus orar este citită ca UTC, exact cum a fost scrisă — dacă nu numiți fusul orar al foii** | 14:30 din foaie devine 14:30 UTC, arătat în fusul dumneavoastră. Alegeți **Fusul orar al foii** la **Setări fișier** — fusul dumneavoastră este oferit pe nume, iar oricare altul poate fi căutat — și 14:30 este citit după ceasul acelui fus, cu ora de vară și de iarnă cu tot; previzualizarea spune ce fus s-a folosit și arată fiecare rând după ceasul lui. O celulă care își scrie singură decalajul (`2026-09-12T14:30+03:00`) este citită cum spune, oricare ar fi alegerea |
-| **O foaie deja importată nu se corectează importând-o din nou în alt fus orar** | Un raport este identificat prin persoană și moment, iar fusul schimbă fiecare moment — așa că al doilea import adaugă rânduri lângă primele în loc să le înlocuiască. Ștergeți întâi rândurile de dinainte |
-| **O oră peste care ceasurile au sărit este refuzată; una pe care au arătat-o de două ori este citită ca prima dintre cele două** | Când ceasurile se dau înainte, o oră nu există deloc, iar un rând scris în ea este refuzat. Când se dau înapoi, o oră are loc de două ori: se ia prima, iar rândul o spune — scrieți decalajul în celulă dacă era vorba de a doua |
-| **O foaie cu ore fără date își cere ziua** | Dialogul cere **Ziua în care a fost ținută foaia** și propune data turei: verificați-o și citiți foaia din nou. O oră mai mică decât una aflată mai sus în foaie este semnalată, oricui i-ar aparține cele două rânduri, pentru că o foaie ținută în ordine care face asta a trecut de miezul nopții, iar rândul acela ține de ziua următoare — lăsați-l deoparte sau dați foii o coloană de dată |
+| **Suprascrierea schimbă doar ce are coloană în foaie** | Acolo unde jurnalul are deja raportul, locul în care era persoana este scris atunci când rândul spune altceva decât raportul; echipa doar dacă foaia are coloană de echipă, iar nota doar dacă are coloană de notă sau de detalii — o celulă goală sub o asemenea coloană o șterge. Excepție face o celulă de echipă care este numele mai multor echipe ale turei: nu se poate decide care echipă este, așa că raportul își păstrează echipa, iar rândul spune acest lucru (dă celor două echipe nume diferite și citește foaia din nou). O foaie cu ore și adâncimi lasă neatinsă o notă introdusă de mână. Rapoartele care spun deja ce spune foaia nu sunt scrise din nou și sunt numărate separat, ca *deja așa cum spune foaia* |
+| **Importul face ce arăta tabelul, sau nimic** | Foaia este citită din nou când apeși **Importă**. Dacă tura s-a schimbat între timp — cineva a introdus un raport la unul dintre momentele foii sau a corectat unul pe care foaia l-ar înlocui, o echipă sau un participant s-a schimbat, un loc a fost declarat în peșteră, urmărirea a fost mutată pe altă ridicare — nu se scrie nimic, foaia este citită din nou și dialogul o spune: verifică rândurile, bifează din nou suprascrierea dacă încă o vrei și apasă **Importă** |
+| **Aceeași foaie importată a doua oară nu scrie nimic** | Fiecare rând al ei se găsește deja în jurnal. Fără bifa de suprascriere, toate sunt *omise*; cu ea, fiecare este comparat cu raportul din jurnal și, spunând același lucru, este numărat ca *deja așa cum spune foaia* — niciun raport nu este adăugat, niciunul nu este rescris și niciunul nu devine **Corectat**. Așa că o foaie la care încă adaugi rânduri poate fi importată din nou ori de câte ori vrei: sunt scrise doar rândurile ei noi și cele schimbate |
+| **O oră scrisă fără fus orar este citită ca UTC, exact cum a fost scrisă — dacă nu numești fusul orar al foii** | 14:30 din foaie devine 14:30 UTC, arătat în fusul tău. Alege **Fusul orar al foii** la **Setări fișier** — fusul tău este oferit pe nume, iar oricare altul poate fi căutat — și 14:30 este citit după ceasul acelui fus, cu ora de vară și de iarnă cu tot; previzualizarea spune ce fus s-a folosit și arată fiecare rând după ceasul lui. O celulă care își scrie singură decalajul (`2026-09-12T14:30+03:00`) este citită cum spune, oricare ar fi alegerea |
+| **O foaie deja importată nu se corectează importând-o din nou în alt fus orar** | Un raport este identificat prin persoană și moment, iar fusul schimbă fiecare moment — așa că al doilea import adaugă rânduri lângă primele în loc să le înlocuiască. Șterge întâi rândurile de dinainte |
+| **O oră peste care ceasurile au sărit este refuzată; una pe care au arătat-o de două ori este citită ca prima dintre cele două** | Când ceasurile se dau înainte, o oră nu există deloc, iar un rând scris în ea este refuzat. Când se dau înapoi, o oră are loc de două ori: se ia prima, iar rândul o spune — scrie decalajul în celulă dacă era vorba de a doua |
+| **O foaie cu ore fără date își cere ziua** | Dialogul cere **Ziua în care a fost ținută foaia** și propune data turei: verific-o și citește foaia din nou. O oră mai mică decât una aflată mai sus în foaie este semnalată, oricui i-ar aparține cele două rânduri, pentru că o foaie ținută în ordine care face asta a trecut de miezul nopții, iar rândul acela ține de ziua următoare — lasă-l deoparte sau dă foii o coloană de dată |
 | **O dată fără oră este refuzată** | Puse la miezul nopții, rapoartele unei zile întregi s-ar suprapune într-un singur moment |
 | **Data și ora pot sta în două coloane separate** | Sunt unite și citite ca un singur moment, după aceleași reguli ca o singură coloană. Un rând care lasă data goală este refuzat — data nu se preia de pe rândul de deasupra |
 | **Numele sunt potrivite doar cu lista acestei ture** | Numele întreg, apoi prenumele și inițiala („Ion P."), apoi prenumele. Un nume care nu corespunde nimănui, sau corespunde la doi oameni, este refuzat, nu ghicit. Cineva al cărui cont poartă alt nume decât are lista pentru el este găsit după oricare dintre ele |
-| **Un rând care repetă stația sau adâncimea pe care raportul o are deja lasă raportul unde este** | Un nume de stație sau o adâncime se citește pe ridicarea pe care este urmărirea *acum*, cu stația de referință, filtrul și locurile declarate de *acum*. Un raport făcut mai devreme — pe o ridicare pe care urmărirea a părăsit-o între timp sau înainte ca un loc declarat să fie schimbat — nu este deci citit din nou când rândul spune doar ce spune deja raportul: își păstrează stația și ridicarea pe care a fost făcut. Scrieți altă stație sau altă adâncime în rând și acel rând este așezat din nou, pe ridicarea în vigoare. Ca o adâncime să fie citită din nou după declarații schimbate, corectați raportul însuși |
+| **Un rând care repetă stația sau adâncimea pe care raportul o are deja lasă raportul unde este** | Un nume de stație sau o adâncime se citește pe ridicarea pe care este urmărirea *acum*, cu stația de referință, filtrul și locurile declarate de *acum*. Un raport făcut mai devreme — pe o ridicare pe care urmărirea a părăsit-o între timp sau înainte ca un loc declarat să fie schimbat — nu este deci citit din nou când rândul spune doar ce spune deja raportul: își păstrează stația și ridicarea pe care a fost făcut. Scrie altă stație sau altă adâncime în rând și acel rând este așezat din nou, pe ridicarea în vigoare. Ca o adâncime să fie citită din nou după declarații schimbate, corectează raportul însuși |
 | **O notă este comparată așa cum se citește o celulă** | Rândurile noi și spațiile duble dintr-o notă introdusă de mână contează ca un singur spațiu, iar o notă care este doar `-`, `?` sau `n/a` contează ca goală. O notă care se citește la fel rămâne exact cum a fost introdusă |
 | **Locul unui rând: stația, apoi locul declarat, apoi adâncimea** | Intrarea și ieșirea nu revendică nicio stație |
-| **Un rând cu o notă și fără loc este o notă — dacă celulele de loc sunt goale** | Un apel care a spus „crește apa” și niciun loc este tot un raport. O adâncime care nu este un număr (*96 cm*) sau un cuvânt de stare pe care nu îl știe niciuna dintre liste nu este o celulă goală: rândul este refuzat, cu celula numită, în loc să fie trecut ca notă — corectați celula sau adăugați cuvântul la **Setări coloane** |
+| **Un rând cu o notă și fără loc este o notă — dacă celulele de loc sunt goale** | Un apel care a spus „crește apa” și niciun loc este tot un raport. O adâncime care nu este un număr (*96 cm*) sau un cuvânt de stare pe care nu îl știe niciuna dintre liste nu este o celulă goală: rândul este refuzat, cu celula numită, în loc să fie trecut ca notă — corectează celula sau adaugă cuvântul la **Setări coloane** |
 | **Două rânduri pentru aceeași persoană la același moment sunt un singur raport** | Ultimul câștigă, iar amândouă rândurile o spun |
 | **O notă mai lungă decât poate purta un raport este refuzată** | 2000 de caractere, nota și detaliile împreună — acel rând, nu toată foaia |
 | **Un moment pe care jurnalul îl are deja de două ori pentru acea persoană este refuzat** | Nu este treaba importului să ghicească pe care dintre cele două îl corectează rândul |
 
 O foaie poate fi importată și pe o urmărire **încheiată** — de obicei atunci este scrisă. O tură
-fără nicio urmărire nu are pe ce să importe: alegeți întâi o ridicare și salvați configurarea.
+fără nicio urmărire nu are pe ce să importe: alege întâi o ridicare și salvează configurarea.
 
 ### Scoaterea jurnalului ca foaie
 
 **Descarcă jurnalul (CSV)**, lângă rapoarte, salvează tot jurnalul ca foaia pe care o citește
 importul — aceleași coloane ca foaia exemplu, plus una pentru a doua stație acolo unde jurnalul
 are un raport între două, un raport pe rând, cel mai vechi primul. Oricine
-poate citi tura îl poate lua. Corectați-l într-o foaie de calcul și importați-l din nou cu
+poate citi tura îl poate lua. Corectează-l într-o foaie de calcul și importă-l din nou cu
 **Suprascrie ce are deja jurnalul la aceste momente** bifat: rândurile schimbate sunt corectate,
 restul sunt numărate ca *deja așa cum spune foaia* — și acolo unde urmărirea a fost mutată între
-timp pe altă ridicare: un raport al cărui rând l-ați lăsat neatins rămâne pe ridicarea pe care a
+timp pe altă ridicare: un raport al cărui rând l-ai lăsat neatins rămâne pe ridicarea pe care a
 fost făcut.
 
 | Ce face foaia | De ce |
 |---|---|
-| **Momentul este scris întreg, cu decalajul lui** (`2026-09-12T14:30:07.123456Z`) | Un raport este regăsit după persoană și după momentul exact. Păstrați coloana ca text: o foaie de calcul care o transformă într-o dată a ei pierde fracțiunea de secundă, iar rândul se întoarce ca raport nou lângă cel vechi — previzualizarea îl arată **Nou** acolo unde așteptați **Înlocuiește** |
+| **Momentul este scris întreg, cu decalajul lui** (`2026-09-12T14:30:07.123456Z`) | Un raport este regăsit după persoană și după momentul exact. Păstrează coloana ca text: o foaie de calcul care o transformă într-o dată a ei pierde fracțiunea de secundă, iar rândul se întoarce ca raport nou lângă cel vechi — previzualizarea îl arată **Nou** acolo unde aștepți **Înlocuiește** |
 | **Un raport de stație își poartă stația, unul de adâncime adâncimea, niciodată amândouă** | La întoarcere stația trece înaintea adâncimii, așa că o adâncime scrisă cu o stație alături n-ar mai fi un raport de adâncime |
-| **Un raport între două stații o poartă pe a doua într-o coloană numită** `Pana la statia`, **imediat după stație** | Coloana este scrisă doar când jurnalul are un asemenea raport, așa că cele mai multe foi nu o au. Importul o recunoaște după acest nume sau după `a doua statie`, `statia 2`, `to station`, `second station`, `station 2` — și o puteți adăuga într-o foaie a dumneavoastră. Acolo unde foaia are coloana, o celulă golită face din raport un raport la prima stație, iar una completată îi dă raportului acea a doua stație. O foaie fără coloană nu spune nimic despre a doua stație: un raport între două a cărui stație ați lăsat-o neatinsă rămâne între două |
+| **Un raport între două stații o poartă pe a doua într-o coloană numită** `Pana la statia`, **imediat după stație** | Coloana este scrisă doar când jurnalul are un asemenea raport, așa că cele mai multe foi nu o au. Importul o recunoaște după acest nume sau după `a doua statie`, `statia 2`, `to station`, `second station`, `station 2` — și o poți adăuga într-o foaie a ta. Acolo unde foaia are coloana, o celulă golită face din raport un raport la prima stație, iar una completată îi dă raportului acea a doua stație. O foaie fără coloană nu spune nimic despre a doua stație: un raport între două a cărui stație ai lăsat-o neatinsă rămâne între două |
 | **Coloana de stare spune** `intrare`, `iesire` **sau** `nota` | Nota are cuvântul ei pentru ca o notă în care nu s-a scris nimic să rămână un rând. Un club care scrie alt cuvânt îl numește la **Setări coloane**, **Cuvinte pentru o notă** |
-| **Un loc care nu vă poate fi comunicat nu este în fișier** | Raportul rămâne, cu ora, persoana și nota lui, și cu `retinut` în coloana de stare. Importat din nou, rândul este refuzat: un loc lăsat afară din copia dumneavoastră nu este scris niciodată peste locul din jurnal |
+| **Un loc care nu îți poate fi comunicat nu este în fișier** | Raportul rămâne, cu ora, persoana și nota lui, și cu `retinut` în coloana de stare. Importat din nou, rândul este refuzat: un loc lăsat afară din copia ta nu este scris niciodată peste locul din jurnal |
 | **Textul pe care o foaie de calcul l-ar rula ca formulă rămâne text** | O notă sau un nume care începe cu `=`, `+`, `-` sau `@` este scris cu un tabulator în față, pe care importul îl înlătură |
-| **Oamenii sunt numiți așa cum vi-i arată aplicația** | Acolo unde contul cuiva poartă alt nume decât are lista pentru el, foaia îl poartă pe al contului. Importul găsește persoana după oricare dintre ele |
-| **O stație sau o adâncime este scrisă așa cum o are raportul, fără ridicarea ei** | Foaia nu spune pe ce ridicare a fost făcut un raport și nici nu are nevoie: importat din nou, un rând a cărui stație sau adâncime ați lăsat-o neatinsă lasă raportul pe ridicarea lui. Schimbați stația sau adâncimea și rândul este citit pe ridicarea pe care este urmărirea acum — unde același nume de stație poate fi alt loc, iar o stație pe care acea ridicare nu o are este refuzată |
+| **Oamenii sunt numiți așa cum ți-i arată aplicația** | Acolo unde contul cuiva poartă alt nume decât are lista pentru el, foaia îl poartă pe al contului. Importul găsește persoana după oricare dintre ele |
+| **O stație sau o adâncime este scrisă așa cum o are raportul, fără ridicarea ei** | Foaia nu spune pe ce ridicare a fost făcut un raport și nici nu are nevoie: importat din nou, un rând a cărui stație sau adâncime ai lăsat-o neatinsă lasă raportul pe ridicarea lui. Schimbă stația sau adâncimea și rândul este citit pe ridicarea pe care este urmărirea acum — unde același nume de stație poate fi alt loc, iar o stație pe care acea ridicare nu o are este refuzată |
 | **Două rapoarte despre aceeași persoană la același moment sunt scrise amândouă și refuzate amândouă la întoarcere** | Importul nu poate ști pe care dintre cele două l-ar corecta un rând |
 | **Fișierul este numit după numărul turei și zi** | Niciodată după titlul turei sau după peșteră |
 
@@ -668,18 +668,18 @@ arată alături, ca orele din jurnal să poată fi trecute pe listă. Apare dup�
 pentru cine poate edita tura, și funcționează pe o urmărire încheiată la fel ca pe una în curs.
 
 Pentru fiecare persoană, tabelul arată primul *A intrat* și ultimul *A ieșit* din jurnal, ce
-are lista acum și o bifă. Nu se scrie nimic până nu apăsați **Scrie pe listă**, și numai pentru
+are lista acum și o bifă. Nu se scrie nimic până nu apeși **Scrie pe listă**, și numai pentru
 persoanele bifate:
 
 - **O oră scrisă de cineva nu este înlocuită de la sine.** Un rând în care orele din jurnal
   diferă de orele aflate deja pe listă este marcat *Înlocuiește o oră scrisă de cineva* și
-  pornește nebifat. Bifați-l dacă jurnalul are dreptate.
+  pornește nebifat. Bifează-l dacă jurnalul are dreptate.
 - **Fusul orar este spus.** Un raport este un moment; o oră de pe listă este ce arăta un ceas,
-  fără fus orar al ei. Dialogul pornește pe fusul dumneavoastră orar și spune în ce fus au fost
-  citite orele — alegeți-l pe al peșterii dacă este altul.
+  fără fus orar al ei. Dialogul pornește pe fusul tău orar și spune în ce fus au fost
+  citite orele — alege-l pe al peșterii dacă este altul.
 - **Unele ore nu pot fi luate, iar rândul spune de ce**: niciun raport că persoana a ieșit (sau
   a intrat din nou după aceea); un moment într-o zi pe care datele turei nu o acoperă —
-  corectați întâi datele turei; ora schimbată cât timp era sub pământ, când cele două ore ar
+  corectează întâi datele turei; ora schimbată cât timp era sub pământ, când cele două ore ar
   greși cu o oră; sau cineva care are rapoarte, dar nu mai este pe listă.
 - **Cine a intrat de mai multe ori** primește prima intrare și ultima ieșire, iar rândul o
   spune: lista are loc pentru o singură pereche, așa că timpul petrecut la suprafață între ele
@@ -706,8 +706,8 @@ nu despre o persoană*: pericolul este partea din evidența unei ture de care ar
 următoare, așa că este tipărit, iar stația pe care o numește este reținută de la un cititor căruia
 nu i se poate comunica, exact ca locul oricui.
 
-Este citit la fel ca tot restul unui raport. Copia pe care o **descărcați** spune ce vă poate fi
-comunicat, cu *loc reținut* acolo unde o stație sau o adâncime vă este reținută. Copia **clasată
+Este citit la fel ca tot restul unui raport. Copia pe care o **descarci** spune ce îți poate fi
+comunicat, cu *loc reținut* acolo unde o stație sau o adâncime îți este reținută. Copia **clasată
 pe tură** este deschisă de oricine poate citi tura, așa că numește un loc doar acolo unde poate fi
 comunicat oricărui cont — într-o peșteră protejată, niciunul — indiferent cine a clasat-o. Un
 raport deja scos nu este în niciuna.
@@ -717,7 +717,7 @@ mai târziu, el rămâne în copia clasată până când raportul turei este cla
 peștera primește mai târziu protecția locației, copiile deja clasate pe turele urmărite în ea
 rămân acolo unde sunt și numesc în continuare stațiile acelei peșteri pentru oricine poate citi
 tura** — punerea peșterii sub protecție nu le retrage, iar modul de a înlătura una este să
-ștergeți copia clasată și să raportați tura din nou. Retragerea automată a fost construită și
+ștergi copia clasată și să raportezi tura din nou. Retragerea automată a fost construită și
 apoi oprită, fiind socotită mai multă complicație decât merita, iar hotărârea va fi reluată.
 [Scrierea unui model și restul a ceea ce face
 cuvântul](trips.md).
@@ -774,7 +774,7 @@ turei).
 **Un link expirat rămâne în listă și încă contează.** Expirarea încheie urmărirea, nu
 publicarea: cât timp nu îl retrage nimeni, linkul ține tura încheiată printre turele trecute ale
 peșterii, iar adresa lui încă le deschide. De aceea un rând **Expirat** păstrează ambele butoane
-— **Înlocuiește linkul** când adresa a ajuns unde nu trebuia, **Retrage-l** ca să scoateți tura
+— **Înlocuiește linkul** când adresa a ajuns unde nu trebuia, **Retrage-l** ca să scoți tura
 și dintre turele trecute ale peșterii.
 
 **Înlocuiește linkul** este pentru o adresă care a ajuns unde nu trebuia sau pe care nu a
@@ -856,7 +856,7 @@ Pagina spune ce arată, pentru un cititor care nu a mai urmărit niciodată o tu
   publicate — nu schimbă limba în care se deschide aplicația pentru cine se autentifică acolo —
   și este scrisă în
   adresă (`?lang=en`), așa că adresa trimisă mai departe se deschide la fel. Un link poate cere
-  el însuși o limbă — vedeți *Pe site-ul dumneavoastră* — iar aceea ține doar pentru vizita
+  el însuși o limbă — vezi *Pe site-ul tău* — iar aceea ține doar pentru vizita
   respectivă: ce spune adresa are întâietate față de ce s-a ales înainte în browser, și nu se
   ține minte. Limba setată în browser nu este întrebată. Vizualizatorul 3D își ia limba o
   singură dată, la deschidere: după apăsarea butonului, indicațiile lui proprii rămân cum erau
@@ -885,7 +885,7 @@ care nu deschide niciuna nu află despre nimeni altcineva, iar pagina nu cere se
   - **Pe ridicarea acestui link, și pe niciuna alta.** Un loc raportat de cealaltă echipă pe
     altă ridicare a peșterii este trecut în listă ca atare și nu este desenat, exact ca pentru
     echipa linkului. Fotografiile și planșele din jurul desenului rămân tot ale linkului.
-  - **Fila browserului și adresa rămân ale turei linkului.** O adresă copiată în timp ce priviți
+  - **Fila browserului și adresa rămân ale turei linkului.** O adresă copiată în timp ce privești
     altă echipă deschide tura pentru care a fost publicat linkul: nu există un link „către
     cealaltă echipă", iar reîncărcarea paginii revine la tura linkului.
   - **La fel de proaspătă ca lista.** Echipa privită este citită odată cu lista, în fiecare
@@ -895,7 +895,7 @@ care nu deschide niciuna nu află despre nimeni altcineva, iar pagina nu cere se
     *„Tura acestei echipe s-a încheiat"*. Când iese din listă — linkul ei a fost retras, sau a
     trecut timpul cât o urmărire încheiată mai rămâne citibilă — pagina revine la tura linkului,
     sub o înștiințare care numește echipa care era pe ecran. Nu schimbă niciodată pe tăcute pe
-    cine priviți. Alegerea unei ture trecute încheie și ea privirea: câte o echipă pe rând.
+    cine privești. Alegerea unei ture trecute încheie și ea privirea: câte o echipă pe rând.
 - **Cât de proaspătă este lista.** Cât timp o echipă din ea este în peșteră, lista este citită
   din nou în fiecare minut; cât timp nu este niciuna, la cinci minute, atât cât lista este
   deschisă și fila ei este la vedere — așa apare, fără redeschidere, o echipă care intră mai
@@ -904,7 +904,7 @@ care nu deschide niciuna nu află despre nimeni altcineva, iar pagina nu cere se
 **Ture trecute în această peșteră** deschide turele încheiate și publicate ale peșterii:
 
 - **Cât de proaspătă este lista.** Turele încheiate nu sunt recitite după ceas: o listă mai
-  veche de cinci minute este citită din nou când reveniți la filă sau o deschideți iar.
+  veche de cinci minute este citită din nou când revii la filă sau o deschizi iar.
 - **Grupate pe tabere.** Unde o tură încheiată a făcut parte dintr-o tabără, lista adună turele
   taberei sub *Tabără: …*, cu turele din nicio tabără la urmă, sub *Alte ture din această
   peșteră*; o echipă urmărită și bannerul unei reluări spun tabăra într-un rând al lor. Unde
@@ -916,7 +916,7 @@ care nu deschide niciuna nu află despre nimeni altcineva, iar pagina nu cere se
   trec de la un raport la următorul trec prin rapoartele acelei echipe sau persoane și sar peste
   ale celorlalți (semnele de pe linia reluării rămân ale întregii ture, iar acolo unde despre cei
   urmăriți nu s-a raportat niciodată nimic săgețile trec în continuare prin toate rapoartele).
-  **Înapoi la echipa din peșteră acum** vă întoarce — la fel și butonul Înapoi al browserului,
+  **Înapoi la echipa din peșteră acum** te întoarce — la fel și butonul Înapoi al browserului,
   pentru că alegerea unei ture este un pas în istoricul paginii. Adresa urmează ce este pe ecran
   (`?past=…&team=…`), așa că un cititor poate trimite cuiva exact acea vedere. Cât timp o tură
   trecută este pe ecran, **Redă altă tură din această peșteră**, chiar sub comenzile reluării,
@@ -964,7 +964,7 @@ Două consecințe bune de știut înainte de publicare:
 - **Un link vechi continuă să arate cine este acum în peșteră**, prin *Urmărite acum*, cât timp
   propria lui tură rămâne citibilă ca tură trecută. Un operator care nu vrea asta stabilește cât
   timp după propria lui tură mai face un link vechi acest lucru — turele trecute rămân citibile —
-  sau oprește turele trecute, sau stabilește cât sunt păstrate; vedeți [ghidul de
+  sau oprește turele trecute, sau stabilește cât sunt păstrate; vezi [ghidul de
   instalare](../../../INSTALL.md#configuration-reference).
 
 Regula întreagă — cât durează fiecare dintre acestea, ce predă o tură trecută și cum se scoate o
@@ -985,24 +985,24 @@ Oprit, pagina face exact ce făcea înainte să existe lucrul respectiv — nimi
 | `SILEXGIS__TripTracking__OfferLanguageChoice` | Niciun buton **English** / **Română**, iar `?lang=` din adresă este ignorat. Pagina se deschide în română, așa cum s-a deschis mereu. Singura excepție este un link care nu deschide nimic: acel ecran nu află niciodată setarea, deci păstrează butonul și respectă `?lang=` — intenționat, fiindcă singura lui propoziție este cea pe care cititorul are cea mai mare nevoie să o înțeleagă |
 | `SILEXGIS__TripPastTracks__OfferMomentLinks` | Niciun buton **Copiază linkul către acest moment**, iar `at=`/`play=` din adresă sunt ignorate: reluarea se deschide de la început |
 | `SILEXGIS__TripPastTracks__CompactReplayBarInFrame` | O pagină încadrată arată toată bara de reluare la orice lățime a cadrului, în loc să o împartă într-un rând și o filă într-un cadru îngust |
-| `SILEXGIS__TripTracking__TellReadersNothingChanged` | Fiecare citire primește răspuns întreg. Pagina nu mai primește răspunsul scurt *nu s-a schimbat nimic*, deci costă mai mult lăsată deschisă — opriți-l doar în spatele a ceva care memorează prost |
+| `SILEXGIS__TripTracking__TellReadersNothingChanged` | Fiecare citire primește răspuns întreg. Pagina nu mai primește răspunsul scurt *nu s-a schimbat nimic*, deci costă mai mult lăsată deschisă — oprește-l doar în spatele a ceva care memorează prost |
 
 Schimbarea unuia dintre ele schimbă ce i se spune paginii despre ea însăși, așa că un cititor care
 are deja pagina deschisă primește răspunsul nou la următoarea citire, nu i se spune că nu s-a
 schimbat nimic.
 
-## Pe site-ul dumneavoastră
+## Pe site-ul tău
 
 Blocul **Pentru un site** se pune într-un bloc **Custom HTML** — nu într-un paragraf, care ar
-tipări codul în loc să-l ruleze. Se dimensionează după lățimea coloanei; nu îi dați o înălțime
-fixă. Administratorul instalării trebuie să permită și site-ului dumneavoastră să îl încadreze
-(`SILEXGIS_FRAME_ANCESTORS`, vedeți [Letting a website embed a live
+tipări codul în loc să-l ruleze. Se dimensionează după lățimea coloanei; nu îi da o înălțime
+fixă. Administratorul instalării trebuie să permită și site-ului tău să îl încadreze
+(`SILEXGIS_FRAME_ANCESTORS`, vezi [Letting a website embed a live
 trip](../../../INSTALL.md#letting-a-website-embed-a-live-trip)); până atunci cadrul rămâne gol.
 
 **Limba cadrului.** Deasupra adresei și a blocului, **Limba în care se deschide pagina** are
 trei poziții: *Nicio limbă precizată*, *Română*, *English*. Alegerea rescrie adresa și blocul
 (`?lang=ro` sau `?lang=en`) fără să creeze un link nou — același link răspunde în ambele limbi,
-deci puteți copia adresa în română pentru un articol și pe cea în engleză pentru altul. O adresă
+deci poți copia adresa în română pentru un articol și pe cea în engleză pentru altul. O adresă
 sau un bloc fără limbă se deschide în română — sau în limba aleasă înainte de cititor pe această
 instalare, în acel browser. Cadrul are și el un buton de două litere (**EN** / **RO**) în
 rândul de jos, pentru cititorul din fața lui; cât timp în cadru rulează o tură trecută, acel
@@ -1010,7 +1010,7 @@ rând este al comenzilor reluării și butonul nu este desenat. Un cadru care nu
 arătat — un link încheiat, o citire eșuată — are butonul sub singura lui propoziție.
 
 **Un cadru care se deschide pe o tură trecută.** Adresa cadrului răspunde la aceleași cuvinte
-ca adresa paginii întregi: adăugați `past=<tură>` și, unde doriți, `team=` sau `caver=`,
+ca adresa paginii întregi: adaugă `past=<tură>` și, unde vrei, `team=` sau `caver=`,
 `at=<moment>` și `play=1` la adresa din bloc (`…/embed?lang=ro&past=…&at=…&play=1`), iar cadrul
 se deschide pe acea tură, la acel moment, în redare. Valorile sunt cele pe care **Copiază linkul
 către acest moment** le pune în adresa copiată.
@@ -1056,26 +1056,26 @@ cât timp trecutul este pe ecran.
 | `data-silexgis-moment="<moment>"` | Mută ceasul unei reluări |
 | `data-silexgis-play` | Adăugat unei legături care numește o tură trecută sau un moment: pornește și redarea |
 
-**De unde se iau valorile: apăsați pe copiere.** Deschideți pagina completă, redați tura trecută
-până la momentul dorit, alegeți pe cine urmăriți și apăsați **Copiază linkul către acest
+**De unde se iau valorile: apasă pe copiere.** Deschide pagina completă, redă tura trecută
+până la momentul dorit, alege pe cine urmărești și apasă **Copiază linkul către acest
 moment**. Adresa copiată numește tura (`past=`), echipa sau persoana (`team=` sau `caver=`) și
 momentul (`at=`) — valorile pentru `data-silexgis-trip`, `-team` sau `-caver` și `-moment`.
 `data-silexgis-play` nu ia nicio valoare; apăsat de două ori lasă reluarea în redare, nu o pune
 pe pauză, iar o legătură fără el nu oprește niciodată o reluare care rulează. Blocurile lipite
-înainte să existe acest atribut funcționează neschimbate: copiați din nou blocul din panoul de
-partajare doar dacă doriți legături care redau.
+înainte să existe acest atribut funcționează neschimbate: copiază din nou blocul din panoul de
+partajare doar dacă vrei legături care redau.
 
 Cu două vizualizări în același articol, fiecare legătură o numește pe cea pe care o comandă cu
 `data-silexgis-target` (identificatorul este în comentariul din capul fiecărui bloc).
 
-### Ce îi spune cadrul paginii dumneavoastră
+### Ce îi spune cadrul paginii tale
 
 Majoritatea articolelor nu au nevoie de nimic din toate acestea. Este pentru un site care își
 scrie propriile cuvinte din ce arată vizualizarea — care estompează numele cuiva pe care nu l-a
 plasat nimeni sau scrie *„echipa este la …"* lângă cadru.
 
-Blocul lipit transmite paginii dumneavoastră tot ce spune vizualizarea, ca evenimente obișnuite
-de browser pe `document`. Ascultați-le într-un bloc **Custom HTML** propriu, oriunde în articol;
+Blocul lipit transmite paginii tale tot ce spune vizualizarea, ca evenimente obișnuite
+de browser pe `document`. Ascultă-le într-un bloc **Custom HTML** propriu, oriunde în articol;
 acesta poate fi lipit așa cum este:
 
 ```html
@@ -1085,8 +1085,8 @@ document.addEventListener('silexgis:ready', function (event) {
   if (said.pastUnreadable) {
     // Serverul A REFUZAT tura trecută cerută cadrului: a fost retrasă sau este mai veche decât
     // păstrează această instalare. said.pastUnreadable.tripLogId spune care tură; nu există
-    // nici titlu, nici moment, iar said.past lipsește. Spuneți-o cu propriile cuvinte și
-    // oferiți o legătură cu data-silexgis-trip="live" - și retrageți cuvintele la următorul
+    // nici titlu, nici moment, iar said.past lipsește. Spune-o cu propriile cuvinte și
+    // oferă o legătură cu data-silexgis-trip="live" - și retrage cuvintele la următorul
     // anunț, care nu îl mai poartă. Se verifică ÎNAINTE de loaded, care rămâne false.
     return;
   }
@@ -1110,12 +1110,12 @@ document.addEventListener('silexgis:ready', function (event) {
 });
 document.addEventListener('silexgis:focused', function (event) {
   // event.detail.target   { kind, ref } al legăturii apăsate
-  // event.detail.found    false: vizualizarea nu a putut-o arăta - estompați legătura
+  // event.detail.found    false: vizualizarea nu a putut-o arăta - estompează legătura
 });
 </script>
 ```
 
-Pe ce vă puteți baza:
+Pe ce te poți baza:
 
 - **`silexgis:ready` este spus din nou ori de câte ori se schimbă ce spune** — vederea a terminat
   de încărcat, cineva s-a mutat (împrospătarea din fiecare minut cât echipa este în peșteră, sau
@@ -1123,16 +1123,16 @@ Pe ce vă puteți baza:
   părăsită, cititorul a ales să vadă o altă echipă din peșteră sau s-a întors de la ea. **Nu**
   este spus la fiecare pas al ceasului unei reluări: `past.at` este momentul la
   care anunțul era adevărat, nu un ceas care merge.
-- **Așteptați `loaded: true`.** Primul anunț sosește de obicei înaintea echipei, cu
+- **Așteaptă `loaded: true`.** Primul anunț sosește de obicei înaintea echipei, cu
   `loaded: false` și o echipă goală. O echipă goală cu `loaded: true` este o tură fără nimeni
   pe ea.
 - **`past` prezent înseamnă o reluare** și poartă întotdeauna `tripLogId`, `title` și `at`.
   Absent, și cu `loaded: true`, echipa este cea a turei publicate de bloc, așa cum stă acum. Nu
-  scrieți niciodată o echipă reluată ca loc în care se află oamenii.
+  scrie niciodată o echipă reluată ca loc în care se află oamenii.
 - **`pastUnreadable` prezent înseamnă că serverul a refuzat tura trecută cerută** — linkul ei a
   fost retras, este mai veche decât păstrează instalarea sau nu a fost niciodată o tură a
   acestei peșteri. Poartă `tripLogId` și nimic altceva; alături de el `past` lipsește, `party`
-  este goală și `loaded` este `false`, pentru că nimic nu este pe ecran — așa că citiți-l
+  este goală și `loaded` este `false`, pentru că nimic nu este pe ecran — așa că citește-l
   **înainte** de verificarea lui `loaded`, cum face exemplul. Este spus o singură dată și rămâne
   valabil până la următorul anunț, care nu îl mai poartă: cititorul a trecut la altă tură sau
   înapoi la echipa de acum, ori — rar — tura a fost publicată din nou și o citire ulterioară a
@@ -1141,12 +1141,12 @@ Pe ce vă puteți baza:
   atunci să anunțe `loaded: false` fără nimic alături, îi spune propriului cititor că tura nu a
   putut fi citită și citește din nou când acesta revine în filă. Cadrul își păstrează pe ecran
   calea de întoarcere în ambele cazuri; o legătură cu `data-silexgis-trip="live"` îl aduce
-  înapoi din textul dumneavoastră. Un ascultător scris înainte să existe acest membru nu este
+  înapoi din textul tău. Un ascultător scris înainte să existe acest membru nu este
   afectat de el: `past` rămâne neatins, iar ascultătorul se oprește la `loaded: false` exact ca
   înainte, când o tură refuzată era anunțată ca nimic.
 - **`watching` prezent înseamnă o altă echipă din peșteră.** Cititorul a deschis în cadru lista
   echipelor urmărite în peșteră și a apăsat **Vezi echipa** pe una dintre ele. Acea echipă este
-  în peșteră acum, iar membrii ei sunt numărați de la 1 exact ca ai turei dumneavoastră, așa că
+  în peșteră acum, iar membrii ei sunt numărați de la 1 exact ca ai turei tale, așa că
   o pagină care scrie *„speologul 3 este la …"* trebuie să spună al cui este speologul 3 — sau să
   nu scrie nimic cât timp `watching` este prezent. Absent, echipa nu este o altă echipă: este
   tura publicată de bloc sau, când `past` este prezent, o reluare; cele două nu sunt niciodată
@@ -1160,13 +1160,13 @@ Pe ce vă puteți baza:
   pagină care scrie nume sau locuri din `party` fără să citească `watching` scrie deci oamenii
   altei echipe sub titlul propriei ture, din clipa în care cititorul apasă **Vezi echipa** în
   cadru. Nu se dezvăluie nimic din ce linkul nu dădea deja, dar cuvintele ar fi greșite. Dacă
-  pagina dumneavoastră scrie ceva din `party`, adăugați verificarea `if (said.watching)` de mai
-  sus — scrieți a cui este echipa sau nu scrieți nimic — înainte de a vă baza pe lista de
+  pagina ta scrie ceva din `party`, adaugă verificarea `if (said.watching)` de mai
+  sus — scrie a cui este echipa sau nu scrie nimic — înainte de a te baza pe lista de
   echipe din cadru.
 - **`station: null` are trei înțelesuri**, iar două dintre ele nu sunt „nu știe nimeni". Nimeni
   nu a raportat unde este acea persoană; sau cineva a raportat, pe altă ridicare a peșterii
   (`onOtherSurvey`); sau la o stație pe care desenul din cadru nu o conține (`notOnDrawing`).
-  Formulați-le diferit. În ultimele două cazuri numele stației nu este predat, intenționat —
+  Formulează-le diferit. În ultimele două cazuri numele stației nu este predat, intenționat —
   îl spune lista de oameni a cadrului.
 - **`silexgis:focused` răspunde unei legături apăsate.** Pentru o stație, o ramură sau un membru
   al echipei, `found` spune dacă desenul conținea locul (peste o reluare, o legătură care
@@ -1175,20 +1175,20 @@ Pe ce vă puteți baza:
   cadru; ce tură este de fapt pe ecran sosește cu următorul `silexgis:ready`. O legătură
   `data-silexgis-moment` apăsată când pe ecran nu este nicio reluare răspunde `found: false`.
 - **`silexgis:listening`** sosește și el, fără nimic în el: este vizualizarea care spune că poate
-  auzi, iar blocul lipit îi răspunde singur. Ignorați-l.
+  auzi, iar blocul lipit îi răspunde singur. Ignoră-l.
 - Fiecare `event.detail` mai poartă `silexgis: "silexgis-trip-embed"`, `v: 1` și `type`. Pot fi
   adăugate câmpuri mai târziu; niciunul dintre acestea nu își schimbă înțelesul sub același `v`.
-- **Pagina dumneavoastră primește ce arată cadrul** — aceleași nume și aceleași stații, nimic în
+- **Pagina ta primește ce arată cadrul** — aceleași nume și aceleași stații, nimic în
   plus. Le primește pagina, deci le poate citi și orice alt script care rulează în articol.
 
 **Un bloc vechi s-ar putea să nu spună niciodată nimic.** Vizualizarea răspunde doar după ce a
 fost salutată și începe să asculte la o clipă după ce cadrul s-a încărcat. Un bloc lipit înainte
 de **29 septembrie 2026** o salută de două ori, de obicei prea devreme de fiecare dată, așa că
-niciun `silexgis:ready` nu ajunge la pagina dumneavoastră — în timp ce cadrul în sine
+niciun `silexgis:ready` nu ajunge la pagina ta — în timp ce cadrul în sine
 funcționează, motiv pentru care nu se observă. Un bloc copiat acum din panoul de publicare
 salută la fiecare jumătate de secundă până răspunde vizualizarea (cel mult un minut, și din nou
-ori de câte ori se reîncarcă cadrul). Dacă scriptul dumneavoastră nu aude nimic, lipiți un bloc
-nou — și **înlocuiți fiecare bloc mai vechi din articol**, în loc să adăugați unul nou lângă el:
+ori de câte ori se reîncarcă cadrul). Dacă scriptul tău nu aude nimic, lipește un bloc
+nou — și **înlocuiește fiecare bloc mai vechi din articol**, în loc să adaugi unul nou lângă el:
 primul bloc de pe pagină poartă conversația pentru toate.
 
 ---
@@ -1265,15 +1265,15 @@ rămân în instalare exact cum erau, pentru membrii care le pot citi.
 
 **Scoaterea unei ture.** De la cel mai puțin la cel mai mult:
 
-| Doriți | Faceți așa |
+|| Vrei | Fă așa ||
 |---|---|
-| Numele unei persoane scos de pe pagină și din reluare | Dați-i o **etichetă** pe tură — se aplică de la următoarea citire |
-| Un raport dispărut | Ștergeți-l din jurnalul de urmărire: iese de pe pagină și din reluare pe loc. Se păstrează încă la **Rapoarte scoase**, pentru coordonatorii turei — **Șterge definitiv** acolo dacă nu trebuie să existe deloc |
+| Numele unei persoane scos de pe pagină și din reluare || Dă-i o **etichetă** pe tură — se aplică de la următoarea citire |
+| Un raport dispărut || Șterge-l din jurnalul de urmărire: iese de pe pagină și din reluare pe loc. Se păstrează încă la **Rapoarte scoase**, pentru coordonatorii turei — **Șterge definitiv** acolo dacă nu trebuie să existe deloc |
 | Pagina în direct închisă acum | **Retrage-l**, pe fiecare link din **Publică această tură** |
-| Tura scoasă dintre turele trecute ale peșterii | **Retrageți fiecare link pe care panoul îl listează pentru acea tură**, inclusiv pe cele marcate **Inactiv**. Când nu mai rămâne niciunul, tura nu mai este listată și nu mai poate fi reluată, imediat |
-| Tot ce ține de acea tură dispărut | Ștergeți tura: linkurile ei se încheie odată cu ea |
-| Toată peștera închisă pentru vizitatori | Protejați coordonatele peșterii: fiecare link către fiecare tură a ei nu mai răspunde, și nici turele ei trecute, cât timp protecția rămâne |
-| Fără ture trecute pentru nimeni, sau doar cele recente | Operatorul oprește turele trecute sau stabilește cât sunt păstrate — vedeți [ghidul de instalare](../../../INSTALL.md#configuration-reference) |
+| Tura scoasă dintre turele trecute ale peșterii || **Retrage fiecare link pe care panoul îl listează pentru acea tură**, inclusiv pe cele marcate **Inactiv**. Când nu mai rămâne niciunul, tura nu mai este listată și nu mai poate fi reluată, imediat |
+| Tot ce ține de acea tură dispărut || Șterge tura: linkurile ei se încheie odată cu ea |
+| Toată peștera închisă pentru vizitatori || Protejează coordonatele peșterii: fiecare link către fiecare tură a ei nu mai răspunde, și nici turele ei trecute, cât timp protecția rămâne |
+| Fără ture trecute pentru nimeni, sau doar cele recente | Operatorul oprește turele trecute sau stabilește cât sunt păstrate — vezi [ghidul de instalare](../../../INSTALL.md#configuration-reference) |
 
 Retragerea unui link nu poate fi anulată, iar un link nou poate fi creat doar cât timp urmărirea
 este pornită — așa că o tură încheiată care a fost scoasă se publică din nou doar pornindu-i iar
@@ -1306,7 +1306,7 @@ momentul scris deasupra tabelului:
 Stările sunt calculate de server, după chiar regulile după care sunt servite paginile publicate
 — lista nu poate spune *Urmărire în curs* despre o adresă care nu răspunde. Numerele de deasupra
 tabelului sunt ale întregii instalări, lista poate fi restrânsă la o singură stare, iar
-majoritatea coloanelor se pot ordona. Apăsați **Reîncarcă** înainte de a acționa pe o
+majoritatea coloanelor se pot ordona. Apasă **Reîncarcă** înainte de a acționa pe o
 listă care a stat deschisă o vreme.
 
 **Pe ce se sprijină stările.** *Abia încheiată* și *În arhivă* sunt perioade, iar cât ține
@@ -1330,14 +1330,14 @@ linkul expiră tura nu mai este în nicio listă publică, nici printre cele urm
 turele trecute. Coloana **Urmărire pornită la** arată când a fost pornită ultima dată urmărirea
 fiecărei ture și, cât timp este pornită, de câte zile; un rând a cărui urmărire este încă
 pornită în spatele unui link expirat spune acest lucru. **Urmărire pornită de mai mult de
-(zile)** restrânge lista la asemenea rânduri: scrieți un număr de zile prea mare pentru felul
+(zile)** restrânge lista la asemenea rânduri: scrie un număr de zile prea mare pentru felul
 de ture pe care le face clubul (`0` păstrează tot ce are urmărirea pornită). Numărul este al
-dumneavoastră de fiecare dată și nu este păstrat nicăieri. **Fila Urmărire** de pe rând deschide
+tău de fiecare dată și nu este păstrat nicăieri. **Fila Urmărire** de pe rând deschide
 tura, acolo unde se află **Încheie urmărirea** — de pe această pagină nu se încheie nimic și
 nimic nu se încheie de la sine.
 
-**De unde vă vede serverul.** Sub numere, pagina scrie adresa de la care cererea dumneavoastră
-a ajuns la server. Ar trebui să fie a dumneavoastră. Dacă este, în schimb, adresa unui proxy
+**De unde te vede serverul.** Sub numere, pagina scrie adresa de la care cererea ta
+a ajuns la server. Ar trebui să fie a ta. Dacă este, în schimb, adresa unui proxy
 aflat în fața instalării, instalării i s-au declarat prea puține proxy-uri: toți cititorii din
 spatele acelui proxy sunt numărați ca unul singur și împart același buget de cereri, așa că
 paginile publicate încep să refuze cititori într-o seară aglomerată. Rândul doar arată
@@ -1353,7 +1353,7 @@ un rând; nu deschide nimic.
 
 | Buton | Ce face | Ce nu se mai poate anula |
 |---|---|---|
-| **Înlocuiește linkul** | Adresa veche încetează să răspundă pe loc, iar una nouă este arătată, **o singură dată**, într-o fereastră care se închide doar cu *Am copiat-o*. Aceeași expirare ca a celei vechi; tura rămâne printre turele trecute ale peșterii; nimeni nu este anunțat | Adresa veche este pierdută definitiv. La fel și o adresă închisă înainte de a fi copiată — înlocuiți linkul din nou |
+| **Înlocuiește linkul** | Adresa veche încetează să răspundă pe loc, iar una nouă este arătată, **o singură dată**, într-o fereastră care se închide doar cu *Am copiat-o*. Aceeași expirare ca a celei vechi; tura rămâne printre turele trecute ale peșterii; nimeni nu este anunțat | Adresa veche este pierdută definitiv. La fel și o adresă închisă înainte de a fi copiată — înlocuiește linkul din nou |
 | **Retrage publicarea turei** | Retrage **toate** linkurile acelei ture într-o singură operație și spune câte | Tot ce urmează mai jos |
 | **Retrage tot ce este publicat** | Retrage toate linkurile instalării — toate turele, toate peșterile. Confirmarea spune câte linkuri arată lista ca fiind încă active, spune că sunt retrase și linkurile **turelor șterse** și cere scrierea unui cuvânt înainte ca butonul să funcționeze | Tot ce urmează mai jos, pentru toate turele deodată |
 
@@ -1382,7 +1382,7 @@ retrage linkurile.
 
 De aceea nu există nici un comutator de **„pauză"**: o adresă care ar putea începe iar să
 răspundă nu este una despre care să se poată spune că a fost retrasă. Dacă scopul este ca turele
-trecute să nu mai fie arătate, fără a renunța la linkuri, aceea este o setare a instalării (vedeți
+trecute să nu mai fie arătate, fără a renunța la linkuri, aceea este o setare a instalării (vezi
 [ghidul de instalare](../../../INSTALL.md#configuration-reference)) și apare pe această pagină
 ca un rând deasupra tabelului.
 
@@ -1400,10 +1400,10 @@ sau a uneia dintre intrările ei — cade în dreptunghiul acoperit de stațiile
 poartă o etichetă portocalie **Peșteră protejată în apropiere?**, iar același avertisment apare
 lângă un link atunci când este creat sau înlocuit.
 
-Citiți-l drept ceea ce este:
+Citește-l drept ceea ce este:
 
-- **Nu refuză nimic.** Linkul există și funcționează. Deschideți ridicarea, uitați-vă și
-  retrageți linkul dacă arată ce nu ar trebui publicat.
+- **Nu refuză nimic.** Linkul există și funcționează. Deschide ridicarea, uită-te și
+  retrage linkul dacă arată ce nu ar trebui publicat.
 - **Este o verificare după poziție și nu poate vedea în interiorul fișierului.** O peșteră se
   poate afla în dreptunghiul unei ridicări care nu intră deloc în ea. Iar o ridicare care
   *desenează* o vecină protejată trece nemarcată atunci când punctul înregistrat al acelei
@@ -1419,21 +1419,21 @@ Citiți-l drept ceea ce este:
 
 O pagină publicată răspunde unui link greșit în *orice* fel cu aceleași cuvinte — *„Nimic de
 arătat pentru acest link"* — oricare ar fi motivul, pentru ca un străin care încearcă o adresă
-la întâmplare să nu afle nimic. Un administrator poate deosebi motivele. Porniți de la rândul
-linkului de pe această pagină (îl găsiți după tură sau după **Cod în jurnal**, dacă vi l-a dat
+la întâmplare să nu afle nimic. Un administrator poate deosebi motivele. Pornește de la rândul
+linkului de pe această pagină (îl găsești după tură sau după **Cod în jurnal**, dacă ți l-a dat
 cel care administrează serverul):
 
 | Rândul spune | De ce pagina nu arată nimic | Ce este de făcut |
 |---|---|---|
-| **Retras** | Cineva a retras linkul sau l-a înlocuit | Nu poate fi pus la loc. Dați mai departe adresa arătată de **Înlocuiește linkul** sau publicați tura din nou |
-| Nu există niciun rând pentru acea adresă | Adresa din articol nu este un link al acestei instalări: tăiată la lipire, scrisă greșit, ori tura ei a fost ștearsă | Copiați din nou linkul din panoul de publicare al turei |
+| **Retras** | Cineva a retras linkul sau l-a înlocuit | Nu poate fi pus la loc. Dă mai departe adresa arătată de **Înlocuiește linkul** sau publică tura din nou |
+| Nu există niciun rând pentru acea adresă | Adresa din articol nu este un link al acestei instalări: tăiată la lipire, scrisă greșit, ori tura ei a fost ștearsă || Copiază din nou linkul din panoul de publicare al turei |
 | **În arhivă** | Nu este nimic în neregulă. Urmărirea a fost încheiată și perioada de grație a trecut: pagina proprie a linkului s-a terminat, iar tura este printre turele trecute ale peșterii, pe care același link le deschide | — |
-| **Abia încheiată**, iar tura nu este printre turele trecute | Nu este nimic în neregulă. Instalarea a stabilit o perioadă de grație: o tură abia încheiată rămâne pe pagina ei, marcată *Abia încheiată*, și trece printre turele trecute când se termină perioada. Fără una — cum pornește orice instalare — o tură încheiată este tură trecută imediat, iar această stare nu apare | Așteptați sfârșitul perioadei |
+| **Abia încheiată**, iar tura nu este printre turele trecute | Nu este nimic în neregulă. Instalarea a stabilit o perioadă de grație: o tură abia încheiată rămâne pe pagina ei, marcată *Abia încheiată*, și trece printre turele trecute când se termină perioada. Fără una — cum pornește orice instalare — o tură încheiată este tură trecută imediat, iar această stare nu apare || Așteaptă sfârșitul perioadei ||
 | **Nu deschide nimic**, cu urmărirea încă pornită | Linkul a expirat și nimeni nu încheiase urmărirea | **Încheie urmărirea** pe tură — devine tură trecută — sau **Înlocuiește linkul** |
-| **Nu deschide nimic**, altfel | Turele trecute sunt oprite pentru instalare (o spune un rând deasupra tabelului) sau tura este mai veche decât perioada cât sunt păstrate turele trecute | O setare a instalării: întrebați-l pe cel care administrează serverul |
+| **Nu deschide nimic**, altfel | Turele trecute sunt oprite pentru instalare (o spune un rând deasupra tabelului) sau tura este mai veche decât perioada cât sunt păstrate turele trecute | O setare a instalării: întreabă-l pe cel care administrează serverul |
 | **Reținut** | Poziția peșterii a fost protejată între timp sau urmărirea și-a pierdut peștera | Intenționat. Răspunde iar de la sine dacă asta nu mai ține |
-| **Urmărire în curs**, iar cititorii tot nu văd nimic sau li se spune să încerce mai târziu | Linkul este bun. Cititorii sunt refuzați ca prea multe cereri de la o singură adresă, serverul nu răspunde sau ceva aflat între ei și server repetă un răspuns vechi | Pentru cel care administrează serverul, mai jos. Uitați-vă întâi la adresa scrisă sub numere pe această pagină |
-| Linkul se deschide singur, dar cadrul dintr-un articol este gol | Site-ului nu i s-a permis să încadreze pagina | `SILEXGIS_FRAME_ANCESTORS` — vedeți [Pe site-ul dumneavoastră](#pe-site-ul-dumneavoastră) |
+| **Urmărire în curs**, iar cititorii tot nu văd nimic sau li se spune să încerce mai târziu | Linkul este bun. Cititorii sunt refuzați ca prea multe cereri de la o singură adresă, serverul nu răspunde sau ceva aflat între ei și server repetă un răspuns vechi | Pentru cel care administrează serverul, mai jos. Uită-te întâi la adresa scrisă sub numere pe această pagină |
+| Linkul se deschide singur, dar cadrul dintr-un articol este gol | Site-ului nu i s-a permis să încadreze pagina | `SILEXGIS_FRAME_ANCESTORS` — vezi [Pe site-ul tău](#pe-site-ul-tău) |
 
 **Pentru cel care administrează serverul.** Fiecare citire refuzată este scrisă în jurnalul
 serverului cu un motiv de un cuvânt și cu **Codul în jurnal** al linkului, niciodată cu adresa
@@ -1446,21 +1446,21 @@ instalare](../../../INSTALL.md#when-a-published-page-or-the-article-showing-it-s
 
 ## Când ceva este refuzat
 
-| Vedeți | De ce |
+|| Vezi | De ce ||
 |---|---|
-| *„Urmărirea nu a fost pornită niciodată pentru această tură, așa că jurnalul ei nu poate fi modificat."* | Porniți întâi urmărirea; o urmărire încheiată este în regulă |
-| *„Acea ridicare aparține altei peșteri…"* | O urmărire pornită rămâne în peștera ei — încheiați-o întâi |
-| *„Nicio stație nu corespunde acelei adâncimi sub filtrul acestei ture…"* | Lărgiți **Unde a spus echipa că merge** sau raportați o stație |
-| *„Un raport nu poate fi despre viitor."* | Verificați ora de pe el |
-| *„Serverul nu a răspuns — raportul nu a fost încă trimis. Este păstrat în acest browser…"* | Nu este un refuz: serverul nu a putut fi contactat, iar raportul este păstrat ca să fie trimis când revine conexiunea — vedeți *Raportarea fără semnal* |
-| *„Serverul este ocupat și nu a primit raportul — nu a fost încă trimis. Este păstrat în acest browser…"* | Nici acesta nu este un refuz: serverul a răspuns că primește *prea multe cereri* sau că este *ocupat*, iar raportul este păstrat și trimis din nou după cât a cerut serverul să se aștepte — vedeți *Raportarea fără semnal* |
-| *„Netrimis: serverul nu a răspuns, iar acest browser nu a putut păstra raportul…"* | Serverul nu a putut fi contactat, iar browserul nu stochează nimic (fereastră privată, date de site blocate). Cardul are încă ce ați scris: trimiteți din nou când revine conexiunea |
-| *„Refuzat:"* pe un raport în așteptare | Serverul a răspuns nu când raportul în așteptare a fost în sfârșit trimis. Rămâne păstrat până când apăsați **Trimite din nou** sau **Aruncă** |
-| *„Acel raport este din nou în jurnal — l-a pus cineva înapoi. Scoate-l mai întâi, apoi șterge-l definitiv."* | Altcineva a apăsat **Pune înapoi** pe el cât timp lista dumneavoastră de rapoarte scoase era deschisă. Nu s-a distrus nimic; dacă tot trebuie să dispară, ștergeți-l din nou din jurnal |
-| *„Spune când s-a spus. Urmărirea este încheiată, așa că raportul nu poate fi marcat cu ora de acum."* | Un raport adăugat pe o urmărire încheiată este completat ulterior: treceți la **Când s-a spus** momentul în care a fost făcut, în timpul turei |
-| *„Această tură nu are nicio urmărire pe care să fie importate rapoarte."* | Alegeți o ridicare și salvați întâi configurarea urmăririi |
-| *„Nu s-a importat nimic. Tura sau jurnalul ei s-au schimbat după ce foaia a fost citită…"* (cu titlul *Tura s-a schimbat cât timp era verificată foaia*) | Între citirea foii și apăsarea pe **Importă** s-a schimbat ceva de care depinde importul — cineva a înregistrat un raport la unul dintre momentele foii, o echipă sau un participant a fost modificat, un loc a fost declarat în peșteră — așa că foaia nu mai corespunde cu ce vi s-a arătat. Nu s-a scris nimic, iar foaia a fost citită din nou: verificați rândurile, bifați din nou suprascrierea dacă încă o vreți și apăsați **Importă** |
-| *„Publicarea acestei ture predă ridicarea topografică a peșterii, iar asta cere dreptul de a partaja peștera."* | Întrebați-l pe cel care se ocupă de peșteră |
+| *„Urmărirea nu a fost pornită niciodată pentru această tură, așa că jurnalul ei nu poate fi modificat."* || Pornește întâi urmărirea; o urmărire încheiată este în regulă |
+| *„Acea ridicare aparține altei peșteri…"* | O urmărire pornită rămâne în peștera ei — încheie-o întâi |
+| *„Nicio stație nu corespunde acelei adâncimi sub filtrul acestei ture…"* || Lărgește **Unde a spus echipa că merge** sau raportează o stație |
+| *„Un raport nu poate fi despre viitor."* || Verifică ora de pe el |
+| *„Serverul nu a răspuns — raportul nu a fost încă trimis. Este păstrat în acest browser…"* | Nu este un refuz: serverul nu a putut fi contactat, iar raportul este păstrat ca să fie trimis când revine conexiunea — vezi *Raportarea fără semnal* |
+| *„Serverul este ocupat și nu a primit raportul — nu a fost încă trimis. Este păstrat în acest browser…"* | Nici acesta nu este un refuz: serverul a răspuns că primește *prea multe cereri* sau că este *ocupat*, iar raportul este păstrat și trimis din nou după cât a cerut serverul să se aștepte — vezi *Raportarea fără semnal* |
+| *„Netrimis: serverul nu a răspuns, iar acest browser nu a putut păstra raportul…"* | Serverul nu a putut fi contactat, iar browserul nu stochează nimic (fereastră privată, date de site blocate). Cardul are încă ce ai scris: trimite din nou când revine conexiunea |
+| *„Refuzat:"* pe un raport în așteptare | Serverul a răspuns nu când raportul în așteptare a fost în sfârșit trimis. Rămâne păstrat până când apeși **Trimite din nou** sau **Aruncă** |
+| *„Acel raport este din nou în jurnal — l-a pus cineva înapoi. Scoate-l mai întâi, apoi șterge-l definitiv."* | Altcineva a apăsat **Pune înapoi** pe el cât timp lista ta de rapoarte scoase era deschisă. Nu s-a distrus nimic; dacă tot trebuie să dispară, șterge-l din nou din jurnal |
+| *„Spune când s-a spus. Urmărirea este încheiată, așa că raportul nu poate fi marcat cu ora de acum."* | Un raport adăugat pe o urmărire încheiată este completat ulterior: treci la **Când s-a spus** momentul în care a fost făcut, în timpul turei |
+| *„Această tură nu are nicio urmărire pe care să fie importate rapoarte."* || Alege o ridicare și salvează întâi configurarea urmăririi |
+| *„Nu s-a importat nimic. Tura sau jurnalul ei s-au schimbat după ce foaia a fost citită…"* (cu titlul *Tura s-a schimbat cât timp era verificată foaia*) | Între citirea foii și apăsarea pe **Importă** s-a schimbat ceva de care depinde importul — cineva a înregistrat un raport la unul dintre momentele foii, o echipă sau un participant a fost modificat, un loc a fost declarat în peșteră — așa că foaia nu mai corespunde cu ce ți s-a arătat. Nu s-a scris nimic, iar foaia a fost citită din nou: verifică rândurile, bifează din nou suprascrierea dacă încă o vrei și apasă **Importă** |
+| *„Publicarea acestei ture predă ridicarea topografică a peșterii, iar asta cere dreptul de a partaja peștera."* || Întreabă-l pe cel care se ocupă de peșteră |
 | *„Peștera acestei ture are coordonate protejate, așa că tura nu poate fi publicată deloc."* | Intenționat — desenul este poziția peșterii |
 | *„Acel link a fost deja retras, așa că nu mai este nimic de înlocuit. Publică tura din nou."* | L-a retras altcineva mai întâi — poate chiar acum o clipă, de pe alt ecran |
 | *„Nimic de arătat pentru acest link"* (pe pagina publică) | Retras, înlocuit, încheiat, sau peștera a fost protejată între timp |

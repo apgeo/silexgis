@@ -17,7 +17,7 @@ cititorilor sezonul.
 
 O întindere de teren pe care lucrează un club: un masiv, o zonă carstică, un sistem de văi.
 
-Tehnic, este **un element de tipul *zonă de lucru*** — nu o etichetă, nu o listă în care adăugați
+Tehnic, este **un obiect de tipul *zonă de lucru*** — nu o etichetă, nu o listă în care adaugi
 lucruri. Distincția contează în practică:
 
 > O etichetă este text liber la nivel de instalare. Redenumirea sau ștergerea celei care însemna
@@ -27,9 +27,9 @@ lucruri. Distincția contează în practică:
 Deci *a fi zonă de lucru este un fapt despre înregistrare*, nu despre lista în care s-a nimerit
 cineva s-o adauge.
 
-Fiind un element obișnuit, poartă nume, descriere, formă, etichete, [legături](links.md), istoric
+Fiind un obiect obișnuit, poartă nume, descriere, formă, etichete, [legături](links.md), istoric
 și permisiuni ca orice altceva — și este filtrată exact de aceeași regulă de acces ca orice alt
-element. **Nu există o a doua cale de acces aici.**
+obiect. **Nu există o a doua cale de acces aici.**
 
 ## Niveluri
 
@@ -38,14 +38,14 @@ de lucru**. Sunt zone de lucru aflate în interiorul alteia prin
 [ierarhia obișnuită de conținere](surface-features.md#ierarhie-părinți-și-copii).
 
 Ceea ce înseamnă că **o subzonă este o zonă de lucru în drept propriu din clipa în care o
-deschideți**, cu propriile subzone dedesubt.
+deschizi**, cu propriile subzone dedesubt.
 
 ## Crearea uneia
 
-Desenați o zonă pe hartă și înregistrați-o ca zonă de lucru — un element de tipul zonă de lucru.
+Desenează o zonă pe hartă și înregistreaz-o ca zonă de lucru — un obiect de tipul zonă de lucru.
 
-Dacă nu există încă niciuna, pagina o spune: *„Nu a fost marcată încă nicio zonă de lucru.
-Desenați o zonă pe hartă și înregistrați-o ca zonă de lucru."*
+Dacă nu există încă niciuna, pagina o spune: *„Nicio zonă de lucru nu a fost marcată încă.
+Desenează o zonă pe hartă și înregistreaz-o ca zonă de lucru."*
 
 **O zonă poate exista înainte de conturul ei.** O zonă de lucru fără formă desenată este listată
 în continuare pe panou; vederea de ansamblu pur și simplu o lasă în afara hărții, în loc să-i
@@ -60,11 +60,11 @@ deosebite prin culoare și denumite pe hartă, cu nivelul de dedesubt la un clic
 
 | Control | |
 |---|---|
-| **Toate zonele** / **La acest nivel** | Răsfoiți tot setul sau doar nivelul curent |
-| **Firul de navigare** | Lanțul de sus până la ce ați deschis |
+| **Toate zonele** / **La acest nivel** | Răsfoiești tot setul sau doar nivelul curent |
+| **Firul de navigare** | Lanțul de sus până la ce ai deschis |
 | **Pe hartă** | Deschide zona în spațiul de lucru al hărții |
-| **Vezi tot** | |
-| **Zone înăuntru: n** | Vi se spune *înainte* să se ceară formele acelui nivel, ca să știți că mai există un nivel de deschis |
+| **Vezi toate** | |
+| **Zone în interior: n** | Ți se spune *înainte* să se ceară formele acelui nivel, ca să știi că mai există un nivel de deschis |
 
 Numele sunt desenate cu un halou, pentru că stau la fel de des peste imagini aeriene ca peste un
 fundal simplu. Harta de ansamblu desenează doar fundaluri obișnuite din dale; un serviciu de hărți
@@ -73,10 +73,10 @@ fundal simplu. Harta de ansamblu desenează doar fundaluri obișnuite din dale; 
 
 ### Un lucru care arată a defect și nu este
 
-**O zonă al cărei părinte nu îl puteți citi apare la primul nivel.**
+**O zonă al cărei părinte nu îl poți citi apare la primul nivel.**
 
-Serverul declară un părinte doar când aveți voie să citiți și acel părinte — deci o zonă
-cuibărită sub ceva ce nu puteți vedea trebuie să apară *undeva*. Eliminată, ar dispărea complet
+Serverul declară un părinte doar când ai voie să citești și acel părinte — deci o zonă
+cuibărită sub ceva ce nu poți vedea trebuie să apară *undeva*. Eliminată, ar dispărea complet
 din vederea de ansamblu: vizibilă pentru server, invizibilă pentru cititorul ei.
 
 Așa că doi oameni pot vedea pe bună dreptate aceeași zonă la niveluri diferite ale arborelui, și
@@ -84,8 +84,8 @@ ambele vederi sunt corecte.
 
 ### Dacă sunt mai multe decât încap
 
-*„Nu sunt afișate toate zonele de lucru: această instalare are mai multe decât listează această
-vedere."* Limita este declarată, nu lăsată să fie dedusă din numărătoare.
+*„Nu sunt afișate toate zonele de lucru: instalația conține mai multe decât listează această
+vizualizare."* Limita este declarată, nu lăsată să fie dedusă din numărătoare.
 
 ---
 
@@ -97,7 +97,7 @@ lucru este arătată acolo **împreună cu ce o conține**, ceea ce deosebește 
 același nume.
 
 **Pe o tabără.** O tabără are propria zonă de lucru, desenată pe harta ei alături de turele pe
-care le puteți citi.
+care le poți citi.
 
 **Pe panoul de bord.** Zonele de lucru sunt unul dintre panourile pe care le poate purta.
 

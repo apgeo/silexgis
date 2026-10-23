@@ -1,4 +1,4 @@
-# Flux: partajarea muncii dumneavoastră
+# Flux: partajarea muncii tale
 
 🇬🇧 [English](../../workflows/share-your-work.md) · 🇷🇴 **Română**
 
@@ -10,18 +10,18 @@
 
 Cineva din afară trebuie să vadă ceva. Un proprietar de teren, un redactor de revistă, alt club,
 un oficiu, publicul. Există cinci mecanisme diferite și nu sunt interschimbabile — alegerea
-greșită fie nu îi ajunge, fie divulgă mai mult decât ați vrut.
+greșită fie nu îi ajunge, fie divulgă mai mult decât ai vrut.
 
 ---
 
-## Hotărâți întâi: cine este persoana aceasta?
+## Hotărăște întâi: cine este persoana aceasta?
 
-| Este | Folosiți |
+| Este | Folosește |
 |---|---|
-| Un membru al acestei instalări | **Acordați-i acces** — o regulă de permisiune sau vizibilitatea înregistrării |
+| Un membru al acestei instalări | **Acordă-i acces** — o regulă de permisiune sau vizibilitatea înregistrării |
 | Cineva din club, fără cont | **Nimic nu funcționează.** Trebuie să primească un cont, sau să fie contactat altfel |
 | Un străin care are nevoie de o singură înregistrare | **Un link de partajare** |
-| Un străin care trebuie să vadă o hartă configurată de dumneavoastră | **O vedere partajată** |
+| Un străin care trebuie să vadă o hartă configurată de tine | **O vedere partajată** |
 | Oricine, pentru poze | **Galeria publică** sau un **album partajat** |
 | Cineva aflat la peșteră cu un telefon | **Un cod QR tipărit** — care nu îi spune aproape nimic |
 
@@ -31,11 +31,11 @@ greșită fie nu îi ajunge, fie divulgă mai mult decât ați vrut.
 
 Două pârghii.
 
-**Schimbați vizibilitatea înregistrării** — privată, grup de speologie, autentificați, publică.
+**Schimbă vizibilitatea înregistrării** — privată, grup de speologie, autentificați, publică.
 Grosier, dar adesea corect: a face o peșteră *autentificată* înseamnă că oricine are cont o poate
 citi.
 
-**Scrieți o regulă de permisiune.** Pe obiectul însuși (fila *Permisiuni*), sau într-un
+**Scrie o regulă de permisiune.** Pe obiectul însuși (fila *Permisiuni*), sau într-un
 [grup de permisiuni](../admin/permissions.md) din care face parte. O regulă numește un subiect
 (un utilizator sau un grup de speologie), un efect (permite sau refuză), acțiunile și un domeniu.
 
@@ -43,29 +43,29 @@ Domenii de reținut:
 
 - **Doar acest obiect**
 - **Acest obiect și tot ce conține** — subarborele
-- **Un set de elemente** — un set numit de elemente către care pot arăta reguli
+- **Un set de obiecte** — un set numit de obiecte către care pot arăta reguli
 - **Un dulap și tot ce este clasat sub el**
 - **Conținutul unui grup de speologie**
 - **Obiectele proprii**, **Tot**
 
 > Un **refuz** bate orice permisiune de la același nivel, iar o regulă scrisă direct pe un obiect
-> bate orice se moștenește. Fereastra o spune înainte să salvați.
+> bate orice se moștenește. Fereastra o spune înainte să salvezi.
 
-Dacă nu sunteți sigur de ce cineva vede sau nu vede ceva: fiecare obiect are **„Accesul
-dumneavoastră aici și motivul lui"**, care numește regula care a decis.
+Dacă nu ești sigur de ce cineva vede sau nu vede ceva: fiecare obiect are **„Accesul
+tău aici și motivul lui"**, care numește regula care a decis.
 
 ## 2. Un link de partajare — o înregistrare, revocabil
 
-Pe o peșteră sau pe un element: **Partajează → Creează link**. (O vedere salvată are un link
-propriu — vedeți secțiunea următoare.)
+Pe o peșteră sau pe un obiect: **Partajează → Creează link**. (O vedere salvată are un link
+propriu — vezi secțiunea următoare.)
 
-Alegeți:
+Alege:
 
 - **Public** sau **Necesită autentificare**,
 - **Include înregistrările conținute** — dacă vine și subarborele.
 
-Linkul este **afișat o singură dată**. Copiați-l atunci; nu poate fi recuperat după aceea. Dacă
-îl pierdeți, revocați-l și generați altul.
+Linkul este **afișat o singură dată**. Copiază-l atunci; nu poate fi recuperat după aceea. Dacă
+îl pierzi, revocă-l și generează altul.
 
 Linkurile existente sunt listate cu data creării și cu starea *Activ* sau *Revocat*.
 **Revocarea** omoară un link imediat.
@@ -76,28 +76,28 @@ Linkurile existente sunt listate cu data creării și cu starea *Activ* sau *Rev
 
 ## 3. O vedere de hartă partajată
 
-Salvați harta curentă — extinderea, straturile, filtrele ei — ca **vedere salvată** (*Vederi
-salvate → Salvează vederea curentă*). Apoi apăsați pe ea **Link de partajare**: primiți linkul de
+Salvează harta curentă — extinderea, straturile, filtrele ei — ca **vedere salvată** (*Vederi
+salvate → Salvează vederea curentă*). Apoi apasă pe ea **Link de partajare**: primești linkul de
 copiat și același link ca cod QR.
 
-Cine deschide linkul primește zona așa cum ați configurat-o, peste un fundal public, cu
+Cine deschide linkul primește zona așa cum ai configurat-o, peste un fundal public, cu
 protecțiile ținând mai strâns decât pentru orice cont. Util pentru „iată zona despre care
-vorbim" fără să dați cont nimănui. Știți ce lasă afară:
+vorbim" fără să dai cont nimănui. Știi ce lasă afară:
 
-- **Doar ce este Public prin sine** se desenează, și **nimic dintr-o peșteră sau un element
+- **Doar ce este Public prin sine** se desenează, și **nimic dintr-o peșteră sau un obiect
   protejat** — nici măcar o poziție aproximativă.
-- **O vedere restrânsă de un filtru nu arată prin link nicio peșteră și niciun element**, pentru
+- **O vedere restrânsă de un filtru nu arată prin link nicio peșteră și niciun obiect**, pentru
   că în spatele unui link nu este nimeni ca care să ruleze filtrul; straturile desenate din filtre
-  salvate nu apar niciodată. Dialogul de partajare o spune înainte să trimiteți linkul. O vedere
+  salvate nu apar niciodată. Dialogul de partajare o spune înainte să trimiți linkul. O vedere
   restrânsă doar de eticheta din panoul de straturi arată în continuare ce lasă eticheta să
   treacă.
 - **Un loc scris în filtrul hărții nu se salvează niciodată într-o vedere**, așa că nu poate
   călători printr-un link.
 
-Linkul rămâne același cât timp există vederea; ca să-l încheiați, ștergeți vederea. Vedeți
+Linkul rămâne același cât timp există vederea; ca să-l închei, șterge vederea. Vezi
 [Vederi salvate](../features/saved-views-and-windows.md#vederi-salvate).
 
-Puteți folosi și **Exportă imaginea hărții**, pentru o poză de lipit într-un document.
+Poți folosi și **Exportă imaginea hărții**, pentru o poză de lipit într-un document.
 
 ## 4. Fotografii: galeria publică și albumele partajate
 
@@ -112,15 +112,15 @@ tot revocabil.
 
 Amândouă arată **doar randări** — niciodată fișierul original, niciodată metadatele aparatului.
 
-Dați fotografiilor un **credit și o licență** înainte să le publicați. Lista de licențe merge de
+Dă fotografiilor un **credit și o licență** înainte să le publici. Lista de licențe merge de
 la CC0, prin familia CC BY, până la *Toate drepturile rezervate*, plus *Nimeni nu a spus*.
 
 ## 5. Un cod QR tipărit la peșteră
 
 Dacă clubul prinde etichete pe pereții peșterilor, adresa de pe etichetă se rezolvă — dar abia.
 
-Din pagina unei peșteri: **Coduri tipărite**. Fie **Publicați** (codurile de la această peșteră
-se rezolvă pentru oricine), fie **Opriți publicarea** (etichetele deja montate nu răspund nimic).
+Din pagina unei peșteri: **Coduri tipărite**. Fie **Publică** (codurile de la această peșteră
+se rezolvă pentru oricine), fie **Oprește publicarea** (etichetele deja montate nu răspund nimic).
 
 Ce primește efectiv un străin care scanează: o pagină care spune că **codul este înregistrat la
 această instalare, și nimic altceva.** Fără nume, fără poziție, fără fotografie. A avea cont nu
@@ -148,8 +148,8 @@ Nu chiar partajare, dar înrudit: cine este împuternicit poate **Anunța** un g
 un rând care ajunge la fiecare membru cu cont, fiecăruia în felul pe care l-a ales (poștă sau în
 aplicație), nu ca o listă de mail de pe care nimeni nu poate ieși.
 
-Înainte de trimitere vi se spune **la câți oameni ajunge**, iar confirmarea este un pas separat.
-Un mesaj către două sute de oameni nu este niciodată un singur clic neatent. Vedeți
+Înainte de trimitere ți se spune **la câți oameni ajunge**, iar confirmarea este un pas separat.
+Un mesaj către două sute de oameni nu este niciodată un singur clic neatent. Vezi
 [Persoane și cluburi](../features/people-and-clubs.md#anunțarea-unui-club).
 
 ---

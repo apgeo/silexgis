@@ -22,11 +22,11 @@ pentru toată lumea — este o listă obișnuită, iar modificările administrat
 
 ## Scrierea uneia
 
-**Listă de verificare nouă**: un titlu, o descriere, **cine o poate citi** și **rândurile**.
+**Listă nouă**: un titlu, o descriere, **Cine o poate citi** și **Linii**.
 
-Vizibilitate: *Doar eu · Grupul meu de speologie · Oricine autentificat · Toată lumea.*
+Vizibilitate: *Doar eu · Clubul meu · Oricine este autentificat · Toată lumea.*
 
-Ca să dați o listă unei singure persoane, pe nume, și nu unei audiențe întregi, folosiți butonul
+Ca să dai o listă unei singure persoane, pe nume, și nu unei audiențe întregi, folosește butonul
 **lacăt** de pe fișa ei: deschide același dialog de permisiuni pe care îl are o tură sau o peșteră.
 
 > **Lista implicită publicată de un administrator nu este nimic altceva decât o listă cu o
@@ -44,17 +44,18 @@ Pagina turei arată lista ca **rânduri de bifat**, cu un discret *3 din 7* pe l
 
 - Bifarea înregistrează **cine a spus asta și când**.
 - **Reformularea unui rând ulterior nu pierde ce fusese deja confirmat.**
-- Pagina o spune limpede: *„Aceasta este o citire pentru echipă, nu o regulă. Nimic nu este
-  refuzat pentru că un rând nu este rezolvat."*
+- Pagina o spune limpede: *„Aceasta este o informare pentru echipă, nu o regulă. Nimic nu este
+  refuzat pentru că o linie a rămas nerezolvată, iar gradul de pregătire nu schimbă niciodată cine
+  poate citi tura."*
 
 ## Ce nu fac niciodată listele de verificare
 
 - **Nimic nu este refuzat vreodată pentru că o listă este neterminată.** Ea îi spune echipei unde
   se află; nu blochează nimic.
 - **Nu decide nimic despre cine poate citi planul.**
-- **Listele pe care nu aveți voie să le citiți nu vă sunt numite**, și nu vi se arată nici un
-  număr al lor. O tură a cărei listă nu o puteți vedea spune *„Această tură nu parcurge nicio
-  listă de verificare pe care s-o puteți vedea."*
+- **Listele pe care nu ai voie să le citești nu îți sunt numite**, și nu ți se arată nici un
+  număr al lor. O tură a cărei listă nu o poți vedea spune *„Această tură nu parcurge nicio
+  listă pe care o poți vedea."*
 
 Ștergerea unei liste pierde confirmările făcute de ture pe rândurile ei, iar confirmarea o spune.
 
@@ -66,9 +67,9 @@ O tură poate spune **când se așteaptă echipa înapoi** și poate fi anunțat
 
 ## Stabilirea unuia
 
-Pe tură: **Stabilește un apel de urgență**.
+Pe tură: **Stabilește o alarmă**.
 
-- **Așteptată înapoi** — când se așteaptă echipa să iasă.
+- **Ieșire estimată** — când se așteaptă echipa să iasă.
 - **Dă alarma la** — ora la care se dă alarma dacă nimeni nu a anunțat. Nu poate fi mai devreme
   decât întoarcerea așteptată.
 
@@ -81,7 +82,7 @@ Acel e-mail numește tura, data și ora așteptată în UTC — și **niciodată
 declanșează o căutare citește tura, unde răspunsul este deja păstrat sub regulile care decid cine
 poate să-l aibă.
 
-Pagina turei arată **Această echipă a întârziat**.
+Pagina turei arată **Echipa are întârziere**.
 
 ## Anularea alarmei
 
@@ -96,9 +97,9 @@ Anularea **dezarmează verificarea, nu o șterge**, așa că ce s-a stabilit ră
 
 | Stare | |
 |---|---|
-| **Niciunul stabilit** | |
-| **Supraveghează** | Armat |
-| **Întârziat** | Alarma s-a declanșat |
+| **Neprogramat** | |
+| **În supraveghere** | Armat |
+| **Întârziere** | Alarma s-a declanșat |
 | **Echipa a ieșit** | Anulat |
 
 ## Când supraveghetorul însuși s-a oprit
@@ -106,8 +107,9 @@ Anularea **dezarmează verificarea, nu o șterge**, așa că ce s-a stabilit ră
 O tură cu alarmă armată arată și **când a rulat ultima oară verificarea**.
 
 > **Tăcerea este vestea bună într-un apel de urgență**, așa că un supraveghetor oprit și o echipă
-> aflată în siguranță în subteran arată identic. Pagina înclină spre a vă spune că nimeni nu s-a
-> uitat: *„O alarmă este stabilită, dar verificarea care ar declanșa-o nu a rulat recent."*
+> aflată în siguranță în subteran arată identic. Pagina înclină spre a-ți spune că nimeni nu s-a
+> uitat: *„Alarma este programată, dar verificarea care ar declanșa-o nu a mai rulat de ceva
+> vreme — deci nimeni nu a confirmat că echipa este în grafic."*
 
 ## Memento-uri și ce le oprește
 
@@ -122,7 +124,7 @@ pentru care au fost stabilite nu mai este una pe care merge cineva.
 
 > O alarmă este **un îndemn să te duci să vezi**, nu o garanție că cineva a fost contactat.
 
-Nu construiți o procedură de salvare care presupune că e-mailul a ajuns. Construiți una care
+Nu construi o procedură de salvare care presupune că e-mailul a ajuns. Construiește una care
 presupune că cineva urmărește ceasul, iar e-mailul este un ghiont util.
 
 Notificarea de apel de urgență **nu poate fi oprită** și **nu este niciodată reținută pentru un

@@ -19,8 +19,8 @@ face munca ce nu s-a făcut la vremea ei.
 ---
 
 > **Acestea nu au încă o pagină proprie.** Se declanșează prin interfața de programare a
-> aplicației, nu dintr-un buton. Dacă nu vă simțiți în largul dumneavoastră făcând asta, pagina
-> este totuși cea către care să vă îndreptați administratorul — spune ce operațiune rezolvă ce
+> aplicației, nu dintr-un buton. Dacă nu te simți în largul tău făcând asta, pagina
+> este totuși cea către care să-ți îndrepți administratorul — spune ce operațiune rezolvă ce
 > simptom.
 
 ---
@@ -32,12 +32,12 @@ face munca ce nu s-a făcut la vremea ei.
 Citește textul fișierelor stocate pe care **nu le-a citit nimic**, sau pe care **un cititor mai
 nou ar trebui să le citească din nou**.
 
-**Rulați-o când:**
+**Rulează-o când:**
 
-- documente încărcate înainte să observați că există căutare în text nu apar în rezultate,
-- un lot de fișiere arată *„Nu poate citi încă textul acestui format"*, iar instalarea a fost
+- documente încărcate înainte să observi că există căutare în text nu apar în rezultate,
+- un lot de fișiere arată *„Nimic de aici nu știe încă să citească textul acestui format."*, iar instalarea a fost
   actualizată între timp,
-- ați importat în masă o arhivă dintr-un dosar de pe server și vreți s-o faceți căutabilă.
+- ai importat în masă o arhivă dintr-un dosar de pe server și vrei s-o faci căutabilă.
 
 După aceea, starea **Text** a fiecărui document ar trebui să treacă la *Textul a fost citit*.
 Fișierele care chiar nu conțin text — scanări, PDF-uri doar-imagine — vor spune tot asta, pe bună
@@ -49,10 +49,10 @@ schimbă asta.
 Face **o copie lizibilă pentru fiecare document de birou care nu are încă una** — paginile pe care
 browserul le arată pentru fișiere Word, Excel, PowerPoint și OpenDocument.
 
-**Rulați-o când:**
+**Rulează-o când:**
 
-- ați instalat serviciul opțional de conversie *după* ce ați încărcat o arhivă,
-- documentele arată la nesfârșit *„Acest document se pregătește pentru citire aici"*, sau *„Această
+- ai instalat serviciul opțional de conversie *după* ce ai încărcat o arhivă,
+- documentele arată la nesfârșit *„Documentul se pregătește pentru citit aici."*, sau *„Această
   instalare nu poate pagina documente de birou"*, iar asta a fost rezolvată între timp.
 
 Aceasta este cea mai probabilă operațiune de care are nevoie un club, pentru că serviciul de
@@ -62,31 +62,31 @@ conversie este opțional și se adaugă de obicei mai târziu.
 
 Pune **poziția înregistrată de un aparat** pe fotografiile deja stocate fără una.
 
-**Rulați-o când:**
+**Rulează-o când:**
 
 - fotografiile geolocalizate nu apar pe stratul *Fotografii geolocalizate* al hărții,
-- ați importat o arhivă foto mare înainte ca asta să funcționeze.
+- ai importat o arhivă foto mare înainte ca asta să funcționeze.
 
 Citește ce este în fișiere. Nu inventează poziții și nu scrie nimic înapoi în fișierele
-dumneavoastră de imagine.
+tale de imagine.
 
 ### Citirea topografiilor
 
-Citește din nou **fiecare poligonație** (`.lox` / `.3d`) a instalării, din fișierul deja păstrat.
+Citește din nou **fiecare model de drumuire** (`.lox` / `.3d`) a instalării, din fișierul deja păstrat.
 
-**Rulați-o când:**
+**Rulează-o când:**
 
-- ați actualizat la o versiune ale cărei note spun că topografiile sunt citite altfel — o stație
+- ai actualizat la o versiune ale cărei note spun că topografiile sunt citite altfel — o stație
   numită în alt fel, o cifră înregistrată de acum, pereți construiți de acum dintr-un grafic,
 - modelele topo încărcate înaintea unei asemenea actualizări se comportă altfel decât cele
   încărcate după ea.
 
 Înlocuiește ce a produs fiecare citire anterioară; nu se încarcă nimic și niciun model nu își
 schimbă identitatea, așa că turele urmărite pe un model rămân pe el. Un model nu reține ce
-versiune l-a citit, așa că operațiunea le ia pe **toate**, nu doar pe cele vechi — socotiți că
+versiune l-a citit, așa că operațiunea le ia pe **toate**, nu doar pe cele vechi — socotește că
 durează cât citirea fiecărei topografii o dată. Modelele care nu au putut fi citite sunt
 încercate din nou; pereții (`.stl`) sunt lăsați în pace. Pentru un singur model, **Citește din
-nou** pe rândul lui din lista peșterii face același lucru — vedeți
+nou** pe rândul lui din lista peșterii face același lucru — vezi
 [Topografii și modele](../features/surveys-and-models.md).
 
 **Se pornește cu** `POST /api/v1/jobs/survey-reading-backfill`, dintr-un cont care are dreptul de
@@ -102,7 +102,7 @@ pas. Dacă o topografie nu poate fi citită de data aceasta, păstrează citirea
 ## Ce au în comun
 
 - **Niciuna nu primește vreo intrare proprie.** Munca este o proprietate a rândurilor instalării,
-  deci singurul lucru care variază este care operațiune rulați.
+  deci singurul lucru care variază este care operațiune rulezi.
 - **Se pun la coadă ca sarcini de fundal**, ca un import sau o conversie raster. Nu blochează pe
   nimeni: o operațiune este luată doar când nu așteaptă nicio altă muncă, deci un import pe care
   cineva tocmai l-a confirmat nu rămâne în urma unei treceri peste toate fișierele stocate.
@@ -110,7 +110,7 @@ pas. Dacă o topografie nu poate fi citită de data aceasta, păstrează citirea
   jurul ei — baza de date care repornește, o depășire de timp, o eroare de rețea — se întoarce în
   coadă și este luată din nou după 30 de secunde, apoi după 2 minute: trei încercări în total. O
   eroare care s-ar repeta la fel nu este reîncercată.
-- **Au nevoie de dreptul de *Rulare* pe domeniul Jobs** — vedeți
+- **Au nevoie de dreptul de *Rulare* pe domeniul Jobs** — vezi
   [Permisiuni](permissions.md#acțiuni).
 - **Se pot rula de mai multe ori în siguranță.** O operațiune face munca nefăcută; nu reface munca
   făcută. Operațiunea de citire a topografiilor este excepția
@@ -120,11 +120,11 @@ pas. Dacă o topografie nu poate fi citită de data aceasta, păstrează citirea
 
 ## Urmărirea uneia
 
-O sarcină pusă la coadă are o stare pe care o puteți citi — cel care a cerut-o își poate vedea
+O sarcină pusă la coadă are o stare pe care o poți citi — cel care a cerut-o își poate vedea
 propriile sarcini, iar cine are **Citire** pe domeniul Jobs le poate vedea pe oricare.
 
 Membrii care au cerut să fie anunțați când **încărcările lor termină de procesat** vor primi
-notificarea pe măsură ce munca se așază. Vedeți [Notificări](../features/notifications.md).
+notificarea pe măsură ce munca se așază. Vezi [Notificări](../features/notifications.md).
 
 ---
 

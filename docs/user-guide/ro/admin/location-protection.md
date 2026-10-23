@@ -6,11 +6,11 @@
 
 ---
 
-Mecanismul care permite unei instalări să spună **„această peșteră există și aveți voie să citiți
-despre ea, dar nu aveți voie să știți unde este."**
+Mecanismul care permite unei instalări să spună **„această peșteră există și ai voie să citești
+despre ea, dar nu ai voie să știi unde este."**
 
 Este motivul specific speologic pentru care există această aplicație în loc să se folosească un
-SIG general, și merită înțeles ca lumea chiar dacă nu administrați nimic.
+SIG general, și merită înțeles ca lumea chiar dacă nu administrezi nimic.
 
 ---
 
@@ -23,11 +23,11 @@ documentele, turele care au numit-o. Ce se reține este **poziția exactă** —
 poziția exactă ar putea fi reconstituită.
 
 Vederea unei poziții protejate exacte este o acțiune proprie de permisiune: **Locație exactă**. Se
-acordă ca orice altă acțiune, la orice cuprins. Vedeți [Permisiuni](permissions.md).
+acordă ca orice altă acțiune, la orice cuprins. Vezi [Permisiuni](permissions.md).
 
 ## Stabilirea ei
 
-Pe o peșteră sau un element, în secțiunea **Acces**: **Locație protejată**.
+Pe o peșteră sau un obiect, în secțiunea **Acces**: **Locație protejată**.
 
 > *„Coordonatele exacte și câmpurile de localizare precisă sunt ascunse utilizatorilor fără
 > permisiune explicită."*
@@ -35,10 +35,10 @@ Pe o peșteră sau un element, în secțiunea **Acces**: **Locație protejată**
 Se mai poate stabili:
 
 - pe formularul **Intrare nouă** al hărții (*Protejează locația exactă*),
-- în masă la un [import GPS](../features/geodata.md) — *Marchează tot ce se creează drept locație
+- în masă la un [import GPS](../features/geodata.md) — *Marchează tot ce se creează ca locație
   protejată*,
 - **prin moștenire**: conținerea transmite protecția **în jos**, deci protejarea unei zone
-  carstice protejează elementele dinăuntrul ei.
+  carstice protejează obiectele dinăuntrul ei.
 
 ---
 
@@ -49,21 +49,21 @@ protecție.
 
 | Cale | Ce primește un cititor fără drept |
 |---|---|
-| **Harta** | O poziție aproximativă, marcată *„Locație aproximativă — coordonatele exacte sunt protejate"*, sau *„Locație nedivulgată"* pentru o geometrie |
+| **Harta** | O poziție aproximativă, marcată *„Locație aproximativă — coordonatele exacte sunt protejate."*, sau *„Localizare nedivulgată — geometria exactă este protejată."* pentru o geometrie |
 | **Tabele și liste** | Câmpurile de localizare precisă sunt reținute |
 | **Exporturi** (GeoJSON, GPX, KML, CSV, shapefile) | Aceeași protecție ca ecranul |
-| **Linkuri și vederi partajate** | Aceeași protecție. Partajarea nu este o cale de ocolire. [Linkul unei vederi partajate](../features/saved-views-and-windows.md#vederi-salvate) merge mai departe: nu desenează **deloc o peșteră sau un element protejat** — nici aproximativ, nici numărat într-un grup — chiar și acolo unde orice cont îl poate vedea exact, pentru că nimic din ce li se acordă conturilor nu urmează un link |
+| **Linkuri și vederi partajate** | Aceeași protecție. Partajarea nu este o cale de ocolire. [Linkul unei vederi partajate](../features/saved-views-and-windows.md#vederi-salvate) merge mai departe: nu desenează **deloc o peșteră sau un obiect protejat** — nici aproximativ, nici numărat într-un grup — chiar și acolo unde orice cont îl poate vedea exact, pentru că nimic din ce li se acordă conturilor nu urmează un link |
 | **Fotografii** | **Originalul** unei poze al cărei punct de capturare ar localiza peștera este refuzat. Randarea se arată |
-| **Pagini și rapoarte de tură** | Peșterile pe care nu le puteți deschide **nu sunt numite**; vi se spune *câte* nu sunt numite. Raportul generat al unei ture reține la fel o stație și o adâncime — dar vedeți limita de mai jos pentru un raport **deja clasat** |
+| **Pagini și rapoarte de tură** | Peșterile pe care nu le poți deschide **nu sunt numite**; ți se spune *câte* nu sunt numite. Raportul generat al unei ture reține la fel o stație și o adâncime — dar vezi limita de mai jos pentru un raport **deja clasat** |
 | **E-mailuri de notificare** | **Nu numesc niciodată o peșteră.** Nici mesajele de tură, nici alarma de echipă întârziată |
 | **Calendarul** | Un rând **nu numește niciodată o peșteră**, nici un număr de peșteri omise |
 | **Istoricul modificărilor** | O valoare protejată se citește *„Valoare ascunsă (locație protejată)"* |
-| **Cea mai mică distanță** | Refuzată dacă nu puteți localiza **ambele** peșteri |
-| **Roca de deasupra** | Refuzată **în întregime** dacă nu puteți localiza peștera — nu o curbă goală, nimic. Curba este poziția galeriei desenată față de terenul de deasupra ei. Are nevoie și de dreptul de a citi datele de elevație |
-| **Verificarea duplicatelor la import** | Se compară doar cu obiectele a căror poziție exactă o puteți vedea |
+| **Cea mai mică distanță** | Refuzată dacă nu poți localiza **ambele** peșteri |
+| **Roca de deasupra** | Refuzată **în întregime** dacă nu poți localiza peștera — nu o curbă goală, nimic. Curba este poziția galeriei desenată față de terenul de deasupra ei. Are nevoie și de dreptul de a citi datele de elevație |
+| **Verificarea duplicatelor la import** | Se compară doar cu obiectele a căror poziție exactă o poți vedea |
 | **Originea unui `.stl`** | Originea precompletată spune că este deliberat aproximativă și cere punctul adevărat |
 | **Paginile QR** | Nicio peșteră, niciun loc, nicio poziție — pentru nimeni, cu sau fără cont |
-| **Sincronizarea cu telefonul** | O poziție pe care nu aveți voie s-o aveți este **pur și simplu absentă** |
+| **Sincronizarea cu telefonul** | O poziție pe care nu ai voie s-o ai este **pur și simplu absentă** |
 | **Legături** | O legătură arată fiecărui cititor doar capetele pe care le poate vedea |
 | **Ture publicate** | O peșteră protejată **nu poate fi publicată deloc**, iar protejarea ei ulterioară închide linkurile deja date. O limită: un fișier de ridicare înregistrat la o peșteră neprotejată poate desena și o vecină protejată, iar asta nu se poate vedea în interiorul fișierului — aplicația doar [avertizează după poziție](../features/live-tracking.md#peșteră-protejată-în-apropiere) |
 
@@ -75,7 +75,7 @@ același răspuns.
 
 **Un raport clasat înainte ca o peșteră să fie protejată poate numi în continuare stațiile acelei
 peșteri pentru oricine poate citi tura. Protejarea peșterii nu retrage copia aceea, iar modul de a
-o înlătura este să ștergeți copia clasată.**
+o înlătura este să ștergi copia clasată.**
 
 O tură poate fi [urmărită de la suprafață](../features/live-tracking.md), iar modelul de raport al
 unui club poate tipări jurnalul urmăririi, sau lista stațiilor ridicării, în raportul turei. O
@@ -84,12 +84,12 @@ cont în ziua în care a fost făcută și continuă să le spună și după ace
 harta, fila de urmărire, un export, un raport făcut din nou — întreabă iar la fiecare citire și
 reține locul cum trebuie; doar un fișier deja clasat nu poate.
 
-Așadar, când protejați o peșteră care a fost urmărită de la suprafață:
+Așadar, când protejezi o peșteră care a fost urmărită de la suprafață:
 
-1. Deschideți turele urmărite în ea (pagina peșterii le listează) și vedeți ce este clasat pe
+1. Deschide turele urmărite în ea (pagina peșterii le listează) și vezi ce este clasat pe
    fiecare.
-2. Ștergeți orice raport clasat al cărui model a tipărit urmărirea sau lista stațiilor.
-3. Raportați tura din nou dacă clubul vrea o copie acolo — cea nouă nu numește nicio stație.
+2. Șterge orice raport clasat al cărui model a tipărit urmărirea sau lista stațiilor.
+3. Raportează tura din nou dacă clubul vrea o copie acolo — cea nouă nu numește nicio stație.
 
 Scoaterea automată a acelor copii de pe ture a fost construită și apoi oprită: trebuia să treacă
 mult mai larg decât problema (un fișier nu consemnează nimic despre faptul că modelul lui a
@@ -107,7 +107,7 @@ schimbă.
 - **Că peștera există**, numele și codul ei.
 - **Documentele ei.** Documentele unei peșteri protejate sunt întotdeauna servite — nu sunt
   niciodată ascunse sau scoase.
-- **Că o listă este scurtă.** Primiți *„n care nu vă sunt arătate"*, nu o listă tacit incompletă.
+- **Că o listă este scurtă.** Primești *„n nearătate ție"*, nu o listă tacit incompletă.
   Ascunderea numărului ar fi propriul ei fel de scurgere.
 
 ### Setarea de asociere a atașamentelor
@@ -154,21 +154,21 @@ o audiență anume, iar aproximarea lor le-ar face inutile pentru scopul în car
 Răspunsul aplicației este să **avertizeze zgomotos în momentul desenării**, nu să degradeze tacit
 datele.
 
-**Spuneți-le membrilor despre acestea două.** Sunt cel mai probabil mod în care se divulgă în
+**Spune-le membrilor despre acestea două.** Sunt cel mai probabil mod în care se divulgă în
 practică o intrare protejată.
 
 ---
 
 ## Stabilirea politicii clubului
 
-Aplicația vă dă mecanismul. Politica este a dumneavoastră și merită scrisă:
+Aplicația îți dă mecanismul. Politica este a ta și merită scrisă:
 
 - **Când este protejată o locație?** După clasa de protecție? La cererea proprietarului de teren?
-  După stadiul explorării? O regulă pe care o puteți aplica consecvent bate judecata caz cu caz.
-- **Cine deține *Locație exactă*, și la ce cuprins?** Tot, un set de elemente, un subarbore?
+  După stadiul explorării? O regulă pe care o poți aplica consecvent bate judecata caz cu caz.
+- **Cine deține *Locație exactă*, și la ce cuprins?** Tot, un set de obiecte, un subarbore?
 - **Ce se întâmplă când cineva este invitat pe o tură la o peșteră pe care nu o poate localiza?**
-  Aplicația anunță proprietarul peșterii și administratorii compleți și spune explicit că nu a
-  fost anunțat nimeni altcineva. Cineva trebuie să acționeze pe baza acelui mesaj — hotărâți cine.
+  Aplicația anunță proprietarul peșterii și administratorii deplini și spune explicit că nu a
+  fost anunțat nimeni altcineva. Cineva trebuie să acționeze pe baza acelui mesaj — hotărăște cine.
 
 ---
 

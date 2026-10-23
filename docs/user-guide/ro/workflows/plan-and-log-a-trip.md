@@ -13,25 +13,25 @@ aceea. Această parcurgere le urmărește pe toate.
 
 ---
 
-## Etapa 1 — Lansați ideea
+## Etapa 1 — Lansează ideea
 
 **Jurnale de tură → Jurnal de tură nou.**
 
-Dați-i un titlu, un **scop de tură** (explorare, cartare, întreținere, instruire, turism,
-salvare, știință, altul — plus ce a adăugat clubul) și date. O tură se înregistrează pe
+Dă-i un titlu, un **scop de tură** (explorare, cartare, întreținere, instruire, turism,
+salvare, știință, altele — plus ce a adăugat clubul) și date. O tură se înregistrează pe
 **zilele în care s-a desfășurat efectiv**, nu pe o singură dată.
 
-Stabiliți-i **vizibilitatea** — cine are voie să citească tura. Și observați bannerul: *„Aceasta
+Stabilește-i **vizibilitatea** — cine are voie să citească tura. Și observă bannerul: *„Aceasta
 este o ciornă. Nimeni nu a fost anunțat încă."* Ciornele sunt pentru scris; nu pleacă nimic.
 
-Dacă dreptul dvs. de a înregistra ture vine de la grupul de speologie, nu de la instalare,
-formularul vă spune și că tura **va aparține acelui grup** — sau vă întreabă căruia, dacă sunteți
-în mai multe. Este de așteptat, și nu este același lucru cu vizibilitatea: vedeți
+Dacă dreptul tău de a înregistra ture vine de la grupul de speologie, nu de la instalare,
+formularul îți spune și că tura **va aparține acelui grup** — sau te întreabă căruia, dacă ești
+în mai multe. Este de așteptat, și nu este același lucru cu vizibilitatea: vezi
 [Când dreptul de a înregistra ture vine de la club](../features/trips.md#când-dreptul-de-a-înregistra-ture-vine-de-la-club).
 
-Apoi **Lansează ideea** ca s-o propuneți, sau treceți direct la **Începe organizarea**.
+Apoi **Propune ideea**, sau treci direct la **Începe organizarea**.
 
-## Etapa 2 — Planificați-o
+## Etapa 2 — Planific-o
 
 Fișa **Plan** a turei conține ce stabilește o echipă înainte de plecare. Ce câmpuri apar depinde
 de scopul turei — clubul descrie formularul o dată și îl poate schimba ulterior fără să
@@ -51,10 +51,10 @@ De obicei:
 
 ### Punctul de întâlnire pe hartă
 
-Puteți desena **unde se adună echipa** — un punct, sau drumul de acces — pe același fel de hartă
+Poți desena **unde se adună echipa** — un punct, sau drumul de acces — pe același fel de hartă
 ca schița turei.
 
-> ⚠ **Citiți avertismentul de lângă el.** Un punct de întâlnire este arătat **exact cum a fost
+> ⚠ **Citește avertismentul de lângă el.** Un punct de întâlnire este arătat **exact cum a fost
 > plasat** tuturor celor care au voie să citească tura. Nu este niciodată aproximat. Un punct de
 > întâlnire lăsat lângă o intrare păzită localizează acea intrare pentru toți cei invitați.
 
@@ -69,7 +69,7 @@ se află; nu îi stă în cale și nu decide nimic despre cine poate citi planul
 
 ### Apelul de urgență
 
-**Stabiliți un apel de urgență**: notați când se așteaptă echipa să iasă și ora la care se dă
+**Stabilește o alarmă**: notează când se așteaptă echipa să iasă și ora la care se dă
 alarma dacă nimeni nu a anunțat.
 
 Dacă ora trece fără să se fi anunțat nimic, toți cei pe care îi privește tura și care au voie
@@ -83,13 +83,13 @@ de pe tură.
 
 O tură cu alarmă armată arată și **când a rulat ultima oară verificarea**. Tăcerea este vestea
 bună într-un apel de urgență, așa că un supraveghetor oprit și o echipă aflată în siguranță în
-subteran arată identic; pagina înclină spre a vă spune că nimeni nu s-a uitat.
+subteran arată identic; pagina înclină spre a-ți spune că nimeni nu s-a uitat.
 
-## Etapa 3 — Întrebați oamenii
+## Etapa 3 — Întreabă oamenii
 
 Fila **Cine vine**.
 
-**Întreabă** pe cineva din lista clubului. O invitație nu acordă nimic — vedeți caseta de mai
+**Invită** pe cineva din lista clubului. O invitație nu acordă nimic — vezi caseta de mai
 jos.
 
 Fiecare răspunde pentru sine: **vine, nu vine, poate**, cu un rând propriu alături. Cine poate
@@ -105,10 +105,10 @@ O limită nu refuză niciodată un răspuns. Decide doar unde în coadă stă ac
 > ### O invitație nu acordă nimic
 >
 > A fi invitat pe o tură nu deschide o peșteră. Când cineva invitat pe o tură nu poate citi o
-> peșteră despre care este tura, **proprietarul peșterii și administratorii compleți** primesc
+> peșteră despre care este tura, **proprietarul peșterii și administratorii deplini** primesc
 > un mesaj. Linkul lui deschide **Permisiunile** acelei peșteri cu **Citire** pentru acea
 > persoană deja pregătită și nu acordă nimic până când cel care îl urmează nu apasă **OK** —
-> vedeți [Ture](../features/trips.md#o-invitație-nu-acordă-nimic).
+> vezi [Ture](../features/trips.md#o-invitație-nu-acordă-nimic).
 >
 > Mesajul acela este sincer despre propria lui rază: spune că a ajuns la proprietar și la
 > administratori și la nimeni altcineva, că cineva care ar putea acorda acces pe altă cale —
@@ -116,17 +116,17 @@ O limită nu refuză niciodată un răspuns. Decide doar unde în coadă stă ac
 > departe dacă nu este al lui de rezolvat. Cineva de pe listă fără cont pe această instalare nu
 > primește nimic și nu i se poate acorda nimic.
 
-## Etapa 4 — Desfășurați-o
+## Etapa 4 — Desfășoar-o
 
-**Merge mai departe** confirmă tura. Dacă planurile se schimbă: **Amână** (amânată), apoi
-**Stabilește o dată nouă**, sau **Anuleaz-o** — ceea ce păstrează tura, o spune pe fiecare
+**Se desfășoară** confirmă tura. Dacă planurile se schimbă: **Amână** (amânată), apoi
+**Stabilește o dată nouă**, sau **Anulează tura** — ceea ce păstrează tura, o spune pe fiecare
 listă, și oprește atât alarma cât și memento-ul.
 
 Oamenii de pe o tură primesc un e-mail când tura se apropie, o singură dată.
 
-## Etapa 5 — Redactați-o
+## Etapa 5 — Redacteaz-o
 
-După aceea, **Marchează ca efectuată** și completați înregistrarea.
+După aceea, **Marchează efectuată** și completează înregistrarea.
 
 ### Cine a fost
 
@@ -138,7 +138,7 @@ Fiecare persoană poate purta și **orele proprii** (pentru cel care a ieșit ma
 rând propriu** — *întors de la capul puțului* — ca nimeni să nu fie nevoit să inventeze o
 funcție ca să înregistreze o împrejurare.
 
-Dacă oamenii au răspuns înainte de tură, un singur act deliberat — **Scrie acești oameni pe
+Dacă oamenii au răspuns înainte de tură, un singur act deliberat — **Trece aceste persoane în
 tură** — transformă pe toți cei care dețin un loc în oameni care au fost acolo. Nu anunță pe
 nimeni: toți cei pe care îi înscrie au cerut să fie acolo și au fost înștiințați când au fost
 întrebați.
@@ -148,10 +148,10 @@ nimeni: toți cei pe care îi înscrie au cerut să fie acolo și au fost înșt
 Aceasta este secțiunea **Ce a făcut tura** și este *singurul* mod în care o tură este legată de
 un loc. Nu există o listă separată de peșteri de ținut la zi.
 
-Fiecare este un câmp etichetat pe care îl completați pe măsură ce tura îl merită:
+Fiecare este un câmp etichetat pe care îl completezi pe măsură ce tura îl merită:
 
-**Zone de lucru · Elemente principale de lucru · Vizitat · Cartat · Descoperit · Săpat ·
-Fotografiat · Căutat, negăsit · Continuări lăsate · Continuă din**
+**Zone de lucru · Obiecte principale · Vizitate · Cartate · Descoperite · Săpate ·
+Fotografiate · Căutate, negăsite · Continuări lăsate · Continuă tura**
 
 Pagina peșterii întoarce favoarea: secțiunea ei **Ture** listează turele care au numit-o, cele
 mai noi întâi.
@@ -163,7 +163,7 @@ mai noi întâi.
 ### Cifrele
 
 Adâncimea atinsă, lungimea cartată, stațiile topografice, coarda folosită — în metri, o singură
-dată, afișate cu formatul numeric al limbii dumneavoastră. Plus timpul în subteran, calculat
+dată, afișate cu formatul numeric al limbii tale. Plus timpul în subteran, calculat
 peste câte zile a durat efectiv tura.
 
 ### Secțiunile raportului
@@ -175,7 +175,7 @@ galerie nouă), **Logistică** (cost și ce a acoperit, note de acces) și **Sig
 ### Incidente
 
 **Ceva a mers prost** este un indicator pe care oricine poate citi tura îl vede și îl poate
-căuta. Relatarea a *ce* a mers prost — ce s-a întâmplat, gravitatea (aproape-accident / minor /
+căuta. Relatarea a *ce* a mers prost — ce s-a întâmplat, gravitatea (la limită / minor /
 grav / salvare), defectarea echipamentului, lecțiile învățate, cui s-a raportat — este arătată
 **doar celor care pot corecta tura**. Un aproape-accident numește greșeala cuiva și nu este
 bârfă pentru tot clubul.
@@ -188,27 +188,27 @@ Un punct, o linie sau o zonă pentru locul unde s-a desfășurat tura.
 > tuturor celor care pot citi tura, *indiferent ce protecție poartă peșterile pe care le
 > numește*.
 
-## Etapa 6 — Publicați
+## Etapa 6 — Publică
 
 **Publică** anunță tura oamenilor numiți pe ea — și numai acelora dintre ei care au voie s-o
-deschidă efectiv. Confirmarea vă spune audiența în cuvinte simple înainte să vă angajați și
+deschidă efectiv. Confirmarea îți spune audiența în cuvinte simple înainte să te angajezi și
 spune că nu poate fi luată înapoi.
 
 ## Etapa 7 — Redactarea
 
 **Vizualizarea raportului** așază toată tura ca pe un document, cu un stil de tipărire, și oferă
-un **document Word** pe care îl puteți descărca sau **clasa chiar pe tură**.
+un **document Word** pe care îl poți descărca sau **clasa chiar pe tură**.
 
-Redactarea este construită din **lectura dumneavoastră** a turei și din nimic altceva — nicio
-peșteră pe care nu o puteți localiza, nicio relatare a unui incident dacă sunteți doar cititor,
+Redactarea este construită din **lectura ta** a turei și din nimic altceva — nicio
+peșteră pe care nu o poți localiza, nicio relatare a unui incident dacă ești doar cititor,
 iar fotografiile intră ca aceleași randări pe care le arată galeria, cu metadatele aparatului
 îndepărtate.
 
 O copie clasată pe tură este și mai îngustă: este scrisă pentru oricine poate citi tura, nu
 pentru cine a clasat-o.
 
-Copia pe care o descărcați conține **o hartă a turei** — schița ei, punctul de întâlnire și
-peșterile numite pe care le puteți localiza — desenată de propriul browser din ceea ce pagina
+Copia pe care o descarci conține **o hartă a turei** — schița ei, punctul de întâlnire și
+peșterile numite pe care le poți localiza — desenată de propriul browser din ceea ce pagina
 deține deja, cu un rând dedesubt care spune a cui vedere este. Copia clasată pe tură nu o
 conține: este deschisă de toți cei care pot citi tura. Detalii:
 [Harta din descărcare](../features/trips.md#harta-din-descărcare).
@@ -217,9 +217,9 @@ Nu există adresă publică pentru un raport: se descarcă de cineva autentifica
 tura. Acolo unde instalarea are convertorul de documente, **Descarcă PDF** dă aceeași redactare
 ca PDF; copia clasată pe tură este întotdeauna un document Word.
 
-Un club poate scrie **propriul model**: descărcați-l pe cel standard (un fișier text scurt care
-se explică singur), editați-l, încărcați-l la Configurare → Modele de raport și alegeți-l — sau
-dați-l unui singur scop de tură, ca fiecare tură cu acel scop să fie redactată în el. Un model
+Un club poate scrie **propriul model**: descarcă-l pe cel standard (un fișier text scurt care
+se explică singur), editează-l, încarcă-l la Configurare → Modele de raport și alege-l — sau
+dă-l unui singur scop de tură, ca fiecare tură cu acel scop să fie redactată în el. Un model
 propriu poate tipări și jurnalul de urmărire al turei și lista de stații a ridicării, pentru o
 tură [urmărită de la suprafață](../features/live-tracking.md). Un model poate cere doar lucruri
 care i-au fost deja date cititorului, iar un rând al cărui conținut se dovedește gol pur și simplu
@@ -232,10 +232,10 @@ dispare. Detalii: [Redactarea](../features/trips.md#redactarea).
 - **Fotografii** — tura are o galerie și o fotografie reprezentativă, iar fotografiile clasate pe ea
   pot [deveni locuri pe hartă](photographs-to-places.md).
 - **Turele proprii** — *Jurnale de tură → Turele mele* răspunde la *pe ce merg și când*: cele
-  mai apropiate întâi, inclusiv turele la care ați fost întrebat și nu ați refuzat. Se calculează
+  mai apropiate întâi, inclusiv turele la care ai fost întrebat și nu ai refuzat. Se calculează
   din cine este autentificat și nu poate fi cerută despre altcineva.
 - **Statistici** — o persoană, o peșteră, un club și o tabără își primesc fiecare totalurile,
-  numărate peste turele pe care le puteți citi. Vedeți
+  numărate peste turele pe care le poți citi. Vezi
   [Măsurători și statistici](../features/measurements-and-statistics.md).
 
 ---

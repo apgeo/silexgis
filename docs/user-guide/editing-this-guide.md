@@ -48,6 +48,11 @@ than letting the two drift.
 file. A guide that says *dosare* where the screen says *dulapuri* helps nobody. If you add a term,
 add it there too.
 
+**The Romanian guide addresses the reader as *tu***, as the interface does — never
+*dumneavoastră* or the polite plural. The settled Romanian terms (*drumuire* for centerline,
+*model de drumuire* for line plot, *obiect* for feature, *registru* for the cave registry, …)
+are listed with their rules at the top of [`ro/TERMINOLOGIE.md`](ro/TERMINOLOGIE.md).
+
 Note the path depth: from `ro/features/x.md`, anything outside `docs/user-guide/` needs one extra
 `../` compared with the English page.
 

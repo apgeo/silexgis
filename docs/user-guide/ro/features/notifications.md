@@ -9,10 +9,10 @@
 
 ## Grila
 
-**Setări → Notificări** este o grilă: **felurile de întâmplări** pe o axă, **felurile de a vă
-ajunge** pe cealaltă.
+**Setări → Notificări** este o grilă: **felurile de întâmplări** pe o axă, **felurile de a
+ajunge la tine** pe cealaltă.
 
-Pentru fiecare pereche spuneți unul dintre trei lucruri:
+Pentru fiecare pereche spui unul dintre trei lucruri:
 
 | | |
 |---|---|
@@ -20,63 +20,63 @@ Pentru fiecare pereche spuneți unul dintre trei lucruri:
 | **Pe măsură ce se întâmplă** | |
 | **Rezumat zilnic** | Reținut și trimis o dată pe zi |
 
-Feluri de a vă ajunge: **În aplicație · E-mail · Mesaj text.**
+Feluri de a ajunge la tine: **În aplicație · E-mail · SMS.**
 
-> Un rezumat zilnic pentru ceva despre care **nu** sunteți anunțat prin poștă nu este ceva ce
-> puteți cere din greșeală — grila nu vă lasă.
+> Un rezumat zilnic pentru ceva despre care **nu** ești anunțat prin poștă nu este ceva ce
+> poți cere din greșeală — grila nu te lasă.
 
-## Despre ce puteți fi anunțat
+## Despre ce poți fi anunțat
 
 | Eveniment | |
 |---|---|
-| Schimbări în apartenența la grupuri de speologie | |
-| Cineva împarte ceva cu mine | O acordare de permisiune |
-| Sunt adăugat pe o tură | |
-| Planificarea turelor | Invitat pe o tură, o tură pe care sunteți se schimbă, o tură are nevoie de acces pe care îl puteți acorda, sau o tură ori un eveniment la care ați răspuns se apropie |
+| Schimbări în grupurile de speologie | |
+| Cineva îmi dă acces la ceva | O acordare de permisiune |
+| Sunt adăugat la o tură | |
+| Planificarea turelor | Invitat la o tură, o tură la care participi se schimbă, o tură are nevoie de acces pe care îl poți acorda, sau o tură ori un eveniment de club la care ai răspuns se apropie |
 | Cineva răspunde la un comentariu scris de mine | |
-| Cineva comentează la ceva de-al meu | |
-| Cineva scrie unui grup de speologie din care fac parte | Un anunț |
-| Încărcările mele termină de procesat | |
-| **Alerte de securitate** | Nu pot fi oprite. Parola schimbată sau resetată, adresa de e-mail schimbată, autentificarea în doi pași oprită — inclusiv când o oprește ștergerea numărului de telefon sau resetarea făcută de un administrator |
-| **O tură pe care sunt a întârziat** | Nu poate fi oprită, nu este niciodată reținută pentru un rezumat |
+| Cineva comentează la ceva ce îmi aparține | |
+| Cineva scrie unui grup din care fac parte | Un anunț |
+| Fișierele mele termină de procesat | |
+| **Alerte de securitate** | Nu pot fi oprite. Parola ta schimbată sau resetată, adresa ta de e-mail schimbată, autentificarea în doi pași oprită — inclusiv când o oprește ștergerea numărului tău de telefon sau resetarea făcută de un administrator |
+| **O tură la care particip a întârziat** | Nu poate fi oprită, nu este niciodată reținută pentru un rezumat |
 
 Cele două setări de comentarii sunt **separate în mod deliberat**, ca oprirea traficului de pe un
-document aglomerat să nu vă coste niciodată răspunsurile care vă erau adresate.
+document aglomerat să nu te coste niciodată răspunsurile care îți erau adresate.
 
-## Ce vă spune pagina sincer
+## Ce îți spune pagina sincer
 
 - **Avertismentele despre propriul cont nu pot fi oprite**, iar pagina o spune.
-- Puteți opri **toate** felurile de a vă ajunge pentru un fel de eveniment — dar pagina vă spune
-  limpede: *„Aceasta nu va ajunge la dumneavoastră nicăieri."*
-- Un fel de a vă ajunge **pe care instalarea nu l-a configurat** este marcat ca atare, iar ce ați
+- Poți opri **toate** felurile de a ajunge la tine pentru un fel de eveniment — dar pagina îți spune
+  limpede: *„Acest lucru nu va ajunge la tine nicăieri."*
+- Un fel de a ajunge la tine **pe care instalarea nu l-a configurat** este marcat ca atare, iar ce ai
   ales este **păstrat pentru ziua în care îl configurează cineva**.
-- Dacă nu există deloc server de poștă: *„Alegerile dumneavoastră sunt salvate și vor fi folosite
-  imediat ce există unul."*
+- Dacă nu există deloc server de poștă: *„Alegerile sunt salvate și vor fi folosite când va
+  exista unul."*
 
 ## Fereastra de liniște
 
 O instalare poate stabili o fereastră de liniște — **nimic nu pleacă de pe server în timpul
-nopții dumneavoastră**, citită în **fusul dumneavoastră orar**, deci înseamnă aceeași oră a nopții
+nopții tale**, citită în **fusul tău orar**, deci înseamnă aceeași oră a nopții
 indiferent de anotimp.
 
 Ce așteaptă se află în lista din aplicație tot timpul, pentru că o listă nu trezește pe nimeni. Un
-avertisment pe care nu îl puteți opri ignoră fereastra.
+avertisment pe care nu îl poți opri ignoră fereastra.
 
 ---
 
 ## Cutia poștală
 
-Un **clopoțel în bara de sus** numără ce nu ați citit încă. În spatele lui, **Notificări**
+Un **clopoțel în bara de sus** numără ce nu ai citit încă. În spatele lui, **Notificări**
 listează ce s-a întâmplat, cele mai noi întâi, filtrabil după fel, marcat citit pe măsură ce le
-deschideți sau tot deodată.
+deschizi sau tot deodată.
 
-- Un rând este **formulat de instalare**, în limba în care citiți site-ul — deci o formulare pe
-  care a rescris-o un operator este cea pe care o vedeți.
-- Un rând despre ceva pe care **nu îl mai puteți deschide** spune exact asta, în locul unui nume
-  și al unui link. Sunteți în continuare anunțat că s-a întâmplat — ascunderea ar fi propriul ei
+- Un rând este **formulat de instalare**, în limba în care citești site-ul — deci o formulare pe
+  care a rescris-o un operator este cea pe care o vezi.
+- Un rând despre ceva pe care **nu îl mai poți deschide** spune exact asta, în locul unui nume
+  și al unui link. Ești în continuare anunțat că s-a întâmplat — ascunderea ar fi propriul ei
   fel de scurgere — dar nimic despre lucrul în sine nu supraviețuiește pierderii accesului.
 - Un rând care spune că **cineva invitat pe o tură nu poate deschide o peșteră** duce la
-  **Permisiunile** acelei peșteri, deschise despre acea persoană — vedeți
+  **Permisiunile** acelei peșteri, deschise despre acea persoană — vezi
   [O invitație nu acordă nimic](trips.md#o-invitație-nu-acordă-nimic).
 
 ---
@@ -89,12 +89,12 @@ deschideți sau tot deodată.
 Și:
 
 - **Niciun mesaj nu repetă vreodată ce s-a spus** într-un comentariu. Numește documentul și
-  trimite la el; îl deschideți și citiți conversația acolo.
-- Dacă o observație este ștearsă, linkul tot vă duce la pagina potrivită. Dacă documentul dispare,
-  rândul spune că subiectul nu mai este disponibil, în loc să vă trimită la un link mort.
-- Dacă mai puteți citi ceva se decide **personal pentru dumneavoastră în momentul în care se scrie
+  trimite la el; îl deschizi și citești conversația acolo.
+- Dacă o observație este ștearsă, linkul tot te duce la pagina potrivită. Dacă documentul dispare,
+  rândul spune că subiectul nu mai este disponibil, în loc să te trimită la un link mort.
+- Dacă mai poți citi ceva se decide **personal pentru tine în momentul în care se scrie
   mesajul**. Cine a pierdut accesul nu este anunțat de nimic.
-- O **ciornă** nu anunță pe nimeni, fiindcă a vă spune că o ciornă s-a schimbat ar însemna a vă
+- O **ciornă** nu anunță pe nimeni, fiindcă a-ți spune că o ciornă s-a schimbat ar însemna a-ți
   spune că există.
 - O scriere care **nu a schimbat nimic** nu trimite nimic.
 
@@ -105,8 +105,8 @@ deschideți sau tot deodată.
 Linkul *nu-mi mai trimite asta* dintr-un client de poștă **oprește acel fel de mesaj doar pentru
 poștă** și lasă cutia din aplicație exact cum era.
 
-Pagina pe care ajungeți spune pe care dintre cele două a schimbat-o. Este accesibilă fără
-autentificare, pentru că o deschideți dintr-un client de poștă.
+Pagina pe care ajungi spune pe care dintre cele două a schimbat-o. Este accesibilă fără
+autentificare, pentru că o deschizi dintr-un client de poștă.
 
 ---
 

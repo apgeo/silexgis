@@ -41,19 +41,19 @@ Valori implicite aplicate a tot ce se încarcă într-un dulap:
 ### Metadate așteptate aici
 
 O **listă de verificare, nu o regulă.** Încărcările nu sunt refuzate niciodată pentru lipsa lor.
-Documentele cărora le lipsesc sunt marcate **Incomplet** și spun ce *mai lipsește*, ca restanța
+Documentele cărora le lipsesc sunt marcate **Incomplet** și spun ce *încă lipsește*, ca restanța
 să fie găsibilă.
 
 ### Neclasate
 
-Tot ce ați adăugat și nu este încă într-un dulap. Clasarea este o decizie de mai târziu, iar aici
+Tot ce ai adăugat și nu este încă într-un dulap. Clasarea este o decizie de mai târziu, iar aici
 stă grămada netriată.
 
 ### Clasare în masă
 
-Selectați documente, apoi **Clasează și în…** (adaugă un dulap, fără să mute nimic) sau **Mută
+Selectează documente, apoi **Depune și în…** (adaugă un dulap, fără să mute nimic) sau **Mută
 în…** (le clasează în dulapul nou și le scoate din acesta). Rezultatele parțiale sunt raportate:
-*„n clasate; m nu au putut fi."*
+*„n depuse; m nu au putut fi."*
 
 ---
 
@@ -63,7 +63,7 @@ Selectați documente, apoi **Clasează și în…** (adaugă un dulap, fără s�
 raport de tură, buletin… — și **fiecare tip decide ce detalii i se cer documentelor lui**. Asta
 permite ca o arhivă să fie organizată în felul în care clasează efectiv un club.
 
-Vedeți [Vocabulare](../admin/vocabularies.md#configurare--tipuri-de-documente).
+Vezi [Vocabulare](../admin/vocabularies.md#configurare--tipuri-de-documente).
 
 ---
 
@@ -81,7 +81,7 @@ documentul însuși.
 | **Limbă** | Română, engleză sau *Necunoscută* |
 | **Proprietăți de document** | Ce cere tipul lui |
 
-Documentele poartă **versiuni**: încărcați una nouă și cele vechi se păstrează.
+Documentele poartă **versiuni**: încarci una nouă și cele vechi se păstrează.
 
 ---
 
@@ -98,12 +98,12 @@ Vizualizatorul arată:
 **Nimic nu este transcodat și nicio pagină scanată nu este inventată.** Acolo unde un format nu
 poate fi afișat, codecul nu este unul pe care browserul îl redă, serviciul de paginare este
 indisponibil, sau fișierul nu conține text deloc, pagina spune **care dintre acestea este** și
-oferă descărcarea. Nu rămâneți niciodată să vă uitați la un panou gol întrebându-vă.
+oferă descărcarea. Nu rămâi niciodată să te uiți la un panou gol întrebându-te.
 
 Funcționează pe telefon. Și cineva care are voie să citească raportul unei peșteri protejate îl
 poate citi acolo **fără să poată vreodată descărca fișierul**.
 
-Puteți **selecta text pe o pagină de PDF** ca să-l copiați sau ca să îndreptați o
+Poți **selecta text pe o pagină de PDF** ca să-l copiezi sau ca să îndrepți o
 [legătură](links.md) spre acel pasaj.
 
 ---
@@ -121,16 +121,16 @@ Starea **Text** este una dintre:
 |---|---|
 | *Se citește textul…* | În curs |
 | *Textul a fost citit* | Căutabil |
-| *Acest document nu are strat de text* | Poze cu pagini — nu există cuvinte în el |
-| *Acest fel de fișier nu conține text* | de ex. o imagine sau o înregistrare |
+| *Documentul nu are strat de text* | Poze cu pagini — nu există cuvinte în el |
+| *Acest fel de fișier nu conține text de citit* | de ex. o imagine sau o înregistrare |
 | *Textul nu a putut fi citit* | Eșuat |
-| *Nu poate citi încă textul acestui format* | Neacceptat |
+| *Nimic de aici nu știe încă să citească textul acestui format* | Neacceptat |
 
 **Nimic nu recunoaște text dintr-o fotografie.** Paginile scanate și PDF-urile doar-imagine nu au
-text de căutat, iar pagina o spune în loc să vă lase să așteptați.
+text de căutat, iar pagina o spune în loc să te lase să aștepți.
 
 > Dacă un lot întreg de documente a fost încărcat înainte ca cititorul de text sau convertorul de
-> documente de birou să funcționeze, un administrator poate trece din nou peste ele — vedeți
+> documente de birou să funcționeze, un administrator poate trece din nou peste ele — vezi
 > [Operațiuni de întreținere](../admin/maintenance.md).
 
 Un document **protejat cu parolă** este raportat ca blocat, nu citit ca prostii.
@@ -150,11 +150,11 @@ citând propoziția care s-a potrivit.
   orice limbă pentru care PostgreSQL are un lematizator, adăugând un singur rând.
 - Un rezultat **deschide pagina documentului la pagina pe care s-a găsit expresia** (sau foaia,
   sau diapozitivul).
-- Găsiți doar documente pe care aveți voie să le citiți.
+- Găsești doar documente pe care ai voie să le citești.
 - **Versiunile înlocuite** sunt căutabile doar de cei care le-ar fi putut înlocui — un paragraf
   scos într-o versiune nouă nu rămâne găsibil în cea veche.
 
-Vedeți [Căutare și filtre](search-and-filters.md).
+Vezi [Căutare și filtre](search-and-filters.md).
 
 ---
 
@@ -168,11 +168,11 @@ Fiecare pagină de document poartă o discuție.
   discuția există**, pentru că o observație este accesibilă doar prin documentul pe care stă.
 - Observațiile sunt **cuvinte simple**, afișate ca acele cuvinte care au fost tastate.
 
-Două comutatoare separate de notificare: *cineva răspunde la un comentariu scris de mine* și
-*cineva comentează la ceva de-al meu*. Așa că oprirea traficului de pe un document aglomerat nu
-vă costă niciodată răspunsurile care vă erau adresate. Nu sunteți niciodată anunțat despre propria
-observație, iar dacă ceva este și răspuns la dumneavoastră și comentariu la propria încărcare,
-aflați o singură dată.
+Două comutatoare separate de notificare: *Cineva răspunde la un comentariu scris de mine* și
+*Cineva comentează la ceva ce îmi aparține*. Așa că oprirea traficului de pe un document aglomerat nu
+te costă niciodată răspunsurile care îți erau adresate. Nu ești niciodată anunțat despre propria
+observație, iar dacă ceva este și răspuns pentru tine și comentariu la propria încărcare,
+afli o singură dată.
 
 **Niciun mesaj nu repetă vreodată ce s-a spus** — numește documentul și trimite la el.
 
@@ -185,7 +185,7 @@ evidențiat **mută vederile deschise** — harta, scena 3D, vizualizatorul topo
 imagine — către ce este acel pasaj.
 
 Acesta este mecanismul pentru o relatare scrisă a unei explorări care conduce harta în timp ce o
-citiți: *„am urmat cursul de apă până la al treilea aven"*, și harta merge acolo.
+citești: *„am urmat cursul de apă până la al treilea aven"*, și harta merge acolo.
 
 ### Este un document obișnuit
 
@@ -202,7 +202,7 @@ față de același șir, **la caracter**.
 > este blocuri de text simplu și nu un fragment de HTML — nu există nimic în el care să poată fi
 > tentat să interpreteze ce a scris cineva.
 
-### Unde le găsiți și le scrieți
+### Unde le găsești și le scrii
 
 Pe panoul unei înregistrări, secțiunea **Text** listează textele adnotate scrise despre ea. Acolo
 unde o înregistrare nu are încă nimic scris despre ea, secțiunea oferă **Scrie unul**, denumit
@@ -210,24 +210,24 @@ după înregistrare.
 
 Care dintre documentele legate ale unei peșteri este text adnotat și care este o scanare a unui
 raport din 1974 este **declarația serverului**, nu o ghicitoare — așa că atașamentele obișnuite
-nu vă arată niciodată o notificare de refuz.
+nu îți arată niciodată o notificare de refuz.
 
 ### Citirea
 
 | Control | |
 |---|---|
-| **Unde merg legăturile** | Opriți individual harta, scena 3D, vizualizatorul topografic sau vederea de imagine, ca s-o lăsați pe una nemișcată |
-| **Deschide într-o fereastră proprie** | Ca să stea lângă harta pe care o conduce |
-| **Arată** | Mută vederile deschise către ținta legăturii, fără să părăsiți textul |
+| **Unde duc legăturile** | Oprești individual harta, scena 3D, vizualizatorul topografic sau vederea de imagine, ca s-o lași pe una nemișcată |
+| **Deschide într-o fereastră separată** | Ca să stea lângă harta pe care o conduce |
+| **Arată** | Mută vederile deschise către ținta legăturii, fără să părăsești textul |
 | **Arată în…** | Inclusiv *altă fereastră* |
 | **Deschide** | Merge la lucrul însuși |
 
-Dacă nu este nimic deschis de mutat: *„Nicio hartă, scenă sau vizualizator nu este deschis, deci
-urmărirea unui pasaj nu are ce muta. Deschideți unul, sau desprindeți acest text lângă el."*
+Dacă nu este nimic deschis de mutat: *„Nu este deschisă nicio hartă, scenă sau vizualizator, deci
+urmărirea unui pasaj nu are ce muta. Deschide una sau desprinde textul lângă ea."*
 
 ### Scrierea legăturilor
 
-**Editează legăturile**, apoi selectați orice parte a textului și legați-o de o peșteră, un
+**Editează legăturile**, apoi selectează orice parte a textului și leag-o de o peșteră, un
 document, o tură sau orice altceva. Ștergerea unei legături oprește evidențierea pasajului;
 **lucrurile pe care le lega nu sunt afectate**.
 
@@ -239,18 +239,18 @@ peștera pe care o descrie, este o [legătură](links.md) obișnuită, scrisă �
 Înlocuirea corpului scrie **o revizie nouă** și remăsoară fiecare legătură peste ea.
 
 - Pasajele care supraviețuiesc rămân **exacte**.
-- Pasajele dispărute se citesc ca **degradate**, iar o fișă spune **Posibil mutat** — *„Aceste
-  cuvinte nu sunt unde le-a înregistrat această legătură, deci evidențierea poate fi pe pasajul
-  greșit."*
+- Pasajele dispărute se citesc ca **degradate**, iar o fișă spune **S-ar putea să se fi mutat** — *„Aceste
+  cuvinte nu se află unde le-a înregistrat legătura, deci evidențierea poate fi pe alt
+  pasaj."*
 
-Sunteți anunțat când o evidențiere este nesigură, în loc să vi se arate una sigură în locul
+Ești anunțat când o evidențiere este nesigură, în loc să ți se arate una sigură în locul
 greșit.
 
 ### Și peste un PDF
 
 Același cititor funcționează peste **stratul de text al unui PDF**, nu doar peste texte scrise
 aici. Așa că un pasaj dintr-un raport scanat care poartă text real poate fi indicat exact ca un
-pasaj dintr-o relatare tastată — vedeți
+pasaj dintr-o relatare tastată — vezi
 [Legături](links.md#ancorele-de-text-supraviețuiesc-editării).
 
 ---
@@ -260,11 +260,11 @@ pasaj dintr-o relatare tastată — vedeți
 **Proprietarul** unui document, sau cineva cu dreptul asupra istoricului de audit, poate vedea
 cine a luat o copie din el.
 
-Faptul că aveți voie să *citiți* un document **nu** face ca cititorii lui să vă aparțină — un
+Faptul că ai voie să *citești* un document **nu** face ca cititorii lui să-ți aparțină — un
 membru de club ar putea altfel afla care alți membri s-au uitat la o anumită topografie, ceea ce
 este un fapt despre ei.
 
-Propriul istoric de lectură este în contul dumneavoastră. **Nimeni nu îl poate obține pe al
+Propriul istoric de lectură este în contul tău. **Nimeni nu îl poate obține pe al
 altcuiva numindu-l.** Mai multe la [Istoric și audit](history-and-audit.md#istoricul-de-acces--cine-a-citit-un-document).
 
 ---

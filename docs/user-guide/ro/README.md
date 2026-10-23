@@ -8,17 +8,17 @@ Acesta este manualul pentru oamenii care *folosesc* SilexGIS: speologi, arhivari
 echipe de topografie și cine se ocupă de instalare. Explică la ce servește aplicația, cum
 gândește și ce face fiecare dintre ecranele ei.
 
-Nu este un document pentru programatori. Nicăieri nu vi se cere să citiți cod, iar acolo unde
-apare un detaliu tehnic, apare pentru că schimbă ceea ce ar trebui să faceți — nu pentru că
+Nu este un document pentru programatori. Nicăieri nu ți se cere să citești cod, iar acolo unde
+apare un detaliu tehnic, apare pentru că schimbă ceea ce ar trebui să faci — nu pentru că
 este interesant.
 
-> **Sunteți nou aici?** Citiți [Ce este SilexGIS](concept.md), apoi
+> **Ești nou aici?** Citește [Ce este SilexGIS](concept.md), apoi
 > [Primii pași](first-steps.md), apoi [Noțiuni de bază](core-concepts.md). Sunt cam patruzeci
-> de minute și vă scutesc de multe presupuneri mai târziu.
+> de minute și te scutesc de multe presupuneri mai târziu.
 
 ---
 
-## Începeți de aici
+## Începe de aici
 
 | Pagina | La ce răspunde |
 |---|---|
@@ -39,7 +39,7 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 - [Transformarea fotografiilor unei ture în locuri](workflows/photographs-to-places.md)
 - [Planificarea, desfășurarea și redactarea unei ture](workflows/plan-and-log-a-trip.md)
 - [Clasarea arhivei clubului](workflows/file-the-archive.md)
-- [Partajarea muncii dumneavoastră](workflows/share-your-work.md)
+- [Partajarea muncii tale](workflows/share-your-work.md)
 
 ## Referință — câte o pagină pentru fiecare parte a aplicației
 
@@ -52,10 +52,10 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Zone de lucru](features/work-areas.md) ·
 [Vederi salvate, panouri și ferestre multiple](features/saved-views-and-windows.md)
 
-**Cadastrul**
+**Registrul**
 [Peșteri și intrări](features/caves-and-entrances.md) ·
 [Fenomene de suprafață](features/surface-features.md) ·
-[Topografii, poligonații și modele 3D](features/surveys-and-models.md) ·
+[Topografii, drumuiri și modele 3D](features/surveys-and-models.md) ·
 [Măsurători și statistici](features/measurements-and-statistics.md) ·
 [Fișiere de geodate](features/geodata.md) ·
 [Hărți raster georeferențiate](features/georeferenced-maps.md) ·
@@ -77,7 +77,7 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Urmărirea în direct și turele publicate](features/live-tracking.md) ·
 [Un film al unei ture urmărite](features/tracking-movie.md)
 
-**Persoane și contul dumneavoastră**
+**Persoane și contul tău**
 [Persoane, speologi și cluburi](features/people-and-clubs.md) ·
 [Contul și setările](features/account-and-settings.md) ·
 [Notificări](features/notifications.md) ·
@@ -96,7 +96,8 @@ Pagini pentru cine deține drepturi de administrare. Tot documentație de utiliz
 instalarea propriu-zisă se află în [INSTALL.md](../../INSTALL.md) și
 [DEPLOY-SERVER.md](../../DEPLOY-SERVER.md).
 
-- [Cuprinsul administrării](admin/README.md) — inclusiv [Conturi](admin/README.md#conturi)
+- [Cuprinsul administrării](admin/README.md)
+- [Conturi](admin/accounts.md)
 - [Permisiunile explicate](admin/permissions.md)
 - [Protecția locațiilor](admin/location-protection.md)
 - [Vocabularele care aparțin clubului](admin/vocabularies.md)
@@ -109,7 +110,7 @@ instalarea propriu-zisă se află în [INSTALL.md](../../INSTALL.md) și
 ## Despre acest ghid
 
 Este scris ca să fie modificat. Dacă ceva de aici este greșit, învechit sau lipsește,
-schimbați — vedeți [Cum se modifică acest ghid](editing-this-guide.md) pentru convenții,
+schimbă — vezi [Cum se modifică acest ghid](editing-this-guide.md) pentru convenții,
 structura fișierelor și felul în care se poate cere unui agent să îl extindă coerent.
 
 **Stadiu:** a doua iterație. Scris pe baza aplicației așa cum este acum; fiecare pagină poate

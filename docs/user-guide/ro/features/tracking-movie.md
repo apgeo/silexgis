@@ -4,20 +4,20 @@
 
 [← Referință](README.md) · Înrudite:
 [Urmărirea în direct și turele publicate](live-tracking.md) ·
-[Topografii, poligonații și modele 3D](surveys-and-models.md) · [Ture](trips.md)
+[Topografii, drumuiri și modele 3D](surveys-and-models.md) · [Ture](trips.md)
 
 ---
 
 O tură urmărită lasă în urmă un jurnal: cine a fost raportat unde și când. **Fă un film**
 transformă acel jurnal într-un film scurt — ridicarea peșterii rotindu-se încet, fiecare om un
 marcaj care se mută din stație în stație așa cum a fost raportat — salvat ca fișier GIF, WebM
-sau MP4 pe calculatorul dumneavoastră.
+sau MP4 pe calculatorul tău.
 
-Filmul este făcut **în browserul dumneavoastră**. Nimic nu se încarcă pe server, instalarea nu
+Filmul este făcut **în browserul tău**. Nimic nu se încarcă pe server, instalarea nu
 păstrează nicio copie și nu există sunet. Este oferit doar cuiva care este autentificat; paginile
 publice ale unei ture publicate nu au un asemenea buton.
 
-> **Un film este o copie a ceea ce ați putut vedea, și circulă.** Dialogul o spune deasupra
+> **Un film este o copie a ceea ce ai putut vedea, și circulă.** Dialogul o spune deasupra
 > butoanelor sale: *„Filmul arată topografia peșterii și unde a fost echipa. Trimite-l doar celor
 > care au voie să le vadă pe amândouă."* Fișierul nu poartă nicio protecție proprie — nici a
 > peșterii, nici a turei. [Ce poate purta fișierul](#ce-poate-purta-fișierul) spune ce se află în
@@ -34,7 +34,7 @@ publice ale unei ture publicate nu au un asemenea buton.
 
 Dialogul are **previzualizarea** într-o parte și setările în cealaltă. Previzualizarea este
 desenată de un vizualizator propriu, așa că panoul ridicării de dedesubt — marcajele lui, camera
-lui, o reluare în curs — este exact cum l-ați lăsat când dialogul se închide.
+lui, o reluare în curs — este exact cum l-ai lăsat când dialogul se închide.
 
 Un film se face pe **o singură ridicare**. Turele urmărite pe altă ridicare a aceleiași peșteri
 nu sunt oferite în același film.
@@ -56,10 +56,10 @@ secunde nu mai sosește nimic, descărcarea este abandonată, cu un mesaj care s
 
 ## Alegerea turelor
 
-**Ture** listează turele urmărite pe această ridicare pe care aveți voie să le citiți, fiecare cu
-datele ei și *Rapoarte: N*. Bifați-le pe cele pe care le arată filmul.
+**Ture** listează turele urmărite pe această ridicare pe care ai voie să le citești, fiecare cu
+datele ei și *Rapoarte: N*. Bifează-le pe cele pe care le arată filmul.
 
-- **Fiecare tură își păstrează culoarea în ordinea în care le bifați**, deci debifați și bifați
+- **Fiecare tură își păstrează culoarea în ordinea în care le bifezi**, deci debifează și bifează
   din nou pentru a schimba ordinea culorilor.
 - O tură a cărei urmărire nu acoperă niciun interval de timp nu poate fi bifată: *„Nu este nimic
   de reluat"*.
@@ -67,15 +67,15 @@ datele ei și *Rapoarte: N*. Bifați-le pe cele pe care le arată filmul.
   până când nu este debifată sau citită din nou.
 - **O tură încă în desfășurare poate fi filmată.** Rândul ei spune *„Încă în desfășurare ·
   rapoarte noi de la deschidere: N"*, iar numărul se schimbă pe măsură ce alți oameni
-  înregistrează rapoarte cât timp dialogul stă deschis. Filmul se termină în clipa în care apăsați
+  înregistrează rapoarte cât timp dialogul stă deschis. Filmul se termină în clipa în care apeși
   **Exportă**, nu în clipa în care a fost deschis dialogul: jurnalul turei este citit din nou în
   acea clipă, așa că rapoartele sosite între timp sunt în fișier. Dacă jurnalul nu poate fi citit
-  atunci, nu se exportă nimic și dialogul spune *„Jurnalul nu a putut fi citit"*; apăsați din nou **Exportă**.
+  atunci, nu se exportă nimic și dialogul spune *„Jurnalul nu a putut fi citit"*; apasă din nou **Exportă**.
 
 ### Cine apare
 
-Sub fiecare tură bifată, după ce a fost citită, un rând spune *„Cine apare: N din M"*. Apăsați-l
-pentru a desface lista participanților turei, toți bifați, și debifați oamenii pe care acest film
+Sub fiecare tură bifată, după ce a fost citită, un rând spune *„Cine apare: N din M"*. Apasă-l
+pentru a desface lista participanților turei, toți bifați, și debifează oamenii pe care acest film
 nu trebuie să îi arate.
 
 - Cine este debifat **nu are marcaj și nici traseu**, iar **o notă spusă de acea persoană nu este
@@ -93,19 +93,19 @@ nu trebuie să îi arate.
   pe nume Ana sunt deosebite printr-o inițială numai cât timp amândouă sunt în film.
 - Aceeași persoană aflată în două ture se bifează separat la fiecare tură.
 - **Alegerea este numai pentru acest film.** Nu este reținută odată cu setările și nu este
-  păstrată nicăieri: închideți dialogul, sau debifați tura și bifați-o din nou, și toată lumea
+  păstrată nicăieri: închide dialogul, sau debifează tura și bifeaz-o din nou, și toată lumea
   este înapoi.
 
 Când sunt bifate mai multe ture, **Mai multe ture** apare sub lista turelor și decide cum împart
 ele filmul:
 
-| Alegere | Ce obțineți | Ceasul arată |
+| Alegere | Ce obții | Ceasul arată |
 |---|---|---|
 | **Pe același calendar** | Turele se redau în ordinea reală a timpului, una după alta sau suprapuse, așa cum au fost | Data și ora |
 | **Una lângă alta** | Toate turele pornesc în același moment, pentru comparație | *Timp scurs*, în ore și minute — sau în minute și secunde când întregul film acoperă mai puțin de o oră |
 
 Fiecare film pornește **Pe același calendar**: *Una lângă alta* este o alegere pentru turele din
-fața dumneavoastră și nu este reținută pentru filmul următor.
+fața ta și nu este reținută pentru filmul următor.
 
 Pe același calendar, **echipa fiecărei ture apare pe model cât timp este în subteran** și dispare
 când iese ultimul membru — cine a ieșit în timp ce alții sunt încă înăuntru rămâne, în gri, până
@@ -121,7 +121,7 @@ imaginea nu stă nemișcată mai mult decât așteptarea stabilită (o secundă 
 niciodată mai mult de o jumătate de oră din timpul turelor fără să se întâmple nimic — astfel încât
 o noapte între două zile, sau zilele dintre două ture, să nu ocupe filmul. Ceasul arată saltul. Un
 film cu multe ture trebuie totuși să-și împartă lungimea între ele: turele unei luni în douăzeci
-de secunde dau fiecărei ture mult sub o secundă, așa că dați unui asemenea film o **Durată (secunde)** mai
+de secunde dau fiecărei ture mult sub o secundă, așa că dă unui asemenea film o **Durată (secunde)** mai
 mare.
 
 ---
@@ -131,7 +131,7 @@ mare.
 Ce arată previzualizarea este ce va conține fișierul: aceleași straturi, etichete și texte,
 într-o casetă de forma cadrului.
 
-- **Trageți de model** pentru a alege vederea de la care pornește filmul; dacă modelul se
+- **Trage de model** pentru a alege vederea de la care pornește filmul; dacă modelul se
   rotește, camera se rotește de acolo. **Vederea de pornire** oferă planul și patru profile, iar
   **Revino la ea** pune camera la loc.
 - Cursorul, **Momentul din film**, arată orice moment al lui. **Redă previzualizarea** rulează
@@ -139,10 +139,10 @@ Ce arată previzualizarea este ce va conține fișierul: aceleași straturi, eti
 - **Salvează acest moment ca imagine** — butonul cu aparat foto de lângă redare — salvează
   momentul pe care stă cursorul ca PNG, la dimensiunea cadrului filmului. Este cadrul pe care îl
   are filmul în acel moment: aceleași persoane, etichete, texte și legendă, cu camera rotită cât
-  s-a rotit filmul până atunci. Nu se face niciun film pentru ea și nu se încarcă nimic. Vedeți
+  s-a rotit filmul până atunci. Nu se face niciun film pentru ea și nu se încarcă nimic. Vezi
   [Numele fișierului](#numele-fișierului) pentru cum se numește.
 
-**Taste.** Faceți clic pe previzualizare, sau ajungeți la ea ori la cursor cu Tab — un contur în
+**Taste.** Fă clic pe previzualizare, sau ajungi la ea ori la cursor cu Tab — un contur în
 jurul previzualizării arată când tastele sunt ale ei — și:
 
 | Tastă | Ce face |
@@ -160,8 +160,8 @@ titlului scrie un spațiu, ca peste tot.
 
 Dialogul se deschide pe un film mic și prudent: un GIF, 640 × 360, 10 cadre pe secundă, 20 de
 secunde și 2 secunde de imagine fixă la sfârșit, modelul rotindu-se cu 6° pe secundă. Setările
-dumneavoastră sunt **ținute minte în acest browser** pentru următorul film — toate, mai puțin
-titlul pe care l-ați scris, care nu este stocat niciodată.
+tale sunt **ținute minte în acest browser** pentru următorul film — toate, mai puțin
+titlul pe care l-ai scris, care nu este stocat niciodată.
 
 **Presetările** stau deasupra grupurilor, pentru un fișier făcut dintr-o apăsare:
 
@@ -176,13 +176,13 @@ titlul pe care l-ați scris, care nu este stocat niciodată.
 Cele trei presetări pentru rețele sociale scriu **doar MP4**, pentru că Instagram nu primește WebM: unde browserul nu poate scrie un MP4 de dimensiunea aceea, nu se schimbă nimic și dialogul o spune.
 
 O presetare schimbă **doar fișierul** — setările grupului *Fișier*. Cine este etichetat și cum, ce
-se vede din model și ce texte se scriu sunt ale dumneavoastră și nu sunt atinse niciodată de o
+se vede din model și ce texte se scriu sunt ale tale și nu sunt atinse niciodată de o
 presetare. Turele bifate și persoanele lăsate deoparte nu sunt setări și rămân, atât după o
 presetare, cât și după o revenire la valorile implicite.
 
 | Grup | Setare | Ce decide |
 |---|---|---|
-| **Fișier** | **Format** | GIF, WebM sau MP4 — vedeți [Ce format](#ce-format) |
+| **Fișier** | **Format** | GIF, WebM sau MP4 — vezi [Ce format](#ce-format) |
 | | **Dimensiunea cadrului** | Lat (16:9) de la 320 × 180 la 1920 × 1080; vertical (9:16, Reels, TikTok, Shorts, Stories) de la 360 × 640 la 1080 × 1920; pătrat (1:1) de la 480 × 480 la 1080 × 1080; portret 4:5 (fluxul Instagram și Facebook) de la 640 × 800 la 1080 × 1350 și 3:4 de la 600 × 800 la 1080 × 1440; sau standard (4:3) de la 320 × 240 la 1024 × 768. Un GIF are cel mult 800 de pixeli lățime |
 | | **Cadre pe secundă** | De la 10 la 30 pentru un video; un GIF păstrează exact doar 10, 12,5, 20 și 25 |
 | | **Durată (secunde)** | Cât durează reluarea, între 1 și 300 de secunde, oricât au durat turele în realitate |
@@ -203,7 +203,7 @@ presetare, cât și după o revenire la valorile implicite.
 
 **Revino la valorile implicite** stă sub presetări și nu este una dintre ele: readuce *fiecare*
 setare la ce arată o primă deschidere — textele, etichetele și vederea, nu doar fișierul, și
-titlul pe care l-ați scris. Dacă ați oprit **Titlul**, el revine, și odată cu el fișierul numit
+titlul pe care l-ai scris. Dacă ai oprit **Titlul**, el revine, și odată cu el fișierul numit
 după tură sau după peșteră; aceleași valori sunt cele pe care se deschide filmul următor. Turele
 bifate și persoanele lăsate deoparte rămân cum sunt.
 
@@ -224,7 +224,7 @@ ordine, iar legenda poartă atunci o linie care o spune: *„Culorile turelor se
 
 **Relieful de deasupra peșterii.** Unele fișiere de ridicare conțin, pe lângă galerii, și
 suprafața de deasupra peșterii. **Relieful de deasupra peșterii**, sub *Vedere*, desenează acea
-suprafață în film. **Este oprit la început și rămâne oprit până îl porniți**: galeriile desenate
+suprafață în film. **Este oprit la început și rămâne oprit până îl pornești**: galeriile desenate
 singure sunt o formă, dar o peșteră desenată sub dealurile ei poate fi așezată pe hartă de oricine
 primește fișierul — același motiv pentru care busola și afișajul de altitudine pornesc oprite.
 Comutatorul este oferit numai pentru o ridicare al cărei fișier își conține propriul relief;
@@ -237,14 +237,14 @@ este ținută minte în acest browser, iar o presetare nu o atinge.
 
 ## Ce format
 
-| Format | Alegeți-l pentru | Limite |
+| Format | Alege-l pentru | Limite |
 |---|---|---|
 | **GIF** | O buclă care se deschide aproape oriunde, fără player — o conversație, un forum, un e-mail | Cel mult 800 de pixeli lățime și 600 de cadre; crește repede când modelul se rotește |
 | **WebM** | Un video pe care îl redă orice browser; mic pentru calitatea lui | — |
 | **MP4** | Un video pe care îl deschid aplicațiile de mesagerie, prezentările și telefoanele | — |
 
 **Un format poate fi gri.** WebM și MP4 sunt scrise de codorul video al browserului
-dumneavoastră, iar dialogul întreabă browserul ce poate scrie la dimensiunea și ritmul alese.
+tău, iar dialogul întreabă browserul ce poate scrie la dimensiunea și ritmul alese.
 Când nu poate, formatul este dezactivat și spune de ce: *„Acest browser nu poate scrie MP4 la
 1920 × 1080, cu 30 cadre/s."* — o dimensiune mai mică sau un ritm mai scăzut pot fi acceptate —
 sau *„Acest browser nu are un codor video, așa că aici se poate face doar un GIF."* Propoziția
@@ -256,55 +256,55 @@ cum erau.
 **GIF-ul este oferit în orice browser.** Îl scrie aplicația însăși și nu cere browserului
 decât vederea 3D cu care este desenată previzualizarea. **Cele două formate video depind de
 browser**, iar dialogul nu se ia după numele browserului: îl întreabă pe cel pe care îl
-folosiți ce poate scrie codorul lui, de fiecare dată când se schimbă dimensiunea sau ritmul,
+folosești ce poate scrie codorul lui, de fiecare dată când se schimbă dimensiunea sau ritmul,
 și oferă exact atât.
 
-| Browser | Ce primiți |
+| Browser | Ce primești |
 |---|---|
 | **Chrome, Edge și celelalte browsere construite pe Chromium** | GIF, WebM și MP4 — acceptate la toate dimensiunile încercate, de la 320 × 180 cu 10 cadre/s la 1920 × 1080 cu 30. Aici este testat filmul de la un capăt la altul, cu fișierele redate chiar de browser |
 | **Un browser al cărui codor video nu acceptă nimic** — varianta de Linux a motorului WebKit încercată aici este una: are un codor și a refuzat ambele formate la orice dimensiune, de la 320 × 180 la 1920 × 1080 | GIF. WebM și MP4 sunt gri, fiecare cu propoziția lui — *„Acest browser nu poate scrie WebM la 640 × 360, cu 10 cadre/s."* — iar alegerea altei dimensiuni schimbă cifrele din propoziție, nu răspunsul |
 | **Un browser fără niciun codor video** | GIF, și singura propoziție *„Acest browser nu are un codor video, așa că aici se poate face doar un GIF."* |
 | **Safari pe Mac sau pe iPhone, și Firefox** | Neîncercate de acest proiect. Li se pune aceeași întrebare ca oricărui alt browser: ce răspund că pot scrie este oferit, iar ce nu pot este gri, cu motivul lui |
 
-Așadar, dacă aveți nevoie de un video și formatul lui este gri la orice dimensiune, cauza este
-browserul și un film mai mic nu schimbă nimic: faceți video-ul într-un browser construit pe
-Chromium, sau trimiteți GIF-ul.
+Așadar, dacă ai nevoie de un video și formatul lui este gri la orice dimensiune, cauza este
+browserul și un film mai mic nu schimbă nimic: fă video-ul într-un browser construit pe
+Chromium, sau trimite GIF-ul.
 
 **Mărimea este o estimare.** Sub setări dialogul spune *„Cadre: 300 · aproximativ 2,7 MB"*.
 Pentru un video cifra este ținta codorului și este de obicei apropiată. Pentru un GIF este o
-presupunere până când ați făcut unul: un GIF al unui model care se rotește, pe o ridicare
+presupunere până când ai făcut unul: un GIF al unui model care se rotește, pe o ridicare
 densă, poate ajunge la aproape dublul primei estimări. După ce un GIF a fost făcut în acest
-browser, estimarea urmează cât au ieșit în realitate propriile dumneavoastră GIF-uri și spune
+browser, estimarea urmează cât au ieșit în realitate propriile tale GIF-uri și spune
 *„…, după ultimul GIF făcut aici"*. Peste aproximativ 10 MB dialogul avertizează că GIF-ul este
-mai mare decât acceptă majoritatea aplicațiilor de mesagerie și propune să îl scurtați, să îl
-micșorați sau să îl răriți, să îi scădeți calitatea, să opriți rotirea sau să faceți un video.
+mai mare decât acceptă majoritatea aplicațiilor de mesagerie și propune să îl scurtezi, să îl
+micșorezi sau să îl rărești, să îi scazi calitatea, să oprești rotirea sau să faci un video.
 
 ---
 
 ## Ce poate purta fișierul
 
-Tot ce este în film v-a fost arătat în baza propriilor dumneavoastră drepturi; fișierul este apoi
-al dumneavoastră de dat mai departe, unor oameni pe care instalarea nu i-a verificat niciodată.
-Merită deci să știți ce se află în el.
+Tot ce este în film ți-a fost arătat în baza propriilor tale drepturi; fișierul este apoi
+al tău de dat mai departe, unor oameni pe care instalarea nu i-a verificat niciodată.
+Merită deci să știi ce se află în el.
 
 | În fișier | La început | Ca să lipsească |
 |---|---|---|
 | Desenul ridicării și locul unde a fost raportat fiecare om | Întotdeauna | — acesta este filmul |
 | **Numele oamenilor**, pe marcaje | Prenume. Două persoane care s-ar citi la fel primesc o inițială | **Etichetele speologilor**: *Inițiale* sau *Fără etichete* |
 | **Când a fost raportat ultima dată fiecare om**, lângă numele lui | Oprit. Pornit, fiecare etichetă poartă ora și minutul, iar pentru un raport care nu este de azi și data | **Ora ultimului raport în etichetă** oprită |
-| **Titlul**, scris peste imagine | Pornit. O tură: titlul turei. Mai multe: numele peșterii și zilele pe care se întind. Sau cuvintele pe care le scrieți în **Textul titlului** | **Titlu** oprit |
+| **Titlul**, scris peste imagine | Pornit. O tură: titlul turei. Mai multe: numele peșterii și zilele pe care se întind. Sau cuvintele pe care le scrii în **Textul titlului** | **Titlu** oprit |
 | **Legenda** — titlurile turelor sau numele echipelor lângă culorile lor | Pornită | **Legendă** oprită |
 | **Ceasul** — data și ora fiecărui moment | Pornit | **Ceas** oprit, sau **Una lângă alta**, care arată timpul scurs și nicio dată. Amândouă scot data numai din ceas — nu și din etichete, dacă ora ultimului raport este pornită |
-| **Numele intrărilor** | Pornite | Debifați-le sub **Vedere** |
+| **Numele intrărilor** | Pornite | Debifează-le sub **Vedere** |
 | **Numele stațiilor**, **Comentariile stațiilor** | Oprite | — |
 | **Ultima notă** — text liber scris de cineva odată cu un raport | Oprită, fiindcă *„Notele sunt text liber și pot conține detalii de siguranță"* | — |
-| **Fotografiile** prinse de momentele turelor, cu legendele lor | Oprite. Pornite, fiecare fotografie de pe un moment al unei ture bifate este desenată în cadre, mai puțin cele despre cineva pe care l-ați lăsat în afara filmului | **Fotografiile de pe momentele turelor**: *Nu apar* |
+| **Fotografiile** prinse de momentele turelor, cu legendele lor | Oprite. Pornite, fiecare fotografie de pe un moment al unei ture bifate este desenată în cadre, mai puțin cele despre cineva pe care l-ai lăsat în afara filmului | **Fotografiile de pe momentele turelor**: *Nu apar* |
 | **Busola și afișajul de altitudine** | Oprite. Pornite, ele *„scriu altitudini și un azimut în fiecare cadru"* | — |
-| **Suprafața de deasupra peșterii** — dealuri, văi și locul intrărilor printre ele, acolo unde fișierul ridicării își conține relieful | Oprită. Pornită, peștera este desenată sub propriul ei peisaj, pe care cineva care cunoaște zona îl poate recunoaște | — lăsați **Relieful de deasupra peșterii** oprit. Alegerea este ținută minte, deci priviți previzualizarea înainte de a trimite un film făcut după unul care îl avea pornit |
-| **Numele fișierului** | Urmează titlul — vedeți mai jos | **Titlu** oprit |
-| **O persoană** — marcajul ei, traseul ei, o notă spusă de ea | Toți participanții fiecărei ture bifate | Debifați-o sub [Cine apare](#cine-apare) |
+| **Suprafața de deasupra peșterii** — dealuri, văi și locul intrărilor printre ele, acolo unde fișierul ridicării își conține relieful | Oprită. Pornită, peștera este desenată sub propriul ei peisaj, pe care cineva care cunoaște zona îl poate recunoaște | — lasă **Relieful de deasupra peșterii** oprit. Alegerea este ținută minte, deci privește previzualizarea înainte de a trimite un film făcut după unul care îl avea pornit |
+| **Numele fișierului** | Urmează titlul — vezi mai jos | **Titlu** oprit |
+| **O persoană** — marcajul ei, traseul ei, o notă spusă de ea | Toți participanții fiecărei ture bifate | Debifeaz-o sub [Cine apare](#cine-apare) |
 
-O poziție care vă este ascunsă nu desenează niciun marcaj în film, din același motiv pentru care
+O poziție care îți este ascunsă nu desenează niciun marcaj în film, din același motiv pentru care
 nu desenează niciunul pe panoul ridicării din tură.
 
 ### Numele fișierului
@@ -315,14 +315,14 @@ silexgis-…"* — pentru că un nume ajunge mai departe decât imaginea: se ved
 
 | Textul „Titlu" | Fișierul se numește |
 |---|---|
-| Pornit, cu propriul **Textul titlului** | `silexgis-<cuvintele dumneavoastră>-<data>` |
+| Pornit, cu propriul **Textul titlului** | `silexgis-<cuvintele tale>-<data>` |
 | Pornit, o tură, fără text propriu | `silexgis-<titlul turei>-<data>` |
 | Pornit, mai multe ture, fără text propriu | `silexgis-<numele peșterii>-<data>` (numele ridicării când cel al peșterii nu este cunoscut) |
 | **Oprit** | `silexgis-movie-<data>` — nimic despre care tură sau care peșteră |
 
 Cuvintele sunt scrise cu litere mici, fără diacritice, cu cratime în locul a tot ce nu este
 literă sau cifră, și tăiate la 60 de caractere. Data este ziua în care a fost făcut fișierul, pe
-calendarul dumneavoastră. Fișierul este salvat exact sub numele arătat când ați apăsat
+calendarul tău. Fișierul este salvat exact sub numele arătat când ai apăsat
 **Exportă**.
 
 O imagine salvată din previzualizare este numită după aceeași regulă, cu terminația `.png` — așa
@@ -330,10 +330,10 @@ că, având textul „Titlu" oprit, nici ea nu spune nimic despre care tură sau
 
 ### Un film care spune mai puțin
 
-Opriți **Titlu**, puneți **Etichetele speologilor** pe *Inițiale* sau *Fără etichete*, opriți
-**Ora ultimului raport în etichetă**, opriți **Legendă**, alegeți **Una lângă alta** sau opriți
-**Ceas**, debifați **Numele intrărilor** și lăsați **Relieful de deasupra peșterii** oprit. Sub
-[Cine apare](#cine-apare), debifați pe oricine nu trebuie să apară deloc.
+Oprește **Titlu**, pune **Etichetele speologilor** pe *Inițiale* sau *Fără etichete*, oprește
+**Ora ultimului raport în etichetă**, oprește **Legendă**, alege **Una lângă alta** sau oprește
+**Ceas**, debifează **Numele intrărilor** și lasă **Relieful de deasupra peșterii** oprit. Sub
+[Cine apare](#cine-apare), debifează pe oricine nu trebuie să apară deloc.
 Fișierul se numește atunci `silexgis-movie-<data>` și arată marcaje care se mișcă printr-o
 ridicare fără nume. Forma ridicării rămâne — un film nu poate ascunde peștera al cărei film este.
 O imagine salvată dintr-o astfel de previzualizare spune la fel de puțin și se numește la fel.
@@ -379,7 +379,7 @@ nu se schimbă nimic: filmul este făcut în memorie, iar browserul îl salveaz�
 
 ## Anularea
 
-| Apăsați | Cât rulează un export | Fără niciun export în curs |
+| Apeși | Cât rulează un export | Fără niciun export în curs |
 |---|---|---|
 | **Anulează exportul** | Se oprește pe loc. Nu se salvează nimic, nimic nu este raportat ca eroare, iar dialogul rămâne deschis cu previzualizarea lui | (butonul este **Închide**) |
 | **Escape**, sau **X**-ul din colț | Întreabă mai întâi: *„Oprești exportul filmului?"* — **Oprește și închide** aruncă cadrele desenate până atunci și închide dialogul; **Continuă exportul** merge mai departe. Escape încă o dată, sau Enter, continuă exportul | Închide dialogul |
@@ -391,17 +391,17 @@ Părăsirea paginii sau închiderea filei încheie și ea un export; nu se salve
 
 ## Când ceva este refuzat
 
-| Vedeți | De ce |
+| Vezi | De ce |
 |---|---|
-| *„Nicio tură nu a fost urmărită încă pe acest model."* | Nicio tură pe care aveți voie să o citiți nu a fost urmărită pe această ridicare |
+| *„Nicio tură nu a fost urmărită încă pe acest model."* | Nicio tură pe care ai voie să o citești nu a fost urmărită pe această ridicare |
 | *„Nu este nimic de reluat"* pe rândul unei ture | Urmărirea ei nu acoperă niciun interval de timp |
-| *„Jurnalul nu a putut fi citit"* | Jurnalul unei ture alese s-a întors incomplet; filmul refuză un jurnal parțial, la fel ca reluarea din tură. Debifați tura, sau închideți și încercați din nou |
-| Un format gri | Browserul dumneavoastră nu îl poate scrie la această dimensiune și la acest ritm — vedeți [Ce format](#ce-format) |
-| *„Filmul nu a putut fi făcut."* | Codorul a eșuat; linia de sub mesaj spune în ce etapă. Încercați o dimensiune mai mică sau alt format. Mesajul rămâne până îl închideți din **X**-ul lui sau porniți alt export |
-| *„Browserul nu a dat o suprafață de desen pe care să fie alcătuit cadrul…"* sub acel titlu, sau sub *„Imaginea nu a putut fi făcută."* | Browserul a refuzat suprafața pe care este alcătuit un cadru, de obicei pentru că a rămas fără memorie grafică. Închideți alte file sau reîncărcați pagina, cum spune propoziția |
+| *„Jurnalul nu a putut fi citit"* | Jurnalul unei ture alese s-a întors incomplet; filmul refuză un jurnal parțial, la fel ca reluarea din tură. Debifează tura, sau închide și încearcă din nou |
+| Un format gri | Browserul tău nu îl poate scrie la această dimensiune și la acest ritm — vezi [Ce format](#ce-format) |
+| *„Filmul nu a putut fi făcut."* | Codorul a eșuat; linia de sub mesaj spune în ce etapă. Încearcă o dimensiune mai mică sau alt format. Mesajul rămâne până îl închizi din **X**-ul lui sau pornești alt export |
+| *„Browserul nu a dat o suprafață de desen pe care să fie alcătuit cadrul…"* sub acel titlu, sau sub *„Imaginea nu a putut fi făcută."* | Browserul a refuzat suprafața pe care este alcătuit un cadru, de obicei pentru că a rămas fără memorie grafică. Închide alte file sau reîncarcă pagina, cum spune propoziția |
 
 ---
 
 Înrudite: [Urmărirea în direct și turele publicate](live-tracking.md) ·
-[Topografii, poligonații și modele 3D](surveys-and-models.md) · [Ture](trips.md) ·
+[Topografii, drumuiri și modele 3D](surveys-and-models.md) · [Ture](trips.md) ·
 [Protecția locațiilor](../admin/location-protection.md)

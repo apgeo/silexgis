@@ -6,9 +6,9 @@
 
 ---
 
-Există trei drumuri. Alegeți-l pe cel care se potrivește cu ce aveți efectiv în mână.
+Există trei drumuri. Alege-l pe cel care se potrivește cu ce ai efectiv în mână.
 
-| Aveți | Folosiți |
+| Ai | Folosește |
 |---|---|
 | O poziție și un nume, stând la birou | **Varianta A** — harta |
 | Un fișier GPS cu zeci de puncte | [Importul unui fișier GPS](import-a-gps-file.md) |
@@ -19,25 +19,25 @@ Există trei drumuri. Alegeți-l pe cel care se potrivește cu ce aveți efectiv
 
 ## Varianta A: de pe hartă
 
-Este cel mai rapid mod de a pune o gaură reală în cadastru.
+Este cel mai rapid mod de a pune o gaură reală în registru.
 
-1. Deschideți **Harta** și navigați aproximativ în locul potrivit. Caseta de căutare acceptă
+1. Deschide **Harta** și navighează aproximativ în locul potrivit. Caseta de căutare acceptă
    nume de locuri, nu doar nume de înregistrări.
-2. **Clic dreapta** acolo unde este intrarea → **Peșteră nouă aici**. (Sau folosiți unealta
-   *Peșteră nouă aici* din bara de editare și faceți clic pe hartă.)
-3. Se deschide un formular cu coordonatele deja completate din locul în care ați dat clic.
-4. Dați-i un **nume**. Restul poate aștepta.
-5. Hotărâți acum două lucruri, pentru că se schimbă greu în mintea oamenilor mai târziu:
+2. **Clic dreapta** acolo unde este intrarea → **Peșteră nouă aici**. (Sau folosește unealta
+   *Peșteră nouă aici* din bara de editare și fă clic pe hartă.)
+3. Se deschide un formular cu coordonatele deja completate din locul în care ai dat clic.
+4. Dă-i un **nume**. Restul poate aștepta.
+5. Hotărăște acum două lucruri, pentru că se schimbă greu în mintea oamenilor mai târziu:
    - **Vizibilitatea** — privată, grup de speologie, autentificați, publică.
-   - **Locație protejată** — bifați dacă poziția exactă trebuie reținută față de cine nu are
-     dreptul anume. Vedeți [Protecția locațiilor](../admin/location-protection.md).
-6. Salvați.
+   - **Locație protejată** — bifează dacă poziția exactă trebuie reținută față de cine nu are
+     dreptul anume. Vezi [Protecția locațiilor](../admin/location-protection.md).
+6. Salvează.
 
-Acum aveți o peșteră cu o intrare. Tot ce urmează este rafinare.
+Acum ai o peșteră cu o intrare. Tot ce urmează este rafinare.
 
 ## Varianta B: din formular
 
-**Peșteri → Peșteră nouă.** Același formular, fără poziție. Puteți adăuga intrări după aceea
+**Peșteri → Peșteră nouă.** Același formular, fără poziție. Poți adăuga intrări după aceea
 din pagina peșterii, fie desenând pe hartă, fie tastând coordonatele.
 
 ## Completarea peșterii
@@ -54,49 +54,49 @@ Formularul unei peșteri este împărțit în secțiuni. Nimic nu este obligator
 | **Descoperire** | Data descoperirii, descoperitor |
 | **Acces** | Vizibilitate, locație protejată |
 
-Nu vă simțiți obligat să completați morfometria de mână. Dacă încărcați o topografie, aplicația
+Nu te simți obligat să completezi morfometria de mână. Dacă încarci o topografie, aplicația
 calculează cifrele acelea din linia topografică și le arată alături de ce scrie în înregistrare
 — inclusiv când cele două nu se potrivesc, ceea ce spune cu voce tare în loc să aleagă un
-câștigător. Vedeți
+câștigător. Vezi
 [Măsurători și statistici](../features/measurements-and-statistics.md).
 
 ## Adăugarea celorlalte intrări
 
 Din pagina peșterii: **Adaugă intrare**. Fiecare intrare poartă:
 
-- **coordonatele** proprii — desenate pe hartă, sau scrise ori lipite în **Scrieți sau lipiți o
+- **coordonatele** proprii — desenate pe hartă, sau scrise ori lipite în **Scrie sau lipește o
   poziție** în oricare dintre [formatele de coordonate](../features/coordinates.md) (UTM, Stereo 70,
   grade și minute…), care completează longitudinea și latitudinea ce se salvează,
 - **altitudinea**,
 - un **tip de intrare**,
 - o **calitate a poziției** — necunoscută, GPS, de pe hartă, estimată — despre care merită să
-  fiți sincer, pentru că este diferența dintre „mergi aici" și „caută pe versantul ăsta",
+  fii sincer, pentru că este diferența dintre „mergi aici" și „caută pe versantul ăsta",
 - data **ridicării**,
 - un indicator **principală**; intrarea principală este cea pe care se bazează implicit alte
   câteva lucruri.
 
-## Ce atașați mai departe
+## Ce atașezi mai departe
 
-Odată ce peștera există, pagina ei crește secțiuni pe măsură ce o hrăniți:
+Odată ce peștera există, pagina ei crește secțiuni pe măsură ce o hrănești:
 
-- **Fotografii și documente** — trageți-le pe pagină. O fotografie poate fi marcată cu stea ca
-  *fotografie reprezentativă*. Vedeți [Fotografii](../features/photographs.md).
-- **Poligonații și modele 3D** — încărcați Therion `.lox`, Survex `.3d` sau pereți ca `.stl`.
+- **Fotografii și documente** — trage-le pe pagină. O fotografie poate fi marcată cu stea ca
+  *fotografie reprezentativă*. Vezi [Fotografii](../features/photographs.md).
+- **Drumuiri și modele 3D** — încarcă Therion `.lox`, Survex `.3d` sau pereți ca `.stl`.
   Primul model de fiecare fel devine modelul curent al peșterii; când o încărcare ulterioară este
   o topografie corectată, dialogul de încărcare oferă să o facă curentă după ce a fost citită.
-  Vedeți [Topografii, poligonații și modele 3D](../features/surveys-and-models.md).
-- **Surse topografice** — arhivați fișierele `.th`, `.th2`, `.thconfig`, `.svx`, `.log` de
+  Vezi [Topografii, drumuiri și modele 3D](../features/surveys-and-models.md).
+- **Surse topografice** — arhivează fișierele `.th`, `.th2`, `.thconfig`, `.svx`, `.log` de
   compilare sau `.zip`-ul unei aplicații de topografie din care a fost făcută topografia
   compilată. Doar jurnalul de compilare este citit, pentru erorile de buclă pe care le raportează;
   restul se păstrează așa cum este, ca să se poată recompila când uneltele care au produs exportul
   vor fi mers mai departe.
 - **Etichete** — libere, și filtrabile în tabele și pe straturile hărții.
 - **Legături** — spre raportul care o descrie, spre peștera de alături, spre înregistrarea care
-  s-a dovedit a fi aceeași gaură. Vedeți [Legături](../features/links.md).
-- **Ture** — pe acestea nu le adăugați aici. Secțiunea *Ture* a unei peșteri se completează
+  s-a dovedit a fi aceeași gaură. Vezi [Legături](../features/links.md).
+- **Ture** — pe acestea nu le adaugi aici. Secțiunea *Ture* a unei peșteri se completează
   singură din turele care au numit-o.
 - **Coduri tipărite** — dacă clubul prinde etichete QR pe pereții peșterilor, de aici le
-  publicați sau le retrageți. Vedeți
+  publici sau le retragi. Vezi
   [Partajare și pagini publice](../features/sharing-and-public-pages.md#coduri-qr-tipărite).
 
 ## Corectarea unei greșeli
@@ -104,16 +104,16 @@ Odată ce peștera există, pagina ei crește secțiuni pe măsură ce o hrăni�
 Fiecare modificare este înregistrată. Secțiunea **Istoric** a unei peșteri arată ce s-a
 schimbat, când și de către cine, și permite **restaurarea unei singure valori** sau
 **restaurarea tuturor valorilor de dinainte de o modificare**. Valorile care fac parte dintr-o
-locație protejată sunt afișate ca ascunse, nu expuse prin istoric. Vedeți
+locație protejată sunt afișate ca ascunse, nu expuse prin istoric. Vezi
 [Istoric și modificări](../features/history-and-audit.md).
 
 ## Două lucruri de hotărât ca club, o singură dată
 
-**Când marcați o locație ca protejată?** Stabiliți regula o dată și scrieți-o în notele
+**Când marchezi o locație ca protejată?** Stabilește regula o dată și scrie-o în notele
 clubului, pentru că este mult mai ușor de aplicat consecvent decât de reparat după aceea.
 
 **Ce intră în codul de identificare?** Aplicația nu impune o schemă. Dacă există una în
-cadastrul național, folosiți-o; codul este căutabil și este ceea ce rezolvă o etichetă QR.
+Cadastrul național, folosește-o; codul este căutabil și este ceea ce rezolvă o etichetă QR.
 
 ---
 

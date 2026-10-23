@@ -29,20 +29,20 @@ Straturi suplimentare de dale configurate de instalare, desenate peste fundal.
 
 Un fundal sau o hartă suprapusă poate fi și un **serviciu de hărți** (WMS sau WMTS) — felul în
 care o agenție națională de cartografie își publică de obicei foile — acolo unde instalarea
-dumneavoastră listează unul. Serviciile de hărți se desenează doar pe această hartă și în
+ta listează unul. Serviciile de hărți se desenează doar pe această hartă și în
 [vizualizarea 3D](3d-view.md): niciodată pe harta de ansamblu a [zonelor de lucru](work-areas.md)
 și niciodată într-un document, cum ar fi harta din raportul unei ture.
 
-### Straturile hărții (datele dumneavoastră)
+### Straturile hărții (datele tale)
 
 | Strat | Arată |
 |---|---|
-| **Intrări în peșteri** | Grupate la zoom mic; puncte individuale pe măsură ce apropiați |
+| **Intrări în peșteri** | Grupate la zoom mic; puncte individuale pe măsură ce apropii |
 | **Peșteri** | Fișele de peșteră propriu-zise |
-| **Fenomene de suprafață** | Tot restul cadastrului |
-| **Poligonații peșteri** | Linia topografică proiectată pe suprafață |
+| **Fenomene de suprafață** | Tot restul registrului |
+| **Drumuiri peșteri** | Linia topografică proiectată pe suprafață |
 | **Fișiere importate** | Câte un strat pentru fiecare fișier de geodate încărcat |
-| **Hărți georeferențiate** | Foi raster — vedeți [Hărți raster georeferențiate](georeferenced-maps.md) |
+| **Hărți georeferențiate** | Foi raster — vezi [Hărți raster georeferențiate](georeferenced-maps.md) |
 | **Fotografii geolocalizate** | Fotografiile care poartă o poziție. Când o imagine cuprinde mai multe decât încap într-un răspuns, rândul stratului spune *„Nu sunt afișate toate fotografiile de aici — apropie harta pentru a le vedea pe celelalte."* |
 | **Hartă de căldură (intrări)** | Densitate în loc de puncte individuale |
 | **Densitatea peșterilor (grilă)** | Câte peșteri se află în fiecare celulă a unei grile, numărate de server |
@@ -50,7 +50,7 @@ dumneavoastră listează unul. Serviciile de hărți se desenează doar pe aceas
 
 ### Straturile carstice
 
-Cele două straturi carstice sunt calculate de server peste peșterile pe care le puteți citi;
+Cele două straturi carstice sunt calculate de server peste peșterile pe care le poți citi;
 harta nu le deduce niciodată din marcajele pe care le are, care sunt limitate pe imagine. Cât
 timp e pornit, fiecare are un rând sub lista de straturi, cu o legendă a culorilor.
 
@@ -60,12 +60,12 @@ timp e pornit, fiecare are un rând sub lista de straturi, cu o legendă a culor
   care protejează pozițiile peșterilor, și mai mare când imaginea e largă. Culorile sunt relative
   la imagine — celula cea mai închisă este cea mai densă *aici* — așa că două imagini se compară
   după numerele din legendă, nu după culoare. Dacă imaginea e prea largă chiar și pentru celula
-  cea mai mare, rândul o spune: măriți harta.
+  cea mai mare, rândul o spune: mărește harta.
 - **Indice de carstificare (zone)** colorează fiecare zonă carstică și masiv după clasa
   indicelui, de la *foarte scăzut* la *foarte ridicat*; o zonă care nu poate fi măsurată este gri,
-  cu margine întreruptă. O zonă carstică din interiorul unui masiv se desenează peste el. Indicați
+  cu margine întreruptă. O zonă carstică din interiorul unui masiv se desenează peste el. Indică
   o zonă pentru numele și clasa ei; un clic o deschide, iar pagina ei are statisticile complete.
-  Se desenează doar zonele pe care le puteți vedea exact; dacă o imagine cuprinde mai multe decât
+  Se desenează doar zonele pe care le poți vedea exact; dacă o imagine cuprinde mai multe decât
   desenează instalarea deodată, legenda spune că unele nu sunt arătate.
 
 Amândouă au opacitate și se păstrează într-o [vedere salvată](saved-views-and-windows.md).
@@ -75,25 +75,25 @@ Niciunul nu se desenează în vederea 3D sau pe linkul unei vederi partajate.
 
 **Rărește etichetele aglomerate** face ca numele care s-ar suprapune să se dea unele altora la o
 parte. Marcajele se desenează întotdeauna — doar *etichetele* lor concurează pentru spațiu. Util
-într-o zonă carstică densă, înșelător dacă uitați că l-ați pornit.
+într-o zonă carstică densă, înșelător dacă uiți că l-ai pornit.
 
-### Detaliul poligonațiilor
+### Detaliul drumuirilor
 
-Poligonațiile sunt stratul scump, așa că au controale proprii:
+Drumuirile sunt stratul scump, așa că au controale proprii:
 
 - **Detaliu de la nivelul** — de la ce nivel apare detaliul topografic complet (inclusiv
-  radialele). Sub el vedeți conturul galeriilor, iar vizările de perete apar pe măsură ce
-  apropiați.
+  radialele). Sub el vezi conturul galeriilor, iar vizările de perete apar pe măsură ce
+  apropii.
 - **Limită de linii** — o limită a numărului de trasee desenate.
 
-Lăsați-le goale ca să urmați valorile implicite ale instalării. Detaliul mai mare costă mai mult
-la desenare. Dacă se rețin poligonații, vi se spune: *„n poligonale nu sunt afișate la această
+Lasă-le goale ca să urmezi valorile implicite ale instalării. Detaliul mai mare costă mai mult
+la desenare. Dacă se rețin drumuiri, ți se spune: *„n drumuiri nu sunt afișate la această
 scară — apropie harta pentru a le încărca."* Cu panoul de straturi închis, același număr apare
-în colțul din stânga jos al hărții — *„n poligonale ascunse la această scară — apropie harta sau
+în colțul din stânga jos al hărții — *„n drumuiri ascunse la această scară — apropie harta sau
 deschide panoul de straturi"* — iar apăsarea lui deschide panoul la aceste controale.
 
 Amândouă se păstrează doar în acest browser. Aceleași două numere se află la
-[Setări › Avansat](account-and-settings.md#poligonațiile-de-pe-hartă), unde se spune și cât de
+[Setări › Avansat](account-and-settings.md#drumuirile-de-pe-hartă), unde se spune și cât de
 sus lasă instalarea să urce limita de linii. Ambele locuri primesc același interval, așa că un
 număr pus într-unul nu este niciodată în afara intervalului în celălalt.
 
@@ -101,11 +101,11 @@ număr pus într-unul nu este niciodată în afara intervalului în celălalt.
 
 ## Selectarea lucrurilor
 
-**Clic** pe un element ca să-l selectați. **Ctrl sau Shift + clic** adaugă la selecție.
+**Clic** pe un obiect ca să-l selectezi. **Ctrl sau Shift + clic** adaugă la selecție.
 
 **Panoul de detalii** din dreapta are două file:
 
-- **Selecție** — ce ați selectat. Cu mai multe selectate arată câte sunt, care sunt lizibile aici
+- **Selecție** — ce ai selectat. Cu mai multe selectate arată câte sunt, care sunt lizibile aici
   și dacă selecția este mixtă.
 - **În vedere** — tot ce este încărcat în zona vizibilă.
 
@@ -113,32 +113,32 @@ Acțiuni: **Zoom la selecție**, **Încadrează-le pe toate**, **Golește selec�
 **Etichetează-le pe toate** apare, dar nu este încă disponibil.
 
 O selecție poate fi umplută și dintr-o listă: **Selectează pe hartă tot ce s-a găsit (n)** din
-registrul peșterilor sau din lista de elemente pune în ea până la 200 dintre rezultatele listei.
-Vedeți [Între o listă și hartă](search-and-filters.md#între-o-listă-și-hartă).
+registrul peșterilor sau din lista de obiecte pune în ea până la 200 dintre rezultatele listei.
+Vezi [Între o listă și hartă](search-and-filters.md#între-o-listă-și-hartă).
 
 În fila **În vedere**, numele din fiecare rând este un buton: **Tab** ajunge la el și **Enter**
 îl selectează, ca un clic pe rând.
 
 Panoul însuși este configurabil. Secțiunile lui — Detalii, Etichete, Fișiere, Legături, Istoric,
 Permisiuni, Text — pot fi **reordonate** (prin tragere sau cu Alt + săgeți), **ascunse**
-individual și readuse. Puteți salva **aranjări** denumite, puteți stabili **spațierea** și
-puteți alege dacă panoul **împinge harta lateral** sau **plutește peste hartă**.
+individual și readuse. Poți salva **aranjări** denumite, poți stabili **spațierea** și
+poți alege dacă panoul **împinge harta lateral** sau **plutește peste hartă**.
 
 Există butoane **înapoi și înainte** pentru deplasarea prin istoricul selecției.
 
 ## Grupări
 
-Sub un nivel de zoom ales de instalarea dumneavoastră, intrările se grupează. Un clic pe o grupare
+Sub un nivel de zoom ales de instalarea ta, intrările se grupează. Un clic pe o grupare
 listează intrările din ea — *„n intrări în această zonă"* — cu **Apropie aici**; o intrare din
-listă a cărei poziție nu o puteți vedea exact este marcată *aprox.*, iar alegerea uneia o
+listă a cărei poziție nu o poți vedea exact este marcată *aprox.*, iar alegerea uneia o
 selectează și mută harta la ea. Cât timp harta este grupată, fila **În vedere** spune *„Apropie
 harta pentru a lista intrările individuale."*, în loc să dea o listă înșelătoare.
 
 ## Poziții aproximative
 
-O înregistrare a cărei poziție exactă nu aveți voie s-o vedeți este desenată aproximativ și
+O înregistrare a cărei poziție exactă nu ai voie s-o vezi este desenată aproximativ și
 etichetată: **„Locație aproximativă — coordonatele exacte sunt protejate"**, sau, pe hartă, forma
-scurtă *aprox.* Un element a cărui geometrie este reținută complet spune **„Locație
+scurtă *aprox.* Un obiect a cărui geometrie este reținută complet spune **„Locație
 nedivulgată"**.
 
 Aceasta este [protecția locațiilor](../admin/location-protection.md). Aplicația nu ascunde că
@@ -152,18 +152,18 @@ Bara de editare:
 
 | Unealtă | Face |
 |---|---|
-| **Desenează** | Plasează o geometrie nouă de tipul de element ales |
-| **Modifică** | Trageți vârfuri. Alt+clic șterge unul |
+| **Desenează** | Plasează o geometrie nouă de tipul de obiect ales |
+| **Modifică** | Trage vârfuri. Alt+clic șterge unul |
 | **Mută geometria** | Translatează toată forma |
-| **Aliniere la elementele vizibile** | Vârfurile se aliniază la ce este desenat |
+| **Aliniere la obiectele vizibile** | Vârfurile se aliniază la ce este desenat |
 | **Anulează / Refă** | Istoric complet al sesiunii de editare |
 | **Renunță la editări** | Aruncă sesiunea |
 
 În timpul desenării: clic pentru a plasa puncte, dublu-clic pentru a termina o linie sau o zonă.
-Bara arată **Încheie** și **Punct** (scoate ultimul punct). Pe ecran tactil, atingeți întâi un
+Bara arată **Încheie** și **Punct** (scoate ultimul punct). Pe ecran tactil, atinge întâi un
 vârf și apoi **Șterge vârful**.
 
-**Alege un tip de fenomen** înainte de a desena. Tipurile sunt grupate în **Puncte, Linii,
+**Alege un tip de obiect** înainte de a desena. Tipurile sunt grupate în **Puncte, Linii,
 Suprafețe** și *Altele*, iar cele folosite des pot fi **fixate** pe bară.
 
 Există unelte dedicate pentru **Peșteră nouă aici** și **Intrare nouă aici** — clic pe hartă și
@@ -183,7 +183,7 @@ curbura Pământului, nu măsoară pe proiecția plană.
 
 Clic dreapta oriunde pe hartă:
 
-- **Adaugă fenomen**
+- **Adaugă obiect**
 - **Peșteră nouă aici**
 - **Intrare nouă aici**
 - **Copiază coordonatele**
@@ -197,23 +197,24 @@ Clic dreapta oriunde pe hartă:
 | **Arată locația mea** | Folosește geolocalizarea browserului |
 | **Compară rasterul cu harta de dedesubt (glisor)** | Un separator glisant pentru a compara un raster suprapus cu harta de bază |
 | **Ascunde barele de instrumente ale hărții** | Eliberează ecranul pentru o captură sau un ecran mic |
-| **Arată scena 3D lângă hartă** | Împarte spațiul de lucru — vedeți [Vizualizarea 3D](3d-view.md) |
-| **Cea mai mică distanță** | Măsoară cât de aproape ajung două peșteri — vedeți [Măsurători](measurements-and-statistics.md#cea-mai-mică-distanță) |
-| **Listează peșterile din vedere** | Deschide registrul peșterilor pe filtrul hărții, restrâns la ce arată harta — vedeți [Între o listă și hartă](search-and-filters.md#între-o-listă-și-hartă) |
+| **Arată scena 3D lângă hartă** | Împarte spațiul de lucru — vezi [Vizualizarea 3D](3d-view.md) |
+| **Cea mai mică distanță** | Măsoară cât de aproape ajung două peșteri — vezi [Măsurători](measurements-and-statistics.md#cea-mai-mică-distanță) |
+| **Listează peșterile din vedere** | Deschide registrul peșterilor pe filtrul hărții, restrâns la ce arată harta — vezi [Între o listă și hartă](search-and-filters.md#între-o-listă-și-hartă) |
 
 ## Căutarea
 
-Caseta de căutare a hărții acoperă **elemente, ture și locuri**: înregistrările dumneavoastră,
+Caseta de căutare a hărții acoperă **obiecte, ture și locuri**: înregistrările tale,
 plus nume de locuri de la un serviciu extern de geocodare (Nominatim). Rezultatele sunt grupate —
-Peșteri, Elemente, Jurnale de tură, Tabere, Locuri și potriviri din interiorul documentelor.
+Peșteri, Obiecte, Jurnale de tură, Tabere, Locuri și potriviri din interiorul documentelor.
 Fiecare oferă **Centrează** sau **Deschide**.
 
-Lângă ea, un selector (*Mergi la…*) găsește după nume o peșteră, o intrare, un element, un
-document, o tură, o vedere salvată, o fotografie sau un filtru salvat și vă duce la el; un filtru
+Lângă ea, un selector (*Mergi la…*) găsește după nume o peșteră, o intrare, un obiect, un
+document, o tură, o vedere salvată, o fotografie sau un filtru salvat și te duce la el; un filtru
 salvat ales acolo devine filtrul hărții. Sub ele stau filtrele rapide și **Listează peșterile din
 vedere**.
 
-Vedeți [Căutare și filtre](search-and-filters.md) și
+Vezi [Căutare și filtre](search-and-filters.md) și
+
 [Filtre pe hartă](search-and-filters.md#filtre-pe-hartă).
 
 ## De la tastatură

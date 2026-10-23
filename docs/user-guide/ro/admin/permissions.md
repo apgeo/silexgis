@@ -10,7 +10,7 @@
 
 SilexGIS are **grupuri de permisiuni editabile în locul unor roluri fixe**. Nu există „Editor" sau
 „Moderator" încorporat în program; există seturi de reguli denumite pe care le-a scris cineva, iar
-dumneavoastră faceți parte din unele dintre ele.
+tu faci parte din unele dintre ele.
 
 ---
 
@@ -20,7 +20,7 @@ Accesul la o înregistrare este decis de trei mecanisme independente care se com
 
 ### 1. Proprietatea
 
-Dețineți ce ați creat. Proprietatea acordă acces prin ea însăși.
+Deții ce ai creat. Proprietatea acordă acces prin ea însăși.
 
 ### 2. Vizibilitatea
 
@@ -38,7 +38,7 @@ O proprietate a înregistrării, stabilită de cine a creat-o:
 *Permite* sau *refuză*, pe acțiune, pe domeniu, la un anumit cuprins. Regulile trăiesc în
 **grupuri de permisiuni** sau direct pe un obiect.
 
-Deasupra tuturor celor trei stau **Administratorii compleți** — apartenența decide înainte de
+Deasupra tuturor celor trei stau **Administratorii deplini** — apartenența decide înainte de
 consultarea vreunei reguli.
 
 ---
@@ -64,15 +64,15 @@ subiectul.)
 | **Partajare** | Generarea de linkuri de partajare |
 | **Rulare** | Execuție — de ex. pornirea unei sarcini |
 | **Administrare permisiuni** | Scrierea de reguli pe acest lucru |
-| **Locație exactă** | Vederea coordonatelor reținute — vedeți [Protecția locațiilor](location-protection.md) |
+| **Locație exactă** | Vederea coordonatelor reținute — vezi [Protecția locațiilor](location-protection.md) |
 
 ### Domenii
 
-Elemente · Jurnale de tură · Fișiere de geodate · Hărți georeferențiate · Vederi de hartă salvate
+Obiecte · Jurnale de tură · Fișiere geodate · Hărți georeferențiate · Vederi de hartă salvate
 · Depozitul de fișiere · Documente · Expediții · Straturi de hartă · Etichete · Ierarhii ·
-Vocabulare · Speologi · Grupuri de speologie · Conturi de utilizator · Grupuri de permisiuni ·
-Seturi de elemente · Setările instalării · Texte mesaje · Istoric modificări · Sarcini · Relief ·
-Liste de verificare · Evenimente de calendar
+Taxonomii · Speologi · Grupuri de speologie · Conturi de utilizator · Grupuri de permisiuni ·
+Seturi de obiecte · Setările instalării · Texte mesaje · Istoricul de audit · Sarcini · Relief ·
+Liste de verificare · Evenimente din calendar
 
 ### Cuprinsuri
 
@@ -83,8 +83,8 @@ Aceasta este partea care face sistemul practic în loc de plictisitor.
 | **Tot** | Întregul domeniu |
 | **Obiectele proprii** | Ce a creat subiectul |
 | **Conținutul unui grup de speologie** | Tot ce este legat de acel grup |
-| **Un element și tot ce conține** | Un subarbore din ierarhia de elemente |
-| **Un set de elemente** | Un set numit de elemente — vedeți mai jos |
+| **Un obiect și tot ce conține** | Un subarbore din ierarhia de obiecte |
+| **Un set de obiecte** | Un set numit de obiecte — vezi mai jos |
 | **Un dulap și tot ce este clasat sub el** | O ramură din arborele de clasare |
 | **Un singur obiect** | O singură înregistrare |
 
@@ -97,16 +97,16 @@ pornește cu un grup de permisiuni care le permite membrilor să citească, să 
 întregului domeniu — așa că un astfel de membru poate crea o tură *care aparține grupului* și
 nimic nelegat. Pentru **ture**, aplicația îi oferă controalele de creare și leagă tura în locul lui
 ([cum arată](../features/trips.md#când-dreptul-de-a-înregistra-ture-vine-de-la-club)). Pentru
-peșteri, elemente, tabere, geodate și documente, controalele de creare se desenează încă doar
+peșteri, obiecte, tabere, geodate și documente, controalele de creare se desenează încă doar
 pentru cine are *Creare* asupra întregului domeniu; un membru fără acest drept nu vede deocamdată
-niciun buton acolo, orice ar spune regulile grupului. Scoateți *Creare* din regula grupului, sau
-refuzați-o, și dispar și controalele pentru ture: oferta urmează regula.
+niciun buton acolo, orice ar spune regulile grupului. Scoate *Creare* din regula grupului, sau
+refuz-o, și dispar și controalele pentru ture: oferta urmează regula.
 
 ---
 
 ## Cum se rezolvă conflictele
 
-Două reguli, declarate pe fiecare ecran care vă lasă să scrieți una:
+Două reguli, declarate pe fiecare ecran care te lasă să scrii una:
 
 > **Un refuz bate orice permisiune de la același nivel, iar o regulă scrisă pe obiectul însuși bate
 > orice se moștenește.**
@@ -114,8 +114,8 @@ Două reguli, declarate pe fiecare ecran care vă lasă să scrieți una:
 Deci o permisiune la nivel de obiect bate un refuz global; un refuz global bate o permisiune
 globală.
 
-**Verificați ce costă înainte să salvați.** Un grup de permisiuni care conține un refuz nu vă lasă
-să-l salvați fără să deschideți întâi previzualizarea — vedeți mai jos.
+**Verifică ce costă înainte să salvezi.** Un grup de permisiuni care conține un refuz nu te lasă
+să-l salvezi fără să deschizi întâi previzualizarea — vezi mai jos.
 
 ---
 
@@ -132,58 +132,58 @@ Previzualizare.
 
 ### Grupuri incluse și protejate
 
-Unele grupuri vin cu produsul și sunt marcate **Incluse** sau **Protejate**. În special,
-**Administratorii compleți nu dețin reguli**: apartenența însăși este acordarea, decisă înaintea
+Unele grupuri vin cu produsul și sunt marcate **Predefinit** sau **Protejat**. În special,
+**Administratorii deplini nu dețin reguli**: apartenența însăși este acordarea, decisă înaintea
 oricărei reguli.
 
 Aplicația refuză categoric două lucruri:
 
-- orice ar **lăsa niciun administrator complet activ capabil să se autentifice**,
-- o regulă care ar **acorda drepturi pe care dumneavoastră înșivă nu le dețineți**.
+- orice ar **lăsa niciun administrator deplin activ capabil să se autentifice**,
+- o regulă care ar **acorda drepturi pe care nu le deții tu**.
 
 ### Previzualizarea
 
-**Alegeți un utilizator sau un grup de speologie ca să vedeți ce drepturi ar deține.** Extindeți un
-rând ca să vedeți ce regulă a decis fiecare acțiune.
+**Alege un utilizator sau un grup de speologie pentru a vedea drepturile pe care le-ar deține.** Extinde un
+rând pentru a vedea ce regulă a decis fiecare acțiune.
 
-Un set de reguli care conține un **refuz** vă cere să deschideți previzualizarea înainte de
+Un set de reguli care conține un **refuz** îți cere să deschizi previzualizarea înainte de
 salvare. Aceasta este singura frecare din tot sistemul de permisiuni și există pentru că un refuz
 este lucrul care strică tacit accesul cuiva peste trei luni.
 
 ### Ștergerea unui grup
 
-*„Membrii pierd doar ce le acorda."* Ștergerea unui grup de permisiuni nu șterge nimic altceva.
+*„Membrii pierd doar ce acorda el."* Ștergerea unui grup de permisiuni nu șterge nimic altceva.
 
 ---
 
 ## Acordări pe obiect
 
-Fiecare obiect are o filă **Permisiuni** (acolo unde aveți voie să administrați permisiuni pe el).
+Fiecare obiect are o filă **Permisiuni** (acolo unde ai voie să administrezi permisiuni pe el).
 
-Adăugați o regulă care numește un **utilizator** sau un **grup de speologie**, un efect, acțiuni și
+Adaugă o regulă care numește un **utilizator** sau un **grup de speologie**, un efect, acțiuni și
 un cuprins de **doar acest obiect** sau **acest obiect și tot ce conține**.
 
 **O regulă pleacă odată cu ce numește.** Ștergerea unei înregistrări, a unui grup de speologie, a
-unui set de elemente, a unui dulap sau a unui cont elimină regulile care o numesc, iar fiecare
+unui set de obiecte, a unui dulap sau a unui cont elimină regulile care o numesc, iar fiecare
 eliminare apare în istoricul de audit — așa că un lucru șters nu rămâne niciodată ca acordare în
 lista de drepturi a cuiva. O înregistrare doar *mutată la coș* — o tură, un document sau o peșteră
 care încă pot fi restaurate — își păstrează regulile, iar restaurarea ei dă înapoi același acces.
-Un grup de speologie cu un refuz scris pe el și un set de elemente sau un dulap prin care încă
+Un grup de speologie cu un refuz scris pe el și un set de obiecte sau un dulap prin care încă
 ajunge o regulă sunt refuzate la ștergere, ca înainte.
 
 ### Deschis despre cineva
 
 Mesajul care spune că cineva invitat pe o tură nu poate deschide o peșteră duce la
 **Permisiunile** acelei peșteri, deschise despre acea persoană. Dialogul conține atunci un rând
-pe care nu l-ați adăugat dumneavoastră — **Citire** pe acest obiect pentru ea, marcat *propusă* —
+pe care nu l-ai adăugat tu — **Citire** pe acest obiect pentru ea, marcat *propusă* —
 și un rând deasupra tabelului care spune de ce este acolo.
 
-Este o ciornă. **Nimic nu se acordă până nu apăsați OK**, iar ce se salvează este o regulă
-obișnuită: mărginită, ca oricare alta, de ceea ce dețineți dumneavoastră înșivă, și în vigoare
-până când cineva o șterge. Ștergeți rândul ca să nu acordați nimic. Un link care numește pe cineva
+Este o ciornă. **Nimic nu se acordă până nu apeși OK**, iar ce se salvează este o regulă
+obișnuită: mărginită, ca oricare alta, de ceea ce deții tu însuți, și în vigoare
+până când cineva o șterge. Șterge rândul ca să nu acorzi nimic. Un link care numește pe cineva
 pe care aplicația nu îl găsește deschide dialogul obișnuit și nu spune nimic despre el.
 
-Vedeți [O invitație nu acordă nimic](../features/trips.md#o-invitație-nu-acordă-nimic).
+Vezi [O invitație nu acordă nimic](../features/trips.md#o-invitație-nu-acordă-nimic).
 
 ### Reguli scrise de o tabără
 
@@ -194,43 +194,43 @@ Sunt arătate pe tură oricum, ca **întreaga listă a cui poate citi tura să f
 
 ---
 
-## Seturi de elemente
+## Seturi de obiecte
 
-**Configurare → Seturi de elemente.** Un set numit de elemente către care pot fi îndreptate reguli
-de acces — *„felul de a spune «aceste peșteri anume»"* fără a scrie o regulă per peșteră.
+**Configurare → Seturi de obiecte.** Un set denumit de obiecte către care pot fi îndreptate reguli
+de acces — *„felul de a spune «exact aceste peșteri»"* fără a scrie o regulă per peșteră.
 
-- Adăugați și scoateți elemente căutându-le.
-- **Schimbarea elementelor unui set mută accesul**, pentru că regulile arată către set. Fiecare
+- Adaugă și scoate obiecte căutându-le.
+- **Schimbarea obiectelor unui set mută accesul**, pentru că regulile arată către set. Fiecare
   modificare este înregistrată.
 - Un set către care încă arată reguli nu poate fi șters până nu sunt scoase acele reguli.
 
-Dulapurile fac echivalentul pentru documente — vedeți
+Dulapurile fac echivalentul pentru documente — vezi
 [Documente și dulapuri](../features/documents-and-cabinets.md#dulapuri).
 
 ---
 
 ## „De ce vede persoana asta lucrul acela?"
 
-Fiecare obiect poartă **Accesul dumneavoastră aici și motivul lui**.
+Fiecare obiect poartă **Accesul tău aici și motivul lui**.
 
 Pentru fiecare acțiune spune **Permis** sau **Refuzat** și numește motivul:
 
 | Sursă | |
 |---|---|
-| *Administrare completă: apartenența decide înaintea oricărei reguli.* | |
+| *Administrare deplină: apartenența decide înainte de orice regulă.* | |
 | *Acordat prin proprietatea asupra obiectului.* | |
 | *Acordat prin vizibilitatea obiectului.* | |
-| *Decis la nivelul [obiect / colecție / global] de „[numele regulii]".* | |
-| *Decis la nivelul … de o regulă pe care nu o puteți vedea.* | Vi se spune că o regulă a decis, nu ce spune regula |
+| *Decis la nivelul de [obiect / colecție / global] de „[numele regulii]”.* | |
+| *Decis la nivelul de … de o regulă pe care nu o poți vedea.* | Ți se spune că o regulă a decis, nu ce spune regula |
 | *Decis de o regulă scrisă direct pe acest obiect.* | |
-| *Nicio regulă nu acordă asta.* | |
+| *Nicio regulă nu acordă acest drept.* | |
 
 Aceasta este unealta pentru fiecare discuție „dar de ce nu poate Maria să deschidă aia?".
-Începeți de aici.
+Începe de aici.
 
 Pentru a vedea **din ce grupuri de permisiuni face parte un cont** — numit direct sau ajuns acolo
-printr-unul dintre grupurile lui de speologie — deschideți rândul lui la
-[Administrare → Conturi](README.md#conturi). Lista vine din aceeași citire a apartenențelor după
+printr-unul dintre grupurile lui de speologie — deschide rândul lui la
+[Administrare → Conturi](accounts.md#registrul). Lista vine din aceeași citire a apartenențelor după
 care se decid drepturile însele, deci nu poate fi în dezacord cu ele.
 
 ---

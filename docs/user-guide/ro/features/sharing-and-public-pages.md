@@ -3,7 +3,7 @@
 🇬🇧 [English](../../features/sharing-and-public-pages.md) · 🇷🇴 **Română**
 
 [← Referință](README.md) · Flux:
-[Partajarea muncii dumneavoastră](../workflows/share-your-work.md)
+[Partajarea muncii tale](../workflows/share-your-work.md)
 
 ---
 
@@ -18,7 +18,7 @@ lista completă.
 | **Galeria publică** | Fotografiile îngrijite ale instalării |
 | **Un cod QR tipărit** | Confirmarea că acel cod este înregistrat. Nimic altceva |
 | **Pagina de dezabonare** | Deschisă dintr-un client de poștă |
-| **O tură publicată** | O echipă urmărită în peșteră, desenată pe ridicarea peșterii — și celelalte echipe ale acelei peșteri urmărite acum, și turele ei încheiate și publicate. Vedeți [Urmărirea în direct și turele publicate](live-tracking.md) |
+| **O tură publicată** | O echipă urmărită în peșteră, desenată pe ridicarea peșterii — și celelalte echipe ale acelei peșteri urmărite acum, și turele ei încheiate și publicate. Vezi [Urmărirea în direct și turele publicate](live-tracking.md) |
 
 O instalare care nu publică nimic îi arată unui vizitator **pagina de autentificare** și nimic
 altceva.
@@ -27,16 +27,16 @@ altceva.
 
 ## Linkuri de partajare
 
-Pe o peșteră sau pe un element: **Partajează → Creează link**. O vedere salvată are un link
-propriu — vedeți [Vederi partajate](#vederi-partajate).
+Pe o peșteră sau pe un obiect: **Partajează → Creează link**. O vedere salvată are un link
+propriu — vezi [Vederi partajate](#vederi-partajate).
 
 | Alegere | |
 |---|---|
 | **Acces** | *Public* sau *Necesită autentificare* |
 | **Include înregistrările conținute** | Dacă vine și subarborele |
 
-**Jetonul este afișat o singură dată.** *„Copiați-l acum — acest link se afișează o singură
-dată."* Dacă îl pierdeți, revocați-l și generați altul.
+**Jetonul este afișat o singură dată.** *„Copiază-l acum — linkul este afișat o singură
+dată."* Dacă îl pierzi, revocă-l și generează altul.
 
 Linkurile existente își listează data **creării** și **starea** (*Activ* / *Revocat*).
 **Revocarea** omoară unul imediat, iar etichetele deja distribuite încetează să funcționeze.
@@ -57,12 +57,12 @@ loc să nu-i arate nimic.
 același link ca cod QR. Se deosebește de un link de partajare în două privințe:
 
 - **Nu este afișat o singură dată.** O vedere își păstrează linkul, arătat din nou de fiecare
-  dată când apăsați **Link de partajare**.
+  dată când apeși **Link de partajare**.
 - **Se încheie când vederea este ștearsă.** Nu există un control separat pentru retragerea lui.
 
 Ce vede vizitatorul este strict mărginit: doar înregistrări care sunt Public prin ele însele, doar
-în zona proprie a vederii, **nimic dintr-o peșteră sau un element protejat** — nici măcar o
-poziție aproximativă — și nicio peșteră sau element pentru o vedere restrânsă de un filtru. Lista
+în zona proprie a vederii, **nimic dintr-o peșteră sau un obiect protejat** — nici măcar o
+poziție aproximativă — și nicio peșteră sau obiect pentru o vedere restrânsă de un filtru. Lista
 completă este la [Vederi salvate](saved-views-and-windows.md#vederi-salvate).
 
 ---
@@ -91,23 +91,23 @@ Din pagina unei peșteri: **Coduri tipărite**.
 
 | | |
 |---|---|
-| **Codurile se rezolvă pentru oricine** | Publicat |
-| **Codurile nu se rezolvă pentru nimeni** | Nepublicat sau retras |
+| **Codurile răspund oricui** | Publicat |
+| **Codurile nu răspund nimănui** | Nepublicat sau retras |
 
 **Publică** / **Oprește publicarea**, cu date înregistrate pentru fiecare. Retragerea înseamnă
-*„etichetele deja montate nu vor răspunde nimic."*
+*„Etichetele aflate deja pe teren nu vor mai răspunde nimic."*
 
 O peșteră care nu poartă un cod propriu o spune — **locurile dinăuntrul ei poartă codurile lor**,
-iar fiecare se rezolvă prin decizia peșterii. Deschideți un loc ca să-i vedeți pătratul.
+iar fiecare se rezolvă prin decizia peșterii. Deschide un loc ca să-i vezi pătratul.
 
 ### Ce arată de fapt o scanare
 
-> *„Codul pe care l-ați scanat este înregistrat la {instalare}, și asta este tot ce spune această
+> *„Codul scanat este înregistrat la {instalare} și atât spune această
 > pagină: nicio peșteră, niciun loc și nicio poziție. **Un cont nu schimbă nimic aici — răspunsul
 > este același pentru toată lumea.**"*
 
 Dacă codul nu este înregistrat sau peștera nu este publicată: *„Acest cod nu este înregistrat
-aici, sau peștera de care aparține nu este publicată."*
+aici sau peștera căreia îi aparține nu este publicată."*
 
 Acesta este întregul design. Confirmă că o etichetă este autentică și cunoscută, fără să fie un
 serviciu de căutare pentru locațiile peșterilor.
@@ -116,11 +116,11 @@ serviciu de căutare pentru locațiile peșterilor.
 
 Unele coduri conțin caractere pe care o adresă trebuie să le codifice, iar scanerele de telefon
 citesc adresa exact cum este scrisă, fără s-o decodifice. Aplicația detectează asta și **spune că
-acel cod nu poate fi tipărit ca etichetă**, în loc să vă lase să prindeți unul stricat pe o stâncă.
+acel cod nu poate fi tipărit ca etichetă**, în loc să te lase să prinzi unul stricat pe o stâncă.
 
 ### Adresa
 
-**Copiază adresa** vă dă URL-ul pe care ar trebui să-l codifice eticheta. Este o rută de cale, nu
+**Copiază adresa** îți dă URL-ul pe care ar trebui să-l codifice eticheta. Este o rută de cale, nu
 un fragment — deliberat, pentru că scanerele aruncă orice se află după un `#`.
 
 ---
@@ -144,11 +144,11 @@ unul sau le retrage.
 - **Un raport de tură.** Nu există adresă publică pentru unul; se descarcă de cineva autentificat
   care poate citi tura.
 - **O locație protejată exactă**, prin oricare dintre cele de mai sus.
-- **Celelalte capete ale unei legături** pe care nu aveți voie să le vedeți.
+- **Celelalte capete ale unei legături** pe care nu ai voie să le vezi.
 - **Numele unei peșteri într-un e-mail de notificare.**
 
 ---
 
-Flux: [Partajarea muncii dumneavoastră](../workflows/share-your-work.md) ·
+Flux: [Partajarea muncii tale](../workflows/share-your-work.md) ·
 Înrudite: [Protecția locațiilor](../admin/location-protection.md) ·
 [Permisiuni](../admin/permissions.md)

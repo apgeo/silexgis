@@ -18,10 +18,10 @@ Trei mecanisme separate, pentru trei întrebări separate.
 
 ## Istoricul (pe înregistrare)
 
-Fiecare peșteră, intrare, element, tură, poligonație, model topografic, atașament, etichetă,
+Fiecare peșteră, intrare, obiect, tură, drumuire, model topografic, atașament, etichetă,
 participant, tabără, invitație și eveniment poartă o secțiune **Istoric**.
 
-Arată, per modificare: **când**, **cine** (sau *Sistem*), **acțiunea** (Creat · Actualizat ·
+Arată, per modificare: **când**, **cine** (sau *Sistem*), **acțiunea** (Creat · Modificat ·
 Șters) și câmpurile care s-au schimbat, cu valorile de dinainte și de după.
 
 ### Restaurarea
@@ -29,7 +29,7 @@ Arată, per modificare: **când**, **cine** (sau *Sistem*), **acțiunea** (Creat
 Două acțiuni:
 
 - **Restaurează această valoare** — pune un câmp la loc,
-- **Restaurează toate valorile de dinainte de această modificare** — readuce toată înregistrarea
+- **Restaurează toate valorile dinaintea acestei modificări** — readuce toată înregistrarea
   la starea anterioară.
 
 Aceasta este ce face sigură întreținerea acelorași înregistrări de către mai mulți oameni. O
@@ -45,7 +45,7 @@ coordonată reținută, și este închisă.
 
 ### Formele mari sunt rezumate
 
-O formă mică — punctul unei intrări, conturul unui element — este înregistrată integral, astfel
+O formă mică — punctul unei intrări, conturul unui obiect — este înregistrată integral, astfel
 încât un punct mutat poate fi citit și pus la loc. Una mare, cum este întreaga linie topografică a
 unei ridicări, este înregistrată ca rezumat: **„Geometrie cu n puncte (prea mare pentru a fi
 înregistrată integral)"**. Un rezumat nu este oferit niciodată pentru restaurare și nu conține
@@ -54,14 +54,14 @@ nicio coordonată, deci nici el nu poate localiza o peșteră protejată.
 ### Câmpuri cu nume lizibile
 
 Istoricul numește câmpurile în cuvinte, nu în coloane: Nume, Descriere, Locație, Altitudine,
-Calitatea poziției, Cea mai apropiată adresă, Număr cadastral, Note de localizare, Peșteră legată,
+Calitatea poziției, Cea mai apropiată adresă, Număr cadastral, Note despre locație, Peșteră asociată,
 Vizibilitate, Legendă și așa mai departe.
 
 ---
 
 ## Istoricul de modificări
 
-**Administrare → Istoric modificări.** O vedere peste toată instalarea, pentru cine deține dreptul
+**Administrare → Istoric** (pagina se numește *Istoric modificări*). O vedere peste toată instalarea, pentru cine deține dreptul
 asupra domeniului de audit.
 
 | Coloană | |
@@ -81,13 +81,13 @@ Aceasta este vederea *ce s-a întâmplat aici*, nu vederea *ce s-a întâmplat c
 
 Două suprafețe, cu reguli intenționat diferite.
 
-**Propriul istoric de lectură** — documentele din care ați luat o copie, cele mai noi întâi. Nu
-are nevoie de nicio permisiune în afară de a fi dumneavoastră.
+**Propriul istoric de lectură** — documentele din care ai luat o copie, cele mai noi întâi. Nu
+are nevoie de nicio permisiune în afară de a fi tu.
 
 **Cine a citit acest document** — pentru **proprietarul** documentului sau pentru cineva cu
 dreptul asupra istoricului de modificări.
 
-> **A avea voie să citiți un document nu face ca cititorii lui să vă aparțină.** Un membru de club
+> **A avea voie să citești un document nu face ca cititorii lui să-ți aparțină.** Un membru de club
 > ar putea altfel afla care alți membri s-au uitat la o anumită topografie, ceea ce este un fapt
 > despre *ei* și pe care nu au fost niciodată de acord să-l publice.
 
@@ -98,7 +98,7 @@ mod rezonabil cine a luat o copie.
 singurul mod în care lectura unei persoane este vizibilă alteia, și este limitată la un document
 pe care aceasta îl administrează deja.
 
-Un document pe care nu aveți voie să-l citiți răspunde *„nu a fost găsit"*, nu *„interzis"* —
+Un document pe care nu ai voie să-l citești răspunde *„nu a fost găsit"*, nu *„interzis"* —
 pentru că un istoric care ar răspunde altfel pentru un document care există i-ar divulga
 existența.
 

@@ -7,11 +7,11 @@
 
 ---
 
-Turele, taberele și evenimentele dumneavoastră pot apărea în calendarul pe care îl folosiți deja —
-pe telefon, pe calculator, în orice aplicație care citește un abonament la calendar. Aplicația vă
+Turele, taberele și evenimentele tale pot apărea în calendarul pe care îl folosești deja —
+pe telefon, pe calculator, în orice aplicație care citește un abonament la calendar. Aplicația îți
 dă o **adresă de flux**; aplicația de calendar o interoghează, arată ce găsește și continuă să o
-interogheze, astfel că o dată care se mută, o tură la care sunteți adăugat sau un eveniment anulat
-vă urmează acolo.
+interogheze, astfel că o dată care se mută, o tură la care ești adăugat sau un eveniment anulat
+te urmează acolo.
 
 ## Înainte să funcționeze
 
@@ -24,20 +24,20 @@ decizie despre cât de departe pot călători datele clubului.
 
 **Setări → Cont → Flux de calendar.**
 
-1. Dați adresei un nume — dispozitivul pe care va ajunge, de pildă *Telefon* sau *Laptopul de la
-   serviciu*. Câte o adresă pentru fiecare dispozitiv, ca să puteți revoca una fără să le atingeți
+1. Dă adresei un nume — dispozitivul pe care va ajunge, de pildă *Telefon* sau *Laptopul de la
+   serviciu*. Câte o adresă pentru fiecare dispozitiv, ca să poți revoca una fără să le atingi
    pe celelalte.
 2. **Creează o adresă de flux.**
-3. **Copiați-o acum.** Se afișează o singură dată. Aplicația păstrează doar o amprentă a ei și nu o
-   poate afișa din nou — dacă o pierdeți, revocați-o și creați alta.
+3. **Copiaz-o acum.** Se afișează o singură dată. Aplicația păstrează doar o amprentă a ei și nu o
+   poate afișa din nou — dacă o pierzi, revoc-o și creează alta.
 
-> **Adresa este un secret.** Oricine o are vă poate citi calendarul fără autentificare. Tratați-o
-> ca pe o parolă: nu o publicați, nu o trimiteți pe e-mail și, dacă ajunge la altcineva,
-> **revocați-o** aici și creați una nouă.
+> **Adresa este un secret.** Oricine o are îți poate citi calendarul fără autentificare. Trateaz-o
+> ca pe o parolă: nu o publica, nu o trimite pe e-mail și, dacă ajunge la altcineva,
+> **revoc-o** aici și creează una nouă.
 
 ## Abonarea
 
-Lipiți adresa acolo unde aplicația dumneavoastră de calendar adaugă un abonament — se numește,
+Lipește adresa acolo unde aplicația ta de calendar adaugă un abonament — se numește,
 după caz, *calendar abonat*, *calendar din URL*, *calendar de internet* sau *adaugă după URL*:
 
 | Unde | Cum |
@@ -57,38 +57,38 @@ devreme.
 
 Câte o intrare pentru fiecare:
 
-- **tură** la care participați — numit în echipă sau invitat să veniți,
-- **tabără** a cărei listă consemnează o ședere a dumneavoastră,
-- **eveniment** despre care ați fost întrebat și pe care nu l-ați refuzat.
+- **tură** la care participi — numit în echipă sau invitat să vii,
+- **tabără** a cărei listă consemnează o ședere a ta,
+- **eveniment** despre care ai fost întrebat și pe care nu l-ai refuzat.
 
 Fiecare intrare are **titlul**, **zilele** (și orele, pentru un eveniment cu oră) și o **legătură
 înapoi** către pagina din aplicație. O intrare anulată este marcată ca anulată, nu ștearsă pe tăcute,
-ca să vedeți că a fost anulată.
+ca să vezi că a fost anulată.
 
 Atât. **Niciun loc, nicio coordonată, niciun participant, nicio descriere** nu intră într-un flux
 — nu pentru că ar fi filtrate, ci pentru că fluxul nu este construit să le poarte. O aplicație de
 calendar de pe telefon, sau serviciul de calendar din spatele ei, nu poate afla niciodată din flux
 unde se află o peșteră, orice ar adăuga cineva mai târziu la tură.
 
-Fluxul arată **la ce participați**, nu tot ce ați putea citi: pagina de calendar din aplicație
-arată fiecare tură și fiecare eveniment pe care le puteți vedea; fluxul le arată doar pe cele care
-vă privesc.
+Fluxul arată **la ce participi**, nu tot ce ai putea citi: pagina de calendar din aplicație
+arată fiecare tură și fiecare eveniment pe care le poți vedea; fluxul le arată doar pe cele care
+te privesc.
 
 ## Ce respectă fluxul
 
-Fluxul este citit **ca dumneavoastră**, la fiecare interogare. Nu ține minte niciodată ce aveați
-voie să vedeți când ați creat adresa:
+Fluxul este citit **ca tine**, la fiecare interogare. Nu ține minte niciodată ce aveai
+voie să vezi când ai creat adresa:
 
-- o tură pe care nu o mai puteți citi dispare din flux,
+- o tură pe care nu o mai poți citi dispare din flux,
 - un cont blocat nu primește niciun răspuns,
-- o adresă pe care o revocați încetează să răspundă imediat,
+- o adresă pe care o revoci încetează să răspundă imediat,
 - iar dacă un administrator oprește fluxurile, toate adresele se opresc deodată.
 
 ## Revocarea unei adrese
 
-**Setări → Cont → Flux de calendar** vă listează adresele după nume și dată — niciodată adresa în
-sine. **Revocați**-o pe cea pierdută sau nefolosită. O aplicație de calendar care o are încă pur și
-simplu nu se va mai actualiza; ștergeți abonamentul și acolo, ca să nu mai întrebe.
+**Setări → Cont → Flux de calendar** îți listează adresele după nume și dată — niciodată adresa în
+sine. **Revocă** adresa pierdută sau nefolosită. O aplicație de calendar care o are încă pur și
+simplu nu se va mai actualiza; șterge abonamentul și acolo, ca să nu mai întrebe.
 
 ---
 

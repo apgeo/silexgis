@@ -12,9 +12,9 @@ Fișa peșterii este cel mai dens lucru din aplicație. Pagina aceasta îi parcu
 
 ## Lista de peșteri
 
-**Cadastru → Peșteri**, registrul peșterilor. Un tabel servit de server, pe care îl parcurgeți
+**Registru → Peșteri**, registrul peșterilor. Un tabel servit de server, pe care îl parcurgi
 pe pagini. Coloane: nume, cod, tip, regiune, lungime cartată, denivelare, număr de intrări și
-vizibilitate; sortați după nume, regiune, lungime sau denivelare. Un rând deschide peștera — de la
+vizibilitate; sortezi după nume, regiune, lungime sau denivelare. Un rând deschide peștera — de la
 tastatură, **Tab** până la numele ei și **Enter**.
 
 Deasupra tabelului stau câmpurile lui de filtrare — **Caută denumire sau toponim…**, **Toate
@@ -31,15 +31,15 @@ De aici:
 | **Arată-le pe hartă** | Deschide harta desenând peșterile găsite de acest filtru |
 | **Selectează pe hartă tot ce s-a găsit (n)** | Face din rezultat, până la 200, selecția hărții |
 | **Exportă** | GeoJSON, GPX, KML, CSV sau shapefile arhivat — și [KarstLink](#partajarea-peșterilor-în-formatul-de-interschimb) — cu tot ce găsește filtrul, nu doar pagina aceasta |
-| **Peșteri și elemente șterse** | [Readuce](#peșteri-și-elemente-șterse) ce aveți voie să restaurați |
+| **Peșteri și obiecte șterse** | [Readuce](#peșteri-și-obiecte-șterse) ce ai voie să restaurezi |
 
 Deschis din **Listează peșterile din vedere** al hărții, registrul este restrâns la ce arăta
 harta și spune *„Doar peșterile din vederea hărții"*, cu **Arată peșterile de peste tot** alături.
-Vedeți [Între o listă și hartă](search-and-filters.md#între-o-listă-și-hartă).
+Vezi [Între o listă și hartă](search-and-filters.md#între-o-listă-și-hartă).
 
 Există și o vedere **Distribuții** peste peșterile de pe pagină — histogramă de lungimi, lungime
 față de adâncime, rang–mărime cu ajustare de tip lege de putere, și o defalcare pe tipuri.
-Vedeți [Măsurători și statistici](measurements-and-statistics.md#distribuții-carstice).
+Vezi [Măsurători și statistici](measurements-and-statistics.md#distribuții-carstice).
 
 ## Formularul peșterii
 
@@ -61,7 +61,7 @@ Denivelare pozitivă · Denivelare negativă · Denivelare potențială · Altit
 Suprafață · Indice de ramificare · Vârsta peșterii
 
 > Acestea sunt cifrele *declarate* — ce a tastat cineva. Aplicația **calculează** și cifre dintr-o
-> topografie încărcată și le arată alături, inclusiv când nu se potrivesc. Vedeți
+> topografie încărcată și le arată alături, inclusiv când nu se potrivesc. Vezi
 > [Măsurători și statistici](measurements-and-statistics.md).
 
 ### Stare
@@ -74,7 +74,7 @@ Data descoperirii · Descoperitor
 ### Acces
 **Vizibilitate** — privată / grup de speologie / utilizatori autentificați / publică.
 **Locație protejată** — *„Coordonatele exacte și câmpurile de localizare precisă sunt ascunse
-utilizatorilor fără permisiune explicită."* Vedeți
+utilizatorilor fără permisiune explicită."* Vezi
 [Protecția locațiilor](../admin/location-protection.md).
 
 ---
@@ -92,25 +92,25 @@ O peșteră are una sau mai multe intrări, fiecare o înregistrare proprie, cu 
 | **Ridicată** | Când a fost luată poziția |
 | **Principală** | Intrarea principală; câteva lucruri se bazează implicit pe ea |
 
-**Merită să fiți sincer cu privire la calitatea poziției.** Este diferența dintre „mergi aici" și
+**Merită să fii sincer cu privire la calitatea poziției.** Este diferența dintre „mergi aici" și
 „caută pe versantul ăsta", și este singurul câmp pe care nimeni nu-l poate reconstitui mai târziu.
 
-Adăugați o intrare din pagina peșterii, din unealta *Intrare nouă aici* a hărții, sau prin clic
+Adaugi o intrare din pagina peșterii, din unealta *Intrare nouă aici* a hărții, sau prin clic
 dreapta pe hartă.
 
 ---
 
 ## Ce crește pe pagina unei peșteri
 
-Dincolo de formular, pagina adună secțiuni pe măsură ce o hrăniți:
+Dincolo de formular, pagina adună secțiuni pe măsură ce o hrănești:
 
-| Secțiune | Vedeți |
+| Secțiune | Vezi |
 |---|---|
 | **Intrări** | Mai sus |
-| **Poligonații** | [Topografii și modele](surveys-and-models.md#poligonații) |
+| **Drumuiri** | [Topografii și modele](surveys-and-models.md#drumuiri) |
 | **Modele topo 3D** | [Topografii și modele](surveys-and-models.md) |
 | **Surse topografice** | [Topografii și modele](surveys-and-models.md#surse-topografice) |
-| **Statistici din topografie** | [Măsurători](measurements-and-statistics.md#ce-măsoară-o-topografie) |
+| **Statistici din cartare** | [Măsurători](measurements-and-statistics.md#ce-măsoară-o-topografie) |
 | **Fotografii și documente** | [Fotografii](photographs.md) · [Documente](documents-and-cabinets.md) |
 | **Etichete** | Libere, filtrabile în tabele și pe straturile hărții |
 | **Legături** | [Legături între înregistrări](links.md) |
@@ -120,21 +120,21 @@ Dincolo de formular, pagina adună secțiuni pe măsură ce o hrăniți:
 | **Coduri tipărite** | [Coduri QR](sharing-and-public-pages.md#coduri-qr-tipărite) |
 | **Istoric** | [Istoric și modificări](history-and-audit.md) |
 
-Rândul de rezumat le numără: *n intrări · n poligonații · n modele 3D · n atașamente ·
+Rândul de rezumat le numără: *n intrări · n drumuiri · n modele 3D · n atașamente ·
 n jurnale de tură.*
 
 ### Secțiunea Ture
 
-Nu adăugați ture la o peșteră. Secțiunea **Ture** listează turele care au numit-o prin câmpurile
+Nu adaugi ture la o peșteră. Secțiunea **Ture** listează turele care au numit-o prin câmpurile
 lor *Ce a făcut tura*, cele mai noi întâi, numărate după aceeași regulă care decide ce poate
-arăta lista. Dacă o tură a numit peștera dar dumneavoastră nu puteți citi tura, ea nu apare — iar
+arăta lista. Dacă o tură a numit peștera dar tu nu poți citi tura, ea nu apare — iar
 numărul reflectă asta.
 
 ---
 
-## O peșteră este un element
+## O peșteră este un obiect
 
-Sub suprafață, o peșteră este un fel de [element](surface-features.md), motiv pentru care:
+Sub suprafață, o peșteră este un fel de [obiect](surface-features.md), motiv pentru care:
 
 - o peșteră poate fi **conținută** de ceva (o zonă carstică) și poate conține lucruri (intrările
   ei), cu fir de navigare pe măsură,
@@ -151,8 +151,8 @@ folosește alt program să le poată citi. Exportă toate peșterile pe care le 
 registrului — câmpurile rapide și condițiile avansate deopotrivă — nu doar pagina de pe ecran. Cât
 timp registrul este restrâns la vederea hărții, nu este disponibil: *„Nu cât timp lista este
 restrânsă la fereastra hărții — elimină fereastra pentru a exporta toată lista filtrată."* Un
-fișier cuprinde cel mult 5.000 de peșteri; un set mai mare este refuzat, iar dialogul vă cere să
-restrângeți filtrele și să exportați pe părți, în loc să predea un fișier oprit la o limită.
+fișier cuprinde cel mult 5.000 de peșteri; un set mai mare este refuzat, iar dialogul îți cere să
+restrângi filtrele și să exporți pe părți, în loc să predea un fișier oprit la o limită.
 
 **Întâi pune o întrebare, și asta contează.** Dacă vreuna dintre peșterile exportate are locația
 protejată, dialogul spune câte sunt și întreabă ce trebuie să scrie fișierul despre ele. Sunt trei
@@ -172,9 +172,9 @@ această aplicație nu scrie o poziție protejată într-unul.
 sunt în fișier și câte au fost lăsate deoparte în mod deliberat — ca nimeni să nu confunde numărul de
 peșteri din fișier cu numărul din registru.
 
-Bifați **Ține minte acest răspuns și nu mă mai întreba** și nu veți mai fi întrebat — răspunsul vă
+Bifează **Ține minte acest răspuns și nu mă mai întreba** și nu vei mai fi întrebat — răspunsul îți
 urmează contul în orice browser. Un al doilea element de meniu, **KarstLink (JSON-LD) — schimbă
-răspunsul meu…**, vă lasă să îl schimbați, iar dacă serverul refuză o cerere, dialogul revine în loc
+răspunsul meu…**, te lasă să îl schimbi, iar dacă serverul refuză o cerere, dialogul revine în loc
 să eșueze în tăcere.
 
 Fiecare export de interschimb este înregistrat în [istoric și jurnalul de
@@ -190,9 +190,9 @@ de date internațională a comunității, sau într-un cadastru național. Pagin
 mică pentru aceste numere, astfel încât legătura să călătorească odată cu peștera și să apară într-un
 export de interschimb.
 
-Dacă administratorul dumneavoastră a activat căutarea în Grottocenter, un buton întreabă acolo dacă
+Dacă administratorul tău a activat căutarea în Grottocenter, un buton întreabă acolo dacă
 peștera este deja cunoscută. **Se trimite doar numele peșterii** — niciodată poziția — și se
-păstrează doar numărul pe care îl acceptați. Majoritatea instalărilor vor vedea „administratorul nu a
+păstrează doar numărul pe care îl accepți. Majoritatea instalărilor vor vedea „administratorul nu a
 configurat aceasta", iar în acea stare nimic nu părăsește instalarea.
 
 **O atenționare.** O intrare în Grottocenter publică coordonate. De aceea, pentru o peșteră cu
@@ -203,9 +203,9 @@ ar preda exact poziția pe care fișierul o ascunde.
 
 ## Ștergerea și restaurarea
 
-**Ștergeți această peșteră?** — și, la elemente în general, *elementele conținute se șterg odată
-cu ea*: o peșteră își ia intrările și poligonațiile. Confirmarea spune ce urmează să se întâmple:
-**nu se elimină nimic, iar peștera poate fi restaurată din Peșteri și elemente șterse.** Ștergerea
+**Ștergi această peșteră?** — și, la obiecte în general, *obiectele conținute se șterg odată
+cu ea*: o peșteră își ia intrările și drumuirile. Confirmarea spune ce urmează să se întâmple:
+**nu se elimină nimic, iar peștera poate fi restaurată din Peșteri și obiecte șterse.** Ștergerea
 unei singure intrări din fișa peșterii spune același lucru. Totul este consemnat în
 [istoricul de modificări](history-and-audit.md).
 
@@ -213,38 +213,38 @@ O peșteră ștearsă **dispare de peste tot deodată** — din listă, de pe ha
 turele care o numeau — iar adresa ei răspunde ca și cum nu ar fi existat niciodată, inclusiv
 pentru proprietar.
 
-### Peșteri și elemente șterse
+### Peșteri și obiecte șterse
 
-**Peșteri → Peșteri și elemente șterse** (același buton se află și pe lista **Elemente**) arată
-ștergerile **pe care le puteți anula**, cele mai recente primele.
+**Peșteri → Peșteri și obiecte șterse** (același buton se află și pe lista **Obiecte**) arată
+ștergerile **pe care le poți anula**, cele mai recente primele.
 
 | Coloană | Ce arată |
 |---|---|
 | **Denumire** | Ce a fost șters și, dedesubt, unde se afla — o intrare se deosebește prin peștera ei |
-| **Fel** | Peșteră, Intrare sau tipul elementului |
+| **Fel** | Peșteră, Intrare sau tipul obiectului |
 | **Șters** | Când |
 | **Șterse odată cu el** | Ce a plecat împreună — *1 intrare*, *2 intrări, 3 alte obiecte* |
 
 - **Un rând este o ștergere, nu un obiect.** O peșteră ștearsă cu două intrări este un singur rând
-  care spune *2 intrări*; restaurarea le aduce înapoi pe toate trei. O intrare pe care ați
+  care spune *2 intrări*; restaurarea le aduce înapoi pe toate trei. O intrare pe care ai
   șters-o *înainte* de a șterge peștera este o ștergere separată: apare în listă după ce peștera
-  revine și rămâne ștearsă până o restaurați și pe ea.
+  revine și rămâne ștearsă până o restaurezi și pe ea.
 - **Cine poate șterge ceva îl poate și restaura.** Lista se calculează rând cu rând după această
   regulă, deci cine nu poate șterge nimic vede o listă goală. O intrare poate fi restaurată și de
   cine poate edita peștera, pentru că tot el o poate șterge din fișa peșterii.
 - **Lista nu spune niciodată unde se află ceva.** Nu conține nicio coordonată, iar o peșteră
-  restaurată se deschide arătând exact poziția pe care o puteați vedea înainte — aproximativă
-  dacă era aproximativă pentru dumneavoastră. Nu vi se arată și nu vi se numără nimic din ce nu
-  puteați citi înainte de ștergere.
-- **Restaurează** întreabă mai întâi, aduce înapoi peștera sau elementul cu tot ce a fost șters
+  restaurată se deschide arătând exact poziția pe care o puteai vedea înainte — aproximativă
+  dacă era aproximativă pentru tine. Nu ți se arată și nu ți se numără nimic din ce nu
+  puteai citi înainte de ștergere.
+- **Restaurează** întreabă mai întâi, aduce înapoi peștera sau obiectul cu tot ce a fost șters
   odată cu el și îl deschide. **O tură care numea peștera o numește din nou.**
 - Ceva aflat **într-o peșteră sau zonă ștearsă nu poate fi restaurat separat** — pagina spune ce
   trebuie restaurat mai întâi.
 - O peșteră restaurată al cărei **nume a fost refolosit între timp** stă pur și simplu alături de
   cea cu același nume: denumirile nu sunt unice.
-- O **poligonație** nu se restaurează separat. Revine odată cu peștera ei, dacă au fost șterse
+- O **drumuire** nu se restaurează separat. Revine odată cu peștera ei, dacă au fost șterse
   împreună.
-- Peșterile și elementele șterse sunt **păstrate până le restaurează cineva**; nimic nu le elimină
+- Peșterile și obiectele șterse sunt **păstrate până le restaurează cineva**; nimic nu le elimină
   după un număr de zile.
 
 ---

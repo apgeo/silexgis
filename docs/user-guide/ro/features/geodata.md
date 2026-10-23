@@ -7,7 +7,7 @@
 
 ---
 
-**Cadastru → Geodate** conține fișierele vectoriale pe care le-ați încărcat, hărțile raster și
+**Registru → Geodate** conține fișierele vectoriale pe care le-ai încărcat, hărțile raster și
 registrul a ce a creat fiecare import.
 
 Trei file: **Fișiere vectoriale**, **Hărți raster**, **Importuri**.
@@ -18,33 +18,33 @@ Trei file: **Fișiere vectoriale**, **Hărți raster**, **Importuri**.
 
 ### Încărcarea
 
-Trageți fișiere înăuntru sau faceți clic pentru a alege. Acceptate:
+Trage fișiere înăuntru sau fă clic pentru a alege. Acceptate:
 
 **GPX · KML · KMZ · GeoJSON · shapefile arhivat · CSV cu coloane de coordonate · WKT**
 
 Importul rulează în fundal. Stare: *În așteptare → Se importă… → Importat* (sau *Eșuat*).
 
-Fiecare fișier devine un **strat** pe care îl puteți aprinde în arborele de straturi al hărții,
+Fiecare fișier devine un **strat** pe care îl poți aprinde în arborele de straturi al hărții,
 cu propriul dreptunghi de încadrare și cu suprascrieri de stil. Acesta este fișierul *desenat pe
-hartă* — încă nu este în cadastru.
+hartă* — încă nu este în registru.
 
-### În cadastru
+### În registru
 
-Desenarea este jumătate din treabă. **Verifică și importă în cadastru** transformă punctele în
+Desenarea este jumătate din treabă. **Verifică și importă în registru** transformă punctele în
 peșteri, intrări și fenomene de suprafață, propunând ce este fiecare pornind de la obiceiurile de
 denumire ale clubului. Acesta este un flux întreg:
 [Importul unui sezon de puncte GPS](../workflows/import-a-gps-file.md).
 
 ### Administrare
 
-Căutați după nume, editați detaliile unui fișier, ștergeți-l — ceea ce îi șterge și elementele
+Caută după nume, editează detaliile unui fișier, șterge-l — ceea ce îi șterge și obiectele
 importate, iar confirmarea o spune.
 
 ---
 
 ## Hărți raster
 
-Vedeți [Hărți raster georeferențiate](georeferenced-maps.md).
+Vezi [Hărți raster georeferențiate](georeferenced-maps.md).
 
 ---
 
@@ -60,12 +60,12 @@ Registrul fiecărui import confirmat. Un rând per import, arătând:
 | **Ce a creat acest import** | Detaliu extensibil |
 
 Și lucrul care face importul sigur de experimentat: **Anulează**. Șterge toate obiectele create
-de acel import — *„Ștergeți toate cele n obiecte create de acest import?"* — inclusiv pe cele
+de acel import — *„Ștergi toate cele n obiecte create de acest import?"* — inclusiv pe cele
 agățate de înregistrări care existau deja. Un import anulat este marcat ca atare, nu dispare.
 
-Confirmarea spune că **fiecare peșteră și element creat de import poate fi restaurat**: anularea
-le șterge așa cum le-ați șterge de mână, câte o ștergere pentru fiecare, deci ajung apoi la
-[Peșteri și elemente șterse](caves-and-entrances.md#peșteri-și-elemente-șterse). Pentru un import
+Confirmarea spune că **fiecare peșteră și obiect creat de import poate fi restaurat**: anularea
+le șterge așa cum le-ai șterge de mână, câte o ștergere pentru fiecare, deci ajung apoi la
+[Peșteri și obiecte șterse](caves-and-entrances.md#peșteri-și-obiecte-șterse). Pentru un import
 care a creat **ture**, adaugă că și acestea pot fi restaurate și pentru cât timp — ele ajung la
 [Ture șterse](trips.md#ștergerea-și-restaurarea-unei-ture). Detaliul unui import anulat marchează
 fiecare astfel de obiect ca *Șters* și trimite acolo de unde poate fi restaurat.
@@ -73,25 +73,25 @@ fiecare astfel de obiect ca *Șters* și trimite acolo de unde poate fi restaura
 Dacă fișierul-sursă a fost șters între timp, rândul o spune; dacă importul nu a creat nimic, o
 spune și pe asta.
 
-> Încărcările de pe **telefon** apar tot aici și se anulează la fel. Vedeți
+> Încărcările de pe **telefon** apar tot aici și se anulează la fel. Vezi
 > [Telefon și sincronizare offline](mobile-sync.md).
 
 ---
 
 ## Exportul
 
-Direcția inversă se află pe paginile de listă și pe hartă, nu aici. Peșterile, elementele și
+Direcția inversă se află pe paginile de listă și pe hartă, nu aici. Peșterile, obiectele și
 fișierele de geodate se exportă ca:
 
 **GeoJSON · GPX · KML · CSV · shapefile arhivat**
 
-Un export din registrul peșterilor sau din lista de elemente cuprinde **tot ce găsește filtrul
-listei**, nu doar pagina de pe ecran — vedeți
+Un export din registrul peșterilor sau din lista de obiecte cuprinde **tot ce găsește filtrul
+listei**, nu doar pagina de pe ecran — vezi
 [Căutare și filtre](search-and-filters.md#filtrarea-pe-paginile-de-listă). Peșterile se pot
 exporta și pentru interschimb, ca
 [KarstLink](caves-and-entrances.md#partajarea-peșterilor-în-formatul-de-interschimb).
 
-Un export poartă doar ce aveți voie să citiți, cu aceeași protecție a locațiilor ca ecranul.
+Un export poartă doar ce ai voie să citești, cu aceeași protecție a locațiilor ca ecranul.
 
 ---
 

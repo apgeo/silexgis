@@ -15,7 +15,7 @@ este o afirmație că nimic nu a spus, iar un zero ar fi o afirmație că ceva a
 
 ## Ce măsoară o topografie
 
-Pe pagina unei peșteri, **Statistici din topografie** — măsurate din linia topografică.
+Pe pagina unei peșteri, **Statistici din cartare** — măsurate din linia topografică.
 
 | Cifră | |
 |---|---|
@@ -36,29 +36,29 @@ dreaptă.
 
 Fiecare set de cifre își declară baza:
 
-- *„Măsurat din topografia compilată, folosind chiar indicatorii topografului pentru a decide ce
-  vizări sunt galerie. Așa sunt definite aceste cifre."*
-- *„Aproximat din poligonația stocată, pentru că această peșteră nu are o topografie compilată cu
-  indicatori per vizare. Forma liniei ține locul indicatorilor topografului."*
-- *„Măsurat din topografia «X»"* — pentru că o peșteră poate avea mai multe topografii încărcate,
+- *„Măsurat din cartarea compilată, folosind marcajele topografului pentru a decide care vize
+  sunt galerie. Aceasta este definiția acestor valori."*
+- *„Aproximat din traseul stocat, pentru că această peșteră nu are o cartare compilată cu marcaje
+  pe fiecare viză. Forma traseului ține locul marcajelor topografului."*
+- *„Măsurat din cartarea „X”"* — pentru că o peșteră poate avea mai multe topografii încărcate,
   iar cifre luate din două topografii diferite nu sunt aceeași măsurătoare.
 
 ### Fără altitudini înseamnă fără cifre verticale
 
-*„Această linie topografică nu poartă altitudini — un desen în plan al unei peșteri nu este o
-peșteră plată."* Fiecare cifră verticală este lăsată goală, nu afișată ca zero.
+*„Aceste trasee nu au altitudini — planul unei peșteri nu înseamnă o peșteră
+orizontală."* Fiecare cifră verticală este lăsată goală, nu afișată ca zero.
 
 ### Calculat față de declarat
 
 Secțiunea **Morfometrie** a peșterii conține cifre tastate de cineva. Statisticile le arată pe
 amândouă:
 
-- *„n calculat; nimic scris în fișă cu care să se compare."*
+- *„n calculat; nimic scris în fișă cu care să fie comparat."*
 - *„n calculat, m în fișă, o diferență de d."*
 
 Iar când nu se potrivesc, o notă: **niciuna nu este automat cea greșită.** O morfometrie tastată
 este adesea mai veche decât topografia; o topografie poate fi și ea parțială. Aplicația
-semnalează dezacordul și lasă judecata în seama dumneavoastră.
+semnalează dezacordul și lasă judecata în seama ta.
 
 ---
 
@@ -74,17 +74,17 @@ logaritmică, și o **pantă medie față de orizontală** care ignoră dacă o 
 
 Două refuzuri de reținut:
 
-- **Panta nu poate fi calculată** dacă linia topografică nu poartă altitudini. Desenarea ei
+- **Înclinarea nu poate fi calculată** dacă linia topografică nu poartă altitudini. Desenarea ei
   oricum ar arăta peștera drept orizontală peste tot, ceea ce este o afirmație pe care n-a
   făcut-o nimeni.
-- **Nicio direcție nu poate fi calculată** dacă fiecare vizare fie coboară vertical, fie urcă
+- **Nu se poate calcula nicio direcție** dacă fiecare vizare fie coboară vertical, fie urcă
   vertical, fie este marcată drept galerie deja cartată pe altă linie.
 
 ---
 
 ## Formă măsurată (morfometrie)
 
-Pentru un element desenat ca un contur — o dolină, o depresiune carstică, o zonă de lucru:
+Pentru un obiect desenat ca un contur — o dolină, o depresiune carstică, o zonă de lucru:
 
 **Suprafață · Perimetru · Circularitate · Axa lungă · Axa scurtă · Alungire · Direcția axei
 lungi · Centru**
@@ -96,16 +96,16 @@ Două observații pe care le face chiar panoul:
 - **Direcția axei lungi este o aliniere, nu o direcție**: merge de la 0° la 180°, așa că 170° și
   350° sunt aceeași aliniere.
 
-Dacă conturul se autointersectează, nu are suprafață sau formă măsurabilă, și vi se spune să-l
-redesenați în loc să primiți o cifră.
+Dacă conturul se autointersectează, nu are suprafață sau formă măsurabilă, și ți se spune să-l
+redesenezi în loc să primești o cifră.
 
 ---
 
 ## Cea mai mică distanță
 
-Cât de aproape ajung două peșteri una de alta. Alegeți a doua peșteră din pagina primei.
+Cât de aproape ajung două peșteri una de alta. Alege a doua peșteră din pagina primei.
 
-Primiți **cea mai scurtă distanță**, componentele ei **orizontală** și **verticală**, și un
+Primești **cea mai scurtă distanță**, componentele ei **orizontală** și **verticală**, și un
 **azimut**. Linia este desenată pe hartă (în plan) și în vizualizarea 3D (trecând prin rocă, la
 adâncimile la care i-au fost ridicate capetele).
 
@@ -115,7 +115,7 @@ adâncimile la care i-au fost ridicate capetele).
 
 Refuză în trei cazuri, fiecare numit:
 
-- **Nu aveți voie să localizați ambele peșteri.** O distanță între două peșteri le localizează pe
+- **Nu ai voie să localizezi ambele peșteri.** O distanță între două peșteri le localizează pe
   fiecare pornind de la cealaltă, așa că se dă doar unui cititor care poate vedea exact unde sunt
   amândouă.
 - **Cel puțin una nu are linie topografică** de măsurat.
@@ -129,7 +129,7 @@ Refuză în trei cazuri, fiecare numit:
 Câtă rocă se află deasupra galeriilor unei peșteri, de-a lungul lor. Pe pagina peșterii.
 
 Graficul are **distanța de-a lungul galeriei** pe orizontală și **grosimea rocii de deasupra** pe
-verticală, cu roca hașurată între ele. Apăsați un punct de pe curbă și locul unde a fost luată
+verticală, cu roca hașurată între ele. Apasă un punct de pe curbă și locul unde a fost luată
 citirea este marcat — pe hartă și în vizualizarea 3D — și numit sub grafic: distanța, grosimea și
 segmentul traseului care a răspuns.
 
@@ -150,8 +150,8 @@ această peșteră. Acestea sunt probleme diferite, pentru oameni diferiți.
 O peșteră lungă este eșantionată mai rar, nu răspunsă mai încet: citirile sunt distribuite la un
 interval egal, niciodată mai apropiate de 2 m și niciodată mai mult de 400.
 
-Aveți nevoie de dreptul de a citi datele de elevație, pe lângă dreptul de a vedea exact unde este
-peștera. Cereți-l unui administrator dacă panoul nu apare.
+Ai nevoie de dreptul de a citi datele de elevație, pe lângă dreptul de a vedea exact unde este
+peștera. Cere-l unui administrator dacă panoul nu apare.
 
 ---
 
@@ -167,7 +167,7 @@ Peste peșterile de pe o pagină de listă: **Distribuții**.
 | **Pe tipuri** | Numărători |
 
 Nota despre domeniu este partea importantă: *„Calculat din cele n din m peșteri de pe această
-pagină care au o lungime cartată. **Peșterile fără una lipsesc, nu sunt numărate ca zero.**"*
+pagină care au o lungime măsurată. **Peșterile fără lungime lipsesc, nu sunt numărate ca zero.**"*
 
 ---
 
@@ -185,7 +185,7 @@ singure peșteri sau unei pagini de peșteri.
 
 Primele trei acceptă aceleași restrângeri — tip de peșteră, tip de rocă, regiune — iar
 **Categorii**, care este grupat chiar după tip, acceptă regiunea. Întrebarea întreagă stă în
-adresă, așa că un link reproduce exact ce vedeați. Primele trei salvează ca foaie de calcul
+adresă, așa că un link reproduce exact ce vedeai. Primele trei salvează ca foaie de calcul
 exact ce arată în acel moment; fișierul este același răspuns, nu un al doilea.
 
 **Categorii** desenează câte o cutie pentru fiecare grupă: *„Fiecare cutie merge de la percentila
@@ -197,23 +197,23 @@ numărătorile și nu are cutie — *Prea puține peșteri măsurate pentru o cu
 percentilele ei ar fi aproape cifrele propriilor peșteri, gata de citit. Este păstrată, nu omisă,
 ca numărătorile să se adune tot la peșterile din domeniu.
 
-Citiți frazele pe care le tipăresc aceste ecrane, pentru că fac o treabă reală:
+Citește frazele pe care le tipăresc aceste ecrane, pentru că fac o treabă reală:
 
 - **Un interval unit spune că este unit.** Acolo unde prea puține peșteri cad într-un interval ca
   să fie arătat singur, el este *unit cu vecinul* în loc să fie ascuns — iar axa spune care au fost
   unite, cu o numărătoare dedesubt. O bară lată este o bară unită, nu o trăsătură reală a
   distribuției.
 - **O relație care lipsește este spusă, nu desenată.** Dacă sunt prea puține perechi ca să se
-  ajusteze ceva, sau nu există un domeniu peste care să se ajusteze, primiți o frază care spune
+  ajusteze ceva, sau nu există un domeniu peste care să se ajusteze, primești o frază care spune
   care dintre acestea a fost și niciun grafic. O dreaptă prin două puncte nu este o relație.
 - **Graficul de corelație desenează o ajustare și nicio peșteră.** Nicio peșteră nu este trasată
   individual; dreapta este trasată peste domeniul măsurătorii orizontale, care poate fi mai larg
   decât perechile folosite efectiv. Pagina o spune acolo unde se vede.
-- **Defalcarea pe regiuni nu se adună, intenționat.** Totalul numără peșterile pe care le puteți
-  citi; rândurile numără peșterile pe care le puteți și *localiza*. Când rândurile rămân în urmă,
+- **Defalcarea pe regiuni nu se adună, intenționat.** Totalul numără peșterile pe care le poți
+  citi; rândurile numără peșterile pe care le poți și *localiza*. Când rândurile rămân în urmă,
   o frază spune cu cât — iar sub ce regiuni stau acele peșteri este exact ceea ce se reține. Nu
-  există rând „în altă parte" și nici coloană de procente, pentru că oricare v-ar invita să
-  închideți o diferență menită să rămână deschisă.
+  există rând „în altă parte" și nici coloană de procente, pentru că oricare te-ar invita să
+  închizi o diferență menită să rămână deschisă.
 - **Numărătorile călătoresc cu cifrele.** O percentilă peste unsprezece peșteri și una peste o mie
   o sută arată identic pe un grafic, așa că fiecare ecran tipărește peste ce a fost calculată.
 
@@ -229,12 +229,12 @@ O persoană, o peșteră, un grup de speologie și o tabără își primesc fiec
 **Ture · Persoane · Locuri · Primele vizite · Ore în subteran · Cartat · Coardă · Stații
 topografice · Ture cu incident · Fotografii · Ture urmărite · Ore în subteran, din urmărire**
 
-Citiți avertismentele pe care le tipărește:
+Citește avertismentele pe care le tipărește:
 
-- **„Numărat peste turele pe care le puteți citi."** Cineva cu alt acces vede totaluri diferite
+- **„Numărate peste turele pe care le poți citi."** Cineva cu alt acces vede totaluri diferite
   pentru același subiect, **și amândoi au dreptate**.
-- **„Orele acoperă cele n din m dăți când cineva a mers și s-au notat orele de intrare și
-  ieșire."**
+- **„Orele acoperă n din m participări în care au fost notate ora intrării și ora
+  ieșirii."**
 - **„Orele din urmărire sunt o a doua numărătoare … Nu se adună la orele în subteran de mai
   sus."** Apare de îndată ce o tură numărată a fost [urmărită](live-tracking.md).
 
@@ -265,7 +265,7 @@ Oricare dintre ele poate fi **salvată ca foaie de calcul**, care poartă exact 
 ecranul — fără aceleași cifre — și spune ale cui sunt totalurile, pentru că un fișier se
 redirecționează și se citește luni mai târziu.
 
-> **Nu puteți cere turele unei persoane numind-o.** Aceasta este o întrebare despre o persoană,
+> **Nu poți cere turele unei persoane numind-o.** Aceasta este o întrebare despre o persoană,
 > asamblată din înregistrări pe care cel care întreabă s-ar putea să nu aibă niciodată voie să le
 > citească. Turele proprii sunt la *Jurnale de tură → Turele mele*, calculate din cine este
 > autentificat.
@@ -275,7 +275,7 @@ redirecționează și se citește luni mai târziu.
 **Sinteză**, deasupra listei de ture, adună turele pe care le arată lista — ia cu ea filtrul
 listei. Patru grafice: *Ture pe an*, *Cu ce scop*, *Unde s-a mers* și *Cine a fost*. Titlul
 fiecărui grafic spune peste câte ture a fost desenat, iar **Filtrul curent · Toate turele**
-comută între filtrul cu care ați venit și tot ce puteți citi, astfel încât o vedere restrânsă
+comută între filtrul cu care ai venit și tot ce poți citi, astfel încât o vedere restrânsă
 să aibă cu ce fi comparată.
 
 Primul grafic desenează o linie peste bare: câte zone distincte atinseseră turele numărate
@@ -289,7 +289,7 @@ aplatizează sub bare care nu se aplatizează, se revine în aceleași locuri."*
 > explorare ajunsese mai întâi. Pagina spune acest lucru sub linie și numește turele la care
 > se referă — aceleași pe care le numește titlul graficului.
 
-Ca orice total de aici, și acestea sunt numărate peste turele pe care le puteți citi.
+Ca orice total de aici, și acestea sunt numărate peste turele pe care le poți citi.
 
 ---
 

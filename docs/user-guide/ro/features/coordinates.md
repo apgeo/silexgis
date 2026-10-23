@@ -7,8 +7,8 @@
 
 ---
 
-Orice poziție pe care aplicația o arată sau o copiază este scrisă așa cum ați ales să o citiți, și
-oriunde scrieți o poziție o puteți scrie în oricare dintre aceste feluri. Pozițiile sunt păstrate
+Orice poziție pe care aplicația o arată sau o copiază este scrisă așa cum ai ales să o citești, și
+oriunde scrii o poziție o poți scrie în oricare dintre aceste feluri. Pozițiile sunt păstrate
 întotdeauna ca longitudine și latitudine WGS84; formatele sunt doar felul în care sunt scrise și
 citite.
 
@@ -27,7 +27,7 @@ citite.
 
 **Setări › Coordonate** alege formatul în care sunt arătate pozițiile, celelalte formate în care
 este listată o poziție arătată în detaliu și setările fiecărui format, cu o previzualizare pe
-vârful Moldoveanu. Setările vă urmează contul în orice browser vă autentificați.
+vârful Moldoveanu. Setările îți urmează contul în orice browser te autentifici.
 
 - **Stereo 70** se convertește din WGS84 cu transformarea obișnuită în șapte parametri. Este bună
   la câțiva metri — destul pentru a găsi o intrare, nu pentru un reper topografic. Este oferită
@@ -59,7 +59,7 @@ de poziție nu este trimisă convertorului.
 
 ## Scrierea unei poziții
 
-Editorul de intrări și alegerea unui punct au un câmp **Scrieți sau lipiți o poziție**. Câmpul
+Editorul de intrări și alegerea unui punct au un câmp **Scrie sau lipește o poziție**. Câmpul
 citește oricare dintre formatele de mai sus și acceptă felul în care sunt scrise pozițiile în
 realitate: `°` sau `º`, `'` sau `′`, `"` sau `″`, N/S/E/V înainte sau după număr, virgula ca semn
 zecimal, UTM cu sau fără litera benzii, MGRS cu sau fără spații. Spune ca ce a citit textul și ce
@@ -67,14 +67,14 @@ a trebuit să presupună (două numere fără litere sunt citite ca latitudine, 
 text care poate fi citit în mai multe feluri oferă fiecare citire; formatul poate fi ales și
 direct. **Folosește** completează longitudinea și latitudinea, care sunt cele salvate.
 
-Câmpul este dezactivat și nu arată nimic cât timp poziția de lângă el este una pe care o puteți
+Câmpul este dezactivat și nu arată nimic cât timp poziția de lângă el este una pe care o poți
 vedea doar aproximativ.
 
 ## Convertorul de coordonate
 
 **Unelte › Convertor de coordonate** (la care se ajunge și din legăturile de mai sus) scrie o
 poziție dată în orice format în toate formatele deodată, fiecare cu copiere. **Arată pe o hartă**
-pune un marcaj temporar pe o hartă mică separată — nu se adaugă nimic pe harta dumneavoastră și nu
+pune un marcaj temporar pe o hartă mică separată — nu se adaugă nimic pe harta ta și nu
 se salvează nimic — iar **Deschide locul pe harta principală** centrează harta spațiului de lucru
 acolo.
 
@@ -84,5 +84,5 @@ Fiecare linie este citită separat, iar o linie care nu poate fi citită spune d
 CSV** dă fiecare linie în fiecare format, cu latitudinea și longitudinea în grade zecimale. Se
 convertesc cel mult 5000 de linii deodată.
 
-Totul se petrece în browserul dumneavoastră: nimic din ce scrieți sau lipiți în convertor nu este
+Totul se petrece în browserul tău: nimic din ce scrii sau lipești în convertor nu este
 trimis serverului.

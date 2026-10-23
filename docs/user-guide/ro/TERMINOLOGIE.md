@@ -10,8 +10,30 @@ Termenii din acest ghid sunt **exact cei pe care îi afișează interfața în r
 fișierul de traducere al aplicației. Un ghid care spune „dosare" acolo unde ecranul spune
 „dulapuri" nu ajută pe nimeni.
 
-**Dacă adăugați o pagină, folosiți această listă.** Dacă interfața se schimbă, lista se schimbă
+**Dacă adaugi o pagină, folosește această listă.** Dacă interfața se schimbă, lista se schimbă
 odată cu ea — și apoi paginile.
+
+---
+
+## Cum ne adresăm cititorului
+
+Interfața și acest ghid i se adresează cititorului cu **„tu”**, niciodată cu „dumneavoastră”:
+„Alege”, „Introdu”, „poți”, „ai salvat”, „setările tale”. Propozițiile impersonale și cele la
+persoana a treia rămân așa cum sunt.
+
+## Termeni stabiliți
+
+- **Drumuire** (EN *centerline*): drumuirea, drumuiri, drumuirile — niciodată „poligonație”.
+- **Model de drumuire** (EN *line plot*): modelul topografic cu stații și vize, pereche cu
+  modelul de pereți — nu „plan de linii”.
+- **Obiect** (EN *feature*): o înregistrare de pe hartă — peșteră, intrare, dolină, izvor;
+  **tip de obiect** (EN *feature kind*), **Tipuri de obiecte**, **Seturi de obiecte**. Nu
+  „element”, „fenomen” sau „obiectiv” pentru un obiect SilexGIS.
+- **Fenomen de suprafață** (EN *surface feature*) rămâne termenul pentru această categorie.
+- **Registru** (EN *registry*): registrul peșterilor, cel al instanței. **Cadastral** („Număr
+  cadastral”) rămâne pentru numărul de carte funciară, iar **Cadastru național** este numele
+  registrului național din afara aplicației.
+- **Doar în acest browser** (EN *This browser only*): o singură etichetă peste tot.
 
 ---
 
@@ -23,9 +45,9 @@ odată cu ea — și apoi paginile.
 | 3D view | Vizualizare 3D |
 | Dashboard | Panou de bord |
 | Work areas | Zone de lucru |
-| Cadastre | Cadastru |
+| Cadastre | Registru |
 | Caves | Peșteri |
-| Features | Elemente |
+| Features | Obiecte |
 | Geodata | Geodate |
 | Library | Bibliotecă |
 | Photographs | Fotografii |
@@ -39,7 +61,7 @@ odată cu ea — și apoi paginile.
 | Events | Evenimente |
 | Trip logs | Jurnale de tură |
 | Deleted trips | Ture șterse |
-| Deleted caves and features | Peșteri și elemente șterse |
+| Deleted caves and features | Peșteri și obiecte șterse |
 | Restore (a deleted trip) | Restaurează |
 | Checklists | Liste de verificare |
 | Camps | Tabere |
@@ -48,7 +70,7 @@ odată cu ea — și apoi paginile.
 | Cavers | Speologi |
 | Administration | Administrare |
 | Accounts | Conturi |
-| Audit | Istoric modificări |
+| Audit | Istoric |
 | Permission groups | Grupuri de permisiuni |
 | Messaging | Mesagerie |
 | Message delivery | Trimiterea mesajelor |
@@ -56,14 +78,14 @@ odată cu ea — și apoi paginile.
 | Maps in documents (a Messaging tab) | Hărți în documente |
 | Terrain | Relief |
 | Configuration | Configurare |
-| Feature sets | Seturi de elemente |
+| Feature sets | Seturi de obiecte |
 | Feature kinds | Tipuri de obiecte |
 | Document kinds | Tipuri de documente |
 | Trip purposes | Scopuri de tură |
 | Trip roles | Roluri în tură |
 | Camp roles | Roluri în tabără |
 | Report layouts | Modele de raport |
-| Link relations | Relații între elemente |
+| Link relations | Relații între obiecte |
 | Detection rules | Reguli de detectare |
 | Message texts | Texte mesaje |
 | Settings | Setări |
@@ -74,11 +96,12 @@ odată cu ea — și apoi paginile.
 | Engleză | Română |
 |---|---|
 | Cave | Peșteră |
-| Cave entrance | Intrare în peșteră |
-| Centerline | Poligonație |
+| Cave entrance | Intrare de peșteră |
+| Centerline | Drumuire |
+| Line plot (a survey model of stations and shots) | Model de drumuire |
 | Scraps (Therion wall surfaces) | Schițe |
 | Splays | Vize laterale |
-| Feature | Element |
+| Feature | Obiect |
 | Surface feature | Fenomen de suprafață |
 | Work area | Zonă de lucru |
 | Lead / continuation | Continuare |
@@ -112,10 +135,10 @@ odată cu ea — și apoi paginile.
 | Exact location | Locație exactă |
 | Everything | Tot |
 | Own objects | Obiectele proprii |
-| A feature and everything inside | Un element și tot ce conține |
+| A feature and everything inside | Un obiect și tot ce conține |
 | A cabinet and everything filed below it | Un dulap și tot ce este clasat sub el |
 | One object | Un singur obiect |
-| Your access here, and why | Accesul dumneavoastră aici și motivul lui |
+| Your access here, and why | Accesul tău aici și motivul lui |
 
 ## Ture
 
@@ -176,7 +199,7 @@ odată cu ea — și apoi paginile.
 | Roster times from the log / Write to the roster | Ore pe listă din jurnal / Scrie pe listă |
 | Replaces a time somebody typed | Înlocuiește o oră scrisă de cineva |
 | On the roster (what holds a person on a trip) | Pe listă |
-| Remove this person / Merge a duplicate instead | Eliminați persoana / Unificați un duplicat în loc |
+| Remove this person / Merge a duplicate instead | Elimină persoana / Unifică un duplicat în loc |
 | First started / Started again (a watch) | Începută prima dată / Începută din nou |
 | Import a sheet | Importă o foaie |
 | This cave's named places | Locurile numite ale acestei peșteri |
@@ -250,8 +273,8 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 |---|---|
 | Filter | Filtru |
 | Saved filter / Saved filters | Filtru salvat / Filtre salvate |
-| Save as filter… | Salvați ca filtru… |
-| Apply a saved filter… | Aplicați un filtru salvat… |
+| Save as filter… | Salvează ca filtru… |
+| Apply a saved filter… | Aplică un filtru salvat… |
 | Advanced filter… | Filtru avansat… |
 | Condition | Condiție |
 | Field · Comparison · Value | Câmp · Comparație · Valoare |
@@ -263,12 +286,12 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | is empty · is not empty | este gol · nu este gol |
 | Property: (a typed property) | Proprietate: |
 | Kinds of object (what a filter is about) | Feluri de obiecte |
-| Features (a filter's kind of object) | Obiective |
+| Features (a filter's kind of object) | Obiecte |
 | Matches: n | Rezultate: n |
 | Who can use it · Only me · Members of … | Cine îl poate folosi · Doar eu · Membrii … |
-| Saved by · You · A club member | Salvat de · Dumneavoastră · Un membru al clubului |
+| Saved by · You · A club member | Salvat de · Tu · Un membru al clubului |
 | Ready · Out of date · Cannot be read | Pregătit · Învechit · Nu poate fi citit |
-| Rename, describe or share | Redenumiți, descrieți sau partajați |
+| Rename, describe or share | Redenumește, descrie sau partajează |
 | Conditions… (gallery) | Condiții… |
 | Photograph conditions | Condiții pentru fotografii |
 | Saved gallery view | Vizualizare salvată a galeriei |
@@ -285,9 +308,9 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Save as a filter… (from a selection) | Salvează ca filtru… |
 | List the caves in view | Listează peșterile din vedere |
 | Only caves in the map's view · Show caves everywhere | Doar peșterile din vederea hărții · Arată peșterile de peste tot |
-| Pin as a quick filter (a quick filter) | Fixați ca filtru rapid (filtru rapid) |
+| Pin as a quick filter (a quick filter) | Fixează ca filtru rapid (filtru rapid) |
 | Add a layer from a saved filter… | Adaugă un strat dintr-un filtru salvat… |
-| Map filtered by … · Clear the map's filter | Hartă filtrată după … · Goliți filtrul hărții |
+| Map filtered by … · Clear the map's filter | Hartă filtrată după … · Golește filtrul hărții |
 | Go to… (the selector beside the map's search) | Mergi la… |
 
 ## Harta și ferestrele
@@ -299,7 +322,7 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Readable here · Mixed | Lizibile aici · Amestecate |
 | Zoom here (a cluster) | Apropie aici |
 | Zoom to (a result) | Centrează |
-| Cave centerlines · Entrance heatmap | Poligonații peșteri · Hartă de căldură (intrări) |
+| Cave centerlines · Entrance heatmap | Drumuiri peșteri · Hartă de căldură (intrări) |
 | Saved arrangements · This browser only | Aranjări salvate · Doar în acest browser |
 | Push the map aside · Float over the map · Spacing | Împinge harta lateral · Plutește peste hartă · Spațiere |
 | Share link (a saved view) | Link de partajare |
@@ -312,10 +335,10 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 |---|---|
 | Password | Parolă |
 | Sign out | Deconectare |
-| Invite someone | Invitați pe cineva |
+| Invite someone | Invită pe cineva |
 | Reset second factor | Resetează al doilea factor |
 | Coordinates (a settings section; also an entrance's field) | Coordonate |
-| This browser only (the accessibility settings kept on one device) | Doar acest browser |
+| This browser only (the accessibility settings kept on one device) | Doar în acest browser |
 
 ## Relief, topografii și hărți scanate
 
@@ -354,7 +377,7 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Review and import | Verifică și importă |
 | Undo (an import) | Anulează |
 | Base layers | Hărți de bază |
-| Snap to visible features | Aliniere la elementele vizibile |
+| Snap to visible features | Aliniere la obiectele vizibile |
 | Measure distance | Măsoară distanța |
 | Discussion | Discuție |
 | Printed codes | Coduri tipărite |

@@ -1,4 +1,4 @@
-# Topografii, poligonații și modele 3D
+# Topografii, drumuiri și modele 3D
 
 🇬🇧 [English](../../features/surveys-and-models.md) · 🇷🇴 **Română**
 
@@ -7,8 +7,8 @@
 
 ---
 
-SilexGIS afișează topografii; nu le compilează. Aduceți ce produc Therion sau Survex, iar
-aplicația le desenează, le măsoară, le proiectează pe hartă și păstrează sursele din care le-ați
+SilexGIS afișează topografii; nu le compilează. Aduci ce produc Therion sau Survex, iar
+aplicația le desenează, le măsoară, le proiectează pe hartă și păstrează sursele din care le-ai
 făcut.
 
 Tot ce urmează trăiește pe **pagina unei peșteri**.
@@ -23,56 +23,56 @@ Tot ce urmează trăiește pe **pagina unei peșteri**.
 Stare: *Așteaptă la rând → În curs → Gata*, sau *Nu a putut fi procesat*.
 
 Un model este desenat în **vizualizatorul topografic** (CaveView.js) și, pentru pereți, în
-[scena 3D](3d-view.md). Pereții sunt fie un `.stl` pe care îl încărcați, fie — acolo unde
+[scena 3D](3d-view.md). Pereții sunt fie un `.stl` pe care îl încarci, fie — acolo unde
 topografia însăși conține destul ca să fie construiți —
 [făcuți din `.lox` sau `.3d`](#pereți-dintr-un-lox-sau-3d).
 
 **Vizualizatorul se așază după mărimea la care este arătat**, adică după panoul în care stă, nu
-după ecranul dumneavoastră. Într-un panou mai îngust de aproximativ 1000 de pixeli, busola și
+după ecranul tău. Într-un panou mai îngust de aproximativ 1000 de pixeli, busola și
 cadranul de înclinare sunt desenate la jumătate din mărime, iar pe telefon la un sfert, ca să nu
 stea peste peștera pe care trebuie să o orienteze. **Fotografiile unei stații** stau într-o
 coloană la marginea stângă a modelului, la jumătate din mărimea pe care o aveau lângă stație,
-unde nu acoperă nicio galerie; descrierea unei fotografii apare când o indicați și în
+unde nu acoperă nicio galerie; descrierea unei fotografii apare când o indici și în
 vizualizatorul în care se deschide. Când mai mulți oameni dintr-o tură urmărită sunt la stații
 apropiate pe ecran, etichetele cu numele lor sunt puse una sub alta, nu una peste alta.
 
 **Locul în care au fost făcute fotografiile este marcat peste model.** O fotografie nu are în
 subteran o poziție proprie — într-o peșteră nu există semnal de satelit — așa că locul ei este
-stația de care este legată: legați o fotografie de o stație (clic pe stație, apoi **Leagă asta…**)
+stația de care este legată: leagă o fotografie de o stație (clic pe stație, apoi **Leagă asta…**)
 și deasupra acelei stații apare un mic aparat foto, cu numărul de fotografii acolo unde sunt mai
-multe. Apăsați aparatul pentru a arăta fotografiile acelei stații; apăsați una dintre ele pentru
+multe. Apasă aparatul pentru a arăta fotografiile acelei stații; apasă una dintre ele pentru
 a o deschide. O fotografie legată de o galerie sau de o topografie întreagă, nu de o stație, nu
 este marcată, pentru că nu are un singur loc.
 
-**Mărimea numelor de stații o alegeți dumneavoastră.** Împreună cu bara de unelte a
+**Mărimea numelor de stații o alegi tu.** Împreună cu bara de unelte a
 vizualizatorului apare, în colțul din dreapta sus al modelului, un mic control **Aa**: 40 %, 60 %,
 80 %, 100 %, 125 % sau 150 % din mărimea vizualizatorului. O topografie numește fiecare stație cu
-toată calea ei, iar o galerie aglomerată la mărime întreagă este un zid de text; micșorați-o până
-nu mai este. Alegerea se păstrează în browserul dumneavoastră și se aplică oricărui model deschis.
+toată calea ei, iar o galerie aglomerată la mărime întreagă este un zid de text; micșoreaz-o până
+nu mai este. Alegerea se păstrează în browserul tău și se aplică oricărui model deschis.
 
 ### Modelul curent
 
 O peșteră păstrează fiecare model încărcat vreodată — încărcările nu se suprascriu, așa că un
 export corectat este un al doilea model lângă primul. Unul dintre ele poartă marcajul **Curent**,
-pe fel: **poligonația** curentă (`.lox` / `.3d`) este cea citită de poligonația extrasă pe hartă și
+pe fel: **modelul de drumuire** curent (`.lox` / `.3d`) este cel citit de drumuirea extrasă pe hartă și
 de [măsurători](measurements-and-statistics.md); **pereții** curenți (`.stl`) sunt cei desenați de
 scena 3D — iar acolo unde o peșteră nu are un `.stl` curent, scena desenează în locul lor pereții
-construiți din poligonația ei curentă. **Primul** model de un fel este curent și rămâne așa până
-alegeți altul — o a doua încărcare poate fi un export corectat sau topografia unei singure galerii
-laterale, și numai dumneavoastră știți care — așa că folosiți **Setează ca model curent** pe
-modelul care trebuie să preia, după ce s-a terminat procesarea. Pentru o poligonație, alegerea
-face și din poligonația ei forma peșterii pe hartă, iar setarea poligonației unei topografii ca
+construiți din modelul ei de drumuire curent. **Primul** model de un fel este curent și rămâne așa până
+alegi altul — o a doua încărcare poate fi un export corectat sau topografia unei singure galerii
+laterale, și numai tu știi care — așa că folosește **Setează ca model curent** pe
+modelul care trebuie să preia, după ce s-a terminat procesarea. Pentru un model de drumuire, alegerea
+face și din drumuirea lui forma peșterii pe hartă, iar setarea drumuirii unei topografii ca
 implicită face același lucru din cealaltă parte: harta și cifrele descriu întotdeauna aceeași
 topografie. Ștergerea modelului curent trece marcajul la cel mai nou rămas.
 
-**Alegerea lui la încărcare.** Când peștera are deja un model curent de felul pe care îl încărcați,
+**Alegerea lui la încărcare.** Când peștera are deja un model curent de felul pe care îl încarci,
 dialogul de încărcare oferă să facă noul fișier cel curent **după ce a fost citit** (pentru pereți,
-după ce au fost convertiți) — *Fă-l planul de linii curent după ce a fost citit, în locul lui „…”*.
+după ce au fost convertiți) — *Fă-l modelul de drumuire curent după ce a fost citit, în locul lui „…”*.
 Până atunci modelul pe care îl are peștera rămâne curent — dintr-un fișier care nu a fost citit nu
 se poate măsura și desena nimic — iar lista mută singură marcajul când citirea se încheie. Două
 lucruri lasă marcajul unde este: un fișier care nu poate fi citit și cineva care alege alt model
-cât timp al dumneavoastră era citit, pentru că alegerea lui este cea mai recentă. Citirea din nou,
-mai târziu, a unui model nu îl face din nou curent; pentru asta folosiți **Setează ca model
+cât timp al tău era citit, pentru că alegerea lui este cea mai recentă. Citirea din nou,
+mai târziu, a unui model nu îl face din nou curent; pentru asta folosește **Setează ca model
 curent**.
 
 ### Citirea unei topografii în rânduri
@@ -83,13 +83,13 @@ O topografie compilată nu este lăsată ca un fișier pe care îl desenează br
 întâmplă; lista se actualizează singură când citirea s-a terminat.
 
 Un model este citit o singură dată, la sosire. **Citește din nou**, pe rândul lui, cere ca fișierul
-păstrat să fie citit a doua oară, iar ce a produs ultima citire — stațiile, vizările, poligonația
+păstrat să fie citit a doua oară, iar ce a produs ultima citire — stațiile, vizările, drumuirea
 extrasă, pereții construiți din grafic — este înlocuit cu ce produce aceasta. Nu se încarcă nimic,
 modelul rămâne același model, iar turele urmărite pe el rămân pe el. Există pentru două situații:
 o citire care **a eșuat** dintr-un motiv care între timp a dispărut și o **actualizare** care
-citește topografiile mai bine decât versiunea care le-a citit pe ale dumneavoastră. Trebuie să
-puteți modifica peștera; acțiunea nu este oferită cât timp o citire așteaptă sau este în curs. Un
-administrator poate cere același lucru pentru toate poligonațiile deodată — vedeți
+citește topografiile mai bine decât versiunea care le-a citit pe ale tale. Trebuie să
+poți modifica peștera; acțiunea nu este oferită cât timp o citire așteaptă sau este în curs. Un
+administrator poate cere același lucru pentru toate modelele de drumuire deodată — vezi
 [Operațiuni de întreținere](../admin/maintenance.md).
 
 Un model care a fost citit rămâne **Gata** cât este citit din nou, cu **Se citește din nou** alături:
@@ -123,7 +123,7 @@ Din faptul că numărul este **al fișierului și nu al peșterii** — următor
   sub altă scriere, pe care nicio apăsare pe desen nu o potrivește. **Citește din nou** îndreaptă
   asta; un raport refuzat din acest motiv o spune. O poziție deja înregistrată la o asemenea stație
   sub vechea scriere nu este rescrisă: rămâne în jurnalul turei sub numele cu care a fost
-  înregistrată, căruia nu îi mai răspunde nicio stație, așa că nu este desenată. Corectați-o pe
+  înregistrată, căruia nu îi mai răspunde nicio stație, așa că nu este desenată. Corecteaz-o pe
   rândul ei din fila de urmărire a turei, dacă are importanță. Fiecare stație căreia fișierul îi dă
   nume își păstrează numele, iar pozițiile înregistrate la acelea rămân neatinse.
 
@@ -132,13 +132,13 @@ Din faptul că numărul este **al fișierului și nu al peșterii** — următor
 Aici greșesc oamenii, așa că formularele sunt explicite.
 
 - **Un fișier `.lox` nu are câmp pentru un sistem de coordonate**, deci nu spune niciodată unde
-  se află. Trebuie să spuneți ce înseamnă numerele lui, altfel topografia nu poate fi plasată.
+  se află. Trebuie să spui ce înseamnă numerele lui, altfel topografia nu poate fi plasată.
 - **Un fișier `.3d` își declară sistemul propriu** doar dacă topografia a fost compilată cu unul.
-  Dacă îl declară, acela este folosit și ce spuneți dumneavoastră este ignorat.
+  Dacă îl declară, acela este folosit și ce spui tu este ignorat.
 
 ### Sistemele de coordonate vin din instalare, nu de pe internet
 
-Când dați un cod EPSG — pentru un `.stl` sau pentru o topografie al cărei fișier nu-și declară
+Când dai un cod EPSG — pentru un `.stl` sau pentru o topografie al cărei fișier nu-și declară
 sistemul — definiția este rezolvată **din baza de date de sisteme de coordonate care vine cu
 aplicația**, nu adusă de la un serviciu web public.
 
@@ -153,23 +153,23 @@ Rezultă două lucruri:
   [formatele de coordonate](coordinates.md) — așa că o topografie în Stereo 70 stă în vizualizator
   acolo unde harta pune peștera, nu la vreo sută de metri alături.
 
-Dacă sunteți obișnuit ca topografiile să-și piardă tăcut poziția pe un sistem găzduit propriu,
+Dacă ești obișnuit ca topografiile să-și piardă tăcut poziția pe un sistem găzduit propriu,
 iată de ce aici nu se întâmplă.
 
 ### Precizie pierdută înainte de sosire
 
 Dacă coordonatele dintr-un fișier au fost prea mari pentru numerele în care le stochează,
 topografia ajunge mai grosieră decât a fost ridicată. Aplicația detectează asta și o spune: *„
-Fișierul a pierdut precizie înainte să ajungă."* Reexportarea în jurul unei origini locale o
+Fișierul a pierdut precizie înainte să ajungă aici"*. Reexportarea în jurul unei origini locale o
 recuperează.
 
 ### Compararea a două topografii
 
-O peșteră topografiată de două ori păstrează ambele poligonații, iar vizualizatorul topografic le
-poate arăta împreună. Deschideți una dintre ele — **Vezi în 3D**, lângă hartă sau într-o fereastră
+O peșteră topografiată de două ori păstrează ambele modele de drumuire, iar vizualizatorul topografic le
+poate arăta împreună. Deschide unul dintre ele — **Vezi în 3D**, lângă hartă sau într-o fereastră
 proprie — și, dacă peștera mai are un `.lox` sau `.3d`, deasupra modelului apare **Compară cu…**.
-Alegeți cealaltă topografie și felul în care sunt arătate cele două. Puteți trece de la un fel la
-celălalt în timp ce comparați, iar **Oprește compararea** vă întoarce la topografia pe care ați
+Alege cealaltă topografie și felul în care sunt arătate cele două. Poți trece de la un fel la
+celălalt în timp ce compari, iar **Oprește compararea** te întoarce la topografia pe care ai
 deschis-o.
 
 - **Suprapuse** desenează ambele topografii într-o singură vedere, fiecare în culoarea ei —
@@ -177,19 +177,19 @@ deschis-o.
   legendă care spune care este care. O galerie retopografiată stă peste ea însăși, cea de dinainte,
   așa că iese în evidență, într-o singură culoare, ce s-a adăugat sau s-a mutat. Acolo unde cele
   două coincid exact se poate vedea o singură culoare, și anume portocaliul topografiei cu care
-  comparați, desenată peste cea deschisă: ascundeți acea parte a ei ca să vedeți albastrul de
+  compari, desenată peste cea deschisă: ascunde acea parte a ei ca să vezi albastrul de
   dedesubt.
 - **Alăturate** dă fiecărei topografii o vedere proprie, sub numele ei — una deasupra celeilalte
   acolo unde nu este loc pe lățime. **Leagă vederile**, pornit de la început, face ca rotirea,
-  înclinarea, apropierea sau mutarea unui model să facă același lucru cu celălalt; opriți-l ca să
-  le priviți pe fiecare separat.
+  înclinarea, apropierea sau mutarea unui model să facă același lucru cu celălalt; oprește-l ca să
+  le privești pe fiecare separat.
 
 **Arătarea și ascunderea părților.** Sub modele este, pentru fiecare topografie, o listă a
 ridicărilor denumite din care este alcătuită, cu câte o bifă și cu **Arată tot**. Cu
 **Sincronizare** pornită, bifarea sau debifarea unei părți face același lucru cu partea cu același
 nume din cealaltă topografie; o parte pe care o are doar una dintre ele este arătată sau ascunsă
 singură. Cu ea oprită, fiecare listă lucrează doar asupra topografiei ei. Merge la fel suprapuse
-și alăturate, iar ce ați ascuns rămâne ascuns când treceți de la un fel la celălalt. Lista este
+și alăturate, iar ce ai ascuns rămâne ascuns când treci de la un fel la celălalt. Lista este
 primul nivel din structura topografiei care oferă o alegere — o topografie exportată dintr-o
 singură bucată apare ca acea singură bucată.
 
@@ -202,7 +202,7 @@ sunt desenate la sute de kilometri una de alta, iar o asemenea imagine nu compar
 spune și le oferă alăturate, unde fiecare topografie este încadrată separat și nimic nu trebuie să
 se potrivească. Verificarea nu poate vedea o deplasare mică: două topografii măsurate față de
 puncte aflate la câțiva metri unul de altul sunt suprapuse și sunt decalate cu acei câțiva metri.
-Pentru o suprapunere în care să aveți încredere, exportați-le pe amândouă față de același punct fix
+Pentru o suprapunere în care să ai încredere, exportă-le pe amândouă față de același punct fix
 sau în același sistem de coordonate.
 
 Compararea este un fel de a privi. Nimic din ea nu se salvează și nu schimbă modelul curent.
@@ -212,21 +212,21 @@ Compararea este un fel de a privi. Nimic din ea nu se salvează și nu schimbă 
 Planul sau profilul desenat al unei topografii — o scanare sau o fotografie a planșei, păstrată ca
 [document](documents-and-cabinets.md) imagine — poate fi arătat lângă modelul ei. În fereastra în
 care se deschide un model, banda de deasupra vizualizatorului are o filă **3D** și câte o filă
-pentru fiecare hartă. **Adaugă hartă**, butonul **+** de la capătul benzii, declară una: alegeți
+pentru fiecare hartă. **Adaugă hartă**, butonul **+** de la capătul benzii, declară una: alege
 **Documentul cu imaginea hărții** și **Vedere** — **Plan**, **Profil** sau **Altă vedere**.
 **Setările hărții** schimbă vederea, sau **Elimină harta de pe acest model**: dispare doar
 declararea, iar documentul și punctele lui rămân.
 
-Imaginea nu are nevoie de coordonate. Ce o leagă de topografie sunt **punctele** ei. Apăsați
-**Definește puncte**, apoi apăsați o stație în vederea 3D sau căutați-o după nume — banda spune
-*Se plasează A12 — apăsați punctul ei pe hartă* — și dați clic acolo unde este desenată acea stație
+Imaginea nu are nevoie de coordonate. Ce o leagă de topografie sunt **punctele** ei. Apasă
+**Definește puncte**, apoi apasă o stație în vederea 3D sau caut-o după nume — banda spune
+*Se plasează A12 — apasă punctul ei pe hartă* — și dă clic acolo unde este desenată acea stație
 pe planșă. O stație care are deja un punct întreabă înainte să primească un al doilea (**Mută-l
-aici**); apăsați un punct pentru **Mută** sau **Șterge**, iar la sfârșit **Gata**. Un
+aici**); apasă un punct pentru **Mută** sau **Șterge**, iar la sfârșit **Gata**. Un
 punct aparține exact scanării pe care a fost pus: după ce se încarcă o scanare mai nouă a aceleiași
 hărți, punctele vechi nu sunt desenate pe noua imagine — fila spune *Puncte plasate pe o scanare mai
-veche a acestei hărți: N*, iar cât definiți puncte sunt listate, fiecare cu **Replasează**.
+veche a acestei hărți: N*, iar cât definești puncte sunt listate, fiecare cu **Replasează**.
 Schimbarea unei hărți cere dreptul de a modifica documentul ei, iar un punct făcut printr-o
-legătură pe care nu o puteți edita spune *Nu puteți corecta acest punct*.
+legătură pe care nu o poți edita spune *Nu poți corecta acest punct*.
 
 **O tură urmărită folosește punctele.** Pe panoul de urmărire al unei ture și pe pagina unei ture
 publicate, fiecare planșă declarată este o filă lângă vederea 3D, iar echipa este desenată pe ea la
@@ -235,14 +235,14 @@ planșă nu este pus pe ea prin ghicire: fișa lui spune *Fără punct pe aceast
 îl arată în continuare.
 
 O foaie georeferențiată — una care are o poziție pe Pământ — este altceva și se desenează pe harta
-însăși: vedeți [Hărți raster georeferențiate](georeferenced-maps.md).
+însăși: vezi [Hărți raster georeferențiate](georeferenced-maps.md).
 
 ### Un al doilea vizualizator, de probă
 
 Fereastra în care se deschide un model (**Vezi în 3D**) are, lângă fila **3D**, o filă
 **LochViewer (de probă)**: același fișier, arătat de un al doilea vizualizator topografic care este
-încercat. Se încarcă doar când deschideți acea filă și este o aplicație separată — setările,
-măsurătorile și partajarea lui sunt ale lui, iar nimic din ce faceți în el nu se salvează aici.
+încercat. Se încarcă doar când deschizi acea filă și este o aplicație separată — setările,
+măsurătorile și partajarea lui sunt ale lui, iar nimic din ce faci în el nu se salvează aici.
 Dacă fila rămâne goală, instalarea nu permite ca el să fie arătat în interiorul paginii;
 **Deschide într-o fereastră nouă** îl arată separat.
 
@@ -251,19 +251,19 @@ Dacă fila rămâne goală, instalarea nu permite ca el să fie arătat în inte
 ## Pereții peșterii (`.stl`)
 
 Un fișier `.stl` este triunghiuri goale. Nimic din el nu spune în ce sistem de coordonate sunt
-numerele — citit ca fusul vecin, ar ateriza la kilometri distanță. Așa că îl declarați:
+numerele — citit ca fusul vecin, ar ateriza la kilometri distanță. Așa că îl declari:
 
 **Metri față de un punct** — exportul obișnuit. Numerele sunt metri est, nord și sus față de un
-punct. Dați **longitudinea și latitudinea** acelui punct și **altitudinea nivelului zero al
+punct. Dă **longitudinea și latitudinea** acelui punct și **altitudinea nivelului zero al
 fișierului**.
 
 > Formularul precompletează originea din **intrarea principală a acestei peșteri**, de unde
 > pornește de obicei un export local. Dacă nu este înregistrată nicio poziție de intrare, sau
-> dacă poziția arătată *contului dumneavoastră* este deliberat aproximativă pentru că locația
-> peșterii este protejată, formularul o spune și vă cere punctul adevărat.
+> dacă poziția arătată *contului tău* este deliberat aproximativă pentru că locația
+> peșterii este protejată, formularul o spune și îți cere punctul adevărat.
 
 **Un sistem de coordonate proiectat** — numerele sunt coordonate est/nord într-o grilă națională
-sau UTM. Dați **codul EPSG**.
+sau UTM. Dă **codul EPSG**.
 
 De reținut și: înălțimile din aceste fișiere se măsoară de la originea proprie a exportului, nu
 de la nivelul mării.
@@ -278,11 +278,11 @@ cincizeci de megaocteți pe o conexiune contorizată este o alegere, nu o surpri
 
 ## Pereți dintr-un `.lox` sau `.3d`
 
-Nu trebuie să exportați un `.stl` ca să vedeți pereți. Când o poligonație este citită, pentru
+Nu trebuie să exporți un `.stl` ca să vezi pereți. Când un model de drumuire este citit, pentru
 același model se construiesc pereți din ce conține fișierul însuși, și din nimic altceva:
 
 - **Un `.lox` cu schițe (scraps)** — suprafețele de perete pe care Therion le-a modelat din
-  desenele dumneavoastră — este desenat exact cu acele suprafețe.
+  desenele tale — este desenat exact cu acele suprafețe.
 - **Un `.lox` fără schițe, sau un `.3d`**, primește un tub de-a lungul fiecărei vize ale cărei
   **dimensiuni de galerie** (stânga, dreapta, sus, jos) au fost măsurate la ambele capete. Fiecare
   stație măsurată devine un inel prin cele patru puncte măsurate — stânga și dreapta așezate
@@ -297,36 +297,36 @@ laterale nu primesc tub — ele sunt măsurători *ale* peretelui, nu galerii. O
 schițe și fără dimensiuni pur și simplu nu are pereți: nu este o eroare, iar modelul este tot
 **Gata**.
 
-Lista de modele arată numărul de triunghiuri și mărimea pe rândul poligonației, cu nota *„Pereți
+Lista de modele arată numărul de triunghiuri și mărimea pe rândul modelului de drumuire, cu nota *„Pereți
 construiți din schițele și dimensiunile de galerie ale acestei ridicări"*. Un sistem foarte mare
 este desenat cu inele cu patru laturi în loc de opt; unul prea mare chiar și pentru atât — peste
 două milioane de triunghiuri — nu primește pereți construiți, iar atunci un `.stl` exportat este
 calea de a-l arăta.
 
 **Ce pereți desenează scena 3D.** Un `.stl` încărcat și marcat **Curent** câștigă în continuare:
-sunt pereți făcuți de cineva cu intenție. Fără el, scena desenează pereții **poligonației
-curente**; în lipsa lor, cel mai nou model al peșterii care are pereți.
+sunt pereți făcuți de cineva cu intenție. Fără el, scena desenează pereții **modelului de
+drumuire curent**; în lipsa lor, cel mai nou model al peșterii care are pereți.
 
 ---
 
-## Poligonații
+## Drumuiri
 
 Linia topografică a unei peșteri, proiectată pe suprafața hărții și desenată la adâncime în 3D.
 
-**Încarcă poligonație**, sau lăsați ca una să fie **extrasă** dintr-o topografie compilată —
+**Încarcă drumuire**, sau lasă ca una să fie **extrasă** dintr-o topografie compilată —
 coloana *Sursă* spune care.
 
-Fiecare poligonație își arată **lungimea** și numărul de **trasee**. Lungimea unei poligonații
+Fiecare drumuire își arată **lungimea** și numărul de **trasee**. Lungimea unei drumuiri
 încărcate este măsurată de-a lungul galeriei, nu de-a lungul vizelor trase la pereți, care într-un
 export topografic pot însuma de multe ori lungimea galeriei; una încărcată înainte ca lungimea să
 fie măsurată așa își păstrează lungimea primită până când este încărcată din nou. Una poate fi făcută **forma
 implicită** a peșterii, care este ce folosesc alte lucruri când au nevoie de „forma acestei
 peșteri".
 
-Pe hartă, poligonațiile sunt stratul scump și au controale proprii de detaliu și buget — vedeți
-[Spațiul de lucru al hărții](map-workspace.md#detaliul-poligonațiilor).
+Pe hartă, drumuirile sunt stratul scump și au controale proprii de detaliu și buget — vezi
+[Spațiul de lucru al hărții](map-workspace.md#detaliul-drumuirilor).
 
-O poligonație fără altitudini este desenată **pe suprafață** în 3D, iar scena spune câte sunt
+O drumuire fără altitudini este desenată **pe suprafață** în 3D, iar scena spune câte sunt
 așa — în loc s-o deseneze la adâncimea zero ca și cum peștera ar fi plată.
 
 ---
@@ -383,7 +383,7 @@ istoricul peșterii.
 
 ---
 
-## Ce vă spune apoi topografia
+## Ce îți spune apoi topografia
 
 Citirea unei topografii în stații și vizări este ce alimentează:
 
@@ -392,7 +392,8 @@ Citirea unei topografii în stații și vizări este ce alimentează:
   jos, și cifrele calculate față de cele declarate,
 - **roza orientării galeriilor** și înclinarea,
 - **cea mai mică distanță** dintre două peșteri,
-- poligonațiile de pe hartă și din 3D.
+- drumuirile de pe hartă și din 3D.
+
 
 Toate acestea sunt pe pagina
 [Măsurători și statistici](measurements-and-statistics.md).

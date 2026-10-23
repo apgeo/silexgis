@@ -10,8 +10,8 @@ Aplicația vine cu liste rezonabile și apoi se dă la o parte. Pagina aceasta a
 pe care instalarea o poate extinde, unde se află și ce guvernează.
 
 **O regulă valabilă peste tot:** elementele care vin cu produsul **nu pot fi redenumite pe sub
-picioarele programului și nici șterse**, așa că nimic din ce construiți nu dispare. Tot ce
-adăugați devine filtrabil și numărabil din clipa în care îl adăugați.
+picioarele programului și nici șterse**, așa că nimic din ce construiești nu dispare. Tot ce
+adaugi devine filtrabil și numărabil din clipa în care îl adaugi.
 
 ---
 
@@ -32,36 +32,36 @@ poate spune fiecare document de acel tip.
 
 ## Configurare → Tipuri de obiecte
 
-**Ce guvernează:** tipurile de [elemente](../features/surface-features.md) pe care instalarea le
+**Ce guvernează:** tipurile de [obiecte](../features/surface-features.md) pe care instalarea le
 înregistrează pe hartă — dolină, izvor, puț, bivuac, zonă carstică și celelalte — iar pentru
 fiecare:
 
 | | |
 |---|---|
 | **Denumire**, **Descriere**, **Ordine** | Cum este listat tipul și în ce ordine |
-| **Cod** | Litere mici, cifre și liniuțe de subliniere. *„Instalările schimbă obiecte după acest cod, deci păstrați-l stabil."* |
+| **Cod** | Litere mici, cifre și liniuțe de subliniere. *„Instalările schimbă obiecte după acest cod, deci păstrează-l stabil."* |
 | **Categorie** | Suprafață · Subteran · Zonă · Structură |
 | **Forme în care poate fi desenat** | Punct · Linie · Contur · Mai multe puncte · Mai multe linii · Mai multe contururi |
-| **Când este protejat** | *Arătat aliniat la grilă (doar punctele)* sau *Nu este arătat deloc* — cum apare un element de acest tip cuiva fără vedere exactă. Vedeți [Protecția locațiilor](location-protection.md) |
+| **Când este protejat** | *Arătat aliniat la grilă (doar punctele)* sau *Nu este arătat deloc* — cum apare un obiect de acest tip cuiva fără vedere exactă. Vezi [Protecția locațiilor](location-protection.md) |
 | **Doar în interiorul altui obiect** | Pentru tipuri care n-au sens singure, cum este un loc din interiorul unei peșteri |
 | **Simbol pe hartă** | Ales din simbolurile pe care le are aplicația, sau niciunul |
 | **Ajustări de stil pe hartă** | Opțional; gol păstrează stilul implicit |
-| **Schema detaliilor** | Ce i se cere unui element de acest tip. În formular apar doar câmpuri simple de text, număr, da/nu și alegere, iar fereastra arată dinainte câmpurile pe care le va oferi formularul |
+| **Schema detaliilor** | Ce i se cere unui obiect de acest tip. În formular apar doar câmpuri simple de text, număr, da/nu și alegere, iar fereastra arată dinainte câmpurile pe care le va oferi formularul |
 
 **Adaugă un tip** pentru ceva ce înregistrează clubul și nu descrie niciun tip livrat. Tipurile
 care vin cu produsul sunt marcate **Livrat cu produsul**: codul, categoria, afișarea protejată și
 nevoia de părinte rămân cum au fost livrate, își păstrează toate formele cu care vin și nu pot fi
-șterse — dar denumirea, simbolul, ordinea și detaliile lor sunt ale dumneavoastră.
+șterse — dar denumirea, simbolul, ordinea și detaliile lor sunt ale tale.
 
-Odată ce există elemente de un tip (inclusiv șterse), tipul poate fi doar **lărgit**: categoria
+Odată ce există obiecte de un tip (inclusiv șterse), tipul poate fi doar **lărgit**: categoria
 rămâne, nicio formă nu mai poate fi scoasă și nu poate începe să ceară un părinte, pentru că
-elementele salvate n-ar mai fi în acord cu el. Un tip poate fi șters doar cât timp nu-l folosește
-niciun element.
+obiectele salvate n-ar mai fi în acord cu el. Un tip poate fi șters doar cât timp nu-l folosește
+niciun obiect.
 
 Are nevoie de **scriere** pe vocabulare, ca tipurile de documente: un tip de obiect decide în ce
-forme poate fi desenat fiecare element al lui și cum este arătat unul protejat.
+forme poate fi desenat fiecare obiect al lui și cum este arătat unul protejat.
 
-Înrudit: [Elemente](../features/surface-features.md)
+Înrudit: [Obiecte](../features/surface-features.md)
 
 ---
 
@@ -116,14 +116,14 @@ ajunge la ea și din lista taberelor, sub *Configurare*.
 **Ce guvernează:** modelul în care se redactează o tură sau o tabără. Sunt două feluri de model,
 cu cuvinte diferite, iar fiecare fel are modelul său standard și modelul său ales.
 
-Descărcați-l pe cel standard pentru felul dorit — un fișier text scurt care se explică singur în
-propriile comentarii — editați-l, încărcați-l și alegeți-l. Un model de tabără are un rând al său,
-`accounts`, care tipărește ce a scris fiecare tură din tabără despre ea însăși; scoateți rândul
+Descarcă-l pe cel standard pentru felul dorit — un fișier text scurt care se explică singur în
+propriile comentarii — editează-l, încarcă-l și alege-l. Un model de tabără are un rând al său,
+`accounts`, care tipărește ce a scris fiecare tură din tabără despre ea însăși; scoate rândul
 pentru un document mai scurt.
 
 Un model poate fi și **al unui singur scop de tură** — buletinul de cartare, de pildă: o tură
 înregistrată sub acel scop este redactată în el dacă nu alege cineva altul, înaintea modelului
-ales pentru tot restul. Un model pe scop; lăsați scopul gol pentru un model pe care îl poate
+ales pentru tot restul. Un model pe scop; lasă scopul gol pentru un model pe care îl poate
 folosi orice tură.
 
 Două proprietăți care fac asta sigur:
@@ -137,7 +137,7 @@ Două proprietăți care fac asta sigur:
 
 ---
 
-## Configurare → Relații între elemente
+## Configurare → Relații între obiecte
 
 **Ce guvernează:** formularea fiecărei [legături](../features/links.md).
 
@@ -145,7 +145,7 @@ Vine cu *Același obiect ca · Înrudit cu · Conține/Conținut în · Document
 Sursă pentru/Derivat din · Adiacent cu · Original al/Duplicat al · Necesită clarificare*,
 relațiile de tură și *Text al/Are text*.
 
-Adăugați ce spune de fapt această arhivă. O relație direcțională poartă ambele citiri, deci o
+Adaugă ce spune de fapt această arhivă. O relație direcțională poartă ambele citiri, deci o
 legătură spune un lucru pe o pagină și inversul lui pe cealaltă.
 
 Restricții pe care le impune aplicația:
@@ -155,14 +155,14 @@ Restricții pe care le impune aplicația:
 - O relație pe care **legăturile o înregistrează deja** nu poate fi schimbată astfel sau ștearsă.
 - Codurile sunt unice.
 
-Are nevoie de Administrator complet.
+Are nevoie de Administrator deplin.
 
 ---
 
 ## Configurare → Reguli de detectare
 
 **Ce guvernează:** ce se propune să devină un punct numit *Peșteră*, *P.*, *aven*, *izbuc*,
-*ponor* sau *doline* când [importați un fișier GPS](../workflows/import-a-gps-file.md).
+*ponor* sau *doline* când [imporți un fișier GPS](../workflows/import-a-gps-file.md).
 
 **Nu este o pagină de administrator.** Oricine are ceva de importat își ține propriile seturi.
 Doar *promovarea* unui set la ce moștenește un grup de speologie sau întreaga instalare este un
@@ -170,9 +170,9 @@ act de administrator, iar asta este refuzată pe server oricui altcuiva.
 
 ### Un set de reguli
 
-Are un **nume** și un **cuprins**: *Întreaga instalare · Un grup de speologie · Dumneavoastră*.
-Seturile pot fi **salvate ca fișier** și **încărcate dintr-un fișier** — așa dați convențiile
-dumneavoastră altui club. Un set care nu este al dumneavoastră poate fi editat ca *o copie
+Are un **nume** și un **cuprins**: *Întreaga instalare · Un club · Tu*.
+Seturile pot fi **salvate ca fișier** și **încărcate dintr-un fișier** — așa dai convențiile
+tale altui club. Un set care nu este al tău poate fi editat ca *o copie
 proprie*.
 
 ### O regulă
@@ -180,22 +180,22 @@ proprie*.
 | Câmp | |
 |---|---|
 | **Numele regulii**, **Activă** | |
-| **Compară după** | Conține · Cuvânt întreg · Începe cu · Expresie regulată |
-| **Termeni** | Tastați unul câte unul |
-| **Limbă** | Termeni în română · Termeni în engleză · Termeni în nicio limbă (care participă întotdeauna) |
+| **Compară prin** | Conține · Cuvânt întreg · Începe cu · Expresie regulată |
+| **Termeni** | Tastează-i unul câte unul |
+| **Limbă** | Termeni în română · Termeni în engleză · Termeni fără limbă (care participă întotdeauna) |
 | **Propune** | O peșteră · O intrare în peșteră · Un fenomen de suprafață, și de ce **tip** |
 | **Citește numele** / **Citește descrierea** | Unde să caute |
-| **Scoate termenul din nume** | Păstrează-l · Doar din față · Doar de la sfârșit · Oriunde este |
+| **Scoate termenul din nume** | Păstrează-l · Doar de la început · Doar de la sfârșit · Oriunde s-ar afla |
 
-> **Ordinea decide.** Când două reguli pretind același candidat, câștigă cea mai de sus — iar
-> ecranul de verificare vă spune ce alte reguli l-au mai pretins.
+> **Ordinea decide.** Când două reguli revendică același candidat, câștigă cea de mai sus — iar
+> ecranul de verificare îți spune ce alte reguli l-au mai pretins.
 
 ---
 
-## Configurare → Seturi de elemente
+## Configurare → Seturi de obiecte
 
-Seturi numite de elemente către care pot fi îndreptate reguli de acces. Tratate la
-[Permisiuni](permissions.md#seturi-de-elemente).
+Seturi denumite de obiecte către care pot fi îndreptate reguli de acces. Tratate la
+[Permisiuni](permissions.md#seturi-de-obiecte).
 
 ---
 
@@ -220,18 +220,18 @@ Accesibile din înregistrările care le folosesc, nu dintr-o pagină proprie:
 - **Feluri de hărți georeferențiate** — geologică, topografică, turistică, hartă de peșteră, altele.
 - **Feluri de evenimente** — ședință de club, instruire, zi de lucru, verificare de echipament,
   conferință, termen limită.
-- **Etichete** — libere, create pe măsură ce le folosiți, filtrabile peste tot.
+- **Etichete** — libere, create pe măsură ce le folosești, filtrabile peste tot.
 
 ---
 
 ## O observație despre schimbarea ulterioară a unui vocabular
 
-Adăugarea este întotdeauna sigură. Redenumirea este sigură pentru orice ați adăugat dumneavoastră.
+Adăugarea este întotdeauna sigură. Redenumirea este sigură pentru orice ai adăugat tu.
 Ce nu se oferă — pentru că ar rescrie tacit evidența — este ștergerea sau redefinirea a ceva ce
-înregistrările folosesc deja. Aplicația refuză și vă spune ce încă arată către acel lucru.
+înregistrările folosesc deja. Aplicația refuză și îți spune ce încă arată către acel lucru.
 
-Merită știut înainte să proiectați o schemă: **este mult mai ușor să adăugați un tip de document
-decât să contopiți două după aceea.**
+Merită știut înainte să proiectezi o schemă: **este mult mai ușor să adaugi un tip de document
+decât să contopești două după aceea.**
 
 ---
 

@@ -10,7 +10,7 @@
 
 SilexGIS este o aplicație web pentru stocarea, vizualizarea și editarea datelor despre peșteri
 și carst. Poate fi instalat / folosit de un grup / club de speologie, de o echipă de explorare sau de o singură persoană în mod independent. Se instalează pe un server
-propriu, se creează conturile care trebuie create, și de atunci încolo aplicația este cadastrul,
+propriu, se creează conturile care trebuie create, și de atunci încolo aplicația este registrul,
 arhiva, harta și jurnalul acelui grup, într-un singur loc. Este software liber
 (AGPL-3.0-or-later) și vine dintr-un club real — Silex Brașov — care a ținut mai întâi toate
 acestea pe hârtie și în foi de calcul.
@@ -20,7 +20,7 @@ acestea pe hârtie și în foi de calcul.
 Acesta este cel mai important lucru de înțeles despre felul în care se comportă aplicația,
 pentru că explică o duzină de decizii care altfel ar părea excesiv de precaute.
 
-Aplicația **refuză implicit**. Trebuie să fiți autentificat ca să ajungeți aproape oriunde.
+Aplicația **refuză implicit**. Trebuie să fii autentificat ca să ajungi aproape oriunde.
 Crearea de conturi este închisă dacă cel care administrează instalarea nu o deschide anume. Nu
 există un mod de răsfoire, nici o „hartă publică", nici un catalog de peșteri prin care un
 străin să poată naviga.
@@ -51,7 +51,7 @@ fotografiile (a căror poziție de capturare ar da-o de gol), e-mailurile de not
 rapoartele.
 
 Subiectul este tratat integral în [Protecția locațiilor](admin/location-protection.md). Merită
-citit chiar dacă nu administrați nimic, pentru că explică de ce doi oameni care se uită la
+citit chiar dacă nu administrezi nimic, pentru că explică de ce doi oameni care se uită la
 același ecran pot vedea, pe bună dreptate, lucruri diferite.
 
 ## Ce conține
@@ -64,7 +64,7 @@ Un inventar aproximativ al lucrurilor care trăiesc într-o instalare:
 - **Fenomene de suprafață** — doline, falii, izvoare, pereți, orice se poate desena. Tipizate,
   cu simboluri și cu proprietăți proprii.
 - **Topografii** — modele Therion `.lox` și Survex `.3d`, pereți de peșteră ca `.stl`,
-  poligonații proiectate pe hartă și desenate în 3D, plus o arhivă a surselor topografice din
+  drumuiri proiectate pe hartă și desenate în 3D, plus o arhivă a surselor topografice din
   care au fost compilate.
 - **Geodate** — GPX, KML/KMZ, shapefile, GeoJSON, WKT, CSV cu poziții; și hărți raster
   georeferențiate servite ca straturi suprapuse.
@@ -83,9 +83,9 @@ Un inventar aproximativ al lucrurilor care trăiesc într-o instalare:
 - **Nu este multi-organizație.** O instalare servește un singur grup. Nu există noțiunea de
   organizații separate care împart un server.
 - **Nu este un program de prelucrare topografică.** Afișează ce produc Therion și Survex; nu le
-  înlocuiește. Vă păstrează sursele ca să puteți recompila mai târziu.
+  înlocuiește. Îți păstrează sursele ca să poți recompila mai târziu.
 - **Nu funcționează offline în browser.** Clientul web are nevoie de conexiune. Offline-ul este
-  rostul aplicației de telefon — vedeți
+  rostul aplicației de telefon — vezi
   [Telefon și sincronizare offline](features/mobile-sync.md).
 - **Nu este perfectă pe telefon.** Funcționează pe telefon, realmente, inclusiv desenarea
   geometriei cu degetul. Dar este gândită pentru un ecran mare și se vede.
@@ -93,18 +93,18 @@ Un inventar aproximativ al lucrurilor care trăiesc într-o instalare:
 ## Cine ce face
 
 Nu există funcții fixe. Există **grupuri de permisiuni** — seturi numite de reguli în care
-cineva vă adaugă — plus ce dețineți, plus vizibilitatea pe care o poartă fiecare înregistrare.
+cineva te adaugă — plus ce deții, plus vizibilitatea pe care o poartă fiecare înregistrare.
 În practică, majoritatea instalărilor ajung la ceva de felul:
 
 | Ce fel de persoană | De obicei poate |
 |---|---|
 | Un membru | Să citească ce împarte clubul, să-și înregistreze turele, să încarce fotografii, să răspundă la invitații |
-| Un editor / topograf | Toate cele de mai sus, plus să creeze și să corecteze peșteri, elemente și topografii |
+| Un editor / topograf | Toate cele de mai sus, plus să creeze și să corecteze peșteri, obiecte și topografii |
 | Un arhivar | În plus, să claseze documente în dulapuri și să îngrijească biblioteca |
 | Un comitet / responsabil de acces | În plus, să vadă locațiile exacte ale peșterilor protejate |
-| Un administrator complet | Tot, inclusiv conturi, permisiuni și setările instalării |
+| Un administrator deplin | Tot, inclusiv conturi, permisiuni și setările instalării |
 
-Acestea sunt convenții, nu funcții predefinite. Vedeți
+Acestea sunt convenții, nu funcții predefinite. Vezi
 [Permisiunile explicate](admin/permissions.md).
 
 ## De unde vine aplicația

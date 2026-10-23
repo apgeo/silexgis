@@ -36,17 +36,17 @@ Pagina are opt file:
 | **Activat** | |
 | **Server** · **Port** | |
 | **Securitatea conexiunii** | Automată · TLS la conectare (465) · Niciuna (text simplu) |
-| **Utilizator** · **Parolă** | Pagina spune dacă este stocată o parolă; lăsați gol ca s-o păstrați |
+| **Utilizator** · **Parolă** | Pagina spune dacă este stocată o parolă; lasă gol ca s-o păstrezi |
 | **Adresă expeditor** · **Nume expeditor** · **Adresă de răspuns** | |
 | **Timp de așteptare** | Secunde |
-| **Acceptă un certificat nevalid** | *Doar pentru un releu intern cu certificat autosemnat.* Elimină protecția de pe traseu |
+| **Acceptă un certificat invalid** | *Doar pentru un releu intern cu certificat autosemnat.* Elimină protecția de pe traseu |
 
 Starea este declarată limpede: **„E-mailul este configurat"**, sau:
 
-> *„Niciun server de poștă configurat. Mesajele sunt scrise în jurnalul serverului în loc să fie
+> *„Niciun server de e-mail configurat. Mesajele sunt scrise în jurnalul serverului în loc să fie
 > trimise."*
 
-**Nu configurați nimic și aplicația funcționează în continuare.** Linkurile de autentificare, cele
+**Nu configura nimic și aplicația funcționează în continuare.** Linkurile de autentificare, cele
 de confirmare și codurile ajung în jurnalul serverului. Acesta este un mod legitim de a rula o
 instalare mică — atâta timp cât cine are nevoie de un link poate citi jurnalul.
 
@@ -66,7 +66,7 @@ este pornită anume**, o persoană nu le poate trimite în șir, iar cheltuiala 
 > jumătate mai puține mesaje către membrii care citesc în română decât către cei care citesc în
 > engleză**.
 
-Stabiliți plafonul având asta în minte și spuneți-i cui scrie anunțuri.
+Stabilește plafonul având asta în minte și spune-i cui scrie anunțuri.
 
 ## Politica de autentificare
 
@@ -74,12 +74,12 @@ Ce cere autentificarea — inclusiv ce metode de autentificare în doi pași ofe
 
 | | |
 |---|---|
-| **Trimiteți un mesaj de confirmare la crearea unui cont** | |
-| **Cereți o adresă confirmată pentru autentificare** | Un cont neconfirmat este refuzat la autentificare și i se oferă un nou mesaj de confirmare. *„Nu are efect până când nu este configurat un server de e-mail — altfel nimeni nu ar putea confirma."* |
-| **Permiteți aplicații de autentificare** · **Permiteți coduri prin e-mail** · **Permiteți coduri prin SMS** | Codurile prin e-mail au nevoie de un server de e-mail, cele prin SMS de o poartă SMS. *„Cea mai slabă dintre cele trei: un număr poate fi mutat pe altă cartelă convingând operatorul de telefonie."* |
+| **Trimite un mesaj de confirmare la crearea unui cont** | |
+| **Cere o adresă confirmată pentru autentificare** | Un cont neconfirmat este refuzat la autentificare și i se oferă un nou mesaj de confirmare. *„Nu are efect până când nu este configurat un server de e-mail — altfel nimeni nu ar putea confirma."* |
+| **Permite aplicații de autentificare** · **Permite coduri prin e-mail** · **Permite coduri prin SMS** | Codurile prin e-mail au nevoie de un server de e-mail, cele prin SMS de o poartă SMS. *„Cea mai slabă dintre cele trei: un număr poate fi mutat pe altă cartelă convingând operatorul de telefonie."* |
 | **Valabilitatea codului (minute)** · **Pauză între coduri (secunde)** | Pentru codurile prin e-mail și prin SMS |
 
-Metodele neactivate aici sunt marcate *„Neactivată pe această instalare"* pe paginile de securitate
+Metodele neactivate aici sunt marcate *„Nu este activată pe această instalare."* pe paginile de securitate
 ale membrilor.
 
 Aceleași coduri sunt cerute și după o autentificare printr-un furnizor extern: un furnizor
@@ -101,7 +101,7 @@ Pornirea lui **nu dezvăluie niciodată o poziție**: urmărirea linkului tot d�
 **„Permite membrilor să se aboneze la calendarul lor din exterior."**
 ([detalii](location-protection.md#setarea-fluxului-de-calendar)) Oprit implicit. Pornit, fiecare
 membru poate crea adrese secrete pe care un calendar de pe telefon sau de pe calculator le
-interoghează fără autentificare; oprirea lui din nou oprește toate adresele deja date. Vedeți
+interoghează fără autentificare; oprirea lui din nou oprește toate adresele deja date. Vezi
 [Abonarea la calendar](../features/calendar-feed.md).
 
 ## Import vectorial
@@ -112,7 +112,7 @@ detectarea duplicatelor.
 
 | | |
 |---|---|
-| **Permite unui utilizator de încredere să creeze obiecte fără verificare** | Dezactivat implicit. Activarea nu lărgește cine poate crea — cel care importă are în continuare nevoie de dreptul de a crea elemente — ci doar elimină pasul intermediar |
+| **Permite unui utilizator de încredere să creeze obiecte fără verificare** | Dezactivat implicit. Activarea nu lărgește cine poate crea — cel care importă are în continuare nevoie de dreptul de a crea obiecte — ci doar elimină pasul intermediar |
 | **Caută ceva deja existent pe o rază de** | Raza de pornire pentru o verificare nouă; cel care importă o poate schimba. Se măsoară doar față de obiectele a căror poziție exactă o poate vedea cel care verifică |
 | **Numele se consideră identice peste** | Cât de asemănătoare trebuie să fie două nume, de la 0 la 1, pentru ca un obiect din apropiere să fie considerat același lucru, nu doar aproape |
 
@@ -142,7 +142,7 @@ Fiecare fundal pe care îl publică această instalare apare cu **un comutator**
 
 - **Pornirea unui fundal este o afirmație despre termenii lui.** Afișarea unei hărți pe ecran și
   punerea ei într-un fișier care apoi este trimis și tipărit sunt utilizări diferite, iar fiecare
-  furnizor o hotărăște separat pe a doua. Porniți o sursă doar după ce i-ați citit termenii; de
+  furnizor o hotărăște separat pe a doua. Pornește o sursă doar după ce i-ai citit termenii; de
   aceea este arătat grupul în care este așezată.
 - O hotărâre are efect **imediat** și se **păstrează la reporniri și actualizări**. Răspunsul
   livrat se aplică în continuare fiecărui fundal despre care nu a hotărât nimeni.
@@ -151,14 +151,14 @@ Fiecare fundal pe care îl publică această instalare apare cu **un comutator**
   care imaginea îl spune sub ea. Pagina avertizează când este cazul.
 - Fiecare hotărâre este consemnată în [istoricul de modificări](../features/history-and-audit.md).
 
-Ce fundaluri există și adresele lor rămân în fișierul-catalog al instalării — vedeți ghidul de
+Ce fundaluri există și adresele lor rămân în fișierul-catalog al instalării — vezi ghidul de
 instalare.
 
 ---
 
 ## Texte mesaje
 
-**Configurare → Texte mesaje.** Formularea fiecărui mesaj, editabilă per limbă. Vedeți
+**Configurare → Texte mesaje.** Formularea fiecărui mesaj, editabilă per limbă. Vezi
 [Vocabulare](vocabularies.md#configurare--texte-mesaje).
 
 ---
@@ -211,23 +211,23 @@ Avertismentele pe care un membru nu le poate opri ignoră fereastra — la fel �
 
 ## Anunțuri
 
-Cine este împuternicit poate scrie un rând unui grup de speologie. Vedeți
+Cine este împuternicit poate scrie un rând unui grup de speologie. Vezi
 [Persoane și cluburi](../features/people-and-clubs.md#anunțarea-unui-club).
 
-> **A avea voie să editați lista unui club nu este același lucru cu a avea voie să scrieți tuturor
+> **A avea voie să editezi lista unui club nu este același lucru cu a avea voie să scrii tuturor
 > celor de pe ea.** Cele două drepturi se acordă separat.
 
 ---
 
 ## Listă de verificare pentru probleme
 
-| Simptom | Priviți la |
+| Simptom | Uită-te la |
 |---|---|
 | Nimeni nu primește nimic | Este e-mailul *Activat*? Spune pagina *„scrise în jurnalul serverului"*? |
 | Unii primesc, alții nu | [Grila lor de notificări](../features/notifications.md) — un membru poate să fi oprit acel fel |
 | Mesajele se adună și nu pleacă niciodată | Cifra **cel mai vechi în așteptare** de pe pagina de trimitere și ce a spus capătul celălalt |
-| Mesajele text se opresc la mijlocul zilei | **Plafonul zilnic** — și amintiți-vă că numără segmente |
-| Cineva spune că un mesaj a numit o peșteră | Nu se poate. Mesajele nu numesc niciodată peșteri. Verificați dacă nu se referă la *pagina* la care a dus linkul |
+| Mesajele text se opresc la mijlocul zilei | **Plafonul zilnic** — și amintește-ți că numără segmente |
+| Cineva spune că un mesaj a numit o peșteră | Nu se poate. Mesajele nu numesc niciodată peșteri. Verifică dacă nu se referă la *pagina* la care a dus linkul |
 
 ---
 

@@ -10,60 +10,60 @@
 **Bibliotecă → Încărcări** este pentru introducerea fișierelor *în masă* și pentru evidența a ce
 a sosit împreună.
 
-Pentru câteva fișiere, trageți-le direct pe înregistrarea de care aparțin sau pe un dulap. Veniți
+Pentru câteva fișiere, trage-le direct pe înregistrarea de care aparțin sau pe un dulap. Vii
 aici când sunt sute.
 
 ---
 
 ## Înainte de a începe
 
-Pagina vă spune, din capul locului:
+Pagina îți spune, din capul locului:
 
 - **Cel mai mare fișier acceptat** — 512 MB implicit; este o setare.
-- **Spațiul rămas pentru dumneavoastră** — cota dumneavoastră, dacă instalarea stabilește una.
+- **Spațiu rămas pentru tine** — cota ta, dacă instalarea stabilește una.
 - **Tipurile acceptate**, sau *„Se acceptă orice tip de fișier"*, și orice **nu este acceptat**.
-- Dacă încărcați într-un dulap: **ce se așteaptă să poarte documentele clasate acolo**.
+- Dacă încarci într-un dulap: **ce trebuie să conțină documentele depuse acolo**.
 
 ## Încărcarea
 
-**Lăsați fișierele aici sau faceți clic pentru a le alege** — sau **Alegeți un dosar**.
+**Trage fișiere aici sau apasă pentru a le alege** — sau **Alege un folder**.
 
 Opțiuni:
 
 | Opțiune | |
 |---|---|
-| **Numiți acest lot** | Opțional. Tot ce s-a încărcat împreună se regăsește după acel nume |
-| **Etichetați tot cu** | Opțional. Eticheta se creează dacă nu există încă |
-| **Desfaceți arhivele ZIP pe server, păstrându-le dosarele** | Dosarele devin dulapuri |
+| **Numele acestui lot** | Opțional. Tot ce se încarcă împreună poate fi regăsit după acest nume |
+| **Etichetează tot cu** | Opțional. Eticheta se creează dacă nu există încă |
+| **Desfă arhivele ZIP pe server, păstrând folderele** | Dosarele devin dulapuri |
 
 ### Duplicate
 
-Dacă un fișier cu exact acest conținut este deja stocat, sunteți întrebat: **Stochează oricum**
-sau **Sari peste** — formulat diferit după cum puteți sau nu vedea documentul existent.
+Dacă un fișier cu exact acest conținut este deja stocat, ești întrebat: **Salvează oricum**
+sau **Sari peste** — formulat diferit după cum poți sau nu vedea documentul existent.
 
 ### Rezumatul
 
-*„n din m stocate · k sărite · j eșuate"*, cu un motiv pe rând:
+*„n din m salvate · k sărite · j eșuate"*, cu un motiv pe rând:
 
 | Motiv | |
 |---|---|
-| Deja stocat | Există conținut identic |
-| Mai mare decât acceptă această instalare | |
+| Deja salvat | Există conținut identic |
+| Mai mare decât acceptă instalarea | |
 | Acest tip de fișier nu este acceptat | |
-| Spațiu insuficient | Cotă |
+| Nu mai este spațiu suficient | Cotă |
 | Fișierul este gol | |
-| Această cale de dosar nu poate fi clasată | |
-| Nu aveți voie să clasați în acel dulap | |
+| Această cale de folder nu poate fi depusă | |
+| Nu ai voie să depui în acel dulap | |
 | Fișierul nu a putut fi citit | |
 | Încărcarea a eșuat | |
 
-**Reîncearcă cele n eșuate** le pune înapoi dintr-o singură apăsare.
+**Reîncearcă n eșuate** le pune înapoi dintr-o singură apăsare.
 
 ---
 
 ## Importul dintr-un dosar de pe server
 
-Dacă instalarea este configurată pentru asta: **Importă dintr-un dosar de pe server**.
+Dacă instalarea este configurată pentru asta: **Importă dintr-un director de pe server**.
 
 Copiază fișiere la care serverul poate ajunge deja, **fără să le trimită prin rețea** — răspunsul
 potrivit pentru un disc băgat în server, nu o încărcare de 40 GB pe o conexiune casnică.
@@ -82,13 +82,13 @@ Fiecare lot de încărcare este listat:
 
 | Coloană | |
 |---|---|
-| **De la** | Browser · Arhivă · Dosar de pe server |
-| **Stare** | Deschis · În rulare · Terminat · Eșuat |
-| **Numărători** | *n stocate · m sărite · j eșuate* |
+| **Sursă** | Browser · Arhivă · Director pe server |
+| **Stare** | Deschis · În lucru · Terminat · Eșuat |
+| **Numărători** | *n salvate · m sărite · j eșuate* |
 | **Încărcat** | Când |
 | **Raport** | Detaliul per fișier |
 
-Așa răspundeți peste șase luni la „ce s-a întâmplat cu cutia de scanări pe care am făcut-o în
+Așa răspunzi peste șase luni la „ce s-a întâmplat cu cutia de scanări pe care am făcut-o în
 martie".
 
 ---
@@ -99,11 +99,11 @@ Documentele încărcate ajung în [bibliotecă](documents-and-cabinets.md). **Te
 în fundal**, iar starea aceea se poate urmări pe pagina fiecărui document. Fotografiile ajung în
 [galerie](photographs.md).
 
-Dacă ați cerut să fiți anunțat, primiți o notificare când **încărcările dumneavoastră termină de
-procesat** — vedeți [Notificări](notifications.md).
+Dacă ai cerut să fii anunțat, primești o notificare când **încărcările tale termină de
+procesat** — vezi [Notificări](notifications.md).
 
-> **Ați încărcat o arhivă mare înainte ca cititorul de text sau convertorul de documente să
-> funcționeze?** Un administrator poate trece din nou peste ea — vedeți
+> **Ai încărcat o arhivă mare înainte ca cititorul de text sau convertorul de documente să
+> funcționeze?** Un administrator poate trece din nou peste ea — vezi
 > [Operațiuni de întreținere](../admin/maintenance.md).
 
 ---
