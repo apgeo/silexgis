@@ -150,15 +150,17 @@ It only ever takes away from what you can already see.
 
 **Add a layer from a saved filter…** in the layer panel draws a second (third…) question over
 the map: the entrances and features that saved filter keeps, in a colour and a symbol of their
-own, both changed from the layer's row. Up to six at once. They are switched, reordered and made
-transparent like every other layer and are kept in saved views. A layer whose filter is gone or
-cannot be run any more stays in the list marked **Unreadable** and draws nothing. Markers on
-these layers are for looking at; selection stays with the main layers. Shared links do not show
-them.
+own, both changed from the layer's row. Up to twelve at once: past six a colour comes round
+again, always with another symbol, so no two layers look alike. They are switched, reordered and
+made transparent like every other layer, are kept in saved views, and are drawn in the 3D view as
+well. A layer whose filter is gone or cannot be run any more stays in the list marked
+**Unreadable** and draws nothing. Clicking a marker on one of these layers selects it, as on the
+main layers; clicking a count lists what that layer's filter keeps there. Shared links do not
+show them.
 
 ### Quick filters
 
-Pin up to six saved filters — yours or ones shared with you — from **Saved filters** (*"Pin as a
+Pin up to twelve saved filters — yours or ones shared with you — from **Saved filters** (*"Pin as a
 quick filter"*). They appear as one-click chips on the map, in the cave registry's toolbar and on
 the feature list, on every browser you sign in to. A chip applies its filter; pressing it again
 lifts it. A chip whose filter is no longer there, or cannot be run, is greyed out and says so
@@ -209,7 +211,7 @@ at the same set both ways.
 | **Select all found (n) on the map** | Cave registry, feature list | Puts the list's whole result — not just the page on screen — into the map's selection and opens the map on it |
 | **List the caves in view** | Map, in the row under the search box beside the quick filters | Opens the cave registry on the map's filter, cut to what the map is showing |
 
-**Select all found** takes at most **200**. When the list found more, it says so with both
+**Select all found** takes at most **200** — or the number your installation set instead. When the list found more, it says so with both
 numbers — *"Selected the first 200 of 1,234 on the map — that is as many as a selection holds."*
 — and the selection keeps saying *"The first 200 of 1,234 found by the list."* The count is only
 of rows you may read, in the order the list shows them. While the selection is still exactly that
@@ -219,7 +221,9 @@ because a saved filter never keeps a place.
 
 **List the caves in view** marks the registry *"Only caves in the map's view"*, with **Show caves
 everywhere** to lift that. What is in view is decided by the server from the map's window, not
-from the markers the map happens to hold. The registry's exports and its Distributions panel
+from the markers the map happens to hold: a cave is in view when any of its entrances you are
+shown is — not only its main one — each where the map draws it for you, so an entrance you see
+only approximately counts at its approximate place. The registry's exports and its Distributions panel
 take the same window; the **KarstLink (JSON-LD)** export does not, so it is unavailable until
 you lift the window — *"Not while the list is cut to the map's window…"*. If the map's filter is a
 saved filter that cannot be read, the map says so and opens nothing; a link naming a window that

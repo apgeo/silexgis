@@ -159,15 +159,17 @@ filtru despre intrări păstrează acele intrări. Nu face decât să scoată di
 
 **Adaugă un strat dintr-un filtru salvat…** în panoul de straturi desenează peste hartă încă o
 întrebare: intrările și obiectele pe care le păstrează filtrul salvat, într-o culoare și un
-simbol proprii, schimbate din rândul stratului. Cel mult șase deodată. Se aprind, se reordonează
-și se fac transparente ca orice alt strat și se păstrează în vederile salvate. Un strat al cărui
-filtru a dispărut sau nu mai poate fi rulat rămâne în listă marcat **Ilizibil** și nu desenează
-nimic. Marcajele acestor straturi sunt doar de privit; selecția rămâne la straturile principale.
-Linkurile partajate nu le arată.
+simbol proprii, schimbate din rândul stratului. Cel mult douăsprezece deodată: după șase, o
+culoare revine, mereu cu alt simbol, așa că nu există două straturi care să arate la fel. Se
+aprind, se reordonează și se fac transparente ca orice alt strat, se păstrează în vederile salvate
+și se desenează și în vederea 3D. Un strat al cărui filtru a dispărut sau nu mai poate fi rulat
+rămâne în listă marcat **Ilizibil** și nu desenează nimic. Un clic pe un marcaj al unui astfel de
+strat îl selectează, ca pe straturile principale; un clic pe un număr listează ce păstrează acolo
+filtrul stratului. Linkurile partajate nu le arată.
 
 ### Filtre rapide
 
-Fixează până la șase filtre salvate — ale tale sau partajate cu tine — din
+Fixează până la douăsprezece filtre salvate — ale tale sau partajate cu tine — din
 **Filtre salvate** (*„Fixează ca filtru rapid"*). Apar ca butoane de un clic pe hartă, în bara
 registrului de peșteri și pe lista de obiecte, în orice browser în care te autentifici. Un
 buton aplică filtrul; apăsat din nou, îl ridică. Un buton al cărui filtru nu mai există sau nu
@@ -222,7 +224,7 @@ privi același set în ambele feluri.
 | **Selectează pe hartă tot ce s-a găsit (n)** | Registrul peșterilor, lista de obiecte | Pune tot rezultatul listei — nu doar pagina de pe ecran — în selecția hărții și deschide harta pe el |
 | **Listează peșterile din vedere** | Harta, pe rândul de sub caseta de căutare, lângă filtrele rapide | Deschide registrul peșterilor pe filtrul hărții, restrâns la ce arată harta |
 
-**Selectează … tot ce s-a găsit** ia cel mult **200**. Când lista a găsit mai multe, o spune cu
+**Selectează … tot ce s-a găsit** ia cel mult **200** — sau numărul stabilit de instalația ta. Când lista a găsit mai multe, o spune cu
 ambele numere — *„Au fost selectate primele 200 din 1.234 pe hartă — atâtea încap într-o
 selecție."* — iar selecția continuă să spună *„Primele 200 din 1.234 găsite de listă."* Se
 numără doar rândurile pe care ai voie să le citești, în ordinea în care le arată lista. Cât
@@ -233,7 +235,10 @@ un loc.
 
 **Listează peșterile din vedere** marchează registrul *„Doar peșterile din vederea hărții"*, cu
 **Arată peșterile de peste tot** ca să ridici restrângerea. Ce se află în vedere decide
-serverul, după fereastra hărții, nu după marcajele pe care harta se întâmplă să le aibă.
+serverul, după fereastra hărții, nu după marcajele pe care harta se întâmplă să le aibă: o
+peșteră este în vedere când oricare dintre intrările ei pe care ți le arată harta este — nu doar
+cea principală —, fiecare acolo unde ți-o desenează harta, așa că o intrare pe care o vezi doar
+aproximativ contează în locul ei aproximativ.
 Exporturile registrului și panoul Distribuții primesc aceeași fereastră; exportul **KarstLink
 (JSON-LD)** nu, așa că nu este disponibil până nu ridici fereastra — *„Nu cât timp lista este
 restrânsă la fereastra hărții…"*. Dacă filtrul hărții este un filtru salvat care nu poate fi

@@ -75,7 +75,7 @@ vadă cel care întreabă — restrânge, nu lărgește niciodată.
 → [Căutare și filtre](features/search-and-filters.md#filtre)
 
 **Filtru rapid** — Un filtru salvat fixat ca buton de un clic pe hartă, în registrul peșterilor și
-pe lista de obiecte. Cel mult șase; îți urmează contul.
+pe lista de obiecte. Cel mult douăsprezece; îți urmează contul.
 → [Căutare și filtre](features/search-and-filters.md#filtre-rapide)
 
 **Filtru salvat** — Un filtru păstrat sub un nume, pentru tine, pentru un grup de speologie

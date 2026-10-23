@@ -29,7 +29,7 @@ De aici:
 |---|---|
 | **Peșteră nouă** | Deschide un formular de peșteră gol |
 | **Arată-le pe hartă** | Deschide harta desenând peșterile găsite de acest filtru |
-| **Selectează pe hartă tot ce s-a găsit (n)** | Face din rezultat, până la 200, selecția hărții |
+| **Selectează pe hartă tot ce s-a găsit (n)** | Face din rezultat, până la 200 (sau numărul stabilit de instalația ta), selecția hărții |
 | **Exportă** | GeoJSON, GPX, KML, CSV sau shapefile arhivat — și [KarstLink](#partajarea-peșterilor-în-formatul-de-interschimb) — cu tot ce găsește filtrul, nu doar pagina aceasta |
 | **Peșteri și obiecte șterse** | [Readuce](#peșteri-și-obiecte-șterse) ce ai voie să restaurezi |
 

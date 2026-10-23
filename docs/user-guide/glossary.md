@@ -142,7 +142,7 @@ registered. → [Sharing](features/sharing-and-public-pages.md#printed-qr-codes)
 **Protected location** — See *Location protection*.
 
 **Quick filter** — A saved filter pinned as a one-click chip on the map, the cave registry and
-the feature list. Up to six; they follow your account.
+the feature list. Up to twelve; they follow your account.
 → [Search and filters](features/search-and-filters.md#quick-filters)
 
 **Report layout** — A club-authored template for the Word document a trip generates. Can only

@@ -15,16 +15,18 @@ feature and walkthroughs of whole jobs.
   index of each karst area and massif in view, with a key, both kept in saved views.
   The map reads the same saved filters as the cave registry: a filter narrows its entrances,
   features, survey lines and 3D walls, travels in the map's address and in saved views, can be
-  drawn as a layer of its own in its own colour and symbol, and up to six can be pinned to the
-  account as one-click quick filters on the map and the registry.
+  drawn as a layer of its own in its own colour and symbol — up to twelve, clickable, and in the
+  3D view too — and up to twelve can be pinned to the account as one-click quick filters on the
+  map and the registry.
   The backgrounds and overlays come from a catalogue the installation edits — tile addresses, and
   WMS and WMTS services, which the 3D view draws as well; an entry whose access key was not given
   is not offered rather than offered broken. Zoomed out, entrances are drawn as counts over a fixed
   grid, below a zoom the installation chooses. The map has an overview inset, a scale box that
   takes a typed scale, the selection kept in its address, and QR codes in its share dialogs.
-  **List the caves in view** opens the cave registry narrowed to the map's window, and a list opens
+  **List the caves in view** opens the cave registry narrowed to the map's window (a cave is in it
+  when any entrance the reader is shown is), and a list opens
   the map on its own filter; hovering a row rings what the map has drawn for it, and picking on the
-  map marks the row. A list's result can fill the map's **working set** — up to 200 objects, and it
+  map marks the row. A list's result can fill the map's **working set** — up to 200 objects (an installation setting), and it
   says when that cut the result short.
 - **Questions you can save, share and ask everywhere** — the cave registry, the feature list, the
   map and the object selector read one kind of filter: conditions on a record's fields, grouped as
