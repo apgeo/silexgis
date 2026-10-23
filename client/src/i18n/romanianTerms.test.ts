@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
+import en from './locales/en.json';
 import ro from './locales/ro.json';
 
 /**
@@ -21,6 +22,11 @@ function strings(node: unknown, path = ''): [string, string][] {
 }
 
 const all = strings(ro);
+const english = new Map(strings(en));
+
+function englishOf(key: string): string {
+  return english.get(key) ?? '';
+}
 
 describe('Romanian wording', () => {
   it('says a watch that is over is "încheiată", never "închisă"', () => {
@@ -59,5 +65,62 @@ describe('Romanian wording', () => {
 
     expect(offenders).toEqual([]);
     expect(ro.caveview.movie.terrain).toBe('Relieful de deasupra peșterii');
+  });
+
+  it('addresses the reader as "tu", never with the polite plural', () => {
+    // The interface spoke to its reader both ways, often on the same screen. The polite forms
+    // are found by their pronouns and by the verbs a sentence to the reader is made of; a plural
+    // participle such as "selectați" or a noun such as "pereți" is not one of them.
+    const polite =
+      /(?<!\p{L})(dumneavoastr\p{L}*|vă|vi|v-a|v-ați|ați|puteți|aveți|sunteți|doriți|vedeți|alegeți|introduceți|încercați|apăsați|deschideți|verificați|copiați|ștergeți|salvați|reveniți)(?!\p{L})/iu;
+    const offenders = all.filter(([, text]) => polite.test(text)).map(([key]) => key);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('calls a centerline "drumuire" and a line plot "model de drumuire"', () => {
+    const offenders = all
+      .filter(([, text]) => /poligona(ți|l)|plan(ul|uri|urile|ului)? de linii/iu.test(text))
+      .map(([key]) => key);
+
+    expect(offenders).toEqual([]);
+    expect(ro.features.kinds.centerline).toBe('Drumuire');
+  });
+
+  it('calls a feature "obiect" and its kind "tip de obiect"', () => {
+    // "Element", "fenomen" and "obiectiv" all stood for the same record on the map. A surface
+    // feature keeps its karst name, "fenomen de suprafață"; "element" stays for a member of a
+    // link, which is not a feature.
+    const offenders = all
+      .filter(([key, text]) => {
+        const aboutLinkItems = key.startsWith('resLinks.') || key.startsWith('admin.relationTypes.');
+        return (
+          /(?<!\p{L})fenomen(?!(e|ul|ului|elor|ele)? de suprafa)/iu.test(text) ||
+          /tip(ul|uri|urile)? de fenomen/iu.test(text) ||
+          (!aboutLinkItems && /tip(ul|uri|urile)? de element/iu.test(text)) ||
+          (!aboutLinkItems &&
+            /(?<!\p{L})element(e|ul|ului|elor|ele)?(?!\p{L})/iu.test(text) &&
+            /\bfeature/i.test(englishOf(key)))
+        );
+      })
+      .map(([key]) => key);
+
+    expect(offenders).toEqual([]);
+    expect(ro.admin.featureTypes.title).toBe('Tipuri de obiecte');
+  });
+
+  it('calls the set of caves the "registru", keeping "cadastral" for land', () => {
+    // The national cave cadastre is the name of an outside register and keeps its own word.
+    const offenders = all
+      .filter(([key, text]) => key !== 'externalIds.systems.national_cadastre' && /cadastr(?!al)/iu.test(text))
+      .map(([key]) => key);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('names what is kept in one browser with one label', () => {
+    expect(ro.panel.layoutKeptHere).toBe('Doar în acest browser');
+    expect(ro.settings.accessibility.deviceOnly).toBe('Doar în acest browser');
+    expect(all.filter(([, text]) => /Doar acest browser/u.test(text)).map(([key]) => key)).toEqual([]);
   });
 });

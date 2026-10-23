@@ -183,7 +183,7 @@ describe('the saved filters screen', () => {
 
   it.each([
     ['en', 'You', 'A club member'],
-    ['ro', 'Dumneavoastră', 'Un membru al clubului'],
+    ['ro', 'Tu', 'Un membru al clubului'],
   ])('names who saved each filter, in %s', async (language, you, someone) => {
     await i18n.changeLanguage(language);
     filters.current = [

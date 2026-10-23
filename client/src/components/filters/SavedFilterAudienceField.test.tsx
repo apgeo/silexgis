@@ -195,7 +195,7 @@ describe('the audience where a filter is saved from the cave registry', () => {
     expect(within(dialog).getByTestId('saved-filter-audience-explanation')).toHaveTextContent(
       'Toți cei autentificați îl pot folosi',
     );
-    expect(within(dialog).getByRole('link', { name: /Schimbați alegerea implicită/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: /Schimbă alegerea implicită/ })).toBeInTheDocument();
   });
 });
 

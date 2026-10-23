@@ -134,7 +134,7 @@ describe('the withheld survey-lines notice on the map', () => {
       render(notice());
       expect(
         screen.getByRole('button', {
-          name: '2 poligonale ascunse la această scară — apropie harta sau deschide panoul de straturi',
+          name: '2 drumuiri ascunse la această scară — apropie harta sau deschide panoul de straturi',
         }),
       ).toBeTruthy();
     } finally {

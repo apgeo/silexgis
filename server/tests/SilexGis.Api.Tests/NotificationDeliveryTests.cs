@@ -132,8 +132,8 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
         (await DrainAsync()).ShouldBe(2);
 
         var message = factory.Messages.LastTo(RecipientEmail);
-        message.Subject.ShouldBe($"Ați fost adăugat în Notif caving group {suffix} ro");
-        message.Body.ShouldContain("v-a adăugat în grupul");
+        message.Subject.ShouldBe($"Ai fost adăugat în Notif caving group {suffix} ro");
+        message.Body.ShouldContain("te-a adăugat în grupul");
 
         // The negative half in the same test: the English wording of the same template is gone,
         // so this cannot pass on a message that merely happens to contain a Romanian word.

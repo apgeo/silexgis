@@ -248,16 +248,16 @@ public static class MessageTemplateCatalog
                     ignore this message — nothing further will happen.
                     """),
                 ["ro"] = new(
-                    "Confirmați adresa dumneavoastră {appName}",
+                    "Confirmă-ți adresa {appName}",
                     """
                     Bună ziua {displayName},
 
-                    Confirmați această adresă pentru a finaliza configurarea contului {appName}:
+                    Confirmă această adresă pentru a finaliza configurarea contului {appName}:
 
                     {url}
 
-                    Linkul este valabil {expiresHours} ore. Dacă nu dumneavoastră ați creat acest cont,
-                    ignorați acest mesaj — nu se va întâmpla nimic.
+                    Linkul este valabil {expiresHours} ore. Dacă nu tu ai creat acest cont,
+                    ignoră acest mesaj — nu se va întâmpla nimic.
                     """),
             }),
 
@@ -281,16 +281,16 @@ public static class MessageTemplateCatalog
                     unchanged. If you did not ask for this, ignore this message — nothing has changed.
                     """),
                 ["ro"] = new(
-                    "Confirmați noua adresă {appName}",
+                    "Confirmă noua adresă {appName}",
                     """
                     Bună ziua {displayName},
 
-                    Confirmați această adresă pentru a deveni adresa contului dumneavoastră {appName}:
+                    Confirmă această adresă pentru a deveni adresa contului tău {appName}:
 
                     {url}
 
                     Linkul este valabil {expiresHours} ore. Până atunci adresa actuală rămâne neschimbată.
-                    Dacă nu dumneavoastră ați cerut acest lucru, ignorați mesajul — nimic nu s-a schimbat.
+                    Dacă nu tu ai cerut acest lucru, ignoră mesajul — nimic nu s-a schimbat.
                     """),
             }),
 
@@ -314,16 +314,16 @@ public static class MessageTemplateCatalog
                     ask for a reset, ignore this message — your password stays as it is.
                     """),
                 ["ro"] = new(
-                    "Resetați parola {appName}",
+                    "Resetează parola {appName}",
                     """
                     Bună ziua {displayName},
 
-                    Deschideți acest link pentru a alege o parolă nouă:
+                    Deschide acest link pentru a alege o parolă nouă:
 
                     {url}
 
                     Linkul este valabil {expiresHours} ore și poate fi folosit o singură dată. Dacă nu
-                    dumneavoastră ați cerut resetarea, ignorați mesajul — parola rămâne neschimbată.
+                    tu ai cerut resetarea, ignoră mesajul — parola rămâne neschimbată.
                     """),
             }),
 
@@ -350,19 +350,19 @@ public static class MessageTemplateCatalog
                     ask whoever runs {appName} to send you a new one.
                     """),
                 ["ro"] = new(
-                    "Contul dumneavoastră {appName} este pregătit",
+                    "Contul tău {appName} este pregătit",
                     """
                     Bună ziua {displayName},
 
-                    V-a fost deschis un cont în {appName}. Vă autentificați cu această adresă:
+                    Ți-a fost deschis un cont în {appName}. Te autentifici cu această adresă:
                     {email}
 
-                    Deschideți acest link pentru a vă alege parola:
+                    Deschide acest link pentru a-ți alege parola:
 
                     {url}
 
                     Linkul este valabil {expiresHours} ore și poate fi folosit o singură dată. Dacă expiră,
-                    cereți celor care administrează {appName} să vă trimită unul nou.
+                    cere-le celor care administrează {appName} să-ți trimită unul nou.
                     """),
             }),
 
@@ -384,13 +384,13 @@ public static class MessageTemplateCatalog
                     as soon as you can.
                     """),
                 ["ro"] = new(
-                    "{code} este codul dumneavoastră de autentificare {appName}",
+                    "{code} este codul tău de autentificare {appName}",
                     """
                     Bună ziua {displayName},
 
                     Codul de autentificare este {code}. Expiră în {expiresMinutes} minute.
 
-                    Dacă nu vă autentificați chiar acum, altcineva vă cunoaște parola — schimbați-o
+                    Dacă nu te autentifici chiar acum, altcineva îți cunoaște parola — schimb-o
                     cât mai curând.
                     """),
             }),
@@ -403,7 +403,7 @@ public static class MessageTemplateCatalog
             new Dictionary<string, MessageTemplateText>
             {
                 ["en"] = new(null, "{code} is your {appName} sign-in code. It expires in {expiresMinutes} minutes."),
-                ["ro"] = new(null, "{code} este codul dumneavoastră de autentificare {appName}. Expiră în {expiresMinutes} minute."),
+                ["ro"] = new(null, "{code} este codul tău de autentificare {appName}. Expiră în {expiresMinutes} minute."),
             }),
 
         new(
@@ -414,7 +414,7 @@ public static class MessageTemplateCatalog
             new Dictionary<string, MessageTemplateText>
             {
                 ["en"] = new(null, "{code} is your {appName} phone verification code. It expires in {expiresMinutes} minutes."),
-                ["ro"] = new(null, "{code} este codul dumneavoastră de verificare a telefonului {appName}. Expiră în {expiresMinutes} minute."),
+                ["ro"] = new(null, "{code} este codul tău de verificare a telefonului {appName}. Expiră în {expiresMinutes} minute."),
             }),
 
         new(
@@ -436,11 +436,11 @@ public static class MessageTemplateCatalog
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Ați fost adăugat în {cavingGroupName}",
+                    "Ai fost adăugat în {cavingGroupName}",
                     """
                     Bună ziua {displayName},
 
-                    {actorName} v-a adăugat în grupul {cavingGroupName} pe {appName}.
+                    {actorName} te-a adăugat în grupul {cavingGroupName} pe {appName}.
 
                     {siteUrl}
 
@@ -468,11 +468,11 @@ public static class MessageTemplateCatalog
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Rolul dumneavoastră în {cavingGroupName} s-a schimbat",
+                    "Rolul tău în {cavingGroupName} s-a schimbat",
                     """
                     Bună ziua {displayName},
 
-                    {actorName} v-a schimbat rolul în grupul {cavingGroupName}. Puteți vedea ce puteți face
+                    {actorName} ți-a schimbat rolul în grupul {cavingGroupName}. Poți vedea ce poți face
                     acum din pagina grupului:
 
                     {siteUrl}
@@ -499,12 +499,12 @@ public static class MessageTemplateCatalog
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Ați fost eliminat din {cavingGroupName}",
+                    "Ai fost eliminat din {cavingGroupName}",
                     """
                     Bună ziua {displayName},
 
-                    {actorName} v-a eliminat din grupul {cavingGroupName} pe {appName}. Este posibil să nu
-                    mai aveți acces la ce mai vedea acel grup.
+                    {actorName} te-a eliminat din grupul {cavingGroupName} pe {appName}. Este posibil să nu
+                    mai ai acces la ce mai vedea acel grup.
 
                     {unsubscribeUrl}
                     """),
@@ -564,7 +564,7 @@ public static class MessageTemplateCatalog
             new Dictionary<string, MessageTemplateText>
             {
                 ["en"] = new(null, "{appName}: {actorName} wrote to {cavingGroupName}. Read it at {url}"),
-                ["ro"] = new(null, "{appName}: {actorName} a scris grupului {cavingGroupName}. Citiți mesajul la {url}"),
+                ["ro"] = new(null, "{appName}: {actorName} a scris grupului {cavingGroupName}. Citește mesajul la {url}"),
             }),
 
         new(
@@ -586,11 +586,11 @@ public static class MessageTemplateCatalog
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Ați primit acces la {objectName}",
+                    "Ai primit acces la {objectName}",
                     """
                     Bună ziua {displayName},
 
-                    {actorName} v-a dat acces la {objectName} pe {appName}:
+                    {actorName} ți-a dat acces la {objectName} pe {appName}:
 
                     {url}
 
@@ -617,11 +617,11 @@ public static class MessageTemplateCatalog
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Ați fost trecut în tura {tripTitle}",
+                    "Ai fost trecut în tura {tripTitle}",
                     """
                     Bună ziua {displayName},
 
-                    {actorName} v-a trecut ca participant la {tripTitle} în data de {tripDate}:
+                    {actorName} te-a trecut ca participant la {tripTitle} în data de {tripDate}:
 
                     {url}
 
@@ -660,7 +660,7 @@ public static class MessageTemplateCatalog
                     linkul poate deschide acum o pagină care arată cine a fost în tură, cum îi
                     numește pagina pe fiecare și unde a fost raportat ultima dată fiecare — fără cont.
 
-                    Deschideți tura pentru a vedea cum vă numește pagina și până când funcționează
+                    Deschide tura pentru a vedea cum te numește pagina și până când funcționează
                     linkul:
 
                     {url}
@@ -688,11 +688,11 @@ public static class MessageTemplateCatalog
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Ați fost invitat la {tripTitle}",
+                    "Ai fost invitat la {tripTitle}",
                     """
                     Bună ziua {displayName},
 
-                    {actorName} v-a invitat la {tripTitle} în data de {tripDate}. Puteți răspunde aici:
+                    {actorName} te-a invitat la {tripTitle} în data de {tripDate}. Poți răspunde aici:
 
                     {url}
 
@@ -785,7 +785,7 @@ public static class MessageTemplateCatalog
                     """
                     Bună ziua {displayName},
 
-                    {tripTitle} are loc în data de {tripDate}. Ce s-a stabilit pentru ea găsiți aici:
+                    {tripTitle} are loc în data de {tripDate}. Ce s-a stabilit pentru ea găsești aici:
 
                     {url}
 
@@ -820,10 +820,10 @@ public static class MessageTemplateCatalog
                     Bună ziua {displayName},
 
                     {tripTitle} din data de {tripDate} trebuia să se încheie până la
-                    {expectedReturn}, iar nimeni nu a confirmat că echipa a ieșit. Primiți acest
-                    mesaj pentru că tura vă numește.
+                    {expectedReturn}, iar nimeni nu a confirmat că echipa a ieșit. Primești acest
+                    mesaj pentru că tura te numește.
 
-                    Dacă știți că echipa este în siguranță, confirmați aici — o poate face oricine
+                    Dacă știi că echipa este în siguranță, confirmă aici — o poate face oricine
                     este numit pe tură:
 
                     {url}
@@ -893,14 +893,13 @@ public static class MessageTemplateCatalog
                     {inviteeName} nu are acces. Invitația la o tură nu acordă acces: numai cineva
                     care poate schimba permisiunile peșterii poate face asta. Legătura de mai jos
                     le deschide cu accesul de citire pentru {inviteeName} deja propus; nimic nu se
-                    acordă până nu confirmați acolo.
+                    acordă până nu confirmi acolo.
 
                     {url}
 
                     Acest mesaj ajunge la proprietarul peșterii și la administratorii deplini, și la
                     nimeni altcineva — cineva care poate acorda acces altfel, printr-un club de
-                    exemplu, nu a fost înștiințat. Vă rugăm să-l transmiteți mai departe dacă nu vă
-                    revine dumneavoastră.
+                    exemplu, nu a fost înștiințat. Transmite-l mai departe dacă nu ține de tine.
 
                     {unsubscribeUrl}
                     """),
@@ -929,7 +928,7 @@ public static class MessageTemplateCatalog
                     """
                     Bună ziua {displayName},
 
-                    {eventTitle} are loc în data de {eventDate}. Ce s-a stabilit pentru el găsiți aici:
+                    {eventTitle} are loc în data de {eventDate}. Ce s-a stabilit pentru el găsești aici:
 
                     {url}
 
@@ -956,12 +955,12 @@ public static class MessageTemplateCatalog
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "{actorName} a răspuns la comentariul dumneavoastră de la {documentTitle}",
+                    "{actorName} a răspuns la comentariul tău de la {documentTitle}",
                     """
                     Bună ziua {displayName},
 
-                    {actorName} a răspuns la comentariul dumneavoastră de la {documentTitle}. Îl
-                    puteți citi aici:
+                    {actorName} a răspuns la comentariul tău de la {documentTitle}. Îl
+                    poți citi aici:
 
                     {url}
 
@@ -993,8 +992,8 @@ public static class MessageTemplateCatalog
                     """
                     Bună ziua {displayName},
 
-                    {actorName} a lăsat un comentariu la {documentTitle}, care vă aparține. Îl
-                    puteți citi aici:
+                    {actorName} a lăsat un comentariu la {documentTitle}, care îți aparține. Îl
+                    poți citi aici:
 
                     {url}
 
@@ -1021,11 +1020,11 @@ public static class MessageTemplateCatalog
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Sarcina dumneavoastră {appName} s-a încheiat",
+                    "Sarcina ta {appName} s-a încheiat",
                     """
                     Bună ziua {displayName},
 
-                    O sarcină pe care ați pornit-o s-a încheiat, iar rezultatul este gata:
+                    O sarcină pe care ai pornit-o s-a încheiat, iar rezultatul este gata:
 
                     {siteUrl}
 
@@ -1054,15 +1053,15 @@ public static class MessageTemplateCatalog
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Sarcina dumneavoastră {appName} nu a putut fi finalizată",
+                    "Sarcina ta {appName} nu a putut fi finalizată",
                     """
                     Bună ziua {displayName},
 
-                    O sarcină pe care ați pornit-o nu a putut fi finalizată:
+                    O sarcină pe care ai pornit-o nu a putut fi finalizată:
 
                     {error}
 
-                    Puteți încerca din nou de la {siteUrl} — dacă eșuează în continuare, anunțați un
+                    Poți încerca din nou de la {siteUrl} — dacă eșuează în continuare, anunță un
                     administrator.
 
                     {unsubscribeUrl}
@@ -1091,14 +1090,14 @@ public static class MessageTemplateCatalog
                     {siteUrl}
                     """),
                 ["ro"] = new(
-                    "Parola contului dumneavoastră {appName} a fost schimbată",
+                    "Parola contului tău {appName} a fost schimbată",
                     """
                     Bună ziua {displayName},
 
-                    Parola contului dumneavoastră {appName} tocmai a fost schimbată.
+                    Parola contului tău {appName} tocmai a fost schimbată.
 
-                    Dacă dumneavoastră ați făcut acest lucru, nu mai este nimic de făcut. Dacă nu,
-                    altcineva are acces la contul dumneavoastră — resetați parola imediat și anunțați
+                    Dacă tu ai făcut acest lucru, nu mai este nimic de făcut. Dacă nu,
+                    altcineva are acces la contul tău — resetează parola imediat și anunță
                     un administrator:
 
                     {siteUrl}
@@ -1126,15 +1125,15 @@ public static class MessageTemplateCatalog
                     {siteUrl}
                     """),
                 ["ro"] = new(
-                    "Adresa contului dumneavoastră {appName} a fost schimbată",
+                    "Adresa contului tău {appName} a fost schimbată",
                     """
                     Bună ziua {displayName},
 
-                    Adresa contului dumneavoastră {appName} a fost schimbată în {newEmail}. Acesta
+                    Adresa contului tău {appName} a fost schimbată în {newEmail}. Acesta
                     este ultimul mesaj primit la această adresă.
 
-                    Dacă nu dumneavoastră ați făcut acest lucru, altcineva are acces la contul
-                    dumneavoastră — anunțați imediat un administrator, deoarece nu mai puteți reseta
+                    Dacă nu tu ai făcut acest lucru, altcineva are acces la contul
+                    tău — anunță imediat un administrator, deoarece nu mai poți reseta
                     singur parola:
 
                     {siteUrl}
@@ -1165,10 +1164,10 @@ public static class MessageTemplateCatalog
                     """
                     Bună ziua {displayName},
 
-                    Autentificarea în doi pași a fost dezactivată pe contul dumneavoastră {appName}.
+                    Autentificarea în doi pași a fost dezactivată pe contul tău {appName}.
                     Parola este acum singurul lucru care îl protejează.
 
-                    Dacă nu dumneavoastră ați făcut acest lucru, reactivați-o și schimbați-vă parola:
+                    Dacă nu tu ai făcut acest lucru, reactiveaz-o și schimbă-ți parola:
 
                     {siteUrl}
                     """),
@@ -1195,7 +1194,7 @@ public static class MessageTemplateCatalog
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Rezumatul dumneavoastră {appName}: {itemCount} noutăți",
+                    "Rezumatul tău {appName}: {itemCount} noutăți",
                     """
                     Bună ziua {displayName},
 
