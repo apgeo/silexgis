@@ -4,6 +4,7 @@ using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.Geo;
 
 namespace SilexGis.Api.Features.Features;
@@ -167,12 +168,8 @@ internal static class FeatureMapping
     /// paths non-exactly — they are withheld before mapping); generic kinds carry theirs
     /// on the feature type. An unknown type withholds — fail closed.
     /// </summary>
-    public static ProtectedDisplay DisplayPolicy(Feature f, FeatureType? featureType) => f.Kind switch
-    {
-        FeatureKind.Cave or FeatureKind.CaveEntrance => ProtectedDisplay.SnapPoint,
-        FeatureKind.Generic => featureType?.ProtectedDisplay ?? ProtectedDisplay.Withhold,
-        _ => ProtectedDisplay.Withhold,
-    };
+    public static ProtectedDisplay DisplayPolicy(Feature f, FeatureType? featureType) =>
+        FeatureDisplay.PolicyOf(f.Kind, featureType?.ProtectedDisplay);
 
     /// <summary>
     /// Applies location protection to the geometry a caller is shown: exact view passes

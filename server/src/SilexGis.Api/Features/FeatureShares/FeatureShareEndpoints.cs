@@ -10,6 +10,7 @@ using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Access;
 using SilexGis.Infrastructure.Permissions;
@@ -311,8 +312,9 @@ public static class FeatureShareEndpoints
 
     /// <summary>
     /// Feature-type ids whose protected display is total withholding, among the types of
-    /// the generic rows the caller may NOT view exactly (the only rows the setting can
-    /// affect). Subtyped kinds carry their policy in code, not in feature_types.
+    /// the rows the caller may NOT view exactly. Only a generic row's type is ever consulted
+    /// (<see cref="IsWithheld"/> decides by kind first); a cave's type is collected here and
+    /// read by nothing.
     /// </summary>
     private static async Task<HashSet<long>> WithholdTypeIdsAsync(
         SilexGisDbContext db,
@@ -347,10 +349,18 @@ public static class FeatureShareEndpoints
         return [.. withheld];
     }
 
-    /// <summary>Whole-row withholding for non-exact viewers, by kind/type.</summary>
+    /// <summary>
+    /// Whole-row withholding for non-exact viewers: by kind first, and by the type only for a
+    /// generic row. A cave carries a type too, and its type's stored display is never what decides
+    /// whether a protected cave is shown snapped or not at all.
+    /// </summary>
     private static bool IsWithheld(FeatureKind kind, long? featureTypeId, HashSet<long> withholdTypeIds) =>
-        kind == FeatureKind.Centerline
-        || (featureTypeId is not null && withholdTypeIds.Contains(featureTypeId.Value));
+        FeatureDisplay.PolicyOf(
+            kind,
+            featureTypeId is { } typeId && withholdTypeIds.Contains(typeId)
+                ? ProtectedDisplay.Withhold
+                : ProtectedDisplay.SnapPoint)
+        == ProtectedDisplay.Withhold;
 
     private static SharedFeatureEnvelopeDto ToEnvelope(
         Feature f, bool exact, double gridMeters, IReadOnlyList<SharedFeatureChildDto>? children)

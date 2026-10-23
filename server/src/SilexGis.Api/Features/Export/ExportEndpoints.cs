@@ -8,6 +8,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Geodata;
@@ -339,7 +340,8 @@ public static class ExportEndpoints
                 // polygons and multi-part geometries disclose shape and extent however coarse
                 // the grid. Dropping the row is the only safe degradation — an export must
                 // never carry a precise coordinate the caller may not see.
-                if (type?.ProtectedDisplay == ProtectedDisplay.Withhold || geom is not Point point)
+                if (FeatureDisplay.PolicyOf(row.Kind, type?.ProtectedDisplay) == ProtectedDisplay.Withhold
+                    || geom is not Point point)
                 {
                     continue;
                 }
