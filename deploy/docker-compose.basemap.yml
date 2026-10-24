@@ -1,0 +1,45 @@
+# Basemap overlay: the tile server for the installation's own vector basemap — OpenStreetMap vector
+# tiles of a region an administrator downloads from the map-backgrounds administration page, drawn
+# with a style this application ships and served from this installation alone.
+#
+# In the default install: the sample .env names this file in COMPOSE_FILE. Without it the stack is
+# what it always was — no extra service, no extra image — and the application does not offer the
+# self-hosted basemap at all.
+#
+# Usage, if COMPOSE_FILE does not already name it:
+#   docker compose -f docker-compose.yml -f docker-compose.basemap.yml up -d
+#
+# What runs: Martin (https://maplibre.org/martin/, Apache-2.0), reading the basemap volume
+# read-only. It publishes no port. The web service's nginx passes it the tile addresses of the
+# current extract only — /basemap/tiles/<extract>/<z>/<x>/<y> — and nothing else of Martin's is
+# reachable. Each download is written under a new name and served under it, so an address is never
+# reused and the tiles can be cached for a year; Martin picks a new extract up as it appears and
+# drops the old one when it is removed, with no restart.
+#
+# Nothing is downloaded when this starts: the volume is empty until an administrator downloads a
+# region, and until then the page says so and the map does not offer the entry.
+#
+# The image is large — about 900 MB, most of it the libraries Martin uses to draw styles, which this
+# installation does not ask of it — and that is the reason this is an overlay: an installation that
+# does not want a basemap of its own can drop this file from COMPOSE_FILE and never download it.
+name: silexgis
+
+services:
+  api:
+    environment:
+      SILEXGIS__Basemap__SelfHosted: "true"
+
+  martin:
+    # Pinned to a released version that had been out for more than two weeks when it was chosen.
+    image: ghcr.io/maplibre/martin:1.16.1
+    # The directory, given on the command line, is watched: an extract that appears is served, one
+    # that goes is dropped. A file still being written carries another extension and is not read.
+    command: ["/data"]
+    volumes:
+      - silexgis-basemap:/data:ro
+    restart: unless-stopped
+    # No published port: nginx in the web service is the only way in, and it passes tile requests
+    # alone.
+
+volumes:
+  silexgis-basemap:

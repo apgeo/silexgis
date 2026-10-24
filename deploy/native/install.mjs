@@ -367,6 +367,13 @@ export async function main(argv) {
       SILEXGIS__Terrain__BuildRoot: { value: path.join(layout.terrainDir, 'builds'), force: dataChanged },
       SILEXGIS__Terrain__SpoolRoot: { value: path.join(layout.terrainDir, 'spool'), force: dataChanged },
       SILEXGIS__Terrain__PublishRoot: { value: path.join(layout.terrainDir, 'published'), force: dataChanged },
+      // The self-hosted basemap needs a tile server this installer does not set up; an operator who
+      // runs one switches it on, and a value already here is kept.
+      SILEXGIS__Basemap__SelfHosted: {
+        value: 'false',
+        force: false,
+        comment: 'No tile server for an own basemap is installed here; see "Your own basemap" in INSTALL.md.',
+      },
     };
     const newEnv = mergeEnvFile(envText === '' ? ENV_HEADER : envText, updates);
     if (newEnv !== envText) {
