@@ -10228,6 +10228,11 @@ export interface components {
             subtitle: null | string;
             symbol: null | string;
             placeable: boolean;
+            matched: null | components["schemas"]["FilterHitMatchDto"];
+        };
+        FilterHitMatchDto: {
+            field: string;
+            text: string;
         };
         FilterLimitsDto: {
             /** Format: int32 */
@@ -11006,6 +11011,7 @@ export interface components {
             meshAskAboveBytes: number;
             /** Format: int32 */
             selectionMax: number;
+            densityFixedBands: number[];
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";
