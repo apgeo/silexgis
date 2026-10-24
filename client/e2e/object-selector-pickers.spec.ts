@@ -66,18 +66,23 @@ test('the closest-approach picker offers other caves only, and is worked from th
   await expect(found.filter({ hasText: 'Peștera Demo Ursului' })).toHaveCount(1, { timeout: 15_000 });
   await expect(page.getByTestId('closest-approach-other-matched').first()).toHaveText('code DEMO-0004');
 
+  // The list is fetched, so its answer is waited for: until it arrives the rows on screen are still
+  // the code search's, and a first row read off them is not the one the arrow will reach. Every
+  // demonstration cave carries "Demo" in its name, so the answer is not empty — and the list never
+  // holds the cave this page is about.
+  const answered = page.waitForResponse(
+    (r) => r.url().includes('/api/v1/filters/query') && (r.request().postData() ?? '').includes('"Demo"'),
+  );
   await box.fill('Demo');
-
-  // The list is fetched, so the first row is waited for. Every demonstration cave carries "Demo"
-  // in its name, so the answer is not empty — and it never holds the cave this page is about.
+  const answer = (await (await answered).json()) as QueryAnswer;
+  const firstTitle = answer.worlds.flatMap((w) => w.hits.map((h) => h.title)).find((title) => title !== own) ?? '';
+  expect(firstTitle.length, 'the answer holds a cave other than this one').toBeGreaterThan(0);
   const rows = page.getByTestId('closest-approach-other-row');
-  await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+  await expect(rows.first().locator('.ant-typography').first()).toHaveText(firstTitle, { timeout: 15_000 });
   await expect(rows.filter({ hasText: own })).toHaveCount(0);
 
   // Keyboard only: the down arrow reaches the first row from the box, Enter chooses it, and the
   // single-choice control closes and names what was chosen on its trigger.
-  const firstTitle = (await rows.first().locator('.ant-typography').first().innerText()).trim();
-  expect(firstTitle.length).toBeGreaterThan(0);
   await box.press('ArrowDown');
   await expect(rows.first().getByRole('button').first()).toBeFocused();
   await page.keyboard.press('Enter');
