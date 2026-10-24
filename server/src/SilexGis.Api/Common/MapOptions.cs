@@ -43,6 +43,74 @@ public sealed class MapOptions
     public int KarstIndexMaxAreas { get; set; } = 500;
 
     /// <summary>
+    /// The fixed bands the cave-density layer can colour by, as the upper bounds of each band in
+    /// caves per square kilometre, ascending and separated by commas: <c>1,5,20</c> is 0–1, 1–5,
+    /// 5–20 and more than 20.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The layer colours relative to the view by default — its darkest colour is the densest cell
+    /// on screen — which reads one view well and makes two views comparable only through the
+    /// legend's numbers. Fixed bands mean the same colour everywhere, which is what comparing
+    /// regions needs, and a reader chooses between the two in the layer's settings. Only the
+    /// colouring changes: the counts, the cells and the protection grid under them are the same.
+    /// </para>
+    /// <para>
+    /// Refused at start unless it is one to <see cref="DensityFixedBandsMaxBounds"/> positive
+    /// numbers, each larger than the one before. The default suits a karst region's register; an
+    /// installation whose caves sit much more thickly or thinly can move the bounds, since bounds
+    /// that do not fit the register leave a whole region in one colour.
+    /// </para>
+    /// </remarks>
+    public string DensityFixedBands { get; set; } = "1,5,20";
+
+    /// <summary>
+    /// The most bounds <see cref="DensityFixedBands"/> may hold: the map's density ramp has five
+    /// colours, and each bound adds a band above it.
+    /// </summary>
+    public const int DensityFixedBandsMaxBounds = 4;
+
+    /// <summary>
+    /// Reads a list of fixed density band bounds, or says it is not one: one to
+    /// <see cref="DensityFixedBandsMaxBounds"/> finite positive numbers, strictly ascending, written
+    /// with a point as the decimal separator whatever the server's language.
+    /// </summary>
+    public static bool TryParseDensityBands(string? text, out double[] bounds)
+    {
+        bounds = [];
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var parts = text.Split(',', StringSplitOptions.TrimEntries);
+        if (parts.Length > DensityFixedBandsMaxBounds)
+        {
+            return false;
+        }
+
+        var parsed = new double[parts.Length];
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (!double.TryParse(parts[i], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var value)
+                || !double.IsFinite(value) || value <= 0 || (i > 0 && value <= parsed[i - 1]))
+            {
+                return false;
+            }
+
+            parsed[i] = value;
+        }
+
+        bounds = parsed;
+        return true;
+    }
+
+    /// <summary>The configured bounds; the options are validated at start, so they always read.</summary>
+    public IReadOnlyList<double> DensityFixedBandBounds() =>
+        TryParseDensityBands(DensityFixedBands, out var bounds) ? bounds : [];
+
+    /// <summary>
     /// Below this zoom the entrance layer answers with clusters — counts over a fixed global
     /// lattice — instead of individual entrances; from it up, with points.
     /// </summary>

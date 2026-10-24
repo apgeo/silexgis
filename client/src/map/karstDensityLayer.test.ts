@@ -6,6 +6,7 @@ import { ApiError } from '../api/client.ts';
 import type { DensityCell, DensityGrid, DensityQuery } from '../api/hooks.ts';
 import { fetchSteppedDensity, TOO_MANY_CELLS } from './densityCells.ts';
 import { bandOf, densityBandMaxima, densityCellFeatures } from './karstDensityLayer.ts';
+import { densityBandFill, karstDensityPalette } from './markerPalette.ts';
 
 // Invented cells and grids: the shapes the density route answers with, none of it real.
 
@@ -99,6 +100,37 @@ describe('density cell polygons', () => {
     expect(bandOf(0.1, maxima)).toBe(0);
     expect(bandOf(0, maxima)).toBeNull();
     expect(densityBandMaxima(cells, 'hotSpot')).toEqual([]);
+  });
+
+  it('bands by the installation\'s fixed bounds when asked, the same whatever else is in view', () => {
+    const bounds = [1, 5, 20];
+    const sparse = [cell({ densityPerKm2: 0.5 }), cell({ densityPerKm2: 3 })];
+    const dense = [cell({ densityPerKm2: 0.5 }), cell({ densityPerKm2: 3 }), cell({ densityPerKm2: 400 })];
+    const maxima = densityBandMaxima(sparse, 'density', 'fixed', bounds);
+    expect(maxima).toEqual([1, 5, 20, Infinity]);
+    // The open-ended band takes everything above the last bound.
+    expect(bandOf(400, densityBandMaxima(dense, 'density', 'fixed', bounds))).toBe(3);
+    // The same cell is the same colour beside a much denser one — unlike relative bands, where a
+    // dense neighbour pales every other cell.
+    const fillOf = (cells: ReturnType<typeof cell>[], scheme: 'relative' | 'fixed') =>
+      densityCellFeatures(cells, 'density', 1.96, scheme, bounds)[1]!.get('fill');
+    expect(fillOf(sparse, 'fixed')).toBe(fillOf(dense, 'fixed'));
+    expect(fillOf(sparse, 'relative')).not.toBe(fillOf(dense, 'relative'));
+    // The smoothed reading is caves per km² too, so it takes the same bands; hot spots take none.
+    expect(densityBandMaxima(sparse, 'kernel', 'fixed', bounds)).toEqual([1, 5, 20, Infinity]);
+    expect(densityBandMaxima(sparse, 'hotSpot', 'fixed', bounds)).toEqual([]);
+    // With no bounds known yet, "fixed" colours as relative rather than as nothing.
+    expect(densityBandMaxima(sparse, 'density', 'fixed', [])).toEqual(densityBandMaxima(sparse, 'density'));
+  });
+
+  it('spreads fewer fixed bands over the whole ramp, palest to darkest', () => {
+    const ramp = karstDensityPalette.ramp;
+    expect(densityBandFill(0, 4)).toBe(ramp[0]);
+    expect(densityBandFill(3, 4)).toBe(ramp[ramp.length - 1]);
+    expect(new Set([0, 1, 2, 3].map((band) => densityBandFill(band, 4))).size).toBe(4);
+    expect([0, 1, 2, 3, 4].map((band) => densityBandFill(band, 5))).toEqual([...ramp]);
+    expect(densityBandFill(0, 2)).toBe(ramp[0]);
+    expect(densityBandFill(1, 2)).toBe(ramp[ramp.length - 1]);
   });
 });
 

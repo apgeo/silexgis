@@ -8,8 +8,13 @@ import { fromLonLat } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Fill, Stroke, Style } from 'ol/style';
 import { fetchMapDensity, type DensityCell, type DensityGrid, type DensityQuery } from '../api/hooks.ts';
-import { fetchSteppedDensity, type DensityGridLimits, type KarstDensityMode } from './densityCells.ts';
-import { karstDensityPalette as palette } from './markerPalette.ts';
+import {
+  fetchSteppedDensity,
+  type DensityGridLimits,
+  type KarstDensityBands,
+  type KarstDensityMode,
+} from './densityCells.ts';
+import { densityBandFill, karstDensityPalette as palette } from './markerPalette.ts';
 import { attachWindowLoader } from './windowLoader.ts';
 
 export const KARST_DENSITY_LAYER_ID = 'karst-density';
@@ -24,7 +29,14 @@ export const KARST_DENSITY_LAYER_ID = 'karst-density';
 // the protected caves are. So this overlay draws the cells it is sent, at the size it was sent,
 // and nothing finer.
 
-export { KARST_DENSITY_MODES, isKarstDensityMode, type KarstDensityMode } from './densityCells.ts';
+export {
+  KARST_DENSITY_BAND_SCHEMES,
+  KARST_DENSITY_MODES,
+  isKarstDensityBands,
+  isKarstDensityMode,
+  type KarstDensityBands,
+  type KarstDensityMode,
+} from './densityCells.ts';
 
 /** How many value bands the two density readings are divided into. */
 export const KARST_DENSITY_BANDS = palette.ramp.length;
@@ -41,8 +53,13 @@ export interface KarstDensityLoadState {
   cellMetres: number | null;
   /** The finest cell this installation publishes, once known. */
   minimumCellMetres: number | null;
-  /** Upper bound of each value band of the current reading, lowest first; empty when none. */
+  /**
+   * Upper bound of each value band of the current reading, lowest first; empty when none. With
+   * fixed bands the last one is open-ended, and its bound is `Infinity`.
+   */
   bandMaxima: number[];
+  /** Whether the bands are relative to the view or the installation's fixed ones. */
+  bands: KarstDensityBands;
   /** The z beyond which a cell is a hot or a cold spot, as the server states it. */
   significanceZ: number | null;
   mode: KarstDensityMode;
@@ -50,6 +67,10 @@ export interface KarstDensityLoadState {
 
 const source = new VectorSource();
 let mode: KarstDensityMode = 'density';
+let bands: KarstDensityBands = 'relative';
+// The installation's fixed bounds, from the map's configuration; until it has arrived a fixed
+// scheme colours relative to the view, which is what it would show with nothing configured.
+let fixedBounds: readonly number[] = [];
 let lastGrid: DensityGrid | null = null;
 
 const emptyState = (): KarstDensityLoadState => ({
@@ -59,6 +80,7 @@ const emptyState = (): KarstDensityLoadState => ({
   bandMaxima: [],
   significanceZ: null,
   mode,
+  bands: effectiveBands(),
 });
 
 // The floor and the cell limit are properties of the installation, not of a window, so once one
@@ -110,11 +132,20 @@ export function cellValue(cell: DensityCell, reading: KarstDensityMode): number 
 }
 
 /**
- * Equal-interval bands from zero to the largest value in the answer. Relative to the window on
- * purpose: the same colour then means "among the densest here", which is what a reader scanning
- * a view asks, and the legend states the numbers each band stands for.
+ * The bands' upper bounds for an answer.
+ *
+ * Relative (the default): equal intervals from zero to the largest value in the answer, so the
+ * same colour means "among the densest here", which is what a reader scanning one view asks; the
+ * legend states the numbers each band stands for. Fixed: the installation's own bounds, the same
+ * in every view, with an open-ended band above the last — what comparing two regions by colour
+ * needs. Either way only the colouring is decided here; the values are the server's.
  */
-export function densityBandMaxima(cells: readonly DensityCell[], reading: KarstDensityMode): number[] {
+export function densityBandMaxima(
+  cells: readonly DensityCell[],
+  reading: KarstDensityMode,
+  scheme: KarstDensityBands = 'relative',
+  bounds: readonly number[] = [],
+): number[] {
   if (reading === 'hotSpot') {
     return [];
   }
@@ -127,6 +158,9 @@ export function densityBandMaxima(cells: readonly DensityCell[], reading: KarstD
   }
   if (max <= 0) {
     return [];
+  }
+  if (scheme === 'fixed' && bounds.length > 0) {
+    return [...bounds, Number.POSITIVE_INFINITY];
   }
   return Array.from({ length: KARST_DENSITY_BANDS }, (_, i) => (max * (i + 1)) / KARST_DENSITY_BANDS);
 }
@@ -149,13 +183,17 @@ export function densityCellFeatures(
   cells: readonly DensityCell[],
   reading: KarstDensityMode,
   significanceZ: number | null,
+  scheme: KarstDensityBands = 'relative',
+  bounds: readonly number[] = [],
 ): Feature[] {
-  const bandMaxima = densityBandMaxima(cells, reading);
+  const bandMaxima = densityBandMaxima(cells, reading, scheme, bounds);
   const features: Feature[] = [];
   for (const cell of cells) {
     const value = cellValue(cell, reading);
     const fill =
-      reading === 'hotSpot' ? hotSpotFill(value, significanceZ) : bandFill(bandOf(value, bandMaxima));
+      reading === 'hotSpot'
+        ? hotSpotFill(value, significanceZ)
+        : bandFill(bandOf(value, bandMaxima), bandMaxima.length);
     if (fill === null) {
       // An empty or insignificant cell draws nothing: a wash over the whole window would hide
       // the ground for no information.
@@ -176,8 +214,8 @@ export function densityCellFeatures(
   return features;
 }
 
-function bandFill(band: number | null): string | null {
-  return band === null ? null : palette.ramp[band];
+function bandFill(band: number | null, bandCount: number): string | null {
+  return band === null ? null : densityBandFill(band, bandCount);
 }
 
 function hotSpotFill(z: number | null, significanceZ: number | null): string | null {
@@ -209,7 +247,44 @@ function cellStyle(feature: FeatureLike): Style | undefined {
 
 function draw(grid: DensityGrid): void {
   source.clear(true);
-  source.addFeatures(densityCellFeatures(grid.cells, mode, grid.autocorrelation.significanceZ));
+  source.addFeatures(
+    densityCellFeatures(grid.cells, mode, grid.autocorrelation.significanceZ, bands, fixedBounds),
+  );
+}
+
+/** The scheme actually drawn: fixed only once the installation's bounds are known. */
+function effectiveBands(): KarstDensityBands {
+  return bands === 'fixed' && fixedBounds.length > 0 ? 'fixed' : 'relative';
+}
+
+function redraw(): void {
+  if (lastGrid && loadState.status === 'ok') {
+    draw(lastGrid);
+    publish(okState(lastGrid));
+  } else {
+    publish({ ...loadState, mode, bands: effectiveBands() });
+  }
+}
+
+/** Switches between bands relative to the view and the installation's fixed bands. */
+export function setKarstDensityBands(value: KarstDensityBands): void {
+  if (value === bands) {
+    return;
+  }
+  bands = value;
+  redraw();
+}
+
+/** The installation's fixed band bounds, as the map's configuration states them. */
+export function setKarstDensityFixedBounds(value: readonly number[]): void {
+  const usable = value.filter((bound) => Number.isFinite(bound) && bound > 0);
+  if (usable.length === fixedBounds.length && usable.every((bound, i) => bound === fixedBounds[i])) {
+    return;
+  }
+  fixedBounds = usable;
+  if (bands === 'fixed') {
+    redraw();
+  }
 }
 
 /** Changes the reading the cells are filled by, redrawing the last answer without asking again. */
@@ -218,12 +293,7 @@ export function setKarstDensityMode(value: KarstDensityMode): void {
     return;
   }
   mode = value;
-  if (lastGrid && loadState.status === 'ok') {
-    draw(lastGrid);
-    publish(okState(lastGrid));
-  } else {
-    publish({ ...loadState, mode });
-  }
+  redraw();
 }
 
 function okState(grid: DensityGrid): KarstDensityLoadState {
@@ -231,9 +301,10 @@ function okState(grid: DensityGrid): KarstDensityLoadState {
     status: 'ok',
     cellMetres: grid.cellMetres,
     minimumCellMetres: grid.minimumCellMetres,
-    bandMaxima: densityBandMaxima(grid.cells, mode),
+    bandMaxima: densityBandMaxima(grid.cells, mode, bands, fixedBounds),
     significanceZ: grid.autocorrelation.significanceZ,
     mode,
+    bands: effectiveBands(),
   };
 }
 

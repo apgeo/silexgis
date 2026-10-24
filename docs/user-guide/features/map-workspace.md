@@ -56,8 +56,11 @@ under the layer list while it is on, with a key to its colours.
   **hot and cold spots** (cells clearly denser or sparser than the rest of the view). The row
   names the cell size used: never finer than the location grid that protects cave positions,
   and coarser when the view is wide. Colours are relative to the view — the darkest cell is the
-  densest *here* — so compare two views by the key's numbers, not by colour. If the view is too
-  wide even for the coarsest cell, the row says so: zoom in.
+  densest *here* — so compare two views by the key's numbers, not by colour. To compare by colour,
+  switch the row's **Bands** from **Relative to view** to **Fixed**: the bands are then the same
+  everywhere (by default 0–1, 1–5, 5–20 and more than 20 caves per km², set by your
+  administrator). Only the colours change, not the counts. A saved view keeps the choice. If the
+  view is too wide even for the coarsest cell, the row says so: zoom in.
 - **Karstification index (areas)** fills each karst area, massif and hill by its index class, from
   *very low* to *very high*; an area that cannot be measured is grey with a dashed edge. A karst
   area inside a massif is drawn over it. Point at an area for its name and class; click it to

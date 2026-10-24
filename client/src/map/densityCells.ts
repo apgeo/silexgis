@@ -59,6 +59,19 @@ export function isKarstDensityMode(value: unknown): value is KarstDensityMode {
   return typeof value === 'string' && (KARST_DENSITY_MODES as readonly string[]).includes(value);
 }
 
+/**
+ * How the density readings are divided into colours: `relative` to the largest value in the view
+ * (the default — the darkest cell is the densest here), or the installation's `fixed` bands, which
+ * mean the same in every view.
+ */
+export type KarstDensityBands = 'relative' | 'fixed';
+
+export const KARST_DENSITY_BAND_SCHEMES: readonly KarstDensityBands[] = ['relative', 'fixed'];
+
+export function isKarstDensityBands(value: unknown): value is KarstDensityBands {
+  return typeof value === 'string' && (KARST_DENSITY_BAND_SCHEMES as readonly string[]).includes(value);
+}
+
 /** A cell size, in metres, that is a multiple of the published floor. */
 export function densityCellMetres(minimumCellMetres: number, multiple: number): number {
   return minimumCellMetres * multiple;

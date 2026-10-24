@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KarstDensityLoadState } from '../../map/karstDensityLayer.ts';
 import type { KarstIndexLoadState } from '../../map/karstIndexLayer.ts';
-import { karstDensityPalette, karstIndexPalette } from '../../map/markerPalette.ts';
+import { densityBandFill, karstDensityPalette, karstIndexPalette } from '../../map/markerPalette.ts';
 
 // The keys for the two karst overlays. Both draw their swatches from the same colour constants
 // the map styles read, so a legend can never describe a colour the map is not using.
@@ -99,16 +99,30 @@ export function KarstDensityLegend({ state }: { state: KarstDensityLoadState }) 
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {t(`map.karstLegend.unit.${state.mode}`)}
       </Typography.Text>
+      <Typography.Text
+        type="secondary"
+        style={{ fontSize: 12, display: 'block' }}
+        data-testid="map-karst-density-legend-scheme"
+      >
+        {t(`map.karstLegend.scheme.${state.bands}`)}
+      </Typography.Text>
       <Rows
         testId="map-karst-density-legend"
-        rows={state.bandMaxima.map((upper, index) => ({
-          key: String(index),
-          swatch: <Swatch fill={karstDensityPalette.ramp[index]} stroke={karstDensityPalette.cellStroke} />,
-          label: t('map.karstLegend.band', {
-            from: formatValue(index === 0 ? 0 : state.bandMaxima[index - 1], i18n.language),
-            to: formatValue(upper, i18n.language),
-          }),
-        }))}
+        rows={state.bandMaxima.map((upper, index) => {
+          const from = formatValue(index === 0 ? 0 : state.bandMaxima[index - 1], i18n.language);
+          return {
+            key: String(index),
+            swatch: (
+              <Swatch
+                fill={densityBandFill(index, state.bandMaxima.length)}
+                stroke={karstDensityPalette.cellStroke}
+              />
+            ),
+            label: Number.isFinite(upper)
+              ? t('map.karstLegend.band', { from, to: formatValue(upper, i18n.language) })
+              : t('map.karstLegend.bandAbove', { from }),
+          };
+        })}
       />
     </>
   );

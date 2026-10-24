@@ -199,6 +199,8 @@ export const groups = {
     'MapLayerKindTests',
     // The ceiling on a selection, published to the client and bounding the summary's request.
     'SelectionMaxConfigurationTests',
+    // The fixed cave-density bands, published to the client and checked at start.
+    'DensityBandsConfigurationTests',
   ],
   // A shared view's page and the data its link draws for nobody in particular.
   mapViews: ['MapViewTests', 'SharedViewDataTests'],

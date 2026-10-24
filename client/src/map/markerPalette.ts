@@ -195,6 +195,23 @@ export const karstDensityPalette = {
 } as const;
 
 /**
+ * The fill of one density band out of `bandCount`, lowest first. With as many bands as the ramp
+ * has colours each band takes its own; with fewer — fixed bands an installation configured — the
+ * bands are spread over the whole ramp, so the lowest is always the palest and the highest always
+ * the darkest. The map and its legend both colour through this, so they cannot disagree.
+ */
+export function densityBandFill(band: number, bandCount: number): string {
+  const ramp = karstDensityPalette.ramp;
+  if (bandCount <= 1) {
+    return ramp[ramp.length - 1];
+  }
+  const index = bandCount >= ramp.length
+    ? Math.min(band, ramp.length - 1)
+    : Math.round((band * (ramp.length - 1)) / (bandCount - 1));
+  return ramp[Math.max(0, Math.min(index, ramp.length - 1))];
+}
+
+/**
  * The karstification-index choropleth's fills, one per class from very low to very high, plus
  * a neutral for an area nothing could be measured in. Purples, so an area's class is never read
  * as a density band (those are the yellow-to-red ramp above) when both overlays are on. The fill

@@ -17,6 +17,7 @@ function density(over: Partial<KarstDensityLoadState>): KarstDensityLoadState {
     bandMaxima: [],
     significanceZ: 1.96,
     mode: 'density',
+    bands: 'relative',
     ...over,
   };
 }
@@ -35,6 +36,23 @@ describe('KarstDensityLegend', () => {
     expect(rows).toHaveLength(5);
     expect(rows[0]).toBe('0 – 0.2');
     expect(rows[4]).toBe('0.8 – 1');
+    expect(screen.getByTestId('map-karst-density-legend-scheme').textContent).toBe('Bands relative to this view');
+  });
+
+  it('states fixed bands with an open-ended top band, in Romanian too', async () => {
+    await i18n.changeLanguage('en');
+    const state = density({ bands: 'fixed', bandMaxima: [1, 5, 20, Infinity] });
+    const { rerender } = render(<KarstDensityLegend state={state} />);
+    const rows = screen.getAllByTestId('map-karst-density-legend-row').map((row) => row.textContent);
+    expect(rows).toEqual(['0 – 1', '1 – 5', '5 – 20', 'more than 20']);
+    expect(screen.getByTestId('map-karst-density-legend-scheme').textContent).toBe('Fixed bands, the same in every view');
+    // Four bands over the five-colour ramp: the palest and the darkest are both used.
+    expect(screen.getAllByTestId('map-karst-legend-swatch')).toHaveLength(4);
+
+    await i18n.changeLanguage('ro');
+    rerender(<KarstDensityLegend state={{ ...state }} />);
+    expect(screen.getAllByTestId('map-karst-density-legend-row').at(-1)!.textContent).toBe('peste 20');
+    await i18n.changeLanguage('en');
   });
 
   it('names hot and cold spots by the threshold the server stated', async () => {

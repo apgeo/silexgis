@@ -112,8 +112,11 @@ import {
   KARST_DENSITY_LAYER_ID,
   attachKarstDensityLoader,
   createKarstDensityLayer,
+  setKarstDensityBands,
   setKarstDensityEnabled,
+  setKarstDensityFixedBounds,
   setKarstDensityMode,
+  type KarstDensityBands,
   type KarstDensityMode,
 } from '../map/karstDensityLayer.ts';
 import {
@@ -307,6 +310,7 @@ export default function MapPage() {
   const [heatmapVisible, setHeatmapVisible] = useState(false);
   const [karstDensityVisible, setKarstDensityVisible] = useState(false);
   const [karstDensityMode, setKarstDensityModeState] = useState<KarstDensityMode>('density');
+  const [karstDensityBands, setKarstDensityBandsState] = useState<KarstDensityBands>('relative');
   const [karstIndexVisible, setKarstIndexVisible] = useState(false);
   const [photosVisible, setPhotosVisible] = useState(false);
   const [tripsVisible, setTripsVisible] = useState(false);
@@ -1066,6 +1070,7 @@ export default function MapPage() {
   useEffect(() => {
     if (mapConfig) {
       setCenterlineLimits(mapConfig);
+      setKarstDensityFixedBounds(mapConfig.densityFixedBands);
     }
   }, [mapConfig]);
 
@@ -1085,6 +1090,10 @@ export default function MapPage() {
   useEffect(() => {
     setKarstDensityMode(karstDensityMode);
   }, [karstDensityMode]);
+
+  useEffect(() => {
+    setKarstDensityBands(karstDensityBands);
+  }, [karstDensityBands]);
 
   useEffect(() => {
     findOverlayLayer(KARST_INDEX_LAYER_ID)?.setVisible(karstIndexVisible);
@@ -1220,6 +1229,7 @@ export default function MapPage() {
       heatmapVisible,
       karstDensityVisible,
       karstDensityMode,
+      karstDensityBands,
       karstIndexVisible,
       photosVisible,
       tripsVisible,
@@ -1312,6 +1322,7 @@ export default function MapPage() {
     setHeatmapVisible(ui.heatmapVisible);
     setKarstDensityVisible(ui.karstDensityVisible);
     setKarstDensityModeState(ui.karstDensityMode);
+    setKarstDensityBandsState(ui.karstDensityBands);
     setKarstIndexVisible(ui.karstIndexVisible);
     setPhotosVisible(ui.photosVisible);
     setTripsVisible(ui.tripsVisible);
@@ -1416,6 +1427,8 @@ export default function MapPage() {
       karstDensityVisible={karstDensityVisible}
       karstDensityMode={karstDensityMode}
       onKarstDensityModeChange={setKarstDensityModeState}
+      karstDensityBands={karstDensityBands}
+      onKarstDensityBandsChange={setKarstDensityBandsState}
       karstIndexVisible={karstIndexVisible}
       tripFilter={tripFilter}
       onTripFilterChange={setTripFilter}

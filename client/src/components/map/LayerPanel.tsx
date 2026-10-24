@@ -49,7 +49,7 @@ import {
 import { ENTRANCE_LAYER_ID } from '../../map/entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from '../../map/featureLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID } from '../../map/heatmapLayer.ts';
-import { KARST_DENSITY_LAYER_ID, type KarstDensityMode } from '../../map/karstDensityLayer.ts';
+import { KARST_DENSITY_LAYER_ID, type KarstDensityBands, type KarstDensityMode } from '../../map/karstDensityLayer.ts';
 import KarstDensityControls from './KarstDensityControls.tsx';
 import { KARST_INDEX_LAYER_ID } from '../../map/karstIndexLayer.ts';
 import KarstIndexControls from './KarstIndexControls.tsx';
@@ -162,6 +162,8 @@ interface LayerPanelProps {
   karstDensityVisible: boolean;
   karstDensityMode: KarstDensityMode;
   onKarstDensityModeChange: (mode: KarstDensityMode) => void;
+  karstDensityBands: KarstDensityBands;
+  onKarstDensityBandsChange: (bands: KarstDensityBands) => void;
   /** True while the karstification-index choropleth is on — its legend is hidden otherwise. */
   karstIndexVisible: boolean;
   /** What the trip overlay is currently asking for. */
@@ -221,6 +223,8 @@ export default function LayerPanel({
   karstDensityVisible,
   karstDensityMode,
   onKarstDensityModeChange,
+  karstDensityBands,
+  onKarstDensityBandsChange,
   karstIndexVisible,
   tripFilter,
   onTripFilterChange,
@@ -584,7 +588,12 @@ export default function LayerPanel({
         onLayerVisibilityChanged={onOverlayVisibilityChanged}
       />
       {karstDensityVisible && (
-        <KarstDensityControls mode={karstDensityMode} onModeChange={onKarstDensityModeChange} />
+        <KarstDensityControls
+          mode={karstDensityMode}
+          onModeChange={onKarstDensityModeChange}
+          bands={karstDensityBands}
+          onBandsChange={onKarstDensityBandsChange}
+        />
       )}
       {karstIndexVisible && <KarstIndexControls />}
       {/* Draws nothing unless the photo overlay is on and its last answer held back photographs. */}

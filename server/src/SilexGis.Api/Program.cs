@@ -244,6 +244,10 @@ try
         .Validate(
             o => o.SelectionMax is >= 1 and <= MapOptions.SelectionMaxCeiling,
             $"Map:SelectionMax must be from 1 to {MapOptions.SelectionMaxCeiling}.")
+        .Validate(
+            o => MapOptions.TryParseDensityBands(o.DensityFixedBands, out _),
+            $"Map:DensityFixedBands must be 1 to {MapOptions.DensityFixedBandsMaxBounds} positive numbers of caves "
+            + "per square kilometre, each larger than the last, separated by commas (for example 1,5,20).")
         .ValidateOnStart();
     builder.Services.AddOptions<MapLayerOptions>()
         .BindConfiguration(MapLayerOptions.SectionName);

@@ -3,9 +3,11 @@ import { Alert, Segmented, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  KARST_DENSITY_BAND_SCHEMES,
   KARST_DENSITY_MODES,
   getKarstDensityLoadState,
   subscribeKarstDensityLoadState,
+  type KarstDensityBands,
   type KarstDensityLoadState,
   type KarstDensityMode,
 } from '../../map/karstDensityLayer.ts';
@@ -29,9 +31,14 @@ const REFUSAL_KEYS: Record<string, string> = {
 export default function KarstDensityControls({
   mode,
   onModeChange,
+  bands,
+  onBandsChange,
 }: {
   mode: KarstDensityMode;
   onModeChange: (mode: KarstDensityMode) => void;
+  /** Bands relative to the view, or the installation's fixed ones; hot spots have no bands. */
+  bands: KarstDensityBands;
+  onBandsChange: (bands: KarstDensityBands) => void;
 }) {
   const { t } = useTranslation();
   const [load, setLoad] = useState<KarstDensityLoadState>(getKarstDensityLoadState);
@@ -49,6 +56,21 @@ export default function KarstDensityControls({
           label: t(`map.karstDensity.mode.${value}`),
         }))}
       />
+      {mode !== 'hotSpot' && (
+        <div style={{ marginTop: 4 }}>
+          <Segmented
+            size="small"
+            value={bands}
+            onChange={(value) => onBandsChange(value as KarstDensityBands)}
+            aria-label={t('map.karstDensity.bands.label')}
+            data-testid="map-karst-density-bands"
+            options={KARST_DENSITY_BAND_SCHEMES.map((value) => ({
+              value,
+              label: t(`map.karstDensity.bands.${value}`),
+            }))}
+          />
+        </div>
+      )}
       <div style={{ marginTop: 4 }}>
         {load.status === 'refused' ? (
           <Alert

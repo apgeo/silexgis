@@ -59,8 +59,11 @@ timp e pornit, fiecare are un rând sub lista de straturi, cu o legendă a culor
   imaginii). Rândul spune mărimea celulei folosite: niciodată mai fină decât grila de localizare
   care protejează pozițiile peșterilor, și mai mare când imaginea e largă. Culorile sunt relative
   la imagine — celula cea mai închisă este cea mai densă *aici* — așa că două imagini se compară
-  după numerele din legendă, nu după culoare. Dacă imaginea e prea largă chiar și pentru celula
-  cea mai mare, rândul o spune: mărește harta.
+  după numerele din legendă, nu după culoare. Ca să compari după culoare, schimbă **Benzi** din
+  rând de la **Relative la imagine** la **Fixe**: benzile sunt atunci aceleași peste tot (implicit
+  0–1, 1–5, 5–20 și peste 20 de peșteri pe km², stabilite de administrator). Se schimbă doar
+  culorile, nu numărătorile. O imagine salvată păstrează alegerea. Dacă imaginea e prea largă
+  chiar și pentru celula cea mai mare, rândul o spune: mărește harta.
 - **Indice de carstificare (zone)** colorează fiecare zonă carstică și masiv după clasa
   indicelui, de la *foarte scăzut* la *foarte ridicat*; o zonă care nu poate fi măsurată este gri,
   cu margine întreruptă. O zonă carstică din interiorul unui masiv se desenează peste el. Indică

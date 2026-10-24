@@ -532,6 +532,11 @@
     },
     "karstLegend": {
       "band": "{{from}} – {{to}}",
+      "bandAbove": "peste {{from}}",
+      "scheme": {
+        "relative": "Benzi relative la această imagine",
+        "fixed": "Benzi fixe, aceleași în orice imagine"
+      },
       "unit": {
         "density": "Peșteri pe km²",
         "kernel": "Peșteri pe km², netezit"
@@ -545,6 +550,11 @@
     "karstDensity": {
       "layer": "Densitatea peșterilor (grilă)",
       "reading": "Ce arată celulele",
+      "bands": {
+        "label": "Benzi",
+        "relative": "Relative la imagine",
+        "fixed": "Fixe"
+      },
       "mode": {
         "density": "Peșteri pe km²",
         "kernel": "Netezită",

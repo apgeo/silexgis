@@ -3,7 +3,12 @@ import { fromLonLat, toLonLat } from 'ol/proj';
 import { normalizeCamera3DState, type Camera3DState } from '../scene3d/camera3d.ts';
 import { viewCamera3dState } from '../workspace/viewCamera.ts';
 import { unreadableTileLayers } from './baseLayers.ts';
-import { isKarstDensityMode, type KarstDensityMode } from './densityCells.ts';
+import {
+  isKarstDensityBands,
+  isKarstDensityMode,
+  type KarstDensityBands,
+  type KarstDensityMode,
+} from './densityCells.ts';
 import { getOverlayOrder, getWorkspaceMap } from './mapContext.ts';
 import { readFilterDocument } from '../filters/url.ts';
 import { holdsPosition } from '../filters/spatial.ts';
@@ -40,6 +45,12 @@ export interface ViewConfig {
    * surface) or `hotSpot`. Added after v1 shipped; omitted or unrecognised reads as `density`.
    */
   karstDensityMode?: KarstDensityMode;
+  /**
+   * Whether the density bands are `relative` to the view or the installation's `fixed` ones.
+   * Added after v1 shipped; omitted or unrecognised reads as `relative`, the colouring every view
+   * saved before it had.
+   */
+  karstDensityBands?: KarstDensityBands;
   /**
    * The karstification-index choropleth over the areas in view. Added after v1 shipped; older
    * saved views omit it (off).
@@ -129,6 +140,7 @@ export interface WorkspaceUiState {
   heatmapVisible: boolean;
   karstDensityVisible: boolean;
   karstDensityMode: KarstDensityMode;
+  karstDensityBands: KarstDensityBands;
   karstIndexVisible: boolean;
   photosVisible: boolean;
   tripsVisible: boolean;
@@ -171,6 +183,7 @@ export function captureViewConfig(
     heatmapVisible: ui.heatmapVisible,
     karstDensityVisible: ui.karstDensityVisible,
     karstDensityMode: ui.karstDensityMode,
+    karstDensityBands: ui.karstDensityBands,
     karstIndexVisible: ui.karstIndexVisible,
     photosVisible: ui.photosVisible,
     tripsVisible: ui.tripsVisible,
@@ -205,6 +218,7 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     heatmapVisible: parsed.heatmapVisible ?? false,
     karstDensityVisible: parsed.karstDensityVisible ?? false,
     karstDensityMode: isKarstDensityMode(parsed.karstDensityMode) ? parsed.karstDensityMode : 'density',
+    karstDensityBands: isKarstDensityBands(parsed.karstDensityBands) ? parsed.karstDensityBands : 'relative',
     karstIndexVisible: parsed.karstIndexVisible ?? false,
     photosVisible: parsed.photosVisible ?? false,
     tripsVisible: parsed.tripsVisible ?? false,

@@ -532,6 +532,11 @@
     },
     "karstLegend": {
       "band": "{{from}} – {{to}}",
+      "bandAbove": "more than {{from}}",
+      "scheme": {
+        "relative": "Bands relative to this view",
+        "fixed": "Fixed bands, the same in every view"
+      },
       "unit": {
         "density": "Caves per km²",
         "kernel": "Caves per km², smoothed"
@@ -545,6 +550,11 @@
     "karstDensity": {
       "layer": "Cave density (grid)",
       "reading": "What the cells show",
+      "bands": {
+        "label": "Bands",
+        "relative": "Relative to view",
+        "fixed": "Fixed"
+      },
       "mode": {
         "density": "Caves per km²",
         "kernel": "Smoothed",

@@ -69,7 +69,14 @@ test('the density grid and the karstification index draw, explain themselves and
   await expect(indexRow.getByTestId('map-karst-index-legend-row')).toHaveCount(6);
   await expect(indexRow.getByText('Very high')).toBeVisible();
 
-  // Save the workspace with both layers on.
+  // Fixed bands: the installation's, the same in every view, the top one open-ended.
+  await densityRow.getByTestId('map-karst-density-bands').getByText('Fixed', { exact: true }).click();
+  await expect(densityRow.getByTestId('map-karst-density-legend-scheme')).toHaveText(
+    'Fixed bands, the same in every view',
+  );
+  await expect(densityRow.getByTestId('map-karst-density-legend-row').last()).toHaveText('more than 20');
+
+  // Save the workspace with both layers on, the density grid on fixed bands.
   const dock = page.locator('.map-workspace-panel').first();
   await dock.getByPlaceholder('View name…').fill(viewName);
   await dock.getByRole('button', { name: 'Save current view', exact: true }).click();
@@ -94,6 +101,7 @@ test('the density grid and the karstification index draw, explain themselves and
   });
   await expect(overlayTreeNode(page, 'Karstification index (areas)').locator('.ant-tree-checkbox-checked')).toBeVisible();
   await expect(page.getByTestId('map-karst-density-legend-row').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('map-karst-density-legend-scheme')).toHaveText('Fixed bands, the same in every view');
   await expect(page.getByTestId('map-karst-index-shown')).toBeVisible({ timeout: 30_000 });
 
   // Clean up the view.

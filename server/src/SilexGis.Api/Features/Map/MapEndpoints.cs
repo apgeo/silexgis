@@ -176,6 +176,11 @@ public sealed record TerrainBuildChoiceDto(
 /// The size above which the scene asks before downloading the walls of a selected cave; 0 asks
 /// before every one. A default: a person may set their own for their browser.
 /// </param>
+/// <param name="DensityFixedBands">
+/// The upper bounds, in caves per square kilometre and ascending, of the fixed bands the
+/// cave-density layer colours by when a reader chooses fixed rather than relative bands; the band
+/// above the last bound is open-ended.
+/// </param>
 public sealed record MapConfigDto(
     int CenterlineDetailZoom,
     int CenterlineMaxPaths,
@@ -192,7 +197,8 @@ public sealed record MapConfigDto(
     int MeshesInViewMaxCavesLimit,
     long MeshesInViewMaxBytesLimit,
     long MeshAskAboveBytes,
-    int SelectionMax);
+    int SelectionMax,
+    IReadOnlyList<double> DensityFixedBands);
 
 /// <summary>One entrance the point branch of the entrance layer considers, before it is shaped.</summary>
 public sealed record EntrancePointRow(
@@ -317,7 +323,8 @@ public static class MapEndpoints
             options.MeshesInViewMaxCavesLimit,
             options.MeshesInViewMaxBytesLimit,
             Math.Max(0, options.MeshAskAboveBytes),
-            options.SelectionMax));
+            options.SelectionMax,
+            options.DensityFixedBandBounds()));
     }
 
     /// <summary>

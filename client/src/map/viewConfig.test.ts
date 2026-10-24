@@ -20,6 +20,7 @@ const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
   heatmapVisible: true,
   karstDensityVisible: true,
   karstDensityMode: 'hotSpot',
+  karstDensityBands: 'fixed',
   karstIndexVisible: true,
   photosVisible: false,
   tripsVisible: true,
@@ -244,6 +245,14 @@ describe('viewConfig cave-density grid', () => {
     expect(restored?.karstDensityMode).toBe('hotSpot');
   });
 
+  it('round-trips whether the bands are relative to the view or fixed', () => {
+    const fixed = captureViewConfig(baseUi);
+    expect(fixed.karstDensityBands).toBe('fixed');
+    expect(applyViewConfig(fixed)?.karstDensityBands).toBe('fixed');
+    const relative = captureViewConfig({ ...baseUi, karstDensityBands: 'relative' });
+    expect(applyViewConfig(relative)?.karstDensityBands).toBe('relative');
+  });
+
   it('round-trips the karstification-index choropleth beside the grid, at version 1', () => {
     const config = captureViewConfig(baseUi);
     expect(config.karstIndexVisible).toBe(true);
@@ -268,6 +277,9 @@ describe('viewConfig cave-density grid', () => {
     expect(restored?.karstDensityVisible).toBe(false);
     expect(restored?.karstDensityMode).toBe('density');
     expect(applyViewConfig({ ...legacy, karstDensityMode: 'contours' })?.karstDensityMode).toBe('density');
+    // Every view saved before the choice existed was coloured relative to the view.
+    expect(restored?.karstDensityBands).toBe('relative');
+    expect(applyViewConfig({ ...legacy, karstDensityBands: 'logarithmic' })?.karstDensityBands).toBe('relative');
   });
 });
 
