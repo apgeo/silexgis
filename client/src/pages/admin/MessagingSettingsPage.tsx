@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
 import {
+  AppstoreOutlined,
   BellOutlined,
   CameraOutlined,
   EnvironmentOutlined,
@@ -27,6 +28,7 @@ import {
 import Button from '../../components/Button.tsx';
 import { useQueryClient } from '@tanstack/react-query';
 import MapBackgroundsForm from './MapBackgroundsForm.tsx';
+import WorkspaceDefaultForm from './WorkspaceDefaultForm.tsx';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import {
@@ -160,6 +162,15 @@ export default function MessagingSettingsPage() {
                 </span>
               ),
               children: <PhotoLibrariesForm settings={settings} onSaved={onSaved} />,
+            },
+            {
+              key: 'workspace',
+              label: (
+                <span>
+                  <AppstoreOutlined /> {t('workspace.admin.tab')}
+                </span>
+              ),
+              children: <WorkspaceDefaultForm settings={settings} onSaved={onSaved} />,
             },
             {
               // Not a section of the stored settings: it is kept on the catalogue's own rows,

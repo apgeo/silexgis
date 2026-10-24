@@ -3207,7 +3207,15 @@
     "surveyChoose": "Open one of the cave's survey models here:",
     "resizePanes": "Resize the panes on either side",
     "resizeBottom": "Resize the map and the strip under it",
-    "shortcutMaximise": "Fill the workspace with the pane you are in, or give every pane its own size back"
+    "shortcutMaximise": "Fill the workspace with the pane you are in, or give every pane its own size back",
+    "admin": {
+      "tab": "Workspace",
+      "intro": "The arrangement a new account starts with on the map. It is applied once, the first time an account opens the map without having arranged anything; after that the arrangement is the member's own.",
+      "preset": "Starting arrangement",
+      "builtIn": "Map (as shipped)",
+      "saved": "Saved.",
+      "unreadable": "The installation's starting arrangement could not be read, so it was not changed. Fix it through the settings API first."
+    }
   },
   "views": {
     "title": "Saved views",

@@ -3207,7 +3207,15 @@
     "surveyChoose": "Deschide aici unul dintre modelele topo ale peșterii:",
     "resizePanes": "Redimensionează panourile de o parte și de alta",
     "resizeBottom": "Redimensionează harta și banda de sub ea",
-    "shortcutMaximise": "Extinde panoul în care te afli pe tot spațiul de lucru sau readu toate panourile la mărimea lor"
+    "shortcutMaximise": "Extinde panoul în care te afli pe tot spațiul de lucru sau readu toate panourile la mărimea lor",
+    "admin": {
+      "tab": "Spațiul de lucru",
+      "intro": "Aranjarea cu care pornește un cont nou pe hartă. Se aplică o singură dată, prima dată când un cont deschide harta fără să fi aranjat ceva; după aceea aranjarea este a membrului.",
+      "preset": "Aranjarea de pornire",
+      "builtIn": "Hartă (ca la livrare)",
+      "saved": "Salvat.",
+      "unreadable": "Aranjarea de pornire a instalării nu a putut fi citită, așa că nu a fost schimbată. Corecteaz-o întâi prin API-ul de setări."
+    }
   },
   "views": {
     "title": "Vederi salvate",
