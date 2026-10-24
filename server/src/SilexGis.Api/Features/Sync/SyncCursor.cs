@@ -34,6 +34,13 @@ namespace SilexGis.Api.Features.Sync;
 /// key, and the ordering key is the server's to change; a device that composed one could ask the
 /// server to resume from a position no read ever produced.
 /// </para>
+/// <para>
+/// A position names the stream it was issued by, and is refused by every other. Each stream
+/// orders its own rows on its own key, so a position from one says nothing about where to resume
+/// another: honoured, it would skip every row of the second stream that happened to sort before
+/// a time read off the first — rows the device would then never be sent. The feature stream's
+/// positions carry no name, which keeps them exactly as devices were already holding them.
+/// </para>
 /// </remarks>
 public readonly record struct SyncCursor(long SetRevision, DateTimeOffset ChangedAt, Guid Id)
 {
@@ -44,12 +51,17 @@ public readonly record struct SyncCursor(long SetRevision, DateTimeOffset Change
     /// </summary>
     private const string Version = "2";
 
-    /// <summary>The opaque token a device sends back to resume from here.</summary>
-    public string Encode()
+    /// <summary>The opaque token a device sends back to resume <paramref name="stream"/> from here.</summary>
+    public string Encode(SyncStream stream)
     {
         var plain = string.Create(
             CultureInfo.InvariantCulture,
             $"{Version}|{SetRevision}|{ChangedAt.UtcTicks}|{Id:N}");
+        if (NameOf(stream) is { } name)
+        {
+            plain += "|" + name;
+        }
+
         return Base64Url.EncodeToString(Encoding.UTF8.GetBytes(plain));
     }
 
@@ -57,9 +69,10 @@ public readonly record struct SyncCursor(long SetRevision, DateTimeOffset Change
     /// Reads a token a device sent back. Returns false for anything this server did not write —
     /// truncated, re-encoded, hand-made or from an older shape — so a bad cursor is answered
     /// rather than silently treated as "start from the beginning", which would hand a device a
-    /// full re-download it did not ask for and could not tell from an incremental one.
+    /// full re-download it did not ask for and could not tell from an incremental one. A token
+    /// another stream issued is refused the same way.
     /// </summary>
-    public static bool TryDecode(string? token, out SyncCursor cursor)
+    public static bool TryDecode(string? token, SyncStream stream, out SyncCursor cursor)
     {
         cursor = default;
         if (string.IsNullOrWhiteSpace(token))
@@ -73,8 +86,10 @@ public readonly record struct SyncCursor(long SetRevision, DateTimeOffset Change
             return false;
         }
 
+        var name = NameOf(stream);
         var parts = Encoding.UTF8.GetString(buffer[..written]).Split('|');
-        if (parts.Length != 4
+        if (parts.Length != (name is null ? 4 : 5)
+            || (name is not null && parts[4] != name)
             || parts[0] != Version
             || !long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var revision)
             || !long.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var ticks)
@@ -88,4 +103,15 @@ public readonly record struct SyncCursor(long SetRevision, DateTimeOffset Change
         cursor = new SyncCursor(revision, new DateTimeOffset(ticks, TimeSpan.Zero), id);
         return true;
     }
+
+    /// <summary>
+    /// The name a stream's positions carry. None for the feature stream, whose positions were
+    /// issued before there was a second stream to tell them from.
+    /// </summary>
+    private static string? NameOf(SyncStream stream) => stream switch
+    {
+        SyncStream.Features => null,
+        SyncStream.Documents => "documents",
+        _ => throw new ArgumentOutOfRangeException(nameof(stream), stream, "A stream with no cursor name."),
+    };
 }
