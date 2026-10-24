@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { PanelSectionId } from '../components/map/panelSections.ts';
+import type { SavedWorkspace } from './workspacePrefs.ts';
 
 /**
  * How tightly the interface is packed. Declared here rather than beside the preference store
@@ -49,6 +50,11 @@ export interface PanelLayout {
   panels: Partial<Record<PanelScope, PanelPrefs>>;
   /** Whether the on-canvas chrome was hidden, since that is part of how a screen was arranged. */
   mapChromeHidden?: boolean;
+  /**
+   * The panes around the map and the docks, for a layout saved from the map workspace. Absent in a
+   * layout saved before layouts held it, which applies the panels alone, as it always did.
+   */
+  workspace?: SavedWorkspace;
 }
 
 export const EMPTY_PANEL_PREFS: PanelPrefs = {};

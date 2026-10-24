@@ -16,6 +16,7 @@ import {
   type ReadingRules,
 } from '../geo/formats/settings.ts';
 import type { DensityPref, PanelLayout, PanelPrefs, PanelScope } from './panelPrefs.ts';
+import { sanitizeSavedWorkspace, type SavedWorkspace, type WorkspaceArrangement } from './workspacePrefs.ts';
 
 export type { DensityPref };
 
@@ -186,12 +187,26 @@ interface UiPrefsState {
   setSelectorPrefs: (key: string, patch: Partial<SelectorPrefs>) => void;
   /** Named arrangements of the whole workspace — chrome, not place. */
   layouts: PanelLayout[];
-  saveLayout: (name: string, mapChromeHidden: boolean) => void;
+  /**
+   * Saves the panels' arrangement under a name, with the workspace around the map when it is
+   * given — the panes, the docks and whether the 3D scene is open.
+   */
+  saveLayout: (name: string, mapChromeHidden: boolean, workspace?: SavedWorkspace) => void;
   applyLayout: (id: string) => void;
   deleteLayout: (id: string) => void;
-  /** The map workspace's docks as they were last left, on a desktop layout. */
+  /**
+   * The map workspace's docks as they were last left, on a desktop layout. Named by the side each
+   * dock starts on: `leftHidden` is the layer panel and `rightHidden` the details panel, wherever
+   * swapping the docks has put them.
+   */
   docks: DockPrefs;
   setDocks: (patch: Partial<DockPrefs>) => void;
+  /**
+   * Where the panes around the map go. Undefined until this person arranges anything, which is
+   * what lets an installation's starting preset be applied to an account that has not.
+   */
+  workspace?: WorkspaceArrangement;
+  setWorkspace: (arrangement: WorkspaceArrangement) => void;
   /** How positions are written wherever one is shown or copied. */
   coordinateFormat: CoordinateFormat;
   setCoordinateFormat: (format: CoordinateFormat) => void;
@@ -262,6 +277,7 @@ export interface AccountPrefsState {
   layouts: PanelLayout[];
   selectors: Record<string, SelectorPrefs>;
   docks: DockPrefs;
+  workspace: WorkspaceArrangement | undefined;
   pinnedTypeIds: number[];
   pinnedFilterIds: string[];
   coordinateFormat: CoordinateFormat;
@@ -289,6 +305,7 @@ export function accountPrefDefaults(): AccountPrefsState {
     layouts: [],
     selectors: {},
     docks: DEFAULT_DOCKS,
+    workspace: undefined,
     pinnedTypeIds: [],
     pinnedFilterIds: [],
     coordinateFormat: DEFAULT_COORDINATE_FORMAT,
@@ -366,7 +383,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
         set((state) => ({
           panels: { ...state.panels, [scope]: { ...state.panels[scope], ...patch } },
         })),
-      saveLayout: (name, mapChromeHidden) =>
+      saveLayout: (name, mapChromeHidden, workspace) =>
         set((state) => {
           // Saving under a name that already exists replaces it, which is what "save" means to
           // somebody who just pressed it twice; a second entry with the same name would be a
@@ -376,6 +393,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
             name,
             panels: structuredClone(state.panels),
             mapChromeHidden,
+            ...(workspace ? { workspace: structuredClone(workspace) } : {}),
           };
           return {
             layouts: [...state.layouts.filter((l) => l.name !== name), layout].slice(-MAX_LAYOUTS),
@@ -391,13 +409,18 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           // Replaced wholesale rather than merged: a layout is a complete arrangement, and
           // merging would leave a panel the layout says nothing about sitting at whatever the
           // last one left it — which is exactly the state loading a layout is meant to end.
+          // A layout saved before layouts held the workspace leaves the panes and docks as they
+          // are: it says nothing about them, and has nothing to put back.
+          const workspace = sanitizeSavedWorkspace(layout.workspace);
           return {
             panels: structuredClone(layout.panels),
             mapChromeHidden: layout.mapChromeHidden ?? state.mapChromeHidden,
+            ...(workspace ? { docks: workspace.docks, workspace: workspace.arrangement } : {}),
           };
         }),
       deleteLayout: (id) => set((state) => ({ layouts: state.layouts.filter((l) => l.id !== id) })),
       setDocks: (patch) => set((state) => ({ docks: { ...state.docks, ...patch } })),
+      setWorkspace: (arrangement) => set({ workspace: { ...arrangement } }),
       setCoordinateFormat: (format) => set({ coordinateFormat: format }),
       setFormatSettings: (format, settings) =>
         set((state) => ({ coordinateSettings: { ...state.coordinateSettings, [format]: { ...settings } } })),

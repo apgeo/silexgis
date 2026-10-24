@@ -2,6 +2,7 @@
 import { isSavedFilterAudience } from '../filters/savedFilterAudience.ts';
 import { isCoordinateFormat, isFormatId, sanitizeFormatSettings, sanitizeReadingRules } from '../geo/formats/settings.ts';
 import { accountPrefDefaults, MAX_PINNED_FILTERS, type AccountPrefsState } from './uiPrefsStore.ts';
+import { sanitizeArrangement } from './workspacePrefs.ts';
 
 /** What a saved filter's id looks like; a pinned chip naming anything else is dropped on read. */
 const SAVED_FILTER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -163,6 +164,7 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
     layouts,
     selectors,
     docks,
+    workspace,
     pinnedTypeIds,
     pinnedFilterIds,
     coordinateFormat,
@@ -197,6 +199,10 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
   }
   if (isPlainObject(docks)) {
     out.docks = { leftHidden: docks.leftHidden === true, rightHidden: docks.rightHidden === true };
+  }
+  const arrangement = sanitizeArrangement(workspace);
+  if (arrangement) {
+    out.workspace = arrangement;
   }
   if (Array.isArray(pinnedTypeIds) && pinnedTypeIds.every((id) => Number.isInteger(id))) {
     out.pinnedTypeIds = pinnedTypeIds as number[];
