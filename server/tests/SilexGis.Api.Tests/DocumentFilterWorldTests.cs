@@ -101,7 +101,7 @@ public sealed class DocumentFilterWorldTests : IAsyncLifetime, IDisposable, ICla
 
     private static async Task<Guid> SeedPublicFeatureAsync(SilexGisDbContext db, Guid ownerId)
     {
-        var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var typeId = await db.FeatureTypes.AsNoTracking().Where(t => t.BoundKind == FeatureKind.Generic).Select(t => t.Id).FirstAsync();
         var id = Guid.NewGuid();
         db.Features.Add(new Feature
         {

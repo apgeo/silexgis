@@ -155,7 +155,7 @@ public sealed class FeatureWorldFixture : WorldFixture
 
     public override async Task<FilterNode?> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
     {
-        var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var typeId = await db.FeatureTypes.AsNoTracking().Where(t => t.BoundKind == FeatureKind.Generic).Select(t => t.Id).FirstAsync();
         var row = Rootless(typeId, ownerId, $"Conformance {tag}", Visibility.Private);
         row.Geom = new NetTopologySuite.Geometries.Point(HiddenLon, HiddenLat) { SRID = 4326 };
         Add(db, row);
@@ -167,7 +167,7 @@ public sealed class FeatureWorldFixture : WorldFixture
     public override async Task<FilterNode> SeedIndistinguishableAsync(
         SilexGisDbContext db, Guid ownerId, string tag, int count)
     {
-        var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var typeId = await db.FeatureTypes.AsNoTracking().Where(t => t.BoundKind == FeatureKind.Generic).Select(t => t.Id).FirstAsync();
         var stamp = DateTimeOffset.UtcNow;
 
         for (var i = 0; i < count; i++)
@@ -229,7 +229,7 @@ public sealed class FeatureWorldFixture : WorldFixture
 
     private static async Task CentrelineAsync(SilexGisDbContext db, Guid ownerId, string tag, bool locationProtected)
     {
-        var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var typeId = await db.FeatureTypes.AsNoTracking().Where(t => t.BoundKind == FeatureKind.Generic).Select(t => t.Id).FirstAsync();
         var row = Rootless(typeId, ownerId, $"Centreline {tag}", Visibility.Public);
         row.Kind = FeatureKind.Centerline;
         // A type belongs to a generic feature and to nothing else; the schema checks both ways.

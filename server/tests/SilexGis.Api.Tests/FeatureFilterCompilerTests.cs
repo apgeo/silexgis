@@ -61,7 +61,7 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var typeId = await db.FeatureTypes.AsNoTracking().Where(t => t.BoundKind == FeatureKind.Generic).Select(t => t.Id).FirstAsync();
 
         Rootless(db, typeId, ownerId, $"Corpus typed public {tag}", Visibility.Public);
         Rootless(db, typeId, ownerId, $"Corpus typed private {tag}");
@@ -494,7 +494,7 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var caveTypeId = await db.CaveTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
         var rockTypeId = await db.RockTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
-        var featureTypeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var featureTypeId = await db.FeatureTypes.AsNoTracking().Where(t => t.BoundKind == FeatureKind.Generic).Select(t => t.Id).FirstAsync();
 
         RootlessCave(db, caveTypeId, ownerId, $"Placed {tag}", region: "Munții Apuseni", rockTypeId: rockTypeId);
         RootlessCave(db, caveTypeId, ownerId, $"Elsewhere {tag}", region: "Banat");
@@ -549,7 +549,7 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
 
         // A generic feature carries a type — the schema insists, because a surface feature with
         // no type is a symbol nothing knows how to draw.
-        var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var typeId = await db.FeatureTypes.AsNoTracking().Where(t => t.BoundKind == FeatureKind.Generic).Select(t => t.Id).FirstAsync();
         Rootless(db, typeId, ownerId, name);
         await db.SaveChangesAsync();
 
@@ -588,7 +588,7 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var typeId = await db.FeatureTypes.AsNoTracking().Where(t => t.BoundKind == FeatureKind.Generic).Select(t => t.Id).FirstAsync();
         Rootless(db, typeId, ownerId, $"Hidden {tag}");
         await db.SaveChangesAsync();
 

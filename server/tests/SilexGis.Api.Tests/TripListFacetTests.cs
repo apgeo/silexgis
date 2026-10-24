@@ -584,7 +584,7 @@ public sealed class TripListFacetTests : IAsyncLifetime, IDisposable, IClassFixt
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var typeId = await db.FeatureTypes.AsNoTracking().Where(t => t.BoundKind == FeatureKind.Generic).Select(t => t.Id).FirstAsync();
         var id = Guid.NewGuid();
         var above = parentId is null
             ? []

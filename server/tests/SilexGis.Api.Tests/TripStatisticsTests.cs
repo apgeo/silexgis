@@ -1310,7 +1310,7 @@ public sealed class TripStatisticsTests : IAsyncLifetime, IDisposable, IClassFix
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var typeId = await db.FeatureTypes.AsNoTracking().Where(t => t.BoundKind == SilexGis.Domain.Entities.FeatureKind.Generic).Select(t => t.Id).FirstAsync();
         var ownerId = await db.Users.AsNoTracking().Select(u => u.Id).FirstAsync();
         var id = Guid.NewGuid();
         db.Features.Add(new SilexGis.Domain.Entities.Feature
