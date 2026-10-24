@@ -613,6 +613,14 @@ function ProtectionForm({ settings, onSaved }: SectionProps) {
       >
         <Switch />
       </Form.Item>
+      <Form.Item
+        name="keepLocationInPhotoFiles"
+        label={t('admin.messaging.keepLocationInPhotoFiles')}
+        valuePropName="checked"
+        extra={t('admin.messaging.keepLocationInPhotoFilesHint')}
+      >
+        <Switch />
+      </Form.Item>
       <Button type="primary" htmlType="submit" loading={saving}>
         {t('common.save')}
       </Button>

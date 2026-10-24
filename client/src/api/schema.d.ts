@@ -4595,6 +4595,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/attachments/{id}/device-default-set": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Puts this file in, or takes it out of, what a phone fetches as the usual files; requires Write on the target. */
+        put: operations["attachmentSetDeviceDefaultSet"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/photos": {
         parameters: {
             query?: never;
@@ -7738,6 +7755,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/files/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Addresses to fetch named documents' files from, each re-checked against the caller's access. */
+        post: operations["syncFileLinks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sync/sets": {
         parameters: {
             query?: never;
@@ -7803,6 +7837,23 @@ export interface paths {
         put?: never;
         /** Applies one batch of device rows, arbitrated row by row; resends are answered, not re-applied. */
         post: operations["syncUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/sets/{id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One page of the document links on a sync set's features, and the links that have gone. */
+        get: operations["syncDocuments"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8180,6 +8231,7 @@ export interface components {
             /** Format: uuid */
             addedBy: null | string;
             isPrimary: boolean;
+            inDeviceDefaultSet: boolean;
             file: components["schemas"]["FileDto"];
         };
         /** @enum {unknown} */
@@ -12510,6 +12562,7 @@ export interface components {
         ProtectionSettingsDto: {
             revealProtectedAssociations: boolean;
             calendarFeedEnabled: boolean;
+            keepLocationInPhotoFiles: boolean;
         };
         PublicAlbumDto: {
             title: string;
@@ -13885,6 +13938,54 @@ export interface components {
             uploadRowsMax: number;
             features: string[];
         };
+        SyncDocumentDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            description: null | string;
+            fileKind: components["schemas"]["SyncFileKind"];
+            mimeType: string;
+            /** Format: int64 */
+            sizeBytes: null | number;
+            sha256: null | string;
+            /** Format: uuid */
+            versionId: string;
+            reach: components["schemas"]["SyncOriginalReach"];
+            renditions: number[];
+            /** Format: uuid */
+            photographerCaverId: null | string;
+            /** Format: date-time */
+            capturedAt: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SyncDocumentLinkDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            documentId: string;
+            target: components["schemas"]["SyncLinkTargetDto"];
+            role: components["schemas"]["AttachmentRole"];
+            caption: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            isPrimary: boolean;
+            inDefaultSet: boolean;
+            /** Format: date-time */
+            revision: string;
+            document: components["schemas"]["SyncDocumentDto"];
+        };
+        SyncDocumentsPageDto: {
+            /** Format: int64 */
+            setRevision: number;
+            settings: components["schemas"]["JsonElement"];
+            links: components["schemas"]["SyncDocumentLinkDto"][];
+            tombstones: components["schemas"]["SyncTombstoneDto"][];
+            nextCursor: null | string;
+            hasMore: boolean;
+        };
         SyncDownloadPageDto: {
             /** Format: int64 */
             setRevision: number;
@@ -13932,6 +14033,43 @@ export interface components {
             /** Format: date-time */
             clientUpdatedAt: null | string;
         };
+        /** @enum {unknown} */
+        SyncFileKind: "photo" | "video" | "audio" | "document" | "other";
+        SyncFileLinkDto: {
+            /** Format: uuid */
+            documentId: string;
+            rendition: components["schemas"]["JsonElement"];
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        SyncFileLinkItem: {
+            /** Format: uuid */
+            documentId: string;
+            rendition: components["schemas"]["JsonElement"];
+        };
+        SyncFileLinkRefusalDto: {
+            /** Format: uuid */
+            documentId: string;
+            rendition: components["schemas"]["JsonElement"];
+            code: string;
+        };
+        SyncFileLinksDto: {
+            links: components["schemas"]["SyncFileLinkDto"][];
+            refused: components["schemas"]["SyncFileLinkRefusalDto"][];
+        };
+        SyncFileLinksRequest: {
+            items: components["schemas"]["SyncFileLinkItem"][];
+        };
+        SyncLinkTargetDto: {
+            kind: components["schemas"]["SyncLinkTargetKind"];
+            /** Format: uuid */
+            id: string;
+        };
+        /** @enum {unknown} */
+        SyncLinkTargetKind: "feature";
+        /** @enum {unknown} */
+        SyncOriginalReach: "original" | "locationFree" | "renditions" | "none";
         SyncParentDto: {
             /** Format: uuid */
             parentId: string;
@@ -27701,6 +27839,37 @@ export interface operations {
             };
         };
     };
+    attachmentSetDeviceDefaultSet: {
+        parameters: {
+            query?: {
+                included?: boolean;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     photoList: {
         parameters: {
             query?: {
@@ -37006,6 +37175,48 @@ export interface operations {
             };
         };
     };
+    syncFileLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncFileLinksRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncFileLinksDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     syncListSets: {
         parameters: {
             query?: never;
@@ -37340,6 +37551,67 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncDocuments: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncDocumentsPageDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

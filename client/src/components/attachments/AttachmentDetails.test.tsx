@@ -31,6 +31,7 @@ const attachment: AttachmentInfo = {
   caption: 'Main entrance',
   sortOrder: 3,
   isPrimary: false,
+  inDeviceDefaultSet: false,
   addedBy: null,
   file: {
     id: 'file-1',

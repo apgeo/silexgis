@@ -4208,6 +4208,8 @@
       "revealAssociationsHint": "Turning this on never reveals a position: following the link still gives the protected view. A photo carrying its own capture point stays unpaired with a protected cave either way, because pairing the two would place the cave.",
       "calendarFeedEnabled": "Let members subscribe to their calendar from outside",
       "calendarFeedEnabledHint": "Each member can then create secret addresses that a phone or desktop calendar polls without signing in. A feed carries only the titles, dates and links of what that member is on — never a place or a position — and is read through the member's own permissions on every poll. Off by default; switching it off again stops every address already handed out.",
+      "keepLocationInPhotoFiles": "Keep the location inside photo files",
+      "keepLocationInPhotoFilesHint": "On: someone who may see where a photo was taken can download it exactly as it was uploaded, GPS position included. Off: everyone downloads the full-size picture with its location data (GPS, XMP, IPTC place names) removed; camera details stay. Either way, someone who may not see where a photo was taken only ever gets the copy without its location. Videos, sound recordings and pictures that cannot be rewritten (anything but JPEG, PNG and WebP) are offered to such a person only as previews — and when this is off, to nobody at all except as previews. The position shown on the map and beside the photo follows the location rules as before.",
       "enabled": "Enabled",
       "host": "Server",
       "port": "Port",

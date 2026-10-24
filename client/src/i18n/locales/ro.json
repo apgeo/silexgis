@@ -4221,6 +4221,8 @@
       "revealAssociationsHint": "Activarea nu dezvăluie niciodată o poziție: urmărirea legăturii duce tot la vizualizarea protejată. O fotografie care poartă propriul punct de captură rămâne neasociată cu o peșteră protejată în ambele cazuri, pentru că împerecherea celor două ar localiza peștera.",
       "calendarFeedEnabled": "Permite membrilor să se aboneze la calendarul lor din exterior",
       "calendarFeedEnabledHint": "Fiecare membru poate crea apoi adrese secrete pe care un calendar de pe telefon sau de pe calculator le citește fără autentificare. Un flux poartă doar titlurile, datele și legăturile a ceea la care participă membrul — niciodată un loc sau o poziție — și este citit prin permisiunile proprii ale membrului la fiecare interogare. Dezactivat implicit; dezactivarea ulterioară oprește toate adresele deja distribuite.",
+      "keepLocationInPhotoFiles": "Păstrează locația în fișierele foto",
+      "keepLocationInPhotoFilesHint": "Activat: cine are voie să vadă unde a fost făcută o fotografie o poate descărca exact cum a fost încărcată, cu tot cu poziția GPS. Dezactivat: toată lumea descarcă imaginea la mărime întreagă, fără datele de locație (GPS, XMP, numele locurilor din IPTC); detaliile camerei rămân. În ambele cazuri, cine nu are voie să vadă unde a fost făcută o fotografie primește doar copia fără locație. Filmele, înregistrările audio și imaginile care nu pot fi rescrise (orice în afară de JPEG, PNG și WebP) îi sunt oferite unei asemenea persoane doar ca previzualizări — iar când opțiunea e dezactivată, nimănui altfel decât ca previzualizări. Poziția arătată pe hartă și lângă fotografie urmează regulile de locație ca până acum.",
       "enabled": "Activat",
       "host": "Server",
       "port": "Port",
