@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Shouldly;
+using SilexGis.Api.Common;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
@@ -224,6 +227,24 @@ public sealed class MapLayerKindTests : IAsyncLifetime, IDisposable, IClassFixtu
 
         await SeedAsync(asTiles);
         (await PublishedAsync()).Keys.ShouldContain(name);
+    }
+
+    /// <summary>
+    /// The catalogue this application ships, read as a start reads it — through the installation's
+    /// own coordinate-system registry, which must know every system a shipped GeoTIFF names.
+    /// </summary>
+    [Fact]
+    public async Task The_shipped_catalogue_reads_without_complaint_through_the_installations_own_registry()
+    {
+        var root = factory.Services.GetRequiredService<IWebHostEnvironment>().ContentRootPath;
+        var path = factory.Services.GetRequiredService<IOptions<MapLayerOptions>>().Value.ResolvedCatalogPath(root);
+
+        var report = await SeedAsync(await File.ReadAllTextAsync(path));
+
+        report.Problems.ShouldBeEmpty(string.Join("; ", report.Problems.Select(p => $"[{p.Code}] {p.Message}")));
+        var published = await PublishedAsync();
+        published["OpenFreeMap Liberty"]["vector"]!["scene3dStandIn"]!.GetValue<string>().ShouldBe("OpenStreetMap");
+        published.Keys.ShouldNotContain("Sentinel-2 scene, Apuseni 2024 (COG example)");
     }
 
     private async Task<MapLayerSeedReport> SeedAsync(string catalogue)

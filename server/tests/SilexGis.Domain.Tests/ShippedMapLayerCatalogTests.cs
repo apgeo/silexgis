@@ -25,9 +25,13 @@ namespace SilexGis.Domain.Tests;
 /// </remarks>
 public class ShippedMapLayerCatalogTests
 {
+    // Any code is given a definition here: whether the installation's own coordinate-system
+    // registry knows the shipped GeoTIFF's system is asked of the real registry, where the
+    // application reads this file on start (MapLayerKindTests).
     private static MapLayerCatalogResult Shipped() =>
-        MapLayerCatalog.Read(File.ReadAllText(
-            Path.Combine(RepositoryRoot(), "server", "src", "SilexGis.Api", "map-layers.xml")));
+        MapLayerCatalog.Read(
+            File.ReadAllText(Path.Combine(RepositoryRoot(), "server", "src", "SilexGis.Api", "map-layers.xml")),
+            code => $"+init=epsg:{code}");
 
     [Fact]
     public void The_shipped_catalogue_reads_without_complaint()
@@ -58,7 +62,9 @@ public class ShippedMapLayerCatalogTests
                     ["{TileMatrix}", "{TileRow}", "{TileCol}"],
                 _ => [],
             };
-            Assert.True(layer.Kind == MapLayerKind.Xyz || layer.Wms is not null || layer.Wmts is not null,
+            Assert.True(
+                layer.Kind == MapLayerKind.Xyz
+                    || layer.Wms is not null || layer.Wmts is not null || layer.Cog is not null || layer.Vector is not null,
                 $"{layer.Name}: a {layer.Kind} entry with no options draws nothing");
             foreach (var token in tokens)
             {
@@ -151,7 +157,7 @@ public class ShippedMapLayerCatalogTests
     [Fact]
     public void The_shipped_map_service_examples_are_one_of_each_and_switched_off()
     {
-        var services = Shipped().Layers.Where(l => l.Kind != MapLayerKind.Xyz).ToList();
+        var services = Shipped().Layers.Where(l => l.Kind is MapLayerKind.Wms or MapLayerKind.Wmts).ToList();
 
         // An example the operator reads, not a source switched on for them: each covers one
         // country, and switching one on is a decision about their own installation.
@@ -160,6 +166,40 @@ public class ShippedMapLayerCatalogTests
         Assert.All(services, l => Assert.False(l.Enabled, $"{l.Name} ships switched on"));
         Assert.All(services, l => Assert.False(l.InDocuments, $"{l.Name} may be copied into a document"));
         Assert.All(services, l => Assert.Null(l.ApiKeyName));
+    }
+
+    /// <summary>
+    /// The shipped vector backgrounds are ones anybody may be sent: no key, allowed on links, each
+    /// with a picture source the 3D view drapes in its place that is itself a shipped, switched-on
+    /// basemap — and none of them copied into a document, which draws from plain tiles only.
+    /// </summary>
+    [Fact]
+    public void The_shipped_vector_backgrounds_need_no_key_reach_links_and_name_a_3d_stand_in_that_is_switched_on()
+    {
+        var layers = Shipped().Layers;
+        var vectors = layers.Where(l => l.Kind == MapLayerKind.Vector && l.Enabled).ToList();
+
+        Assert.NotEmpty(vectors);
+        foreach (var layer in vectors)
+        {
+            Assert.Null(layer.ApiKeyName);
+            Assert.True(layer.OnSharedLinks, $"{layer.Name} is kept off shared links");
+            Assert.False(layer.InDocuments, $"{layer.Name} may be copied into a document");
+            Assert.False(string.IsNullOrWhiteSpace(layer.Attribution), $"{layer.Name} has no credit");
+            var standIn = layers.SingleOrDefault(l => l.Name == layer.Vector!.Scene3dStandIn);
+            Assert.True(standIn is { Enabled: true, IsBase: true, Kind: MapLayerKind.Xyz },
+                $"{layer.Name}: its 3D stand-in '{layer.Vector!.Scene3dStandIn}' is not a switched-on tile basemap");
+        }
+    }
+
+    [Fact]
+    public void The_shipped_geotiff_example_is_switched_off()
+    {
+        var files = Shipped().Layers.Where(l => l.Kind == MapLayerKind.Cog).ToList();
+
+        Assert.Single(files);
+        Assert.All(files, l => Assert.False(l.Enabled, $"{l.Name} ships switched on"));
+        Assert.All(files, l => Assert.NotNull(l.Cog!.ProjectionDefinition));
     }
 
     private static string RepositoryRoot()

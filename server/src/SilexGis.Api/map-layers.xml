@@ -512,4 +512,80 @@
          attribution="Grundkarte: basemap.at"
          enabled="false"
          maxZoom="19" />
+
+  <!-- ============================ Vector backgrounds =========================== -->
+  <!--
+    Shapes drawn by the browser in a style rather than finished pictures: sharp at every zoom and on
+    every screen, labels kept upright when the map turns and written in the reader's language
+    (labelField), and several looks over one set of tiles.
+
+    OpenFreeMap (https://openfreemap.org): OpenStreetMap vector tiles in the OpenMapTiles schema,
+    with no key, no registration and no cookies, free with no limit on views, commercial use
+    allowed, and the credit below required. Funded by donations, with no service guarantee. Its
+    tile addresses change with every weekly build, so the url is its TileJSON document, which
+    names the current one. Its tiles stop at zoom 14; the map draws closer by enlarging them, and
+    they stay sharp.
+
+    OSM vector backgrounds carry no contours or relief: for reading karst, keep the topographic
+    sources above. The 3D view drapes the raster named in scene3d in each one's place, and a
+    document's map is never drawn from one.
+  -->
+  <layer name="OpenFreeMap Liberty"
+         group="Vector"
+         kind="vector"
+         format="mvt"
+         url="https://tiles.openfreemap.org/planet"
+         style="https://tiles.openfreemap.org/styles/liberty"
+         styleSource="openmaptiles"
+         labelField="name:{lang}"
+         scene3d="OpenStreetMap"
+         attribution="OpenFreeMap © OpenMapTiles Data from OpenStreetMap"
+         maxZoom="14" />
+
+  <!-- Muted, for cave data drawn on top: see the Carto entries above for why that matters. -->
+  <layer name="OpenFreeMap Positron"
+         group="Vector"
+         kind="vector"
+         format="mvt"
+         url="https://tiles.openfreemap.org/planet"
+         style="https://tiles.openfreemap.org/styles/positron"
+         styleSource="openmaptiles"
+         labelField="name:{lang}"
+         scene3d="Carto Positron (light)"
+         attribution="OpenFreeMap © OpenMapTiles Data from OpenStreetMap"
+         maxZoom="14" />
+
+  <layer name="OpenFreeMap Dark"
+         group="Vector"
+         kind="vector"
+         format="mvt"
+         url="https://tiles.openfreemap.org/planet"
+         style="https://tiles.openfreemap.org/styles/dark"
+         styleSource="openmaptiles"
+         labelField="name:{lang}"
+         scene3d="Carto Dark Matter"
+         attribution="OpenFreeMap © OpenMapTiles Data from OpenStreetMap"
+         maxZoom="14" />
+
+  <!-- ===================== A cloud-optimised GeoTIFF example ===================== -->
+  <!--
+    SWITCHED OFF: an example of the syntax, not a background. One Sentinel-2 scene in true colour
+    (31 July 2024, tile 34TFS, about 110 km across over the Apuseni mountains), read straight from
+    the public copy AWS Open Data hosts, which answers range requests and cross-origin reads. It is
+    in UTM zone 34N, which the map places using this installation's own definition of EPSG:32634.
+    Copernicus Sentinel data are free to use with the credit below.
+
+    A GeoTIFF of your own — a LiDAR hillshade, an orthophoto, a scanned geological map — works the
+    same way from any web server that answers range requests and sends CORS headers: build it with
+    gdal_translate -of COG, name its projection, and give min and max for anything but 8-bit
+    pictures. A file that must stay behind sign-in is uploaded as a georeferenced map instead.
+  -->
+  <layer name="Sentinel-2 scene, Apuseni 2024 (COG example)"
+         group="Imagery"
+         kind="cog"
+         base="false"
+         url="https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/34/T/FS/2024/7/S2A_34TFS_20240731_0_L2A/TCI.tif"
+         projection="EPSG:32634"
+         attribution="Contains modified Copernicus Sentinel data 2024"
+         enabled="false" />
 </silexgis-map-layers>
