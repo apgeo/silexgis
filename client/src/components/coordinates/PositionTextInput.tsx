@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { FORMAT_IDS, isFormatId, readPosition, writePosition, type FormatId } from '../../geo/formats/registry.ts';
 import type { ParsedPosition } from '../../geo/formats/types.ts';
+import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import Button from '../Button.tsx';
 import { assumptionLabel, formatLabel, parseErrorLabel } from './formatLabels.ts';
 
@@ -36,10 +37,11 @@ export default function PositionTextInput({
   const [text, setText] = useState('');
   const [choice, setChoice] = useState<FormatChoice>('any');
   const feedbackId = useId();
+  const rules = useUiPrefsStore((s) => s.coordinateReading);
 
   const reading = useMemo(
-    () => (text.trim() === '' ? null : readPosition(text, choice === 'any' ? undefined : choice)),
-    [text, choice],
+    () => (text.trim() === '' ? null : readPosition(text, choice === 'any' ? undefined : choice, rules)),
+    [text, choice, rules],
   );
   const candidates = reading?.kind === 'parsed' ? reading.candidates : [];
   const use = (position: ParsedPosition) => onPosition([position.lon, position.lat]);

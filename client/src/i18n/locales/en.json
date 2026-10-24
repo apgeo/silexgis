@@ -7432,6 +7432,20 @@
       "notAvailable": "Not available here",
       "notes": {
         "utm": "A zone chosen here is kept for positions near the zone's edge, so that a team working across it reads one grid; far from that zone, the position's own zone is used.",
+      "reading": {
+        "title": "Reading positions you type or paste",
+        "intro": "How a position is read when the text itself does not say: two numbers with no hemisphere letters, and a UTM reference with no letter. A text that says it — a letter, a number over 90 — is always read as written. These settings follow your account.",
+        "pairOrder": "Two bare numbers",
+        "pairOrderValues": {
+          "latLon": "Latitude first, then longitude (45.53, 25.44)",
+          "lonLat": "Longitude first, then latitude (25.44, 45.53)"
+        },
+        "bareUtmHemisphere": "A UTM reference with no letter",
+        "bareUtmHemisphereValues": {
+          "north": "Northern hemisphere",
+          "south": "Southern hemisphere"
+        }
+      },
         "stereo70": "Converted from WGS84 with the usual seven-parameter datum shift: good to a few metres, which suits finding a cave and not a survey. Offered only inside Romania.",
         "lv95": "Good to about a metre. Offered only in Switzerland and Liechtenstein.",
         "lv03": "Good to about a metre. Offered only in Switzerland and Liechtenstein.",
@@ -7479,6 +7493,8 @@
       "northernHemisphere": "No hemisphere was given: the northern one was assumed.",
       "utmLetterAsBand": "The letter was read as a latitude band.",
       "utmLetterAsHemisphere": "The letter was read as a hemisphere.",
+      "lonLatOrder": "Two bare numbers were read as longitude, then latitude.",
+      "southernHemisphere": "No hemisphere was given: the southern one was assumed.",
       "gridAxisOrder": "The first number was read as the easting."
     },
     "converter": {

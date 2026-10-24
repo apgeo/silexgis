@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { isSavedFilterAudience } from '../filters/savedFilterAudience.ts';
-import { isCoordinateFormat, isFormatId, sanitizeFormatSettings } from '../geo/formats/settings.ts';
+import { isCoordinateFormat, isFormatId, sanitizeFormatSettings, sanitizeReadingRules } from '../geo/formats/settings.ts';
 import { accountPrefDefaults, MAX_PINNED_FILTERS, type AccountPrefsState } from './uiPrefsStore.ts';
 
 /** What a saved filter's id looks like; a pinned chip naming anything else is dropped on read. */
@@ -171,6 +171,7 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
     savedFilterAudience,
     coordinateSettings,
     coordinateFormatsListed,
+    coordinateReading,
   } = read;
   if (
     isPlainObject(appearance) &&
@@ -217,6 +218,9 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
   }
   if (karstLinkTreatment === 'no_position' || karstLinkTreatment === 'omit' || karstLinkTreatment === 'grid_position') {
     out.karstLinkTreatment = karstLinkTreatment;
+  if (isPlainObject(coordinateReading)) {
+    out.coordinateReading = sanitizeReadingRules(coordinateReading);
+  }
   }
   if (isSavedFilterAudience(savedFilterAudience)) {
     out.savedFilterAudience = savedFilterAudience;

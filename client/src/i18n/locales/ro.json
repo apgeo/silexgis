@@ -7445,6 +7445,20 @@
       "notAvailable": "Nu este disponibil aici",
       "notes": {
         "utm": "O zonă aleasă aici este păstrată pentru pozițiile de lângă marginea ei, ca o echipă care lucrează peste margine să citească un singur caroiaj; departe de zonă se folosește zona proprie a poziției.",
+      "reading": {
+        "title": "Citirea pozițiilor pe care le tastezi sau le lipești",
+        "intro": "Cum este citită o poziție când textul însuși nu o spune: două numere fără litere de emisferă și o referință UTM fără literă. Un text care o spune — o literă, un număr peste 90 — este citit mereu așa cum e scris. Aceste setări îți urmează contul.",
+        "pairOrder": "Două numere fără litere",
+        "pairOrderValues": {
+          "latLon": "Întâi latitudinea, apoi longitudinea (45.53, 25.44)",
+          "lonLat": "Întâi longitudinea, apoi latitudinea (25.44, 45.53)"
+        },
+        "bareUtmHemisphere": "O referință UTM fără literă",
+        "bareUtmHemisphereValues": {
+          "north": "Emisfera nordică",
+          "south": "Emisfera sudică"
+        }
+      },
         "stereo70": "Convertit din WGS84 cu transformarea uzuală în șapte parametri: precisă la câțiva metri, potrivită pentru a găsi o peșteră, nu pentru o ridicare topografică. Oferit doar în România.",
         "lv95": "Precis la circa un metru. Oferit doar în Elveția și Liechtenstein.",
         "lv03": "Precis la circa un metru. Oferit doar în Elveția și Liechtenstein.",
@@ -7492,6 +7506,8 @@
       "northernHemisphere": "Nu s-a dat emisfera: s-a presupus cea nordică.",
       "utmLetterAsBand": "Litera a fost citită ca bandă de latitudine.",
       "utmLetterAsHemisphere": "Litera a fost citită ca emisferă.",
+      "lonLatOrder": "Două numere fără litere au fost citite ca longitudine, apoi latitudine.",
+      "southernHemisphere": "Nu s-a dat emisfera: s-a presupus cea sudică.",
       "gridAxisOrder": "Primul număr a fost citit ca valoarea est."
     },
     "converter": {

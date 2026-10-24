@@ -99,6 +99,21 @@ describe('reading angles', () => {
     expect([lettered.lon, lettered.lat]).toEqual([25.5, 45.5]);
   });
 
+  it('reads two bare numbers longitude first when the person chose that, and says so', () => {
+    const lonLat = { pairOrder: 'lonLat', bareUtmHemisphere: 'north' } as const;
+    const read = only(parseAngles('25.5 45.5', lonLat));
+    expect([read.lon, read.lat, read.assumptions]).toEqual([25.5, 45.5, ['lonLatOrder']]);
+    // What the text settles is read as written, whatever the rule: a letter, or a second number
+    // only a longitude can be.
+    const lettered = only(parseAngles('45.5N 25.5', lonLat));
+    expect([lettered.lon, lettered.lat, lettered.assumptions]).toEqual([25.5, 45.5, []]);
+    const forced = only(parseAngles('45.5 120.5', lonLat));
+    expect([forced.lon, forced.lat]).toEqual([120.5, 45.5]);
+    // The default is latitude first, as before.
+    const byDefault = only(parseAngles('25.5 45.5', { pairOrder: 'latLon', bareUtmHemisphere: 'north' }));
+    expect([byDefault.lon, byDefault.lat, byDefault.assumptions]).toEqual([45.5, 25.5, ['latLonOrder']]);
+  });
+
   it.each([
     ['91N 25E', 'latitudeRange'],
     ['45 181', 'longitudeRange'],

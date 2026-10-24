@@ -10,6 +10,15 @@ export type FormatSettingsShape = Record<string, string | number>;
 export type SettingChoices<S extends FormatSettingsShape> = { readonly [K in keyof S]: readonly S[K][] };
 
 /**
+ * How a position written without the words that would settle it is read: two bare numbers with no
+ * hemisphere letters (`45.53, 25.44`), and a UTM reference with no band or hemisphere letter.
+ */
+export type ReadingRules = {
+  pairOrder: 'latLon' | 'lonLat';
+  bareUtmHemisphere: 'north' | 'south';
+};
+
+/**
  * Something the reader of a parsed position should be told was assumed rather than read: the
  * order of two bare numbers, the hemisphere of a grid reference typed without one, how a
  * letter that is both a UTM band and a hemisphere was taken, or which of two unlabelled national
@@ -17,7 +26,9 @@ export type SettingChoices<S extends FormatSettingsShape> = { readonly [K in key
  */
 export type ParseAssumption =
   | 'latLonOrder'
+  | 'lonLatOrder'
   | 'northernHemisphere'
+  | 'southernHemisphere'
   | 'utmLetterAsBand'
   | 'utmLetterAsHemisphere'
   | 'gridAxisOrder';
@@ -73,7 +84,8 @@ export interface FormatDefinition<S extends FormatSettingsShape> {
    * grid allows — printed finer, a point moved by up to half a grid square reads as a surveyed one.
    */
   formatProtected(lon: number, lat: number, settings: S, gridMetres: number): string | null;
-  parse(text: string): ParseOutcome;
+  /** Reads a text; `rules` settle what the text leaves open, the defaults where none are given. */
+  parse(text: string, rules?: ReadingRules): ParseOutcome;
 }
 
 export const NOT_THIS_FORMAT: ParseOutcome = { kind: 'notThisFormat' };

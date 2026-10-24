@@ -5,7 +5,7 @@ import { STEREO70, SWISS_LV03, SWISS_LV95 } from './nationalGrids.ts';
 import { PLUS_CODE } from './plusCodes.ts';
 import { DEFAULT_PROTECTION_GRID_METRES } from './protection.ts';
 import { FORMAT_IDS, type FormatId, type FormatSettings } from './settings.ts';
-import type { FormatDefinition, ParseError, ParsedPosition } from './types.ts';
+import type { FormatDefinition, ParseError, ParsedPosition, ReadingRules } from './types.ts';
 import { UTM } from './utm.ts';
 
 export {
@@ -83,11 +83,13 @@ export type PositionReading =
  * recognised the shape and found it malformed.
  *
  * Decimal degrees, degrees-minutes and degrees-minutes-seconds share one reader, which tells them
- * apart by the text's shape.
+ * apart by the text's shape. `rules` settle what a text leaves open — the order of two bare numbers,
+ * the hemisphere of a UTM reference with no letter — and are the person's own; the defaults where
+ * none are given.
  */
-export function readPosition(text: string, only?: FormatId): PositionReading {
+export function readPosition(text: string, only?: FormatId, rules?: ReadingRules): PositionReading {
   const angleIds: readonly FormatId[] = ['dd', 'ddm', 'dms'];
-  const readers: { id: FormatId; parse: (text: string) => ReturnType<typeof parseAngles> }[] = [];
+  const readers: { id: FormatId; parse: (text: string, rules?: ReadingRules) => ReturnType<typeof parseAngles> }[] = [];
   if (only === undefined || angleIds.includes(only)) {
     readers.push({ id: 'dd', parse: parseAngles });
   }
@@ -99,7 +101,7 @@ export function readPosition(text: string, only?: FormatId): PositionReading {
   const candidates: ParsedPosition[] = [];
   let error: ParseError | null = null;
   for (const reader of readers) {
-    const outcome = reader.parse(text);
+    const outcome = reader.parse(text, rules);
     if (outcome.kind === 'parsed') {
       candidates.push(...outcome.candidates);
     } else if (outcome.kind === 'invalid' && error === null) {

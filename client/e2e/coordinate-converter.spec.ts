@@ -126,3 +126,31 @@ test('a Stereo 70 reference typed into the entrance editor stores its WGS84 poin
     await tryAsPerson(page, 'DELETE', `/api/v1/caves/${cave.id}`);
   }
 });
+
+/**
+ * The order two bare numbers are read in is the member's own: chosen in Settings, kept with the
+ * account, and followed by the converter, which says which order it read. A registered account of
+ * its own, so the choice reaches no other spec.
+ */
+test('a pair pasted after choosing longitude first is read longitude first', async ({ page }) => {
+  const member = await registerAccount(page.request, 'reading-order');
+  await login(page, member.email, member.password);
+
+  await gotoRoute(page, '/settings/coordinates');
+  const written = page.waitForResponse(
+    (response) => response.url().endsWith('/api/v1/me/preferences') && response.request().method() === 'PATCH',
+  );
+  await choose(
+    page,
+    page.getByRole('combobox', { name: 'Two bare numbers' }),
+    'Longitude first, then latitude (25.44, 45.53)',
+  );
+  expect((await written).ok()).toBe(true);
+
+  await gotoRoute(page, '/tools/coordinates');
+  await page.getByTestId('converter-input').fill('25.44, 45.53');
+  await expect(page.getByTestId('converter-feedback')).toContainText(
+    'Two bare numbers were read as longitude, then latitude.',
+  );
+  await expect(page.getByTestId('converter-result-dd')).toHaveText('45.53000°N 25.44000°E');
+});

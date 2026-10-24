@@ -153,6 +153,15 @@ describe('reading a position in any format', () => {
     expect(angles.kind === 'parsed' && angles.candidates[0].format).toBe('ddm');
   });
 
+  it('reads what a text leaves open by the rules it is given', () => {
+    const lonLat = readPosition('25.5 45.5', undefined, { pairOrder: 'lonLat', bareUtmHemisphere: 'south' });
+    expect(lonLat.kind === 'parsed' && [lonLat.candidates[0].lon, lonLat.candidates[0].lat]).toEqual([25.5, 45.5]);
+    const south = readPosition('35 378752 5043143', undefined, { pairOrder: 'latLon', bareUtmHemisphere: 'south' });
+    expect(south.kind === 'parsed' && south.candidates.every((candidate) => candidate.lat < 0)).toBe(true);
+    const byDefault = readPosition('35 378752 5043143');
+    expect(byDefault.kind === 'parsed' && byDefault.candidates.some((candidate) => candidate.lat > 0)).toBe(true);
+  });
+
   it('reports why a recognisable text cannot be read, and that an unrecognisable one is not a position', () => {
     expect(readPosition('95.5 125.5')).toEqual({ kind: 'invalid', error: 'latitudeRange' });
     expect(readPosition('9QCJ+2V')).toEqual({ kind: 'invalid', error: 'plusCodeShort' });

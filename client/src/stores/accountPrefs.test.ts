@@ -335,6 +335,16 @@ describe('sanitizeAccountPrefs', () => {
     expect(out.coordinateSettings?.pluscode).toEqual({ length: 10 });
     expect(out.coordinateFormatsListed).toEqual(['mgrs', 'dd']);
   });
+
+  it('keeps the reading rules member by member, and writes nothing while they are the defaults', () => {
+    expect(sanitizeAccountPrefs({ coordinateReading: { pairOrder: 'lonLat', bareUtmHemisphere: 'east' } }).coordinateReading)
+      .toEqual({ pairOrder: 'lonLat', bareUtmHemisphere: 'north' });
+    expect(accountPrefsIn({ coordinateReading: { pairOrder: 'latLon', bareUtmHemisphere: 'north' } })).toEqual({});
+    expect(accountPrefsIn({ coordinateReading: { bareUtmHemisphere: 'south' } })).toEqual({
+      coordinateReading: { pairOrder: 'latLon', bareUtmHemisphere: 'south' },
+    });
+    expect(ACCOUNT_PREF_KEYS).toContain('coordinateReading');
+  });
 });
 
 describe('mergeAccountPrefs', () => {

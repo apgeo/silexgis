@@ -15,7 +15,25 @@ vi.mock('../../api/download.ts', () => ({
 afterEach(() => {
   cleanup();
   saved.blobs.length = 0;
-  useUiPrefsStore.setState({ coordinateFormat: 'dd', coordinateSettings: defaultFormatSettings() });
+  useUiPrefsStore.setState({
+    coordinateFormat: 'dd',
+    coordinateSettings: defaultFormatSettings(),
+    coordinateReading: { pairOrder: 'latLon', bareUtmHemisphere: 'north' },
+  });
+});
+
+it('reads two bare numbers in the order the account chose, and says which it was', () => {
+  open();
+  fireEvent.change(screen.getByTestId('converter-input'), { target: { value: '45.5, 25.5' } });
+  expect(screen.getByTestId('converter-feedback').textContent).toContain('read as latitude, then longitude');
+  expect(screen.getByTestId('converter-result-dd').textContent).toBe('45.50000°N 25.50000°E');
+  cleanup();
+
+  useUiPrefsStore.setState({ coordinateReading: { pairOrder: 'lonLat', bareUtmHemisphere: 'north' } });
+  open();
+  fireEvent.change(screen.getByTestId('converter-input'), { target: { value: '25.5, 45.5' } });
+  expect(screen.getByTestId('converter-feedback').textContent).toContain('read as longitude, then latitude');
+  expect(screen.getByTestId('converter-result-dd').textContent).toBe('45.50000°N 25.50000°E');
 });
 
 function open(path = '/tools/coordinates') {

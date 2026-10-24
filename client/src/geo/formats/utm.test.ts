@@ -68,6 +68,23 @@ describe('UTM reading', () => {
     expect(outcome.kind === 'parsed' && outcome.candidates[0].assumptions).toEqual(['northernHemisphere']);
   });
 
+  it('takes a reference without a letter as southern when the person chose that, and says so', () => {
+    const north = parseUtm('17 630084 4833438', { pairOrder: 'latLon', bareUtmHemisphere: 'north' });
+    const south = parseUtm('17 630084 4833438', { pairOrder: 'latLon', bareUtmHemisphere: 'south' });
+    if (north.kind !== 'parsed' || south.kind !== 'parsed') throw new Error('not parsed');
+    expect(south.candidates).toHaveLength(1);
+    expect(south.candidates[0].assumptions).toEqual(['southernHemisphere']);
+    // The same numbers, the same projection, the false northing of the south applied instead.
+    const [lon, lat] = fromUtm({ zone: 17, hemisphere: 'S', easting: 630084, northing: 4833438 });
+    expect(Math.abs(south.candidates[0].lon - lon)).toBeLessThan(1e-9);
+    expect(Math.abs(south.candidates[0].lat - lat)).toBeLessThan(1e-9);
+    expect(south.candidates[0].lat).toBeLessThan(0);
+    expect(north.candidates[0].lat).toBeGreaterThan(0);
+    // A letter settles it whatever the rule.
+    const lettered = parseUtm('17T 630084 4833438', { pairOrder: 'latLon', bareUtmHemisphere: 'south' });
+    expect(lettered.kind === 'parsed' && lettered.candidates[0].lat).toBeGreaterThan(0);
+  });
+
   it('offers both readings of S when the reference could be band S or the southern hemisphere', () => {
     // 35S 500000 3800000 is 34.3°N as band S, and 55.9°S as the southern hemisphere.
     const outcome = parseUtm('35S 500000 3800000');

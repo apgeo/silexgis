@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { sanitizeSettings, type SettingChoices, type FormatSettingsShape } from './types.ts';
+import { sanitizeSettings, type ReadingRules, type SettingChoices, type FormatSettingsShape } from './types.ts';
+
+export type { ReadingRules };
 
 /**
  * The formats a position can be written in, by id, with each one's settings: the choices a
@@ -140,4 +142,22 @@ export const DEFAULT_COORDINATE_FORMAT: CoordinateFormat = 'dd';
 /** Whether a stored value is a format this client knows, so an unknown one falls back. */
 export function isCoordinateFormat(value: unknown): value is CoordinateFormat {
   return isFormatId(value);
+}
+
+/**
+ * The reading rules a person may choose, kept with their account. The defaults are the readings
+ * this application has always made — latitude first, and the northern hemisphere — because every
+ * cave it was written for is north of the equator, while a GIS export that writes longitude first
+ * is common enough for a member who pastes from one to want it the other way round.
+ */
+export const READING_RULE_CHOICES: SettingChoices<ReadingRules> = {
+  pairOrder: ['latLon', 'lonLat'],
+  bareUtmHemisphere: ['north', 'south'],
+};
+
+export const DEFAULT_READING_RULES: ReadingRules = { pairOrder: 'latLon', bareUtmHemisphere: 'north' };
+
+/** Stored reading rules made safe member by member, like a format's settings. */
+export function sanitizeReadingRules(raw: unknown): ReadingRules {
+  return sanitizeSettings({ choices: READING_RULE_CHOICES, defaults: DEFAULT_READING_RULES }, raw);
 }

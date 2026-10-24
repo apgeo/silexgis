@@ -7,11 +7,13 @@ import { DEFAULT_SAVED_FILTER_AUDIENCE, type SavedFilterAudience } from '../filt
 import type { SelectorPrefs } from '../filters/selectorPrefs.ts';
 import {
   DEFAULT_COORDINATE_FORMAT,
+  DEFAULT_READING_RULES,
   defaultFormatSettings,
   FORMAT_IDS,
   type CoordinateFormat,
   type FormatId,
   type FormatSettings,
+  type ReadingRules,
 } from '../geo/formats/settings.ts';
 import type { DensityPref, PanelLayout, PanelPrefs, PanelScope } from './panelPrefs.ts';
 
@@ -200,6 +202,9 @@ interface UiPrefsState {
   /**
    * Which account the account preferences held here belong to — those `accountPrefDefaults`
    * lists. They are a cache of what that account has stored; undefined when no account has
+  /** How a typed or pasted position is read where the text itself leaves it open. */
+  coordinateReading: ReadingRules;
+  setCoordinateReading: (patch: Partial<ReadingRules>) => void;
    * claimed them.
    */
   accountId?: string;
@@ -262,6 +267,7 @@ export interface AccountPrefsState {
 }
 
 /**
+  coordinateReading: ReadingRules;
  * THE list of account preferences, with what each one is when nobody has chosen anything.
  *
  * Everything that treats the account's preferences as a set — which keys are written to the
@@ -288,6 +294,7 @@ export function accountPrefDefaults(): AccountPrefsState {
   };
 }
 
+    coordinateReading: DEFAULT_READING_RULES,
 /**
  * Cross-session personal UI preferences, persisted per browser. Deliberately separate
  * from the session-scoped workspace store: saved views and the workspace bus must never
@@ -395,6 +402,8 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       layoutsKeptHere: [],
       setLayoutsKeptHere: (ids) => set({ layoutsKeptHere: ids }),
       adoptAccount: (accountId) => {
+      setCoordinateReading: (patch) =>
+        set((state) => ({ coordinateReading: { ...state.coordinateReading, ...patch } })),
         let claim: AccountClaim = 'same';
         set((state) => {
           if (state.accountId === accountId) {

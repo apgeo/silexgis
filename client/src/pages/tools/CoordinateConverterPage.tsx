@@ -74,11 +74,12 @@ function SingleConverter() {
   const [picked, setPicked] = useState(0);
   const [onMap, setOnMap] = useState(false);
   const settings = useUiPrefsStore((s) => s.coordinateSettings);
+  const rules = useUiPrefsStore((s) => s.coordinateReading);
   const feedbackId = useId();
 
   const reading = useMemo(
-    () => (text.trim() === '' ? null : readPosition(text, choice === 'any' ? undefined : choice)),
-    [text, choice],
+    () => (text.trim() === '' ? null : readPosition(text, choice === 'any' ? undefined : choice, rules)),
+    [text, choice, rules],
   );
   const candidates = reading?.kind === 'parsed' ? reading.candidates : [];
   const position: ParsedPosition | undefined = candidates[Math.min(picked, candidates.length - 1)];
@@ -257,6 +258,7 @@ const SEPARATOR_OPTIONS: { value: Separator | 'auto'; key: string }[] = [
 function BatchConverter() {
   const { t } = useTranslation();
   const settings = useUiPrefsStore((s) => s.coordinateSettings);
+  const rules = useUiPrefsStore((s) => s.coordinateReading);
   const [text, setText] = useState('');
   const [mode, setMode] = useState<'lines' | 'csv'>('lines');
   const [separator, setSeparator] = useState<Separator | 'auto'>('auto');
@@ -273,7 +275,7 @@ function BatchConverter() {
 
   const convert = () => {
     const source: BatchSource = mode === 'lines' ? { mode } : { mode, separator, header, columns };
-    setResult(readBatch(text, source, choice === 'any' ? undefined : choice));
+    setResult(readBatch(text, source, choice === 'any' ? undefined : choice, rules));
   };
 
   const download = () => {

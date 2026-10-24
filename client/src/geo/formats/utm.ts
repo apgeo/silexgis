@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { normaliseCoordinateText } from './angles.ts';
 import { protectedGridStepMetres } from './protection.ts';
-import { FORMAT_SETTINGS, type UtmSettings } from './settings.ts';
+import { DEFAULT_READING_RULES, FORMAT_SETTINGS, type ReadingRules, type UtmSettings } from './settings.ts';
 import { invalid, NOT_THIS_FORMAT, type FormatDefinition, type ParsedPosition, type ParseOutcome } from './types.ts';
 import { BANDS, bandRange, fromUtm, toUtm, UTM_NORTH_LIMIT, UTM_SOUTH_LIMIT } from './utmMath.ts';
 
@@ -41,9 +41,10 @@ function inBand(lat: number, band: string): boolean {
  * N and S are both band letters and hemisphere letters. N reads the same either way (both are
  * north) unless the latitude falls outside band N, when it is a hemisphere; S as band S means
  * 32°–40°N and as a hemisphere means south, and when both readings are possible both are offered.
- * Without a letter the reference is taken as northern and says so.
+ * Without a letter the reference is taken in the hemisphere the reading rules name — northern
+ * unless the person chose otherwise — and says so.
  */
-export function parseUtm(raw: string): ParseOutcome {
+export function parseUtm(raw: string, rules: ReadingRules = DEFAULT_READING_RULES): ParseOutcome {
   const text = normaliseCoordinateText(raw);
   const head = /^(\d{1,2})(\s*)([A-Z])?(?=[\s,;])[\s,;]+(.*)$/.exec(text);
   if (!head) {
@@ -98,8 +99,11 @@ export function parseUtm(raw: string): ParseOutcome {
   const within = (lat: number) => lat >= UTM_SOUTH_LIMIT - 1 && lat <= UTM_NORTH_LIMIT + 1;
 
   if (letter === null) {
-    const [lon, lat] = readAs('N');
-    if (within(lat)) candidates.push({ lon, lat, format: 'utm', assumptions: ['northernHemisphere'] });
+    const south = rules.bareUtmHemisphere === 'south';
+    const [lon, lat] = readAs(south ? 'S' : 'N');
+    if (within(lat)) {
+      candidates.push({ lon, lat, format: 'utm', assumptions: [south ? 'southernHemisphere' : 'northernHemisphere'] });
+    }
   } else if (letter === 'N' || letter === 'S') {
     // Band N and the northern hemisphere are both read north, so N is one position either way.
     const asBand = readAs('N');

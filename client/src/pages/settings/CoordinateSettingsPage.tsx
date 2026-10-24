@@ -5,6 +5,7 @@ import { useSaveAccountPreferences } from '../../api/hooks/accountPrefs.ts';
 import { choiceLabel, formatLabel, settingLabel } from '../../components/coordinates/formatLabels.ts';
 import { formatCoordinate, type CoordinateFormat } from '../../geo/coordinateFormat.ts';
 import { FORMAT_IDS, FORMATS, writePosition, type FormatId, type FormatSettings } from '../../geo/formats/registry.ts';
+import { READING_RULE_CHOICES, type ReadingRules } from '../../geo/formats/settings.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
 /**
@@ -23,8 +24,9 @@ function samplePointFor(id: FormatId): [number, number] {
 const NOTES: Partial<Record<FormatId, true>> = { utm: true, mgrs: true, stereo70: true, lv95: true, lv03: true, pluscode: true };
 
 /**
- * Settings › Coordinates: the format positions are written in, the other formats a position shown
- * in detail is also listed in, and each format's own settings with a live preview.
+ * Settings › Coordinates: the format positions are written in, how a typed or pasted position is
+ * read where its text leaves that open, the other formats a position shown in detail is also listed
+ * in, and each format's own settings with a live preview.
  *
  * Every control writes the local copy at once and saves to the account in the background, the way
  * the other settings pages do, so a preview follows the choice without a round trip.
@@ -38,6 +40,8 @@ export default function CoordinateSettingsPage() {
   const setFormatSettings = useUiPrefsStore((s) => s.setFormatSettings);
   const listed = useUiPrefsStore((s) => s.coordinateFormatsListed);
   const setListed = useUiPrefsStore((s) => s.setCoordinateFormatsListed);
+  const reading = useUiPrefsStore((s) => s.coordinateReading);
+  const setReading = useUiPrefsStore((s) => s.setCoordinateReading);
 
   const save = useSaveAccountPreferences();
   const saveNow = () => save.mutate(undefined, { onError: () => message.error(t('common.saveFailed')) });
@@ -71,6 +75,32 @@ export default function CoordinateSettingsPage() {
             />
           </Flex>
           <Typography.Text type="secondary">{t('coordinates.settings.sample')}</Typography.Text>
+        </Flex>
+      </Card>
+
+      <Card title={t('coordinates.settings.reading.title')}>
+        <Flex vertical gap={12}>
+          <Typography.Text type="secondary">{t('coordinates.settings.reading.intro')}</Typography.Text>
+          {(Object.keys(READING_RULE_CHOICES) as (keyof ReadingRules)[]).map((rule) => (
+            <Flex key={rule} gap={12} align="center" wrap>
+              <Typography.Text style={{ minWidth: 160 }}>{t(`coordinates.settings.reading.${rule}`)}</Typography.Text>
+              <Select
+                style={{ minWidth: 280, maxWidth: '100%' }}
+                popupMatchSelectWidth={false}
+                value={reading[rule]}
+                onChange={(value: string) => {
+                  setReading({ [rule]: value } as Partial<ReadingRules>);
+                  saveNow();
+                }}
+                aria-label={t(`coordinates.settings.reading.${rule}`)}
+                data-testid={`coordinate-reading-${rule}`}
+                options={READING_RULE_CHOICES[rule].map((value) => ({
+                  value,
+                  label: t(`coordinates.settings.reading.${rule}Values.${value}`),
+                }))}
+              />
+            </Flex>
+          ))}
         </Flex>
       </Card>
 

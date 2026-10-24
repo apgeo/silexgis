@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { readPosition, writePosition, type FormatId, type FormatSettings } from './registry.ts';
-import type { ParseAssumption, ParseError } from './types.ts';
+import type { ParseAssumption, ParseError, ReadingRules } from './types.ts';
 
 /**
  * Many positions converted at once, from text pasted into the converter: one position per line,
@@ -95,11 +95,11 @@ export function numberedLines(text: string): { lines: { line: number; text: stri
 }
 
 /** One text read as a position, with a reading that is genuinely two positions refused as ambiguous. */
-export function readOne(text: string, only?: FormatId): BatchOutcome {
+export function readOne(text: string, only?: FormatId, rules?: ReadingRules): BatchOutcome {
   if (text.trim() === '') {
     return { kind: 'error', error: 'empty' };
   }
-  const reading = readPosition(text, only);
+  const reading = readPosition(text, only, rules);
   if (reading.kind === 'invalid') {
     return { kind: 'error', error: reading.error };
   }
@@ -115,10 +115,15 @@ export function readOne(text: string, only?: FormatId): BatchOutcome {
 }
 
 /** Every position in a pasted text, a row per non-blank line (the header line excepted). */
-export function readBatch(text: string, source: BatchSource, only?: FormatId): { rows: BatchRow[]; leftOut: number } {
+export function readBatch(
+  text: string,
+  source: BatchSource,
+  only?: FormatId,
+  rules?: ReadingRules,
+): { rows: BatchRow[]; leftOut: number } {
   const { lines, leftOut } = numberedLines(text);
   if (source.mode === 'lines') {
-    return { rows: lines.map(({ line, text: value }) => ({ line, input: value.trim(), outcome: readOne(value, only) })), leftOut };
+    return { rows: lines.map(({ line, text: value }) => ({ line, input: value.trim(), outcome: readOne(value, only, rules) })), leftOut };
   }
   const separator = source.separator === 'auto' ? detectSeparator(lines[0]?.text ?? '') : source.separator;
   const body = source.header ? lines.slice(1) : lines;
@@ -129,7 +134,7 @@ export function readBatch(text: string, source: BatchSource, only?: FormatId): {
       return { line, input: value.trim(), outcome: { kind: 'error', error: 'missingColumn' } as BatchOutcome };
     }
     const input = picked.join(' ');
-    return { line, input, outcome: readOne(input, only) };
+    return { line, input, outcome: readOne(input, only, rules) };
   });
   return { rows, leftOut };
 }

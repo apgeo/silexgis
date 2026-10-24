@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { protectedDecimalPlaces } from './protection.ts';
-import { FORMAT_SETTINGS, type DdmSettings, type DdSettings, type DmsSettings } from './settings.ts';
+import {
+  DEFAULT_READING_RULES,
+  FORMAT_SETTINGS,
+  type DdmSettings,
+  type DdSettings,
+  type DmsSettings,
+  type ReadingRules,
+} from './settings.ts';
 import {
   invalid,
   NOT_THIS_FORMAT,
@@ -243,7 +250,7 @@ const ANGLE_FORMAT_BY_COMPONENTS = ['dd', 'ddm', 'dms'] as const;
  * commas. Without letters the order is latitude, longitude unless the first number can only be a
  * longitude; the reading then says the order was assumed.
  */
-export function parseAngles(raw: string): ParseOutcome {
+export function parseAngles(raw: string, rules: ReadingRules = DEFAULT_READING_RULES): ParseOutcome {
   const text = normaliseCoordinateText(raw);
   if (text === '') {
     return NOT_THIS_FORMAT;
@@ -301,6 +308,10 @@ export function parseAngles(raw: string): ParseOutcome {
     firstIsLat = secondAxis === 'lon';
   } else if (Math.abs(first.degrees) > 90 && Math.abs(second.degrees) <= 90) {
     firstIsLat = false;
+  } else if (rules.pairOrder === 'lonLat' && !(Math.abs(second.degrees) > 90 && Math.abs(first.degrees) <= 90)) {
+    // Longitude first, as the person chose — unless the second number cannot be a latitude.
+    firstIsLat = false;
+    assumptions.push('lonLatOrder');
   } else {
     firstIsLat = true;
     assumptions.push('latLonOrder');
