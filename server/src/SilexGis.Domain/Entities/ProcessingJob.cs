@@ -204,6 +204,12 @@ public static class ProcessingJobKinds
     public const string TerrainDerivative = "terrain-derivative";
 
     /// <summary>
+    /// Download a region of a planet build of OpenStreetMap vector tiles as the installation's own
+    /// basemap, and make it the one served. Asked for by an administrator, one at a time.
+    /// </summary>
+    public const string BasemapExtract = "basemap-extract";
+
+    /// <summary>
     /// The kinds that run on a worker of their own rather than on the general one.
     /// </summary>
     /// <remarks>
@@ -227,8 +233,12 @@ public static class ProcessingJobKinds
     /// rewriting; sharing one worker with builds is what makes it impossible for the two to run at
     /// once over the same files.
     /// </para>
+    /// <para>
+    /// A basemap download is here for the first reason only: a country is minutes of downloading,
+    /// and on the general lane every import and conversion behind it would wait for all of them.
+    /// </para>
     /// </remarks>
-    public static readonly IReadOnlyList<string> TerrainLane = [TerrainBuild, TerrainDerivative];
+    public static readonly IReadOnlyList<string> TerrainLane = [TerrainBuild, TerrainDerivative, BasemapExtract];
 
     /// <summary>
     /// The kinds nobody is waiting on, which a worker takes only when no other job of its lane is

@@ -107,6 +107,7 @@ export const specs = {
   ],
   // A shared view opened with no account: its background and the public data its link draws.
   mapViews: ['shared-view.spec.ts', 'karst-layers.spec.ts', 'map-filters.spec.ts'],
+  basemap: [],
   me: ['settings.spec.ts', 'my-trips.spec.ts', 'workspace-state.spec.ts', 'sign-out.spec.ts'],
   messaging: ['announcements.spec.ts', 'notifications.spec.ts', 'notification-health.spec.ts'],
   metadata: ['documents.spec.ts', 'gallery.spec.ts'],

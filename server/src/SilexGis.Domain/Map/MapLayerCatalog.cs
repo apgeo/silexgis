@@ -609,7 +609,8 @@ public static class MapLayerCatalog
                 return null;
             }
 
-            filled = named == 3 ? TileCoordinates : [];
+            // A template may also name where the installation's own basemap extract goes.
+            filled = named == 3 ? [.. TileCoordinates, SelfHostedBasemap.Placeholder] : [];
         }
 
         if (StrayPlaceholder(url, filled) is { } stray)
@@ -617,7 +618,7 @@ public static class MapLayerCatalog
             problems.Add(new MapLayerCatalogProblem(
                 MapLayerCatalogCodes.StrayPlaceholder,
                 filled.Count > 0
-                    ? $"'{name}' is a vector tile template holding {stray}, which the map does not fill (it fills {{z}}, {{x}} and {{y}}); skipped"
+                    ? $"'{name}' is a vector tile template holding {stray}, which the map does not fill (it fills {{z}}, {{x}}, {{y}} and {SelfHostedBasemap.Placeholder}); skipped"
                     : $"'{name}' is a {MapLayerKinds.NameOf(format)} vector layer whose url holds {stray}; that url is the address alone; skipped"));
             return null;
         }

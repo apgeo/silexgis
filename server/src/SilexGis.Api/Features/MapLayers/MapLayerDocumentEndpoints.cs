@@ -8,6 +8,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Map;
+using SilexGis.Infrastructure.Basemap;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.MapLayers;
@@ -97,7 +98,7 @@ public static class MapLayerDocumentEndpoints
     }
 
     private static async Task<Results<Ok<List<MapBackgroundDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
-        SilexGisDbContext db, IAccessContextAccessor accessAccessor, CancellationToken ct)
+        SilexGisDbContext db, IAccessContextAccessor accessAccessor, BasemapStore basemap, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null)
@@ -111,8 +112,10 @@ public static class MapLayerDocumentEndpoints
         }
 
         var rows = await Backgrounds(db).AsNoTracking().OrderBy(l => l.SortOrder).ToListAsync(ct);
+        var sourceId = basemap.CurrentSourceId();
         return TypedResults.Ok(rows
             .Where(l => MapLayerOptionsJson.IsDrawable(l.LayerKind, l.Options))
+            .Where(l => SelfHostedBasemap.Published(l.UrlTemplate, sourceId) is not null)
             .Select(ToDto)
             .ToList());
     }

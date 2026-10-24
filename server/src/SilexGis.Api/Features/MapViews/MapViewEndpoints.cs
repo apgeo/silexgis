@@ -10,6 +10,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
 using SilexGis.Domain.Map;
+using SilexGis.Infrastructure.Basemap;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -334,6 +335,7 @@ public static class MapViewEndpoints
         Guid token,
         SilexGisDbContext db,
         IOptions<MapOptions> mapOptions,
+        BasemapStore basemap,
         CancellationToken ct)
     {
         var view = await db.MapViews.AsNoTracking().FirstOrDefaultAsync(x => x.ShareToken == token, ct);
@@ -355,7 +357,7 @@ public static class MapViewEndpoints
             view.Name,
             camera is null ? null : new SharedViewCameraDto(camera.Longitude, camera.Latitude, camera.Zoom),
             reach is null ? null : new SharedViewReachDto(reach.West, reach.South, reach.East, reach.North, reach.LowestZoom),
-            await SharedBackgroundAsync(db, anyAccount, config.BaseLayerId, ct),
+            await SharedBackgroundAsync(db, anyAccount, config.BaseLayerId, basemap.CurrentSourceId(), ct),
             overlays));
     }
 
@@ -377,7 +379,7 @@ public static class MapViewEndpoints
     /// </para>
     /// </remarks>
     private static async Task<SharedViewBackgroundDto?> SharedBackgroundAsync(
-        SilexGisDbContext db, AccessContext anyAccount, long? chosenId, CancellationToken ct)
+        SilexGisDbContext db, AccessContext anyAccount, long? chosenId, string? sourceId, CancellationToken ct)
     {
         if (!AccessEvaluator.Decide(anyAccount, AccessDomain.MapLayers, AccessAction.Read, null).Allowed)
         {
@@ -389,6 +391,7 @@ public static class MapViewEndpoints
                 .OrderBy(l => l.SortOrder)
                 .ToListAsync(ct))
             .Where(l => MapLayerOptionsJson.IsDrawable(l.LayerKind, l.Options))
+            .Where(l => SelfHostedBasemap.Published(l.UrlTemplate, sourceId) is not null)
             .ToList();
         var layer = usable.FirstOrDefault(l => l.Id == chosenId)
             ?? usable.FirstOrDefault(l => l.IsDefault)
@@ -398,7 +401,7 @@ public static class MapViewEndpoints
             : new SharedViewBackgroundDto(
                 layer.Name,
                 layer.LayerKind,
-                layer.UrlTemplate,
+                SelfHostedBasemap.Published(layer.UrlTemplate, sourceId)!,
                 MapLayerOptionsJson.Wms(layer.LayerKind, layer.Options),
                 MapLayerOptionsJson.Wmts(layer.LayerKind, layer.Options),
                 MapLayerOptionsJson.Cog(layer.LayerKind, layer.Options),

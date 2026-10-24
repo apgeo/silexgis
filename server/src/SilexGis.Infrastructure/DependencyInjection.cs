@@ -395,6 +395,18 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, TerrainBuildHandler>();
         services.AddScoped<IProcessingJobHandler, TerrainUploadSweepHandler>();
 
+        // The installation's own basemap: the directory it is kept in, the download that cuts a
+        // region of a planet build into it, and the list of builds offered. The source's address is
+        // configuration; nothing an administrator types becomes an address.
+        services.Configure<Basemap.BasemapOptions>(configuration.GetSection(Basemap.BasemapOptions.SectionName));
+        services.AddSingleton<Basemap.BasemapStore>();
+        services.AddSingleton<Basemap.BasemapCancellation>();
+        services.AddSingleton<Basemap.IBasemapExtractor, Basemap.PmtilesCliExtractor>();
+        services.AddHttpClient(Basemap.ProtomapsBuildList.HttpClientName);
+        services.AddSingleton<Basemap.IBasemapBuilds, Basemap.ProtomapsBuildList>();
+        services.AddScoped<IProcessingJobHandler, BasemapExtractHandler>();
+        services.AddHostedService<Basemap.BasemapFirstDownload>();
+
         // Obtaining the rasters: a client for the open elevation dataset, and the step that copies
         // in what was downloaded or uploaded and lists what a directory the operator named holds —
         // those are read where they are, never copied — plus the one answer every later step asks

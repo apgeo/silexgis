@@ -187,6 +187,21 @@ public class MapLayerCogAndVectorCatalogTests
     }
 
     [Fact]
+    public void A_tile_template_may_name_where_the_installations_own_basemap_extract_goes_and_nothing_else_may()
+    {
+        var result = Read(
+            """
+            <layer name="Own" kind="vector" format="mvt" url="/basemap/tiles/{basemap}/{z}/{x}/{y}" maxZoom="15" />
+            <layer name="Archive" kind="vector" format="pmtiles" url="/basemap/{basemap}.pmtiles" />
+            <layer name="Styled" kind="vector" format="mvt" url="/basemap/tiles/{basemap}/{z}/{x}/{y}" style="/styles/{basemap}.json" />
+            """);
+
+        Assert.Equal("/basemap/tiles/{basemap}/{z}/{x}/{y}", Assert.Single(result.Layers).UrlTemplate);
+        Assert.All(result.Problems, p => Assert.Equal(MapLayerCatalogCodes.StrayPlaceholder, p.Code));
+        Assert.Equal(["Archive", "Styled"], result.RefusedNames);
+    }
+
+    [Fact]
     public void A_label_field_may_name_one_language_for_every_reader()
     {
         var entry = Assert.Single(Read(

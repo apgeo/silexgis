@@ -2497,6 +2497,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/basemap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The installation's own basemap: whether it is served, the extract served now and the latest download. */
+        get: operations["basemapStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/basemap/builds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The planet builds the configured source publishes, newest first. */
+        get: operations["basemapBuilds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/basemap/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What an extract of a region would weigh, and whether it would be accepted. Downloads nothing. */
+        post: operations["basemapEstimate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/basemap/downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Downloads a region as the installation's basemap, in the background; one at a time. */
+        post: operations["basemapDownload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/basemap/downloads/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Calls a download off. The extract being served stays as it was. */
+        post: operations["basemapCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves": {
         parameters: {
             query?: never;
@@ -8114,6 +8199,86 @@ export interface components {
         };
         AvatarPresetsDto: {
             presets: string[];
+        };
+        BasemapBuildDto: {
+            build: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: date-time */
+            uploaded: null | string;
+            version: null | string;
+        };
+        BasemapDownloadDto: {
+            /** Format: int64 */
+            id: number;
+            state: components["schemas"]["BasemapDownloadState"];
+            /** Format: int32 */
+            percent: number;
+            region: components["schemas"]["BasemapRegionDto"];
+            /** Format: int32 */
+            maxZoom: number;
+            build: null | string;
+            errorCode: null | string;
+            error: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            startedAt: null | string;
+            /** Format: date-time */
+            completedAt: null | string;
+        };
+        /** @enum {unknown} */
+        BasemapDownloadState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+        BasemapEstimateDto: {
+            build: string;
+            /** Format: int64 */
+            bytes: number;
+            /** Format: int64 */
+            freeBytes: null | number;
+            refusalCode: null | string;
+        };
+        BasemapFileDto: {
+            sourceId: string;
+            build: string;
+            /** Format: date-time */
+            extractedAt: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            region: null | components["schemas"]["BasemapRegionDto"];
+            /** Format: int32 */
+            maxZoom: null | number;
+        };
+        BasemapPresetDto: {
+            key: string;
+            region: components["schemas"]["BasemapRegionDto"];
+        };
+        BasemapRegionDto: {
+            /** Format: double */
+            west: number;
+            /** Format: double */
+            south: number;
+            /** Format: double */
+            east: number;
+            /** Format: double */
+            north: number;
+        };
+        BasemapRegionRequest: {
+            region: null | components["schemas"]["BasemapRegionDto"];
+            /** Format: int32 */
+            maxZoom: number;
+            build: null | string;
+        };
+        BasemapStatusDto: {
+            selfHosted: boolean;
+            current: null | components["schemas"]["BasemapFileDto"];
+            download: null | components["schemas"]["BasemapDownloadDto"];
+            entries: string[];
+            presets: components["schemas"]["BasemapPresetDto"][];
+            /** Format: int32 */
+            maxZoom: number;
+            /** Format: int64 */
+            maxBytes: number;
+            source: string;
         };
         BulkFilingRequest: {
             documentIds: string[];
@@ -21443,6 +21608,179 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    basemapStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasemapStatusDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    basemapBuilds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasemapBuildDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    basemapEstimate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BasemapRegionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasemapEstimateDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    basemapDownload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BasemapRegionRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasemapDownloadDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    basemapCancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasemapDownloadDto"];
                 };
             };
             /** @description Unauthorized */

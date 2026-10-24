@@ -6,6 +6,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Map;
+using SilexGis.Infrastructure.Basemap;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.MapLayers;
@@ -67,7 +68,7 @@ public static class MapLayerEndpoints
     }
 
     private static async Task<Results<Ok<List<MapLayerDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
-        SilexGisDbContext db, IAccessContextAccessor accessAccessor, CancellationToken ct)
+        SilexGisDbContext db, IAccessContextAccessor accessAccessor, BasemapStore basemap, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null)
@@ -89,18 +90,25 @@ public static class MapLayerEndpoints
         // stored options do not read back, would be a radio button or a switch that draws
         // nothing. The catalogue reports such entries when it is read; a row put into the table
         // some other way is simply not offered.
-        var published = rows.Where(l => MapLayerOptionsJson.IsDrawable(l.LayerKind, l.Options)).ToList();
+        // An entry drawn from the installation's own basemap is published only while there is an
+        // extract to serve, under the address of that extract.
+        var sourceId = basemap.CurrentSourceId();
+        var published = rows
+            .Where(l => MapLayerOptionsJson.IsDrawable(l.LayerKind, l.Options))
+            .Select(l => (Layer: l, Url: SelfHostedBasemap.Published(l.UrlTemplate, sourceId)))
+            .Where(l => l.Url is not null)
+            .ToList();
         // By name, as a stand-in is named; two rows whose names differ only in case can only have
         // been put in by hand, and the first of them stands.
         var byName = published
-            .GroupBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-        return TypedResults.Ok(published.Select(l => ToDto(l, byName)).ToList());
+            .GroupBy(l => l.Layer.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Layer, StringComparer.OrdinalIgnoreCase);
+        return TypedResults.Ok(published.Select(l => ToDto(l.Layer, l.Url!, byName)).ToList());
     }
 
-    /// <summary>A stored layer as the map reads it, among the others published with it.</summary>
-    private static MapLayerDto ToDto(MapLayer l, IReadOnlyDictionary<string, MapLayer> published) => new(
-        l.Id, l.Name, l.LayerKind, l.UrlTemplate,
+    /// <summary>A stored layer as the map reads it, at its published address, among the others published with it.</summary>
+    private static MapLayerDto ToDto(MapLayer l, string url, IReadOnlyDictionary<string, MapLayer> published) => new(
+        l.Id, l.Name, l.LayerKind, url,
         MapLayerOptionsJson.Wms(l.LayerKind, l.Options),
         MapLayerOptionsJson.Wmts(l.LayerKind, l.Options),
         MapLayerOptionsJson.Cog(l.LayerKind, l.Options),
