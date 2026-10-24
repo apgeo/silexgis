@@ -11,16 +11,29 @@ import type { UserManager } from 'oidc-client-ts';
  * endpoint answers it without asking anything: the reader lands back where they were, signed in.
  * Nothing here clears the user in place, so nothing on the page can react before it is gone.
  *
- * <b>Why the cookie is what is ended.</b> It is the only part of the session that outlives the page:
- * the tokens live in memory, so loading `destination` as a new document is what discards them,
- * together with every cached answer about the account. The renewal is stopped first so that no
- * renewal spends the refresh token in between.
+ * <b>Why the cookie is ended, and the renewal key cancelled.</b> The cookie is the part of the
+ * session that outlives the page: the tokens live in memory, so loading `destination` as a new
+ * document is what discards them, together with every cached answer about the account. But a copy
+ * of the refresh token taken out of the page beforehand would otherwise stay good for weeks, so it is
+ * cancelled on the server first — which also ends every earlier key of this one sign-in, and no
+ * other sign-in of the account. The renewal is stopped before that, so that no renewal spends the
+ * key in between and leaves a fresh one uncancelled.
+ *
+ * <b>Never in the way of leaving.</b> Neither request can stop the sign-out: if the server cannot
+ * be reached, the page still forgets its keys and leaves.
  */
 export async function endSession(
-  userManager: Pick<UserManager, 'stopSilentRenew'>,
+  userManager: Pick<UserManager, 'stopSilentRenew' | 'revokeTokens'>,
   destination: string,
 ): Promise<void> {
   userManager.stopSilentRenew();
+  try {
+    // Only the refresh token: the access token is a signed document the API checks by its
+    // signature, so cancelling it would change nothing for the quarter of an hour it has left.
+    await userManager.revokeTokens(['refresh_token']);
+  } catch {
+    // Unreachable server, or a key already gone: the page forgets it either way.
+  }
   try {
     await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin' });
   } catch {

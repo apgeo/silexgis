@@ -33,7 +33,8 @@ const cachedPrefs = (page: Page) =>
  * asking anything. A sign-out that left it behind would look done and be undone by the next page
  * load — so the proof is a protected route opened afterwards, as a new document, that has to ask for
  * the password. As an account of its own: the session and the arrangement ended here are nobody
- * else's.
+ * else's. The renewal key the page held is cancelled on the server as well, so a copy of it taken
+ * out of the page beforehand renews nothing afterwards.
  */
 test('signing out ends the session and releases the arrangement this browser held', async ({ page }) => {
   const member = await registerAccount(page.request, 'signout');
@@ -49,8 +50,16 @@ test('signing out ends the session and releases the arrangement this browser hel
   // The positive case first: before signing out the cache is the member's and carries the choice.
   await expect.poll(() => cachedPrefs(page)).toEqual({ accountId: member.id, coordinateFormat: 'utm' });
 
+  // The page cancels its renewal key on the server before it forgets it.
+  const revoked = page.waitForRequest((request) => request.url().endsWith('/connect/revoke'));
   await page.getByTestId('account-menu').click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  const revocation = await revoked;
+  expect((await revocation.response())?.status()).toBe(200);
+  const sent = new URLSearchParams(revocation.postData() ?? '');
+  expect(sent.get('token_type_hint')).toBe('refresh_token');
+  const key = sent.get('token');
+  expect(key).toBeTruthy();
 
   // The end-session round trip comes back to the application, which finds no session and is sent
   // to the sign-in form — not straight back in.
@@ -66,4 +75,10 @@ test('signing out ends the session and releases the arrangement this browser hel
   await page.waitForURL(/\/login\?returnUrl=/, { timeout: 60_000 });
   await expect(page.getByLabel('Password')).toBeVisible();
   await expect(page.getByTestId('app-sider')).toHaveCount(0);
+
+  // And the key the page held, had somebody copied it out beforehand, renews nothing any more.
+  const renewal = await page.request.post('/connect/token', {
+    form: { grant_type: 'refresh_token', refresh_token: key!, client_id: 'silexgis-spa' },
+  });
+  expect(renewal.status()).toBe(400);
 });

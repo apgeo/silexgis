@@ -104,6 +104,8 @@ public static class IdentitySeeder
                 Permissions.Endpoints.Authorization,
                 Permissions.Endpoints.Token,
                 Permissions.Endpoints.EndSession,
+                // Signing out cancels the refresh token the page holds.
+                Permissions.Endpoints.Revocation,
                 Permissions.GrantTypes.AuthorizationCode,
                 Permissions.GrantTypes.RefreshToken,
                 Permissions.ResponseTypes.Code,
@@ -142,6 +144,7 @@ public static class IdentitySeeder
             {
                 Permissions.Endpoints.Authorization,
                 Permissions.Endpoints.Token,
+                Permissions.Endpoints.Revocation,
                 Permissions.GrantTypes.AuthorizationCode,
                 Permissions.GrantTypes.RefreshToken,
                 Permissions.ResponseTypes.Code,

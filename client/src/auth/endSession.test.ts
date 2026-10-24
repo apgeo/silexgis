@@ -14,6 +14,10 @@ describe('endSession', () => {
     vi.spyOn(userManager, 'stopSilentRenew').mockImplementation(() => {
       steps.push('stop renewal');
     });
+    vi.spyOn(userManager, 'revokeTokens').mockImplementation((types) => {
+      steps.push(`revoke ${types?.join(',')}`);
+      return Promise.resolve();
+    });
     // Clearing the user while the page is still open is what let the page's own guard start a
     // sign-in of its own, answered by the cookie, before the sign-out had gone anywhere.
     const removeUser = vi.spyOn(userManager, 'removeUser');
@@ -29,13 +33,19 @@ describe('endSession', () => {
 
     await endSession(userManager, '/');
 
-    expect(steps).toEqual(['stop renewal', 'POST /api/v1/auth/logout (same-origin)', 'replace /']);
+    expect(steps).toEqual([
+      'stop renewal',
+      'revoke refresh_token',
+      'POST /api/v1/auth/logout (same-origin)',
+      'replace /',
+    ]);
     expect(removeUser).not.toHaveBeenCalled();
     expect(signoutRedirect).not.toHaveBeenCalled();
   });
 
   it('still leaves when the server cannot be reached', async () => {
     vi.spyOn(userManager, 'stopSilentRenew').mockImplementation(() => undefined);
+    vi.spyOn(userManager, 'revokeTokens').mockRejectedValue(new TypeError('offline'));
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('offline'))));
     const replace = vi.fn();
     vi.stubGlobal('location', { replace });
@@ -43,5 +53,23 @@ describe('endSession', () => {
     await endSession(userManager, '/login?passwordChanged=1');
 
     expect(replace).toHaveBeenCalledWith('/login?passwordChanged=1');
+  });
+
+  it('ends the cookie and leaves even when cancelling the key is refused', async () => {
+    const steps: string[] = [];
+    vi.spyOn(userManager, 'stopSilentRenew').mockImplementation(() => undefined);
+    vi.spyOn(userManager, 'revokeTokens').mockRejectedValue(new Error('invalid_client'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        steps.push(`fetch ${url}`);
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }),
+    );
+    vi.stubGlobal('location', { replace: (to: string) => steps.push(`replace ${to}`) });
+
+    await endSession(userManager, '/');
+
+    expect(steps).toEqual(['fetch /api/v1/auth/logout', 'replace /']);
   });
 });

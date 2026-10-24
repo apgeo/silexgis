@@ -105,13 +105,24 @@ public static class AuthenticationSetup
                 options.SetAuthorizationEndpointUris("connect/authorize")
                     .SetTokenEndpointUris("connect/token")
                     .SetEndSessionEndpointUris("connect/logout")
-                    .SetUserInfoEndpointUris("connect/userinfo");
+                    .SetUserInfoEndpointUris("connect/userinfo")
+                    // Token revocation, so that signing out can cancel the renewal key the page
+                    // held rather than leave it valid for the rest of its window. The protocol's
+                    // own endpoint, answered by the sign-in server itself: it needs no access token
+                    // (which may already have expired when somebody signs out), it is idempotent
+                    // (an unknown or already revoked token is answered as success), and the only
+                    // thing it can be made to do is cancel a token the caller already holds — so it
+                    // is not a cross-site risk and offers nothing to an anonymous caller.
+                    .SetRevocationEndpointUris("connect/revoke");
 
                 options.AllowAuthorizationCodeFlow()
                     .RequireProofKeyForCodeExchange()
                     .AllowRefreshTokenFlow();
 
                 options.RegisterScopes(Scopes.Profile, Scopes.Email, Scopes.Roles);
+
+                // Revoking a refresh token ends the sign-in it belongs to, not only that token.
+                options.AddEventHandler(SignInRevocation.Descriptor);
 
                 options.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));
                 options.SetRefreshTokenLifetime(TimeSpan.FromDays(30));

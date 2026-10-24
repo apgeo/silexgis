@@ -231,6 +231,8 @@ export const groups = {
     'TokenCertificateTests',
     // Finished sign-in tokens and authorizations are pruned on a schedule.
     'TokenStorePruneTests',
+    // Signing out cancels that sign-in's renewal key at the revocation endpoint.
+    'SignOutRevocationTests',
   ],
   resLinks: [
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
