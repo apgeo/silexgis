@@ -149,7 +149,10 @@ description of the caves in the shared speleological vocabulary published by the
 using different software can read them. It exports every cave the registry's filter finds — the
 quick controls and the advanced conditions alike — not only the page on screen. While the
 registry is cut to the map's view it is unavailable: *"Not while the list is cut to the map's
-window — clear the window to export the whole filtered list."* One file holds at most 5,000 caves;
+window — clear the window to export the whole filtered list."* The reason is protection: the
+interchange file includes a protected cave whatever its position, so a file cut to a window would
+have to decide by that position which protected caves belong in it — and the list of caves in the
+file would then hint at where they are. One file holds at most 5,000 caves;
 a larger set is refused, and the dialog asks you to narrow the filters and export in parts rather
 than handing over a file that stopped at a limit.
 

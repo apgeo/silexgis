@@ -150,7 +150,10 @@ descriere a peșterilor în vocabularul speologic comun publicat de UIS, astfel 
 folosește alt program să le poată citi. Exportă toate peșterile pe care le găsește filtrul
 registrului — câmpurile rapide și condițiile avansate deopotrivă — nu doar pagina de pe ecran. Cât
 timp registrul este restrâns la vederea hărții, nu este disponibil: *„Nu cât timp lista este
-restrânsă la fereastra hărții — elimină fereastra pentru a exporta toată lista filtrată."* Un
+restrânsă la fereastra hărții — elimină fereastra pentru a exporta toată lista filtrată."* Motivul
+este protecția: fișierul de interschimb cuprinde o peșteră protejată oricare i-ar fi poziția, așa că
+un fișier restrâns la o fereastră ar trebui să hotărască după acea poziție care peșteri protejate
+intră în el — iar lista peșterilor din fișier ar sugera atunci unde se află. Un
 fișier cuprinde cel mult 5.000 de peșteri; un set mai mare este refuzat, iar dialogul îți cere să
 restrângi filtrele și să exporți pe părți, în loc să predea un fișier oprit la o limită.
 
