@@ -163,6 +163,15 @@ public class Attachment : ITimestamped, IAuditable, IAuditChild
     /// </summary>
     public bool IsPrimary { get; set; }
 
+    /// <summary>
+    /// Whether a phone offering "download the usual files" includes this one. Nothing is pushed
+    /// because of it: a phone fetches files only when its caver asks, and this only says which
+    /// of the catalogue that one request covers. On the attachment rather than the document,
+    /// because what is worth carrying into a cave is a property of what the file is hung on — the
+    /// entrance photo of this cave, not the photo everywhere it is used. Any number per object.
+    /// </summary>
+    public bool InDeviceDefaultSet { get; set; }
+
     public Guid? AddedBy { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

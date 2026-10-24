@@ -66,3 +66,26 @@ public sealed class SyncSetMemberConfiguration : IEntityTypeConfiguration<SyncSe
             .HasDatabaseName("ux_sync_set_members_set_root");
     }
 }
+
+public sealed class SyncLinkRemovalConfiguration : IEntityTypeConfiguration<SyncLinkRemoval>
+{
+    public void Configure(EntityTypeBuilder<SyncLinkRemoval> builder)
+    {
+        // Written by the trigger on the attachments table, which the migration that creates this
+        // table also creates; the application only reads it.
+        builder.ToTable("sync_link_removals");
+        builder.Property(x => x.Id).UseIdentityByDefaultColumn();
+        builder.Property(x => x.EntityType).HasConversion<short?>();
+
+        // No foreign keys, on purpose: every row describes something that is no longer there,
+        // and a key to the feature or the file would delete the record of the removal together
+        // with the last thing that could have explained it.
+
+        // A documents stream reads the removals hanging on the features it hands out, in its
+        // own order — the target first, then the change key and the identifier it pages on.
+        builder.HasIndex(x => new { x.FeatureId, x.RemovedAt, x.AttachmentId })
+            .HasDatabaseName("ix_sync_link_removals_feature_removed");
+        builder.HasIndex(x => new { x.EntityType, x.EntityId })
+            .HasDatabaseName("ix_sync_link_removals_entity");
+    }
+}

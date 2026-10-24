@@ -823,6 +823,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("file_id");
 
+                    b.Property<bool>("InDeviceDefaultSet")
+                        .HasColumnType("boolean")
+                        .HasColumnName("in_device_default_set");
+
                     b.Property<bool>("IsPrimary")
                         .HasColumnType("boolean")
                         .HasColumnName("is_primary");
@@ -5884,6 +5888,55 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_survey_topology_cyclomatic_number");
 
                     b.ToTable("survey_topology", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SyncLinkRemoval", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("AttachmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("attachment_id");
+
+                    b.Property<Guid?>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<Guid?>("EntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entity_id");
+
+                    b.Property<short?>("EntityType")
+                        .HasColumnType("smallint")
+                        .HasColumnName("entity_type");
+
+                    b.Property<Guid?>("FeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("feature_id");
+
+                    b.Property<Guid>("FileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("file_id");
+
+                    b.Property<DateTimeOffset>("RemovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("removed_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sync_link_removals");
+
+                    b.HasIndex("EntityType", "EntityId")
+                        .HasDatabaseName("ix_sync_link_removals_entity");
+
+                    b.HasIndex("FeatureId", "RemovedAt", "AttachmentId")
+                        .HasDatabaseName("ix_sync_link_removals_feature_removed");
+
+                    b.ToTable("sync_link_removals", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SyncSet", b =>
