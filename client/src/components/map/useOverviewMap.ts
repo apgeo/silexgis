@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from 'react';
 import type Map from 'ol/Map';
-import type TileLayer from 'ol/layer/Tile';
-import type TileSource from 'ol/source/Tile';
+import type { BackgroundLayer } from '../../map/baseLayers.ts';
 import { attachOverviewMap } from '../../map/overviewMap.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
@@ -12,7 +11,7 @@ import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
  * arrive after the map is drawn, and a later save brings in a change made in another browser.
  * Opening or closing it from its button is what changes the preference.
  */
-export function useOverviewMap(map: Map, baseLayers: TileLayer<TileSource>[], enabled: boolean, label: string) {
+export function useOverviewMap(map: Map, baseLayers: BackgroundLayer[], enabled: boolean, label: string) {
   const setOverviewMap = useUiPrefsStore((s) => s.setOverviewMap);
   useEffect(() => {
     if (!enabled || baseLayers.length === 0) {

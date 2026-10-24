@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type OlLayerBase from 'ol/layer/Base';
+import { isCatalogueLayer } from './baseLayers.ts';
 import { CENTERLINE_LAYER_ID } from './centerlineLayer.ts';
 import { KARST_DENSITY_LAYER_ID } from './karstDensityLayer.ts';
 
@@ -20,7 +21,11 @@ import { KARST_DENSITY_LAYER_ID } from './karstDensityLayer.ts';
 // up to a few thousand polygons under the cursor's every move would be replayed for nothing.
 const NON_INTERACTIVE_LAYER_IDS: readonly string[] = [CENTERLINE_LAYER_ID, KARST_DENSITY_LAYER_ID];
 
-/** `layerFilter` for `forEachFeatureAtPixel`: skips layers nothing reads a hit from. */
+/**
+ * `layerFilter` for `forEachFeatureAtPixel`: skips layers nothing reads a hit from — and every
+ * catalogue background or overlay, whose shapes (a vector background's roads and rivers) are not
+ * objects of this installation, and would otherwise be replayed in their thousands on every move.
+ */
 export function isHitTestable(layer: OlLayerBase): boolean {
-  return !NON_INTERACTIVE_LAYER_IDS.includes(layer.get('id') as string);
+  return !NON_INTERACTIVE_LAYER_IDS.includes(layer.get('id') as string) && !isCatalogueLayer(layer);
 }

@@ -28,7 +28,6 @@ import {
 } from '@ant-design/icons';
 import type { EventsKey } from 'ol/events';
 import type BaseLayer from 'ol/layer/Base';
-import type TileLayer from 'ol/layer/Tile';
 import { unByKey } from 'ol/Observable';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -249,7 +248,9 @@ const LibraryPhotoFeatureModal = lazy(
 
 /** Map workspace v1: fixed resizable panes on desktop, drawers on phones. */
 export default function MapPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // A vector background's labels follow the language the interface is read in.
+  const language = (i18n.resolvedLanguage ?? i18n.language ?? 'ro').slice(0, 2);
   const { message } = App.useApp();
   const isMobile = useIsMobile();
   const mapTarget = useRef<HTMLDivElement>(null);
@@ -637,9 +638,9 @@ export default function MapPage() {
   // Tile overlays from the catalogue: several at once, above the basemap and below the data.
   useEffect(() => {
     if (layers) {
-      syncTileOverlays(getWorkspaceMap(), layers, new Set(visibleTileOverlayIds), tileOverlayOpacity);
+      syncTileOverlays(getWorkspaceMap(), layers, new Set(visibleTileOverlayIds), tileOverlayOpacity, language);
     }
-  }, [layers, visibleTileOverlayIds, tileOverlayOpacity]);
+  }, [layers, visibleTileOverlayIds, tileOverlayOpacity, language]);
 
   // Whether crowded labels give way to each other. Applied to the map rather than held only in the
   // store, and applied on mount as well as on change, because a layer built before this ran would
@@ -1054,10 +1055,10 @@ export default function MapPage() {
   const [baseLayersVersion, setBaseLayersVersion] = useState(0);
   useEffect(() => {
     if (layers && activeBaseId !== undefined) {
-      syncBaseLayers(getWorkspaceMap(), layers, activeBaseId);
+      syncBaseLayers(getWorkspaceMap(), layers, activeBaseId, language);
       setBaseLayersVersion((v) => v + 1);
     }
-  }, [layers, activeBaseId]);
+  }, [layers, activeBaseId, language]);
   const baseOlLayers = useMemo(
     () => (baseLayersVersion > 0 ? getBaseLayers(getWorkspaceMap()) : []),
     [baseLayersVersion],
@@ -1980,7 +1981,7 @@ export default function MapPage() {
             {baseOlLayers.length > 0 && (
               <BaseLayerChooser
                 layers={baseOlLayers}
-                backgroundLayerFilter={(l) => getBaseLayerId(l as TileLayer) !== undefined}
+                backgroundLayerFilter={(l) => getBaseLayerId(l) !== undefined}
                 buttonTooltip={t('map.changeBaseLayer')}
               />
             )}

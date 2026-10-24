@@ -10,7 +10,7 @@ import { fromLonLat, transformExtent } from 'ol/proj';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { fetchSharedView } from '../api/hooks.ts';
-import { tileLayerFor } from '../map/baseLayers.ts';
+import { backgroundLayerFor } from '../map/baseLayers.ts';
 import { createSharedViewLayers } from '../map/sharedViewLayers.ts';
 
 /** What a click on the shared map shows: a public name. */
@@ -30,7 +30,9 @@ interface Picked {
  * what was shared rather than data stopping for no reason they can see.
  */
 export default function SharedViewPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // A vector background's labels follow the language the page is read in.
+  const language = (i18n.resolvedLanguage ?? i18n.language ?? 'ro').slice(0, 2);
   const { token } = useParams<{ token: string }>();
   const mapTarget = useRef<HTMLDivElement>(null);
   const [name, setName] = useState<string | null>(null);
@@ -54,7 +56,10 @@ export default function SharedViewPage() {
         const camera = shared.camera;
         const reach = shared.reach;
         const data = createSharedViewLayers(token!, shared.overlays);
-        const base = shared.background ? tileLayerFor(shared.background, 0) : null;
+        const dataLayers = new Set<unknown>(data.layers);
+        const base = shared.background
+          ? backgroundLayerFor({ ...shared.background, isBase: true }, 0, language)
+          : null;
         base?.setVisible(true);
         setNoBackground(!base);
         const created = new Map({
@@ -74,7 +79,11 @@ export default function SharedViewPage() {
         map = created;
         detach = data.attach(created);
         created.on('singleclick', (event) => {
-          const hit = created.forEachFeatureAtPixel(event.pixel, (feature: FeatureLike) => feature);
+          // Only the link's data answers a click: a vector background's roads and rivers are not
+          // what was shared.
+          const hit = created.forEachFeatureAtPixel(event.pixel, (feature: FeatureLike) => feature, {
+            layerFilter: (layer) => dataLayers.has(layer),
+          });
           if (!hit) {
             setPicked(null);
             setCluster(null);
@@ -111,7 +120,7 @@ export default function SharedViewPage() {
       detach?.();
       map?.setTarget(undefined);
     };
-  }, [token]);
+  }, [token, language]);
 
   if (failed) {
     return (

@@ -1,15 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Map from 'ol/Map';
 import View from 'ol/View';
-import type TileLayer from 'ol/layer/Tile';
+import TileLayer from 'ol/layer/Tile';
+import VectorLayer from 'ol/layer/Vector';
+import VectorTileLayer from 'ol/layer/VectorTile';
+import WebGLTileLayer from 'ol/layer/WebGLTile';
+import VectorTileSource from 'ol/source/VectorTile';
+import { Style } from 'ol/style';
 import TileWMS from 'ol/source/TileWMS';
 import WMTS from 'ol/source/WMTS';
 import XYZ from 'ol/source/XYZ';
 import type { MapLayerInfo } from '../api/hooks.ts';
+import { isHitTestable } from './hitTesting.ts';
 import {
   documentBackgroundName,
+  getBaseLayers,
+  isCatalogueLayer,
   isDrawable,
+  isDrawableOnMap,
+  mirrorBackground,
   setActiveBaseLayer,
   syncBaseLayers,
   syncTileOverlays,
@@ -20,18 +30,35 @@ import {
   type DrawableLayer,
 } from './baseLayers.ts';
 
+// The real source starts reading its file the moment it is made; this one stays quiet.
+vi.mock('ol/source/GeoTIFF', async () => {
+  const { default: DataTile } = await import('ol/source/DataTile');
+  return {
+    default: class extends DataTile {
+      constructor() {
+        super({});
+      }
+    },
+  };
+});
+
 function entry(overrides: Partial<MapLayerInfo>): DrawableLayer {
   return {
     layerKind: 'xyz',
     urlTemplate: 'https://tiles.example.invalid/{z}/{x}/{y}.png',
     wms: null,
     wmts: null,
+    cog: null,
+    vector: null,
     attribution: '© Somebody',
     minZoom: 0,
     maxZoom: 18,
     ...overrides,
   };
 }
+
+const vectorOptions = { format: 'mvt', style: null, styleSource: null, labelField: null, scene3dStandIn: null } as const;
+const cogOptions = { bands: null, nodata: null, min: null, max: null, projection: 'EPSG:3857', projectionDefinition: null };
 
 const wms = {
   layers: 'topo,contours',
@@ -58,9 +85,18 @@ describe('which catalogue entries the map can draw', () => {
     expect(isDrawable(entry({ layerKind: 'wmts', wmts }))).toBe(true);
     expect(isDrawable(entry({ layerKind: 'wms' }))).toBe(false);
     expect(isDrawable(entry({ layerKind: 'wmts', wms }))).toBe(false);
-    // Named in the vocabulary, drawn by nothing yet: never offered.
-    expect(isDrawable(entry({ layerKind: 'vector' }))).toBe(false);
-    expect(isDrawable(entry({ layerKind: 'cog' }))).toBe(false);
+    // Drawn by the flat map, not yet draped by the 3D scene, which asks this.
+    expect(isDrawable(entry({ layerKind: 'vector', vector: vectorOptions }))).toBe(false);
+    expect(isDrawable(entry({ layerKind: 'cog', cog: cogOptions }))).toBe(false);
+  });
+
+  it('draws a GeoTIFF and a vector source on the flat map only with the options their kind needs', () => {
+    expect(isDrawableOnMap(entry({}))).toBe(true);
+    expect(isDrawableOnMap(entry({ layerKind: 'wms', wms }))).toBe(true);
+    expect(isDrawableOnMap(entry({ layerKind: 'cog', cog: cogOptions }))).toBe(true);
+    expect(isDrawableOnMap(entry({ layerKind: 'vector', vector: vectorOptions }))).toBe(true);
+    expect(isDrawableOnMap(entry({ layerKind: 'cog' }))).toBe(false);
+    expect(isDrawableOnMap(entry({ layerKind: 'vector', cog: cogOptions }))).toBe(false);
   });
 });
 
@@ -181,8 +217,8 @@ describe('a picture of the map and the layers that cannot go into one', () => {
 
   const mapWith = (catalog: MapLayerInfo[], activeId: number) => {
     const map = new Map({ view: new View({ center: [0, 0], zoom: 3 }) });
-    syncBaseLayers(map, catalog, activeId);
-    syncTileOverlays(map, catalog, new Set(catalog.filter((e) => !e.isBase).map((e) => Number(e.id))), {});
+    syncBaseLayers(map, catalog, activeId, 'ro');
+    syncTileOverlays(map, catalog, new Set(catalog.filter((e) => !e.isBase).map((e) => Number(e.id))), {}, 'ro');
     return map;
   };
 
@@ -237,5 +273,109 @@ describe('a picture of the map and the layers that cannot go into one', () => {
       ]),
     ).toBe('Orthophoto');
     expect(documentBackgroundName([catalogEntry(1, { inDocuments: false }), catalogEntry(2, { isBase: false })])).toBeUndefined();
+  });
+});
+
+describe('GeoTIFF and vector entries among the flat map\u2019s layers', () => {
+  const catalogEntry = (id: number, over: Partial<MapLayerInfo>): MapLayerInfo => ({
+    id,
+    name: `Layer ${id}`,
+    layerKind: 'xyz',
+    urlTemplate: `https://tiles.example.org/${id}/{z}/{x}/{y}.png`,
+    wms: null,
+    wmts: null,
+    cog: null,
+    vector: null,
+    attribution: '© Somebody',
+    groupName: null,
+    minZoom: 0,
+    maxZoom: 18,
+    isBase: true,
+    isDefault: false,
+    sortOrder: id,
+    inDocuments: false,
+    ...over,
+  });
+  const catalog = [
+    catalogEntry(1, { name: 'Tiles' }),
+    catalogEntry(2, { name: 'Ortho', layerKind: 'cog', urlTemplate: 'https://data.example.org/ortho.tif', cog: cogOptions }),
+    catalogEntry(3, { name: 'Vector', layerKind: 'vector', urlTemplate: 'https://v.example.org/{z}/{x}/{y}.pbf', vector: vectorOptions }),
+    catalogEntry(4, {
+      name: 'Boundary',
+      isBase: false,
+      layerKind: 'vector',
+      urlTemplate: 'https://v.example.org/natura.geojson',
+      vector: { ...vectorOptions, format: 'geojson' },
+    }),
+  ];
+  const layerNamed = (map: Map, name: string) => map.getLayers().getArray().find((layer) => layer.get('name') === name)!;
+
+  it('builds each as the layer its kind needs, and none makes a picture of the map unreadable', () => {
+    const map = new Map({ view: new View({ center: [0, 0], zoom: 3 }) });
+    syncBaseLayers(map, catalog, 2, 'ro');
+    syncTileOverlays(map, catalog, new Set([4]), {}, 'ro');
+
+    expect(layerNamed(map, 'Tiles')).toBeInstanceOf(TileLayer);
+    expect(layerNamed(map, 'Ortho')).toBeInstanceOf(WebGLTileLayer);
+    expect(layerNamed(map, 'Vector')).toBeInstanceOf(VectorTileLayer);
+    expect(layerNamed(map, 'Boundary')).toBeInstanceOf(VectorLayer);
+    expect(getBaseLayers(map).map((layer) => layer.get('name'))).toEqual(['Tiles', 'Ortho', 'Vector']);
+    // Their bytes are fetched with the server's cross-origin leave or not at all.
+    expect(unreadableTileLayers(map)).toEqual([]);
+    setActiveBaseLayer(map, 3);
+    expect(unreadableTileLayers(map)).toEqual([]);
+  });
+
+  it('builds a vector layer again, in its place, when the reader changes language — and nothing else', () => {
+    const map = new Map({ view: new View({ center: [0, 0], zoom: 3 }) });
+    syncBaseLayers(map, catalog, 1, 'ro');
+    syncTileOverlays(map, catalog, new Set([4]), { 4: 0.4 }, 'ro');
+    const tiles = layerNamed(map, 'Tiles');
+    const vector = layerNamed(map, 'Vector');
+    const boundary = layerNamed(map, 'Boundary');
+
+    syncBaseLayers(map, catalog, 1, 'en');
+    syncTileOverlays(map, catalog, new Set([4]), { 4: 0.4 }, 'en');
+
+    expect(layerNamed(map, 'Tiles')).toBe(tiles);
+    expect(layerNamed(map, 'Vector')).not.toBe(vector);
+    expect(layerNamed(map, 'Boundary')).not.toBe(boundary);
+    expect(layerNamed(map, 'Boundary').getOpacity()).toBe(0.4);
+    expect(getBaseLayers(map).map((layer) => layer.get('name'))).toEqual(['Tiles', 'Ortho', 'Vector']);
+    expect(map.getLayers().getLength()).toBe(4);
+  });
+
+  it('keeps every catalogue layer out of hit tests, so a background\u2019s roads are never picked', () => {
+    const map = new Map({ view: new View({ center: [0, 0], zoom: 3 }) });
+    syncBaseLayers(map, catalog, 3, 'ro');
+    syncTileOverlays(map, catalog, new Set([4]), {}, 'ro');
+    const data = new VectorLayer({});
+
+    for (const name of ['Tiles', 'Ortho', 'Vector', 'Boundary']) {
+      expect(isCatalogueLayer(layerNamed(map, name))).toBe(true);
+      expect(isHitTestable(layerNamed(map, name))).toBe(false);
+    }
+    expect(isCatalogueLayer(data)).toBe(false);
+    expect(isHitTestable(data)).toBe(true);
+  });
+
+  it('mirrors each kind for the overview inset from the same source, a vector one following its style as it arrives', () => {
+    const webgl = new WebGLTileLayer({ visible: true });
+    expect(mirrorBackground(webgl).mirror).toBeInstanceOf(WebGLTileLayer);
+
+    const vector = new VectorTileLayer({ visible: false });
+    const { mirror, keys } = mirrorBackground(vector);
+    expect(mirror).toBeInstanceOf(VectorTileLayer);
+    expect(mirror.getVisible()).toBe(false);
+    expect(keys.length).toBeGreaterThan(0);
+
+    const source = new VectorTileSource({ url: 'https://v.example.org/{z}/{x}/{y}.pbf' });
+    const style = new Style({});
+    vector.setSource(source);
+    vector.setStyle(style);
+    vector.setBackground('#f8f4f0');
+    expect((mirror as VectorTileLayer).getSource()).toBe(source);
+    expect((mirror as VectorTileLayer).getStyle()).toBe(style);
+    expect((mirror as VectorTileLayer).getBackground()).toBe('#f8f4f0');
   });
 });

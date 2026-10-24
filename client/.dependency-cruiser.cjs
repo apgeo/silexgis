@@ -93,9 +93,11 @@ module.exports = {
         'Only the national-grid and MGRS format modules may import the projection library '
         + '(proj4) and the MGRS library. Everything else asks for a position by format id '
         + 'through the format registry, so each library has one seam and stays replaceable. '
+        + 'The one other seam is the map\'s projection registry (src/map/projections.ts), which '
+        + 'hands OpenLayers the definitions a raster\'s coordinate system needs to be placed. '
         + 'Test files are excluded from this graph, so a test may import either library.',
       severity: 'error',
-      from: { pathNot: '^src/geo/formats/(nationalGrids|militaryGrid)\\.ts$' },
+      from: { pathNot: '^src/(geo/formats/(nationalGrids|militaryGrid)|map/projections)\\.ts$' },
       to: { path: '^node_modules/(proj4|mgrs)/' },
     },
     {

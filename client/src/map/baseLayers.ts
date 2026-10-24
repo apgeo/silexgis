@@ -3,7 +3,11 @@ import type Map from 'ol/Map';
 import { unByKey } from 'ol/Observable';
 import type { EventsKey } from 'ol/events';
 import { getTopLeft, getWidth, type Extent } from 'ol/extent';
+import type BaseLayer from 'ol/layer/Base';
 import TileLayer from 'ol/layer/Tile';
+import VectorLayer from 'ol/layer/Vector';
+import VectorTileLayer from 'ol/layer/VectorTile';
+import WebGLTileLayer from 'ol/layer/WebGLTile';
 import { get as getProjection } from 'ol/proj';
 import type TileSource from 'ol/source/Tile';
 import TileWMS from 'ol/source/TileWMS';
@@ -11,6 +15,8 @@ import WMTS from 'ol/source/WMTS';
 import XYZ from 'ol/source/XYZ';
 import WMTSTileGrid from 'ol/tilegrid/WMTS';
 import type { MapLayerInfo } from '../api/hooks.ts';
+import { cogLayerFor } from './cogLayers.ts';
+import { createVectorLayer } from './vectorLayers.ts';
 
 /**
  * What a source needs in order to be drawn: a catalogue entry, or the background a shared view
@@ -19,14 +25,18 @@ import type { MapLayerInfo } from '../api/hooks.ts';
  */
 export type DrawableLayer = Pick<
   MapLayerInfo,
-  'layerKind' | 'urlTemplate' | 'wms' | 'wmts' | 'attribution' | 'minZoom' | 'maxZoom'
+  'layerKind' | 'urlTemplate' | 'wms' | 'wmts' | 'cog' | 'vector' | 'attribution' | 'minZoom' | 'maxZoom'
 > &
-  Partial<Pick<MapLayerInfo, 'inDocuments'>>;
+  Partial<Pick<MapLayerInfo, 'inDocuments' | 'isBase'>>;
+
+/** A layer drawing one catalogue entry on the flat map, whatever its kind. */
+export type BackgroundLayer = TileLayer | WebGLTileLayer | VectorTileLayer | VectorLayer;
 
 /**
- * Whether this client can draw the entry: tiles on a z/x/y template, or a map service carrying
- * the options its kind needs. The server publishes nothing else, and this keeps a list from
- * offering a radio button or a switch that would draw nothing if it ever did.
+ * Whether the entry is a picture source both views drape — tiles on a z/x/y template, or a map
+ * service carrying the options its kind needs. The 3D scene asks this to decide what it drapes, so
+ * it answers no for a GeoTIFF or vector entry until the scene draws those itself; the flat map
+ * asks {@link isDrawableOnMap}.
  */
 export function isDrawable(entry: DrawableLayer): boolean {
   switch (entry.layerKind) {
@@ -38,6 +48,22 @@ export function isDrawable(entry: DrawableLayer): boolean {
       return Boolean(entry.wmts);
     default:
       return false;
+  }
+}
+
+/**
+ * Whether the flat map can draw the entry: every picture source {@link isDrawable} names, and a
+ * GeoTIFF or vector entry carrying its options. The server publishes nothing else, and this keeps a
+ * list from offering a radio button or a switch that would draw nothing if it ever did.
+ */
+export function isDrawableOnMap(entry: DrawableLayer): boolean {
+  switch (entry.layerKind) {
+    case 'cog':
+      return Boolean(entry.cog);
+    case 'vector':
+      return Boolean(entry.vector);
+    default:
+      return isDrawable(entry);
   }
 }
 
@@ -135,6 +161,8 @@ const BASE_ID_PROP = 'silexgis:baseLayerId';
 const TILE_OVERLAY_ID_PROP = 'silexgis:tileOverlayId';
 /** Whether a tile layer's tiles can be read back out of the map's canvas, into a picture of it. */
 const READABLE_PROP = 'silexgis:readable';
+/** The reader's language a vector layer's labels were drawn in. */
+const LANGUAGE_PROP = 'silexgis:language';
 
 /**
  * Where tile overlays sit in the stack: above the basemap (0), below every data layer (1 upwards,
@@ -171,6 +199,86 @@ export function zoomBand(entry: Pick<DrawableLayer, 'minZoom' | 'maxZoom'>): { m
   // sitting in a database column nobody is looking at.
   const max = entry.maxZoom && entry.maxZoom > min ? entry.maxZoom : 19;
   return { min, max };
+}
+
+/**
+ * The layer that draws a catalogue entry on the flat map, by its kind.
+ *
+ * A GeoTIFF and a vector source are read with requests that need the server's cross-origin
+ * leave to succeed at all — the browser fetches their bytes, it does not merely display them — so
+ * whatever they draw can be read back into a picture of the map, and they never make an export
+ * unreadable. A vector layer's labels are drawn in the reader's language where its entry says how.
+ */
+export function backgroundLayerFor(entry: DrawableLayer, zIndex: number, language: string): BackgroundLayer {
+  if (entry.layerKind === 'cog' && entry.cog) {
+    const layer = cogLayerFor({ ...entry, cog: entry.cog }, zIndex);
+    layer.set(READABLE_PROP, true);
+    return layer;
+  }
+  if (entry.layerKind === 'vector' && entry.vector) {
+    const { layer } = createVectorLayer({ ...entry, vector: entry.vector }, { language, zIndex });
+    layer.set(READABLE_PROP, true);
+    layer.set(LANGUAGE_PROP, language);
+    return layer;
+  }
+  return tileLayerFor(entry, zIndex);
+}
+
+/** Whether a layer must be built again for the reader's language: a vector layer drawn in another. */
+function drawnInAnotherLanguage(layer: BaseLayer, language: string): boolean {
+  const drawnIn = layer.get(LANGUAGE_PROP) as string | undefined;
+  return drawnIn !== undefined && drawnIn !== language;
+}
+
+/**
+ * Whether a layer draws a catalogue entry — a basemap or a tile overlay. Such a layer answers no
+ * hit test: its shapes, where it has any, are a background's roads and rivers, not objects of this
+ * installation a click could open, and replaying a vector background's thousands of shapes under
+ * every pointer move would cost the map its responsiveness for nothing.
+ */
+export function isCatalogueLayer(layer: BaseLayer): boolean {
+  return layer.get(BASE_ID_PROP) !== undefined || layer.get(TILE_OVERLAY_ID_PROP) !== undefined;
+}
+
+/**
+ * A second layer drawing what a background layer draws, from the same source — for the overview
+ * inset, which must fetch nothing the main map has not — kept in its look as the original's style
+ * arrives. Returns the listeners to take off with it.
+ */
+export function mirrorBackground(layer: BackgroundLayer): { mirror: BackgroundLayer; keys: EventsKey[] } {
+  const visible = layer.getVisible();
+  if (layer instanceof WebGLTileLayer) {
+    return { mirror: new WebGLTileLayer({ source: layer.getSource() ?? undefined, visible }), keys: [] };
+  }
+  // A vector layer's source and style arrive after the layer itself, so the mirror follows them.
+  if (layer instanceof VectorTileLayer) {
+    const mirror = new VectorTileLayer({ declutter: true, visible });
+    const follow = () => {
+      mirror.setSource(layer.getSource());
+      followLook(layer, mirror);
+    };
+    follow();
+    return { mirror, keys: [layer.on('change', follow), layer.on('change:source', follow)] };
+  }
+  if (layer instanceof VectorLayer) {
+    const mirror = new VectorLayer({ visible });
+    const follow = () => {
+      mirror.setSource(layer.getSource());
+      followLook(layer, mirror);
+    };
+    follow();
+    return { mirror, keys: [layer.on('change', follow), layer.on('change:source', follow)] };
+  }
+  return { mirror: new TileLayer({ source: layer.getSource() ?? undefined, visible }), keys: [] };
+}
+
+/** Gives a vector layer's mirror the original's style and background, once it has them. */
+function followLook(from: VectorTileLayer | VectorLayer, to: VectorTileLayer | VectorLayer): void {
+  const style = from.getStyle();
+  if (style && to.getStyle() !== style) {
+    to.setStyle(style);
+  }
+  to.setBackground(from.getBackground() || undefined);
 }
 
 export function tileLayerFor(entry: DrawableLayer, zIndex: number): TileLayer {
@@ -238,26 +346,33 @@ export function documentBackgroundName(catalog: readonly MapLayerInfo[]): string
   return catalog.find((entry) => entry.layerKind === 'xyz' && entry.isBase && entry.inDocuments)?.name;
 }
 
-/** Creates/refreshes base tile layers from the server catalog: every kind this client can draw. */
-export function syncBaseLayers(map: Map, catalog: MapLayerInfo[], activeId: number): void {
-  const existing = new Set(
-    map
-      .getLayers()
-      .getArray()
-      .map((layer) => layer.get(BASE_ID_PROP) as number | undefined)
-      .filter((id) => id !== undefined),
-  );
+/**
+ * Creates/refreshes base layers from the server catalog: every kind the flat map can draw. A vector
+ * basemap drawn in another language than the reader's is built again in theirs.
+ */
+export function syncBaseLayers(map: Map, catalog: MapLayerInfo[], activeId: number, language: string): void {
+  const existing = new globalThis.Map<number, BaseLayer>();
+  for (const layer of map.getLayers().getArray()) {
+    const id = layer.get(BASE_ID_PROP) as number | undefined;
+    if (id !== undefined) {
+      existing.set(id, layer);
+    }
+  }
 
   for (const entry of catalog) {
     // int64 ids arrive as number | string from the generated contract — normalize once here.
     const entryId = Number(entry.id);
-    if (!isDrawable(entry) || !entry.isBase || existing.has(entryId)) {
+    if (!isDrawableOnMap(entry) || !entry.isBase) {
       continue;
     }
-    const layer = tileLayerFor(entry, 0);
+    const present = existing.get(entryId);
+    if (present && !drawnInAnotherLanguage(present, language)) {
+      continue;
+    }
+    const layer = backgroundLayerFor(entry, 0, language);
     layer.set(BASE_ID_PROP, entryId);
     layer.set('name', entry.name); // shown by the on-canvas background-layer chooser
-    map.addLayer(layer);
+    placeLayer(map, layer, present);
   }
 
   setActiveBaseLayer(map, activeId);
@@ -279,27 +394,29 @@ export function syncTileOverlays(
   catalog: MapLayerInfo[],
   visibleIds: ReadonlySet<number>,
   opacityById: Readonly<Record<number, number>>,
+  language: string,
 ): void {
-  const existing: Record<number, TileLayer> = {};
+  const existing: Record<number, BackgroundLayer> = {};
   for (const layer of map.getLayers().getArray()) {
     const id = layer.get(TILE_OVERLAY_ID_PROP) as number | undefined;
     if (id !== undefined) {
-      existing[id] = layer as TileLayer;
+      existing[id] = layer as BackgroundLayer;
     }
   }
 
   for (const entry of catalog) {
     const entryId = Number(entry.id);
-    if (!isDrawable(entry) || entry.isBase) {
+    if (!isDrawableOnMap(entry) || entry.isBase) {
       continue;
     }
 
-    let layer = existing[entryId];
-    if (!layer) {
-      layer = tileLayerFor(entry, TILE_OVERLAY_Z);
+    const present = existing[entryId];
+    let layer = present;
+    if (!present || drawnInAnotherLanguage(present, language)) {
+      layer = backgroundLayerFor(entry, TILE_OVERLAY_Z, language);
       layer.set(TILE_OVERLAY_ID_PROP, entryId);
       layer.set('name', entry.name);
-      map.addLayer(layer);
+      placeLayer(map, layer, present);
     }
 
     layer.setVisible(visibleIds.has(entryId));
@@ -307,21 +424,32 @@ export function syncTileOverlays(
   }
 }
 
+/** Adds a layer to the map, or puts it where the one it replaces was, so the catalogue's order holds. */
+function placeLayer(map: Map, layer: BaseLayer, replacing: BaseLayer | undefined): void {
+  const layers = map.getLayers();
+  const index = replacing ? layers.getArray().indexOf(replacing) : -1;
+  if (index >= 0) {
+    layers.setAt(index, layer);
+  } else {
+    layers.push(layer);
+  }
+}
+
 /** The catalog id of a tile overlay created by `syncTileOverlays`. */
-export function getTileOverlayId(layer: TileLayer): number | undefined {
+export function getTileOverlayId(layer: BaseLayer): number | undefined {
   return layer.get(TILE_OVERLAY_ID_PROP) as number | undefined;
 }
 
-/** The base tile layers currently on the map (creation order = catalog order). */
-export function getBaseLayers(map: Map): TileLayer[] {
+/** The base layers currently on the map, in catalog order. */
+export function getBaseLayers(map: Map): BackgroundLayer[] {
   return map
     .getLayers()
     .getArray()
-    .filter((layer): layer is TileLayer => layer.get(BASE_ID_PROP) !== undefined);
+    .filter((layer): layer is BackgroundLayer => layer.get(BASE_ID_PROP) !== undefined);
 }
 
 /** The catalog id of a base layer created by `syncBaseLayers`. */
-export function getBaseLayerId(layer: TileLayer): number | undefined {
+export function getBaseLayerId(layer: BaseLayer): number | undefined {
   return layer.get(BASE_ID_PROP) as number | undefined;
 }
 

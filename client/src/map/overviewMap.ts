@@ -4,8 +4,7 @@ import { unByKey } from 'ol/Observable';
 import Control from 'ol/control/Control';
 import OverviewMap from 'ol/control/OverviewMap';
 import type { EventsKey } from 'ol/events';
-import TileLayer from 'ol/layer/Tile';
-import type TileSource from 'ol/source/Tile';
+import { mirrorBackground, type BackgroundLayer } from './baseLayers.ts';
 
 /** The library's overview control, with its toggle button reachable — the control keeps its element to itself. */
 class ToggleableOverviewMap extends OverviewMap {
@@ -37,7 +36,7 @@ export interface OverviewMapHandle {
  * showing.
  *
  * The inset is a second map with layers of its own; each mirrors one of the main map's base
- * layers — the same tile source, so no tile is fetched twice — and is shown exactly while that
+ * layers — the same source, so nothing is fetched twice — and is shown exactly while that
  * base layer is. Switching base layer, from the panel or from the chooser, therefore switches the
  * inset with it, and the inset never draws anything the main map is not already drawing.
  *
@@ -51,7 +50,7 @@ export interface OverviewMapHandle {
  */
 export function attachOverviewMap(
   map: Map,
-  baseLayers: TileLayer<TileSource>[],
+  baseLayers: BackgroundLayer[],
   { open, label, onToggle }: OverviewMapOptions,
 ): OverviewMapHandle {
   let current: Control | undefined;
@@ -106,12 +105,14 @@ export function attachOverviewMap(
   const showOpen = (focus: boolean) => {
     take();
     isOpen = true;
-    const mirrors = baseLayers.map(
-      (base) => new TileLayer({ source: base.getSource() ?? undefined, visible: base.getVisible() }),
-    );
-    keys = baseLayers.map((base, index) =>
-      base.on('change:visible', () => mirrors[index].setVisible(base.getVisible())),
-    );
+    const mirrored = baseLayers.map(mirrorBackground);
+    const mirrors = mirrored.map(({ mirror }) => mirror);
+    keys = [
+      ...mirrored.flatMap(({ keys: followers }) => followers),
+      ...baseLayers.map((base, index) =>
+        base.on('change:visible', () => mirrors[index].setVisible(base.getVisible())),
+      ),
+    ];
     const control = new ToggleableOverviewMap({
       className: CLASS_NAME,
       layers: mirrors,

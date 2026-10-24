@@ -30,7 +30,7 @@ import {
 } from '../../map/centerlineLayer.ts';
 import { CENTERLINE_STATUS_ID } from './centerlineStatus.ts';
 import PhotoCutShortNotice from './PhotoCutShortNotice.tsx';
-import { isDrawable } from '../../map/baseLayers.ts';
+import { isDrawableOnMap } from '../../map/baseLayers.ts';
 import { CLOSEST_APPROACH_LAYER_ID } from '../../map/closestApproachLayer.ts';
 import { OVERBURDEN_HIGHLIGHT_LAYER_ID } from '../../map/overburdenHighlightLayer.ts';
 import { ROW_HIGHLIGHT_LAYER_ID } from '../../map/rowHighlightLayer.ts';
@@ -274,8 +274,8 @@ export default function LayerPanel({
   const { baseGroups, looseBases, overlayGroups, looseOverlays } = useMemo(() => {
     // Every kind the map can draw, and nothing it cannot: a radio button or a switch for a source
     // that draws nothing is a control that silently does nothing.
-    const bases = layers.filter((l) => l.isBase && isDrawable(l));
-    const overlays = layers.filter((l) => !l.isBase && isDrawable(l));
+    const bases = layers.filter((l) => l.isBase && isDrawableOnMap(l));
+    const overlays = layers.filter((l) => !l.isBase && isDrawableOnMap(l));
     // Insertion-ordered, so groups appear in the order the catalogue first mentions them rather
     // than alphabetically — the file's order is the operator's stated preference.
     const group = (entries: MapLayerInfo[]) => {
