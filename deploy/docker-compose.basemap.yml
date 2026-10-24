@@ -1,5 +1,5 @@
 # Basemap overlay: the tile server for the installation's own vector basemap — OpenStreetMap vector
-# tiles of a region an administrator downloads from the map-backgrounds administration page, drawn
+# tiles of a region an administrator downloads on the Own basemap tab of Administration → Messaging, drawn
 # with a style this application ships and served from this installation alone.
 #
 # In the default install: the sample .env names this file in COMPOSE_FILE. Without it the stack is

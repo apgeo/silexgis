@@ -719,9 +719,9 @@ was. Put the entry right and restart, and it is switched back on.
 
 ### Your own basemap
 
-An OpenStreetMap vector basemap served from your installation alone, with Romanian labels, no account
-anywhere and no request to anybody else's tile server: an administrator downloads a region on
-**Settings → Own basemap**, and the entry *Self-hosted basemap (light)* is offered on the map from then on.
+An OpenStreetMap vector basemap served from your installation alone, labelled in the reader's language,
+with no account anywhere and no request to anybody else's tile server: an administrator downloads a region
+on the **Own basemap** tab of **Administration → Messaging**, and the entry *Self-hosted basemap (light)* is offered on the map from then on.
 It also works offline — an expedition laptop running SilexGIS locally has a whole country's basemap.
 
 - **What runs it.** The basemap overlay, `docker-compose.basemap.yml`, which the sample `.env` already names
