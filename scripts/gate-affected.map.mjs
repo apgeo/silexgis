@@ -219,7 +219,11 @@ export const groups = {
   ],
   // How long a centreline is, measured once over its passage: the upload path and the survey
   // compiler both ask it.
-  centerlines: ['CenterlineTests', 'SurveyGraphTests'],
+  centerlines: [
+    'CenterlineTests', 'SurveyGraphTests',
+    // The overview answers stay under the sizes at which more levels of detail are due.
+    'CenterlineOverviewBudgetTests',
+  ],
   me: [
     'AccountEmailTests', 'AccountSettingsTests', 'CredentialRevocationTests',
     'PhoneCredentialTests', 'TwoFactorChannelTests', 'UiDefaultsTests',
