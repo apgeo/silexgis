@@ -201,6 +201,8 @@ export const groups = {
     'SelectionMaxConfigurationTests',
     // The fixed cave-density bands, published to the client and checked at start.
     'DensityBandsConfigurationTests',
+    // Opt-in: member reads through one grant and through a thousand, at a chosen size.
+    'GrantScaleMeasurementTests',
   ],
   // A shared view's page and the data its link draws for nobody in particular.
   mapViews: ['MapViewTests', 'SharedViewDataTests'],
