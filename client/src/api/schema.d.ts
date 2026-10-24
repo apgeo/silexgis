@@ -10014,6 +10014,7 @@ export interface components {
             id: string;
             name: null | string;
             kind: components["schemas"]["FeatureKind"];
+            typeName: null | string;
         };
         FeatureSetMemberReplaceRequest: {
             featureIds: string[];

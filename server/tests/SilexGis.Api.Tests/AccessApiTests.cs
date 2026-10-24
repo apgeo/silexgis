@@ -727,6 +727,49 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<
     }
 
     [Fact]
+    public async Task A_member_is_named_with_its_feature_type()
+    {
+        var created = await admin.PostAsJsonAsync("/api/v1/feature-sets/", new { name = $"Typed {suffix}" });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var setId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        long sinkholeTypeId;
+        string sinkholeTypeName;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var sinkhole = await db.FeatureTypes.AsNoTracking().SingleAsync(t => t.Code == "sinkhole");
+            (sinkholeTypeId, sinkholeTypeName) = (sinkhole.Id, sinkhole.Name);
+        }
+
+        var caveId = await CreateCaveAsync(editor, $"Typed Cave {suffix}");
+        var point = await editor.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name = $"Typed Sinkhole {suffix}",
+            featureTypeId = sinkholeTypeId,
+            geometry = new { type = "Point", coordinates = new[] { 25.4, 45.5 } },
+            visibility = "private",
+        });
+        point.StatusCode.ShouldBe(HttpStatusCode.Created, await point.Content.ReadAsStringAsync());
+        var sinkholeId = (await point.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        (await admin.PutAsJsonAsync($"/api/v1/feature-sets/{setId}/members", new { featureIds = new[] { caveId, sinkholeId } }))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var members = (await admin.GetFromJsonAsync<JsonElement>($"/api/v1/feature-sets/{setId}/members"))
+            .EnumerateArray().ToDictionary(x => x.GetProperty("id").GetGuid());
+        members[sinkholeId].GetProperty("typeName").GetString().ShouldBe(sinkholeTypeName);
+        members[sinkholeId].GetProperty("kind").GetString().ShouldBe("generic");
+        // A cave keeps its kind whatever its type turns out to be; the editor falls back to it.
+        members[caveId].GetProperty("kind").GetString().ShouldBe("cave");
+
+        (await admin.PutAsJsonAsync($"/api/v1/feature-sets/{setId}/members", new { featureIds = Array.Empty<Guid>() }))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await admin.DeleteAsync($"/api/v1/feature-sets/{setId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
     public async Task Set_membership_speaks_only_of_features_the_caller_may_read()
     {
         // Set membership moves access, and the ids in a replace resolve through the

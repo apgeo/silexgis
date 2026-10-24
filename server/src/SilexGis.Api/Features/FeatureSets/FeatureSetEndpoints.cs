@@ -111,7 +111,11 @@ public static class FeatureSetEndpoints
             .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => db.FeatureSetMembers.Any(m => m.FeatureSetId == id && m.FeatureId == f.Id))
             .OrderBy(f => f.Name)
-            .Select(f => new FeatureSetMemberDto(f.Id, f.Name, f.Kind))
+            .Select(f => new FeatureSetMemberDto(
+                f.Id,
+                f.Name,
+                f.Kind,
+                db.FeatureTypes.Where(t => t.Id == f.FeatureTypeId).Select(t => t.Name).FirstOrDefault()))
             .ToListAsync(ct);
         return TypedResults.Ok(members);
     }

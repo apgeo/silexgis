@@ -15,6 +15,7 @@ import {
   useDeleteFeatureSet,
   useFeatureSetMembers,
   useFeatureSets,
+  useFeatureTypes,
   useReplaceFeatureSetMembers,
   useUpdateFeatureSet,
   type FeatureSetInfo,
@@ -30,16 +31,16 @@ const MEMBER_SCOPES: readonly SelectorScope[] = [
   { id: 'features', labelKey: 'filters.scopes.features', world: 'feature', where: null },
 ];
 
+const FEATURE_KINDS: readonly FeatureKind[] = ['generic', 'cave', 'caveEntrance', 'centerline'];
+
 interface DraftMember {
   id: string;
   name: string | null;
-  /** Known for a member the set already holds. */
-  kind: FeatureKind | null;
   /**
-   * For one picked here instead: a search row names the feature's type, not its kind, and the
-   * type is the more particular word anyway.
+   * What the member is: its feature type's name when it has one — the more particular word —
+   * and its kind otherwise. The same word whether the member was saved before or picked just now.
    */
-  typeName: string | null;
+  label: string | null;
 }
 
 /**
@@ -52,6 +53,7 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
   const { message } = App.useApp();
   const { data: members, isPending } = useFeatureSetMembers(set.id);
   const replaceMembers = useReplaceFeatureSetMembers(set.id);
+  const { data: featureTypes } = useFeatureTypes();
   const [drafts, setDrafts] = useState<DraftMember[]>([]);
   const [picked, setPicked] = useState<FilterHit | null>(null);
 
@@ -60,11 +62,21 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
       setDrafts(members.map((member) => ({
         id: member.id,
         name: member.name,
-        kind: member.kind,
-        typeName: null,
+        label: member.typeName ?? t(`featureKinds.${member.kind}`),
       })));
     }
-  }, [members]);
+  }, [members, t]);
+
+  // A search row's symbol is its feature type's code, or its kind for the kinds that carry no
+  // type; its subtitle is a whole context line (type, cave, region), not a type name.
+  const labelOfPick = (hit: FilterHit): string | null => {
+    const type = featureTypes?.find((candidate) => candidate.code === hit.symbol);
+    if (type) {
+      return type.name;
+    }
+    const kind = FEATURE_KINDS.find((candidate) => candidate === hit.symbol);
+    return kind ? t(`featureKinds.${kind}`) : null;
+  };
 
   // A member appears once. The server keeps a set's membership to distinct features whatever
   // this list offers; leaving members out of the search is only so a pick cannot look like it
@@ -75,7 +87,7 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
     if (!picked) {
       return;
     }
-    setDrafts([...drafts, { id: picked.id, name: picked.title, kind: null, typeName: picked.subtitle }]);
+    setDrafts([...drafts, { id: picked.id, name: picked.title, label: labelOfPick(picked) }]);
     setPicked(null);
   };
 
@@ -145,8 +157,7 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
               ]}
             >
               <Flex gap={8} align="center">
-                {draft.kind ? <Tag>{t(`featureKinds.${draft.kind}`)}</Tag>
-                  : draft.typeName && <Tag>{draft.typeName}</Tag>}
+                {draft.label && <Tag>{draft.label}</Tag>}
                 {draft.name ?? t('features.unnamed')}
               </Flex>
             </List.Item>

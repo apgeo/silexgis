@@ -8,6 +8,7 @@ import '../../i18n';
 
 const MEMBER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const TYPED = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 const { replaceSpy, queryCalls, stored } = vi.hoisted(() => ({
   replaceSpy: vi.fn(),
@@ -16,12 +17,15 @@ const { replaceSpy, queryCalls, stored } = vi.hoisted(() => ({
   // into its draft whenever this changes.
   stored: {
     sets: [{ id: '99999999-9999-4999-8999-999999999999', name: 'Zona de test', description: null, memberCount: 1 }],
-    members: [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Peștera Deja', kind: 'cave' }],
+    members: [
+      { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Peștera Deja', kind: 'cave', typeName: null },
+      { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', name: 'Dolina Mare', kind: 'generic', typeName: 'Dolină test' },
+    ],
   },
 }));
 
-const hit = (id: string, title: string, subtitle: string) =>
-  ({ world: 'feature', id, title, subtitle, symbol: null, placeable: false });
+const hit = (id: string, title: string, subtitle: string, symbol: string) =>
+  ({ world: 'feature', id, title, subtitle, symbol, placeable: false });
 
 vi.mock('../../api/hooks.ts', () => ({
   hasAccessAction: () => true,
@@ -38,6 +42,7 @@ vi.mock('../../api/hooks.ts', () => ({
     isPending: false,
   }),
   useReplaceFeatureSetMembers: () => ({ mutateAsync: replaceSpy, isPending: false }),
+  useFeatureTypes: () => ({ data: [{ id: 7, code: 'spring', name: 'Izvor test' }] }),
   useFilterVocabulary: () => ({
     data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] },
   }),
@@ -49,7 +54,10 @@ vi.mock('../../api/hooks.ts', () => ({
           data: {
             worlds: [{
               world: 'feature',
-              hits: [hit(MEMBER, 'Peștera Deja', 'Cave'), hit(OTHER, 'Izvorul Nou', 'Spring')],
+              hits: [
+                hit(MEMBER, 'Peștera Deja', 'Cave', 'cave'),
+                hit(OTHER, 'Izvorul Nou', 'Spring · Peștera Deja · Bihor', 'spring'),
+              ],
               total: null,
             }],
             page: 1, pageSize: 6, counted: false,
@@ -103,14 +111,23 @@ describe('the feature set member picker', () => {
     fireEvent.click(add);
 
     const drawer = screen.getByRole('dialog');
-    expect(within(drawer).getByText('Spring')).toBeTruthy();
+    // Named by its feature type, as a saved member is — not by the search row's context line.
+    expect(within(drawer).getByText('Izvor test')).toBeTruthy();
+    expect(within(drawer).queryByText(/Spring/)).toBeNull();
     expect(within(drawer).getAllByText('Izvorul Nou').length).toBeGreaterThan(0);
     // Added once: it leaves the search, and the button waits for the next pick.
     expect(screen.queryAllByTestId('feature-set-member-picker-row')).toHaveLength(0);
     expect(add).toBeDisabled();
 
     fireEvent.click(within(drawer).getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(replaceSpy).toHaveBeenCalledWith([MEMBER, OTHER]));
+    await waitFor(() => expect(replaceSpy).toHaveBeenCalledWith([MEMBER, TYPED, OTHER]));
+  });
+
+  it('names a saved member by its feature type, and one with only a kind by its kind', async () => {
+    await openMembersAndSearch();
+    const drawer = screen.getByRole('dialog');
+    expect(within(drawer).getByText('Dolină test')).toBeTruthy();
+    expect(within(drawer).getByText('Cave')).toBeTruthy();
   });
 
   it('picks a feature from the keyboard alone', async () => {

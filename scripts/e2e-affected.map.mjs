@@ -27,6 +27,7 @@ export const specs = {
   admin: [
     'settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts',
     'users-admin.spec.ts',
+    'feature-sets.spec.ts',
   ],
   audit: ['panel.spec.ts'],
   cabinets: ['documents.spec.ts'],
@@ -69,7 +70,7 @@ export const specs = {
     'karstlink-export.spec.ts', 'registry-statistics.spec.ts', 'trip-list.spec.ts',
     'cave-registry-filters.spec.ts',
   ],
-  featureSets: ['doline-morphometry.spec.ts', 'vector-import.spec.ts'],
+  featureSets: ['doline-morphometry.spec.ts', 'vector-import.spec.ts', 'feature-sets.spec.ts'],
   featureShares: [],
   files: ['uploads.spec.ts', 'documents.spec.ts', 'gallery.spec.ts', 'cave-attachments.spec.ts'],
   filters: [
@@ -84,6 +85,7 @@ export const specs = {
   geoFeatures: [
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
     'photo-import.spec.ts', 'feature-restore.spec.ts', 'table-map.spec.ts',
+    'feature-sets.spec.ts',
   ],
   geofiles: ['vector-import.spec.ts'],
   georeferencedMaps: [

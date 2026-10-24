@@ -54,7 +54,11 @@ public sealed record PermissionGroupMemberWriteRequest(AccessSubjectKind MemberK
 public sealed record FeatureSetDto(Guid Id, string Name, string Slug, string? Description, int MemberCount);
 
 /// <summary>A member the caller may read, named so the membership editor can show it.</summary>
-public sealed record FeatureSetMemberDto(Guid Id, string? Name, FeatureKind Kind);
+/// <param name="TypeName">
+/// The member's feature type, when it has one — the more particular word, and the one a member
+/// just picked in the editor is shown with too. Null for rows that carry only a kind.
+/// </param>
+public sealed record FeatureSetMemberDto(Guid Id, string? Name, FeatureKind Kind, string? TypeName);
 
 public sealed record FeatureSetWriteRequest(string Name, string? Description);
 
