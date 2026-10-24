@@ -102,6 +102,8 @@ export const specs = {
     'coordinate-converter.spec.ts',
     // Saved-filter layers clicked on the map and drawn in the 3D view beside it.
     'map-filter-layers.spec.ts',
+    // The workspace's panes, presets, the table under the map, and the corner notice's place.
+    'map-workspace.spec.ts', 'map-workspace-mobile.spec.ts',
   ],
   // A shared view opened with no account: its background and the public data its link draws.
   mapViews: ['shared-view.spec.ts', 'karst-layers.spec.ts', 'map-filters.spec.ts'],

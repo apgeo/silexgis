@@ -72,6 +72,9 @@ const PHONE_ONLY_SPECS = [
   // The movie dialog where the browser's video encoder may be missing or may write nothing:
   // Chromium has every encoder, so only the suite's other engine can show how that is said.
   /(^|\/)tracking-movie-webkit\.spec\.ts$/,
+  // The map workspace on a phone: one pane, the docks as drawers, whatever the account arranged on
+  // a desktop — and the survey-line notice clear of the corner controls at a phone's width.
+  /(^|\/)map-workspace-mobile\.spec\.ts$/,
 ];
 
 export default defineConfig({
