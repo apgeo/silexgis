@@ -466,7 +466,7 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
         foreach (var bbox in new[] { "1,2,3", "a,b,c,d", "23,46,22,47", "-200,46,22,47" })
         {
             var refused = await reader.GetAsync($"/api/v1/caves?filter={token}&bbox={bbox}");
-            await ShouldRefuseAsync(refused, HttpStatusCode.BadRequest, "cave.invalid_bbox");
+            await ShouldRefuseAsync(refused, HttpStatusCode.BadRequest, "map.invalid_bbox");
         }
 
         // The same filter with a well-formed window, and with none, is answered.

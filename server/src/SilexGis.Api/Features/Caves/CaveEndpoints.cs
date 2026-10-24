@@ -103,9 +103,10 @@ public static class CaveEndpoints
         // A window that is not a box is refused rather than read as no window: the list it was
         // meant to narrow would otherwise come back as every cave the reader may read, under a
         // page that says it shows only those in the map's view.
-        if (!string.IsNullOrWhiteSpace(bbox) && (!Bbox.TryParse(bbox, out var window) || !window.IsWithinWorld))
+        // The same refusal, under the same code, as every other route that takes a map window.
+        if (WindowProblems.Optional(bbox, out var window) is { } badWindow)
         {
-            return ApiProblems.BadRequest("cave.invalid_bbox", "bbox must be 'west,south,east,north'.");
+            return badWindow;
         }
 
         // The filter's conditions narrow the rows this caller may already see, and nothing else:
@@ -163,7 +164,7 @@ public static class CaveEndpoints
         // its entrances they may read — each tested where it is shown, snapped when they may not
         // place it, never by its stored one: tested on the stored point, the listing and its total
         // would bisect a hidden position below the protection grid.
-        if (Bbox.TryParse(bbox, out var box))
+        if (window is { } box)
         {
             query = await CaveWindow.NarrowAsync(
                 query, db, ctx, box, accessOptions.Value.LocationGridMeters, ct);
