@@ -628,3 +628,74 @@ describe('the ground the scene is drawn from', () => {
     expect(chosen.onTerrainChoiceChange).toHaveBeenCalledWith(undefined);
   });
 });
+
+describe('catalogue layers the scene draws itself', () => {
+  const catalogue = [
+    ...layers,
+    {
+      id: 41,
+      name: 'LiDAR hillshade',
+      layerKind: 'cog',
+      urlTemplate: 'https://data.example/lidar.tif',
+      cog: { bands: null, nodata: null, min: null, max: null, projection: 'EPSG:3857', projectionDefinition: null },
+      attribution: null,
+      isBase: true,
+      isDefault: false,
+      sortOrder: 1,
+    },
+    {
+      id: 42,
+      name: 'Liberty',
+      layerKind: 'vector',
+      urlTemplate: 'https://tiles.example/planet',
+      vector: { format: 'mvt', style: null, styleSource: null, labelField: null, scene3dStandIn: 'OpenStreetMap' },
+      attribution: null,
+      isBase: true,
+      isDefault: false,
+      sortOrder: 2,
+    },
+    {
+      id: 43,
+      name: 'Geology',
+      layerKind: 'cog',
+      urlTemplate: 'https://data.example/geology.tif',
+      cog: { bands: null, nodata: null, min: null, max: null, projection: 'EPSG:3857', projectionDefinition: null },
+      attribution: null,
+      isBase: false,
+      isDefault: false,
+      sortOrder: 3,
+    },
+  ] as unknown as MapLayerInfo[];
+
+  it('lists a GeoTIFF and a vector background beside the tiled ones, as the flat map does', () => {
+    renderPanel({ layers: catalogue });
+    expect(screen.getByRole('radio', { name: 'LiDAR hillshade' })).toBeEnabled();
+    expect(screen.getByRole('radio', { name: 'Liberty' })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: 'Geology' })).toBeInTheDocument();
+  });
+
+  it('says a background it cannot draw is not drawn, and why, and does not offer it', () => {
+    renderPanel({ layers: catalogue, imageryStatus: { 41: { state: 'unavailable', code: 'cog.unreadable' } } });
+    expect(screen.getByRole('radio', { name: 'LiDAR hillshade' })).toBeDisabled();
+    expect(screen.getByTestId('scene3d-layer-note-41')).toHaveTextContent(
+      'Not drawn in 3D. This GeoTIFF could not be read, so the 3D view does not draw it.',
+    );
+  });
+
+  it('names the stand-in a vector background is drawn by', () => {
+    renderPanel({ layers: catalogue, imageryStatus: { 42: { state: 'limited', code: 'vector.stand_in' } } });
+    expect(screen.getByTestId('scene3d-layer-note-42')).toHaveTextContent('Drawn in 3D as OpenStreetMap.');
+    expect(screen.getByRole('radio', { name: 'Liberty' })).toBeEnabled();
+  });
+
+  it('says an overlay is drawn only close in, and leaves its switch to the viewer', () => {
+    renderPanel({ layers: catalogue, imageryStatus: { 43: { state: 'limited', code: 'cog.short_pyramid' } } });
+    expect(screen.getByTestId('scene3d-layer-note-43')).toHaveTextContent('draws it only from close in');
+    expect(screen.getByRole('checkbox', { name: 'Geology' })).toBeEnabled();
+  });
+
+  it('says nothing under a layer that draws', () => {
+    renderPanel({ layers: catalogue, imageryStatus: { 41: { state: 'ready' } } });
+    expect(screen.queryByTestId('scene3d-layer-note-41')).not.toBeInTheDocument();
+  });
+});

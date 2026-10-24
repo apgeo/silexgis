@@ -99,3 +99,10 @@
   gap: 2px;
   margin: 2px 8px 0 24px;
 }
+
+/* What the scene says about drawing a catalogue entry: under the name, small, wrapping. */
+.scene3d-layer-note {
+  display: block;
+  font-size: 12px;
+  line-height: 1.35;
+}

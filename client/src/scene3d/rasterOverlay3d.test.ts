@@ -32,6 +32,9 @@ class FakeImagery implements Scene3DImagery {
   removeImageryLayer(id: string) {
     this.layers.delete(id);
   }
+  replaceImageryLayer() {
+    // The georeferenced maps never replace a layer; present only to satisfy the contract.
+  }
   hasImageryLayer(id: string) {
     return this.layers.has(id);
   }

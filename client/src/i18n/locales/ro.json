@@ -3366,6 +3366,16 @@
     "contextLostReload": "Reîncarcă",
     "rasterOverlayHint": "Pe glob fiecare planșă este aplatizată într-o singură imagine, așa că devine mai neclară la apropiere. Harta plană citește fișierul în sine și rămâne clară.",
     "geofileTracksHint": "Traseele și contururile din aceste fișiere sunt desenate ca linii, în culorile folosite pe harta plană. Un traseu care nu a înregistrat altitudini este așezat pe teren.",
+    "catalogueLayer": {
+      "unavailable": "Nedesenat în 3D",
+      "cog_unreadable": "Acest GeoTIFF nu a putut fi citit, așa că vederea 3D nu îl desenează.",
+      "cog_not_georeferenced": "Acest GeoTIFF nu spune unde se află pe teren, așa că vederea 3D nu îl desenează.",
+      "cog_projection_unusable": "Sistemul de coordonate al acestui GeoTIFF nu poate fi folosit aici, așa că vederea 3D nu îl desenează.",
+      "cog_band_missing": "Acestui GeoTIFF îi lipsește o bandă pe care intrarea lui o cere, așa că vederea 3D nu îl desenează.",
+      "cog_short_pyramid": "Acest GeoTIFF nu conține copii micșorate ale sale, așa că vederea 3D îl desenează doar de aproape.",
+      "vector_unreadable": "Stilul sau datele acestui fundal nu au putut fi încărcate, așa că vederea 3D nu îl desenează.",
+      "vector_stand_in": "Desenat în 3D ca {{name}}."
+    },
     "terrainTitle": "Terenul",
     "terrainBuildsHint": "Fiecare generare acoperă o zonă la un nivel de detaliu. Schimbarea recitește terenul și mută topografiile pe noua suprafață.",
     "terrainConfiguredEntry": "Modelul de altitudine configurat",

@@ -15,12 +15,14 @@ import {
   Credit,
   Ellipsoid,
   EllipsoidTerrainProvider,
+  Event as EngineEvent,
   GeographicTilingScheme,
   GeometryInstance,
   GroundPolylineGeometry,
   GroundPolylinePrimitive,
   HeightReference,
   ImageryLayer,
+  type ImageryProvider,
   Ion,
   Material,
   Math as CesiumMath,
@@ -90,6 +92,8 @@ import type {
   Scene3DSurfaceMode,
   Scene3DSurfaceState,
   Scene3DTerrainSource,
+  Scene3DTileSource,
+  Scene3DTileSourceInfo,
   Scene3DVectorSource,
 } from './scene3dEngine.ts';
 
@@ -288,7 +292,7 @@ interface LoadedModel {
  * two views ask a service for the same tiles.
  */
 function imageryProviderFor(
-  options: Scene3DImageryOptions,
+  options: Exclude<Scene3DImageryOptions, { kind: 'rendered' }>,
 ): UrlTemplateImageryProvider | WebMapServiceImageryProvider | WebMapTileServiceImageryProvider {
   const credit = options.attribution ? new Credit(options.attribution, true) : undefined;
   const ceiling = options.maximumLevel !== undefined ? { maximumLevel: options.maximumLevel } : {};
@@ -343,9 +347,71 @@ function tilingSchemeFor(crs: Scene3DServiceCrs): GeographicTilingScheme | WebMe
   return crs === 'EPSG:4326' ? new GeographicTilingScheme() : new WebMercatorTilingScheme();
 }
 
+/** A failed tile is asked for again this many times before the engine settles for its parent. */
+const RENDERED_TILE_RETRIES = 2;
+
+/**
+ * The engine's provider for tiles this application draws itself — a catalogue GeoTIFF, a vector
+ * style. It only adapts: what to draw, how much at once and what to say when it cannot are the
+ * source's business, and the source is engine-free code.
+ *
+ * Web mercator always, whatever the source's own coordinate system: the source reprojects into
+ * the tile it is asked for, and the z/x/y pyramid is the one every other catalogue tile is on, so
+ * a self-drawn background and a tile template switch without the ground shifting under the camera.
+ */
+class RenderedTileImageryProvider {
+  readonly tilingScheme = new WebMercatorTilingScheme();
+  readonly rectangle: Rectangle;
+  readonly tileWidth: number;
+  readonly tileHeight: number;
+  readonly minimumLevel = 0;
+  readonly maximumLevel: number;
+  readonly tileDiscardPolicy = undefined;
+  readonly errorEvent = new EngineEvent();
+  readonly credit: Credit | undefined;
+  readonly proxy = undefined;
+  readonly hasAlphaChannel = true;
+  private readonly source: Scene3DTileSource;
+
+  constructor(source: Scene3DTileSource, info: Scene3DTileSourceInfo, credit: Credit | undefined) {
+    this.source = source;
+    this.rectangle = info.bounds ? Rectangle.fromDegrees(...info.bounds) : this.tilingScheme.rectangle;
+    this.tileWidth = info.tileSize;
+    this.tileHeight = info.tileSize;
+    this.maximumLevel = info.maximumLevel;
+    this.credit = credit;
+    // Listened to, so a failed tile is not also written to the console by the engine; retried a
+    // couple of times, because a range request can fail once and answer the next time.
+    this.errorEvent.addEventListener((error: { timesRetried: number; retry: boolean }) => {
+      error.retry = error.timesRetried <= RENDERED_TILE_RETRIES;
+    });
+  }
+
+  getTileCredits(): undefined {
+    return undefined;
+  }
+
+  requestImage(x: number, y: number, level: number) {
+    return this.source.renderTile(x, y, level);
+  }
+
+  pickFeatures(): undefined {
+    return undefined;
+  }
+}
+
 class CesiumScene3D implements Scene3DCore {
   private readonly widget: CesiumWidget;
   private readonly imageryById = new Map<string, ImageryLayer>();
+  /** The self-drawn sources behind imagery layers, closed when their layer goes or the scene does. */
+  private readonly tileSourceById = new Map<string, Scene3DTileSource>();
+  /**
+   * Self-drawn layers added hidden and not shown yet, with what opens their source. A source is
+   * opened the first time its layer is shown, not when it is added: every basemap is added up
+   * front, and opening each would read the header of every GeoTIFF and the style of every vector
+   * background the catalogue lists — requests to their servers for layers nobody chose.
+   */
+  private readonly unopenedById = new Map<string, () => void>();
   /**
    * The attribution each imagery layer was added with, for the layers that were given one.
    *
@@ -686,6 +752,11 @@ class CesiumScene3D implements Scene3DCore {
     this.removeContextLostHandler();
     this.contextLossListeners.clear();
     this.imageryById.clear();
+    for (const source of this.tileSourceById.values()) {
+      source.destroy();
+    }
+    this.tileSourceById.clear();
+    this.unopenedById.clear();
     // The widget takes every batch down with the scene; the map only exists so a source built
     // twice under one id can be found, and it must not outlive the scene it named.
     this.vectorSourceIds.clear();
@@ -781,8 +852,31 @@ class CesiumScene3D implements Scene3DCore {
     if (this.imageryById.has(id)) {
       return;
     }
-    const provider = imageryProviderFor(options);
-    const layer = new ImageryLayer(provider, {
+    this.insertImageryLayer(id, options);
+  }
+
+  replaceImageryLayer(id: string, options: Scene3DImageryOptions): void {
+    const existing = this.imageryById.get(id);
+    if (!existing) {
+      return;
+    }
+    const collection = this.widget.scene.imageryLayers;
+    const index = collection.indexOf(existing);
+    const show = existing.show;
+    const alpha = existing.alpha;
+    // The id keeps its entry, and so its place in the order the credits are listed in; only what
+    // the entry holds changes.
+    this.imageryCredit.delete(id);
+    this.tileSourceById.get(id)?.destroy();
+    this.tileSourceById.delete(id);
+    this.unopenedById.delete(id);
+    collection.remove(existing, true);
+    this.insertImageryLayer(id, { ...options, visible: show, opacity: alpha }, index);
+  }
+
+  /** Builds the layer for a source and puts it at `index` in the stack, or on top. */
+  private insertImageryLayer(id: string, options: Scene3DImageryOptions, index?: number): void {
+    const layerOptions = {
       show: options.visible ?? true,
       alpha: options.opacity ?? 1,
       // The lower end hides the layer, as in 2D, rather than asking for a continent of tiles: the
@@ -790,12 +884,45 @@ class CesiumScene3D implements Scene3DCore {
       // is stated in the ground's levels, whose pyramid starts with two tiles where the imagery's
       // starts with one, so ground level n is about imagery zoom n + 1.
       ...(options.minimumLevel ? { minimumTerrainLevel: Math.max(0, options.minimumLevel - 1) } : {}),
-    });
-    this.widget.scene.imageryLayers.add(layer);
+    };
+    let layer: ImageryLayer;
+    if (options.kind === 'rendered') {
+      const source = options.source;
+      const credit = options.attribution ? new Credit(options.attribution, true) : undefined;
+      // The provider exists once the source has opened (a file's header read, a style loaded);
+      // until then the layer is in the stack, in its place, drawing nothing.
+      const opened = new Promise<void>((resolve) => {
+        if (layerOptions.show) {
+          resolve();
+        } else {
+          this.unopenedById.set(id, resolve);
+        }
+      });
+      const provider = opened
+        .then(() => source.open())
+        .then((info) => new RenderedTileImageryProvider(source, info, credit) as unknown as ImageryProvider);
+      layer = ImageryLayer.fromProviderAsync(provider, layerOptions);
+      // A source that cannot open has already said why, through its own report to the layer list.
+      // Listened to here only so the engine does not write the same failure to the console.
+      layer.errorEvent.addEventListener(() => undefined);
+      this.tileSourceById.set(id, source);
+    } else {
+      layer = new ImageryLayer(imageryProviderFor(options), layerOptions);
+    }
+    this.widget.scene.imageryLayers.add(layer, index);
     this.imageryById.set(id, layer);
     if (options.attribution) {
       this.imageryCredit.set(id, options.attribution);
     }
+  }
+
+  /** Drops what this object holds about a layer, closing its source; the layer itself is the caller's. */
+  private forgetImageryLayer(id: string): void {
+    this.imageryById.delete(id);
+    this.imageryCredit.delete(id);
+    this.tileSourceById.get(id)?.destroy();
+    this.tileSourceById.delete(id);
+    this.unopenedById.delete(id);
   }
 
   addImageOverlayLayer(id: string, options: Scene3DImageOverlayOptions): void {
@@ -827,8 +954,7 @@ class CesiumScene3D implements Scene3DCore {
     if (!layer) {
       return;
     }
-    this.imageryById.delete(id);
-    this.imageryCredit.delete(id);
+    this.forgetImageryLayer(id);
     this.widget.scene.imageryLayers.remove(layer, true);
   }
 
@@ -844,6 +970,10 @@ class CesiumScene3D implements Scene3DCore {
     const layer = this.imageryById.get(id);
     if (layer) {
       layer.show = visible;
+    }
+    if (visible) {
+      this.unopenedById.get(id)?.();
+      this.unopenedById.delete(id);
     }
   }
 

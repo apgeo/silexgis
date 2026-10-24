@@ -78,7 +78,11 @@ export type Scene3DServiceCrs = 'EPSG:3857' | 'EPSG:4326';
  * asked for one picture per tile, or a Web Map Tile Service's ready-cut tiles. `kind` may be left
  * out for a z/x/y template, which is what every source was before the other two existed.
  */
-export type Scene3DImageryOptions = Scene3DXyzImagery | Scene3DWmsImagery | Scene3DWmtsImagery;
+export type Scene3DImageryOptions =
+  | Scene3DXyzImagery
+  | Scene3DWmsImagery
+  | Scene3DWmtsImagery
+  | Scene3DRenderedImagery;
 
 export interface Scene3DXyzImagery extends Scene3DImageryCommon {
   kind?: 'xyz';
@@ -109,6 +113,49 @@ export interface Scene3DWmtsImagery extends Scene3DImageryCommon {
   crs: Scene3DServiceCrs;
   /** The service's name for each level from 0 up. */
   matrixIds: string[];
+}
+
+/**
+ * Tiles this application draws itself, for a source the engine has no reader for: a
+ * cloud-optimised GeoTIFF read by range requests, a vector style drawn by the flat map's own
+ * renderer. The engine asks the source for each tile it needs and drapes what comes back.
+ */
+export interface Scene3DRenderedImagery extends Scene3DImageryCommon {
+  kind: 'rendered';
+  source: Scene3DTileSource;
+}
+
+/** What a self-drawn source tells the engine once it has opened. */
+export interface Scene3DTileSourceInfo {
+  /** The ground it covers, west, south, east, north in degrees; absent means the whole world. */
+  bounds?: Scene3DBounds;
+  /** The deepest web-mercator level it has detail for; the engine enlarges that level past it. */
+  maximumLevel: number;
+  /** Side of a tile in pixels. */
+  tileSize: number;
+}
+
+/** A tile as the engine takes it: a canvas or a decoded bitmap, `tileSize` square. */
+export type Scene3DTileImage = HTMLCanvasElement | ImageBitmap;
+
+/**
+ * A source of tiles on the web-mercator pyramid (z/x/y, as every tile template counts them),
+ * drawn by this application rather than fetched ready-made.
+ */
+export interface Scene3DTileSource {
+  /**
+   * Reads whatever the source needs before it can draw (a file's header, a style). Rejects when it
+   * cannot draw at all; the source has said why through its own channel by then, so the engine
+   * only stops asking it for tiles.
+   */
+  open(): Promise<Scene3DTileSourceInfo>;
+  /**
+   * One tile. Undefined means "busy, ask again later" — how a source bounds the work in flight —
+   * and the engine does ask again on a later frame.
+   */
+  renderTile(x: number, y: number, level: number): Promise<Scene3DTileImage> | undefined;
+  /** Stops everything in flight and lets go of what is held. Called when its layer goes. */
+  destroy(): void;
 }
 
 export interface Scene3DImageryCommon {
@@ -221,6 +268,12 @@ export interface Scene3DImagery {
    */
   addImageOverlayLayer(id: string, options: Scene3DImageOverlayOptions): void;
   removeImageryLayer(id: string): void;
+  /**
+   * Puts a different source under an existing id, in the same place in the stack and with the
+   * same visibility and opacity — for a layer that has to fall back to another way of drawing
+   * after it was added, without being moved over the layers added after it. No-op for an unknown id.
+   */
+  replaceImageryLayer(id: string, options: Scene3DImageryOptions): void;
   hasImageryLayer(id: string): boolean;
   /** Ids of the imagery layers currently in the scene, bottom→top. */
   getImageryLayerIds(): string[];

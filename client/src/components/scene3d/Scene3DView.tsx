@@ -18,7 +18,14 @@ import {
   setFeatureTypeCatalog,
 } from '../../map/featureTypeCatalog.ts';
 import { ANCHORED_TO_SURFACE, type Altitude3DPlacement } from '../../scene3d/altitude3d.ts';
-import { baseImageryLayerId, syncBaseImagery, syncTileOverlayImagery } from '../../scene3d/baseImagery3d.ts';
+import {
+  baseImageryLayerId,
+  isDrawableIn3d,
+  syncBaseImagery,
+  syncTileOverlayImagery,
+  type CatalogueImageryContext,
+} from '../../scene3d/baseImagery3d.ts';
+import type { RenderedSourceStatus } from '../../scene3d/renderedTiles3d.ts';
 import { syncRasterImagery } from '../../scene3d/rasterOverlay3d.ts';
 import {
   applyCamera3D,
@@ -127,6 +134,14 @@ import {
 } from '../../scene3d/stationPhotos3d.ts';
 import { cutawayPauseMessage, terrainProblemMessage } from './surfaceMessages.ts';
 import './Scene3DView.css';
+
+/** Whether two reports say the same, so a source repeating itself does not re-render the view. */
+function sameImageryStatus(known: RenderedSourceStatus | undefined, next: RenderedSourceStatus): boolean {
+  if (!known || known.state !== next.state) {
+    return false;
+  }
+  return known.state === 'ready' || (next.state !== 'ready' && known.code === next.code);
+}
 
 /** One empty list for every render in which the configuration has not arrived or has no builds. */
 const NO_TERRAIN_BUILDS: TerrainBuildChoice[] = [];
@@ -309,6 +324,23 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const { data: layers } = useMapLayers();
   const [activeBaseId, setActiveBaseId] = useState<number>();
 
+  // How each catalogue layer the scene draws itself stands — a GeoTIFF it cannot read, a vector
+  // entry drawn by its stand-in — keyed by catalogue id, for the layer list to say beside the entry.
+  const [imageryStatus, setImageryStatus] = useState<Record<number, RenderedSourceStatus>>({});
+  const reportImagery = useCallback((catalogId: number, status: RenderedSourceStatus) => {
+    setImageryStatus((previous) =>
+      sameImageryStatus(previous[catalogId], status) ? previous : { ...previous, [catalogId]: status },
+    );
+  }, []);
+  // A vector style's labels are drawn into its tiles in the language the layer was created in: a
+  // layer already in the scene keeps its tiles through a language switch, and takes the new
+  // language the next time the scene is built.
+  const language = i18n.resolvedLanguage ?? i18n.language;
+  const imageryContext = useMemo<CatalogueImageryContext | undefined>(
+    () => (layers ? { catalog: layers, language, report: reportImagery } : undefined),
+    [layers, language, reportImagery],
+  );
+
   // What each kind of surface feature is called, which is how a feature drawn here gets named in
   // a tooltip. The flat map fills the same catalog when it opens; this view has to fill it as
   // well, because a session that goes straight to the 3D route never opens the flat map and would
@@ -321,23 +353,35 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   }, [featureTypes]);
 
   useEffect(() => {
-    if (layers && activeBaseId === undefined) {
-      const initial = layers.find((l) => l.isDefault && l.isBase) ?? layers.find((l) => l.isBase);
-      if (initial) {
-        setActiveBaseId(Number(initial.id));
+    if (!layers) {
+      return;
+    }
+    // The basemap the scene opens on, and the one it falls back to when the chosen one turns out
+    // not to draw (a GeoTIFF whose header cannot be read): the installation's default, else the
+    // first it lists, among those the scene can drape and has not found unusable. Falling back
+    // rather than keeping the choice, because the alternative is an empty globe; the list still
+    // shows the unusable entry, with the reason.
+    const usable = layers.filter(
+      (l) => l.isBase && isDrawableIn3d(l, layers) && imageryStatus[Number(l.id)]?.state !== 'unavailable',
+    );
+    const current = activeBaseId === undefined ? undefined : usable.find((l) => Number(l.id) === activeBaseId);
+    if (!current) {
+      const next = usable.find((l) => l.isDefault) ?? usable[0];
+      if (next && Number(next.id) !== activeBaseId) {
+        setActiveBaseId(Number(next.id));
       }
     }
-  }, [layers, activeBaseId]);
+  }, [layers, activeBaseId, imageryStatus]);
 
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine || !layers || activeBaseId === undefined) {
+    if (!engine || !imageryContext || activeBaseId === undefined) {
       return;
     }
-    syncBaseImagery(engine, layers, activeBaseId);
+    syncBaseImagery(engine, imageryContext, activeBaseId);
     // Nothing moved the camera, and the scene only draws when asked to.
     engine.requestRender();
-  }, [layers, activeBaseId, engineVersion]);
+  }, [imageryContext, activeBaseId, engineVersion]);
 
   // ---- catalogue overlays and this installation's own georeferenced maps ----
 
@@ -367,12 +411,12 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // picture of the ground, which nothing reports and nothing on screen explains.
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine || !layers) {
+    if (!engine || !imageryContext) {
       return;
     }
-    syncTileOverlayImagery(engine, layers, new Set(visibleTileOverlayIds), tileOverlayOpacity);
+    syncTileOverlayImagery(engine, imageryContext, new Set(visibleTileOverlayIds), tileOverlayOpacity);
     engine.requestRender();
-  }, [layers, visibleTileOverlayIds, tileOverlayOpacity, engineVersion, activeBaseId]);
+  }, [imageryContext, visibleTileOverlayIds, tileOverlayOpacity, engineVersion, activeBaseId]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -1364,6 +1408,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
             content={
               <Scene3DLayerPanel
                 layers={layers ?? []}
+                imageryStatus={imageryStatus}
                 activeBaseId={activeBaseId}
                 onBaseChange={setActiveBaseId}
                 baseOpacity={baseOpacity}

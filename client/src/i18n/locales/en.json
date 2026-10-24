@@ -3366,6 +3366,16 @@
     "contextLostReload": "Reload",
     "rasterOverlayHint": "On the globe each sheet is flattened to a single picture, so it softens under close zoom. The flat map reads the file itself and stays sharp.",
     "geofileTracksHint": "Tracks and outlines from these files are drawn as lines, in the colours the flat map uses. A track that recorded no altitude is laid on the ground.",
+    "catalogueLayer": {
+      "unavailable": "Not drawn in 3D",
+      "cog_unreadable": "This GeoTIFF could not be read, so the 3D view does not draw it.",
+      "cog_not_georeferenced": "This GeoTIFF does not say where on the ground it lies, so the 3D view does not draw it.",
+      "cog_projection_unusable": "This GeoTIFF's coordinate system cannot be used here, so the 3D view does not draw it.",
+      "cog_band_missing": "This GeoTIFF lacks a band its entry asks for, so the 3D view does not draw it.",
+      "cog_short_pyramid": "This GeoTIFF carries no reduced copies of itself, so the 3D view draws it only from close in.",
+      "vector_unreadable": "This background's style or data could not be loaded, so the 3D view does not draw it.",
+      "vector_stand_in": "Drawn in 3D as {{name}}."
+    },
     "terrainTitle": "Ground",
     "terrainBuildsHint": "Each build covers one area to one level of detail. Switching re-reads the ground and moves the surveys onto the new surface.",
     "terrainConfiguredEntry": "The configured elevation model",

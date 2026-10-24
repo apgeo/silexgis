@@ -9,7 +9,8 @@ import {
   ENTRANCE_SOURCE_ID,
   type CaveData3DLayer,
 } from '../../scene3d/caveData3d.ts';
-import { isDrawable } from '../../map/baseLayers.ts';
+import { isDrawableIn3d, standInFor } from '../../scene3d/baseImagery3d.ts';
+import type { RenderedSourceStatus } from '../../scene3d/renderedTiles3d.ts';
 import { CENTERLINE_DEPTH_BANDS } from '../../scene3d/centerlines3d.ts';
 import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
 import type { Scene3DSurfaceMode, Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
@@ -35,6 +36,11 @@ import './Scene3DLayerPanel.css';
 
 export interface Scene3DLayerPanelProps {
   layers: MapLayerInfo[];
+  /**
+   * How each catalogue layer the scene draws itself stands, by catalogue id: drawing, drawing with
+   * a limit, or not drawing and why. Said under the entry; missing means nothing to say.
+   */
+  imageryStatus?: Readonly<Record<number, RenderedSourceStatus>>;
   activeBaseId: number | undefined;
   onBaseChange: (id: number) => void;
   /** Per-base-layer opacity (0..1) keyed by catalog id; missing = fully opaque. */
@@ -120,8 +126,12 @@ export interface Scene3DLayerPanelProps {
  */
 const CONFIGURED_TERRAIN_ENTRY = 'configured';
 
+/** No statuses: what a panel shows before any self-drawn layer has reported. */
+const NO_STATUS: Readonly<Record<number, RenderedSourceStatus>> = {};
+
 export default function Scene3DLayerPanel({
   layers,
+  imageryStatus = NO_STATUS,
   activeBaseId,
   onBaseChange,
   baseOpacity,
@@ -273,9 +283,32 @@ export default function Scene3DLayerPanel({
     : terrainBuilds.find((build) => build.isDrawn)?.id;
   const terrainEntry = terrainChoice ?? defaultTerrainEntry;
 
-  // Every kind the scene can drape, and nothing it cannot — the same rule as the flat map's panel.
-  const baseLayers = layers.filter((layer) => layer.isBase && isDrawable(layer));
-  const tileOverlays = layers.filter((layer) => !layer.isBase && isDrawable(layer));
+  // Every kind the scene can drape, and nothing it cannot — the same list as the flat map's panel,
+  // with a vector entry offered when the scene draws its style or drapes its stand-in.
+  const baseLayers = layers.filter((layer) => layer.isBase && isDrawableIn3d(layer, layers));
+  const tileOverlays = layers.filter((layer) => !layer.isBase && isDrawableIn3d(layer, layers));
+
+  /** What the scene has said about drawing an entry, as a sentence under it, or nothing. */
+  const statusOf = (layer: MapLayerInfo) => imageryStatus[Number(layer.id)];
+  const statusNote = (layer: MapLayerInfo) => {
+    const status = statusOf(layer);
+    if (!status || status.state === 'ready') {
+      return null;
+    }
+    const text =
+      status.code === 'vector.stand_in'
+        ? t('scene3d.catalogueLayer.vector_stand_in', { name: standInFor(layer, layers)?.name ?? '' })
+        : t(`scene3d.catalogueLayer.${status.code.replace('.', '_')}`);
+    return (
+      <Typography.Text
+        type={status.state === 'unavailable' ? 'warning' : 'secondary'}
+        className="scene3d-layer-note"
+        data-testid={`scene3d-layer-note-${Number(layer.id)}`}
+      >
+        {status.state === 'unavailable' ? `${t('scene3d.catalogueLayer.unavailable')}. ${text}` : text}
+      </Typography.Text>
+    );
+  };
   // Only rasters that finished converting have anything to drape. The others are shown in the
   // georeferenced-maps screen with their status; offering them here would be offering a switch
   // that does nothing and says nothing about why.
@@ -294,6 +327,7 @@ export default function Scene3DLayerPanel({
         >
           {layer.name}
         </Checkbox>
+        {statusNote(layer)}
         <Slider
           className="scene3d-layer-opacity"
           min={0}
@@ -355,7 +389,12 @@ export default function Scene3DLayerPanel({
                 const id = Number(layer.id);
                 return (
                   <div key={id} className="scene3d-layer-row">
-                    <Radio value={id}>{layer.name}</Radio>
+                    {/* A basemap the scene found it cannot draw is not offered: choosing it would
+                        empty the globe. It stays in the list, with the reason under it. */}
+                    <Radio value={id} disabled={statusOf(layer)?.state === 'unavailable'}>
+                      {layer.name}
+                    </Radio>
+                    {statusNote(layer)}
                     <Slider
                       className="scene3d-layer-opacity"
                       min={0}

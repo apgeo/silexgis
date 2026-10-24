@@ -375,3 +375,33 @@ export const SWISS_LV03 = swiss(LV03);
 
 /** The grids themselves, for the tests and for a caller that needs the raw numbers. */
 export const GRIDS = { stereo70: STEREO_70, lv95: LV95, lv03: LV03 } as const;
+
+/** Longitude/latitude to and from a coordinate system, either way null where it has no answer. */
+export interface DefinedProjection {
+  forward(lon: number, lat: number): [number, number] | null;
+  inverse(x: number, y: number): [number, number] | null;
+}
+
+/**
+ * Longitude/latitude to and from a coordinate system given by its PROJ.4 definition: a raster the
+ * layer catalogue declares in its own system arrives with the definition the server resolved for
+ * it, datum shift included, and is placed by that rather than by anything written here. Here
+ * because this module is the one seam to the projection library. Throws when proj4 cannot read
+ * the definition.
+ */
+export function definedProjection(definition: string): DefinedProjection {
+  const projection = proj4(WGS84, definition);
+  const finite = (convert: () => number[]): [number, number] | null => {
+    try {
+      const [a, b] = convert();
+      return Number.isFinite(a) && Number.isFinite(b) ? [a!, b!] : null;
+    } catch {
+      // proj4 throws for some positions outside a projection's domain rather than answering NaN.
+      return null;
+    }
+  };
+  return {
+    forward: (lon, lat) => finite(() => projection.forward([lon, lat])),
+    inverse: (x, y) => finite(() => projection.inverse([x, y])),
+  };
+}

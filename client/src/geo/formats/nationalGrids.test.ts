@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import proj4 from 'proj4';
 import { describe, expect, it } from 'vitest';
-import { fromGrid, GRIDS, STEREO70, SWISS_LV03, SWISS_LV95, toGrid } from './nationalGrids.ts';
+import { definedProjection, fromGrid, GRIDS, STEREO70, SWISS_LV03, SWISS_LV95, toGrid } from './nationalGrids.ts';
 
 /**
  * The grid's one definition and the points that pin it, in a file at the root of the working tree
@@ -181,5 +181,24 @@ describe('a protected position in a national grid', () => {
   it('is written to the kilometre whatever the precision setting', () => {
     expect(STEREO70.formatProtected(25.4472, 45.5313, STEREO70.defaults, 5000)).toMatch(/^E \d{3}000 N \d{3}000$/);
     expect(SWISS_LV95.formatProtected(7.44, 46.95, SWISS_LV95.defaults, 5000)).toMatch(/^E \d{4}000 N \d{4}000$/);
+  });
+});
+
+describe('a coordinate system given by its definition', () => {
+  it('projects as the grid written out here does, when the definition is the same', () => {
+    const projection = definedProjection(GRIDS.stereo70.definition);
+    const [x, y] = projection.forward(25.3, 45.7)!;
+    const [easting, northing] = toGrid(GRIDS.stereo70, 25.3, 45.7)!;
+    expect(x).toBeCloseTo(easting, 6);
+    expect(y).toBeCloseTo(northing, 6);
+    const [lon, lat] = projection.inverse(x, y)!;
+    // Back to within a millimetre: the datum shift is undone iteratively.
+    expect(lon).toBeCloseTo(25.3, 7);
+    expect(lat).toBeCloseTo(45.7, 7);
+  });
+
+  it('answers null rather than a number where the projection has none', () => {
+    const projection = definedProjection('+proj=merc +a=6378137 +b=6378137 +units=m +no_defs');
+    expect(projection.forward(0, 90)).toBeNull();
   });
 });

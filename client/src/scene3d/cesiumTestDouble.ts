@@ -187,6 +187,7 @@ export const Material = {
 // The library exports its own maths helpers under the name `Math`. Exported as an alias rather
 // than declared under that name, so the global one stays reachable inside this file.
 export { CesiumMath as Math };
+export { FakeEvent as Event };
 
 export const Cartesian3 = {
   fromDegrees(longitudeDegrees: number, latitudeDegrees: number, height = 0): FakeCartesian3 {
@@ -625,6 +626,7 @@ export class UrlTemplateImageryProvider {
 /** The two tilings a map service is drawn on; the double records which one it was given. */
 export class WebMercatorTilingScheme {
   readonly name = 'web-mercator';
+  readonly rectangle = { west: -180, south: -85.0511287798066, east: 180, north: 85.0511287798066 };
 }
 
 export class GeographicTilingScheme {
@@ -673,11 +675,28 @@ export class WebMapTileServiceImageryProvider {
   }
 }
 
+/**
+ * What a provider for self-drawn tiles looks like to the engine: the members the real library
+ * reads from any provider, and `requestImage`, which a test calls the way the engine would.
+ */
+export interface FakeRenderedProvider {
+  tilingScheme: WebMercatorTilingScheme;
+  rectangle: { west: number; south: number; east: number; north: number };
+  tileWidth: number;
+  tileHeight: number;
+  maximumLevel: number;
+  credit: Credit | undefined;
+  hasAlphaChannel: boolean;
+  errorEvent: FakeEvent;
+  requestImage(x: number, y: number, level: number): Promise<unknown> | undefined;
+}
+
 type FakeImageryProvider =
   | UrlTemplateImageryProvider
   | SingleTileImageryProvider
   | WebMapServiceImageryProvider
-  | WebMapTileServiceImageryProvider;
+  | WebMapTileServiceImageryProvider
+  | FakeRenderedProvider;
 
 /** One picture pinned to a rectangle of ground, as the scene asks for a georeferenced map. */
 export class SingleTileImageryProvider {
@@ -696,13 +715,43 @@ export interface FakeImageryLayerOptions {
 export class ImageryLayer {
   show = true;
   alpha = 1;
-  provider: FakeImageryProvider;
+  /** Undefined while a provider promised to {@link ImageryLayer.fromProviderAsync} has not arrived. */
+  provider: FakeImageryProvider | undefined;
   options: FakeImageryLayerOptions;
-  constructor(provider: FakeImageryProvider, options: FakeImageryLayerOptions = {}) {
+  /** What the real layer raises when the provider it was promised fails to arrive. */
+  readonly errorEvent = new FakeEvent();
+  /** Settles once a promised provider has arrived or failed; a test awaits it instead of guessing. */
+  providerSettled: Promise<void> = Promise.resolve();
+  destroyed = false;
+  constructor(provider: FakeImageryProvider | undefined, options: FakeImageryLayerOptions = {}) {
     this.provider = provider;
     this.options = options;
     this.show = options.show ?? true;
     this.alpha = options.alpha ?? 1;
+  }
+
+  /**
+   * As the real one: the layer exists at once, in its place in the stack, and takes its provider
+   * when the promise resolves. A rejection is raised on the layer's error event — and, as in the
+   * library, written to the console when nothing listens, which is what a test can catch.
+   */
+  static fromProviderAsync(promise: Promise<FakeImageryProvider>, options: FakeImageryLayerOptions = {}) {
+    const layer = new ImageryLayer(undefined, options);
+    layer.providerSettled = promise.then(
+      (provider) => {
+        if (!layer.destroyed) {
+          layer.provider = provider;
+        }
+      },
+      (error: unknown) => {
+        if (layer.errorEvent.listeners.size > 0) {
+          layer.errorEvent.raise(error);
+        } else {
+          console.error(error);
+        }
+      },
+    );
+    return layer;
   }
 }
 
@@ -716,13 +765,21 @@ class FakeImageryLayerCollection {
     this.layers.push(layer);
     return layer;
   }
-  add(layer: FakeImageryLayer) {
-    this.layers.push(layer);
+  add(layer: FakeImageryLayer, index?: number) {
+    if (index === undefined) {
+      this.layers.push(layer);
+    } else {
+      this.layers.splice(index, 0, layer);
+    }
   }
-  remove(layer: FakeImageryLayer) {
+  indexOf(layer: FakeImageryLayer) {
+    return this.layers.indexOf(layer);
+  }
+  remove(layer: FakeImageryLayer, destroy = true) {
     const index = this.layers.indexOf(layer);
     if (index >= 0) {
       this.layers.splice(index, 1);
+      layer.destroyed = destroy;
     }
   }
 }
@@ -730,7 +787,7 @@ class FakeImageryLayerCollection {
 // The real events forward every argument they were raised with, positionally, to each listener.
 // That matters here because the render-error event is raised as `(scene, error)` and a double that
 // passed only one argument would let a listener with the wrong arity keep passing its test.
-class FakeEvent {
+export class FakeEvent {
   readonly listeners = new Set<(...args: unknown[]) => void>();
   addEventListener(listener: (...args: unknown[]) => void) {
     this.listeners.add(listener);

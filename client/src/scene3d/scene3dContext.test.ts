@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { FakeRenderedProvider, UrlTemplateImageryProvider } from './cesiumTestDouble.ts';
 
 // The engine library is replaced wholesale: it needs a graphics context the runner does not have,
 // and every behaviour under test here belongs to this application's configuration of it rather
@@ -458,6 +459,145 @@ describe('imagery layers', () => {
       session.engine.setImageryLayerOpacity('missing', 0.5);
       session.engine.removeImageryLayer('missing');
     }).not.toThrow();
+    session.release();
+  });
+});
+
+describe('tiles the application draws itself', () => {
+  /** A source standing in for a GeoTIFF or a vector style: it says what it covers and counts what it was asked. */
+  function tileSource(info: Promise<{ bounds?: [number, number, number, number]; maximumLevel: number; tileSize: number }>) {
+    const asked: [number, number, number][] = [];
+    let destroyed = 0;
+    let opened = 0;
+    const tile = {} as HTMLCanvasElement;
+    return {
+      asked,
+      tile,
+      destroyed: () => destroyed,
+      opened: () => opened,
+      source: {
+        open: () => {
+          opened += 1;
+          return info;
+        },
+        renderTile: (x: number, y: number, level: number) => {
+          asked.push([x, y, level]);
+          return Promise.resolve(tile);
+        },
+        destroy: () => {
+          destroyed += 1;
+        },
+      },
+    };
+  }
+
+  it('drapes a source once it has opened, on the web-mercator tiling, over the ground it covers', async () => {
+    const session = acquire();
+    const drawn = tileSource(Promise.resolve({ bounds: [24, 45, 26, 46], maximumLevel: 13, tileSize: 256 }));
+    session.engine.addImageryLayer('base:9', {
+      kind: 'rendered',
+      source: drawn.source,
+      attribution: '© Agency',
+      visible: false,
+      minimumLevel: 6,
+    });
+
+    const [layer] = engine.engineState.widgets[0].scene.imageryLayers.layers;
+    // In the stack at once, in its place, before the source has said anything — and not opened
+    // while hidden: every basemap is added up front, and nobody chose this one yet.
+    expect(layer.show).toBe(false);
+    expect(layer.options.minimumTerrainLevel).toBe(5);
+    await Promise.resolve();
+    expect(drawn.opened()).toBe(0);
+    session.engine.setImageryLayerVisible('base:9', true);
+    session.engine.setImageryLayerVisible('base:9', false);
+    session.engine.setImageryLayerVisible('base:9', true);
+    await layer.providerSettled;
+    expect(drawn.opened()).toBe(1);
+    const provider = layer.provider as FakeRenderedProvider;
+    expect(provider.tilingScheme).toBeInstanceOf(engine.WebMercatorTilingScheme);
+    expect(provider.rectangle).toEqual({ west: 24, south: 45, east: 26, north: 46 });
+    expect(provider.maximumLevel).toBe(13);
+    expect(provider.tileWidth).toBe(256);
+    expect(provider.hasAlphaChannel).toBe(true);
+    expect(provider.credit).toEqual(new engine.Credit('© Agency', true));
+    // The engine's request reaches the source unchanged.
+    await expect(provider.requestImage(4, 5, 6)).resolves.toBe(drawn.tile);
+    expect(drawn.asked).toEqual([[4, 5, 6]]);
+    // A picture of the scene names its credit like any other layer's.
+    expect(session.engine.getVisibleCredits()).toEqual(['© Agency']);
+    session.release();
+  });
+
+  it('keeps quiet in the console about a source that cannot open, which has said why itself', async () => {
+    const session = acquire();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const drawn = tileSource(Promise.reject(new Error('cog.unreadable')));
+    session.engine.addImageryLayer('overlay:3', { kind: 'rendered', source: drawn.source });
+
+    const [layer] = engine.engineState.widgets[0].scene.imageryLayers.layers;
+    await layer.providerSettled;
+    expect(layer.provider).toBeUndefined();
+    expect(consoleError).not.toHaveBeenCalled();
+    session.release();
+  });
+
+  it('retries a failed tile a couple of times, then settles for the parent', async () => {
+    const session = acquire();
+    session.engine.addImageryLayer('base:9', {
+      kind: 'rendered',
+      source: tileSource(Promise.resolve({ maximumLevel: 10, tileSize: 256 })).source,
+    });
+    const [layer] = engine.engineState.widgets[0].scene.imageryLayers.layers;
+    await layer.providerSettled;
+    const provider = layer.provider as FakeRenderedProvider;
+    const failure = (timesRetried: number) => {
+      const error = { timesRetried, retry: false };
+      provider.errorEvent.raise(error);
+      return error.retry;
+    };
+    expect([failure(1), failure(2), failure(3)]).toEqual([true, true, false]);
+    session.release();
+  });
+
+  it('closes a source when its layer goes, and every source when the scene does', async () => {
+    const session = acquire();
+    const first = tileSource(Promise.resolve({ maximumLevel: 10, tileSize: 256 }));
+    const second = tileSource(Promise.resolve({ maximumLevel: 10, tileSize: 256 }));
+    session.engine.addImageryLayer('base:1', { kind: 'rendered', source: first.source });
+    session.engine.addImageryLayer('base:2', { kind: 'rendered', source: second.source });
+
+    session.engine.removeImageryLayer('base:1');
+    expect(first.destroyed()).toBe(1);
+    expect(second.destroyed()).toBe(0);
+
+    session.engine.destroy();
+    expect(second.destroyed()).toBe(1);
+  });
+
+  it('puts another source under the same id in the same place, keeping what the viewer set', async () => {
+    const session = acquire();
+    const drawn = tileSource(Promise.resolve({ maximumLevel: 10, tileSize: 256 }));
+    session.engine.addImageryLayer('base:1', { urlTemplate: 'https://a/{z}/{x}/{y}' });
+    session.engine.addImageryLayer('base:2', { kind: 'rendered', source: drawn.source });
+    session.engine.addImageryLayer('overlay:3', { urlTemplate: 'https://c/{z}/{x}/{y}' });
+    session.engine.setImageryLayerVisible('base:2', false);
+    session.engine.setImageryLayerOpacity('base:2', 0.4);
+
+    session.engine.replaceImageryLayer('base:2', { urlTemplate: 'https://stand-in/{z}/{x}/{y}', visible: true });
+
+    expect(session.engine.getImageryLayerIds()).toEqual(['base:1', 'base:2', 'overlay:3']);
+    const layers = engine.engineState.widgets[0].scene.imageryLayers.layers;
+    expect(layers).toHaveLength(3);
+    // Still under the overlay added after it, not on top of it.
+    expect((layers[1].provider as UrlTemplateImageryProvider).options.url).toBe('https://stand-in/{z}/{x}/{y}');
+    expect(layers[1].show).toBe(false);
+    expect(layers[1].alpha).toBe(0.4);
+    // The source it replaced was closed.
+    expect(drawn.destroyed()).toBe(1);
+    // And an id the scene does not have is left alone.
+    expect(() => session.engine.replaceImageryLayer('missing', { urlTemplate: 'https://x/{z}/{x}/{y}' })).not.toThrow();
+    expect(session.engine.getImageryLayerIds()).toHaveLength(3);
     session.release();
   });
 });
