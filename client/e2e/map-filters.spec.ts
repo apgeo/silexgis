@@ -3,7 +3,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { asPerson, registerAccount } from './arrange.ts';
-import { gotoRoute, login, mapAddress } from './helpers.ts';
+import { gotoRoute, login, mapAddress, openedDialog } from './helpers.ts';
 
 /**
  * The map drawn through saved filters: a filter saved in the cave registry, pinned as a quick chip,
@@ -75,8 +75,9 @@ test('a pinned saved filter narrows the map, a filter layer and the filter come 
     await length.press('Enter');
     await expect(page.getByRole('cell', { name: FOUND, exact: true })).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('cave-registry-save-filter').click();
+    const saveDialog = await openedDialog(page);
     await page.getByTestId('saved-filter-name').fill(pinnedName);
-    await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
+    await saveDialog.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByTestId('cave-registry-active-filter')).toContainText(pinnedName);
     await expect(page).toHaveURL(/[?&]saved=/);
     const pinnedId = new URL(page.url()).searchParams.get('saved')!.toLowerCase();

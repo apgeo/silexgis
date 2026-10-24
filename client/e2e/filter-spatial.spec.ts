@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, openedDialog } from './helpers.ts';
 
 /**
  * A position condition written in the cave registry's advanced filter: "within a distance of an
@@ -121,8 +121,9 @@ test('a distance from a picked cave narrows the registry, and is saved and appli
   const save = page.getByTestId('cave-registry-save-filter');
   await expect(save).toBeEnabled();
   await save.click();
+  const saveDialog = await openedDialog(page);
   await page.getByTestId('saved-filter-name').fill(filterName);
-  await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
+  await saveDialog.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByTestId('cave-registry-active-filter')).toContainText(filterName);
 
   // ---- applied on a fresh visit, it narrows the same way ----

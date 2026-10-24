@@ -7,6 +7,23 @@ export const adminEmail = 'admin@dev.local';
 export const adminPassword = 'dev-admin-pass-1';
 
 /**
+ * The dialog on top of the page, once it has finished opening.
+ *
+ * A dialog opens with a zoom: it is put on the page at its full size but transparent, and the zoom
+ * from a fifth of that size starts a frame later — many frames later on a busy machine. Playwright
+ * finds a button in it visible and still during that wait, so a click made then can be a press on
+ * the button and a release, once the zoom has started, on the backdrop the button has shrunk away
+ * from. The browser sends that click to neither: the dialog stays open with nothing done and nothing
+ * said. So a dialog is pressed in only once its opening motion has ended.
+ */
+export async function openedDialog(page: Page) {
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).not.toHaveClass(/ant-zoom-(appear|enter)/, { timeout: 15_000 });
+  return dialog;
+}
+
+/**
  * Signs in, as the demo administrator unless another account is named. A flow that has to
  * show one person's content to a different person needs a second account, and the sign-in
  * itself is identical for both — only the credentials differ.
