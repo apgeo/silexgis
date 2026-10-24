@@ -129,7 +129,7 @@ export const specs = {
   ],
   qr: ['qr-landing.spec.ts'],
   resLinks: ['reslinks.spec.ts', 'annotated-text.spec.ts', 'cave-grant-link.spec.ts'],
-  scene: ['scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts'],
+  scene: ['scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts', 'scene3d-backgrounds.spec.ts'],
   search: ['documents.spec.ts'],
   settings: [
     'settings.spec.ts', 'not-found.spec.ts', 'saved-filter-audience.spec.ts', 'coordinate-converter.spec.ts',
