@@ -420,19 +420,30 @@ test("a new account starts on the installation's starting arrangement, once, and
     },
   );
   const member = await registerAccount(page.request, 'workspace-start');
-  await login(page, member.email, member.password);
-  await gotoRoute(page, '/map');
-  await expectBeside(page, 'table', 'bottom');
-  await waitForScene3dReady(page, 120_000);
-  await expectBeside(page, 'scene3d', 'bottom');
+  try {
+    // Signing in lands a new account on the map, and that first map is where the starting
+    // arrangement is applied — not a later one. Applying it stores the arrangement, so a map
+    // opened after it finds the table already placed and opens no scene: the scene is a visit's,
+    // never stored. Going to the map again here raced the landing map's own answer, and lost
+    // whenever the landing map had applied it first.
+    await login(page, member.email, member.password);
+    await expectBeside(page, 'table', 'bottom');
+    await expectBeside(page, 'scene3d', 'bottom');
+    await waitForScene3dReady(page, 120_000);
 
-  // Arranged differently, the account keeps its own arrangement on the next visit.
-  await page.getByTestId('workspace-table-close').click();
-  await expect(pane(page, 'table')).toHaveCount(0);
-  await gotoRoute(page, '/dashboard');
-  await gotoRoute(page, '/map');
-  await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 30_000 });
-  await expect(pane(page, 'table')).toHaveCount(0);
-  // Nor does the scene open by itself: only the starting arrangement, applied once, opened it.
-  await expect(pane(page, 'scene3d')).toHaveCount(0);
+    // Arranged differently, the account keeps its own arrangement on the next visit.
+    await page.getByTestId('workspace-table-close').click();
+    await expect(pane(page, 'table')).toHaveCount(0);
+    await gotoRoute(page, '/dashboard');
+    await gotoRoute(page, '/map');
+    await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 30_000 });
+    await expect(pane(page, 'table')).toHaveCount(0);
+    // Nor does the scene open by itself: only the starting arrangement, applied once, opened it.
+    await expect(pane(page, 'scene3d')).toHaveCount(0);
+  } finally {
+    // Every page load asks for the installation's answer again, so one is usually still being
+    // fetched through the stand-in when the test is done; it must not be reported against
+    // whichever test this worker runs next.
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  }
 });
