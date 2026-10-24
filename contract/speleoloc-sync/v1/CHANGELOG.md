@@ -100,3 +100,25 @@ Recorded exchanges written in this entry: none — neither refusal is recorded h
 
 Codes: `auth.unauthenticated` and `rate.limited` appeared. They are written by the server itself
 when an answer would otherwise leave without a code, so every refusal of this API now carries one.
+
+## 2026-10-24 — a locked account can no longer refresh, and a server restart no longer signs devices out
+
+**Contract version: 1, unchanged. A build pinned to it keeps working.** No sync route, field or
+`sync.*` / `qr.*` code changed. Two changes on the sign-in side reach a device; both are described in
+`docs/speleoloc-sync/03-auth.md` §5 and §6.
+
+- **A locked account's refresh is refused.** `POST /connect/token` answers `400 invalid_grant` with
+  the description "The account is locked." while the lock lasts. Before, a lock stopped new sign-ins
+  only and an existing session kept renewing itself. A lock revokes nothing: the same refresh token
+  works again once it lifts, so a client should keep its tokens and retry later rather than asking
+  for a password. A client that treats every `invalid_grant` as "sign in again" still works; it just
+  asks for a password it did not need.
+- **Restarting the server, or recreating its container, no longer ends sessions.** The token signing
+  and encryption keys now persist in the installation's keys directory and roll over without
+  invalidating what they issued. No client change is needed; a device simply stops being signed out
+  by server maintenance.
+
+Recorded exchanges written in this entry: none — neither change is a sync exchange.
+
+Codes: no API problem code appeared or changed. The new refusal is an OAuth `invalid_grant`, told
+apart from the others only by its `error_description`.

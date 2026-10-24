@@ -27,6 +27,12 @@ and a custom scheme. Whichever the application eventually uses, the server alrea
 work is entirely client-side: open the authorization URL in the system browser instead of in the
 application, and catch the redirect back.
 
+A second factor needs no special handling on that path either. An account that has one switched on
+and signs in through an external provider is now asked for its code on the server's own sign-in page,
+in the browser, before the authorization completes. The application never sees that step: it gets
+the redirect with a `code` once the person has passed it, exactly as for an account without a second
+factor.
+
 ## 2. Preview-then-confirm upload
 
 **Not built. The shape is written down.**

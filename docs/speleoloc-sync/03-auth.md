@@ -381,7 +381,7 @@ to ask for a password, not a reason to discard or re-download anything.
 | `401` | `auth.invalid_credentials` | Wrong email or password. Ask again. |
 | `401` | `auth.mfa_required` | §3.4. Prompt for a code, and always offer the recovery-code path. |
 | `401` | `auth.mfa_invalid` | The code was wrong or has expired. Ask again; a new authenticator code appears every thirty seconds. |
-| `401` | `auth.locked_out` | Too many failed attempts. The lock lifts by itself after a few minutes — say so, and do not retry in a loop. |
+| `401` | `auth.locked_out` | Too many failed attempts, or an administrator locked the account. A lock from failed attempts lifts by itself after a few minutes — say so, and do not retry in a loop. While the lock lasts, refreshing an existing session is refused too (see `POST /connect/token` below). |
 | `401` | `auth.email_not_confirmed` | The installation requires a confirmed address and this one is not. Only the account holder can fix it, from their mailbox. |
 | `429` | — | Too many requests from this address in a minute. Back off; the window is one minute. This limit is per installation and can be tightened by an operator, so a client that retries hard can lock itself out of a shared connection. |
 
@@ -413,6 +413,7 @@ The body is always `{"error", "error_description", "error_uri"}`.
 | `400` | `invalid_request` | Malformed — most often a JSON body (§3.3) or a missing parameter. |
 | `400` | `invalid_grant` | The code or refresh token was rejected: spent, expired, replayed (§3.5), issued to a different client, or redeemed with a `redirect_uri` or `code_verifier` that does not match. **Also what a client meets after the account's password was changed or reset**, which revokes every refresh token and authorization that account holds, on every device, deliberately — it is the action somebody takes when a phone has been lost. Ask for a password. |
 | `400` | `invalid_grant` with "the account's email address is not confirmed" | The account's state changed after the token was issued. An administrator can turn on confirmed-email enforcement at any time, and refreshes then start failing for an account that had been working. There is no client-side symptom and nothing the client can do: **show the server's `error_description` verbatim** rather than inventing a diagnosis, or the resulting support call has nothing to go on. |
+| `400` | `invalid_grant` with "The account is locked." | The account is locked — after repeated failed passwords, or by an administrator. Unlike a password change, **this revokes nothing**: the refresh token is refused only while the lock lasts, and the same token works again once the lock lifts. So **keep the tokens**, tell the user the account is locked, and try again later instead of sending them to the password prompt. Retrying in a loop does not shorten the lock. |
 | `400` | `unsupported_grant_type` | Only `authorization_code` and `refresh_token` exist. There is no password grant, no client-credentials grant and no device-code grant on this server, and asking for one is not a configuration problem to be solved at the far end. |
 
 ### On an API call
@@ -440,6 +441,21 @@ Worth knowing because none of it is visible from the device:
 - **A redeemed refresh token is presented outside the retry window** (§3.5) — the chain is revoked.
 - **The account is deleted, or confirmed-email enforcement is turned on while the address is
   unconfirmed.**
+- **The account is locked — suspended, not ended.** Refreshes are refused with `invalid_grant`
+  ("The account is locked.") for as long as the lock lasts, whether it came from failed passwords or
+  from an administrator. Nothing is revoked, so the same refresh token works again once the lock
+  lifts. The 15-minute access-token window above applies here too.
+
+What does **not** end a session, and might be expected to:
+
+- **The server restarting, or its container being recreated.** The keys that sign and encrypt tokens
+  live in the installation's keys directory and survive both. An installation can replace them; when
+  it lets the server roll them over itself, the outgoing key stays accepted, so tokens it issued keep
+  working. A session is lost here only if an operator swaps in keys of their own without keeping
+  the previous one — rare, and indistinguishable on the device from a lapsed token: sign in again.
+- **Housekeeping on the server.** Finished sign-in records — expired, revoked or already redeemed —
+  are pruned on a schedule once they are two weeks old. A refresh token that is still valid is never
+  pruned, however old it is.
 
 There is no server-side session list and no per-device sign-out for an account holder to use today.
 Signing out on the device is a local act: discard the tokens.
