@@ -19,6 +19,11 @@ interface Props {
   onChange?: (audience: SavedFilterAudience) => void;
   /** The groups to offer; a group the value names that is not among them is still offered. */
   groups: readonly AudienceGroup[] | undefined;
+  /**
+   * The installation's other clubs, offered after the member's own under a heading that says the
+   * server may refuse them.
+   */
+  otherGroups?: readonly AudienceGroup[];
   /** Names a group the offered list does not hold (an administrator editing another's filter). */
   groupName?: (id: string) => string | undefined;
   /** Offers the way to the member's default audience in Settings — where a new filter is saved. */
@@ -40,6 +45,7 @@ export default function SavedFilterAudienceField({
   value,
   onChange,
   groups,
+  otherGroups,
   groupName,
   showDefaultLink = false,
   testId,
@@ -48,18 +54,20 @@ export default function SavedFilterAudienceField({
   const explanationId = useId();
   const audience = value ?? { visibility: 'private' };
 
+  const offered = [...(groups ?? []), ...(otherGroups ?? [])];
   const nameOf = (id: string) =>
-    groups?.find((group) => group.id === id)?.name ?? groupName?.(id) ?? t('savedFilters.someGroup');
+    offered.find((group) => group.id === id)?.name ?? groupName?.(id) ?? t('savedFilters.someGroup');
+  const groupOption = (group: AudienceGroup) => ({
+    value: audienceKey({ visibility: 'cavingGroup', cavingGroupId: group.id }),
+    label: t('savedFilters.sharedWith', { name: group.name }),
+  });
 
   const options = [
     { value: audienceKey({ visibility: 'private' }), label: t('savedFilters.private') },
-    ...(groups ?? []).map((group) => ({
-      value: audienceKey({ visibility: 'cavingGroup', cavingGroupId: group.id }),
-      label: t('savedFilters.sharedWith', { name: group.name }),
-    })),
-    // A group the list does not hold — still loading, or one an administrator is not a member of —
-    // stays on offer, so the control never shows a raw key and a rename never moves the filter.
-    ...(audience.visibility === 'cavingGroup' && !(groups ?? []).some((group) => group.id === audience.cavingGroupId)
+    ...(groups ?? []).map(groupOption),
+    // A group the lists do not hold — still loading, or one this reader cannot see — stays on
+    // offer, so the control never shows a raw key and a rename never moves the filter.
+    ...(audience.visibility === 'cavingGroup' && !offered.some((group) => group.id === audience.cavingGroupId)
       ? [{
           value: audienceKey(audience),
           label: groupName?.(audience.cavingGroupId) === undefined
@@ -68,6 +76,9 @@ export default function SavedFilterAudienceField({
         }]
       : []),
     { value: audienceKey({ visibility: 'authenticated' }), label: t('savedFilters.authenticated') },
+    ...(otherGroups && otherGroups.length > 0
+      ? [{ label: t('savedFilters.otherClubs'), title: t('savedFilters.otherClubs'), options: otherGroups.map(groupOption) }]
+      : []),
   ];
 
   const explanation =

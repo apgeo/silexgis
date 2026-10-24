@@ -704,6 +704,8 @@
     "delete": "Delete",
     "deleteConfirm": "Delete this saved filter? Nobody it was shared with will be able to use it.",
     "notAvailable": "not available to you",
+    "otherClubs": "Other clubs — you may not be allowed to share with these",
+    "groupNotAllowed": "You may not share filters with this club. Choose one of your own clubs, Only me or Everyone signed in.",
     "parts": {
       "search": "Name contains “{{text}}”",
       "region": "Region contains “{{text}}”",

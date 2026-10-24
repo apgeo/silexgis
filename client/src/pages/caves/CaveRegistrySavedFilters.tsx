@@ -13,7 +13,7 @@ import {
   type SavedFilter,
 } from '../../api/hooks/savedFilters.ts';
 import SavedFilterAudienceField from '../../components/filters/SavedFilterAudienceField.tsx';
-import { useSavedFilterAudienceChoice } from '../../components/filters/useSavedFilterAudienceChoice.ts';
+import { savedFilterSaveFailedKey, useSavedFilterAudienceChoice } from '../../components/filters/useSavedFilterAudienceChoice.ts';
 import { audienceFields, type SavedFilterAudience } from '../../filters/savedFilterAudience.ts';
 import {
   caveRegistryDocument,
@@ -66,7 +66,7 @@ export default function CaveRegistrySavedFilters({
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm<{ name: string; description?: string; audience: SavedFilterAudience }>();
   // The dialog is rebuilt on every open, so it starts each time from the member's current default.
-  const { groups, defaultAudience } = useSavedFilterAudienceChoice();
+  const { groups, otherGroups, defaultAudience } = useSavedFilterAudienceChoice();
 
   const document = caveRegistryDocument(reading.controls, reading.extra);
   // A typed point or a pasted outline is a position of its own, which a saved filter never holds:
@@ -107,8 +107,8 @@ export default function CaveRegistrySavedFilters({
       form.resetFields();
       message.success(t('caveRegistry.saved', { name: created.name }));
       onSaved(created.id);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(t(savedFilterSaveFailedKey(error)));
     }
   };
 
@@ -229,7 +229,7 @@ export default function CaveRegistrySavedFilters({
             <Input.TextArea rows={3} data-testid="saved-filter-description" />
           </Form.Item>
           <Form.Item name="audience" label={t('savedFilters.audience')}>
-            <SavedFilterAudienceField groups={groups} showDefaultLink testId="saved-filter-audience" />
+            <SavedFilterAudienceField groups={groups} otherGroups={otherGroups} showDefaultLink testId="saved-filter-audience" />
           </Form.Item>
         </Form>
       </Modal>

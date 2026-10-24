@@ -12,7 +12,7 @@ import {
   type SavedFilter,
 } from '../../api/hooks/savedFilters.ts';
 import SavedFilterAudienceField from '../../components/filters/SavedFilterAudienceField.tsx';
-import { useSavedFilterAudienceChoice } from '../../components/filters/useSavedFilterAudienceChoice.ts';
+import { savedFilterSaveFailedKey, useSavedFilterAudienceChoice } from '../../components/filters/useSavedFilterAudienceChoice.ts';
 import { audienceFields, type SavedFilterAudience } from '../../filters/savedFilterAudience.ts';
 import { galleryDocument, readGalleryDocument, sameGalleryQuestion } from '../../filters/gallery.ts';
 import type { FilterNode } from '../../filters/types.ts';
@@ -45,7 +45,7 @@ export default function GallerySavedFilters({ where, savedFilterId, onApply, onS
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm<{ name: string; description?: string; audience: SavedFilterAudience }>();
   // The dialog is rebuilt on every open, so it starts each time from the member's current default.
-  const { groups, defaultAudience } = useSavedFilterAudienceChoice();
+  const { groups, otherGroups, defaultAudience } = useSavedFilterAudienceChoice();
 
   const document = galleryDocument(where);
   const active = savedFilterId === undefined
@@ -83,8 +83,8 @@ export default function GallerySavedFilters({ where, savedFilterId, onApply, onS
       form.resetFields();
       message.success(t('gallery.filter.saved', { name: created.name }));
       onSaved(created.id);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(t(savedFilterSaveFailedKey(error)));
     }
   };
 
@@ -172,7 +172,7 @@ export default function GallerySavedFilters({ where, savedFilterId, onApply, onS
             <Input.TextArea rows={3} data-testid="gallery-saved-filter-description" />
           </Form.Item>
           <Form.Item name="audience" label={t('savedFilters.audience')}>
-            <SavedFilterAudienceField groups={groups} showDefaultLink testId="gallery-saved-filter-audience" />
+            <SavedFilterAudienceField groups={groups} otherGroups={otherGroups} showDefaultLink testId="gallery-saved-filter-audience" />
           </Form.Item>
         </Form>
       </Modal>

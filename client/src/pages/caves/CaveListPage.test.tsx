@@ -67,6 +67,12 @@ vi.mock('../../api/hooks/access.ts', () => ({
   useCreateDoor: () => ({ canCreate: true, unbound: false, cavingGroups: [] }),
 }));
 
+// The save dialog's audience control also lists every club of the installation.
+vi.mock('../../api/hooks/people.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/hooks/people.ts')>()),
+  useCavingGroups: () => ({ data: [] }),
+}));
+
 vi.mock('../../api/hooks/savedFilters.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks/savedFilters.ts')>(
     '../../api/hooks/savedFilters.ts',

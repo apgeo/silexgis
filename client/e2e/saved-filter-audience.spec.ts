@@ -134,3 +134,54 @@ test('a filter saved with the default “everyone signed in” reaches another m
     await admin.context.close();
   }
 });
+
+/**
+ * Every club of the installation is on offer, the author's own first and the others under a heading
+ * that says the server may refuse them; picking one the author is not in is refused, and the dialog
+ * says so in words rather than as a failure to save.
+ */
+test('a club the author may not share with is offered, and refusing it is said in words', async ({
+  page,
+  browser,
+  consoleErrors,
+}) => {
+  consoleErrors.allow(
+    /Failed to load resource: .*403/,
+    'the server refusing a club the author is not in is what this test provokes',
+  );
+  const stamp = `${Date.now()}`;
+  const clubName = `E2E Other Club ${stamp}`;
+  const author = await registerAccount(page.request, 'audience-other-club');
+  const admin = await signedInElsewhere(browser);
+  const club = await asPerson<{ id: string }>(admin.page, 'POST', '/api/v1/caving-groups', {
+    name: clubName,
+    type: 'cavingClub',
+    description: null,
+    website: null,
+  });
+
+  try {
+    await login(page, author.email, author.password);
+    await gotoRoute(page, '/caves');
+    await page.getByPlaceholder('Search name or toponym…').fill(`E2E nothing ${stamp}`);
+    await page.getByTestId('cave-registry-save-filter').click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByTestId('saved-filter-name').fill(`E2E other club filter ${stamp}`);
+
+    await dialog.getByTestId('saved-filter-audience').click();
+    const dropdown = page.locator('.ant-select-dropdown:visible');
+    await expect(dropdown.getByText('Other clubs — you may not be allowed to share with these')).toBeVisible();
+    await dropdown.locator('.ant-select-item-option').filter({ hasText: `Members of ${clubName}` }).click();
+
+    const refused = page.waitForResponse(
+      (r) => r.url().endsWith('/api/v1/saved-filters') && r.request().method() === 'POST',
+    );
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+    expect((await refused).status()).toBe(403);
+    await expect(page.getByText('You may not share filters with this club.', { exact: false })).toBeVisible();
+    await expect(dialog).toBeVisible();
+  } finally {
+    await asPerson(admin.page, 'DELETE', `/api/v1/caving-groups/${club.id}`);
+    await admin.context.close();
+  }
+});

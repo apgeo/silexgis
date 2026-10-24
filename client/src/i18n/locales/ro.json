@@ -704,6 +704,8 @@
     "delete": "Șterge",
     "deleteConfirm": "Ștergi acest filtru salvat? Nimeni dintre cei cu care a fost partajat nu îl va mai putea folosi.",
     "notAvailable": "indisponibil pentru tine",
+    "otherClubs": "Alte cluburi — e posibil să nu ai voie să partajezi cu ele",
+    "groupNotAllowed": "Nu ai voie să partajezi filtre cu acest club. Alege unul dintre cluburile tale, „Doar eu” sau „Toți cei autentificați”.",
     "parts": {
       "search": "Numele conține „{{text}}”",
       "region": "Regiunea conține „{{text}}”",

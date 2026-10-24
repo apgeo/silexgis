@@ -18,7 +18,7 @@ import { describeCaveRegistry, type ConditionPart } from '../../filters/describe
 import { MAX_PINNED_FILTERS, useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import { describeComparison } from '../../filters/typedComparison.ts';
 import SavedFilterAudienceField from '../../components/filters/SavedFilterAudienceField.tsx';
-import { useSavedFilterAudienceChoice } from '../../components/filters/useSavedFilterAudienceChoice.ts';
+import { savedFilterSaveFailedKey, useSavedFilterAudienceChoice } from '../../components/filters/useSavedFilterAudienceChoice.ts';
 import { audienceFields, type SavedFilterAudience } from '../../filters/savedFilterAudience.ts';
 
 interface EditValues {
@@ -55,10 +55,10 @@ export default function SavedFiltersPage() {
   const { data: filters, isLoading } = useSavedFilters();
   const { data: caveTypes } = useCaveTypes();
   const { data: tags } = useTags('');
-  // Every club, to name the group a listed filter is shared with; the share control offers only
-  // the member's own groups a filter may be bound to, which is what the server accepts.
+  // Every club, to name the group a listed filter is shared with. The share control offers the
+  // member's own groups first and every other club after them, which the server may refuse.
   const { data: cavingGroups } = useCavingGroups();
-  const { groups: shareGroups } = useSavedFilterAudienceChoice();
+  const { groups: shareGroups, otherGroups } = useSavedFilterAudienceChoice();
   const update = useUpdateSavedFilter();
   const remove = useDeleteSavedFilter();
   const [editing, setEditing] = useState<SavedFilter | null>(null);
@@ -106,8 +106,8 @@ export default function SavedFiltersPage() {
       });
       setEditing(null);
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(t(savedFilterSaveFailedKey(error)));
     }
   };
 
@@ -303,6 +303,7 @@ export default function SavedFiltersPage() {
           <Form.Item name="audience" label={t('savedFilters.audience')}>
             <SavedFilterAudienceField
               groups={shareGroups}
+              otherGroups={otherGroups}
               groupName={(id) => cavingGroups?.find((group) => group.id === id)?.name}
               testId="saved-filter-edit-audience"
             />

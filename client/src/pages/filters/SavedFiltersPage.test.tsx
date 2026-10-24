@@ -26,6 +26,10 @@ vi.mock('../../api/hooks/access.ts', () => ({
   useCreateDoor: () => ({ canCreate: true, unbound: false, cavingGroups: [{ id: 'g-1', name: 'Speo Club' }] }),
 }));
 
+vi.mock('../../api/hooks/people.ts', () => ({
+  useCavingGroups: () => ({ data: [{ id: 'g-1', name: 'Speo Club', slug: 'speo-club' }] }),
+}));
+
 vi.mock('../../api/hooks/savedFilters.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks/savedFilters.ts')>(
     '../../api/hooks/savedFilters.ts',
