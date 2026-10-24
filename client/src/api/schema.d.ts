@@ -12563,6 +12563,8 @@ export interface components {
             revealProtectedAssociations: boolean;
             calendarFeedEnabled: boolean;
             keepLocationInPhotoFiles: boolean;
+            serveUnstrippableOriginalsToLocationReaders: boolean;
+            describeLocationFreeCopies: boolean;
         };
         PublicAlbumDto: {
             title: string;
@@ -14042,6 +14044,9 @@ export interface components {
             url: string;
             /** Format: date-time */
             expiresAt: string;
+            /** Format: int64 */
+            sizeBytes: null | number;
+            sha256: null | string;
         };
         SyncFileLinkItem: {
             /** Format: uuid */

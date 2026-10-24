@@ -562,9 +562,11 @@ function PolicyForm({ settings, onSaved }: SectionProps) {
 /**
  * What the installation gives away about a protected cave's surroundings. The documents
  * themselves are never affected by this — only whether a caller who may not see where the cave
- * is gets told which documents point at it.
+ * is gets told which documents point at it. The photo switches decide what travels inside the
+ * files handed out; which reader may be told a location stays the server's rule either way.
+ * Exported for its test.
  */
-function ProtectionForm({ settings, onSaved }: SectionProps) {
+export function ProtectionForm({ settings, onSaved }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<ProtectionSettings>();
@@ -618,6 +620,22 @@ function ProtectionForm({ settings, onSaved }: SectionProps) {
         label={t('admin.messaging.keepLocationInPhotoFiles')}
         valuePropName="checked"
         extra={t('admin.messaging.keepLocationInPhotoFilesHint')}
+      >
+        <Switch />
+      </Form.Item>
+      <Form.Item
+        name="serveUnstrippableOriginalsToLocationReaders"
+        label={t('admin.messaging.serveUnstrippableOriginalsToLocationReaders')}
+        valuePropName="checked"
+        extra={t('admin.messaging.serveUnstrippableOriginalsToLocationReadersHint')}
+      >
+        <Switch />
+      </Form.Item>
+      <Form.Item
+        name="describeLocationFreeCopies"
+        label={t('admin.messaging.describeLocationFreeCopies')}
+        valuePropName="checked"
+        extra={t('admin.messaging.describeLocationFreeCopiesHint')}
       >
         <Switch />
       </Form.Item>
