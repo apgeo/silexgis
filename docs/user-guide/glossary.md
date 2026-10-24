@@ -125,6 +125,9 @@ the record readable. Its permission action is **Exact location**.
 somebody typed in (length, depth, volume…). On an **area feature**, the *measured shape*
 computed from the outline (area, circularity, long-axis bearing…).
 
+**Own basemap** — The installation's own vector basemap: OpenStreetMap shapes of a region an
+administrator downloaded, served by the installation alone. → [Own basemap](admin/messaging.md#own-basemap)
+
 **Permission group** — A named ruleset with members. Not a caving group.
 → [Permissions](admin/permissions.md)
 
@@ -191,6 +194,10 @@ survey was made from. Archived, never read.
 
 **Trip purpose** — What a trip was for. Also decides what its report asks for and which
 checklist it works through.
+
+**Vector background** — A map background drawn by your browser from shapes in a style rather than
+from finished pictures: sharp at every zoom, labels in your language. Carries no relief.
+→ [Map workspace](features/map-workspace.md#base-layers)
 
 **Visibility** — A record's own audience: private, caving group, authenticated users, public.
 One of the three things that decide access.

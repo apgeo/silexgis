@@ -27,6 +27,7 @@ Pagina are nouă file:
 | **Fototeci** | Oprirea și repornirea folosirii unei fototeci pe care instalarea o are deja | [Fototeci](#fototeci) |
 | **Spațiul de lucru** | Cu ce aranjare a spațiului de lucru al hărții pornește un cont nou | [Spațiul de lucru](#spațiul-de-lucru) |
 | **Hărți în documente** | Ce fundaluri de hartă pot fi copiate într-un document | [Hărți în documente](#hărți-în-documente) |
+| **Hartă de bază proprie** | Harta de bază vectorială a instalării: ce se servește și descărcarea unei regiuni | [Hartă de bază proprie](#hartă-de-bază-proprie) |
 
 ---
 
@@ -167,6 +168,41 @@ Fiecare fundal pe care îl publică această instalare apare cu **un comutator**
 
 Ce fundaluri există și adresele lor rămân în fișierul-catalog al instalării — vezi ghidul de
 instalare.
+
+## Hartă de bază proprie
+
+Fila **Hartă de bază proprie** se ocupă de **harta de bază vectorială proprie** a instalării: formele
+OpenStreetMap ale unei regiuni, servite numai de instalarea ta și desenate pe hartă ca fundalul
+*Self-hosted basemap (light)* — clare la orice zoom, cu etichete în limba fiecărui cititor și fără
+nicio cerere către serverul altcuiva.
+
+> O hartă de bază vectorială OpenStreetMap, servită numai de această instalare: descarcă o regiune
+> dintr-o versiune Protomaps a planetei, iar fundalurile desenate din ea sunt oferite pe hartă de
+> atunci încolo.
+
+| Parte | Ce arată |
+|---|---|
+| **Servită acum** | Versiunea din care a fost decupată, mărimea, când a fost descărcată, regiunea și ultimul nivel de zoom |
+| **Ultima descărcare** | În așteptare, în curs (cu cât a înaintat și **Anulează descărcarea**), terminată, eșuată sau anulată — și de ce a eșuat, în cuvinte |
+| **Descarcă o regiune** | **România**, **Apuseni (regiune carstică)** sau **Un dreptunghi ales de mine** (vest, sud, est și nord, în grade), **ultimul nivel de zoom** (cel mai adânc este 15) și **versiunea** — cea mai nouă, implicit |
+
+- **Până la prima descărcare, fundalul nu este oferit deloc pe hartă**, iar pagina spune ce
+  fundaluri așteaptă una.
+- **Estimează mărimea** întâi: calculează cât ar cântări descărcarea fără s-o aducă. România până
+  la zoom 15 are aproximativ 1,3 GB, dreptunghiul Apuseni aproximativ 36 MB. O regiune mai mare
+  decât acceptă instalarea ta, sau una pentru care nu e loc pe disc, este refuzată înainte să se
+  descarce ceva.
+- **O singură descărcare odată**, în fundal: poți părăsi pagina și reveni. O descărcare nouă
+  **înlocuiește** harta de bază servită doar după ce s-a terminat; până atunci — și dacă eșuează
+  sau e anulată — cea de acum este servită în continuare, neschimbată.
+- Plăcile nu au curbe de nivel și nici relief: păstrează fundalurile topografice pentru citirea
+  carstului.
+- De unde se decupează regiunea se stabilește în configurarea instalării, nu pe această pagină:
+  alegi o dată și un dreptunghi, niciodată o adresă. Dacă pagina spune că găzduirea proprie este
+  oprită, instalarea nu rulează niciun server de dale pentru o hartă de bază proprie — vezi ghidul
+  de instalare.
+- Fiecare descărcare cerută și fiecare anulată este consemnată în
+  [istoricul de modificări](../features/history-and-audit.md).
 
 ---
 

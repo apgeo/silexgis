@@ -33,6 +33,25 @@ ta listează unul. Serviciile de hărți se desenează doar pe această hartă �
 [vizualizarea 3D](3d-view.md): niciodată pe harta de ansamblu a [zonelor de lucru](work-areas.md)
 și niciodată într-un document, cum ar fi harta din raportul unei ture.
 
+Un fundal poate fi și un **fundal vectorial** — forme ca drumuri, râuri și nume de localități pe
+care browserul tău le desenează într-un stil, în loc de imagini gata făcute. Rămâne clar la orice
+zoom și pe orice ecran, etichetele lui stau drepte când rotești harta și sunt scrise **în limba în
+care citești interfața**, acolo unde harta are un nume în ea (altfel cu numele local). Cele obișnuite
+sunt fundalurile *OpenFreeMap* (Liberty, Positron, mai estompat, și Dark) și **harta de bază
+proprie** a instalării, servită chiar de instalare — vezi
+[Hartă de bază proprie](../admin/messaging.md#hartă-de-bază-proprie). Fundalurile vectoriale **nu
+au curbe de nivel și nici relief**: pentru citirea carstului folosește un fundal topografic sau pune
+o umbrire de relief peste unul vectorial.
+
+Un fundal sau o hartă suprapusă poate fi și un **fișier GeoTIFF** — o ortofotografie, o hartă
+geologică scanată, o umbrire LiDAR — pe care instalarea ta îl listează; este așezat în propriul lui
+sistem de coordonate, inclusiv o scanare în *Stereo 70*.
+
+Nici un fundal vectorial, nici un fișier GeoTIFF nu este copiat vreodată într-un document: harta din
+raportul unei ture se desenează doar peste fundaluri din dale simple. În
+[vizualizarea 3D](3d-view.md), un fundal vectorial apare ca fundalul-imagine pe care instalarea îl
+numește în locul lui.
+
 ### Straturile hărții (datele tale)
 
 | Strat | Arată |

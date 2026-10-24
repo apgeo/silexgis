@@ -31,6 +31,24 @@ mapping agency usually publishes its sheets — where your installation lists on
 drawn in this map and in the [3D view](3d-view.md) only: never on the overview of
 [work areas](work-areas.md), and never in a document such as a trip write-up's map.
 
+A background can also be a **vector background** — shapes such as roads, rivers and place names
+that your browser draws in a style, rather than finished pictures. It stays sharp at every zoom and
+on every screen, its labels stay upright when the map turns, and they are written **in the
+language you read the interface in** where the map has a name in it (otherwise in the local name).
+Typical ones are the *OpenFreeMap* backgrounds (Liberty, a muted Positron, and Dark) and your
+installation's **own basemap**, served from the installation itself — see
+[Own basemap](../admin/messaging.md#own-basemap). Vector backgrounds carry **no contours or
+relief**: for reading karst, use a topographic background, or put a hillshade overlay over a
+vector one.
+
+A background or an overlay can also be a **GeoTIFF file** — an orthophoto, a scanned geological map,
+a LiDAR hillshade — that your installation lists; it is placed in its own coordinate system, a
+Romanian *Stereo 70* scan included.
+
+Neither a vector background nor a GeoTIFF file is ever copied into a document: a trip write-up's
+map is drawn over plain tile backgrounds only. In the [3D view](3d-view.md), a vector background is
+shown as the picture background its installation names in its place.
+
 ### Map layers (your data)
 
 | Layer | Shows |

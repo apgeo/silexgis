@@ -27,6 +27,7 @@ The page has nine tabs:
 | **Photo libraries** | Stopping and restarting the use of a photo library the installation already has | [Photo libraries](#photo-libraries) |
 | **Workspace** | Which arrangement of the map workspace a new account starts with | [Workspace](#workspace) |
 | **Maps in documents** | Which map backgrounds a document may copy | [Maps in documents](#maps-in-documents) |
+| **Own basemap** | The installation's own vector basemap: what is served, and downloading a region | [Own basemap](#own-basemap) |
 
 ---
 
@@ -165,6 +166,37 @@ Every background this installation publishes is listed with **one switch**.
 
 Which backgrounds exist at all, and their addresses, stay in the installation's catalogue file —
 see the install guide.
+
+## Own basemap
+
+The **Own basemap** tab manages the installation's **own vector basemap**: OpenStreetMap shapes of
+a region, served by your installation alone and drawn on the map as the background *Self-hosted
+basemap (light)* — sharp at every zoom, with labels in each reader's language, and no request to
+anybody else's server.
+
+> An OpenStreetMap vector basemap served from this installation alone: download a region of a
+> Protomaps planet build, and the map backgrounds drawn from it are offered on the map from then on.
+
+| Part | What it shows |
+|---|---|
+| **Served now** | The build the basemap was cut from, its size, when it was downloaded, the region and the last zoom level |
+| **Latest download** | Queued, running (with how far it has got and **Cancel download**), finished, failed or cancelled — and why it failed, in words |
+| **Download a region** | **Romania**, **Apuseni (karst region)** or **A box of my own** (west, south, east and north, in degrees), the **last zoom level** (15 is the deepest), and the **build** — the latest by default |
+
+- **Until the first download, the background is not offered on the map at all**, and the page says
+  which backgrounds are waiting for one.
+- **Estimate size** first: it works out what the download would weigh without fetching it. Romania
+  to zoom 15 is about 1.3 GB, the Apuseni box about 36 MB. A region larger than your installation
+  accepts, or one the disk has no room for, is refused before anything is downloaded.
+- **One download at a time**, in the background: you can leave the page and come back. A new
+  download **replaces** the basemap being served only once it has finished; until then — and if it
+  fails or is cancelled — the current one goes on being served unchanged.
+- The tiles have no contours or relief: keep the topographic backgrounds for reading karst.
+- Where the region is cut from is set in the installation's configuration, not on this page: you
+  choose a date and a box, never an address. If the page says self-hosting is switched off, the
+  installation runs no tile server for an own basemap — see the install guide.
+- Each download asked for, and each one cancelled, is recorded in the
+  [audit trail](../features/history-and-audit.md).
 
 ---
 

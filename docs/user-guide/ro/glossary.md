@@ -142,6 +142,10 @@ dintre *Obiect, Peșteră, Intrare de peșteră, Drumuire*.
 înregistrarea lizibilă. Acțiunea lui de permisiune este **Locație exactă**.
 → [Protecția locațiilor](admin/location-protection.md)
 
+**Hartă de bază proprie** — Harta de bază vectorială a instalării: formele OpenStreetMap ale unei
+regiuni pe care a descărcat-o un administrator, servite numai de instalare.
+→ [Hartă de bază proprie](admin/messaging.md#hartă-de-bază-proprie)
+
 **Grup de permisiuni** — Un set de reguli denumit, cu membri. Nu este un grup de speologie.
 → [Permisiuni](admin/permissions.md)
 
@@ -205,6 +209,10 @@ unui pasaj mută harta, scena 3D și vizualizatoarele deschise.
 
 **Vedere salvată** — O configurație de hartă denumită: extindere, straturi, filtre. Partajabilă
 printr-un link. → [Vederi salvate](features/saved-views-and-windows.md#vederi-salvate)
+
+**Fundal vectorial** — Un fundal de hartă desenat de browserul tău din forme, într-un stil, în loc
+de imagini gata făcute: clar la orice zoom, cu etichete în limba ta. Nu are relief.
+→ [Spațiul de lucru al hărții](features/map-workspace.md#hărți-de-bază)
 
 **Vizibilitate** — Audiența proprie a unei înregistrări: privată, grup de speologie, utilizatori
 autentificați, publică. Unul dintre cele trei lucruri care decid accesul.

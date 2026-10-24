@@ -76,6 +76,9 @@ persoana a treia rămân așa cum sunt.
 | Message delivery | Trimiterea mesajelor |
 | Vector import (a Messaging tab) | Import vectorial |
 | Maps in documents (a Messaging tab) | Hărți în documente |
+| Own basemap (a Messaging tab) | Hartă de bază proprie |
+| Vector background | Fundal vectorial |
+| GeoTIFF file (a background or overlay) | Fișier GeoTIFF |
 | Terrain | Relief |
 | Configuration | Configurare |
 | Feature sets | Seturi de obiecte |
