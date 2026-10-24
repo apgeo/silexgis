@@ -99,7 +99,9 @@ public sealed class PmtilesCliExtractor(IOptions<BasemapOptions> options, ILogge
 
         var kept = new StringBuilder();
         var lastPercent = -1;
-        async Task Read(StreamReader reader)
+        // Both streams are kept for a failure's report; progress is read from the output stream
+        // alone, where the tool writes its log and its bar, so two readers never report at once.
+        async Task Read(StreamReader reader, bool reportsProgress)
         {
             var buffer = new char[1024];
             int read;
@@ -115,7 +117,7 @@ public sealed class PmtilesCliExtractor(IOptions<BasemapOptions> options, ILogge
                     }
                 }
 
-                if (SelfHostedBasemap.ProgressPercent(chunk) is { } percent && percent != lastPercent)
+                if (reportsProgress && SelfHostedBasemap.ProgressPercent(chunk) is { } percent && percent != lastPercent)
                 {
                     lastPercent = percent;
                     await progress(percent);
@@ -123,7 +125,7 @@ public sealed class PmtilesCliExtractor(IOptions<BasemapOptions> options, ILogge
             }
         }
 
-        var reading = Task.WhenAll(Read(process.StandardOutput), Read(process.StandardError));
+        var reading = Task.WhenAll(Read(process.StandardOutput, reportsProgress: true), Read(process.StandardError, reportsProgress: false));
         try
         {
             await process.WaitForExitAsync(ct);
