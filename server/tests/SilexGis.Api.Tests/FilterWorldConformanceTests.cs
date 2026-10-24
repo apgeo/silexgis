@@ -1313,7 +1313,11 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, I
         // shown is decided in one place, and a selector answering it separately would be a second.
         typeof(FilterHit).GetProperties()
             .Select(p => p.Name)
-            .ShouldBe(["World", "Id", "Title", "Subtitle", "Symbol", "Placeable"], ignoreOrder: true);
+            .ShouldBe(["World", "Id", "Title", "Subtitle", "Symbol", "Placeable", "Matched"], ignoreOrder: true);
+        // What found a row is a field name and that field's text — a name or a code, never a place.
+        typeof(FilterHitMatch).GetProperties()
+            .Select(p => (p.Name, p.PropertyType))
+            .ShouldBe([("Field", typeof(string)), ("Text", typeof(string))], ignoreOrder: true);
 
         using var scope = factory.Services.CreateScope();
         var caller = await CallerAsync(GlobalRoles.Viewer, "conf-pos");
