@@ -17,7 +17,8 @@ interface QueryAnswer {
  * scope narrowed to one kind of feature is honoured by the server (a term that finds entrances
  * finds nothing here), that a row the screen withholds (the cave a closest approach is measured
  * from) is not offered, and that the whole thing — opening it included — can be worked from the
- * keyboard alone. The closest-approach picker on a cave's page is the vehicle
+ * keyboard alone — and that a cave is found by its code as well as its name, saying so. The
+ * closest-approach picker on a cave's page is the vehicle
  * because choosing in it changes nothing stored — the run leaves no trace to clear away.
  */
 test('the closest-approach picker offers other caves only, and is worked from the keyboard', async ({ page }) => {
@@ -57,6 +58,13 @@ test('the closest-approach picker offers other caves only, and is worked from th
   const entranceTitles = asEntrances.worlds.flatMap((w) => w.hits.map((h) => h.title));
   expect(entranceTitles.some((title) => /entrance/i.test(title))).toBe(true);
   await expect(page.getByTestId('closest-approach-other-rows').getByText('Nothing matches')).toBeVisible({ timeout: 15_000 });
+
+  // A cave is found by its registry code too, and its row says that the code is what found it —
+  // the title alone would not explain why it is listed.
+  await box.fill('demo-0004');
+  const found = page.getByTestId('closest-approach-other-row');
+  await expect(found.filter({ hasText: 'Peștera Demo Ursului' })).toHaveCount(1, { timeout: 15_000 });
+  await expect(page.getByTestId('closest-approach-other-matched').first()).toHaveText('code DEMO-0004');
 
   await box.fill('Demo');
 
