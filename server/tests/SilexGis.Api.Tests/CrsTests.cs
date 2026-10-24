@@ -240,6 +240,59 @@ public sealed class CrsTests : IAsyncLifetime, IDisposable, IClassFixture<Postgr
         }
     }
 
+    // ---- the Swiss grids: answered from PROJ's own export, as before ------------------------------
+
+    /// <summary>
+    /// Invented positions over Switzerland, for the grids whose PROJ export keeps its datum shift.
+    /// </summary>
+    public static TheoryData<int> SwissGrids() => new() { 2056, 21781 };
+
+    private static readonly (double Lon, double Lat)[] SwissPoints =
+    [
+        (7.43958, 46.95241), (6.1432, 46.2044), (9.5309, 47.1410), (8.9511, 46.0037), (7.6621, 45.9763),
+    ];
+
+    [Theory]
+    [MemberData(nameof(SwissGrids))]
+    public async Task A_Swiss_grid_is_answered_from_the_proj_export_and_places_points_where_the_database_does(int srid)
+    {
+        // The Stereo 70 definition is stated because PROJ's export of it loses the shift; the Swiss
+        // grids' export keeps theirs, so they are answered as they always were — and that answer
+        // has to agree with the database's own transform just as the stated one does.
+        var definition = await reader.GetStringAsync($"/api/v1/crs/{srid}.proj4");
+        definition.ShouldNotBe(Stereo70.Value.Definition);
+        definition.ShouldContain("+proj=somerc");
+        definition.ShouldContain("+towgs84=");
+
+        GdalRuntime.Configure();
+        using var grid = new SpatialReference("");
+        grid.ImportFromProj4(definition).ShouldBe(0);
+        using var wgs84 = new SpatialReference("");
+        wgs84.ImportFromEPSG(4326).ShouldBe(0);
+        grid.SetAxisMappingStrategy(AxisMappingStrategy.OAMS_TRADITIONAL_GIS_ORDER);
+        wgs84.SetAxisMappingStrategy(AxisMappingStrategy.OAMS_TRADITIONAL_GIS_ORDER);
+        using var forward = new CoordinateTransformation(wgs84, grid);
+
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        foreach (var (lon, lat) in SwissPoints)
+        {
+            await using var command = new NpgsqlCommand(
+                "select st_x(g), st_y(g) from (select st_transform(st_setsrid(st_makepoint(@lon, @lat), 4326), @srid) g) t",
+                connection);
+            command.Parameters.AddWithValue("lon", lon);
+            command.Parameters.AddWithValue("lat", lat);
+            command.Parameters.AddWithValue("srid", srid);
+            await using var row = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+            (await row.ReadAsync(TestContext.Current.CancellationToken)).ShouldBeTrue();
+
+            var projected = new double[3];
+            forward.TransformPoint(projected, lon, lat, 0);
+            Math.Sqrt(Math.Pow(projected[0] - row.GetDouble(0), 2) + Math.Pow(projected[1] - row.GetDouble(1), 2))
+                .ShouldBeLessThan(Stereo70.Value.ToleranceMetres, $"EPSG:{srid} at {lon}, {lat}");
+        }
+    }
+
     private static double MetresBetween(double lon1, double lat1, double lon2, double lat2)
     {
         // Over centimetres an equirectangular approximation is exact enough.
