@@ -53,6 +53,8 @@ function layer(overrides: Partial<MapLayerInfo> & { id: number }): MapLayerInfo 
     urlTemplate: `https://tiles.example/${overrides.id}/{z}/{x}/{y}.png`,
     wms: null,
     wmts: null,
+    cog: null,
+    vector: null,
     attribution: null,
     isBase: true,
     isDefault: false,

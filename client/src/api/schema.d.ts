@@ -11015,6 +11015,17 @@ export interface components {
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";
+        MapLayerCogOptions: {
+            bands: null | number[];
+            /** Format: double */
+            nodata: null | number;
+            /** Format: double */
+            min: null | number;
+            /** Format: double */
+            max: null | number;
+            projection: string;
+            projectionDefinition: null | string;
+        };
         /** @enum {unknown} */
         MapLayerDocumentChoice: "default" | "on" | "off";
         MapLayerDto: {
@@ -11025,6 +11036,8 @@ export interface components {
             urlTemplate: string;
             wms: null | components["schemas"]["MapLayerWmsOptions"];
             wmts: null | components["schemas"]["MapLayerWmtsOptions"];
+            cog: null | components["schemas"]["MapLayerCogOptions"];
+            vector: null | components["schemas"]["MapLayerVectorOptions"];
             attribution: null | string;
             groupName: null | string;
             /** Format: int32 */
@@ -11039,6 +11052,15 @@ export interface components {
         };
         /** @enum {unknown} */
         MapLayerKind: "xyz" | "wmts" | "wms" | "vector" | "cog";
+        /** @enum {unknown} */
+        MapLayerVectorFormat: "mvt" | "pmtiles" | "geojson";
+        MapLayerVectorOptions: {
+            format: components["schemas"]["MapLayerVectorFormat"];
+            style: null | string;
+            styleSource: null | string;
+            labelField: null | string;
+            scene3dStandIn: null | string;
+        };
         MapLayerWmsOptions: {
             layers: string;
             styles: string;
@@ -13126,6 +13148,8 @@ export interface components {
             urlTemplate: string;
             wms: null | components["schemas"]["MapLayerWmsOptions"];
             wmts: null | components["schemas"]["MapLayerWmtsOptions"];
+            cog: null | components["schemas"]["MapLayerCogOptions"];
+            vector: null | components["schemas"]["MapLayerVectorOptions"];
             attribution: null | string;
             /** Format: int32 */
             minZoom: number;

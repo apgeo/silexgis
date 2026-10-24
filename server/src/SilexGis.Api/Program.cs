@@ -787,10 +787,11 @@ internal static class MapLayerStartup
             return;
         }
 
-        var report = await MapLayerSeeder.SeedAsync(xml, options.ApiKeys, db);
+        var report = await MapLayerSeeder.SeedAsync(
+            xml, options.ApiKeys, services.GetRequiredService<SilexGis.Infrastructure.Geodata.ICrsRegistry>(), db);
         foreach (var problem in report.Problems)
         {
-            Log.Warning("Map layer catalogue {Path}: {Problem}", path, problem);
+            Log.Warning("Map layer catalogue {Path}: [{Code}] {Problem}", path, problem.Code, problem.Message);
         }
 
         Log.Information(

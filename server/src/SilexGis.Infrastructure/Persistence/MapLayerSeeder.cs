@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Map;
+using SilexGis.Infrastructure.Geodata;
 
 namespace SilexGis.Infrastructure.Persistence;
 
@@ -20,7 +21,7 @@ public sealed record MapLayerSeedReport(
     int Added,
     int Updated,
     int WithheldForMissingKey,
-    IReadOnlyList<string> Problems,
+    IReadOnlyList<MapLayerCatalogProblem> Problems,
     int SwitchedOffAsRefused = 0);
 
 /// <summary>
@@ -48,17 +49,24 @@ public sealed record MapLayerSeedReport(
 /// Idempotent, and it has to be: this runs on every start, so applying it twice must equal
 /// applying it once, or a restart would renumber, re-default or duplicate the list.
 /// </para>
+/// <para>
+/// A cloud-optimised GeoTIFF's coordinate system is resolved here, from the installation's own
+/// registry, and its definition stored with the entry's options — so the views that place the
+/// file are handed it with the layer, and a code the registry does not know refuses the entry on
+/// start rather than misplacing the picture on screen.
+/// </para>
 /// </remarks>
 public static class MapLayerSeeder
 {
     public static async Task<MapLayerSeedReport> SeedAsync(
         string catalogXml,
         IReadOnlyDictionary<string, string> apiKeys,
+        ICrsRegistry crs,
         SilexGisDbContext db,
         CancellationToken ct = default)
     {
-        var catalog = MapLayerCatalog.Read(catalogXml);
-        var problems = catalog.Problems.Select(p => p.Message).ToList();
+        var catalog = MapLayerCatalog.Read(catalogXml, crs.Proj4);
+        var problems = catalog.Problems.ToList();
 
         var stored = await db.MapLayers.ToDictionaryAsync(x => x.Name, StringComparer.OrdinalIgnoreCase, ct);
         int added = 0, updated = 0, withheld = 0;
@@ -101,7 +109,9 @@ public static class MapLayerSeeder
             {
                 row.Enabled = false;
                 switchedOff++;
-                problems.Add($"'{row.Name}' was stored from an earlier start and is switched off until its entry can be read again");
+                problems.Add(new MapLayerCatalogProblem(
+                    MapLayerCatalogCodes.SwitchedOffAsRefused,
+                    $"'{row.Name}' was stored from an earlier start and is switched off until its entry can be read again"));
             }
         }
 

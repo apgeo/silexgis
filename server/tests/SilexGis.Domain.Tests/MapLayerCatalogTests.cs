@@ -275,21 +275,6 @@ public class MapLayerCatalogTests
             result.Layers.Single(l => l.Name == "Tiles KVP").Wmts);
     }
 
-    [Theory]
-    [InlineData("vector")]
-    [InlineData("cog")]
-    public void A_kind_this_version_cannot_draw_is_refused_and_says_not_supported_yet(string kind)
-    {
-        var result = MapLayerCatalog.Read(Doc(
-            $$"""<layer name="Later" kind="{{kind}}" url="https://tiles.example/{z}/{x}/{y}.pbf" />"""));
-
-        Assert.Empty(result.Layers);
-        var problem = Assert.Single(result.Problems).Message;
-        Assert.Contains("'Later'", problem, StringComparison.Ordinal);
-        Assert.Contains(kind, problem, StringComparison.Ordinal);
-        Assert.Contains("not supported yet", problem, StringComparison.Ordinal);
-    }
-
     [Fact]
     public void A_kind_that_names_nothing_is_refused_and_names_the_kinds_there_are()
     {
@@ -297,30 +282,33 @@ public class MapLayerCatalogTests
             """<layer name="Typo" kind="wtms" url="https://tiles.example/{z}/{x}/{y}.png" />"""));
 
         Assert.Empty(result.Layers);
-        var problem = Assert.Single(result.Problems).Message;
-        Assert.Contains("'wtms'", problem, StringComparison.Ordinal);
-        Assert.Contains("xyz, wms or wmts", problem, StringComparison.Ordinal);
+        var problem = Assert.Single(result.Problems);
+        Assert.Equal(MapLayerCatalogCodes.UnknownKind, problem.Code);
+        Assert.Contains("'wtms'", problem.Message, StringComparison.Ordinal);
+        Assert.Contains("xyz, wms, wmts, cog or vector", problem.Message, StringComparison.Ordinal);
     }
 
     [Theory]
-    [InlineData("""<layer name="Bad" kind="wms" url="https://maps.example.gov/wms" />""", "no layers attribute")]
-    [InlineData("""<layer name="Bad" kind="wms" url="https://maps.example.gov/wms?x={z}" layers="a" />""", "service address alone")]
-    [InlineData("""<layer name="Bad" kind="wms" url="https://maps.example.gov/wms" layers="a" version="1.0.0" />""", "1.0.0")]
-    [InlineData("""<layer name="Bad" kind="wms" url="https://maps.example.gov/wms" layers="a" crs="EPSG:31700" />""", "EPSG:31700")]
-    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/wmts" layer="a" />""", "matrixSet")]
-    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/{TileMatrix}/{TileCol}.png" layer="a" matrixSet="m" />""", "{TileRow}")]
-    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/wmts" layer="a" matrixSet="m" crs="EPSG:2056" />""", "EPSG:2056")]
+    [InlineData("""<layer name="Bad" kind="wms" url="https://maps.example.gov/wms" />""", "no layers attribute", MapLayerCatalogCodes.WmsNoLayers)]
+    [InlineData("""<layer name="Bad" kind="wms" url="https://maps.example.gov/wms?x={z}" layers="a" />""", "service address alone", MapLayerCatalogCodes.StrayPlaceholder)]
+    [InlineData("""<layer name="Bad" kind="wms" url="https://maps.example.gov/wms" layers="a" version="1.0.0" />""", "1.0.0", MapLayerCatalogCodes.WmsVersionUnsupported)]
+    [InlineData("""<layer name="Bad" kind="wms" url="https://maps.example.gov/wms" layers="a" crs="EPSG:31700" />""", "EPSG:31700", MapLayerCatalogCodes.CrsUnsupported)]
+    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/wmts" layer="a" />""", "matrixSet", MapLayerCatalogCodes.WmtsIncomplete)]
+    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/{TileMatrix}/{TileCol}.png" layer="a" matrixSet="m" />""", "{TileRow}", MapLayerCatalogCodes.WmtsTemplateIncomplete)]
+    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/wmts" layer="a" matrixSet="m" crs="EPSG:2056" />""", "EPSG:2056", MapLayerCatalogCodes.CrsUnsupported)]
     // The access key's placeholder is no licence for another one beside it, in either kind.
-    [InlineData("""<layer name="Bad" kind="wms" apiKey="Agency" url="https://maps.example.gov/wms?key={apikey}&amp;x={z}" layers="a" />""", "{z}")]
-    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/wmts?TileMatrix={z}" layer="a" matrixSet="m" />""", "{z}")]
-    [InlineData("""<layer name="Bad" kind="wmts" apiKey="Agency" url="https://tiles.example.gov/wmts?key={apikey}&amp;level={level}" layer="a" matrixSet="m" />""", "{level}")]
-    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/{TileMatrix}/{TileRow}/{TileCol}.{format}" layer="a" matrixSet="m" />""", "{format}")]
-    public void A_service_entry_that_cannot_be_drawn_is_skipped_and_says_why(string entry, string reason)
+    [InlineData("""<layer name="Bad" kind="wms" apiKey="Agency" url="https://maps.example.gov/wms?key={apikey}&amp;x={z}" layers="a" />""", "{z}", MapLayerCatalogCodes.StrayPlaceholder)]
+    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/wmts?TileMatrix={z}" layer="a" matrixSet="m" />""", "{z}", MapLayerCatalogCodes.StrayPlaceholder)]
+    [InlineData("""<layer name="Bad" kind="wmts" apiKey="Agency" url="https://tiles.example.gov/wmts?key={apikey}&amp;level={level}" layer="a" matrixSet="m" />""", "{level}", MapLayerCatalogCodes.StrayPlaceholder)]
+    [InlineData("""<layer name="Bad" kind="wmts" url="https://tiles.example.gov/{TileMatrix}/{TileRow}/{TileCol}.{format}" layer="a" matrixSet="m" />""", "{format}", MapLayerCatalogCodes.StrayPlaceholder)]
+    public void A_service_entry_that_cannot_be_drawn_is_skipped_and_says_why(string entry, string reason, string code)
     {
         var result = MapLayerCatalog.Read(Doc(entry));
 
         Assert.Empty(result.Layers);
-        Assert.Contains(reason, Assert.Single(result.Problems).Message, StringComparison.Ordinal);
+        var problem = Assert.Single(result.Problems);
+        Assert.Contains(reason, problem.Message, StringComparison.Ordinal);
+        Assert.Equal(code, problem.Code);
         Assert.Equal(["Bad"], result.RefusedNames);
     }
 
@@ -388,6 +376,10 @@ public class MapLayerCatalogTests
         Assert.False(MapLayerOptionsJson.IsDrawable(MapLayerKind.Wms, null));
         Assert.False(MapLayerOptionsJson.IsDrawable(MapLayerKind.Wms, "{ not json"));
         Assert.False(MapLayerOptionsJson.IsDrawable(MapLayerKind.Vector, null));
+        Assert.False(MapLayerOptionsJson.IsDrawable(MapLayerKind.Cog, null));
+        // Nor do a service's options read as a file's or a vector layer's.
+        Assert.Null(MapLayerOptionsJson.Cog(MapLayerKind.Cog, stored));
+        Assert.Null(MapLayerOptionsJson.Vector(MapLayerKind.Vector, stored));
         Assert.True(MapLayerOptionsJson.IsDrawable(MapLayerKind.Xyz, null));
         // A plain tile entry stores no options.
         Assert.Null(MapLayerOptionsJson.Write(Assert.Single(MapLayerCatalog.Read(Doc(

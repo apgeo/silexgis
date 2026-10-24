@@ -22,7 +22,9 @@ public class MapLayerDocumentRulesTests
     [Theory]
     [InlineData(MapLayerKind.Wms)]
     [InlineData(MapLayerKind.Wmts)]
-    public void A_map_service_is_never_copied_into_a_document_whatever_anybody_said(MapLayerKind kind)
+    [InlineData(MapLayerKind.Cog)]
+    [InlineData(MapLayerKind.Vector)]
+    public void Nothing_but_plain_tiles_is_ever_copied_into_a_document_whatever_anybody_said(MapLayerKind kind)
     {
         MapLayerDocumentRules.Effective(true, null, kind).ShouldBeFalse();
         MapLayerDocumentRules.Effective(false, true, kind).ShouldBeFalse();

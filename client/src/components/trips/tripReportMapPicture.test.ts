@@ -69,6 +69,8 @@ const basemap = {
   urlTemplate: 'https://tiles.example.invalid/{z}/{x}/{y}.png',
   wms: null,
   wmts: null,
+  cog: null,
+  vector: null,
   attribution: '© <a href="https://example.invalid">Open Mappers</a>',
   groupName: null,
   minZoom: 0,

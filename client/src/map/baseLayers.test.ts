@@ -166,6 +166,8 @@ describe('a picture of the map and the layers that cannot go into one', () => {
     urlTemplate: `https://tiles.example.org/${id}/{z}/{x}/{y}.png`,
     wms: null,
     wmts: null,
+    cog: null,
+    vector: null,
     attribution: null,
     groupName: null,
     minZoom: 0,

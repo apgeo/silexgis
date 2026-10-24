@@ -9,6 +9,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Map;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -285,20 +286,34 @@ public sealed class MapBackgroundDocumentChoiceTests : IAsyncLifetime, IDisposab
     }
 
     /// <summary>
-    /// A map service is never copied into a document: an administrator can switch one off or
-    /// leave it to the catalogue, and is refused, in words of its own, when switching it on.
+    /// Nothing but plain tiles is copied into a document — not a map service, a GeoTIFF file or
+    /// vector data: an administrator can switch one off or leave it to the catalogue, and is
+    /// refused, in words of its own, when switching it on.
     /// </summary>
-    [Fact]
-    public async Task A_map_service_background_can_be_switched_off_and_never_on()
+    [Theory]
+    [InlineData(
+        MapLayerKind.Wms,
+        "https://maps.example.gov/wms",
+        """{"layers":"topo","styles":"","format":"image/png","version":"1.3.0","transparent":false,"crs":"EPSG:3857"}""")]
+    [InlineData(
+        MapLayerKind.Cog,
+        "https://data.example.gov/ortho.tif",
+        """{"bands":null,"nodata":null,"min":null,"max":null,"projection":"EPSG:3857","projectionDefinition":null}""")]
+    [InlineData(
+        MapLayerKind.Vector,
+        "https://tiles.example.org/planet",
+        """{"format":"mvt","style":"https://tiles.example.org/styles/liberty","styleSource":null,"labelField":null,"scene3dStandIn":null}""")]
+    public async Task A_background_that_is_not_plain_tiles_can_be_switched_off_and_never_on(
+        MapLayerKind kind, string url, string options)
     {
         long service;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             var row = Layer($"Service {suffix}", isBase: true, attribution: "© Agency", enabled: true);
-            row.LayerKind = MapLayerKind.Wms;
-            row.UrlTemplate = "https://maps.example.gov/wms";
-            row.Options = """{"layers":"topo","styles":"","format":"image/png","version":"1.3.0","transparent":false,"crs":"EPSG:3857"}""";
+            row.LayerKind = kind;
+            row.UrlTemplate = url;
+            row.Options = options;
             db.MapLayers.Add(row);
             await db.SaveChangesAsync();
             service = row.Id;
@@ -352,7 +367,8 @@ public sealed class MapBackgroundDocumentChoiceTests : IAsyncLifetime, IDisposab
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var report = await MapLayerSeeder.SeedAsync(catalogXml, new Dictionary<string, string>(), db);
+        var report = await MapLayerSeeder.SeedAsync(
+            catalogXml, new Dictionary<string, string>(), scope.ServiceProvider.GetRequiredService<ICrsRegistry>(), db);
         report.Problems.ShouldBeEmpty();
     }
 

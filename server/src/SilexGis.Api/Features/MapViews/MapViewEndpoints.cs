@@ -69,12 +69,18 @@ public sealed record SharedViewReachDto(double West, double South, double East, 
 /// A background a shared view's page draws. Only a source that needs no access key is ever one:
 /// a key would be handed to whoever holds the link.
 /// </summary>
+/// <param name="Vector">
+/// A vector background's data and style. Never with a 3D stand-in: the page draws no 3D scene,
+/// and the name of another of the installation's sources is not the link's to carry.
+/// </param>
 public sealed record SharedViewBackgroundDto(
     string Name,
     MapLayerKind LayerKind,
     string UrlTemplate,
     MapLayerWmsOptions? Wms,
     MapLayerWmtsOptions? Wmts,
+    MapLayerCogOptions? Cog,
+    MapLayerVectorOptions? Vector,
     string? Attribution,
     int MinZoom,
     int MaxZoom);
@@ -395,6 +401,10 @@ public static class MapViewEndpoints
                 layer.UrlTemplate,
                 MapLayerOptionsJson.Wms(layer.LayerKind, layer.Options),
                 MapLayerOptionsJson.Wmts(layer.LayerKind, layer.Options),
+                MapLayerOptionsJson.Cog(layer.LayerKind, layer.Options),
+                MapLayerOptionsJson.Vector(layer.LayerKind, layer.Options) is { } vector
+                    ? vector with { Scene3dStandIn = null }
+                    : null,
                 layer.Attribution,
                 layer.MinZoom,
                 layer.MaxZoom);

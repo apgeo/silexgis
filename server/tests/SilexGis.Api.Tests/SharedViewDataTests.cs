@@ -359,6 +359,64 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         background["wms"]!["crs"]!.GetValue<string>().ShouldBe("EPSG:3857");
     }
 
+    /// <summary>
+    /// A vector or GeoTIFF background reaches the link with what the page needs to draw it — the
+    /// style, the file's coordinate system and its definition — and a vector background's 3D
+    /// stand-in does not: the page draws no 3D scene, and the name of another source is not the
+    /// link's to carry.
+    /// </summary>
+    [Fact]
+    public async Task A_vector_or_file_background_reaches_the_link_with_its_options_and_no_stand_in()
+    {
+        var entries = MapLayerCatalog.Read(
+                """
+                <silexgis-map-layers version="1">
+                  <layer name="Raster" url="https://t.example/{z}/{x}/{y}.png" />
+                  <layer name="Styled" kind="vector" format="mvt" url="https://tiles.example.org/planet"
+                         style="https://tiles.example.org/styles/positron" labelField="name:{lang}" scene3d="Raster"
+                         attribution="© OpenMapTiles © OpenStreetMap contributors" />
+                  <layer name="Lidar" kind="cog" url="https://data.example.gov/lidar.tif" projection="EPSG:3844"
+                         min="0" max="255" attribution="© Agency" />
+                </silexgis-map-layers>
+                """,
+                code => code == 3844 ? "+proj=sterea +lat_0=46 +lon_0=25 +k=0.99975 +units=m +no_defs" : null)
+            .Layers.ToDictionary(l => l.Name);
+        entries["Styled"].Vector!.Scene3dStandIn.ShouldBe("Raster");
+
+        async Task<JsonNode> BackgroundAsync(MapLayerEntry entry)
+        {
+            var id = await AddLayerAsync(new MapLayer
+            {
+                Name = $"{entry.Name} {Guid.NewGuid():N}"[..30],
+                UrlTemplate = entry.UrlTemplate,
+                LayerKind = entry.Kind,
+                Options = MapLayerOptionsJson.Write(entry),
+                IsBase = true,
+                Enabled = true,
+                Attribution = entry.Attribution,
+                OnSharedLinks = true,
+            });
+            var token = await ShareAsync(await CreateViewAsync(entrances: false, features: false, 10.1, 60.1, baseLayerId: id));
+            return (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}"))["background"]!;
+        }
+
+        var vector = await BackgroundAsync(entries["Styled"]);
+        vector["layerKind"]!.GetValue<string>().ShouldBe("vector");
+        vector["urlTemplate"]!.GetValue<string>().ShouldBe("https://tiles.example.org/planet");
+        vector["vector"]!["format"]!.GetValue<string>().ShouldBe("mvt");
+        vector["vector"]!["style"]!.GetValue<string>().ShouldBe("https://tiles.example.org/styles/positron");
+        vector["vector"]!["labelField"]!.GetValue<string>().ShouldBe("name:{lang}");
+        vector["vector"]!["scene3dStandIn"].ShouldBeNull();
+        vector["cog"].ShouldBeNull();
+
+        var file = await BackgroundAsync(entries["Lidar"]);
+        file["layerKind"]!.GetValue<string>().ShouldBe("cog");
+        file["cog"]!["projection"]!.GetValue<string>().ShouldBe("EPSG:3844");
+        file["cog"]!["projectionDefinition"]!.GetValue<string>().ShouldStartWith("+proj=sterea");
+        file["cog"]!["max"]!.GetValue<double>().ShouldBe(255);
+        file["vector"].ShouldBeNull();
+    }
+
     [Fact]
     public async Task With_data_on_shared_views_switched_off_a_link_draws_its_background_only()
     {

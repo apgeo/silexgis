@@ -151,14 +151,15 @@ public static class MapLayerDocumentEndpoints
                 "A document's picture is drawn over one background, and this layer is an overlay.");
         }
 
-        // Taking a mark off is always possible; putting one on a map service is not, because a
-        // document's picture is drawn from plain tiles only.
+        // Taking a mark off is always possible; putting one on a map service, a GeoTIFF file or
+        // vector data is not, because a document's picture is drawn from plain tiles only.
         var choice = request.Choice!.Value;
         if (choice == MapLayerDocumentChoice.On && obstacle == MapLayerDocumentObstacle.NotPlainTiles)
         {
             return ApiProblems.Conflict(
                 MapLayerDocumentRules.NotPlainTilesCode,
-                "This background is a map service, and a document's picture is drawn from plain tiles only.");
+                "This background is not plain map tiles (it is a map service, a GeoTIFF file or vector data), "
+                + "and a document's picture is drawn from plain tiles only.");
         }
 
         // Switching off, or going back to the catalogue, is always possible; only saying yes

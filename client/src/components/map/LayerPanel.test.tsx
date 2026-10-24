@@ -396,6 +396,8 @@ describe('the basemap groups of the layer panel', () => {
     urlTemplate: `https://tiles.example.invalid/${id}/{z}/{x}/{y}.png`,
     wms: null,
     wmts: null,
+    cog: null,
+    vector: null,
     attribution: null,
     groupName,
     minZoom: 0,

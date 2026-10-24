@@ -36,9 +36,9 @@ public enum MapLayerDocumentObstacle
     NoAttribution,
 
     /// <summary>
-    /// The source is a map service rather than plain z/x/y tiles. A document's picture is drawn
-    /// from tiles only, and whether a service's terms allow its pictures into a circulated file is
-    /// a separate question nobody has answered for one yet.
+    /// The source is not plain z/x/y tiles — a map service, a GeoTIFF file or vector data. A
+    /// document's picture is drawn from tiles only, and whether such a source's terms allow its
+    /// pictures into a circulated file is a separate question nobody has answered for one yet.
     /// </summary>
     NotPlainTiles,
 }
@@ -70,7 +70,7 @@ public static class MapLayerDocumentRules
     /// <summary>Refusal: the source has no credit to write under a picture.</summary>
     public const string AttributionRequiredCode = "map_layer.attribution_required";
 
-    /// <summary>Refusal: the source is a map service, and a document's picture is drawn from tiles.</summary>
+    /// <summary>Refusal: the source is not plain tiles, and a document's picture is drawn from tiles.</summary>
     public const string NotPlainTilesCode = "map_layer.not_plain_tiles";
 
     /// <summary>
@@ -94,7 +94,7 @@ public static class MapLayerDocumentRules
 
     /// <summary>
     /// Whether a document may copy the source: the administrator's answer where they gave one,
-    /// the catalogue's otherwise — and never for a map service, whatever either said.
+    /// the catalogue's otherwise — and never for anything but plain tiles, whatever either said.
     /// </summary>
     public static bool Effective(bool catalogue, bool? administrator, MapLayerKind kind) =>
         kind == MapLayerKind.Xyz && (administrator ?? catalogue);

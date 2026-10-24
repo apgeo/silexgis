@@ -11,15 +11,27 @@
   Point somewhere else with  SILEXGIS__MapLayers__CatalogPath=/path/to/your.xml  to keep your own
   catalogue outside the image; the file shipped here is then not read at all.
 
+  WHAT BELONGS HERE: installation-wide sources anybody signed in may see — public basemaps, a
+  national agency's services, an orthophoto or a hillshade published openly. Every source listed is
+  offered to every account, and may be drawn on a shared map view's link (see sharedLinks). A raster
+  that must stay behind sign-in — a club's own survey, a scan whose licence is for members only —
+  does NOT belong in this file: upload it as a georeferenced map instead, where each file has its
+  own permissions and is delivered through signed, expiring addresses.
+
+  Every problem with an entry is reported at startup, one log line each, with a stable code in
+  brackets (e.g. [map_layer.cog_projection_missing]) followed by the entry's name, what is wrong,
+  and whether the entry was skipped or kept without the attribute at fault.
+
   ATTRIBUTES
     name          Required. The catalogue key, and what the layer selector shows.
-    kind          xyz (default), wms or wmts — how the source is asked for its pictures. Any
-                  other value is reported at startup and the entry is not offered: vector tiles
-                  and cloud-optimised GeoTIFFs have names here and nothing that draws them yet.
+    kind          xyz (default), wms, wmts, cog or vector — how the source is drawn. Any other
+                  value is reported at startup and the entry is not offered.
     url           Required. For xyz, a template with {z}/{x}/{y} (some services order it
                   {z}/{y}/{x}). For wms, the service's address alone — the map adds the request.
                   For wmts, the service's key-value address, or its REST template naming
-                  {TileMatrix}, {TileRow} and {TileCol}.
+                  {TileMatrix}, {TileRow} and {TileCol}. For cog, the file's address. For vector,
+                  the data: see VECTOR ONLY below. An address may start with / for a source this
+                  installation serves itself.
     group         Heading to list it under. Groups collapse in the panel; ungrouped entries sit
                   at the top, always open.
     attribution   Credit shown on the map. Most of these sources REQUIRE it — it is not a nicety.
@@ -57,8 +69,53 @@
     matrixIdPrefix  What the service puts before the level in each matrix id: empty (default) for
                   0, 1, 2…, or e.g. EPSG:3857: for EPSG:3857:0, EPSG:3857:1….
     maxZoom       For wmts, the deepest level of the matrix set — the grid is built up to it.
-    A wms or wmts source is never copied into a document, whatever inDocuments says: the
-    document's map is drawn from xyz tiles only (see inDocuments below).
+    COG ONLY — a cloud-optimised GeoTIFF: one raster file (an orthophoto, a scanned geological map,
+    a LiDAR hillshade) read piece by piece with HTTP range requests. Its server must answer range
+    requests and send CORS headers (Access-Control-Allow-Origin, and expose Content-Range); a file
+    without internal overviews works but makes the browser read far too much — build it with
+    gdal_translate -of COG.
+    projection    Required. The file's coordinate system, written EPSG: and its code, e.g.
+                  EPSG:3857, EPSG:4326 or EPSG:3844 (Stereo 70). Both the map and the 3D view place
+                  the file by it, whatever its own header says. Any code this installation's PROJ
+                  database knows is accepted; one it does not know is refused at startup rather
+                  than drawn in the wrong place.
+    bands         Which bands to draw, numbered from 1, comma-separated, at most four: one band
+                  is drawn as grey, two as grey and transparency, three as red, green, blue, four
+                  as those and transparency. E.g. bands="4,3,2" for a false-colour infrared
+                  picture. Default: the file's bands as it stores them.
+    nodata        A sample value drawn transparent, in place of whatever the file declares.
+    min, max      The value range the samples are scaled across, the same for every band — what a
+                  16-bit elevation or hillshade file needs (a photograph does not). Both or
+                  neither; min below max. Default: the file's own statistics, else its data
+                  type's range.
+                  minZoom hides the layer further out, as for every kind; maxZoom does not apply —
+                  the file's own levels decide how close it can be drawn.
+    VECTOR ONLY — shapes with attributes, drawn by the browser in a style.
+    format        Required. mvt, pmtiles or geojson — what url delivers:
+                    mvt      Mapbox vector tiles: a template naming all of {z}, {x} and {y}, or the
+                             address of the service's TileJSON document (naming none of them),
+                             for a service whose tile addresses change with each build.
+                    pmtiles  one PMTiles archive, read with HTTP range requests.
+                    geojson  one GeoJSON file holding every shape — for a small overlay.
+    style         The address of a MapLibre style document whose layers draw the shapes,
+                  including the fonts and icons it names. Without one the shapes are drawn in the
+                  map's plain default look. Used as it stands: no placeholder is filled in it.
+    styleSource   Which source of the style the url stands for. Default: the style's first
+                  vector source. Needs a style.
+    labelField    The property holding a name in a given language, with {lang} where the
+                  reader's language goes — name:{lang} for the OpenMapTiles and Protomaps
+                  schemas. The style's name labels then read it, falling back to the plain name.
+                  Needs a style. Default: the style's labels as it writes them.
+    scene3d       The name of another entry in this file — xyz, wms or wmts, and a basemap for a
+                  basemap, an overlay for an overlay — that the 3D view drapes in this entry's
+                  place, so both views list the same backgrounds. One that cannot be used is
+                  reported at startup and dropped; the entry is kept.
+    maxZoom       The last level the tiles hold. Default 14, where OpenMapTiles-schema tiles stop;
+                  a Protomaps build holds 15. Past it the map enlarges the last level, which stays
+                  sharp — so a value too low costs detail and one too high blanks the map.
+    Only an xyz source is ever copied into a document, whatever inDocuments says: the document's
+    map is drawn from xyz tiles only (see inDocuments below). A wms, wmts, cog or vector entry
+    marked inDocuments is reported at startup and loses the mark.
     sharedLinks   false keeps the source off shared map views: a link somebody is sent draws the
                   installation's default basemap instead (or the first one it may draw). Default
                   true, except under the group "Restricted terms of use", where it defaults to
