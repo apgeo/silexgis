@@ -20,3 +20,5 @@
 *.lox binary
 *.3d binary
 *.wav binary
+*.woff2 binary
+*.pmtiles binary
