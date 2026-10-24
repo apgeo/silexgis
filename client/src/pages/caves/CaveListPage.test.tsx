@@ -16,7 +16,7 @@ import { whereOf, withWhere } from '../../filters/document.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
 import { decodeFilter, encodeFilter } from '../../filters/url.ts';
 
-const { canSpy, doorSpy, cavesSpy, caveItems, downloadSpy, savedFilters, editorSpy, editorMounts, selectAllSpy, heldWrites } = vi.hoisted(() => ({
+const { canSpy, doorSpy, cavesSpy, caveItems, downloadSpy, savedFilters, createSpy, editorSpy, editorMounts, selectAllSpy, heldWrites } = vi.hoisted(() => ({
   caveItems: { current: [] as unknown[] },
   editorSpy: vi.fn(),
   editorMounts: { count: 0 },
@@ -27,6 +27,7 @@ const { canSpy, doorSpy, cavesSpy, caveItems, downloadSpy, savedFilters, editorS
   cavesSpy: vi.fn(),
   downloadSpy: vi.fn(),
   savedFilters: { current: [] as unknown[] },
+  createSpy: vi.fn(),
 }));
 
 // The browser's router changes the address bar at once and tells the page a moment later. Holding
@@ -80,7 +81,7 @@ vi.mock('../../api/hooks/savedFilters.ts', async () => {
   return {
     documentOf: actual.documentOf,
     useSavedFilters: () => ({ data: savedFilters.current, isSuccess: true }),
-    useCreateSavedFilter: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useCreateSavedFilter: () => ({ mutateAsync: createSpy, isPending: false }),
   };
 });
 
@@ -180,6 +181,7 @@ beforeEach(async () => {
   caveItems.current = [];
   downloadSpy.mockReset();
   savedFilters.current = [];
+  createSpy.mockReset();
   editorSpy.mockReset();
   editorMounts.count = 0;
   heldWrites.on = false;
@@ -364,6 +366,43 @@ describe('the registry read from its address', () => {
     fireEvent.blur(region);
 
     expect(screen.getByTestId('cave-registry-active-changed')).toBeInTheDocument();
+  });
+
+  it('saves a control just committed that the page has not yet been told of', async () => {
+    createSpy.mockResolvedValue({ id: 'f-new', name: 'Long in Bihor' });
+    show(`/caves?filter=${encodeFilter(caveRegistryDocument({ region: 'Bihor' })!)}`);
+    heldWrites.on = true;
+    const length = screen.getByTestId('cave-registry-min-length');
+    fireEvent.change(length, { target: { value: '1000' } });
+    fireEvent.blur(length);
+    expect(heldWrites.queue).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId('cave-registry-save-filter'));
+    fireEvent.change(await screen.findByTestId('saved-filter-name'), { target: { value: 'Long in Bihor' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await vi.waitFor(() => expect(createSpy).toHaveBeenCalledTimes(1));
+    const saved = (createSpy.mock.calls[0]![0] as { document: FilterDocument }).document;
+    expect(saved).toEqual(caveRegistryDocument({
+      region: 'Bihor',
+      length: { op: 'greaterOrEqual', values: [1000], negated: false },
+    }));
+  });
+
+  it('says so, and saves nothing, when the controls were cleared a moment before Save', async () => {
+    show(`/caves?filter=${encodeFilter(caveRegistryDocument({ region: 'Bihor' })!)}`);
+    heldWrites.on = true;
+    const region = screen.getByTestId('cave-registry-region');
+    fireEvent.change(region, { target: { value: '' } });
+    fireEvent.blur(region);
+    expect(heldWrites.queue).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId('cave-registry-save-filter'));
+    fireEvent.change(await screen.findByTestId('saved-filter-name'), { target: { value: 'Nothing' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('There are no conditions to save — set at least one first.')).toBeInTheDocument();
+    expect(createSpy).not.toHaveBeenCalled();
   });
 });
 

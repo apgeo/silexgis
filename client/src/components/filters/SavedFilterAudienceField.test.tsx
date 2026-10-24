@@ -63,6 +63,7 @@ function showRegistry() {
       <MemoryRouter initialEntries={['/caves']}>
         <CaveRegistrySavedFilters
           reading={{ controls: { region: 'Bihor' }, extra: [] }}
+          newest={() => ({ controls: { region: 'Bihor' }, extra: [] })}
           onApply={vi.fn()}
           onSaved={vi.fn()}
           onClearExtra={vi.fn()}

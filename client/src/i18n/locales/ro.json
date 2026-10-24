@@ -685,6 +685,7 @@
     "empty": "Niciun filtru salvat. Salvează unul din registrul peșterilor.",
     "name": "Nume",
     "description": "Descriere",
+    "nothingToSave": "Nu există nicio condiție de salvat — stabilește mai întâi cel puțin una.",
     "asks": "Caută",
     "cannotShow": "Nu poate fi afișat",
     "audience": "Cine îl poate folosi",

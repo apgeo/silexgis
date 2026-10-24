@@ -14,6 +14,11 @@ interface Props<R extends { extra: FilterNode[] }> {
   reading: R;
   /** The document that reading composes, or null when it narrows nothing (nothing to save). */
   document: FilterDocument | null;
+  /**
+   * The document as the page last wrote it, a change it has not yet been told of included — what
+   * is saved, so a control committed a moment before Save is pressed is in the filter.
+   */
+  newestDocument: () => FilterDocument | null;
   /** A saved filter's document as this list's controls can hold it, or null when it is about something else. */
   read: (document: FilterDocument) => R | null;
   /** Whether two readings ask the same question. */
@@ -45,6 +50,7 @@ interface Props<R extends { extra: FilterNode[] }> {
 export default function ListSavedFilters<R extends { extra: FilterNode[] }>({
   reading,
   document,
+  newestDocument,
   read,
   same,
   savedFilterId,
@@ -91,13 +97,21 @@ export default function ListSavedFilters<R extends { extra: FilterNode[] }>({
   };
 
   const save = async () => {
-    if (document === null) return;
+    // Read when Save is pressed rather than when the dialog opened: the router tells the page of a
+    // change a moment after it is made — longer on a busy machine — so a control just committed may
+    // not have reached `document` yet, and the filter would be saved without it.
+    const toSave = newestDocument();
+    // Never a Save that does nothing: whatever stops it is said.
+    if (toSave === null) {
+      message.warning(t('savedFilters.nothingToSave'));
+      return;
+    }
     const values = await form.validateFields();
     try {
       const created = await create.mutateAsync({
         name: values.name.trim(),
         description: values.description?.trim() || null,
-        document,
+        document: toSave,
         visibility: 'private',
       });
       setSaving(false);

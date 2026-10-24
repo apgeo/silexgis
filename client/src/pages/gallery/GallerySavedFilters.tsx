@@ -70,7 +70,11 @@ export default function GallerySavedFilters({ where, savedFilterId, onApply, onS
   };
 
   const save = async () => {
-    if (document === null) return;
+    // Never a Save that does nothing: whatever stops it is said.
+    if (document === null) {
+      message.warning(t('savedFilters.nothingToSave'));
+      return;
+    }
     const values = await form.validateFields();
     try {
       const created = await create.mutateAsync({

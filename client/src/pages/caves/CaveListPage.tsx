@@ -574,6 +574,7 @@ export default function CaveListPage() {
       </Drawer>
       <CaveRegistrySavedFilters
         reading={{ controls, extra }}
+        newest={newestAddress}
         savedFilterId={address.savedFilterId}
         onApply={(reading, savedFilterId) =>
           go(() => ({ controls: reading.controls, extra: reading.extra, savedFilterId, page: 1 }))}

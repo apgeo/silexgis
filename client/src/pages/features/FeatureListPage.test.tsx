@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { App as AntApp } from 'antd';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,13 +8,35 @@ import i18n from '../../i18n';
 import { featureListDocument, readFeatureListAddress } from '../../filters/featureList.ts';
 import { decodeFilter, encodeFilter } from '../../filters/url.ts';
 
-const { canSpy, doorSpy, featuresSpy, downloadSpy, savedFilters } = vi.hoisted(() => ({
+const { canSpy, doorSpy, featuresSpy, downloadSpy, savedFilters, createSpy, heldWrites } = vi.hoisted(() => ({
   canSpy: vi.fn(),
   doorSpy: vi.fn(),
   featuresSpy: vi.fn(),
   downloadSpy: vi.fn(),
   savedFilters: { current: [] as unknown[] },
+  createSpy: vi.fn(),
+  heldWrites: { on: false, queue: [] as (() => void)[] },
 }));
+
+// The browser's router changes the address bar at once and tells the page a moment later. Holding
+// the page's writes stands for that moment, so what is done inside it can be proved.
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return {
+    ...actual,
+    useSearchParams: (...args: Parameters<typeof actual.useSearchParams>) => {
+      const [params, write] = actual.useSearchParams(...args);
+      const held: typeof write = (...writeArgs) => {
+        if (heldWrites.on) {
+          heldWrites.queue.push(() => write(...writeArgs));
+        } else {
+          write(...writeArgs);
+        }
+      };
+      return [params, held] as const;
+    },
+  };
+});
 
 const SINKHOLE = {
   id: '33333333-3333-3333-3333-333333333333',
@@ -49,7 +71,7 @@ vi.mock('../../api/hooks/savedFilters.ts', async () => {
   return {
     documentOf: actual.documentOf,
     useSavedFilters: () => ({ data: savedFilters.current, isSuccess: true }),
-    useCreateSavedFilter: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useCreateSavedFilter: () => ({ mutateAsync: createSpy, isPending: false }),
   };
 });
 
@@ -110,6 +132,9 @@ beforeEach(async () => {
   featuresSpy.mockReset();
   downloadSpy.mockReset();
   savedFilters.current = [];
+  createSpy.mockReset();
+  heldWrites.on = false;
+  heldWrites.queue = [];
 });
 
 /** The address as the list last wrote it. */
@@ -244,5 +269,29 @@ describe('a row of the feature list', () => {
     // Back would land on the same feature and seem to do nothing.
     fireEvent.click(screen.getByTestId('history-back'));
     expect(screen.getByTestId('address')).toHaveTextContent(/^\/features$/);
+  });
+});
+
+describe('saving the feature list’s conditions as a filter', () => {
+  it('saves a control just chosen that the page has not yet been told of', async () => {
+    createSpy.mockResolvedValue({ id: 'f-new', name: 'Surface features' });
+    show(`/features?filter=${encodeFilter(featureListDocument({ kind: 'generic' })!)}`);
+    heldWrites.on = true;
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Feature category' }));
+    fireEvent.click(screen.getByTitle('Surface'));
+    expect(heldWrites.queue).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId('feature-list-save-filter'));
+    fireEvent.change(await screen.findByTestId('saved-filter-name'), { target: { value: 'Surface features' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await vi.waitFor(() => expect(createSpy).toHaveBeenCalledTimes(1));
+    expect((createSpy.mock.calls[0]![0] as { document: unknown }).document)
+      .toEqual(featureListDocument({ kind: 'generic', category: 'surface' }));
+
+    heldWrites.on = false;
+    act(() => {
+      heldWrites.queue.splice(0).forEach((apply) => apply());
+    });
   });
 });

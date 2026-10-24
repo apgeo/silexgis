@@ -26,6 +26,11 @@ import { holdsPosition } from '../../filters/spatial.ts';
 interface Props {
   /** What the registry's controls and any extra conditions say now. */
   reading: CaveRegistryReading;
+  /**
+   * The same, with a change the page has written to its address and not yet been told of — what
+   * is saved, so a box committed a moment before Save is pressed is in the filter.
+   */
+  newest: () => CaveRegistryReading;
   /** The saved filter the conditions were taken from, if any. */
   savedFilterId?: string;
   onApply: (reading: CaveRegistryReading, savedFilterId: string) => void;
@@ -50,6 +55,7 @@ interface Props {
  */
 export default function CaveRegistrySavedFilters({
   reading,
+  newest,
   savedFilterId,
   onApply,
   onSaved,
@@ -94,13 +100,26 @@ export default function CaveRegistrySavedFilters({
   };
 
   const save = async () => {
-    if (document === null) return;
+    // Read when Save is pressed rather than when the dialog opened: the router tells the page of a
+    // change a moment after it is made — longer on a busy machine — so the length just typed and
+    // committed may not have reached `reading` yet, and the filter would be saved without it.
+    const question = newest();
+    const toSave = caveRegistryDocument(question.controls, question.extra);
+    // Never a Save that does nothing: whatever stops it is said.
+    if (toSave === null) {
+      message.warning(t('savedFilters.nothingToSave'));
+      return;
+    }
+    if (holdsPosition(toSave)) {
+      message.warning(t('filters.editor.spatial.notSaved'));
+      return;
+    }
     const values = await form.validateFields();
     try {
       const created = await create.mutateAsync({
         name: values.name.trim(),
         description: values.description?.trim() || null,
-        document,
+        document: toSave,
         ...audienceFields(values.audience),
       });
       setSaving(false);

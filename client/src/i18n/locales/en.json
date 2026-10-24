@@ -685,6 +685,7 @@
     "empty": "No saved filters. Save one from the cave registry.",
     "name": "Name",
     "description": "Description",
+    "nothingToSave": "There are no conditions to save — set at least one first.",
     "asks": "Asks for",
     "cannotShow": "Cannot be shown",
     "audience": "Who can use it",

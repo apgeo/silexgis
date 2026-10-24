@@ -74,10 +74,15 @@ export default function FeatureListPage() {
     arrivedByOwnWrite.current = arrived !== -1;
   }, [searchParams]);
 
+  /** The address as this page last wrote it, or as it arrived when no write of its own is on its way. */
+  const newestAddress = () => {
+    const newest = written.current.at(-1);
+    return newest === undefined ? address : readFeatureListAddress(new URLSearchParams(newest));
+  };
+
   /** A new state written to the address. Typing replaces the entry; anything chosen adds one. */
   const go = (update: (current: AddressState) => Partial<AddressState>, replace = false) => {
-    const newest = written.current.at(-1);
-    const base = newest === undefined ? address : readFeatureListAddress(new URLSearchParams(newest));
+    const base = newestAddress();
     const current: AddressState = {
       controls: base.controls,
       extra: base.extra,
@@ -294,6 +299,10 @@ export default function FeatureListPage() {
       <ListSavedFilters
         reading={address}
         document={featureListDocument(controls, extra)}
+        newestDocument={() => {
+          const newest = newestAddress();
+          return featureListDocument(newest.controls, newest.extra);
+        }}
         read={readFeatureList}
         same={sameFeatureQuestion}
         savedFilterId={address.savedFilterId}
