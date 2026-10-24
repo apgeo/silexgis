@@ -588,4 +588,28 @@
          projection="EPSG:32634"
          attribution="Contains modified Copernicus Sentinel data 2024"
          enabled="false" />
+
+  <!-- ======================= This installation's own basemap ===================== -->
+  <!--
+    OpenStreetMap vector tiles of a region an administrator downloaded from the map-backgrounds
+    administration page, served by this installation's own tile server (the basemap overlay) and
+    drawn in the light Protomaps style this application ships — fonts and icons included, so it
+    makes no request outside the installation. {basemap} is replaced by the name of the extract
+    being served, which changes with every download, so a year-long cache is always safe.
+
+    Offered only while there is an extract: before the first download, or with self-hosting
+    switched off (SILEXGIS__Basemap__SelfHosted), the map does not list it and the administration
+    page says why. Protomaps builds hold zoom 15.
+  -->
+  <layer name="Self-hosted basemap (light)"
+         group="Vector"
+         kind="vector"
+         format="mvt"
+         url="/basemap/tiles/{basemap}/{z}/{x}/{y}"
+         style="/map-styles/protomaps/light.json"
+         styleSource="protomaps"
+         labelField="name:{lang}"
+         scene3d="OpenStreetMap"
+         attribution="© OpenStreetMap contributors · Protomaps"
+         maxZoom="15" />
 </silexgis-map-layers>

@@ -112,6 +112,19 @@ mapped onto them, so no label font is fetched from outside the installation.
   License:   SIL Open Font License 1.1 — see client/public/map-fonts/noto-sans/OFL.txt
   Provenance: client/public/map-fonts/noto-sans/README.md
 
+--------------------------------------------------------------------------------
+Protomaps basemap style and sprites (the installation's own basemap)
+--------------------------------------------------------------------------------
+client/public/map-styles/protomaps/light.json — a style generated once with the npm
+package @protomaps/basemaps 5.7.2 — and the four v4 light sprite files beside it,
+taken unmodified from the protomaps/basemaps-assets repository.
+
+  Style:     BSD-3-Clause, © 2019-2023 Protomaps LLC, Kelso Cartography; visual
+             design CC0 — see client/public/map-styles/protomaps/LICENSE.md
+  Sprites:   derived from tangrams/icons, MIT, © 2017 Mapzen — see
+             client/public/map-styles/protomaps/sprites/LICENSE.md
+  Provenance: client/public/map-styles/protomaps/README.md
+
 ================================================================================
 Dependencies
 ================================================================================
