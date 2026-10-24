@@ -40,6 +40,7 @@ function mapConfig(
     meshesInViewMaxBytesLimit: 512 * 1024 * 1024,
     meshAskAboveBytes: 50 * 1024 * 1024,
     selectionMax: 200,
+    densityFixedBands: [1, 5, 20],
   };
 }
 
