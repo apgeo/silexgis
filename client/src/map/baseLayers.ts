@@ -210,13 +210,15 @@ export function zoomBand(entry: Pick<DrawableLayer, 'minZoom' | 'maxZoom'>): { m
  * unreadable. A vector layer's labels are drawn in the reader's language where its entry says how.
  */
 export function backgroundLayerFor(entry: DrawableLayer, zIndex: number, language: string): BackgroundLayer {
+  // Both wait to be shown before they fetch anything: of a list of backgrounds a reader shows one,
+  // and opening the map must not send the browser to every source the catalogue names.
   if (entry.layerKind === 'cog' && entry.cog) {
-    const layer = cogLayerFor({ ...entry, cog: entry.cog }, zIndex);
+    const layer = cogLayerFor({ ...entry, cog: entry.cog }, zIndex, { deferUntilShown: true });
     layer.set(READABLE_PROP, true);
     return layer;
   }
   if (entry.layerKind === 'vector' && entry.vector) {
-    const { layer } = createVectorLayer({ ...entry, vector: entry.vector }, { language, zIndex });
+    const { layer } = createVectorLayer({ ...entry, vector: entry.vector }, { language, zIndex, deferUntilShown: true });
     layer.set(READABLE_PROP, true);
     layer.set(LANGUAGE_PROP, language);
     return layer;
@@ -248,7 +250,10 @@ export function isCatalogueLayer(layer: BaseLayer): boolean {
 export function mirrorBackground(layer: BackgroundLayer): { mirror: BackgroundLayer; keys: EventsKey[] } {
   const visible = layer.getVisible();
   if (layer instanceof WebGLTileLayer) {
-    return { mirror: new WebGLTileLayer({ source: layer.getSource() ?? undefined, visible }), keys: [] };
+    const mirror = new WebGLTileLayer({ source: layer.getSource() ?? undefined, visible });
+    // A GeoTIFF layer is given its source the first time it is shown.
+    const follow = () => mirror.setSource(layer.getSource());
+    return { mirror, keys: [layer.on('change:source', follow)] };
   }
   // A vector layer's source and style arrive after the layer itself, so the mirror follows them.
   if (layer instanceof VectorTileLayer) {

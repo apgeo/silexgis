@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { applyBackground, applyStyle } from 'ol-mapbox-style';
 import { PMTilesVectorSource } from 'ol-pmtiles';
+import { unByKey } from 'ol/Observable';
 import GeoJSON from 'ol/format/GeoJSON';
 import MVT from 'ol/format/MVT';
 import VectorLayer from 'ol/layer/Vector';
@@ -32,6 +33,12 @@ export interface VectorLayerBuildOptions {
   fetch?: typeof fetch;
   /** The address relative addresses are read against; the page's own unless a test says otherwise. */
   baseUrl?: string;
+  /**
+   * Fetch nothing — no style, no TileJSON, no archive header — until the layer is first shown. For
+   * a list of backgrounds of which a reader shows one, so that opening the map does not send the
+   * browser to every service the catalogue names. Off by default.
+   */
+  deferUntilShown?: boolean;
 }
 
 /** A vector layer for one catalogue entry, and when its data and style are in place. */
@@ -95,24 +102,44 @@ export function createVectorLayer(entry: VectorEntry, options: VectorLayerBuildO
   const common = { minZoom: min, visible: options.visible ?? false, zIndex: options.zIndex };
 
   if (entry.vector.format === 'geojson') {
-    const layer = new VectorLayer({
-      ...common,
-      source: new VectorSource({ url: dataUrl, format: new GeoJSON(), attributions }),
-    });
-    return { layer, ready: styled(layer, entry, options, fetchDocument, base) };
+    const layer = new VectorLayer({ ...common });
+    const load = () => {
+      layer.setSource(new VectorSource({ url: dataUrl, format: new GeoJSON(), attributions }));
+      return styled(layer, entry, options, fetchDocument, base);
+    };
+    return { layer, ready: whenShown(layer, options, load) };
   }
 
   // Labels kept upright and placed again as the map turns, and never drawn over one another.
   const layer = new VectorTileLayer({ ...common, declutter: true, renderMode: 'hybrid' });
-  const sourced = vectorTileSource(entry, dataUrl, max, attributions, fetchDocument).then((source) => {
+  const load = async () => {
+    const source = await vectorTileSource(entry, dataUrl, max, attributions, fetchDocument);
     if (!source) {
       return false;
     }
     layer.setSource(source);
-    return true;
+    return styled(layer, entry, options, fetchDocument, base);
+  };
+  return { layer, ready: whenShown(layer, options, load) };
+}
+
+/** Runs a layer's loading now, or — when asked to wait — the first time the layer is shown. */
+function whenShown(
+  layer: VectorTileLayer | VectorLayer,
+  options: VectorLayerBuildOptions,
+  load: () => Promise<boolean>,
+): Promise<boolean> {
+  if (!options.deferUntilShown || layer.getVisible()) {
+    return load();
+  }
+  return new Promise((resolve) => {
+    const key = layer.on('change:visible', () => {
+      if (layer.getVisible()) {
+        unByKey(key);
+        load().then(resolve, () => resolve(false));
+      }
+    });
   });
-  const ready = sourced.then(async (hasSource) => hasSource && (await styled(layer, entry, options, fetchDocument, base)));
-  return { layer, ready };
 }
 
 /**

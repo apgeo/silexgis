@@ -202,6 +202,27 @@ describe('a vector catalogue entry drawn on the flat map', () => {
     await expect(unusable.ready).resolves.toBe(false);
   });
 
+  it('can wait to be shown before it fetches anything at all', async () => {
+    const tileJson = 'https://tiles.example.invalid/planet';
+    const styleUrl = 'https://tiles.example.invalid/styles/liberty';
+    const fetchDocument = fetchFrom({ [tileJson]: { tiles: ['t/{z}/{x}/{y}.pbf'] }, [styleUrl]: { version: 8, layers: [] } });
+    const { layer, ready } = createVectorLayer(entry({ urlTemplate: tileJson, vector: { style: styleUrl } }), {
+      language: 'ro',
+      baseUrl: BASE,
+      fetch: fetchDocument,
+      deferUntilShown: true,
+    });
+
+    await Promise.resolve();
+    expect(fetchDocument).not.toHaveBeenCalled();
+    expect(layer.getSource()).toBeNull();
+
+    layer.setVisible(true);
+    await expect(ready).resolves.toBe(true);
+    expect(fetchDocument).toHaveBeenCalledWith(tileJson);
+    expect(layer.getSource()).not.toBeNull();
+  });
+
   it('takes the zoom band from the entry, and a band with no ceiling from where vector tiles commonly stop', () => {
     expect(vectorZoomBand({ minZoom: 2, maxZoom: 15 })).toEqual({ min: 2, max: 15 });
     expect(vectorZoomBand({ minZoom: 0, maxZoom: 0 })).toEqual({ min: 0, max: 14 });

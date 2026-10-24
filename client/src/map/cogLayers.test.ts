@@ -67,4 +67,19 @@ describe('a catalogue GeoTIFF on the flat map', () => {
     expect(options.attributions).toBe('© Agency');
     expect(options.sources).toEqual([{ url: 'https://data.example.invalid/lidar.tif' }]);
   });
+
+  it('can wait to be shown before it asks the file for anything', () => {
+    const before = made.length;
+    const layer = cogLayerFor(entry(), 0, { deferUntilShown: true });
+
+    expect(made.length).toBe(before);
+    expect(layer.getSource()).toBeNull();
+
+    layer.setVisible(true);
+    expect(made.length).toBe(before + 1);
+    expect(layer.getSource()).not.toBeNull();
+    layer.setVisible(false);
+    layer.setVisible(true);
+    expect(made.length).toBe(before + 1);
+  });
 });
