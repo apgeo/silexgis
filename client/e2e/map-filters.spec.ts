@@ -219,6 +219,11 @@ test('a link whose saved filter the recipient cannot run opens the map unfiltere
     'the saved filter named by the link does not exist for this reader, which the route answers 404',
   );
   await login(page);
+  // Signing in lands on the map, which asks for every entrance unfiltered as well. The page is
+  // left before the answers are watched for, so the one counted below is the link's own map: an
+  // answer of the landing map arriving as the link opened was taken instead, and its body was gone
+  // with the page by the time it was read.
+  await page.goto('about:blank');
 
   // A saved filter id no reader has: what a clubmate's private filter looks like to a recipient.
   const missing = '00000000-0000-4000-8000-000000000001';
