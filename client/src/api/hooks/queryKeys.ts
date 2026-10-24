@@ -40,6 +40,8 @@ export const queryKeys = {
   dashboardSummary: ['dashboard', 'summary'] as const,
   mapLayers: ['map-layers'] as const,
   mapBackgrounds: ['map-backgrounds'] as const,
+  basemap: ['basemap'] as const,
+  basemapBuilds: ['basemap', 'builds'] as const,
   mapConfig: ['map-config'] as const,
   taxonomy: (kind: string) => ['taxonomy', kind] as const,
   caves: (params: CaveListParams) => ['caves', 'list', params] as const,

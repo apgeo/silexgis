@@ -4265,6 +4265,61 @@
       "photoLibrariesTab": "Photo libraries",
       "photoLibrariesIntro": "These switches stop this installation using a photo library it already has, and start it again afterwards. They cannot connect one: which libraries this installation has is decided by the deployment that gave them their addresses and credentials."
     },
+    "basemap": {
+      "tab": "Own basemap",
+      "title": "This installation's own basemap",
+      "intro": "An OpenStreetMap vector basemap served from this installation alone: download a region of a Protomaps planet build, and the map backgrounds drawn from it are offered on the map from then on. Its labels follow the reader's language. The tiles carry no contours, so keep the topographic backgrounds for relief.",
+      "off": "This installation does not serve a basemap of its own: self-hosting is switched off in its configuration (SILEXGIS__Basemap__SelfHosted), or the basemap overlay is not running.",
+      "none": "No basemap has been downloaded yet.",
+      "waiting": "These map backgrounds are offered once a region is downloaded: {{entries}}.",
+      "noEntry": "No background in the map catalogue is drawn from it yet: add one with {basemap} in its address.",
+      "current": "Served now",
+      "build": "Build",
+      "size": "Size",
+      "downloadedAt": "Downloaded",
+      "region": "Region (W, S, E, N)",
+      "maxZoom": "Last zoom level",
+      "newDownload": "Download a region",
+      "preset": {
+        "romania": "Romania",
+        "apuseni": "Apuseni (karst region)",
+        "custom": "A box of my own"
+      },
+      "side": {
+        "west": "West",
+        "south": "South",
+        "east": "East",
+        "north": "North"
+      },
+      "latest": "Latest build",
+      "buildsFailed": "The list of builds could not be read; the latest one is used.",
+      "estimate": "Estimate size",
+      "download": "Download",
+      "estimated": "About {{size}}, from build {{build}}.",
+      "source": "Cut from {{source}}. The largest download accepted is {{limit}}.",
+      "replaceTitle": "Replace the basemap being served?",
+      "replaceBody": "The new region replaces the current one once its download has finished. Until then the current one goes on being served.",
+      "latestDownload": "Latest download:",
+      "cancel": "Cancel download",
+      "loadFailed": "The basemap's state could not be read.",
+      "state": {
+        "queued": "queued",
+        "running": "running",
+        "succeeded": "finished",
+        "failed": "failed",
+        "cancelled": "cancelled"
+      },
+      "refusal": {
+        "too_large": "Too large for this installation: choose a smaller box or a lower last zoom level.",
+        "disk_full": "There is not enough room on the disk for it beside the current basemap.",
+        "source_unreachable": "The source could not be reached. Try again later.",
+        "build_not_found": "The source does not list that build.",
+        "cancelled": "The download was cancelled; the basemap being served is unchanged.",
+        "extract_failed": "The download failed; the basemap being served is unchanged.",
+        "download_running": "A download is already underway.",
+        "self_hosting_off": "Self-hosting is switched off."
+      }
+    },
     "mapBackgrounds": {
       "tab": "Maps in documents",
       "intro": "Which map backgrounds a document may copy. A trip's downloaded write-up carries a map drawn over one background: the default one if it is switched on here, otherwise the first that is.",

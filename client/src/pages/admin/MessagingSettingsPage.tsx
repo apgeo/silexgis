@@ -6,6 +6,7 @@ import {
   CameraOutlined,
   EnvironmentOutlined,
   FileImageOutlined,
+  GlobalOutlined,
   ImportOutlined,
   MailOutlined,
   MobileOutlined,
@@ -29,6 +30,7 @@ import Button from '../../components/Button.tsx';
 import { useQueryClient } from '@tanstack/react-query';
 import MapBackgroundsForm from './MapBackgroundsForm.tsx';
 import WorkspaceDefaultForm from './WorkspaceDefaultForm.tsx';
+import SelfHostedBasemapPanel from './SelfHostedBasemapPanel.tsx';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import {
@@ -184,6 +186,17 @@ export default function MessagingSettingsPage() {
                 </span>
               ),
               children: <MapBackgroundsForm />,
+            },
+            {
+              // The installation's own vector basemap: read and downloaded on its own routes,
+              // under the same right as the backgrounds above it.
+              key: 'basemap',
+              label: (
+                <span>
+                  <GlobalOutlined /> {t('admin.basemap.tab')}
+                </span>
+              ),
+              children: <SelfHostedBasemapPanel />,
             },
           ]}
         />

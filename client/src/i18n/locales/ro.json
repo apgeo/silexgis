@@ -4278,6 +4278,61 @@
       "photoLibrariesTab": "Fototeci",
       "photoLibrariesIntro": "Aceste comutatoare opresc folosirea unei fototeci pe care instalarea o are deja și o pornesc la loc. Ele nu pot conecta una: ce fototeci are această instalare se decide prin implementarea care le-a dat adresele și credențialele."
     },
+    "basemap": {
+      "tab": "Hartă de bază proprie",
+      "title": "Harta de bază a acestei instalări",
+      "intro": "O hartă de bază vectorială OpenStreetMap, servită numai de această instalare: descarcă o regiune dintr-o versiune Protomaps a planetei, iar fundalurile desenate din ea sunt oferite pe hartă de atunci încolo. Etichetele ei urmează limba cititorului. Plăcile nu conțin curbe de nivel, așa că păstrează fundalurile topografice pentru relief.",
+      "off": "Această instalare nu servește o hartă de bază proprie: găzduirea proprie este oprită din configurare (SILEXGIS__Basemap__SelfHosted) sau extensia pentru harta de bază nu rulează.",
+      "none": "Nu a fost descărcată încă nicio hartă de bază.",
+      "waiting": "Aceste fundaluri de hartă sunt oferite după ce descarci o regiune: {{entries}}.",
+      "noEntry": "Niciun fundal din catalogul hărții nu este desenat încă din ea: adaugă unul cu {basemap} în adresă.",
+      "current": "Servită acum",
+      "build": "Versiune",
+      "size": "Mărime",
+      "downloadedAt": "Descărcată",
+      "region": "Regiune (V, S, E, N)",
+      "maxZoom": "Ultimul nivel de zoom",
+      "newDownload": "Descarcă o regiune",
+      "preset": {
+        "romania": "România",
+        "apuseni": "Apuseni (regiune carstică)",
+        "custom": "Un dreptunghi ales de mine"
+      },
+      "side": {
+        "west": "Vest",
+        "south": "Sud",
+        "east": "Est",
+        "north": "Nord"
+      },
+      "latest": "Cea mai nouă versiune",
+      "buildsFailed": "Lista versiunilor nu a putut fi citită; se folosește cea mai nouă.",
+      "estimate": "Estimează mărimea",
+      "download": "Descarcă",
+      "estimated": "Aproximativ {{size}}, din versiunea {{build}}.",
+      "source": "Decupată din {{source}}. Cea mai mare descărcare acceptată este de {{limit}}.",
+      "replaceTitle": "Înlocuiești harta de bază servită acum?",
+      "replaceBody": "Noua regiune o înlocuiește pe cea de acum după ce descărcarea ei s-a terminat. Până atunci, cea de acum este servită în continuare.",
+      "latestDownload": "Ultima descărcare:",
+      "cancel": "Anulează descărcarea",
+      "loadFailed": "Starea hărții de bază nu a putut fi citită.",
+      "state": {
+        "queued": "în așteptare",
+        "running": "în curs",
+        "succeeded": "terminată",
+        "failed": "eșuată",
+        "cancelled": "anulată"
+      },
+      "refusal": {
+        "too_large": "Prea mare pentru această instalare: alege un dreptunghi mai mic sau un ultim nivel de zoom mai mic.",
+        "disk_full": "Nu este destul loc pe disc pentru ea lângă harta de bază de acum.",
+        "source_unreachable": "Sursa nu a putut fi contactată. Încearcă din nou mai târziu.",
+        "build_not_found": "Sursa nu are această versiune.",
+        "cancelled": "Descărcarea a fost anulată; harta de bază servită a rămas aceeași.",
+        "extract_failed": "Descărcarea a eșuat; harta de bază servită a rămas aceeași.",
+        "download_running": "O descărcare este deja în curs.",
+        "self_hosting_off": "Găzduirea proprie este oprită."
+      }
+    },
     "mapBackgrounds": {
       "tab": "Hărți în documente",
       "intro": "Ce fundaluri de hartă pot fi copiate într-un document. Raportul descărcat al unei ture conține o hartă desenată peste un singur fundal: cel implicit, dacă este pornit aici, altfel primul care este.",
