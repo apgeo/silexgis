@@ -177,9 +177,14 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
     isPlainObject(appearance) &&
     ['system', 'light', 'dark'].includes(appearance.theme as string) &&
     ['comfortable', 'compact'].includes(appearance.density as string) &&
-    typeof appearance.reduceMotion === 'boolean'
+    typeof appearance.reduceMotion === 'boolean' &&
+    (appearance.highContrast === undefined || typeof appearance.highContrast === 'boolean')
   ) {
-    out.appearance = appearance as unknown as AccountPrefsState['appearance'];
+    // A document written before higher contrast existed has no word on it, which is "off".
+    out.appearance = {
+      ...(appearance as unknown as AccountPrefsState['appearance']),
+      highContrast: appearance.highContrast === true,
+    };
   }
   if (isPlainObject(panels)) {
     out.panels = panels as AccountPrefsState['panels'];
@@ -213,14 +218,14 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
   if (Array.isArray(coordinateFormatsListed)) {
     out.coordinateFormatsListed = [...new Set(coordinateFormatsListed.filter(isFormatId))];
   }
+  if (isPlainObject(coordinateReading)) {
+    out.coordinateReading = sanitizeReadingRules(coordinateReading);
+  }
   if (typeof overviewMap === 'boolean') {
     out.overviewMap = overviewMap;
   }
   if (karstLinkTreatment === 'no_position' || karstLinkTreatment === 'omit' || karstLinkTreatment === 'grid_position') {
     out.karstLinkTreatment = karstLinkTreatment;
-  if (isPlainObject(coordinateReading)) {
-    out.coordinateReading = sanitizeReadingRules(coordinateReading);
-  }
   }
   if (isSavedFilterAudience(savedFilterAudience)) {
     out.savedFilterAudience = savedFilterAudience;

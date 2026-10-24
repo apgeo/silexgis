@@ -51,6 +51,7 @@ function Root() {
     const root = document.documentElement;
     root.dataset.theme = resolveDark(appearance.theme) ? 'dark' : 'light';
     root.dataset.reduceMotion = String(appearance.reduceMotion);
+    root.dataset.contrast = appearance.highContrast ? 'high' : 'standard';
   }, [appearance]);
 
   return (

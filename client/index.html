@@ -33,6 +33,7 @@
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
         document.documentElement.dataset.reduceMotion = String(!!appearance.reduceMotion);
+        document.documentElement.dataset.contrast = appearance.highContrast ? 'high' : 'standard';
       } catch (e) {
         document.documentElement.dataset.theme = 'light';
       }

@@ -130,6 +130,7 @@ describe('uiPrefsStore appearance', () => {
       theme: 'dark',
       density: 'comfortable',
       reduceMotion: true,
+      highContrast: false,
     });
   });
 

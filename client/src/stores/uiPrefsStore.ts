@@ -42,12 +42,18 @@ export interface Appearance {
   theme: ThemePref;
   density: DensityPref;
   reduceMotion: boolean;
+  /**
+   * Text, field outlines and the focus ring drawn at readable contrast (4.5:1 for text, 3:1 for an
+   * outline) in place of the library's own lighter colours. Off unless the person turns it on.
+   */
+  highContrast: boolean;
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
   theme: 'system',
   density: 'comfortable',
   reduceMotion: false,
+  highContrast: false,
 };
 
 /** Whether each of the map workspace's two docks is folded away. */
@@ -196,15 +202,15 @@ interface UiPrefsState {
   /** The formats a position shown in detail is also listed in, under "other formats", in this order. */
   coordinateFormatsListed: FormatId[];
   setCoordinateFormatsListed: (formats: FormatId[]) => void;
+  /** How a typed or pasted position is read where the text itself leaves it open. */
+  coordinateReading: ReadingRules;
+  setCoordinateReading: (patch: Partial<ReadingRules>) => void;
   /** Whether the map's overview inset is open. */
   overviewMap: boolean;
   setOverviewMap: (open: boolean) => void;
   /**
    * Which account the account preferences held here belong to — those `accountPrefDefaults`
    * lists. They are a cache of what that account has stored; undefined when no account has
-  /** How a typed or pasted position is read where the text itself leaves it open. */
-  coordinateReading: ReadingRules;
-  setCoordinateReading: (patch: Partial<ReadingRules>) => void;
    * claimed them.
    */
   accountId?: string;
@@ -261,13 +267,13 @@ export interface AccountPrefsState {
   coordinateFormat: CoordinateFormat;
   coordinateSettings: FormatSettings;
   coordinateFormatsListed: FormatId[];
+  coordinateReading: ReadingRules;
   overviewMap: boolean;
   karstLinkTreatment: ProtectedPositionTreatment | undefined;
   savedFilterAudience: SavedFilterAudience;
 }
 
 /**
-  coordinateReading: ReadingRules;
  * THE list of account preferences, with what each one is when nobody has chosen anything.
  *
  * Everything that treats the account's preferences as a set — which keys are written to the
@@ -288,13 +294,13 @@ export function accountPrefDefaults(): AccountPrefsState {
     coordinateFormat: DEFAULT_COORDINATE_FORMAT,
     coordinateSettings: defaultFormatSettings(),
     coordinateFormatsListed: [...FORMAT_IDS],
+    coordinateReading: DEFAULT_READING_RULES,
     overviewMap: false,
     karstLinkTreatment: undefined,
     savedFilterAudience: DEFAULT_SAVED_FILTER_AUDIENCE,
   };
 }
 
-    coordinateReading: DEFAULT_READING_RULES,
 /**
  * Cross-session personal UI preferences, persisted per browser. Deliberately separate
  * from the session-scoped workspace store: saved views and the workspace bus must never
@@ -396,14 +402,14 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       setFormatSettings: (format, settings) =>
         set((state) => ({ coordinateSettings: { ...state.coordinateSettings, [format]: { ...settings } } })),
       setCoordinateFormatsListed: (formats) => set({ coordinateFormatsListed: [...formats] }),
+      setCoordinateReading: (patch) =>
+        set((state) => ({ coordinateReading: { ...state.coordinateReading, ...patch } })),
       setOverviewMap: (open) => set({ overviewMap: open }),
       accountId: undefined,
       accountPrefsBaseline: undefined,
       layoutsKeptHere: [],
       setLayoutsKeptHere: (ids) => set({ layoutsKeptHere: ids }),
       adoptAccount: (accountId) => {
-      setCoordinateReading: (patch) =>
-        set((state) => ({ coordinateReading: { ...state.coordinateReading, ...patch } })),
         let claim: AccountClaim = 'same';
         set((state) => {
           if (state.accountId === accountId) {

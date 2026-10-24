@@ -197,9 +197,9 @@ describe('the look the theme draws', () => {
       const body = indexCss.slice(indexCss.indexOf('{', start) + 1, indexCss.indexOf('}', start));
       return new RegExp(`${property}:\\s*([^;]+);`).exec(body)?.[1]?.trim();
     };
-    expect(declared("html[data-theme='dark'] .ant-btn.ant-btn-color-primary", '--ant-btn-color-light-active'))
+    expect(declared("html[data-theme='dark']:not([data-contrast='high']) .ant-btn.ant-btn-color-primary", '--ant-btn-color-light-active'))
       .toBe(derived.colorPrimaryBorder);
-    expect(declared("html[data-theme='dark'] .ant-picker-dropdown .ant-picker-ranges .ant-picker-preset > .ant-tag-blue", 'border-color'))
+    expect(declared("html[data-theme='dark']:not([data-contrast='high']) .ant-picker-dropdown .ant-picker-ranges .ant-picker-preset > .ant-tag-blue", 'border-color'))
       .toBe(derived.colorPrimaryBorder);
   });
 
@@ -259,5 +259,153 @@ describe.each(['light', 'dark'] as const)('the ring the stylesheet draws on the 
   it("the map's focus ring stands out at 3:1 from its own inner tone", () => {
     const [inner, outer] = propertiesIn(mapPageCss, '.map-canvas:focus-visible::after');
     expect(contrast(token[tokenOf(outer)], token[tokenOf(inner)])).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/**
+ * Every pair is measured on the tokens antd actually derives, not on the values written in the
+ * theme, because the algorithms rewrite seeds: the dark algorithm darkens the brand colour and the
+ * link colour, and a ratio computed from what was written would pass while the screen failed.
+ */
+describe.each(['light', 'dark'] as const)('higher contrast in the %s theme', (mode) => {
+  const config = buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: mode, highContrast: true });
+  const token = theme.getDesignToken(config);
+  const surfaces = { page: token.colorBgContainer, raised: token.colorBgElevated };
+
+  it.each([
+    ['body text', token.colorText],
+    ['secondary text', token.colorTextSecondary],
+    ['description text', token.colorTextDescription],
+    ['placeholder text', token.colorTextPlaceholder],
+    ['links', token.colorLink],
+    ['error text', token.colorErrorText],
+    ['warning text', token.colorWarningText],
+    ['success text', token.colorSuccessText],
+    ['info text', token.colorInfoText],
+  ])('%s reads at 4.5:1 on the page and on raised surfaces', (_, colour) => {
+    expect(contrast(colour, surfaces.page)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(colour, surfaces.raised)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('description text also reads on the grey layout background', () => {
+    expect(contrast(token.colorTextDescription, token.colorBgLayout)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('text on a primary or a danger button reads at 4.5:1', () => {
+    expect(contrast(token.colorTextLightSolid, token.colorPrimary)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token.colorTextLightSolid, token.colorError)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the focus ring and a field outline stand out at 3:1', () => {
+    expect(contrast(token.colorPrimaryBorder, surfaces.page)).toBeGreaterThanOrEqual(3);
+    expect(contrast(token.colorPrimaryBorder, surfaces.raised)).toBeGreaterThanOrEqual(3);
+    expect(contrast(token.colorBorder, surfaces.page)).toBeGreaterThanOrEqual(3);
+    expect(contrast(token.colorBorder, surfaces.raised)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('the selected item of a menu reads at 4.5:1 on its highlight', () => {
+    const selectedText = config.components?.Menu?.itemSelectedColor ?? token.colorPrimary;
+    expect(contrast(selectedText, token.colorPrimaryBg)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the selected tab reads at 4.5:1', () => {
+    const selectedTab = config.components?.Tabs?.itemSelectedColor ?? token.colorPrimary;
+    expect(contrast(selectedTab, surfaces.page)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the brand colour drawn as text reads at 4.5:1', () => {
+    for (const colour of [token.colorPrimaryText, token.colorPrimaryTextHover, token.colorPrimaryTextActive]) {
+      expect(contrast(colour, surfaces.page)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(colour, surfaces.raised)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  // The places antd draws the brand colour as text, each read the way that component resolves it:
+  // its own token where it has one, else the brand colour as overridden for that component alone,
+  // else the global brand colour.
+  const brandFor = (component: 'Pagination' | 'Radio' | 'Steps') =>
+    (config.components?.[component] as { colorPrimary?: string } | undefined)?.colorPrimary ?? token.colorPrimary;
+
+  it("the active page's number reads at 4.5:1", () => {
+    const pagination = config.components?.Pagination;
+    expect(contrast(pagination?.itemActiveColor ?? token.colorPrimary, surfaces.page)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(pagination?.itemActiveColorHover ?? token.colorPrimaryHover, surfaces.page)).toBeGreaterThanOrEqual(4.5);
+    // Its border marks which page is current alongside the bold number.
+    expect(contrast(brandFor('Pagination'), surfaces.page)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a checked radio button reads at 4.5:1', () => {
+    expect(contrast(brandFor('Radio'), surfaces.page)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("the steps' icons read at 4.5:1", () => {
+    const steps = config.components?.Steps;
+    // A finished step: the brand colour on its pale circle.
+    expect(contrast(brandFor('Steps'), token.colorPrimaryBg)).toBeGreaterThanOrEqual(4.5);
+    // The current step: its number on a circle of the brand colour.
+    expect(contrast(steps?.colorTextLightSolid ?? token.colorTextLightSolid, brandFor('Steps'))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(['red', 'volcano', 'orange', 'gold', 'yellow', 'lime', 'green', 'cyan', 'blue', 'geekblue', 'purple', 'magenta'])(
+    'a %s tag reads at 4.5:1 on its own background',
+    (colour) => {
+      const tag = (config.components?.Tag ?? {}) as Record<string, string | undefined>;
+      const palette = token as unknown as Record<string, string>;
+      expect(contrast(tag[`${colour}7`] ?? palette[`${colour}7`], palette[`${colour}1`])).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+
+  it.each(['Success', 'Warning', 'Error', 'Info'])('a %s status tag reads at 4.5:1 on its own background', (status) => {
+    const tag = (config.components?.Tag ?? {}) as Record<string, string | undefined>;
+    const palette = token as unknown as Record<string, string>;
+    expect(contrast(tag[`color${status}`] ?? palette[`color${status}`], palette[`color${status}Bg`])).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('an empty table says so at 4.5:1', () => {
+    const empty = (config.components?.Table as { colorTextDisabled?: string } | undefined)?.colorTextDisabled;
+    expect(contrast(empty ?? token.colorTextDisabled, surfaces.page)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("a default button's text under the pointer reads at 4.5:1", () => {
+    const button = config.components?.Button;
+    expect(contrast(button?.defaultHoverColor ?? token.colorPrimaryHover, surfaces.page)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(button?.defaultActiveColor ?? token.colorPrimaryActive, surfaces.page)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe('the higher-contrast switch', () => {
+  it.each([
+    ['light', '#d9d9d9', '#8c8c8c'],
+    ['dark', '#424242', '#6b6b6b'],
+  ] as const)('changes the %s theme\'s field outline from the standard colour to the readable one', (mode, standard, high) => {
+    const off = theme.getDesignToken(buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: mode }));
+    const on = theme.getDesignToken(buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: mode, highContrast: true }));
+    expect(off.colorBorder).toBe(standard);
+    expect(on.colorBorder).toBe(high);
+  });
+
+  it('is off unless chosen', () => {
+    expect(DEFAULT_APPEARANCE.highContrast).toBe(false);
+  });
+
+  it("keeps the dark theme's slider on the readable teal rather than handing it back", () => {
+    expect(buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'dark', highContrast: true }).components?.Slider).toBeUndefined();
+  });
+});
+
+describe('overrides the stylesheet draws for the higher-contrast dark theme', () => {
+  const token = theme.getDesignToken(
+    buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'dark', highContrast: true }),
+  ) as unknown as Record<string, string>;
+
+  it.each([
+    "html[data-theme='dark'][data-contrast='high'] .ant-btn-color-primary:not(.ant-btn-variant-solid)",
+    "html[data-theme='dark'][data-contrast='high'] .ant-btn-color-dangerous:not(.ant-btn-variant-solid)",
+  ])('the text shades of %s read at 4.5:1, at rest, hovered and pressed', (selector) => {
+    const properties = propertiesIn(indexCss, selector);
+    expect(properties).toHaveLength(3);
+    for (const property of properties) {
+      expect(contrast(token[tokenOf(property)], token.colorBgContainer), property).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });

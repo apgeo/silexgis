@@ -53,6 +53,148 @@ const darkFocusRing: ThemeConfig = {
 };
 
 /**
+ * The optional "Higher contrast" appearance: token overrides that bring text and controls up to
+ * readable contrast — 4.5:1 for text, 3:1 for the outline of a control and for the focus ring —
+ * against the page and against the raised surfaces (dialogs, menus) it sits on. Off by default;
+ * the person turns it on in the accessibility settings, and it travels with the account.
+ *
+ * antd's own defaults miss these in several places, and two of the misses come from the brand
+ * colour rather than from antd: the palette generated from a teal this dark has a grey-green as
+ * its lightest step, which antd puts behind the selected row of every menu, list and picker — so
+ * the selected page in the navigation reads at 2.7:1 — and the dark algorithm darkens the brand
+ * colour further. The seed stays the brand colour in both modes; only derived values are
+ * replaced, and where a value is itself a seed (link, error) it is chosen so that what the
+ * algorithm makes of it lands where it must.
+ *
+ * Each mode has its own set because the two fail in different places: the darker amber that
+ * rescues warning text on the light page is exactly the one that fails on the dark page.
+ * `theme.test.ts` recomputes every ratio from the tokens antd derives, so a change here that
+ * drops a pair below its threshold fails there rather than on somebody's screen.
+ *
+ * A coloured tag writes its words in the seventh step of its colour's palette on the first step;
+ * for the warm and green palettes that is under 4.5:1 on the light theme (green 3.4, gold 2.8,
+ * yellow 2.1), and for two cool ones on the dark theme. The words take the first darker (light
+ * theme) or lighter (dark theme) step that reads; the tag's background and outline keep antd's.
+ * The status tags (success, warning, info, error) write in the status colour itself, which is a
+ * fill colour; they take the status's text colour instead.
+ */
+const lightTagText = {
+  volcano7: '#ad2102',
+  orange7: '#ad4e00',
+  gold7: '#874d00',
+  yellow7: '#876800',
+  lime7: '#3f6600',
+  green7: '#237804',
+  cyan7: '#006d75',
+  colorSuccess: '#237804',
+  colorWarning: '#874d00',
+  colorInfo: '#0958d9',
+} satisfies NonNullable<ThemeConfig['components']>['Tag'];
+
+const darkTagText = {
+  geekblue7: '#7f9ef3',
+  purple7: '#ab7ae0',
+  colorError: '#ff7875',
+  colorInfo: '#69b1ff',
+} satisfies NonNullable<ThemeConfig['components']>['Tag'];
+
+const lightContrast: ThemeConfig = {
+  token: {
+    colorPrimaryBg: '#e3efee',
+    colorPrimaryBgHover: '#cde3e1',
+    colorLink: '#0958d9',
+    colorTextTertiary: 'rgba(0, 0, 0, 0.56)',
+    colorTextPlaceholder: 'rgba(0, 0, 0, 0.54)',
+    colorError: '#d32f2f',
+    colorWarningText: '#874d00',
+    colorSuccessText: '#237804',
+    colorInfoText: '#0958d9',
+    // The outline is all that marks out an empty field or a default button.
+    colorBorder: '#8c8c8c',
+  },
+  components: {
+    Tag: lightTagText,
+    // An empty table says so in the disabled grey (1.8:1); it is a message, not a disabled control.
+    Table: { colorTextDisabled: 'rgba(0, 0, 0, 0.56)' },
+  },
+};
+
+/**
+ * The brand teal as the dark theme draws it as TEXT — selected items, the active page number, a
+ * checked button, an outlined or text-only primary button — and its hover and pressed shades.
+ *
+ * The dark algorithm darkens the brand colour to a fill that carries white text well (8.4:1) but
+ * reads at 2.2:1 as text on the dark page, and no single teal can do both: a colour light enough
+ * to be read on the page is too light to carry white text. So the fill keeps antd's derived
+ * colour and every place antd draws the brand colour as text is pointed at these instead. They
+ * are also published as antd's `colorPrimaryText` family, which no antd component reads, so that
+ * the stylesheet can reach them as `--ant-color-primary-text*` where no component token exists.
+ */
+export const DARK_PRIMARY_TEXT = { base: '#5cbdbd', hover: '#7fd0d0', active: '#3fa8a8' } as const;
+
+const darkContrast: ThemeConfig = {
+  token: {
+    colorPrimaryBorder: '#3fa8a8',
+    colorPrimaryText: DARK_PRIMARY_TEXT.base,
+    colorPrimaryTextHover: DARK_PRIMARY_TEXT.hover,
+    colorPrimaryTextActive: DARK_PRIMARY_TEXT.active,
+    colorLink: '#69b1ff',
+    colorTextTertiary: 'rgba(255, 255, 255, 0.5)',
+    colorTextPlaceholder: 'rgba(255, 255, 255, 0.5)',
+    colorError: '#f04040',
+    // As text — a danger button that is not filled, under the pointer and pressed too (the
+    // stylesheet points those at these): the derived shades read at 3.8:1 and 2.7:1 on the page.
+    colorErrorText: '#ff7875',
+    colorErrorTextHover: '#ffa39e',
+    colorErrorTextActive: '#e86060',
+    colorInfoText: '#69b1ff',
+    colorBorder: '#6b6b6b',
+  },
+  components: {
+    // The places antd draws the brand colour as text rather than as a fill. Where a component
+    // has a token for that text it is set; where it reads the brand colour itself (a checked
+    // radio button, the steps' icons, the active page's border) the brand colour is replaced for
+    // that component alone, which leaves the fills that read the derived component tokens — the
+    // radio dot, the primary button — on antd's own darker teal.
+    Menu: { itemSelectedColor: DARK_PRIMARY_TEXT.base },
+    Tabs: {
+      itemSelectedColor: DARK_PRIMARY_TEXT.base,
+      itemActiveColor: DARK_PRIMARY_TEXT.base,
+      inkBarColor: DARK_PRIMARY_TEXT.base,
+    },
+    Pagination: {
+      itemActiveColor: DARK_PRIMARY_TEXT.base,
+      itemActiveColorHover: DARK_PRIMARY_TEXT.hover,
+      colorPrimary: DARK_PRIMARY_TEXT.base,
+      colorPrimaryHover: DARK_PRIMARY_TEXT.hover,
+    },
+    Radio: {
+      colorPrimary: DARK_PRIMARY_TEXT.base,
+      colorPrimaryHover: DARK_PRIMARY_TEXT.hover,
+      colorPrimaryActive: DARK_PRIMARY_TEXT.active,
+    },
+    // The current step is a circle of the brand colour with its number on it; once that circle
+    // is the light teal, the number has to be dark to be read.
+    Steps: {
+      colorPrimary: DARK_PRIMARY_TEXT.base,
+      colorPrimaryHover: DARK_PRIMARY_TEXT.hover,
+      colorTextLightSolid: '#141414',
+    },
+    // A default button's text turns brand-coloured under the pointer. The outlined and text-only
+    // primary buttons cannot be reached from here — one token feeds both their text and the
+    // solid primary button's fill — and are re-pointed in the stylesheet instead.
+    Tag: darkTagText,
+    Table: { colorTextDisabled: 'rgba(255, 255, 255, 0.5)' },
+    Button: {
+      defaultHoverColor: DARK_PRIMARY_TEXT.hover,
+      defaultHoverBorderColor: DARK_PRIMARY_TEXT.hover,
+      defaultActiveColor: DARK_PRIMARY_TEXT.active,
+      defaultActiveBorderColor: DARK_PRIMARY_TEXT.active,
+    },
+  },
+};
+
+/**
  * How the stack of records inside one day of a month grid is allowed to grow — an override of the
  * calendar's own shipped sizing, kept here with the rest of the theming rather than in the page
  * that draws the grid.
@@ -117,19 +259,22 @@ export function resolveDark(preference: Appearance['theme']): boolean {
  * locally mirrored preference — so switching theme or density takes effect as it is picked
  * rather than after a round trip.
  *
- * All three knobs are antd's own: the light/dark algorithms, the compact algorithm, and the
- * motion token that turns component animation off.
+ * The knobs are antd's own — the light/dark algorithms, the compact algorithm and the motion
+ * token that turns component animation off — plus the token sets of the higher-contrast
+ * appearance, which replace the standard look's single dark focus-ring override when chosen.
  */
 export function buildThemeConfig(appearance: Appearance): ThemeConfig {
   const dark = resolveDark(appearance.theme);
-  const focusRing: ThemeConfig = dark ? darkFocusRing : {};
+  const overrides: ThemeConfig = appearance.highContrast
+    ? (dark ? darkContrast : lightContrast)
+    : (dark ? darkFocusRing : {});
   return {
     ...themeConfig,
     algorithm: [
       dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
       ...(appearance.density === 'compact' ? [theme.compactAlgorithm] : []),
     ],
-    token: { ...themeConfig.token, ...focusRing.token, motion: !appearance.reduceMotion },
-    components: { ...themeConfig.components, ...focusRing.components },
+    token: { ...themeConfig.token, ...overrides.token, motion: !appearance.reduceMotion },
+    components: { ...themeConfig.components, ...overrides.components },
   };
 }

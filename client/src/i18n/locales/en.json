@@ -3985,6 +3985,8 @@
       },
       "reduceMotion": "Reduce motion",
       "reduceMotionHint": "Turns off animations and map fly-to movement.",
+      "highContrast": "Higher contrast",
+      "highContrastHint": "Darker text, outlines you can see on every field, and a stronger focus ring — in the light and the dark theme.",
       "deviceOnly": "This browser only",
       "deviceOnlyIntro": "These stay on this device — a phone and a workstation want different answers.",
       "landingPage": "Open the app on",
@@ -7430,8 +7432,6 @@
       "perFormat": "Settings of each format",
       "sample": "Sample point: the summit of Moldoveanu",
       "notAvailable": "Not available here",
-      "notes": {
-        "utm": "A zone chosen here is kept for positions near the zone's edge, so that a team working across it reads one grid; far from that zone, the position's own zone is used.",
       "reading": {
         "title": "Reading positions you type or paste",
         "intro": "How a position is read when the text itself does not say: two numbers with no hemisphere letters, and a UTM reference with no letter. A text that says it — a letter, a number over 90 — is always read as written. These settings follow your account.",
@@ -7446,6 +7446,8 @@
           "south": "Southern hemisphere"
         }
       },
+      "notes": {
+        "utm": "A zone chosen here is kept for positions near the zone's edge, so that a team working across it reads one grid; far from that zone, the position's own zone is used.",
         "stereo70": "Converted from WGS84 with the usual seven-parameter datum shift: good to a few metres, which suits finding a cave and not a survey. Offered only inside Romania.",
         "lv95": "Good to about a metre. Offered only in Switzerland and Liechtenstein.",
         "lv03": "Good to about a metre. Offered only in Switzerland and Liechtenstein.",
@@ -7491,10 +7493,10 @@
     "assumptions": {
       "latLonOrder": "Two bare numbers were read as latitude, then longitude.",
       "northernHemisphere": "No hemisphere was given: the northern one was assumed.",
-      "utmLetterAsBand": "The letter was read as a latitude band.",
-      "utmLetterAsHemisphere": "The letter was read as a hemisphere.",
       "lonLatOrder": "Two bare numbers were read as longitude, then latitude.",
       "southernHemisphere": "No hemisphere was given: the southern one was assumed.",
+      "utmLetterAsBand": "The letter was read as a latitude band.",
+      "utmLetterAsHemisphere": "The letter was read as a hemisphere.",
       "gridAxisOrder": "The first number was read as the easting."
     },
     "converter": {

@@ -95,6 +95,19 @@ export default function AccessibilitySettingsPage() {
           </Flex>
 
           <Flex gap={12} align="center" wrap>
+            <Typography.Text style={{ minWidth: 160 }}>
+              {t('settings.accessibility.highContrast')}
+            </Typography.Text>
+            <Switch
+              checked={appearance.highContrast === true}
+              onChange={(highContrast) => update({ highContrast })}
+              aria-label={t('settings.accessibility.highContrast')}
+              data-testid="settings-high-contrast"
+            />
+            <Typography.Text type="secondary">{t('settings.accessibility.highContrastHint')}</Typography.Text>
+          </Flex>
+
+          <Flex gap={12} align="center" wrap>
             <Typography.Text style={{ minWidth: 160 }}>{t('settings.accessibility.overviewMap')}</Typography.Text>
             <Switch
               checked={overviewMap}

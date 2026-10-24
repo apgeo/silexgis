@@ -22,13 +22,34 @@ html[data-theme='light'] {
    ring shows on the dark page. Two other things antd draws from that one colour, with no
    component setting of their own to hand it back, are given back the colour the dark algorithm
    derives (the slider's are handed back in the theme): a primary filled or text button's pressed
-   background, and the edge of the date picker's preset tags. */
-html[data-theme='dark'] .ant-btn.ant-btn-color-primary {
+   background, and the edge of the date picker's preset tags. The higher-contrast appearance keeps
+   the brighter teal there too, so these two apply to the standard look only. */
+html[data-theme='dark']:not([data-contrast='high']) .ant-btn.ant-btn-color-primary {
   --ant-btn-color-light-active: #142b2b;
 }
 
-html[data-theme='dark'] .ant-picker-dropdown .ant-picker-ranges .ant-picker-preset > .ant-tag-blue {
+html[data-theme='dark']:not([data-contrast='high']) .ant-picker-dropdown .ant-picker-ranges .ant-picker-preset > .ant-tag-blue {
   border-color: #142b2b;
+}
+
+/* Higher contrast, dark theme. An outlined, dashed or text-only primary button draws the brand
+   colour as its text, and antd feeds that text and the solid primary button's fill from one
+   variable — so where the fill's teal is too dark to read as text, the variable is re-pointed for
+   the non-solid variants only, at the theme's text shades of the brand colour. */
+html[data-theme='dark'][data-contrast='high'] .ant-btn-color-primary:not(.ant-btn-variant-solid) {
+  --ant-btn-color-base: var(--ant-color-primary-text);
+  --ant-btn-color-hover: var(--ant-color-primary-text-hover);
+  --ant-btn-color-active: var(--ant-color-primary-text-active);
+}
+
+/* Higher contrast, dark theme. A danger button that is not filled draws the error colour as its
+   text, which the dark algorithm derives at 3.8:1 on the page; re-pointed, for the non-solid
+   variants only, at the theme's error text shades — the same way, for the same reason, as the
+   primary button above. */
+html[data-theme='dark'][data-contrast='high'] .ant-btn-color-dangerous:not(.ant-btn-variant-solid) {
+  --ant-btn-color-base: var(--ant-color-error-text);
+  --ant-btn-color-hover: var(--ant-color-error-text-hover);
+  --ant-btn-color-active: var(--ant-color-error-text-active);
 }
 
 /* A selection panel section's drag handle: the glyph is 14 pixels wide, and 24 is the smallest

@@ -493,6 +493,40 @@ test('a row of the trip list opens with Enter', async ({ page }) => {
 /** The WCAG 2.0, 2.1 and 2.2 level A and AA rules — the yardstick, with no conformance claimed. */
 const WCAG_AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
+
+/**
+ * The higher-contrast appearance, switched on in the accessibility settings, redraws a field's
+ * outline in the readable grey at once and keeps it after a reload, because it is kept with the
+ * account. A registered account of its own: the switch is an account preference, and the shared
+ * administrator's must not change under the other specs.
+ */
+test('turning higher contrast on draws a field outline in the readable grey', async ({ page }) => {
+  const member = await registerAccount(page.request, 'high-contrast');
+  await login(page, member.email, member.password);
+
+  const outline = async () => {
+    await gotoRoute(page, '/tools/coordinates');
+    const field = page.getByTestId('converter-input');
+    await expect(field).toBeVisible();
+    // A field that can be cleared draws its outline on the wrapper around the input.
+    return field.evaluate((element) =>
+      getComputedStyle(element.closest('.ant-input-affix-wrapper') ?? element).borderTopColor);
+  };
+  expect(await outline()).toBe('rgb(217, 217, 217)');
+
+  await gotoRoute(page, '/settings/accessibility');
+  await page.getByRole('combobox', { name: 'Theme' }).click();
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^Light$/ }).click();
+  const written = page.waitForResponse(
+    (response) => response.url().endsWith('/api/v1/me/preferences') && response.request().method() === 'PATCH',
+  );
+  await page.getByRole('switch', { name: 'Higher contrast' }).click();
+  expect((await written).ok()).toBe(true);
+  await expect(page.locator('html')).toHaveAttribute('data-contrast', 'high');
+
+  expect(await outline()).toBe('rgb(140, 140, 140)');
+});
+
 /**
  * The one rule the scan leaves out, everywhere: colour contrast. The screens are drawn in the
  * component library's own colours, several of which read below the 4.5:1 (text) and 3:1 (field

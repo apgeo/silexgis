@@ -336,6 +336,19 @@ describe('sanitizeAccountPrefs', () => {
     expect(out.coordinateFormatsListed).toEqual(['mgrs', 'dd']);
   });
 
+  it('reads an appearance written before higher contrast existed as having it off, and keeps it when on', () => {
+    expect(sanitizeAccountPrefs({ appearance: { theme: 'dark', density: 'compact', reduceMotion: false } }).appearance)
+      .toEqual({ theme: 'dark', density: 'compact', reduceMotion: false, highContrast: false });
+    expect(
+      sanitizeAccountPrefs({ appearance: { theme: 'light', density: 'comfortable', reduceMotion: false, highContrast: true } })
+        .appearance?.highContrast,
+    ).toBe(true);
+    expect(
+      sanitizeAccountPrefs({ appearance: { theme: 'light', density: 'comfortable', reduceMotion: false, highContrast: 'yes' } })
+        .appearance,
+    ).toBeUndefined();
+  });
+
   it('keeps the reading rules member by member, and writes nothing while they are the defaults', () => {
     expect(sanitizeAccountPrefs({ coordinateReading: { pairOrder: 'lonLat', bareUtmHemisphere: 'east' } }).coordinateReading)
       .toEqual({ pairOrder: 'lonLat', bareUtmHemisphere: 'north' });
