@@ -128,7 +128,13 @@ export default function FeatureEditModal({
   }, [open]);
 
   const onOk = async () => {
-    const values = await form.validateFields();
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      // The form marks the fields that are missing; a refused validation is not an error.
+      return;
+    }
 
     // Merge schema-driven values over any pre-existing properties so keys the
     // current schema does not know about survive the round-trip.

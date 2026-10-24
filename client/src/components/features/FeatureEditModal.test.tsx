@@ -25,7 +25,7 @@ const featureType = (id: string, name: string, requiresParent: boolean) => ({
 
 vi.mock('../../api/hooks.ts', () => ({
   useFeatureTypes: () => ({
-    data: [featureType('1', 'Spring', false), featureType('2', 'Passage marker', false)],
+    data: [featureType('1', 'Spring', false), featureType('2', 'Passage marker', true)],
   }),
   useGenericFeatureTypes: () => ({
     data: [featureType('1', 'Spring', false), featureType('2', 'Passage marker', false)],
@@ -119,6 +119,19 @@ describe('the feature form parent picker', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ primaryParentId: null });
+  });
+
+  it('refuses to submit without a parent when the type requires one', async () => {
+    const onSubmit = show({ featureTypeId: 2 });
+
+    // The rule follows the chosen type, which the form reports a moment after it opens; a person
+    // cannot press OK sooner than that, and a test pressing it sooner sees a form with no rule yet.
+    await waitFor(() =>
+      expect(screen.getByText('Parent').closest('label')).toHaveClass('ant-form-item-required'));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(document.querySelector('.ant-form-item-explain-error')).not.toBeNull());
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('picks a parent from the keyboard alone', async () => {
