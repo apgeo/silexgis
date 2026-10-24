@@ -14,7 +14,7 @@ Trimiterea mesajelor** arată dacă ceva din toate acestea chiar funcționează.
 > Acestea pot fi stabilite și din mediul de instalare, iar pagina o spune. Stabilirea lor aici
 > este calea care nu are nevoie de repornire.
 
-Pagina are opt file:
+Pagina are nouă file:
 
 | Fila | Ce hotărăște | Mai jos |
 |---|---|---|
@@ -25,6 +25,7 @@ Pagina are opt file:
 | **Import vectorial** | Dacă un import poate sări peste verificare și cum se caută duplicatele | [Import vectorial](#import-vectorial) |
 | **Notificări** | Cât se păstrează notificările și cât poate costa un anunț | [Păstrare](#păstrare) · [Garda de cheltuială](#garda-de-cheltuială) |
 | **Fototeci** | Oprirea și repornirea folosirii unei fototeci pe care instalarea o are deja | [Fototeci](#fototeci) |
+| **Spațiul de lucru** | Cu ce aranjare a spațiului de lucru al hărții pornește un cont nou | [Spațiul de lucru](#spațiul-de-lucru) |
 | **Hărți în documente** | Ce fundaluri de hartă pot fi copiate într-un document | [Hărți în documente](#hărți-în-documente) |
 
 ---
@@ -125,6 +126,19 @@ nimic din ce conține fototeca însăși sau cine se poate autentifica direct î
 
 Comutatorul nu poate *conecta* o fototecă: ce fototeci are o instalare se hotărăște la
 implementare, iar pagina o spune — sau spune că nu este nimic de oprit.
+
+## Spațiul de lucru
+
+Fila **Spațiul de lucru** alege **aranjarea de pornire**: cu care dintre aranjările spațiului de
+lucru al hărții — *Hartă*, *Hartă + 3D*, *Verificarea topografiilor* sau *Planificarea turei* —
+pornește un cont nou (vezi [Panouri și aranjări](../features/map-workspace.md#panouri-și-aranjări)).
+Se aplică o singură dată, prima dată când un cont care nu a aranjat nimic deschide harta pe un
+calculator; de atunci aranjarea este a membrului, iar cine și-a aranjat deja spațiul de lucru nu
+este mutat. *Două ecrane* nu este oferită: deschide o a doua fereastră, pe care browserul o permite
+doar când cineva apasă ceva. *Hartă (ca la livrare)* anulează alegerea.
+
+Alegerea se păstrează în aranjarea de pornire a instalării, același document cu secțiunile
+implicite ale panourilor, pe care fila aceasta le lasă cum sunt.
 
 ## Hărți în documente
 

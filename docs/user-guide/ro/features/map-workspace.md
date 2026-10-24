@@ -220,11 +220,64 @@ Vezi [Căutare și filtre](search-and-filters.md) și
 
 [Filtre pe hartă](search-and-filters.md#filtre-pe-hartă).
 
+## Panouri și aranjări
+
+Spațiul de lucru este un rând de panouri în jurul hărții: **panoul de straturi** în stânga,
+**panoul de detalii** în dreapta și — când le deschizi — **scena 3D** și **modelul topo** al unei
+peșteri lângă hartă. Trage de separatoarele subțiri ca să redimensionezi oricare dintre ele, sau
+du tastatura pe un separator și folosește săgețile.
+
+**Mutarea unui panou.** Scena 3D și modelul topo au fiecare o bandă sus cu un buton **Mută**: pune
+panoul **în stânga hărții**, **în dreapta hărții**, **sub hartă** sau **într-o fereastră
+separată** (util pentru un al doilea monitor; panoul se închide aici când se deschide fereastra). O
+mutare nu repornește niciodată panoul — scena își păstrează camera, iar modelul vederea.
+
+**Tabelul de sub hartă.** **Tabel sub hartă** (în meniul spațiului de lucru) deschide sub hartă o
+bandă cu două file: **În vedere** — intrările și obiectele pe care le arată harta, actualizate când
+o miști — și **Alese** — obiectele adunate cu Ctrl- sau Shift-clic. Un clic pe un rând îl selectează
+și îl încadrează pe hartă. Cât timp tabelul e deschis, lista *În vedere* stă acolo în loc de panoul de
+detalii. Trage de separatorul de deasupra benzii ca s-o faci mai înaltă sau mai joasă.
+
+**Inversează panourile laterale** pune panoul de straturi în dreapta și panoul de detalii în stânga
+(și înapoi). Tastele **[** și **]** și butoanele de pe margini urmează părțile: **[** pliază mereu ce
+este în stânga.
+
+**Extinderea pe tot spațiul de lucru.** Apasă **M** ca panoul în care lucrezi să ocupe tot spațiul
+de lucru și din nou **M** ca toate panourile să revină la mărimea lor. Când tastatura nu e în niciun
+panou anume, **M** extinde harta. Scena 3D, modelul topo, tabelul și harta au și un buton pentru
+asta, iar un panou de straturi sau de detalii extins arată în colț un buton **Readu**.
+
+**Aranjări.** Meniul spațiului de lucru (butonul cu patru pătrățele de lângă celelalte butoane ale
+hărții) oferă aranjări gata făcute, cu o singură apăsare:
+
+| Aranjare | Ce obții |
+|---|---|
+| **Hartă** | Harta între cele două panouri, nimic altceva — spațiul de lucru ca la livrare |
+| **Hartă + 3D** | Scena 3D lângă hartă, în dreapta |
+| **Verificarea topografiilor** | Un panou pentru modelul topo lângă hartă; alege o peșteră și deschide acolo unul dintre modelele ei. Panoul de straturi se pliază ca să-i facă loc |
+| **Planificarea turei** | Sub hartă, tabelul cu ce e în vedere și scena 3D cu relieful pe care îl traversează apropierea |
+| **Două ecrane** | Harta și panourile ei aici, scena 3D într-o fereastră separată |
+
+Aranjarea în vigoare e bifată. **Salvează aranjarea curentă…** păstrează sub un nume panourile,
+panourile din jurul hărții și dacă scena 3D e deschisă; aranjările salvate apar în același meniu (și,
+ca până acum, în meniul *Aranjări salvate* al panoului de detalii) și îți urmează contul. Aranjările
+salvate înainte de aceasta aduc înapoi, ca înainte, secțiunile panourilor.
+
+Aranjarea îți urmează contul în orice browser — mai puțin faptul că scena 3D e deschisă: e un
+afișaj greu, așa că se deschide când o ceri (butonul ei sau o aranjare care o include), niciodată de
+la sine la încărcarea paginii. Un administrator poate alege cu ce aranjare pornește un cont **nou**
+(*Administrare → Mesagerie*, fila *Spațiul de lucru*); se aplică o singură dată, prima dată când acel cont deschide harta.
+
 ## De la tastatură
 
 Primul **Tab** pe pagina hărții oferă **Sari la hartă**, care duce tastatura chiar pe hartă,
 dincolo de panoul de straturi; panoul rămâne la un **Shift+Tab** în urma ei. Orice altă pagină
 oferă în același loc *Sari la conținutul principal*.
+
+Pe pagina hărții, **?** listează toate scurtăturile. **[** și **]** pliază și depliază panourile din
+stânga și din dreapta, **Alt+←** și **Alt+→** te duc înapoi și înainte prin ce ai selectat,
+**Escape** golește selecția, iar **M** extinde pe tot spațiul de lucru panoul în care te afli (și îl
+readuce) — vezi [Panouri și aranjări](#panouri-și-aranjări).
 
 ---
 
@@ -233,6 +286,10 @@ oferă în același loc *Sari la conținutul principal*.
 Spațiul de lucru se adaptează la atingere, inclusiv editarea completă a geometriei cu degetul.
 Panoul se pliază; **Arată panoul** / **Ascunde panoul** îl comută. Aplicația se poate și instala
 pe ecranul de pornire.
+
+Telefonul arată un singur panou, harta, cu cele două panouri laterale ca sertare: aranjările, tabelul
+de sub hartă și scena 3D de lângă ea sunt aranjări pentru calculator. Lista *În vedere* rămâne în
+sertarul de detalii.
 
 ---
 

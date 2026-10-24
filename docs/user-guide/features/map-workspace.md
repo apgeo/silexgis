@@ -212,11 +212,65 @@ there becomes the map's filter. Below them sit the quick filters and **List the 
 See [Search and filters](search-and-filters.md) and
 [Filters on the map](search-and-filters.md#filters-on-the-map).
 
+## Panes and arrangements
+
+The workspace is a row of panes around the map: the **layer panel** on the left, the
+**details panel** on the right, and — when you open them — the **3D scene** and a cave's
+**survey model** beside the map. Drag the thin separators to resize any of them, or put the
+keyboard on a separator and use the arrow keys.
+
+**Moving a pane.** The 3D scene and the survey model each have a strip at the top with a
+**Move** button: put the pane **left of the map**, **right of the map**, **under the map**, or
+**in its own window** (handy for a second monitor; the pane closes here as the window opens). A
+move never restarts the pane — the scene keeps its camera and the model keeps its view.
+
+**The table under the map.** **Table under the map** (in the workspace menu) opens a strip under
+the map with two tabs: **In view** — the entrances and features the map is showing, updated as you
+pan — and **Picked** — the objects you gathered with Ctrl- or Shift-click. Clicking a row selects it
+and frames it on the map. While the table is open, the *In view* list lives there instead of in the
+details panel. Drag the separator above the strip to make it taller or shorter.
+
+**Swap the side panels** puts the layer panel on the right and the details panel on the left (and
+back). The **[** and **]** keys and the edge buttons follow the sides: **[** always folds whatever is
+on the left.
+
+**Filling the workspace.** Press **M** to make the pane you are working in fill the whole workspace,
+and **M** again to give every pane its own size back. With the keyboard nowhere in particular, **M**
+fills it with the map. The 3D scene, the survey model, the table and the map also have a button
+for it, and a filled layer or details panel shows a **Restore** button in its corner.
+
+**Arrangements.** The workspace menu (the button of four squares beside the map's other buttons)
+offers ready-made arrangements, one press each:
+
+| Arrangement | What you get |
+|---|---|
+| **Map** | The map between its two panels, nothing else — the workspace as it ships |
+| **Map + 3D** | The 3D scene beside the map, on the right |
+| **Survey review** | A survey-model pane beside the map; pick a cave and open one of its models there. The layer panel folds away to give it room |
+| **Trip planning** | Under the map, the table of what is in view and the 3D scene showing the ground the approach crosses |
+| **Two screens** | The map and its panels here, the 3D scene in a window of its own |
+
+The arrangement in force is ticked. **Save the current arrangement…** keeps the panels, the panes
+around the map and whether the 3D scene is open under a name; saved arrangements are listed in the
+same menu (and in the details panel's *Saved arrangements* menu, as before) and follow your
+account. Arrangements saved before this existed still bring back the panels' sections as they did.
+
+Your arrangement follows your account to any browser — except whether the 3D scene is open: it
+is a heavy renderer, so it opens when you ask for it (its button, or an arrangement that includes
+it), never by itself when the page loads. An administrator can choose which arrangement a **new**
+account starts with (*Administration → Messaging*, tab *Workspace*); it is applied once, the first time that account opens
+the map.
+
 ## From the keyboard
 
 The first **Tab** on the map page offers **Skip to map**, which puts the keyboard on the map
 itself, past the layer panel; the panel stays one **Shift+Tab** behind it. Every other page
 offers *Skip to main content* in the same place.
+
+On the map page **?** lists every shortcut. **[** and **]** fold and unfold the panels on the left
+and on the right, **Alt+←** and **Alt+→** step back and forward through what you selected,
+**Escape** clears the selection, and **M** fills the workspace with the pane you are in (and gives
+it back) — see [Panes and arrangements](#panes-and-arrangements).
 
 ---
 
@@ -225,6 +279,10 @@ offers *Skip to main content* in the same place.
 The map workspace adapts to touch, including full geometry editing by finger. The panel
 collapses; **Show panel** / **Hide panel** toggles it. The application also installs to a
 home screen.
+
+A phone shows one pane, the map, with the two panels as drawers: the arrangements, the table under
+the map and the 3D scene beside it are desktop arrangements. The *In view* list stays in the details
+drawer.
 
 ---
 

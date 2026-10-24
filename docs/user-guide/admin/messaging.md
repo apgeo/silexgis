@@ -14,7 +14,7 @@ delivery** shows whether any of it is actually working.
 > These can also be set from the deployment's environment, and the page says so. Setting them
 > here is the route that does not need a restart.
 
-The page has eight tabs:
+The page has nine tabs:
 
 | Tab | Decides | Below |
 |---|---|---|
@@ -25,6 +25,7 @@ The page has eight tabs:
 | **Vector import** | Whether an import may skip its review, and how duplicates are looked for | [Vector import](#vector-import) |
 | **Notifications** | How long notifications are kept, and what an announcement may cost | [Retention](#retention) · [The money guard](#the-money-guard) |
 | **Photo libraries** | Stopping and restarting the use of a photo library the installation already has | [Photo libraries](#photo-libraries) |
+| **Workspace** | Which arrangement of the map workspace a new account starts with | [Workspace](#workspace) |
 | **Maps in documents** | Which map backgrounds a document may copy | [Maps in documents](#maps-in-documents) |
 
 ---
@@ -122,6 +123,19 @@ the library itself holds or who can sign in to it directly.
 
 The switch cannot *connect* a library: which libraries an installation has is decided when it is
 deployed, and the page says so — or says that there is nothing to stop.
+
+## Workspace
+
+The **Workspace** tab chooses the **starting arrangement**: which of the map workspace's
+arrangements — *Map*, *Map + 3D*, *Survey review* or *Trip planning* — a new account starts with
+(see [Panes and arrangements](../features/map-workspace.md#panes-and-arrangements)). It is applied
+once, the first time an account that has arranged nothing opens the map on a desktop; from then on
+the arrangement is the member's own, and nobody who has already arranged their workspace is moved.
+*Two screens* is not offered: it opens a second window, which a browser allows only when somebody
+presses something. *Map (as shipped)* removes the choice.
+
+The choice is kept in the installation's starting arrangement, the same document as the panels'
+default sections, which this tab leaves as it is.
 
 ## Maps in documents
 
