@@ -175,6 +175,8 @@ public sealed class MapLayerKindTests : IAsyncLifetime, IDisposable, IClassFixtu
                 new MapLayer { Name = $"Hand broken wms {suffix}", UrlTemplate = "https://maps.example.gov/wms", LayerKind = MapLayerKind.Wms, Options = "{\"nonsense\":true}", IsBase = true, SortOrder = 9001 },
                 new MapLayer { Name = $"Hand bare wmts {suffix}", UrlTemplate = "https://tiles.example.gov/wmts", LayerKind = MapLayerKind.Wmts, IsBase = true, SortOrder = 9002 },
                 new MapLayer { Name = $"Hand xyz {suffix}", UrlTemplate = "https://t.example/{z}/{x}/{y}.png", IsBase = true, SortOrder = 9003 },
+                // The same name in other letters: possible only by hand, and no reason to fail the list.
+                new MapLayer { Name = $"HAND XYZ {suffix}", UrlTemplate = "https://t.example/{z}/{x}/{y}.png", IsBase = true, SortOrder = 9007 },
                 // A file in a system nobody defined would be drawn somewhere else, not refused.
                 new MapLayer
                 {
@@ -196,6 +198,16 @@ public sealed class MapLayerKindTests : IAsyncLifetime, IDisposable, IClassFixtu
 
         var published = await PublishedAsync();
         published.Keys.ShouldContain($"Hand xyz {suffix}");
+        published.Keys.ShouldContain($"HAND XYZ {suffix}");
+
+        // Nor to fail a start: the catalogue naming the source updates the older of the two.
+        var report = await SeedAsync(
+            $$"""<silexgis-map-layers version="1"><layer name="hand xyz {{suffix}}" url="https://t2.example/{z}/{x}/{y}.png" /></silexgis-map-layers>""");
+        report.Updated.ShouldBe(1);
+        using var check = factory.Services.CreateScope();
+        var stored = check.ServiceProvider.GetRequiredService<SilexGisDbContext>().MapLayers.AsNoTracking();
+        (await stored.SingleAsync(l => l.Name == $"Hand xyz {suffix}")).UrlTemplate.ShouldBe("https://t2.example/{z}/{x}/{y}.png");
+        (await stored.SingleAsync(l => l.Name == $"HAND XYZ {suffix}")).UrlTemplate.ShouldBe("https://t.example/{z}/{x}/{y}.png");
         published.Keys.ShouldNotContain($"Hand vector {suffix}");
         published.Keys.ShouldNotContain($"Hand broken wms {suffix}");
         published.Keys.ShouldNotContain($"Hand bare wmts {suffix}");

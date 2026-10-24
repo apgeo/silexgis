@@ -90,7 +90,11 @@ public static class MapLayerEndpoints
         // nothing. The catalogue reports such entries when it is read; a row put into the table
         // some other way is simply not offered.
         var published = rows.Where(l => MapLayerOptionsJson.IsDrawable(l.LayerKind, l.Options)).ToList();
-        var byName = published.ToDictionary(l => l.Name, StringComparer.OrdinalIgnoreCase);
+        // By name, as a stand-in is named; two rows whose names differ only in case can only have
+        // been put in by hand, and the first of them stands.
+        var byName = published
+            .GroupBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         return TypedResults.Ok(published.Select(l => ToDto(l, byName)).ToList());
     }
 

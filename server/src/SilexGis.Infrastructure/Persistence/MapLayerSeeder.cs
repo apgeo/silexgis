@@ -68,7 +68,13 @@ public static class MapLayerSeeder
         var catalog = MapLayerCatalog.Read(catalogXml, crs.Proj4);
         var problems = catalog.Problems.ToList();
 
-        var stored = await db.MapLayers.ToDictionaryAsync(x => x.Name, StringComparer.OrdinalIgnoreCase, ct);
+        // Matched by name without regard to case, as an operator edits names. Two stored sources
+        // whose names differ only in case can only have been put in by hand; the older one is the
+        // file's, and the other is left alone like any source the file does not name — rather than
+        // the start failing on the pair.
+        var stored = (await db.MapLayers.OrderBy(x => x.Id).ToListAsync(ct))
+            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         int added = 0, updated = 0, withheld = 0;
 
         foreach (var entry in catalog.Layers)
