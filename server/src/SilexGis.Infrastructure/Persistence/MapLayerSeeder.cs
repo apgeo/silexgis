@@ -115,7 +115,14 @@ public static class MapLayerSeeder
         // all it takes. Publishing is what the Enabled flag above withholds.
         row.UrlTemplate = url ?? entry.UrlTemplate;
         row.LayerKind = entry.Kind;
-        row.Options = MapLayerOptionsJson.Write(entry);
+        // Kept when it holds the same options in the database's own spelling, so that a start
+        // which changes nothing writes nothing.
+        var options = MapLayerOptionsJson.Write(entry);
+        if (!MapLayerOptionsJson.SameOptions(row.Options, options))
+        {
+            row.Options = options;
+        }
+
         row.Attribution = entry.Attribution;
         row.GroupName = entry.GroupName;
         row.ApiKeyName = entry.ApiKeyName;

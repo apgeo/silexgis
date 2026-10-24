@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace SilexGis.Domain.Map;
 
@@ -152,6 +153,32 @@ public static class MapLayerOptionsJson
         MapLayerKind.Wmts => Wmts(kind, stored) is not null,
         _ => false,
     };
+
+    /// <summary>
+    /// Whether two stored texts hold the same options, whatever their spelling.
+    /// </summary>
+    /// <remarks>
+    /// The column is jsonb, which hands back its own spelling of what was written — keys
+    /// reordered, spaces added — so the text read back never equals the text the catalogue writes
+    /// although the options are the same. Compared as text, every start would count every layer
+    /// with options as changed and write it again.
+    /// </remarks>
+    public static bool SameOptions(string? stored, string? written)
+    {
+        if (stored is null || written is null)
+        {
+            return stored == written;
+        }
+
+        try
+        {
+            return JsonNode.DeepEquals(JsonNode.Parse(stored), JsonNode.Parse(written));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     private static T? Read<T>(string? stored)
         where T : class

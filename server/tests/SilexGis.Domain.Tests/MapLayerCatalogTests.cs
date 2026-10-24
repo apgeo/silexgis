@@ -393,4 +393,24 @@ public class MapLayerCatalogTests
         Assert.Null(MapLayerOptionsJson.Write(Assert.Single(MapLayerCatalog.Read(Doc(
             """<layer name="Plain" url="https://tile.example/{z}/{x}/{y}.png" />""")).Layers)));
     }
+
+    /// <summary>
+    /// The options column hands back its own spelling of what was written, so the seeder compares
+    /// what the text says rather than how it is spelt — or every start would rewrite every layer
+    /// with options and count it as changed.
+    /// </summary>
+    [Fact]
+    public void Stored_options_are_the_same_when_they_say_the_same_however_they_are_spelt()
+    {
+        const string written = """{"layer":"topo","matrixSet":"google3857","format":"image/png","style":"default","crs":"EPSG:3857","matrixIdPrefix":""}""";
+        const string readBack = """{"crs": "EPSG:3857", "layer": "topo", "style": "default", "format": "image/png", "matrixSet": "google3857", "matrixIdPrefix": ""}""";
+
+        Assert.True(MapLayerOptionsJson.SameOptions(readBack, written));
+        Assert.True(MapLayerOptionsJson.SameOptions(null, null));
+        Assert.False(MapLayerOptionsJson.SameOptions(readBack, written.Replace("topo", "relief", StringComparison.Ordinal)));
+        Assert.False(MapLayerOptionsJson.SameOptions(null, written));
+        Assert.False(MapLayerOptionsJson.SameOptions(written, null));
+        Assert.False(MapLayerOptionsJson.SameOptions("{ not json", written));
+        Assert.True(MapLayerOptionsJson.SameOptions("""{"min": 1, "max": 2500.5}""", """{"max":2500.5,"min":1}"""));
+    }
 }
