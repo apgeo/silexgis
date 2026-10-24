@@ -558,9 +558,73 @@ the two grids the map and the 3D view can draw — and `matrixIdPrefix` when the
 template, naming `{TileMatrix}`, `{TileRow}` and `{TileCol}`. The grid is named rather than read from the
 service's capabilities document on purpose: the 3D view reads no capabilities, so a background that
 depended on them would draw in one view and not the other. The shipped file ends with one switched-off
-example of each. Any other `kind` (`vector`, `cog`, or a typo) is reported at startup and not offered —
-those kinds are not drawn by this version. A map service is never copied into a trip's write-up, whatever
-its entry says; the write-up's map is drawn from `{z}/{x}/{y}` tiles only.
+example of each.
+
+**Vector backgrounds.** `kind="vector"` lists shapes the browser draws in a style, rather than finished
+pictures: sharp at every zoom and on every screen, labels kept upright when the map turns and written in
+the reader's language, and several looks over one set of tiles. Three ship switched on — OpenFreeMap
+Liberty, Positron and Dark, which need no key and allow commercial use — and so does the installation's
+own basemap (see *Your own basemap* below):
+
+```xml
+<layer name="OpenFreeMap Liberty"
+       group="Vector"
+       kind="vector"
+       format="mvt"
+       url="https://tiles.openfreemap.org/planet"
+       style="https://tiles.openfreemap.org/styles/liberty"
+       styleSource="openmaptiles"
+       labelField="name:{lang}"
+       scene3d="OpenStreetMap"
+       attribution="OpenFreeMap © OpenMapTiles Data from OpenStreetMap"
+       maxZoom="14" />
+```
+
+`format` (required) says what `url` delivers: `mvt` — a `{z}/{x}/{y}` template, or, naming none of the
+three, the service's TileJSON address, for a service whose tile addresses change with each build —
+`pmtiles` (one PMTiles archive, read with range requests) or `geojson` (one file, for a small overlay).
+`style` is a MapLibre style document: the look only, applied to the entry's own data; `styleSource` says
+which of the style's sources the data stands for (default: its first vector source). `labelField` is the
+property holding a name in a given language, `{lang}` standing for the reader's — `name:{lang}` for the
+OpenMapTiles and Protomaps schemas — and the style's name labels then read it, falling back to the plain
+name. `scene3d` names another entry of the file — a tile or service basemap for a basemap, an overlay for
+an overlay — that the 3D view drapes in this one's place, so both views list the same backgrounds.
+`maxZoom` is the last level the tiles hold (default 14): past it the map enlarges the last level, which
+stays sharp. Labels are drawn in fonts the application serves itself, whatever font a style names, so a
+vector background never sends the browser to a font service. OSM vector tiles carry **no contours or
+relief** — keep the topographic backgrounds for reading karst.
+
+**GeoTIFF files.** `kind="cog"` lists one cloud-optimised GeoTIFF — an orthophoto, a scanned geological map,
+a LiDAR hillshade — read piece by piece from any web server that answers range requests and sends CORS
+headers:
+
+```xml
+<layer name="LiDAR hillshade"
+       group="Relief"
+       kind="cog"
+       base="false"
+       url="https://data.example.org/plateau-hillshade.tif"
+       projection="EPSG:3844"
+       bands="1"
+       min="0"
+       max="255"
+       attribution="© Agency" />
+```
+
+`projection` (required) is the file's coordinate system, `EPSG:` and its code; both the map and the 3D
+view place the file by it, whatever its own header says, and a code the installation's PROJ database
+does not know is reported at startup and the entry not offered — never drawn in the wrong place.
+`bands` picks one to four bands, counted from 1 (grey, grey with transparency, colour, colour with
+transparency); `nodata` is a value drawn transparent; `min` and `max` are the value range the samples are
+scaled across, which a 16-bit file needs. Build the file with `gdal_translate -of COG` so it has the
+internal overviews that keep the browser from reading far too much. **A raster that must stay behind
+sign-in does not belong in this file** — every entry is offered to every account and may reach a shared
+link — upload it as a georeferenced map instead. The shipped file ends with one switched-off example, a
+Sentinel-2 scene in UTM zone 34N.
+
+Only `{z}/{x}/{y}` tiles are ever copied into a trip's write-up, whatever an entry says: a map service, a
+GeoTIFF or a vector background never is. Every problem the start-up report names comes with a stable code
+in brackets, such as `[map_layer.cog_projection_missing]`.
 
 **Backgrounds that need an account.** Some services — Thunderforest, Stadia Maps, MapTiler, Mapbox — need a
 key you register for. The catalogue names the key, and you supply its value:
@@ -652,6 +716,44 @@ link.
 draw — a kind it does not support, a placeholder neither map fills — the start-up report says it was
 skipped, and the source it had stored on an earlier start is switched off rather than left drawing as it
 was. Put the entry right and restart, and it is switched back on.
+
+### Your own basemap
+
+An OpenStreetMap vector basemap served from your installation alone, with Romanian labels, no account
+anywhere and no request to anybody else's tile server: an administrator downloads a region on
+**Settings → Own basemap**, and the entry *Self-hosted basemap (light)* is offered on the map from then on.
+It also works offline — an expedition laptop running SilexGIS locally has a whole country's basemap.
+
+- **What runs it.** The basemap overlay, `docker-compose.basemap.yml`, which the sample `.env` already names
+  in `COMPOSE_FILE`: it runs [Martin](https://maplibre.org/martin/) (Apache-2.0), a tile server reading the
+  `silexgis-basemap` volume. Martin publishes no port; the web service passes it the tile addresses of the
+  current extract only. Its image is about 900 MB, which is why it is an overlay: drop it from
+  `COMPOSE_FILE` to have no basemap of your own, and the application stops offering one.
+- **Downloading a region.** Choose Romania, the Apuseni karst region, or a box of your own, the last zoom
+  level (15 is the deepest a build holds), and a build — the latest by default — then **Estimate size**
+  and **Download**. The region is cut out of a [Protomaps](https://docs.protomaps.com/basemaps/downloads)
+  daily planet build with the `pmtiles` tool inside the api container, which fetches only the parts the
+  region needs: Romania to zoom 15 is about **1.3 GB**, to zoom 14 about 650 MB, and the Apuseni box
+  about 36 MB. One download runs at a time, in the background, with its progress on the page and a
+  **Cancel** button; a download larger than `SILEXGIS__Basemap__MaxBytes`, or one the disk has no room
+  for beside the current basemap, is refused before anything is fetched.
+- **Replacing it.** A new download is written beside the basemap being served and takes its place only
+  when it is complete; the old one is then removed. Each download is served at an address of its own,
+  `/basemap/tiles/<extract>/…`, and an address is never reused, so the tiles are cached for a year by
+  browsers and by anything in between — safely, because they are public OpenStreetMap data, the same for
+  every caller.
+- **Fonts and icons.** The style, its icons and its label fonts are part of the web image, so the
+  basemap makes no request outside your installation.
+- **Licences.** The data is OpenStreetMap's (ODbL), credited "© OpenStreetMap contributors"; the style is
+  Protomaps' (BSD-3-Clause, design CC0), its icons derived from Mapzen's (MIT); the fonts are Noto Sans
+  (OFL). The credit is shown on the map.
+- **Coming up with one already.** `SILEXGIS__Basemap__InitialRegion=romania` (or `apuseni`) makes the
+  first start that finds no basemap and no download ever asked for download that region by itself —
+  for a test or showcase installation that should come up with a basemap without anybody pressing a
+  button. Once only: from then on the page decides.
+- **Without Docker.** The setting `SILEXGIS__Basemap__SelfHosted` is what offers the basemap; the packaged
+  stack sets it from the overlay. A native installation that runs no Martin should set it to `false`, or
+  a download will produce a basemap nothing serves.
 
 ## Terrain (optional)
 
@@ -2233,6 +2335,13 @@ the reasoning beside each one.
 | `SILEXGIS__Terrain__BakePickupSeconds` | `300` (5 min) | how long a build waits for the worker to take its bake before deciding nothing is going to. Generous, because an image this size takes a while to start and a request left waiting costs nothing. Values outside 5 s to 1 h are brought back inside that range — `0` does **not** mean "wait indefinitely" and becomes 5 s, which reports a worker that is merely starting as absent |
 | `SILEXGIS__Terrain__UploadRetentionHours` | `24` | how long a raster sent through the browser for a terrain build is kept when **no build names it**. The build form sends each raster the moment it is chosen, so one picked and then abandoned would otherwise stay on the terrain volume for ever; an hourly sweep deletes those once they are this old. A raster any build names — queued, running, finished or stopped — is never deleted, whatever its age; deleting the build is what releases it. Values outside 1 hour to a year (8760) are brought back inside that range, so `0` does **not** mean "never" |
 | `SILEXGIS__Terrain__BakeTimeoutSeconds` | `43200` (12 h) | how long one bake may run before it is stopped. The queue a build runs on has no limit of its own, so this is the only one there is, and it is meant to catch a bake that has stopped making progress rather than to cap a large one. A bake that reaches it is withdrawn from the worker exactly as a called-off one is, its tiles are discarded, and the build stops as `terrain_build.bake_timed_out` with the time it ran and the limit; raise this and press **Run again** to carry on at the bake. Values outside 60 s to 7 days are brought back inside that range — `0` does **not** mean "no limit" and becomes 60 s, which stops every real bake after a minute |
+| `SILEXGIS__Basemap__SelfHosted` | `true` (the compose stack sets `false`, and the basemap overlay `true`) | whether this installation serves a vector basemap of its own. Off, the self-hosted entry is never offered and no region can be downloaded. The packaged stack ties it to the overlay that runs the tile server, so the two cannot disagree |
+| `SILEXGIS__Basemap__Directory` | `data/basemap` (the compose stack sets `/data/basemap`) | where the downloaded region is kept: the directory the tile server reads. A country is a gigabyte or so, so under Docker it is the `silexgis-basemap` volume |
+| `SILEXGIS__Basemap__SourceUrlTemplate` | `https://build.protomaps.com/{build}.pmtiles` | where a region is cut from, with `{build}` where the build's date goes. The administration page chooses a date and a box, never an address: this is the only source |
+| `SILEXGIS__Basemap__BuildsUrl` | `https://build-metadata.protomaps.dev/builds.json` | the list of builds the page offers, and where "the latest" is looked up |
+| `SILEXGIS__Basemap__ExtractorPath` | `pmtiles` | the program that cuts the region — the `pmtiles` command-line tool, which the api image carries |
+| `SILEXGIS__Basemap__MaxBytes` | `5000000000` (5 GB) | the largest extract accepted. Romania to zoom 15 is about 1.3 GB, Europe about 49 GB |
+| `SILEXGIS__Basemap__InitialRegion` | *(empty)* | a region (`romania`, or `apuseni` for a karst region) downloaded by itself on the first start that finds no basemap and no download ever asked for — for test and showcase installations. Once only |
 | `SILEXGIS__MapLayers__CatalogPath` | — (the file shipped in the image) | the XML file listing the tile sources this installation offers. Set it to a path outside the image — that is the only way an edit of yours survives an upgrade. Start from a copy of the shipped `map-layers.xml` |
 | `SILEXGIS__MapLayers__ApiKeys__<name>` | — | the access key a catalogue entry names, e.g. `SILEXGIS__MapLayers__ApiKeys__Thunderforest`. An entry whose key is not set is **not offered at all**, rather than offered and broken: a tile address still carrying the placeholder answers 401 for every tile, which on screen looks exactly like a source that is down |
 | `SILEXGIS__Reports__MaxMapBytes` | `5242880` (5 MB) | the largest picture of a map a trip's write-up takes when it is downloaded. The page sends one of a few hundred kilobytes (a megabyte or two over photographic imagery); a larger one is refused and the document is downloaded without it. The picture is held for the one answer it came with and stored nowhere. If a reverse proxy sits in front, its body-size cap has to allow this plus about a megabyte |
