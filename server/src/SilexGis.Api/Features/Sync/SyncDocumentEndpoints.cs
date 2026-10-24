@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json;
 using FluentValidation;
+using ImageMagick;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -8,6 +9,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -218,15 +220,28 @@ public static class SyncDocumentEndpoints
     /// rule gives now.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The address of a file itself lives for a sitting rather than for one fetch: the content
     /// route answers ranges, and a phone on a poor connection resumes a large file over several of
     /// them. A picture is small and is fetched at once, so its address keeps the short lifetime.
+    /// </para>
+    /// <para>
+    /// A photo handed without its location is a copy made on first request, so nothing knows its
+    /// size or hash before somebody asks for it. When the administrator chose to have phones told
+    /// them, the copy is made here, for each such item, and its numbers go beside its address —
+    /// which is what makes this request slow for many such photos, and why it is a choice. A copy
+    /// that cannot be made is answered with its address and no numbers: fetching it fails the same
+    /// way whether or not they were asked for.
+    /// </para>
     /// </remarks>
     private static async Task<Results<Ok<SyncFileLinksDto>, UnauthorizedHttpResult>> LinksAsync(
         SyncFileLinksRequest request,
         SilexGisDbContext db,
         PhotoPositionDisclosure photos,
         IFileAccessTokenService tokens,
+        IAppSettingsService settings,
+        LocationFreeCopyService locationFreeCopies,
+        ILogger<LocationFreeCopyService> logger,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -257,6 +272,8 @@ public static class SyncDocumentEndpoints
             .ToDictionaryAsync(x => x.DocumentId, x => x.File!, ct);
 
         var reach = await photos.ReachAsync(ctx, [.. files.Values.Select(f => f.Id)], ct);
+        var describeCopies = (await settings.GetProtectionAsync(ct)).DescribeLocationFreeCopies;
+        var described = new Dictionary<Guid, (long SizeBytes, string Sha256)?>();
         // The same clock the address's own expiry is stamped against, so the time a phone is told
         // is the time the address actually stops opening.
         var now = DateTimeOffset.UtcNow;
@@ -284,12 +301,17 @@ public static class SyncDocumentEndpoints
                     continue;
                 }
 
+                var copy = delivery == FileDelivery.LocationFree && describeCopies
+                    ? await DescribeCopyAsync(file)
+                    : null;
                 var token = tokens.CreateToken(file.Id, delivery, FileAccessLifetime.Session);
                 links.Add(new SyncFileLinkDto(
                     item.DocumentId,
                     rendition,
                     $"/api/v1/files/{file.Id}/content?token={Uri.EscapeDataString(token)}",
-                    now.Add(FileAccessTokenService.SessionLifetime)));
+                    now.Add(FileAccessTokenService.SessionLifetime),
+                    copy?.SizeBytes,
+                    copy?.Sha256));
                 continue;
             }
 
@@ -308,10 +330,34 @@ public static class SyncDocumentEndpoints
                 item.DocumentId,
                 rendition,
                 $"/api/v1/files/{file.Id}/thumbnail?size={size}&token={Uri.EscapeDataString(pictureToken)}",
-                now.Add(FileAccessTokenService.FetchLifetime)));
+                now.Add(FileAccessTokenService.FetchLifetime),
+                null,
+                null));
         }
 
         return TypedResults.Ok(new SyncFileLinksDto(links, refused));
+
+        // Once per file, however many items name it.
+        async Task<(long SizeBytes, string Sha256)?> DescribeCopyAsync(StoredFile file)
+        {
+            if (described.TryGetValue(file.Id, out var known))
+            {
+                return known;
+            }
+
+            try
+            {
+                known = await locationFreeCopies.DescribeAsync(file, ct);
+            }
+            catch (MagickException e)
+            {
+                logger.LogWarning(e, "Could not write a location-free copy of file {FileId}", file.Id);
+                known = null;
+            }
+
+            described[file.Id] = known;
+            return known;
+        }
     }
 }
 

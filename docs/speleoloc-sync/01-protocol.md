@@ -745,13 +745,21 @@ keys it on `documentId` and `versionId`.
     taken, and to every account when the installation switched location in photo files off.
     `sizeBytes` and `sha256` are **absent**: the rewritten copy is made the first time somebody asks
     for it, and quoting the stored file's numbers would announce bytes the device will never
-    receive. Check what arrives against the response's own length.
+    receive. Check what arrives against the response's own length — or, where the installation
+    turned on *Tell phones the size and fingerprint of photos sent without their location*
+    (`DescribeLocationFreeCopies`), against the numbers the address route gives beside the URL
+    (section 11.2).
   - `renditions` — no file itself, only the pictures the server draws of it. What an image in a
     format that cannot be rewritten is, for an account that may not have its location (or for every
     account while location in photo files is switched off).
   - `none` — neither: what a video or a sound recording is for the same accounts. A photo, a video
     and a recording are treated as carrying a location whether or not one was ever read out of
     them — a cleared position or a fix a phone wrote into a video is still in the bytes.
+  - With location in photo files switched off, an installation may also turn on *still let people
+    who may see the location download videos, recordings and pictures that cannot be rewritten*
+    (`ServeUnstrippableOriginalsToLocationReaders`): then an account that **may** be told the
+    location gets those files as `original` again; an account that may not is unaffected and keeps
+    `renditions` or `none`.
 - **`renditions`** lists the picture sizes the server draws, largest first; it is empty for any
   file that is not an image.
 - **No position, ever.** Not the photo's capture point, not its target's coordinates. Where a picture
@@ -786,7 +794,8 @@ request whole with `400`.
 ```json
 {
   "links":   [ { "documentId": "0199…", "rendition": "original",
-                 "url": "/api/v1/files/0199…/content?token=…", "expiresAt": "2026-10-24T13:14:52Z" } ],
+                 "url": "/api/v1/files/0199…/content?token=…", "expiresAt": "2026-10-24T13:14:52Z",
+                 "sizeBytes": null, "sha256": null } ],
   "refused": [ { "documentId": "0199…", "rendition": 480, "code": "sync.rendition_unavailable" } ]
 }
 ```
@@ -809,4 +818,14 @@ ten minutes, because it is small and fetched at once. A URL that has expired ans
 a new one. A URL already handed out keeps opening until it expires even if access is withdrawn in the
 meantime; that bounded staleness is what the short lifetimes are for. An original fetched under
 `locationFree` reach is the rewritten copy; it has the same name and type as the stored file.
+
+**`sizeBytes` and `sha256` on a link** are `null` unless both hold: the item is an `"original"`
+handed under `locationFree` reach, and the installation turned on *Tell phones the size and
+fingerprint of photos sent without their location* (`DescribeLocationFreeCopies`, off by default).
+Then the server makes the rewritten copy while answering — for every such item of the request, which
+makes a request for many of them slower — and the two are the copy's own: exactly the bytes the URL
+serves (`sha256` lower-case hex, like the catalogue's). A stored original is described by the
+catalogue and gets no numbers here; a picture never does. Should the copy fail to be made, the link
+comes without numbers and fetching it answers `404` either way. The catalogue never quotes the copy's
+numbers, whatever the switch says.
 

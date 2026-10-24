@@ -398,6 +398,58 @@ public sealed class PhotoBytesProtectionTests : IAsyncLifetime, IDisposable, ICl
 
     // ---- helpers ----
 
+    [Fact]
+    public async Task With_the_location_switch_off_a_video_reaches_the_caller_who_may_place_it_only_through_the_second_switch()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: true);
+        var videoId = await UploadAsync("switch-two.mp4", Mp4Bytes(), "video/mp4");
+        await AttachAsync(videoId, caveId);
+        var uploaded = PlacedJpeg(45.42, 25.42, 240, 180);
+        var photoId = await UploadAsync("switch-two.jpg", uploaded, "image/jpeg");
+        await AttachAsync(photoId, caveId);
+
+        await SetProtectionAsync(p => p with { KeepLocationInPhotoFiles = false });
+        try
+        {
+            // Second switch off (the default): nobody gets the video as a file, not even the owner,
+            // who may place the cave — there is no copy of it without its location.
+            var withheld = await ReadJsonAsync(await owner.GetAsync($"/api/v1/files/{videoId}"));
+            withheld.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeFalse();
+            (await owner.GetAsync(withheld.GetProperty("contentUrl").GetString()))
+                .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+            await SetProtectionAsync(p => p with
+            {
+                KeepLocationInPhotoFiles = false,
+                ServeUnstrippableOriginalsToLocationReaders = true,
+            });
+
+            // On: the owner gets the stored video, byte for byte.
+            var held = await ReadJsonAsync(await owner.GetAsync($"/api/v1/files/{videoId}"));
+            held.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeTrue();
+            (await ContentBytesAsync(owner, held)).ShouldBe(Mp4Bytes());
+
+            // The reader, who may not place the cave, still gets nothing of it.
+            var seen = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{videoId}"));
+            seen.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeFalse();
+            (await reader.GetAsync(seen.GetProperty("contentUrl").GetString()))
+                .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+            // A picture that can be rewritten is not the second switch's business: with the
+            // location switch off the owner still gets it without its location.
+            var photo = await ReadJsonAsync(await owner.GetAsync($"/api/v1/files/{photoId}"));
+            ShouldBeLocationFreeCopyOf(await ContentBytesAsync(owner, photo), uploaded);
+        }
+        finally
+        {
+            await SetProtectionAsync(p => p with
+            {
+                KeepLocationInPhotoFiles = true,
+                ServeUnstrippableOriginalsToLocationReaders = false,
+            });
+        }
+    }
+
     private async Task<byte[]> ThumbnailBytesAsync(HttpClient client, Guid fileId, int size)
     {
         var seen = await ReadJsonAsync(await client.GetAsync($"/api/v1/files/{fileId}"));
@@ -468,6 +520,13 @@ public sealed class PhotoBytesProtectionTests : IAsyncLifetime, IDisposable, ICl
         var settings = scope.ServiceProvider.GetRequiredService<IAppSettingsService>();
         var current = await settings.GetProtectionAsync();
         await settings.SaveAsync(AppSettingSections.Protection, current with { KeepLocationInPhotoFiles = keep });
+    }
+
+    private async Task SetProtectionAsync(Func<ProtectionSettings, ProtectionSettings> change)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var settings = scope.ServiceProvider.GetRequiredService<IAppSettingsService>();
+        await settings.SaveAsync(AppSettingSections.Protection, change(await settings.GetProtectionAsync()));
     }
 
     private static string Sha(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));

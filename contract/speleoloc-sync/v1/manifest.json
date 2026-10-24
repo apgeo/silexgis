@@ -18,7 +18,7 @@
     "manifest.json"
   ],
   "fileCount": 35,
-  "digest": "ba2c91b9e2d94202eda700ba06c42b948e764cd8f4f99b6c43d566146dbaf1e5",
+  "digest": "fa70826902761f01ef327f5cd96f19d1879af3a84e0bb604909009df9bbba4cd",
   "files": {
     "07-download-first-page/request.txt": {
       "bytes": 37,
@@ -153,8 +153,8 @@
       "sha256": "b5250d764721aa67681630221c6398cdaecb4cc961bf39d4b84764036242a3d8"
     },
     "CHANGELOG.md": {
-      "bytes": 10803,
-      "sha256": "46d1021f2f22f9eb40c132917cbe2eac814153d6434fe3208ef592a7a7b77cc7"
+      "bytes": 11412,
+      "sha256": "624bf6f1649edd2915c7a04f3d000f72449de7d66e9ae1c273c60c77181c762f"
     },
     "README.md": {
       "bytes": 8990,

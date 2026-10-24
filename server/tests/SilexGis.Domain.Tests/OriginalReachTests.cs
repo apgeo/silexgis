@@ -89,6 +89,36 @@ public class OriginalReachTests
             .ShouldBe(OriginalReach.None);
     }
 
-    private static OriginalReach Reach(bool mayCarryLocation, bool disclosable, bool keep, bool removable) =>
-        PhotoPositionProtection.OriginalReachOf(mayCarryLocation, disclosable, keep, removable);
+    [Fact]
+    public void The_second_switch_hands_an_unrewritable_file_to_a_reader_who_may_place_it_while_the_first_is_off()
+    {
+        // Switch off: nobody gets a video or an unrewritable picture as a file, the reader who
+        // may place it included.
+        Reach(mayCarryLocation: true, disclosable: true, keep: false, removable: false, serveUnstrippable: false)
+            .ShouldBe(OriginalReach.None);
+        // On: that reader gets it as stored.
+        Reach(mayCarryLocation: true, disclosable: true, keep: false, removable: false, serveUnstrippable: true)
+            .ShouldBe(OriginalReach.Stored);
+    }
+
+    [Fact]
+    public void The_second_switch_never_reaches_a_reader_who_may_not_place_the_file_nor_a_rewritable_one()
+    {
+        foreach (var keep in new[] { true, false })
+        {
+            Reach(mayCarryLocation: true, disclosable: false, keep: keep, removable: false, serveUnstrippable: true)
+                .ShouldBe(OriginalReach.None);
+            Reach(mayCarryLocation: true, disclosable: false, keep: keep, removable: true, serveUnstrippable: true)
+                .ShouldBe(OriginalReach.LocationFree);
+        }
+
+        // A picture it can rewrite still goes location-free to everybody while the first switch
+        // is off: the second is only about files no location-free copy exists for.
+        Reach(mayCarryLocation: true, disclosable: true, keep: false, removable: true, serveUnstrippable: true)
+            .ShouldBe(OriginalReach.LocationFree);
+    }
+
+    private static OriginalReach Reach(
+        bool mayCarryLocation, bool disclosable, bool keep, bool removable, bool serveUnstrippable = false) =>
+        PhotoPositionProtection.OriginalReachOf(mayCarryLocation, disclosable, keep, removable, serveUnstrippable);
 }

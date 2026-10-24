@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Security.Cryptography;
 using ImageMagick;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
@@ -113,6 +114,26 @@ public sealed class LocationFreeCopyService(IFileStore fileStore)
         }
 
         return cachePath;
+    }
+
+    /// <summary>
+    /// The size and SHA-256 (lower-case hex, as stored files are hashed) of the file's
+    /// location-free copy, made now when there is none yet — the copy's own bytes, which are what
+    /// a location-free delivery hands over, not the stored file's.
+    /// </summary>
+    /// <remarks>
+    /// Hashed from the cached file on every call rather than remembered beside it: the copy is a
+    /// cache that may be deleted and made again, and a remembered hash would then describe bytes
+    /// that are no longer there.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The file is not in a format this can write.</exception>
+    /// <exception cref="MagickException">The stored image could not be read or written.</exception>
+    public async Task<(long SizeBytes, string Sha256)> DescribeAsync(StoredFile file, CancellationToken ct)
+    {
+        var path = await GetOrCreateAsync(file, ct);
+        await using var copy = File.OpenRead(path);
+        var hash = await SHA256.HashDataAsync(copy, ct);
+        return (copy.Length, Convert.ToHexStringLower(hash));
     }
 
     /// <summary>

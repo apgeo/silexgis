@@ -245,6 +245,8 @@ public static class AdminSettingsEndpoints
                 RevealProtectedAssociations = request.RevealProtectedAssociations,
                 CalendarFeedEnabled = request.CalendarFeedEnabled,
                 KeepLocationInPhotoFiles = request.KeepLocationInPhotoFiles,
+                ServeUnstrippableOriginalsToLocationReaders = request.ServeUnstrippableOriginalsToLocationReaders,
+                DescribeLocationFreeCopies = request.DescribeLocationFreeCopies,
             },
             ct);
 
@@ -571,7 +573,9 @@ public static class AdminSettingsEndpoints
             new ProtectionSettingsDto(
                 disclosure.RevealProtectedAssociations,
                 disclosure.CalendarFeedEnabled,
-                disclosure.KeepLocationInPhotoFiles),
+                disclosure.KeepLocationInPhotoFiles,
+                disclosure.ServeUnstrippableOriginalsToLocationReaders,
+                disclosure.DescribeLocationFreeCopies),
             new ImportSettingsDto(
                 import.AllowCreateWithoutReview,
                 import.DuplicateRadiusMeters,

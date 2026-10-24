@@ -517,6 +517,107 @@ public sealed class SyncDocumentStreamTests : IAsyncLifetime, IDisposable, IClas
 
     // ---- helpers ----
 
+    [Fact]
+    public async Task A_location_free_originals_address_carries_the_size_and_hash_of_the_copy_only_while_the_switch_asks_for_them()
+    {
+        var open = await CreateCaveAsync(locationProtected: false);
+        var guarded = await CreateCaveAsync(locationProtected: true);
+        var uploaded = PlacedJpeg(45.51, 25.41);
+        var photo = await UploadAsync("described.jpg", uploaded, "image/jpeg");
+        var link = await AttachAsync(photo, open);
+        await AttachAsync(photo, guarded);
+        var documentId = await DocumentIdOfAsync(photo);
+        var readersSet = await CreateSetAsync(reader, [open]);
+
+        // Off (the default): the address comes without numbers.
+        var silent = Single(await LinksAsync(reader, (documentId, "original")));
+        silent.GetProperty("sizeBytes").ValueKind.ShouldBe(JsonValueKind.Null);
+        silent.GetProperty("sha256").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        await SetProtectionAsync(p => p with { DescribeLocationFreeCopies = true });
+        try
+        {
+            var described = Single(await LinksAsync(reader, (documentId, "original")));
+            var bytes = await FetchAsync(reader, described);
+
+            // The numbers are those of the bytes the address then serves — the copy, not the
+            // stored file.
+            described.GetProperty("sizeBytes").GetInt64().ShouldBe(bytes.LongLength);
+            described.GetProperty("sha256").GetString().ShouldBe(Sha(bytes));
+            Sha(bytes).ShouldNotBe(Sha(uploaded));
+            PhotoDelivery.ShouldCarryNoLocation(bytes);
+
+            // The catalogue still quotes none for that reach, and a picture's address none at all.
+            var entry = Link(await GetPageAsync(reader, $"/api/v1/sync/sets/{readersSet}/documents"), link)
+                .GetProperty("document");
+            entry.GetProperty("reach").GetString().ShouldBe("locationFree");
+            entry.GetProperty("sizeBytes").ValueKind.ShouldBe(JsonValueKind.Null);
+            entry.GetProperty("sha256").ValueKind.ShouldBe(JsonValueKind.Null);
+            Single(await LinksAsync(reader, (documentId, 480))).GetProperty("sizeBytes").ValueKind
+                .ShouldBe(JsonValueKind.Null);
+
+            // The owner is handed the stored file, which the catalogue already describes.
+            var ownersLink = Single(await LinksAsync(owner, (documentId, "original")));
+            ownersLink.GetProperty("sizeBytes").ValueKind.ShouldBe(JsonValueKind.Null);
+            Sha(await FetchAsync(owner, ownersLink)).ShouldBe(Sha(uploaded));
+        }
+        finally
+        {
+            await SetProtectionAsync(p => p with { DescribeLocationFreeCopies = false });
+        }
+    }
+
+    [Fact]
+    public async Task With_the_location_switch_off_the_second_switch_hands_a_video_to_the_owner_and_never_to_the_reader()
+    {
+        var open = await CreateCaveAsync(locationProtected: false);
+        var guarded = await CreateCaveAsync(locationProtected: true);
+        var video = await UploadAsync("switched.mp4", Mp4Bytes(), "video/mp4");
+        var link = await AttachAsync(video, open);
+        await AttachAsync(video, guarded);
+        var documentId = await DocumentIdOfAsync(video);
+        var readersSet = await CreateSetAsync(reader, [open]);
+        var ownersSet = await CreateSetAsync(owner, [open]);
+
+        await SetProtectionAsync(p => p with { KeepLocationInPhotoFiles = false });
+        try
+        {
+            // Second switch off: not even the owner, who may place both caves, gets the video.
+            Link(await GetPageAsync(owner, $"/api/v1/sync/sets/{ownersSet}/documents"), link)
+                .GetProperty("document").GetProperty("reach").GetString().ShouldBe("none");
+            (await LinksAsync(owner, (documentId, "original"))).GetProperty("refused").EnumerateArray()
+                .Single().GetProperty("code").GetString().ShouldBe("sync.original_withheld");
+
+            await SetProtectionAsync(p => p with
+            {
+                KeepLocationInPhotoFiles = false,
+                ServeUnstrippableOriginalsToLocationReaders = true,
+            });
+
+            var owners = Link(await GetPageAsync(owner, $"/api/v1/sync/sets/{ownersSet}/documents"), link)
+                .GetProperty("document");
+            owners.GetProperty("reach").GetString().ShouldBe("original");
+            owners.GetProperty("sha256").GetString().ShouldBe(Sha(Mp4Bytes()));
+            (await FetchAsync(owner, Single(await LinksAsync(owner, (documentId, "original"))))).ShouldBe(Mp4Bytes());
+
+            // The reader may not place the guarded cave: still nothing, on either route.
+            Link(await GetPageAsync(reader, $"/api/v1/sync/sets/{readersSet}/documents"), link)
+                .GetProperty("document").GetProperty("reach").GetString().ShouldBe("none");
+            var readers = await LinksAsync(reader, (documentId, "original"));
+            readers.GetProperty("links").GetArrayLength().ShouldBe(0);
+            readers.GetProperty("refused").EnumerateArray().Single().GetProperty("code").GetString()
+                .ShouldBe("sync.original_withheld");
+        }
+        finally
+        {
+            await SetProtectionAsync(p => p with
+            {
+                KeepLocationInPhotoFiles = true,
+                ServeUnstrippableOriginalsToLocationReaders = false,
+            });
+        }
+    }
+
     private static IReadOnlyList<Guid> FeatureIds(JsonElement page) =>
         [.. page.GetProperty("features").EnumerateArray().Select(f => f.GetProperty("id").GetGuid())];
 
@@ -663,6 +764,13 @@ public sealed class SyncDocumentStreamTests : IAsyncLifetime, IDisposable, IClas
         var settings = scope.ServiceProvider.GetRequiredService<IAppSettingsService>();
         var current = await settings.GetProtectionAsync();
         await settings.SaveAsync(AppSettingSections.Protection, current with { KeepLocationInPhotoFiles = keep });
+    }
+
+    private async Task SetProtectionAsync(Func<ProtectionSettings, ProtectionSettings> change)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var settings = scope.ServiceProvider.GetRequiredService<IAppSettingsService>();
+        await settings.SaveAsync(AppSettingSections.Protection, change(await settings.GetProtectionAsync()));
     }
 
     private static string Sha(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));

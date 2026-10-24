@@ -159,7 +159,14 @@ recorded exchange. A build that has never heard of them carries on unaffected.
   whether fetching the file itself hands over the stored file, the whole picture with its location data
   removed, pictures of it only, or nothing.
 - **`POST /api/v1/sync/files/links`** — signed addresses for the files a phone chose to fetch,
-  `"original"` or a picture size, each item decided again against the account's access now.
+  `"original"` or a picture size, each item decided again against the account's access now. Each
+  address carries `sizeBytes` and `sha256`, `null` unless the item is an original handed without its
+  location and the installation chose to describe those copies (an administrator setting, off by
+  default); then they are the copy's own, exactly the bytes the address serves.
+- Which `reach` an account gets follows two administrator settings as well as its access: whether
+  location stays in photo files, and — while it does not — whether an account that may have the
+  location still gets videos, recordings and pictures that cannot be rewritten. A device reads
+  `reach` and does not infer it.
 
 Described in `docs/speleoloc-sync/01-protocol.md` §11 and `02-field-mapping.md` §7.
 

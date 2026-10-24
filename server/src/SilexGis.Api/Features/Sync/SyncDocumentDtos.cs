@@ -108,7 +108,19 @@ public sealed record SyncFileLinkItem(Guid DocumentId, JsonElement Rendition);
 public sealed record SyncFileLinksRequest(IReadOnlyList<SyncFileLinkItem> Items);
 
 /// <summary>An address a file can be fetched from, until <paramref name="ExpiresAt"/>.</summary>
-public sealed record SyncFileLinkDto(Guid DocumentId, JsonElement Rendition, string Url, DateTimeOffset ExpiresAt);
+/// <param name="SizeBytes">
+/// The size of what the address hands over, given only for an original handed without its location
+/// and only when the installation tells phones these numbers; otherwise absent (the catalogue's
+/// numbers describe a stored original).
+/// </param>
+/// <param name="Sha256">The hash of the same bytes, on the same terms as <paramref name="SizeBytes"/>.</param>
+public sealed record SyncFileLinkDto(
+    Guid DocumentId,
+    JsonElement Rendition,
+    string Url,
+    DateTimeOffset ExpiresAt,
+    long? SizeBytes,
+    string? Sha256);
 
 /// <summary>An item no address was given for, and why.</summary>
 public sealed record SyncFileLinkRefusalDto(Guid DocumentId, JsonElement Rendition, string Code);

@@ -90,6 +90,13 @@ public static class PhotoPositionProtection
     /// cannot carry a location (see <see cref="MayCarryLocation"/>) is outside the rule
     /// entirely: the stored bytes go to anybody who may read it.
     /// </para>
+    /// <para>
+    /// The second administrator switch reaches exactly one case: a reader who may be told the
+    /// location, the first switch off, and a file whose location cannot be taken out. By the
+    /// first switch alone nobody would get such a file at all; with the second on, that reader
+    /// gets it as stored — it can hold nothing they may not already be told. A reader who may not
+    /// be told the location is never reached by it.
+    /// </para>
     /// </remarks>
     /// <param name="mayCarryLocation"><see cref="MayCarryLocation"/>'s answer for the file.</param>
     /// <param name="positionDisclosable">
@@ -100,15 +107,24 @@ public static class PhotoPositionProtection
     /// <param name="locationRemovable">
     /// Whether this application can write the file back with its location data removed.
     /// </param>
+    /// <param name="serveUnstrippableToLocationReaders">
+    /// The installation's second switch: whether a reader who may be told the location still gets
+    /// a file whose location cannot be removed, as stored, while <paramref name="keepLocationInFiles"/>
+    /// is off. Off by default.
+    /// </param>
     public static OriginalReach OriginalReachOf(
-        bool mayCarryLocation, bool positionDisclosable, bool keepLocationInFiles, bool locationRemovable)
+        bool mayCarryLocation,
+        bool positionDisclosable,
+        bool keepLocationInFiles,
+        bool locationRemovable,
+        bool serveUnstrippableToLocationReaders)
     {
         if (!mayCarryLocation)
         {
             return OriginalReach.Stored;
         }
 
-        if (positionDisclosable && keepLocationInFiles)
+        if (positionDisclosable && (keepLocationInFiles || (!locationRemovable && serveUnstrippableToLocationReaders)))
         {
             return OriginalReach.Stored;
         }

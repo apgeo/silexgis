@@ -166,6 +166,25 @@ public sealed record ProtectionSettings
     /// inside the file.
     /// </summary>
     public bool KeepLocationInPhotoFiles { get; init; } = true;
+
+    /// <summary>
+    /// While <see cref="KeepLocationInPhotoFiles"/> is off, still hand a video, a sound recording
+    /// or a picture in a format this application cannot rewrite, as stored, to a reader who may
+    /// be told where it was taken. Off by default, which means nobody gets such a file at all while
+    /// the location switch is off — no copy without the location can be made of it. Switched on,
+    /// the reader who may have the location gets the file; it changes nothing for a reader who may
+    /// not, and nothing while the location switch is on.
+    /// </summary>
+    public bool ServeUnstrippableOriginalsToLocationReaders { get; init; }
+
+    /// <summary>
+    /// Tell a phone asking for the address of a photo it will receive without its location the
+    /// size and SHA-256 of that copy, beside the address. Off by default: the copy is made the
+    /// first time anybody asks for it, so saying how large it is means making it there and then,
+    /// which makes an address request for many such photos slow. The catalogue a phone reads
+    /// never gives these numbers for such a photo either way.
+    /// </summary>
+    public bool DescribeLocationFreeCopies { get; init; }
 }
 
 /// <summary>How much an installation trusts a vector file to become registry objects on its own.</summary>

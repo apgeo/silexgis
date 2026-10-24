@@ -73,13 +73,17 @@ public sealed record SecuritySettingsDto(
 
 /// <summary>
 /// What the installation gives away about a protected position's surroundings, whether it
-/// lets an account subscribe to its own calendar from outside, and whether photo files keep the
-/// location data written into them when they are handed to a reader who may have it.
+/// lets an account subscribe to its own calendar from outside, whether photo files keep the
+/// location data written into them when they are handed to a reader who may have it, whether such
+/// a reader still gets the files no copy without the location can be made of while they do not,
+/// and whether a phone is told the size and hash of a copy without the location.
 /// </summary>
 public sealed record ProtectionSettingsDto(
     bool RevealProtectedAssociations,
     bool CalendarFeedEnabled,
-    bool KeepLocationInPhotoFiles);
+    bool KeepLocationInPhotoFiles,
+    bool ServeUnstrippableOriginalsToLocationReaders,
+    bool DescribeLocationFreeCopies);
 
 /// <summary>
 /// Everything the installation-settings page needs in one read, including whether each channel is

@@ -31,7 +31,7 @@ public sealed class PhotoPositionDisclosure(
     /// </summary>
     public async Task<PhotoReach> ReachAsync(
         AccessContext? ctx, IReadOnlyCollection<Guid> fileIds, CancellationToken ct = default) =>
-        new(await DisclosableIdsAsync(ctx, fileIds, ct), await KeepLocationInFilesAsync(ct));
+        new(await DisclosableIdsAsync(ctx, fileIds, ct), await settings.GetProtectionAsync(ct));
 
     /// <summary>
     /// The same answer for the person holding a file they have just sent. Nothing can hang on a
@@ -39,10 +39,7 @@ public sealed class PhotoPositionDisclosure(
     /// because it is about what any delivery carries rather than about who asks.
     /// </summary>
     public async Task<PhotoReach> ForUploaderAsync(Guid fileId, CancellationToken ct = default) =>
-        new(new HashSet<Guid> { fileId }, await KeepLocationInFilesAsync(ct));
-
-    private async Task<bool> KeepLocationInFilesAsync(CancellationToken ct) =>
-        (await settings.GetProtectionAsync(ct)).KeepLocationInPhotoFiles;
+        new(new HashSet<Guid> { fileId }, await settings.GetProtectionAsync(ct));
 
     /// <summary>
     /// Of the given files, those whose own recorded position may be disclosed to the caller.
@@ -216,14 +213,20 @@ public sealed class PhotoPositionDisclosure(
 
 /// <summary>
 /// A resolved answer about a batch of files: whose recorded position this caller may be given,
-/// and whether the installation lets location data travel inside photo files. The one place a
-/// delivery's reach is worked out from those two, so every listing, detail and map layer that
-/// mints a delivery address answers alike.
+/// and what the installation lets travel inside photo files. The one place a delivery's reach is
+/// worked out from those, so every listing, detail and map layer that mints a delivery address
+/// answers alike.
 /// </summary>
-public sealed class PhotoReach(IReadOnlySet<Guid> disclosable, bool keepLocationInFiles)
+public sealed class PhotoReach(IReadOnlySet<Guid> disclosable, ProtectionSettings protection)
 {
-    /// <summary>The installation's switch, as it stood when this answer was resolved.</summary>
-    public bool KeepLocationInFiles { get; } = keepLocationInFiles;
+    /// <summary>The installation's location switch, as it stood when this answer was resolved.</summary>
+    public bool KeepLocationInFiles { get; } = protection.KeepLocationInPhotoFiles;
+
+    /// <summary>
+    /// Whether a reader who may be told the location still gets a file no location-free copy can
+    /// be made of while the location switch is off, as it stood when this answer was resolved.
+    /// </summary>
+    public bool ServeUnstrippableToLocationReaders { get; } = protection.ServeUnstrippableOriginalsToLocationReaders;
 
     /// <summary>
     /// Whether the file's recorded position may be shown to this caller — the answer the
@@ -252,5 +255,6 @@ public sealed class PhotoReach(IReadOnlySet<Guid> disclosable, bool keepLocation
             PhotoPositionProtection.MayCarryLocation(kind, recordsPosition),
             positionDisclosable,
             KeepLocationInFiles,
-            locationRemovable: LocationFreeCopyService.CanRemoveLocation(kind, mimeType));
+            locationRemovable: LocationFreeCopyService.CanRemoveLocation(kind, mimeType),
+            ServeUnstrippableToLocationReaders);
 }
