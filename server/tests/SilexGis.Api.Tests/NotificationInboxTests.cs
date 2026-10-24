@@ -271,13 +271,13 @@ public sealed class NotificationInboxTests : IAsyncLifetime, IDisposable, IClass
             .GetProperty("title").GetString().ShouldBe($"You were given access to {title}");
 
         (await InboxAsync(reader, acceptLanguage: "ro-RO,ro;q=0.9,en;q=0.8")).GetProperty("items")[0]
-            .GetProperty("title").GetString().ShouldBe($"Ați primit acces la {title}");
+            .GetProperty("title").GetString().ShouldBe($"Ai primit acces la {title}");
 
         // A language this installation has no wording in asks for nothing, and the account's own
         // choice decides instead of a default overruling it.
         await SetLocaleAsync("ro");
         (await InboxAsync(reader, acceptLanguage: "de-DE,de;q=0.9")).GetProperty("items")[0]
-            .GetProperty("title").GetString().ShouldBe($"Ați primit acces la {title}");
+            .GetProperty("title").GetString().ShouldBe($"Ai primit acces la {title}");
     }
 
     private async Task<Guid> CreateTripAsync(string title)

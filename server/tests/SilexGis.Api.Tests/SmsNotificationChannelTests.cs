@@ -338,7 +338,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable, I
         // rendered text and not on the catalogue, because what is billed is what was handed over
         // — and asserted on a word carrying the marks, so that stripping them anywhere in the
         // wording would fail this test rather than quietly halve the bill.
-        wide.ShouldContain("Citiți");
+        wide.ShouldContain("Citește");
 
         // Not length. The Romanian message is well inside what a single seven-bit piece would
         // have held, so a counter that only divided by 160 would have answered one. What doubles
