@@ -3164,6 +3164,7 @@
     "sharedNoBackground": "Nicio hartă de fundal nu este disponibilă pentru vederile partajate în această instalare.",
     "sharedUnnamed": "Fără nume",
     "sharedClose": "Închide",
+    "sharedProtectedNote": "Peșterile protejate nu sunt afișate niciodată pe o hartă partajată.",
     "exportUnreadable": "Harta nu poate fi pusă într-o imagine: unul dintre straturile ei vine de la un furnizor care nu permite asta.",
     "exportUnreadableLayers": "Harta nu poate fi pusă într-o imagine cât timp arată {{layers}}: furnizorul nu permite asta.",
     "exportUnreadableTry": "Alege un fundal permis în documente, de exemplu {{name}}, oprește celelalte straturi numite aici și exportă din nou.",

@@ -82,6 +82,11 @@ test('a shared view draws its public entrances for somebody with no account', as
     );
     await visitor.goto(`/shared/view/${shared.shareToken}`);
     await expect(visitor.getByRole('heading', { name: `E2E Shared ${stamp}` })).toBeVisible({ timeout: 30_000 });
+    // Said on every shared page — this window holds no protected cave at all, and the sentence is
+    // there all the same, so its presence tells a reader nothing about what lies in view.
+    await expect(visitor.getByTestId('shared-view-protection-note')).toHaveText(
+      'Protected caves are never shown on a shared map.',
+    );
 
     const body = (await (await answered).json()) as {
       features: { geometry: { coordinates: number[] }; properties: Record<string, unknown> }[];

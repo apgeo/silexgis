@@ -3164,6 +3164,7 @@
     "sharedNoBackground": "No background map is available for shared views on this installation.",
     "sharedUnnamed": "Unnamed",
     "sharedClose": "Close",
+    "sharedProtectedNote": "Protected caves are never shown on a shared map.",
     "exportUnreadable": "The map cannot be put into an image: a layer on it comes from a provider that does not allow that.",
     "exportUnreadableLayers": "The map cannot be put into an image while it shows {{layers}}: the provider does not allow that.",
     "exportUnreadableTry": "Switch the background to one allowed in documents, such as {{name}}, turn off any other layer named here, and export again.",

@@ -129,6 +129,15 @@ export default function SharedViewPage() {
         </Typography.Title>
         <Typography.Text type="secondary">{t('app.name')}</Typography.Text>
       </Flex>
+      {/* Said on every shared page, whatever it holds: conditional on the data, the sentence
+          would itself tell the reader that something protected lies in view. */}
+      <Typography.Text
+        type="secondary"
+        style={{ padding: '4px 16px', fontSize: 12, borderBottom: '1px solid rgba(128,128,128,0.25)' }}
+        data-testid="shared-view-protection-note"
+      >
+        {t('views.sharedProtectedNote')}
+      </Typography.Text>
       {noBackground && <Alert type="info" showIcon banner title={t('views.sharedNoBackground')} />}
       <div style={{ flex: 1, position: 'relative' }}>
         <div ref={mapTarget} style={{ position: 'absolute', inset: 0 }} data-testid="shared-view-map" />
