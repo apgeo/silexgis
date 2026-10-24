@@ -187,6 +187,30 @@ A centerline surveyed in plan, with no altitudes recorded, is drawn **on the sur
 the scene says how many are in that state. It is not drawn at depth zero as if the cave were
 flat — that would be a statement about the cave that nobody made.
 
+## GeoTIFF and vector backgrounds in 3D
+
+A background or an overlay your installation lists as a **GeoTIFF** — a cloud-optimised GeoTIFF
+such as a LiDAR hillshade, an orthophoto or a geological map — is drawn on the globe tile by tile,
+from the file's own levels of detail, so it stays as sharp in the scene as on the map. The file is
+read only once you switch it on, and only the parts in view.
+
+A **vector background** — roads, rivers and names drawn in a style, such as the OpenFreeMap
+styles — is drawn on the globe by the same renderer as the map, into each tile, labels included.
+The labels lie on the ground and turn with it. Where two neighbouring tiles disagree about which of
+two crowded labels to leave out, a label can be cut off at a tile's edge.
+
+The layer panel says when one of these is not drawn as you might expect:
+
+- *Not drawn in 3D*, with the reason — a GeoTIFF that cannot be read, that does not say where on
+  the ground it lies, or whose coordinate system cannot be used here; a style that cannot be
+  loaded. Such a basemap is not offered, and the scene goes back to the installation's default.
+- *Draws it only from close in* — a GeoTIFF without reduced copies of itself (overviews). From far
+  out the scene would have to read the whole file for every tile, so it waits until you are closer.
+- *Drawn in 3D as …* — a vector background drawn by the picture background your installation
+  named to stand in for it. That happens on a computer with two processor cores or two gigabytes of
+  memory or less, where drawing a style tile by tile would make the scene stutter, and whenever the
+  style cannot be loaded. Choosing the background still chooses it on the map.
+
 ## Raster overlays in 3D
 
 Georeferenced raster sheets can be draped on the globe. Note the difference from the flat

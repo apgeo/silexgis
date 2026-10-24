@@ -196,6 +196,33 @@ O drumuire ridicată în plan, fără altitudini, este desenată **pe suprafaț�
 câte sunt în starea aceea. Nu este desenată la adâncimea zero ca și cum peștera ar fi plată —
 asta ar fi o afirmație despre peșteră pe care n-a făcut-o nimeni.
 
+## Fundaluri GeoTIFF și vectoriale în 3D
+
+Un fundal sau o hartă suprapusă pe care instalarea o listează ca **GeoTIFF** — un GeoTIFF
+optimizat pentru cloud, cum ar fi o umbrire de relief LiDAR, o ortofotografie sau o hartă
+geologică — este desenat pe glob dală cu dală, din propriile niveluri de detaliu ale fișierului,
+așa că rămâne la fel de clar în scenă ca pe hartă. Fișierul este citit doar după ce îl pornești și
+doar porțiunile aflate în vedere.
+
+Un **fundal vectorial** — drumuri, râuri și nume desenate într-un stil, cum sunt stilurile
+OpenFreeMap — este desenat pe glob de același motor ca harta, în fiecare dală, cu tot cu etichete.
+Etichetele stau pe teren și se rotesc odată cu el. Acolo unde două dale vecine nu cad de acord care
+dintre două etichete înghesuite să fie lăsată deoparte, o etichetă poate apărea tăiată la marginea
+unei dale.
+
+Panoul de straturi spune când unul dintre acestea nu este desenat cum te-ai aștepta:
+
+- *Nedesenat în 3D*, cu motivul — un GeoTIFF care nu poate fi citit, care nu spune unde se află pe
+  teren sau al cărui sistem de coordonate nu poate fi folosit aici; un stil care nu poate fi
+  încărcat. O astfel de hartă de bază nu este oferită, iar scena revine la cea implicită a
+  instalării.
+- *Îl desenează doar de aproape* — un GeoTIFF fără copii micșorate ale sale (overviews). De departe,
+  scena ar trebui să citească întregul fișier pentru fiecare dală, așa că așteaptă să te apropii.
+- *Desenat în 3D ca …* — un fundal vectorial desenat de fundalul-imagine pe care instalarea l-a
+  numit înlocuitorul lui. Asta se întâmplă pe un calculator cu cel mult două nuclee de procesor sau
+  cel mult doi gigaocteți de memorie, unde desenarea unui stil dală cu dală ar sacada scena, și
+  ori de câte ori stilul nu poate fi încărcat. Alegerea fundalului îl alege în continuare și pe hartă.
+
 ## Straturi raster în 3D
 
 Foile raster georeferențiate pot fi întinse pe glob. Observă diferența față de harta plană:
