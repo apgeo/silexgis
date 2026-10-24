@@ -115,6 +115,31 @@ describe('List', () => {
     expect(screen.queryAllByText('No data')).toHaveLength(0);
   });
 
+  /**
+   * A search list fetches again after every key, and a keyboard user arrows onto a row while it
+   * does. The rows have to be the same elements across the fetch: rebuilt, the row that held the
+   * focus is gone and the focus falls to the page, so the next Enter chooses nothing.
+   */
+  it('keeps the focused row, and its focus, while the rows are fetched again', () => {
+    const renderRow = (row: Row) => (
+      <List.Item>
+        <div role="button" tabIndex={0}>{row.name}</div>
+      </List.Item>
+    );
+    const { rerender } = render(<List dataSource={rows} renderItem={renderRow} />);
+    const option = screen.getByRole('button', { name: 'Peștera Demo Mare' });
+    option.focus();
+    expect(option).toHaveFocus();
+
+    rerender(<List dataSource={rows} renderItem={renderRow} loading />);
+    expect(screen.getByRole('button', { name: 'Peștera Demo Mare' })).toBe(option);
+    expect(option).toHaveFocus();
+
+    rerender(<List dataSource={rows} renderItem={renderRow} loading={false} />);
+    expect(screen.getByRole('button', { name: 'Peștera Demo Mare' })).toBe(option);
+    expect(option).toHaveFocus();
+  });
+
   it('can be found by the mark its caller put on it, with rows and without', () => {
     // The library's own list handed a `data-testid` on to its root, and a call site moved here
     // by changing its import kept passing one. Dropped silently, the list was simply not there

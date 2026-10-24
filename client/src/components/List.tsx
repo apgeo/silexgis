@@ -79,7 +79,11 @@ function ListRoot<T>({
 
   return (
     <div style={style} data-testid={testId}>
-      {loading ? <Spin>{rows}</Spin> : rows}
+      {/* Always inside the spinner, which is only switched on and off. Wrapped only while
+          loading, the rows moved to another parent each time a fetch began and ended, so React
+          built them again — and a row somebody had arrowed onto lost the keyboard focus to the
+          page the moment the list asked again, which a search list does after every key. */}
+      <Spin spinning={loading === true}>{rows}</Spin>
     </div>
   );
 }
