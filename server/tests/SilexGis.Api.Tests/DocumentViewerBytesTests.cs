@@ -195,8 +195,9 @@ public sealed class DocumentViewerBytesTests : IAsyncLifetime, IDisposable, ICla
 
     /// <summary>
     /// The viewer's own path for a photo, at the width it displays: someone who may not place
-    /// what the photo shows is shown the picture and never the stored bytes, and the picture
-    /// they are shown carries none of the metadata the bytes do.
+    /// what the photo shows is shown the picture and never the stored bytes — the rendering
+    /// carries none of the metadata the bytes do, and the whole picture they may download
+    /// carries no location.
     /// </summary>
     [Fact]
     public async Task Showing_a_guarded_photo_serves_the_rendering_and_never_the_original()
@@ -218,7 +219,6 @@ public sealed class DocumentViewerBytesTests : IAsyncLifetime, IDisposable, ICla
         seenCave.GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
 
         var seen = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{fileId}"));
-        seen.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeFalse();
 
         // What the viewer shows: the largest rendering offered, asked for with the token that
         // came with the file. This is the substitution the display makes, and it works.
@@ -231,20 +231,17 @@ public sealed class DocumentViewerBytesTests : IAsyncLifetime, IDisposable, ICla
             rendering.ProfileNames.ShouldBeEmpty();
         }
 
-        // What it must not reach for, however it is spelled: the stored bytes, which still hold
-        // the fix the camera wrote. The published URL is refused, and so is the same URL asked
-        // for by a screen that is only displaying something.
-        (await reader.GetAsync(seen.GetProperty("contentUrl").GetString()))
-            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        // What it must not be handed, however it is spelled: the stored bytes, which still hold
+        // the fix the camera wrote. The published URL serves the whole picture with the fix
+        // taken out instead.
+        await PhotoDelivery.ShouldBeHandedWithoutLocationAsync(reader, seen);
 
         // The owner may place the cave, so both halves succeed for them — the refusal above is
         // the rule being applied, not a URL that never worked.
         var held = await ReadJsonAsync(await owner.GetAsync($"/api/v1/files/{fileId}"));
-        held.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeTrue();
         (await owner.GetAsync(held.GetProperty("thumbnailUrl").GetString()!.Replace("size=480", "size=1200")))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await owner.GetAsync(held.GetProperty("contentUrl").GetString()))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await PhotoDelivery.ShouldBeHandedStoredAsync(owner, held);
     }
 
     // ---- helpers ----

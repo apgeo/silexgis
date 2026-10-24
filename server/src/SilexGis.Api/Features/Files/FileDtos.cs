@@ -3,6 +3,7 @@ using SilexGis.Api.Common;
 using SilexGis.Api.Features.Import;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Files;
 
@@ -14,13 +15,15 @@ namespace SilexGis.Api.Features.Files;
 /// the metadata when a token expires.
 /// </summary>
 /// <param name="MayDownloadOriginal">
-/// Whether <see cref="ContentUrl"/> will actually hand over the stored bytes. It is false
-/// for a photo whose own coordinates this caller may not be given: the delivery route
-/// refuses such a request whatever the response said, because a token carries no identity
-/// and that route is the only place the decision can be honoured. The field exists so a
-/// client can label a control it must not offer, rather than discovering the refusal by
-/// following the link — the URL itself stays present and answers as a missing file, which
-/// is what every other withheld thing answers.
+/// Whether <see cref="ContentUrl"/> will hand over the whole file. For a photo whose location
+/// this caller may not have — or for every reader when the installation keeps no location in
+/// photo files — that is the full-size picture with its location data taken out, not the
+/// stored bytes. It is false only where no such copy can be made, a video or a format that
+/// cannot be written back: the delivery route refuses such a request whatever the response
+/// said, because a token carries no identity and that route is the only place the decision can
+/// be honoured. The field exists so a client can label a control it must not offer, rather
+/// than discovering the refusal by following the link — the URL itself stays present and
+/// answers as a missing file, which is what every other withheld thing answers.
 /// </param>
 /// <param name="PagesUrl">
 /// The delivery URL of the file whose pages can be drawn, or null when nothing here has pages
@@ -45,9 +48,9 @@ namespace SilexGis.Api.Features.Files;
 /// </param>
 /// <param name="Position">
 /// Where the picture was taken, and how that was arrived at. Null for anything without a
-/// position <em>and</em> for a caller who may not be given this one — the same answer as
-/// <paramref name="MayDownloadOriginal"/>, decided by the same rule, because a photograph's fix
-/// is a position rather than a fact about one. Splitting it from <paramref name="Photo"/> above
+/// position <em>and</em> for a caller who may not be given this one — decided by the same
+/// disclosure rule that decides whether the file goes out with its location inside it, because
+/// a photograph's fix is a position rather than a fact about one. Splitting it from <paramref name="Photo"/> above
 /// is what lets a viewer be shown the camera and not the coordinates.
 /// </param>
 public sealed record FileDto(
@@ -174,12 +177,10 @@ internal static class FileMapping
     /// The document id comes from the same revision — a file id changes with every new
     /// version, so it is the only identifier that can name the thing being looked at.
     /// </summary>
-    /// <param name="mayHaveOriginal">
-    /// Whether this caller may be handed the stored bytes of a photo that records where it
-    /// was taken. Defaults to no, and the default is the point: a photo's GPS fix is a
-    /// position rather than a fact about one, so a mint site that has not resolved the
-    /// caller's right to place what the photo shows must not hand out the original — while
-    /// everything without a position of its own is unaffected, whatever this says.
+    /// <param name="reach">
+    /// What this caller may be handed of each file and told about its position, resolved for
+    /// the batch the file came in. Required, because a mint site that has not resolved it has
+    /// not answered the question the delivery address exists to carry.
     /// </param>
     /// <param name="rendition">
     /// The converted copy of this file, where one has been produced. Passed in rather than
@@ -190,10 +191,10 @@ internal static class FileMapping
         this StoredFile f,
         DocumentVersion version,
         IFileAccessTokenService tokens,
-        bool mayHaveOriginal = false,
+        PhotoReach reach,
         StoredFile? rendition = null)
     {
-        var delivery = f.Geom is null || mayHaveOriginal ? FileDelivery.Full : FileDelivery.DerivativesOnly;
+        var delivery = FileDeliveries.Of(reach.OriginalOf(f));
         var token = tokens.CreateToken(f.Id, delivery);
 
         // A portable document draws its own pages; anything else draws them only through the
@@ -204,7 +205,11 @@ internal static class FileMapping
             : null;
         var pagesUrl = pagesFile is null ? null
             : pagesFile.Id == f.Id ? ContentUrl(f.Id, token)
-            : ContentUrl(pagesFile.Id, tokens.CreateToken(pagesFile.Id, delivery));
+            // A location-free copy is made of pictures only, and a converted copy is never one, so
+            // the pages of a converted copy are drawn under the renderings reach rather than
+            // under a reach its content route would have nothing to serve for.
+            : ContentUrl(pagesFile.Id, tokens.CreateToken(
+                pagesFile.Id, delivery == FileDelivery.LocationFree ? FileDelivery.DerivativesOnly : delivery));
 
         return new FileDto(
             f.Id,
@@ -221,16 +226,16 @@ internal static class FileMapping
             f.Kind == FileKind.Image
                 ? $"/api/v1/files/{f.Id}/thumbnail?size=480&token={Uri.EscapeDataString(token)}"
                 : null,
-            delivery == FileDelivery.Full,
+            delivery != FileDelivery.DerivativesOnly,
             pagesUrl,
             (pagesFile ?? f).PageCount,
             f.Conversion,
             f.ContentCreatedAt,
             PhotoExifOf(f),
-            // Gated on the same answer as the bytes, and it has to be: the original carries this
-            // fix inside it, so a response that withheld the file and printed its coordinates
-            // beside it would be withholding nothing at all.
-            mayHaveOriginal ? PositionOf(f) : null);
+            // Gated on the disclosure answer, never on the switch: the switch decides what travels
+            // inside the file, and a reader who may not be told where the photo was taken is not
+            // told it here either, whichever bytes the address above opens.
+            reach.PositionDisclosable(f.Id) ? PositionOf(f) : null);
     }
 
     private static PhotoExif? PhotoExifOf(StoredFile f)

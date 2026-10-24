@@ -434,7 +434,8 @@ public sealed class PhotoImportTests : IAsyncLifetime, IDisposable, IClassFixtur
     public async Task A_files_camera_panel_is_shown_where_its_coordinates_are_withheld()
     {
         // The picture hangs on a guarded cave, so the second account may see the picture but may
-        // not be given the original — which carries the fix inside it. Printing that fix beside
+        // not be given the stored original — which carries the fix inside it — only a copy
+        // without it. Printing that fix beside
         // the withheld file would be withholding nothing at all; the camera is a different
         // question and stays.
         var caveId = await CreateCaveWithEntranceAsync(
@@ -448,7 +449,7 @@ public sealed class PhotoImportTests : IAsyncLifetime, IDisposable, IClassFixtur
         mine.GetProperty("photo").GetProperty("cameraMake").GetString().ShouldBe("SilexTest");
 
         var theirs = await ReadJsonAsync(await other.GetAsync($"/api/v1/files/{photo}"));
-        theirs.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeFalse();
+        await PhotoDelivery.ShouldBeHandedWithoutLocationAsync(other, theirs);
         theirs.GetProperty("position").ValueKind.ShouldBe(JsonValueKind.Null);
         theirs.GetProperty("photo").GetProperty("cameraMake").GetString().ShouldBe("SilexTest");
     }

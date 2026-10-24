@@ -650,18 +650,23 @@ public sealed class TripSoftDeleteTests : IAsyncLifetime, IDisposable, IClassFix
 
     /// <summary>
     /// Whether this caller is handed the bytes the camera wrote, position and all. Asked of the
-    /// answer that says so and of the address it points at, which must agree: a control that
-    /// says no over a link that still serves the file would be the refusal in name only.
+    /// bytes the file's address serves: a caller who may not place the photo is still handed the
+    /// whole picture, so only the bytes tell the stored file apart from the copy with its
+    /// location taken out — and that copy, when it is what was served, must carry no fix.
     /// </summary>
     private static async Task<bool> IsHandedTheOriginalAsync(HttpClient client, Guid fileId)
     {
         var file = await JsonAsync(client, $"/api/v1/files/{fileId}");
-        var offered = file.GetProperty("mayDownloadOriginal").GetBoolean();
-        var served = await client.GetAsync(file.GetProperty("contentUrl").GetString());
-        served.StatusCode.ShouldBe(
-            offered ? HttpStatusCode.OK : HttpStatusCode.NotFound,
-            "what the file says of its original and what its address answers disagree");
-        return offered;
+        file.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeTrue(
+            "a geotagged JPEG is always handed over, as stored or without its location");
+        var served = await PhotoDelivery.ContentAsync(client, file);
+        if (PhotoDelivery.IsStored(served, file))
+        {
+            return true;
+        }
+
+        PhotoDelivery.ShouldCarryNoLocation(served);
+        return false;
     }
 
     /// <summary>

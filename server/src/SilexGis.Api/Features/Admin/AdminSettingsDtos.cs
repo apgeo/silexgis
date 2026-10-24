@@ -72,10 +72,14 @@ public sealed record SecuritySettingsDto(
     int TwoFactorResendIntervalSeconds);
 
 /// <summary>
-/// What the installation gives away about a protected position's surroundings, and whether it
-/// lets an account subscribe to its own calendar from outside.
+/// What the installation gives away about a protected position's surroundings, whether it
+/// lets an account subscribe to its own calendar from outside, and whether photo files keep the
+/// location data written into them when they are handed to a reader who may have it.
 /// </summary>
-public sealed record ProtectionSettingsDto(bool RevealProtectedAssociations, bool CalendarFeedEnabled);
+public sealed record ProtectionSettingsDto(
+    bool RevealProtectedAssociations,
+    bool CalendarFeedEnabled,
+    bool KeepLocationInPhotoFiles);
 
 /// <summary>
 /// Everything the installation-settings page needs in one read, including whether each channel is
@@ -297,7 +301,7 @@ public sealed class SecuritySettingsDtoValidator : AbstractValidator<SecuritySet
 }
 
 /// <summary>
-/// Nothing to reject: the section is a single switch, and both of its positions are valid
+/// Nothing to reject: the section is a set of switches, and every position of each is valid
 /// installation policy. The validator exists so the route is validated like every other one
 /// rather than being the single exception someone later has to explain.
 /// </summary>

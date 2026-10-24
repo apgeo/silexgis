@@ -2,6 +2,7 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.DataProtection;
 using SilexGis.Domain;
+using SilexGis.Domain.Geo;
 
 namespace SilexGis.Api.Common;
 
@@ -19,6 +20,26 @@ public enum FileDelivery
 
     /// <summary>The stored bytes exactly as uploaded, plus everything a derivative opens.</summary>
     Full = 1,
+
+    /// <summary>
+    /// The whole picture at full size, rewritten without the location data the stored file
+    /// carries, plus everything a derivative opens. What a reader who may see a photo but not be
+    /// told where it was taken is handed instead of the stored bytes. Only the content route
+    /// tells this apart from <see cref="Full"/>, and it must: serving the stored file under this
+    /// reach would hand over the very position the reach exists to keep back.
+    /// </summary>
+    LocationFree = 2,
+}
+
+/// <summary>The one translation of a file's original reach into what its delivery token opens.</summary>
+public static class FileDeliveries
+{
+    public static FileDelivery Of(OriginalReach reach) => reach switch
+    {
+        OriginalReach.Stored => FileDelivery.Full,
+        OriginalReach.LocationFree => FileDelivery.LocationFree,
+        _ => FileDelivery.DerivativesOnly,
+    };
 }
 
 /// <summary>
@@ -144,7 +165,7 @@ public sealed class FileAccessTokenService : IFileAccessTokenService
     /// chose to share with this caller, so the revocation staleness this service accepts is
     /// stretched to one sitting, not removed.
     /// </summary>
-    private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(4);
+    internal static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(4);
 
     private const string Anonymous = "-";
 
@@ -197,6 +218,8 @@ public sealed class FileAccessTokenService : IFileAccessTokenService
         {
             "f" => (FileDelivery.Full, FileNaming.AsUploaded),
             "fn" => (FileDelivery.Full, FileNaming.Withheld),
+            "l" => (FileDelivery.LocationFree, FileNaming.AsUploaded),
+            "ln" => (FileDelivery.LocationFree, FileNaming.Withheld),
             "d" => (FileDelivery.DerivativesOnly, FileNaming.AsUploaded),
             "dn" => (FileDelivery.DerivativesOnly, FileNaming.Withheld),
             _ => null,
@@ -213,7 +236,19 @@ public sealed class FileAccessTokenService : IFileAccessTokenService
         return new FileAccessGrant(reach.Value.Delivery, subject, reach.Value.Naming);
     }
 
-    private static string Payload(Guid fileId, FileDelivery delivery, FileNaming naming, Guid? userId) =>
-        $"{fileId:N}.{(delivery == FileDelivery.Full ? "f" : "d")}{(naming == FileNaming.Withheld ? "n" : "")}"
-        + $".{(userId is { } id ? id.ToString("N") : Anonymous)}";
+    private static string Payload(Guid fileId, FileDelivery delivery, FileNaming naming, Guid? userId)
+    {
+        // Every reach has its own word, and one this version has not met is refused rather than
+        // written as the nearest one — a new reach silently minted as another would hand out
+        // whatever that other one opens.
+        var word = delivery switch
+        {
+            FileDelivery.Full => "f",
+            FileDelivery.LocationFree => "l",
+            FileDelivery.DerivativesOnly => "d",
+            _ => throw new ArgumentOutOfRangeException(nameof(delivery), delivery, "Unknown delivery reach."),
+        };
+        return $"{fileId:N}.{word}{(naming == FileNaming.Withheld ? "n" : "")}"
+            + $".{(userId is { } id ? id.ToString("N") : Anonymous)}";
+    }
 }

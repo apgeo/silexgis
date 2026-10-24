@@ -112,27 +112,21 @@ public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable, IClassFixt
         var seenCave = await ReadJsonAsync(await reader.GetAsync($"/api/v1/caves/{guardedCaveId}"));
         seenCave.GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
 
-        // The picture on the trip that names the guarded cave: the bytes still hold the fix the
-        // camera wrote, so they are not handed over, and the response says so up front.
+        // The picture on the trip that names the guarded cave: the stored bytes still hold the
+        // fix the camera wrote, so this caller is handed the picture with it taken out instead.
         var guarded = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{guardedPhotoId}"));
-        guarded.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeFalse();
-        (await reader.GetAsync(guarded.GetProperty("contentUrl").GetString()))
-            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        await PhotoDelivery.ShouldBeHandedWithoutLocationAsync(reader, guarded);
 
         // The same caller, the same kind of request, one trip over: nothing about this cave is
-        // being kept back, so the original is served. This is what makes the refusal above a
+        // being kept back, so the stored file is served. This is what makes the copy above a
         // rule about the cave the trip names rather than a rule about trips.
         var open = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{openPhotoId}"));
-        open.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeTrue();
-        (await reader.GetAsync(open.GetProperty("contentUrl").GetString()))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await PhotoDelivery.ShouldBeHandedStoredAsync(reader, open);
 
-        // And the owner may place the guarded cave exactly, so the withheld bytes are withheld
-        // from this caller rather than from everybody.
+        // And the owner may place the guarded cave exactly, so the stored bytes are kept from
+        // this caller rather than from everybody.
         var held = await ReadJsonAsync(await owner.GetAsync($"/api/v1/files/{guardedPhotoId}"));
-        held.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeTrue();
-        (await owner.GetAsync(held.GetProperty("contentUrl").GetString()))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await PhotoDelivery.ShouldBeHandedStoredAsync(owner, held);
     }
 
     /// <summary>
@@ -176,10 +170,8 @@ public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable, IClassFixt
         // served. This is the half that would still pass on a build that never followed the camp
         // to its trips, which is why the guarded leg comes next over the same file.
         var before = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{photoId}"));
-        before.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeTrue();
         before.GetProperty("position").ValueKind.ShouldNotBe(JsonValueKind.Null);
-        (await reader.GetAsync(before.GetProperty("contentUrl").GetString()))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await PhotoDelivery.ShouldBeHandedStoredAsync(reader, before);
 
         await AddTripToCampAsync(campId, guardedTripId);
 
@@ -187,17 +179,13 @@ public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable, IClassFixt
         // guarded cave's position rule exists to keep, and it travels in the payload beside the
         // delivery token rather than inside the file.
         var after = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{photoId}"));
-        after.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeFalse();
         after.GetProperty("position").ValueKind.ShouldBe(JsonValueKind.Null);
-        (await reader.GetAsync(after.GetProperty("contentUrl").GetString()))
-            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        await PhotoDelivery.ShouldBeHandedWithoutLocationAsync(reader, after);
 
-        // And the owner, who may place the guarded cave exactly, is served the original over the
-        // same camp — the bytes are withheld from this caller, not from everybody.
+        // And the owner, who may place the guarded cave exactly, is served the stored file over
+        // the same camp — the stored bytes are kept from this caller, not from everybody.
         var held = await ReadJsonAsync(await owner.GetAsync($"/api/v1/files/{photoId}"));
-        held.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeTrue();
-        (await owner.GetAsync(held.GetProperty("contentUrl").GetString()))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await PhotoDelivery.ShouldBeHandedStoredAsync(owner, held);
     }
 
     /// <summary>
@@ -219,15 +207,12 @@ public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable, IClassFixt
         // Naming only the open cave, the original is served — the positive case, on the same
         // file, one cave before the refusal.
         var before = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{photoId}"));
-        (await reader.GetAsync(before.GetProperty("contentUrl").GetString()))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await PhotoDelivery.ShouldBeHandedStoredAsync(reader, before);
 
         await SetTripCavesAsync(tripId, openCaveId, guardedCaveId);
 
         var after = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{photoId}"));
-        after.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeFalse();
-        (await reader.GetAsync(after.GetProperty("contentUrl").GetString()))
-            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        await PhotoDelivery.ShouldBeHandedWithoutLocationAsync(reader, after);
     }
 
     /// <summary>

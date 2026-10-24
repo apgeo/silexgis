@@ -155,6 +155,17 @@ public sealed record ProtectionSettings
     /// stops every address already handed out, at the next poll.
     /// </summary>
     public bool CalendarFeedEnabled { get; init; }
+
+    /// <summary>
+    /// Hand the stored original of a photo — with the GPS fix and place names its camera or
+    /// editor wrote into it — to a reader who may be told where it was taken. On by default.
+    /// Switched off, every reader is handed the same full-size picture rewritten without its
+    /// location data instead. Either way a reader who may not be told where a photo was taken
+    /// gets that rewritten copy and never the stored file, and the position recorded beside a
+    /// photo is governed by the location rules as always: this is only about what travels
+    /// inside the file.
+    /// </summary>
+    public bool KeepLocationInPhotoFiles { get; init; } = true;
 }
 
 /// <summary>How much an installation trusts a vector file to become registry objects on its own.</summary>

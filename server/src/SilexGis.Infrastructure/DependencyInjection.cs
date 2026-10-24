@@ -335,6 +335,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IFileStore, LocalFileStore>();
         services.AddSingleton<ThumbnailService>();
+        services.AddSingleton<LocationFreeCopyService>();
         services.AddSingleton<PageRenderService>();
         services.AddSingleton<StoredContentRemover>();
         services.AddSingleton<IPhotoGeotagReader, MagickPhotoGeotagReader>();

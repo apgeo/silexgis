@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
+using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Permissions;
@@ -19,8 +21,29 @@ namespace SilexGis.Infrastructure.Permissions;
 /// that turned up either way, and the exact-view pass over the lot. Everything downstream of
 /// that is in memory, so authorising a page of photos costs what authorising one does.
 /// </remarks>
-public sealed class PhotoPositionDisclosure(SilexGisDbContext db, FeatureProtection protection)
+public sealed class PhotoPositionDisclosure(
+    SilexGisDbContext db, FeatureProtection protection, IAppSettingsService settings)
 {
+    /// <summary>
+    /// Everything a mint site needs to decide which bytes each of the given files may be
+    /// handed out as, and whether its recorded position may be printed: the disclosure answer
+    /// for the batch and the installation's switch for location inside photo files.
+    /// </summary>
+    public async Task<PhotoReach> ReachAsync(
+        AccessContext? ctx, IReadOnlyCollection<Guid> fileIds, CancellationToken ct = default) =>
+        new(await DisclosableIdsAsync(ctx, fileIds, ct), await KeepLocationInFilesAsync(ct));
+
+    /// <summary>
+    /// The same answer for the person holding a file they have just sent. Nothing can hang on a
+    /// file created this instant, so its position places nothing yet; the switch still applies,
+    /// because it is about what any delivery carries rather than about who asks.
+    /// </summary>
+    public async Task<PhotoReach> ForUploaderAsync(Guid fileId, CancellationToken ct = default) =>
+        new(new HashSet<Guid> { fileId }, await KeepLocationInFilesAsync(ct));
+
+    private async Task<bool> KeepLocationInFilesAsync(CancellationToken ct) =>
+        (await settings.GetProtectionAsync(ct)).KeepLocationInPhotoFiles;
+
     /// <summary>
     /// Of the given files, those whose own recorded position may be disclosed to the caller.
     /// </summary>
@@ -28,7 +51,9 @@ public sealed class PhotoPositionDisclosure(SilexGisDbContext db, FeatureProtect
     /// The question is answered from what each file hangs on, without asking whether the file
     /// actually holds a position — so a text report attached to a guarded cave comes back
     /// absent, meaning only "a position here would have to be withheld". Callers pair this
-    /// with the file's own position: no position, nothing to withhold, whatever this says.
+    /// with whether the file can hold a position at all (its own recorded one, or a capture
+    /// location its kind can carry inside its bytes): one that cannot has nothing to withhold,
+    /// whatever this says.
     /// Doing it the other way round would cost a read of every file to answer a question most
     /// of them are not asking.
     /// </remarks>
@@ -187,4 +212,45 @@ public sealed class PhotoPositionDisclosure(SilexGisDbContext db, FeatureProtect
             list.Add(partnerId);
         }
     }
+}
+
+/// <summary>
+/// A resolved answer about a batch of files: whose recorded position this caller may be given,
+/// and whether the installation lets location data travel inside photo files. The one place a
+/// delivery's reach is worked out from those two, so every listing, detail and map layer that
+/// mints a delivery address answers alike.
+/// </summary>
+public sealed class PhotoReach(IReadOnlySet<Guid> disclosable, bool keepLocationInFiles)
+{
+    /// <summary>The installation's switch, as it stood when this answer was resolved.</summary>
+    public bool KeepLocationInFiles { get; } = keepLocationInFiles;
+
+    /// <summary>
+    /// Whether the file's recorded position may be shown to this caller — the answer the
+    /// position printed beside a photo is gated on. Not the switch's business: the switch is
+    /// about what is inside the file, not about the record.
+    /// </summary>
+    public bool PositionDisclosable(Guid fileId) => disclosable.Contains(fileId);
+
+    /// <summary>Which bytes the file itself may be handed out as.</summary>
+    public OriginalReach OriginalOf(StoredFile file) => OriginalOf(file, PositionDisclosable(file.Id));
+
+    /// <summary>
+    /// Which bytes the file may be handed out as, with the disclosure answer supplied — for a
+    /// superseded revision, which hangs on nothing and so must borrow the answer given for the
+    /// current one rather than be asked about directly.
+    /// </summary>
+    public OriginalReach OriginalOf(StoredFile file, bool positionDisclosable) =>
+        OriginalOf(file.Geom is not null, file.Kind, file.MimeType, positionDisclosable);
+
+    /// <summary>
+    /// The same answer from the facts it is made of, for a query that projected them rather
+    /// than loading the file.
+    /// </summary>
+    public OriginalReach OriginalOf(bool recordsPosition, FileKind kind, string mimeType, bool positionDisclosable) =>
+        PhotoPositionProtection.OriginalReachOf(
+            PhotoPositionProtection.MayCarryLocation(kind, recordsPosition),
+            positionDisclosable,
+            KeepLocationInFiles,
+            locationRemovable: LocationFreeCopyService.CanRemoveLocation(kind, mimeType));
 }

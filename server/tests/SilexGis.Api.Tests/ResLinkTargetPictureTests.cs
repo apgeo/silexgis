@@ -327,15 +327,14 @@ public sealed class ResLinkTargetPictureTests : IAsyncLifetime, IDisposable, ICl
             ownSurface.ShouldStartWith(route);
 
             // Both open the rendering; neither opens the stored bytes, which is where the
-            // camera's fix actually lives. The file surface says as much in its own words, and
-            // withholds the position it would otherwise print beside them.
+            // camera's fix actually lives. The chip's token opens renderings only; the file
+            // surface's own opens the whole picture with the fix taken out, and withholds the
+            // position it would otherwise print beside it.
             (await viewer.GetAsync(chip)).StatusCode.ShouldBe(HttpStatusCode.OK);
             (await viewer.GetAsync(ownSurface)).StatusCode.ShouldBe(HttpStatusCode.OK);
             (await viewer.GetAsync($"/api/v1/files/{photoFileId}/content?token={TokenIn(chip)}"))
                 .StatusCode.ShouldBe(HttpStatusCode.NotFound);
-            (await viewer.GetAsync($"/api/v1/files/{photoFileId}/content?token={TokenIn(ownSurface)}"))
-                .StatusCode.ShouldBe(HttpStatusCode.NotFound);
-            file.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeFalse();
+            await PhotoDelivery.ShouldBeHandedWithoutLocationAsync(viewer, file);
             file.GetProperty("position").ValueKind.ShouldBe(JsonValueKind.Null);
         }
         finally

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json;
 using FluentValidation;
+using ImageMagick;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -256,6 +257,7 @@ public static class FileEndpoints
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         IAccessService access,
+        PhotoPositionDisclosure photos,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -347,7 +349,8 @@ public static class FileEndpoints
         // guarded cave is what closes this, and every later read of it asks again.
         return TypedResults.Created(
             $"/api/v1/files/{outcome.Content.File.Id}",
-            outcome.Content.File.ToDto(outcome.Content.Version, tokens, mayHaveOriginal: true));
+            outcome.Content.File.ToDto(
+                outcome.Content.Version, tokens, await photos.ForUploaderAsync(outcome.Content.File.Id, ct)));
     }
 
     /// <summary>
@@ -512,11 +515,10 @@ public static class FileEndpoints
             // A new revision inherits the document's attachments, so unlike a first upload
             // this one can already be placed by something — and being allowed to change a
             // document is not the same as being allowed to know where its subject is.
-            var mayHaveOriginal = (await photos.DisclosableIdsAsync(ctx, [stored.File.Id], ct))
-                .Contains(stored.File.Id);
+            var reach = await photos.ReachAsync(ctx, [stored.File.Id], ct);
             return TypedResults.Created(
                 $"/api/v1/files/{stored.File.Id}",
-                stored.File.ToDto(stored.Version, tokens, mayHaveOriginal));
+                stored.File.ToDto(stored.Version, tokens, reach));
         }
         catch (DocumentWriteException e)
         {
@@ -591,8 +593,8 @@ public static class FileEndpoints
         // is what the document hangs on, and only the current file is what anything hangs
         // on — a superseded one is attached to nothing, so asking about it directly would
         // find no protection at all and hand out the very original the head is withholding.
-        var mayHaveOriginals = (await photos.DisclosableIdsAsync(ctx, [subject.CurrentFile.Id], ct))
-            .Contains(subject.CurrentFile.Id);
+        var reach = await photos.ReachAsync(ctx, [subject.CurrentFile.Id], ct);
+        var mayHaveOriginals = reach.PositionDisclosable(subject.CurrentFile.Id);
 
         IReadOnlyList<FileVersionDto> dtos = [.. versions.Select(x => new FileVersionDto(
             x.File.Id, x.Version.VersionNumber, x.File.OriginalName, x.File.MimeType, x.File.SizeBytes,
@@ -601,9 +603,7 @@ public static class FileEndpoints
             x.Version.CreatedAt,
             FileMapping.ContentUrl(
                 x.File.Id,
-                tokens.CreateToken(
-                    x.File.Id,
-                    x.File.Geom is null || mayHaveOriginals ? FileDelivery.Full : FileDelivery.DerivativesOnly)),
+                tokens.CreateToken(x.File.Id, FileDeliveries.Of(reach.OriginalOf(x.File, mayHaveOriginals)))),
             x.Version.IsCurrent))];
         return TypedResults.Ok(dtos);
     }
@@ -614,6 +614,7 @@ public static class FileEndpoints
         DocumentWriteService documents,
         IFileStore fileStore,
         ThumbnailService thumbnails,
+        LocationFreeCopyService locationFreeCopies,
         PageRenderService pages,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -648,6 +649,7 @@ public static class FileEndpoints
         {
             await fileStore.DeleteAsync(purged.StoragePath, ct);
             thumbnails.Purge(purged.Id);
+            locationFreeCopies.Purge(purged.Id);
             pages.Purge(purged.Id);
         }
 
@@ -903,6 +905,7 @@ public static class FileEndpoints
         UploadBatchService batches,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
+        PhotoPositionDisclosure photos,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -975,7 +978,8 @@ public static class FileEndpoints
 
         return TypedResults.Created(
             $"/api/v1/files/{outcome.Content.File.Id}",
-            outcome.Content.File.ToDto(outcome.Content.Version, tokens, mayHaveOriginal: true));
+            outcome.Content.File.ToDto(
+                outcome.Content.Version, tokens, await photos.ForUploaderAsync(outcome.Content.File.Id, ct)));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> AbandonUploadAsync(
@@ -1054,15 +1058,14 @@ public static class FileEndpoints
 
         // Reading the picture and placing what it shows are two different rights, so the
         // second is asked for separately before the bytes that answer it are offered.
-        var mayHaveOriginal = (await photos.DisclosableIdsAsync(ctx, [subject.File.Id], ct))
-            .Contains(subject.File.Id);
+        var reach = await photos.ReachAsync(ctx, [subject.File.Id], ct);
 
         // The copy something made of this file so its pages could be drawn, where one exists.
         // It is looked up here rather than in listings: this is the response a reader's screen
         // is built from, and it is the only one that has to know how to show the document.
         var rendition = await db.StoredFiles.AsNoTracking()
             .FirstOrDefaultAsync(f => f.ConvertedFromFileId == id, ct);
-        return TypedResults.Ok(subject.File.ToDto(subject.Version, tokens, mayHaveOriginal, rendition));
+        return TypedResults.Ok(subject.File.ToDto(subject.Version, tokens, reach, rendition));
     }
 
     private static async Task<Results<Ok<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -1098,9 +1101,8 @@ public static class FileEndpoints
         // Asked here for the same reason it is asked on the way out of a plain read: being
         // allowed to correct a document's date says nothing about being allowed to know where
         // its subject is, and the two answers must not differ by which verb was used.
-        var mayHaveOriginal = (await photos.DisclosableIdsAsync(ctx, [subject.File.Id], ct))
-            .Contains(subject.File.Id);
-        return TypedResults.Ok(subject.File.ToDto(version, tokens, mayHaveOriginal));
+        var reach = await photos.ReachAsync(ctx, [subject.File.Id], ct);
+        return TypedResults.Ok(subject.File.ToDto(version, tokens, reach));
     }
 
     private static async Task<Results<PhysicalFileHttpResult, ProblemHttpResult>> ContentAsync(
@@ -1110,6 +1112,8 @@ public static class FileEndpoints
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         FileAccessRecorder accessHistory,
+        LocationFreeCopyService locationFreeCopies,
+        ILogger<LocationFreeCopyService> logger,
         CancellationToken ct)
     {
         // Nothing here can re-decide anything: a URL that was handed out is a decision
@@ -1118,7 +1122,7 @@ public static class FileEndpoints
         // opens no original, and it says so the same way an unknown file does, because
         // whether these bytes exist is part of what was being kept back.
         var grant = tokens.Validate(token, id);
-        if (grant?.Delivery != FileDelivery.Full)
+        if (grant is null || grant.Delivery == FileDelivery.DerivativesOnly)
         {
             return ApiProblems.NotFound("file.not_found"); // expired/tampered tokens don't disclose existence
         }
@@ -1129,8 +1133,35 @@ public static class FileEndpoints
             return ApiProblems.NotFound("file.not_found");
         }
 
-        // Handing over the stored bytes is the event worth recording: this is the one route
-        // that gives out what was uploaded rather than something drawn from it. Recorded
+        // Which bytes, decided by the reach alone. A location-free reach never falls through to
+        // the stored file: that file is exactly what the reach was minted to keep back, so a copy
+        // that cannot be made answers as a missing file rather than as the original.
+        string path;
+        if (grant.Delivery == FileDelivery.LocationFree)
+        {
+            if (!LocationFreeCopyService.CanRemoveLocation(file.Kind, file.MimeType))
+            {
+                return ApiProblems.NotFound("file.not_found");
+            }
+
+            try
+            {
+                path = await locationFreeCopies.GetOrCreateAsync(file, ct);
+            }
+            catch (MagickException e)
+            {
+                logger.LogWarning(e, "Could not write a location-free copy of file {FileId}", file.Id);
+                return ApiProblems.NotFound("file.not_found");
+            }
+        }
+        else
+        {
+            path = fileStore.GetAbsolutePath(file.StoragePath);
+        }
+
+        // Handing over the whole file is the event worth recording: this is the one route that
+        // gives out what was uploaded — or the whole of it less its location — rather than
+        // something drawn from it. Recorded
         // after the refusals, so a rejected request leaves no trace of a read that did not
         // happen, and against the person the token was minted for — the only identity a
         // route browsers reach ambiently can have.
@@ -1141,7 +1172,7 @@ public static class FileEndpoints
         // these are bytes somebody uploaded, and without it a browser sent to this address would
         // render them under the application's own origin instead of saving them.
         return TypedResults.PhysicalFile(
-            fileStore.GetAbsolutePath(file.StoragePath),
+            path,
             contentType: file.MimeType,
             fileDownloadName: grant.Naming == FileNaming.Withheld ? NamelessDownloadName : file.OriginalName,
             enableRangeProcessing: true);

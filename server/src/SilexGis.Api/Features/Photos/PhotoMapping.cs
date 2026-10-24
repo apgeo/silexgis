@@ -34,20 +34,16 @@ internal static class PhotoMapping
     /// <summary>
     /// Builds the response for one photograph.
     /// </summary>
-    /// <param name="mayHaveOriginal">
-    /// Whether this caller may be handed the stored bytes. Defaults to no, and the default is
-    /// the point: a photograph's GPS fix is a position rather than a fact about one, so a call
-    /// site that has not resolved the caller's right to place what the picture shows must not
-    /// hand out the original — nor print the coordinates beside it, which is why both are
-    /// gated on this one answer.
+    /// <param name="reach">
+    /// What this caller may be handed of the picture and told about where it was taken,
+    /// resolved for the page the row came in. Required: a call site that has not resolved it
+    /// has not answered the question the delivery address carries.
     /// </param>
     public static PhotoDto ToDto(
-        this PhotoRow row, IFileAccessTokenService tokens, bool mayHaveOriginal)
+        this PhotoRow row, IFileAccessTokenService tokens, PhotoReach reach)
     {
         var file = row.File;
-        var delivery = file.Geom is null || mayHaveOriginal
-            ? FileDelivery.Full
-            : FileDelivery.DerivativesOnly;
+        var delivery = FileDeliveries.Of(reach.OriginalOf(file));
         var token = tokens.CreateToken(file.Id, delivery);
 
         var exif = PhotoExif.FromMetadata(file.Metadata);
@@ -69,13 +65,13 @@ internal static class PhotoMapping
             Rendering(file.Id, token, ThumbnailSize),
             Rendering(file.Id, token, PreviewSize),
             $"/api/v1/files/{file.Id}/content?token={Uri.EscapeDataString(token)}",
-            delivery == FileDelivery.Full,
+            delivery != FileDelivery.DerivativesOnly,
             CreditOf(row),
             exif.IsEmpty ? null : exif,
-            // Gated on the same answer as the bytes, and it has to be: the original carries this
-            // fix inside it, so a response that withheld the file and printed its coordinates
-            // beside it would be withholding nothing at all.
-            mayHaveOriginal ? PositionOf(file) : null);
+            // Gated on the disclosure answer, never on the switch: the switch decides what travels
+            // inside the file, and a reader who may not be told where the picture was taken is
+            // not told it here either, whichever bytes the address above opens.
+            reach.PositionDisclosable(file.Id) ? PositionOf(file) : null);
     }
 
     /// <summary>

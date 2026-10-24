@@ -375,6 +375,8 @@ public static class MapEndpoints
                            file.DirectionDegrees,
                            file.DirectionIsMagnetic,
                            file.PositionSource,
+                           file.Kind,
+                           file.MimeType,
                            document);
 
         // The cap counts photos this caller is shown, never photos looked at. Cut before the
@@ -420,6 +422,8 @@ public static class MapEndpoints
         double? DirectionDegrees,
         bool DirectionIsMagnetic,
         PhotoPositionSource PositionSource,
+        FileKind Kind,
+        string MimeType,
         Document Document);
 
     /// <summary>
@@ -458,7 +462,8 @@ public static class MapEndpoints
         // the same question is asked wherever the bytes that carry that point could be
         // handed over, and one of those two places working it out for itself is how they
         // would come to disagree about a photo.
-        var disclosable = await photos.DisclosableIdsAsync(ctx, fileIds, ct);
+        var reach = await photos.ReachAsync(ctx, fileIds, ct);
+        var disclosable = fileIds.Where(reach.PositionDisclosable).ToHashSet();
 
         // Readability is separate and stays here: it is about the objects a photo hangs on
         // being readable at all, not about placing them. One pass per target world.
@@ -516,8 +521,10 @@ public static class MapEndpoints
             // Reaching this line means every feature the photo inherits protection from is
             // one the caller may already place exactly — the point is being handed over in
             // the response body — so the bytes that carry the same point are no further
-            // disclosure.
-            var token = tokens.CreateToken(candidate.Id, FileDelivery.Full);
+            // disclosure. Whether they carry it at all is still the installation's switch,
+            // answered by the same rule as every other delivery of the same file.
+            var token = tokens.CreateToken(candidate.Id, FileDeliveries.Of(reach.OriginalOf(
+                recordsPosition: true, candidate.Kind, candidate.MimeType, positionDisclosable: true)));
             features.Add(GeoFeature.Of(candidate.Geom, new Dictionary<string, object?>
             {
                 ["id"] = candidate.Id,

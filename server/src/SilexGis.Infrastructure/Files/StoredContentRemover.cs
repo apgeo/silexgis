@@ -20,6 +20,7 @@ namespace SilexGis.Infrastructure.Files;
 public sealed class StoredContentRemover(
     IFileStore fileStore,
     ThumbnailService thumbnails,
+    LocationFreeCopyService locationFreeCopies,
     PageRenderService pages,
     ILogger<StoredContentRemover> logger)
 {
@@ -31,6 +32,7 @@ public sealed class StoredContentRemover(
             {
                 await fileStore.DeleteAsync(file.StoragePath, CancellationToken.None);
                 thumbnails.Purge(file.Id);
+                locationFreeCopies.Purge(file.Id);
                 pages.Purge(file.Id);
             }
             catch (IOException e)

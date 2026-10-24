@@ -653,7 +653,7 @@ public static class PhotoEndpoints
         CancellationToken ct)
     {
         var rows = await PhotographReads.RowsAsync(db, documents, ct);
-        var disclosable = await disclosure.DisclosableIdsAsync(ctx, [.. rows.Select(r => r.File.Id)], ct);
-        return [.. rows.Select(r => r.ToDto(tokens, disclosable.Contains(r.File.Id)))];
+        var reach = await disclosure.ReachAsync(ctx, [.. rows.Select(r => r.File.Id)], ct);
+        return [.. rows.Select(r => r.ToDto(tokens, reach))];
     }
 }

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Entities;
+
 namespace SilexGis.Domain.Geo;
 
 /// <summary>
@@ -45,4 +47,88 @@ public static class PhotoPositionProtection
         // All, not Any: inheriting from two places means obeying both. A photo attached to
         // an open cave and a guarded one is still a photo of the guarded one.
         protectionChain.All(exactViewable.Contains);
+
+    /// <summary>
+    /// Whether a file of this kind may carry where it was captured inside its own bytes, so
+    /// that handing the bytes over could hand over a position.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Decided by kind, not by whether a position was read out of the file. A recorded position
+    /// is what intake managed to read and what an editor left in place, not what the bytes hold:
+    /// clearing a photo's position never rewrites the photo, nothing reads the location a phone
+    /// writes into a video or a voice recording, a fix can sit only in an XMP or IPTC packet that
+    /// is never read, and older uploads were never read at all. Photographs, videos and sound
+    /// recordings are what cameras and phones stamp with a position, so those are treated as
+    /// carrying one whatever the record says.
+    /// </para>
+    /// <para>
+    /// Any other kind carries no capture location of its own, but a position may still have been
+    /// set on it by hand, and then it is treated like a photograph that recorded one.
+    /// </para>
+    /// </remarks>
+    public static bool MayCarryLocation(FileKind kind, bool recordsPosition) =>
+        recordsPosition || kind is FileKind.Image or FileKind.Video or FileKind.Audio;
+
+    /// <summary>
+    /// Which bytes a reader of a file is handed when they ask for the file itself rather than a
+    /// rendering of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two questions decide it, and they are kept apart on purpose. Whether this reader may be
+    /// told where the picture was taken is <see cref="IsDisclosable"/>'s answer and is not
+    /// re-asked here. Whether an installation lets location data travel inside photo files at
+    /// all is its administrator's switch. The size of what is handed over is neither: a reader
+    /// who may not have the location gets the whole picture with the location taken out of it,
+    /// not a smaller one.
+    /// </para>
+    /// <para>
+    /// A file whose location cannot be taken out — a video, a sound recording, or an image in a
+    /// format that cannot be written back — keeps the older rule for whoever would have been
+    /// given the stripped copy: renderings only, and nothing where none are drawn. A file that
+    /// cannot carry a location (see <see cref="MayCarryLocation"/>) is outside the rule
+    /// entirely: the stored bytes go to anybody who may read it.
+    /// </para>
+    /// </remarks>
+    /// <param name="mayCarryLocation"><see cref="MayCarryLocation"/>'s answer for the file.</param>
+    /// <param name="positionDisclosable">
+    /// Whether a position of the file's may be disclosed to this reader —
+    /// <see cref="IsDisclosable"/>'s answer over the file's protection chain.
+    /// </param>
+    /// <param name="keepLocationInFiles">The installation's switch; on by default.</param>
+    /// <param name="locationRemovable">
+    /// Whether this application can write the file back with its location data removed.
+    /// </param>
+    public static OriginalReach OriginalReachOf(
+        bool mayCarryLocation, bool positionDisclosable, bool keepLocationInFiles, bool locationRemovable)
+    {
+        if (!mayCarryLocation)
+        {
+            return OriginalReach.Stored;
+        }
+
+        if (positionDisclosable && keepLocationInFiles)
+        {
+            return OriginalReach.Stored;
+        }
+
+        return locationRemovable ? OriginalReach.LocationFree : OriginalReach.None;
+    }
+}
+
+/// <summary>What a reader asking for a file itself is handed.</summary>
+public enum OriginalReach
+{
+    /// <summary>No original at all: renderings where the application draws any, nothing else.</summary>
+    None = 0,
+
+    /// <summary>
+    /// The whole picture at full size, rewritten without the location data it carried. The
+    /// stored file is never touched; this is a copy.
+    /// </summary>
+    LocationFree = 1,
+
+    /// <summary>The stored bytes exactly as uploaded.</summary>
+    Stored = 2,
 }

@@ -17,6 +17,9 @@ namespace SilexGis.Api.Features.Attachments;
 /// <see cref="EntityType"/>/<see cref="EntityId"/> name the attachment's target:
 /// "feature" + a feature id, or a non-feature entity name + its id.
 /// </summary>
+/// <param name="InDeviceDefaultSet">
+/// Whether a phone asked for "the usual files" of what this hangs on includes this one.
+/// </param>
 public sealed record AttachmentDto(
     Guid Id,
     Guid FileId,
@@ -27,6 +30,7 @@ public sealed record AttachmentDto(
     int SortOrder,
     Guid? AddedBy,
     bool IsPrimary,
+    bool InDeviceDefaultSet,
     FileDto File);
 
 public sealed record AttachmentCreateRequest(
@@ -85,6 +89,8 @@ public static class AttachmentEndpoints
             .WithSummary("Detaches a file (the file itself is kept); requires Write on the target.");
         attachments.MapPut("/{id:guid}/primary", SetPrimaryAsync)
             .WithSummary("Makes this the object's headline picture, replacing whichever was; requires Write on the target.");
+        attachments.MapPut("/{id:guid}/device-default-set", SetDeviceDefaultSetAsync)
+            .WithSummary("Puts this file in, or takes it out of, what a phone fetches as the usual files; requires Write on the target.");
 
         return api;
     }
@@ -162,11 +168,11 @@ public static class AttachmentEndpoints
         // row, and a photo hanging on two features — one open, one guarded — has a row that
         // survives. The bytes do not care which row was followed to reach them, so the right
         // to have them is decided over everything the photo hangs on at once.
-        var mayHaveOriginals = await photos.DisclosableIdsAsync(
+        var reach = await photos.ReachAsync(
             ctx, [.. shown.Select(x => x.Attachment.FileId)], ct);
 
         return TypedResults.Ok(shown
-            .Select(x => x.Attachment.ToDto(x.Content, tokens, mayHaveOriginals.Contains(x.Attachment.FileId)))
+            .Select(x => x.Attachment.ToDto(x.Content, tokens, reach))
             .ToList());
     }
 
@@ -225,10 +231,9 @@ public static class AttachmentEndpoints
 
         // Attaching a photo to a cave is what can make its capture point sensitive, so the
         // answer is resolved after the row exists rather than before.
-        var mayHaveOriginal = (await photos.DisclosableIdsAsync(ctx, [attachment.FileId], ct))
-            .Contains(attachment.FileId);
+        var reach = await photos.ReachAsync(ctx, [attachment.FileId], ct);
         return TypedResults.Created(
-            $"/api/v1/attachments/{attachment.Id}", attachment.ToDto(content, tokens, mayHaveOriginal));
+            $"/api/v1/attachments/{attachment.Id}", attachment.ToDto(content, tokens, reach));
     }
 
     private static async Task<Results<Ok<AttachmentDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -274,10 +279,9 @@ public static class AttachmentEndpoints
         attachment.SortOrder = request.SortOrder;
         await db.SaveChangesAsync(ct);
 
-        var mayHaveOriginal = (await photos.DisclosableIdsAsync(ctx, [attachment.FileId], ct))
-            .Contains(attachment.FileId);
+        var reach = await photos.ReachAsync(ctx, [attachment.FileId], ct);
         return TypedResults.Ok(
-            attachment.ToDto(new DocumentFile(subject.File, subject.Version), tokens, mayHaveOriginal));
+            attachment.ToDto(new DocumentFile(subject.File, subject.Version), tokens, reach));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
@@ -369,12 +373,54 @@ public static class AttachmentEndpoints
         return TypedResults.NoContent();
     }
 
+    /// <summary>
+    /// Says whether a phone asked for "the usual files" of this object fetches this one.
+    /// </summary>
+    /// <remarks>
+    /// Decided by the right to hang a file on the object in the first place, because choosing
+    /// what travels with the object into a cave is curating the object: whoever may attach or
+    /// detach a picture there may say which of them a caver carries by default. Nothing about the
+    /// file's own rules changes — a phone given this flag still fetches only what its account may
+    /// read, at the reach its account is allowed.
+    /// </remarks>
+    private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> SetDeviceDefaultSetAsync(
+        Guid id,
+        bool? included,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var attachment = await db.Attachments.FirstOrDefaultAsync(a => a.Id == id, ct);
+        if (attachment is null)
+        {
+            return ApiProblems.NotFound("attachment.not_found");
+        }
+
+        if (!await FileAccessRules.CanWriteTargetAsync(db, access, ctx, TargetOf(attachment), ct))
+        {
+            return await FileAccessRules.CanReadTargetAsync(db, access, ctx, TargetOf(attachment), ct)
+                ? ApiProblems.Forbidden()
+                : ApiProblems.NotFound("attachment.not_found");
+        }
+
+        attachment.InDeviceDefaultSet = included ?? true;
+        await db.SaveChangesAsync(ct);
+        return TypedResults.NoContent();
+    }
+
     // The row's XOR maps directly: a feature row has a null EntityType, which is exactly
     // the parsed shape of a feature target.
     private static AttachmentTarget TargetOf(Attachment a) => new(a.EntityType, a.FeatureId ?? a.EntityId!.Value);
 
     private static AttachmentDto ToDto(
-        this Attachment a, DocumentFile content, IFileAccessTokenService tokens, bool mayHaveOriginal) => new(
+        this Attachment a, DocumentFile content, IFileAccessTokenService tokens, PhotoReach reach) => new(
         a.Id,
         a.FileId,
         AttachmentTargets.NameOf(a.FeatureId, a.EntityType),
@@ -384,5 +430,6 @@ public static class AttachmentEndpoints
         a.SortOrder,
         a.AddedBy,
         a.IsPrimary,
-        content.File.ToDto(content.Version, tokens, mayHaveOriginal));
+        a.InDeviceDefaultSet,
+        content.File.ToDto(content.Version, tokens, reach));
 }

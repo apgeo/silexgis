@@ -384,6 +384,7 @@ public sealed class CalendarFeedTests : IAsyncLifetime, IDisposable, IClassFixtu
         {
             revealProtectedAssociations = false,
             calendarFeedEnabled = enabled,
+            keepLocationInPhotoFiles = true,
         });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }

@@ -244,6 +244,7 @@ public static class AdminSettingsEndpoints
             {
                 RevealProtectedAssociations = request.RevealProtectedAssociations,
                 CalendarFeedEnabled = request.CalendarFeedEnabled,
+                KeepLocationInPhotoFiles = request.KeepLocationInPhotoFiles,
             },
             ct);
 
@@ -567,7 +568,10 @@ public static class AdminSettingsEndpoints
                 security.SmsTwoFactorEnabled,
                 security.TwoFactorCodeLifetimeMinutes,
                 security.TwoFactorResendIntervalSeconds),
-            new ProtectionSettingsDto(disclosure.RevealProtectedAssociations, disclosure.CalendarFeedEnabled),
+            new ProtectionSettingsDto(
+                disclosure.RevealProtectedAssociations,
+                disclosure.CalendarFeedEnabled,
+                disclosure.KeepLocationInPhotoFiles),
             new ImportSettingsDto(
                 import.AllowCreateWithoutReview,
                 import.DuplicateRadiusMeters,
