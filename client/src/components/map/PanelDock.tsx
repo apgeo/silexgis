@@ -18,6 +18,7 @@ import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import type { PanelScope } from '../../stores/panelPrefs.ts';
 import type { DensityPref } from '../../stores/uiPrefsStore.ts';
+import { applySavedLayout, savedWorkspaceNow } from './workspace/workspaceActions.ts';
 
 /**
  * The panel's own chrome: where you have been, how the panel sits, and the named arrangements.
@@ -40,7 +41,6 @@ export default function PanelDock({ scope }: { scope: PanelScope }) {
   const mapChromeHidden = useUiPrefsStore((s) => s.mapChromeHidden);
   const layouts = useUiPrefsStore((s) => s.layouts);
   const saveLayout = useUiPrefsStore((s) => s.saveLayout);
-  const applyLayout = useUiPrefsStore((s) => s.applyLayout);
   const deleteLayout = useUiPrefsStore((s) => s.deleteLayout);
 
   const [name, setName] = useState('');
@@ -52,7 +52,9 @@ export default function PanelDock({ scope }: { scope: PanelScope }) {
     if (!trimmed) {
       return;
     }
-    saveLayout(trimmed, mapChromeHidden);
+    // Saved beside the map, a layout keeps the panes and docks around it too; the same list is
+    // offered in the map's workspace menu. Elsewhere there is no workspace to keep.
+    saveLayout(trimmed, mapChromeHidden, scope === 'main' ? savedWorkspaceNow() : undefined);
     setName('');
   };
 
@@ -156,7 +158,7 @@ export default function PanelDock({ scope }: { scope: PanelScope }) {
                   />
                 </Flex>
               ),
-              onClick: () => applyLayout(layout.id),
+              onClick: () => applySavedLayout(layout.id),
             })),
             ...(layouts.length > 0 ? [{ type: 'divider' as const, key: 'sep' }] : []),
             {

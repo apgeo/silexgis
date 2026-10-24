@@ -3161,6 +3161,54 @@
     "scanHint": "Scan this with your authenticator app, then type the code it shows.",
     "scanAlt": "QR code for your authenticator app"
   },
+  "workspace": {
+    "menu": "Workspace: presets and arrangement",
+    "presetsTitle": "Arrangements",
+    "preset": {
+      "map": "Map",
+      "map3d": "Map + 3D",
+      "survey": "Survey review",
+      "trip": "Trip planning",
+      "twoScreens": "Two screens"
+    },
+    "presetHint": {
+      "map": "The map between its two panels",
+      "map3d": "The 3D scene beside the map",
+      "survey": "A cave's survey model beside the map",
+      "trip": "Under the map: what is in view, and the 3D ground",
+      "twoScreens": "The map here, the 3D scene in a window of its own"
+    },
+    "savedTitle": "Saved arrangements",
+    "saveCurrent": "Save the current arrangement…",
+    "saveTitle": "Save the current arrangement",
+    "saveHint": "Keeps the panels, the panes around the map and whether the 3D scene is open, under a name. Saved arrangements follow your account.",
+    "tableToggle": "Table under the map",
+    "swapDocks": "Swap the side panels",
+    "maximiseMap": "Fill the workspace with the map",
+    "mapName": "the map",
+    "scene3dName": "3D scene",
+    "surveyName": "Survey model",
+    "tableName": "the table",
+    "move": "Move {{name}}",
+    "maximise": "Fill the workspace with {{name}}",
+    "restore": "Give {{name}} its own size back",
+    "restoreShort": "Restore",
+    "close": "Close {{name}}",
+    "place": {
+      "left": "Left of the map",
+      "right": "Right of the map",
+      "bottom": "Under the map",
+      "window": "In its own window"
+    },
+    "pickedTab": "Picked ({{count}})",
+    "pickedEmpty": "Nothing picked. Hold Ctrl or Shift while clicking the map to pick several objects.",
+    "surveyPickCave": "Pick a cave on the map: its survey models are listed here.",
+    "surveyNone": "This cave has no survey model that can be opened here.",
+    "surveyChoose": "Open one of the cave's survey models here:",
+    "resizePanes": "Resize the panes on either side",
+    "resizeBottom": "Resize the map and the strip under it",
+    "shortcutMaximise": "Fill the workspace with the pane you are in, or give every pane its own size back"
+  },
   "views": {
     "title": "Saved views",
     "namePlaceholder": "View name…",

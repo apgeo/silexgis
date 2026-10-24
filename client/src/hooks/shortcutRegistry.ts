@@ -98,6 +98,7 @@ export const MAP_WORKSPACE_SHORTCUTS = {
   toggleRightDock: { key: ']', labelKey: 'shortcuts.action.toggleRightDock' },
   selectionBack: { key: 'ArrowLeft', alt: true, labelKey: 'shortcuts.action.selectionBack' },
   selectionForward: { key: 'ArrowRight', alt: true, labelKey: 'shortcuts.action.selectionForward' },
+  maximise: { key: 'm', labelKey: 'workspace.shortcutMaximise' },
 } satisfies Record<string, DescribedShortcut>;
 
 interface ShortcutRegistryState {

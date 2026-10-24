@@ -151,8 +151,13 @@ function InViewGrid({ features, attributeFilter, nameTitle, columns = [], onPick
   );
 }
 
-/** Live index of the viewport: entrances and features currently loaded. */
-export default function FeatureListPanel() {
+/**
+ * Live index of the viewport: entrances and features currently loaded.
+ *
+ * `row` lays the two lists side by side, for the wide, short strip under the map; the side panel,
+ * tall and narrow, stacks them.
+ */
+export default function FeatureListPanel({ layout = 'column' }: { layout?: 'column' | 'row' } = {}) {
   const { t } = useTranslation();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
 
@@ -205,8 +210,14 @@ export default function FeatureListPanel() {
     render: (value: unknown) => getFeatureTypeNameByCode(value) ?? '',
   };
 
+  const row = layout === 'row';
   return (
-    <div style={{ padding: 8, overflow: 'auto', height: '100%' }}>
+    <div
+      className={row ? 'feature-list-row' : undefined}
+      style={{ padding: 8, overflow: 'auto', height: '100%' }}
+      data-testid="feature-list-panel"
+    >
+      <div className={row ? 'feature-list-row-part' : undefined}>
       <Typography.Text strong>
         {t('map.entrances')} ({entrances.length})
       </Typography.Text>
@@ -235,7 +246,9 @@ export default function FeatureListPanel() {
           }}
         />
       )}
-      <Typography.Text strong style={{ display: 'block', marginTop: 12 }}>
+      </div>
+      <div className={row ? 'feature-list-row-part' : undefined}>
+      <Typography.Text strong style={{ display: 'block', marginTop: row ? 0 : 12 }}>
         {t('map.features')} ({mapFeatures.length})
       </Typography.Text>
       {mapFeatures.length > 0 && (
@@ -256,6 +269,7 @@ export default function FeatureListPanel() {
           }}
         />
       )}
+      </div>
       {entrances.length === 0 && mapFeatures.length === 0 && !clustered && (
         <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
           {t('map.nothingInView')}

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { createPortal } from 'react-dom';
 import GeoLocationButton from '@terrestris/react-geo/dist/Button/GeoLocationButton/GeoLocationButton';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
-import { App, Drawer, Flex, Spin, Tabs, Tooltip, Typography } from 'antd';
+import { App, Drawer, Spin, Tabs, Tooltip } from 'antd';
 import Button from '../components/Button.tsx';
 import BaseLayerChooser from '../components/map/BaseLayerChooser.tsx';
 import ScaleBox from '../components/map/ScaleBox.tsx';
@@ -11,13 +12,14 @@ import { useFeatureRights } from '../api/hooks/objectRights.ts';
 import {
   AimOutlined,
   BorderVerticleOutlined,
-  CloseOutlined,
   CodeSandboxOutlined,
   ExpandOutlined,
   ProfileOutlined,
   ExportOutlined,
   EyeInvisibleOutlined,
   EyeOutlined,
+  FullscreenExitOutlined,
+  FullscreenOutlined,
   GlobalOutlined,
   LeftOutlined,
   QuestionCircleOutlined,
@@ -30,7 +32,7 @@ import type TileLayer from 'ol/layer/Tile';
 import { unByKey } from 'ol/Observable';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
+import { Group, Panel, Separator, usePanelRef, type PanelProps } from 'react-resizable-panels';
 import { useSearchParams } from 'react-router-dom';
 import {
   isGenericFeatureType,
@@ -210,6 +212,22 @@ import ShortcutHelpDialog from '../components/ShortcutHelpDialog.tsx';
 import { geometryFor, isGeographic } from '../viewlinks/geoTargets.ts';
 import { useViewControl } from '../viewlinks/useViewControl.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
+import { useWorkspacePanesStore, type WorkspacePaneId } from '../stores/workspacePanesStore.ts';
+import {
+  BOTTOM_SIZE_MAX,
+  BOTTOM_SIZE_MIN,
+  DEFAULT_ARRANGEMENT,
+  type PanePlace,
+} from '../stores/workspacePrefs.ts';
+import { useUiDefaults } from '../api/hooks/me.ts';
+import BottomTable from '../components/map/workspace/BottomTable.tsx';
+import PaneHeader, { type PaneDestination } from '../components/map/workspace/PaneHeader.tsx';
+import PaneSlot from '../components/map/workspace/PaneSlot.tsx';
+import { usePaneElement } from '../components/map/workspace/paneElement.ts';
+import SurveyModelChooser from '../components/map/workspace/SurveyModelChooser.tsx';
+import WorkspaceMenu from '../components/map/workspace/WorkspaceMenu.tsx';
+import { applyWorkspaceSnapshot, openScene3dWindow } from '../components/map/workspace/workspaceActions.ts';
+import { installationPresetOf } from '../components/map/workspace/workspacePresets.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import './MapPage.css';
 
@@ -235,25 +253,36 @@ export default function MapPage() {
   const { message } = App.useApp();
   const isMobile = useIsMobile();
   const mapTarget = useRef<HTMLDivElement>(null);
-  const leftPanelRef = usePanelRef();
-  const rightPanelRef = usePanelRef();
+  const layersPanelRef = usePanelRef();
+  const detailsPanelRef = usePanelRef();
   // The docks' collapsed state is the person's, remembered with their account: somebody who works
-  // with the layer panel folded away finds it folded away the next time, on any browser.
+  // with the layer panel folded away finds it folded away the next time, on any browser. Kept by
+  // what the dock holds, not by the side it is on: swapping the docks moves a folded panel folded.
   const docks = useUiPrefsStore((s) => s.docks);
   const setDocks = useUiPrefsStore((s) => s.setDocks);
-  const leftCollapsed = docks.leftHidden;
-  const rightCollapsed = docks.rightHidden;
-  const setLeftCollapsed = (hidden: boolean) => setDocks({ leftHidden: hidden });
-  const setRightCollapsed = (hidden: boolean) => setDocks({ rightHidden: hidden });
-  // The size a dock starts at: folded when it was left folded. Read once, at mount — afterwards
-  // the panel itself is what folds and unfolds, and reports back.
-  const [initialDocks] = useState(docks);
+  const layersCollapsed = docks.leftHidden;
+  const detailsCollapsed = docks.rightHidden;
+  const setLayersCollapsed = (hidden: boolean) => setDocks({ leftHidden: hidden });
+  const setDetailsCollapsed = (hidden: boolean) => setDocks({ rightHidden: hidden });
+  // Where the panes around the map go, the account's like the docks.
+  const arrangement = useUiPrefsStore((s) => s.workspace) ?? DEFAULT_ARRANGEMENT;
+  const setWorkspace = useUiPrefsStore((s) => s.setWorkspace);
+  const workspaceGroupRef = useRef<HTMLDivElement>(null);
+  // The set of panels last laid out, and whether the layout library is still laying out a new one —
+  // see where the row is built.
+  const panelSetRef = useRef('');
+  const relayingOutRef = useRef(false);
+  // Each pane that must outlive a move is drawn into an element of its own, which the slot showing
+  // it takes in — see PaneSlot for why.
+  const scenePaneElement = usePaneElement('scene3d');
+  const caveViewPaneElement = usePaneElement('caveview');
+  const tablePaneElement = usePaneElement('table');
   // The stored state can also change under a mounted dock: the account's own arrangement arrives
   // a moment after sign-in, over what this browser had. The panel is folded or unfolded to match,
   // so the toggle's label and the dock never disagree. A fold the panel made itself has already
   // reached the store by then, and asks for nothing here.
   useEffect(() => {
-    const panel = leftPanelRef.current;
+    const panel = layersPanelRef.current;
     if (isMobile || !panel) {
       return;
     }
@@ -264,9 +293,9 @@ export default function MapPage() {
         panel.expand();
       }
     }
-  }, [docks.leftHidden, isMobile, leftPanelRef]);
+  }, [docks.leftHidden, isMobile, layersPanelRef]);
   useEffect(() => {
-    const panel = rightPanelRef.current;
+    const panel = detailsPanelRef.current;
     if (isMobile || !panel) {
       return;
     }
@@ -277,7 +306,7 @@ export default function MapPage() {
         panel.expand();
       }
     }
-  }, [docks.rightHidden, isMobile, rightPanelRef]);
+  }, [docks.rightHidden, isMobile, detailsPanelRef]);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   // Below md the docks are drawers over the map instead of resizable panes; the same
   // dock-toggle buttons drive whichever one is mounted.
@@ -286,11 +315,27 @@ export default function MapPage() {
   // The 3D scene as a pane beside the map, off until asked for. Off is the honest default: it is
   // a second renderer with a graphics context of its own, and most visits to the map do not want
   // one. Opening it is what makes the two-way sync visible — the point of having both on screen.
-  const [scene3dOpen, setScene3dOpen] = useState(false);
-  // Which survey model is open beside the map, if any. Held as an id rather than as the model,
-  // so the pane keeps asking for it: the answer carries a signed URL with a ten-minute life, and
-  // a pane left open outlives it.
-  const [caveViewModelId, setCaveViewModelId] = useState<string | null>(null);
+  const scene3dOpen = useWorkspacePanesStore((s) => s.scene3dOpen);
+  const setScene3dOpen = useWorkspacePanesStore((s) => s.setScene3dOpen);
+  // Which survey model is open beside the map, if any, and whether its pane is up without one.
+  const caveViewModelId = useWorkspacePanesStore((s) => s.caveViewModelId);
+  const setCaveViewModelId = useWorkspacePanesStore((s) => s.setCaveViewModelId);
+  const caveViewPaneOpen = useWorkspacePanesStore((s) => s.caveViewPaneOpen);
+  const setCaveViewPaneOpen = useWorkspacePanesStore((s) => s.setCaveViewPaneOpen);
+  const maximised = useWorkspacePanesStore((s) => s.maximised);
+  const setMaximised = useWorkspacePanesStore((s) => s.setMaximised);
+  // The panes are this visit's: leaving the map shuts them, as it did while they were the page's
+  // own state, so coming back to the map does not quietly rebuild a scene nobody asked for again.
+  useEffect(
+    () => () => {
+      const panes = useWorkspacePanesStore.getState();
+      panes.setScene3dOpen(false);
+      panes.setCaveViewModelId(null);
+      panes.setCaveViewPaneOpen(false);
+      panes.setMaximised(null);
+    },
+    [],
+  );
   /** The same model over the whole window, escalated from the pane. */
   const [caveViewOverlay, setCaveViewOverlay] = useState<SurveyModelInfo | null>(null);
   const syncRef = useRef<ViewSync2dHandle | null>(null);
@@ -911,7 +956,7 @@ export default function MapPage() {
       },
       { replace: true },
     );
-  }, [requestedModelId, setSearchParams]);
+  }, [requestedModelId, setSearchParams, setCaveViewModelId]);
 
   // A model the reader may not see answers 404 rather than an empty result — a cave's models are
   // its location — so there is nothing to report and nothing to draw, and the pane simply does not
@@ -1441,32 +1486,70 @@ export default function MapPage() {
     />
   );
 
+  // The "In view" list moves to the table under the map while that is shown, rather than being
+  // drawn twice: each copy marks the rows it has ticked on the map's own features, and two copies
+  // would undo each other's marks. On a phone there is no table, and the list stays here.
+  const inViewInTable = !isMobile && arrangement.table;
   const rightDock = (
     <Tabs
       className="map-right-tabs"
-      activeKey={rightTab}
+      activeKey={inViewInTable ? 'selection' : rightTab}
       onChange={setRightTab}
       items={[
         { key: 'selection', label: t('map.tabSelection'), children: <SelectionPanel /> },
-        { key: 'inview', label: t('map.tabInView'), children: <FeatureListPanel /> },
+        ...(inViewInTable ? [] : [{ key: 'inview', label: t('map.tabInView'), children: <FeatureListPanel /> }]),
       ]}
     />
   );
 
+  // Which dock is on which side. Swapping is a desktop arrangement only: on a phone the docks are
+  // drawers opened from the edge buttons, and the layer drawer stays the one on the left.
+  const swapped = !isMobile && arrangement.docksSwapped;
+  const dockOnSide = (side: 'left' | 'right'): DockContent =>
+    (side === 'left') !== swapped ? 'layers' : 'details';
+  const sideOfDock = (dock: DockContent): 'left' | 'right' =>
+    dockOnSide('left') === dock ? 'left' : 'right';
+
   // One notion of "is this dock showing" across both layouts, so the toggle buttons keep
   // their icon and label truthful whichever host is mounted.
-  const leftHidden = isMobile ? !leftDrawerOpen : leftCollapsed;
-  const rightHidden = isMobile ? !rightDrawerOpen : rightCollapsed;
+  const dockHidden = (dock: DockContent) =>
+    isMobile
+      ? !(dock === 'layers' ? leftDrawerOpen : rightDrawerOpen)
+      : dock === 'layers'
+        ? layersCollapsed
+        : detailsCollapsed;
+  const leftHidden = dockHidden(dockOnSide('left'));
+  const rightHidden = dockHidden(dockOnSide('right'));
+  const layersHidden = dockHidden('layers');
 
-  const toggleLeftDock = () => {
+  const toggleDock = (dock: DockContent) => {
     if (isMobile) {
-      setLeftDrawerOpen((open) => !open);
-    } else if (leftCollapsed) {
-      leftPanelRef.current?.expand();
+      if (dock === 'layers') {
+        setLeftDrawerOpen((open) => !open);
+      } else {
+        setRightDrawerOpen((open) => !open);
+      }
+      return;
+    }
+    const panel = dock === 'layers' ? layersPanelRef.current : detailsPanelRef.current;
+    const collapsed = dock === 'layers' ? layersCollapsed : detailsCollapsed;
+    if (!panel) {
+      // The details panel floating over the map rather than docked: its drawer follows the flag.
+      if (dock === 'details') {
+        setDetailsCollapsed(!detailsCollapsed);
+      }
+      return;
+    }
+    if (collapsed) {
+      panel.expand();
     } else {
-      leftPanelRef.current?.collapse();
+      panel.collapse();
     }
   };
+  // The bracket keys and the edge buttons are about sides, which is what a person sees: after a
+  // swap, `[` folds whatever is on the left.
+  const toggleLeftDock = () => toggleDock(dockOnSide('left'));
+  const toggleRightDock = () => toggleDock(dockOnSide('right'));
 
   // Opens (never closes) the layer panel and takes focus to its survey-line block, where the
   // withheld-lines alert and the line budget are.
@@ -1474,10 +1557,124 @@ export default function MapPage() {
     if (isMobile) {
       setLeftDrawerOpen(true);
     } else {
-      leftPanelRef.current?.expand();
+      layersPanelRef.current?.expand();
     }
     focusCenterlineStatus();
   };
+
+  // The survey-model pane is up while it holds a model, or while a preset has put it up empty.
+  const caveViewShown = !isMobile && (caveViewModel !== undefined || caveViewPaneOpen);
+  const tableShown = !isMobile && arrangement.table;
+  const sceneShown = !isMobile && scene3dOpen;
+
+  // A pane that went away cannot stay filling the workspace, and a phone has no panes to fill it.
+  useEffect(() => {
+    const gone =
+      (maximised === 'scene3d' && !sceneShown) ||
+      (maximised === 'caveview' && !caveViewShown) ||
+      (maximised === 'table' && !tableShown) ||
+      (maximised === 'details' && !rightPinned && detailsCollapsed);
+    if (maximised !== null && (isMobile || gone)) {
+      setMaximised(null);
+    }
+  }, [maximised, isMobile, sceneShown, caveViewShown, tableShown, rightPinned, detailsCollapsed, setMaximised]);
+
+  // A pane filling the workspace is drawn over the others at the workspace's own box, which is
+  // followed while it is filled: the window can be resized, or the navigation rail opened, under it.
+  useEffect(() => {
+    const group = workspaceGroupRef.current;
+    if (maximised === null || !group) {
+      return;
+    }
+    const place = () => {
+      const box = group.getBoundingClientRect();
+      group.style.setProperty('--workspace-top', `${box.top}px`);
+      group.style.setProperty('--workspace-left', `${box.left}px`);
+      group.style.setProperty('--workspace-width', `${box.width}px`);
+      group.style.setProperty('--workspace-height', `${box.height}px`);
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(group);
+    window.addEventListener('resize', place);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', place);
+    };
+  }, [maximised]);
+
+  const toggleMaximised = (pane: WorkspacePaneId) => setMaximised(maximised === pane ? null : pane);
+  const mapMaximiseLabel =
+    maximised === 'map'
+      ? t('workspace.restore', { name: t('workspace.mapName') })
+      : t('workspace.maximise', { name: t('workspace.mapName') });
+  // What a pane's root carries: its name, for the maximise key to find which pane focus is in, and
+  // — while another pane fills the workspace — `inert`, so the panes drawn over cannot be reached
+  // by Tab or a screen reader while they cannot be seen.
+  const paneRoot = (pane: WorkspacePaneId, className: string) => ({
+    className: [className, maximised === pane ? 'workspace-pane-maximised' : ''].filter(Boolean).join(' '),
+    'data-workspace-pane': pane,
+    inert: maximised !== null && maximised !== pane ? true : undefined,
+  });
+  // The docks have no strip of their own to put a restore button in, so one floats in the corner.
+  const restoreFloat = (pane: WorkspacePaneId, name: string) =>
+    maximised === pane ? (
+      <Button
+        className="workspace-restore-float"
+        size="small"
+        icon={<FullscreenExitOutlined />}
+        aria-label={t('workspace.restore', { name })}
+        aria-keyshortcuts="M"
+        onClick={() => setMaximised(null)}
+        data-testid={`workspace-${pane}-restore`}
+      >
+        {t('workspace.restoreShort')}
+      </Button>
+    ) : null;
+
+  const moveScene3d = (destination: PaneDestination) => {
+    setMaximised(null);
+    if (destination === 'window') {
+      // One window holds one scene: the pane shuts as the window opens.
+      setScene3dOpen(false);
+      openScene3dWindow();
+    } else {
+      setWorkspace({ ...arrangement, scene3dPlace: destination });
+    }
+  };
+  const moveCaveView = (destination: PaneDestination) => {
+    setMaximised(null);
+    if (destination === 'window') {
+      if (caveViewModel) {
+        openModelWindow(caveViewModel.id);
+      }
+      setCaveViewModelId(null);
+      setCaveViewPaneOpen(false);
+    } else {
+      setWorkspace({ ...arrangement, caveViewPlace: destination });
+    }
+  };
+  const closeCaveView = () => {
+    setCaveViewModelId(null);
+    setCaveViewPaneOpen(false);
+  };
+
+  // An installation can start a new account on one of the presets. "New" is an account that has
+  // arranged nothing yet, and it is decided only once the account's own stored preferences have
+  // been read — before that, an account that did arrange its workspace would look as if it had not.
+  // Applying it stores the arrangement, so it happens once and is the person's own from then on.
+  const { data: uiDefaults } = useUiDefaults();
+  const accountPrefsRead = useUiPrefsStore((s) => s.accountPrefsBaseline !== undefined);
+  const workspaceChosen = useUiPrefsStore((s) => s.workspace !== undefined);
+  useEffect(() => {
+    if (isMobile || !accountPrefsRead || workspaceChosen || !uiDefaults) {
+      return;
+    }
+    const preset = installationPresetOf(uiDefaults.panel);
+    if (preset) {
+      applyWorkspaceSnapshot(preset.snapshot, false);
+    }
+  }, [isMobile, accountPrefsRead, workspaceChosen, uiDefaults]);
 
   useShortcuts(
     useMemo(
@@ -1499,399 +1696,620 @@ export default function MapPage() {
           ...MAP_WORKSPACE_SHORTCUTS.selectionForward,
           run: () => useWorkspaceStore.getState().goForwardSelection(),
         },
+        // The pane focus is in fills the workspace — the map when focus is in none of them — and
+        // the same key gives every pane its own size back. Not on a phone, which has one pane.
+        ...(isMobile
+          ? []
+          : [
+              {
+                ...MAP_WORKSPACE_SHORTCUTS.maximise,
+                run: () => {
+                  const panes = useWorkspacePanesStore.getState();
+                  if (panes.maximised !== null) {
+                    panes.setMaximised(null);
+                    return;
+                  }
+                  const focused = document.activeElement?.closest('[data-workspace-pane]');
+                  panes.setMaximised(
+                    (focused?.getAttribute('data-workspace-pane') as WorkspacePaneId | null) ?? 'map',
+                  );
+                },
+              },
+            ]),
       ],
       // The dock toggles read state that changes with the layout; rebuilding the list when it
       // does is what keeps a shortcut from acting on a stale idea of which host is mounted.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [isMobile, leftCollapsed, rightCollapsed, leftDrawerOpen, rightDrawerOpen],
+      [isMobile, layersCollapsed, detailsCollapsed, leftDrawerOpen, rightDrawerOpen, swapped, rightPinned],
     ),
   );
 
-  const toggleRightDock = () => {
-    if (isMobile) {
-      setRightDrawerOpen((open) => !open);
-    } else if (rightCollapsed) {
-      rightPanelRef.current?.expand();
-    } else {
-      rightPanelRef.current?.collapse();
-    }
+  // The details panel's separator: a double-click snaps between the width somebody dragged to and
+  // the one the panel ships at, which is the gesture every resizable pane has and the fastest way
+  // to get the map back whole without losing the width you chose.
+  const snapDetailsWidth = () => {
+    const shipped = 22;
+    // The pane reports both units; the stored width is a percentage, so compare in one.
+    const size = detailsPanelRef.current?.getSize();
+    const current = Math.round(typeof size === 'number' ? size : (size?.asPercentage ?? shipped));
+    const next = current === shipped ? (rightWidth === shipped ? 34 : rightWidth) : shipped;
+    detailsPanelRef.current?.resize(`${next}%`);
+    setPanelPrefs('main', { width: next });
   };
+
+  const layersDockPanel = (
+    <StablePanel
+      key={`dock-layers-${sideOfDock('layers')}`}
+      id="ws-dock-layers"
+      panelRef={layersPanelRef}
+      collapsible
+      collapsedSize="0%"
+      defaultSize={docks.leftHidden ? '0%' : '16%'}
+      minSize="10%"
+      className="map-workspace-panel"
+      onResize={() => {
+        if (!relayingOutRef.current) {
+          setLayersCollapsed(layersPanelRef.current?.isCollapsed() ?? false);
+        }
+      }}
+    >
+      <div {...paneRoot('layers', 'workspace-dock')}>
+        {layerDock}
+        {restoreFloat('layers', t('map.layersTitle'))}
+      </div>
+    </StablePanel>
+  );
+
+  // Pinned pushes the map aside; unpinned floats over it. A preference rather than a breakpoint,
+  // because which one is right depends on the screen *and* on what somebody is doing — a wide
+  // monitor still wants the map whole while tracing a passage.
+  const detailsDockPanel = rightPinned ? (
+    <StablePanel
+      key={`dock-details-${sideOfDock('details')}`}
+      id="ws-dock-details"
+      panelRef={detailsPanelRef}
+      collapsible
+      collapsedSize="0%"
+      defaultSize={docks.rightHidden ? '0%' : `${rightWidth}%`}
+      minSize="12%"
+      className="map-workspace-panel"
+      onResize={(size) => {
+        if (relayingOutRef.current) {
+          return;
+        }
+        setDetailsCollapsed(detailsPanelRef.current?.isCollapsed() ?? false);
+        // Remembered as the person drags, so the width survives a reload. Rounded: a stored
+        // 21.7318% is noise that makes every save look like a change.
+        if (typeof size === 'number' && size > 0) {
+          setPanelPrefs('main', { width: Math.round(size) });
+        }
+      }}
+    >
+      <div {...paneRoot('details', 'workspace-dock')}>
+        {rightDock}
+        {restoreFloat('details', t('map.detailsTitle'))}
+      </div>
+    </StablePanel>
+  ) : null;
+
+  const dockPanelOn = (side: 'left' | 'right') =>
+    dockOnSide(side) === 'layers' ? layersDockPanel : detailsDockPanel;
+
+  // A pane beside the map or in the strip under it is a slot its content's element is shown in.
+  // Keyed by place, so a move mounts a new slot — a new panel the layout library sizes afresh —
+  // while what is drawn in it is never touched.
+  const scene3dSlot = (place: PanePlace) => (
+    <StablePanel
+      key={`scene3d-${place}`}
+      id={`ws-scene3d-${place}`}
+      defaultSize={place === 'bottom' ? undefined : '34%'}
+      minSize="20%"
+      className="map-workspace-panel"
+    >
+      <PaneSlot element={scenePaneElement} />
+    </StablePanel>
+  );
+  const caveViewSlot = (place: PanePlace) => (
+    <StablePanel
+      key={`caveview-${place}`}
+      id={`ws-caveview-${place}`}
+      defaultSize={place === 'bottom' ? undefined : '30%'}
+      minSize="20%"
+      className="map-workspace-panel"
+    >
+      <PaneSlot element={caveViewPaneElement} />
+    </StablePanel>
+  );
+
+  // Panels with a separator between each pair, keyed by the pair, so a separator is made afresh
+  // whenever what it stands between changes and the layout library never resizes a stale pair.
+  const withSeparators = (panels: ReactElement[], separatorClass: string, label: string): ReactElement[] =>
+    panels.flatMap((panel, index) => {
+      if (index === 0) {
+        return [panel];
+      }
+      const before = panels[index - 1];
+      const nextToDetails = before.key?.startsWith('dock-details') || panel.key?.startsWith('dock-details');
+      return [
+        <Separator
+          key={`sep:${before.key}|${panel.key}`}
+          className={separatorClass}
+          aria-label={label}
+          inert={maximised !== null ? true : undefined}
+          onDoubleClick={nextToDetails ? snapDetailsWidth : undefined}
+        />,
+        panel,
+      ];
+    });
+
+  // Under the map: the table, then whichever of the two drawing panes was sent there.
+  const bottomPanels: ReactElement[] = [
+    ...(tableShown
+      ? [
+          <StablePanel key="table" id="ws-table" minSize="20%" className="map-workspace-panel">
+            <PaneSlot element={tablePaneElement} />
+          </StablePanel>,
+        ]
+      : []),
+    ...(sceneShown && arrangement.scene3dPlace === 'bottom' ? [scene3dSlot('bottom')] : []),
+    ...(caveViewShown && arrangement.caveViewPlace === 'bottom' ? [caveViewSlot('bottom')] : []),
+  ];
+  const bottomShown = bottomPanels.length > 0;
+
+  const mapColumn = (
+    <Panel key="center" id="ws-center" minSize="30%">
+      <Group orientation="vertical" className="map-workspace-column">
+        <Panel id="ws-map" minSize="30%">
+          <div
+            {...paneRoot(
+              'map',
+              [
+                'map-canvas-wrap',
+                mapChromeHidden ? 'map-chrome-hidden' : '',
+                isMobile ? 'map-canvas-wrap-mobile' : '',
+              ]
+                .filter(Boolean)
+                .join(' '),
+            )}
+          >
+            {/* Focusable, because OpenLayers listens for its keyboard pan and zoom on this element
+                and nowhere else: without a place in the tab order the map could only be moved with
+                a pointer. An application to assistive technology, so that a screen reader hands the
+                arrow keys to the map instead of using them to read the page. */}
+            <div
+              ref={mapTarget}
+              id={MAP_CANVAS_ID}
+              className="map-canvas"
+              data-testid="map-canvas"
+              tabIndex={0}
+              role="application"
+              aria-label={t('a11y.map')}
+            />
+            {/* Search is the primary action on a phone: it gets the width the pop-out
+                buttons no longer need. The selector sits beside it — search asks what mentions
+                these words, the selector asks which of these things you mean — and stacks under
+                it on a phone, where they cannot both have the strip. */}
+            <div className={`map-search-overlay map-chrome${isMobile ? ' map-search-overlay-mobile' : ''}`}>
+              <MapSearch fullWidth={isMobile} />
+              <MapObjectSelector fullWidth={isMobile} />
+              {/* A row of its own under search: on the first row the button ran on past the
+                  selector, under the pop-out buttons pinned at the top right, which then took
+                  every press meant for it. */}
+              <div className="map-filter-row">
+                <MapListInViewButton filter={mapFilter} />
+                {/* The account's pinned saved filters: one click narrows the main entrance and
+                    feature layers to one of them, a second click lifts it again. */}
+                <QuickFilterChips
+                  className="map-quick-filters"
+                  activeId={mapFilter?.kind === 'saved' ? mapFilter.savedFilterId : null}
+                  onApply={(filter) => adoptMapFilter({ kind: 'saved', savedFilterId: filter.id })}
+                  onRelease={() => adoptMapFilter(null)}
+                  data-testid="map-quick-filters"
+                />
+              </div>
+              <MapFilterNotice
+                filter={mapFilter}
+                unreadableLink={unreadableFilterLink}
+                onDismissUnreadableLink={() => setUnreadableFilterLink(false)}
+                refused={filterRefused}
+                onClear={() => adoptMapFilter(null)}
+              />
+            </div>
+            <Tooltip title={mapChromeHidden ? t('map.showChrome') : t('map.hideChrome')} placement="left">
+              <Button
+                className="map-chrome-toggle"
+                size="small"
+                aria-label={mapChromeHidden ? t('map.showChrome') : t('map.hideChrome')}
+                icon={mapChromeHidden ? <EyeOutlined /> : <EyeInvisibleOutlined />}
+                onClick={() => setMapChromeHidden(!mapChromeHidden)}
+                data-testid="map-chrome-toggle"
+              />
+            </Tooltip>
+            {mapChromeHidden && editDirty > 0 && (
+              <Button
+                className="map-dirty-pill"
+                size="small"
+                type="primary"
+                onClick={() => setMapChromeHidden(false)}
+                data-testid="map-dirty-pill"
+              >
+                {t('map.unsavedEdits', { count: editDirty })}
+              </Button>
+            )}
+            <Tooltip title={leftHidden ? t('map.showPanel') : t('map.hidePanel')} placement="right">
+              <Button
+                className="map-dock-toggle map-dock-toggle-left"
+                size="small"
+                aria-label={leftHidden ? t('map.showPanel') : t('map.hidePanel')}
+                icon={leftHidden ? <RightOutlined /> : <LeftOutlined />}
+                onClick={toggleLeftDock}
+                data-testid="map-dock-toggle-left"
+              />
+            </Tooltip>
+            <Tooltip title={rightHidden ? t('map.showPanel') : t('map.hidePanel')} placement="left">
+              <Button
+                className="map-dock-toggle map-dock-toggle-right"
+                size="small"
+                aria-label={rightHidden ? t('map.showPanel') : t('map.hidePanel')}
+                icon={rightHidden ? <LeftOutlined /> : <RightOutlined />}
+                onClick={toggleRightDock}
+                data-testid="map-dock-toggle-right"
+              />
+            </Tooltip>
+            {/* The bottom-left corner holds a column: the survey-line notice over the scale box,
+                over OpenLayers' own scale line. One column rather than two boxes each placed by a
+                guess at the other's height, so the notice moves up when the scale box grows — it
+                does, by a line, when a typed scale is refused — and never lies over it; its width
+                stops short of the background chooser and the attribution in the opposite corner.
+                The notice comes after the map in the tab order, beside the dock toggles it is a
+                shortcut for, so it never lengthens the way from the page start to the map. */}
+            <div className={`map-corner-stack${isMobile ? ' map-corner-stack-mobile' : ''}`}>
+              <CenterlineWithheldNotice
+                centerlinesVisible={centerlinesVisible}
+                panelHidden={layersHidden}
+                chromeHidden={mapChromeHidden}
+                onOpenPanel={openLayerPanelAtCenterlines}
+              />
+              {/* Jump-to-scale is niche clutter at phone size; OL's own scale line stays. */}
+              {!isMobile && (
+                <div className="map-scale-overlay map-chrome">
+                  <ScaleBox map={getWorkspaceMap()} />
+                </div>
+              )}
+            </div>
+            {baseOlLayers.length > 0 && (
+              <BaseLayerChooser
+                layers={baseOlLayers}
+                backgroundLayerFilter={(l) => getBaseLayerId(l as TileLayer) !== undefined}
+                buttonTooltip={t('map.changeBaseLayer')}
+              />
+            )}
+            {swipeActive && (
+              <div
+                className="map-swipe-handle"
+                style={{ left: `calc(${(swipePos * 100).toFixed(2)}% - 2px)` }}
+                onPointerDown={onSwipeHandleDown}
+                data-testid="raster-swipe-handle"
+              />
+            )}
+            <div className="map-popout-overlay map-chrome">
+              {visibleRasterIds.length > 0 && (
+                <Tooltip title={t('map.swipeCompare')}>
+                  <Button
+                    size="small"
+                    type={swipeActive ? 'primary' : 'default'}
+                    icon={<BorderVerticleOutlined />}
+                    aria-label={t('map.swipeCompare')}
+                    aria-pressed={swipeActive}
+                    onClick={() => setSwipeActive((v) => !v)}
+                    data-testid="raster-swipe-toggle"
+                  />
+                </Tooltip>
+              )}
+              <GeoLocationButton
+                size="small"
+                icon={<AimOutlined />}
+                pressedIcon={<AimOutlined />}
+                tooltip={t('map.locateMe')}
+                aria-label={t('map.locateMe')}
+                showMarker
+                follow
+                enableTracking
+                onError={() => message.error(t('map.geolocationFailed'))}
+              />
+              {/* Pop-out windows are meaningless on a phone; the 3D viewer stays reachable
+                  from the cave detail page. */}
+              {!isMobile && (
+                <>
+                  <WorkspaceMenu />
+                  <Tooltip title={`${mapMaximiseLabel} (M)`}>
+                    <Button
+                      size="small"
+                      type={maximised === 'map' ? 'primary' : 'default'}
+                      icon={maximised === 'map' ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                      aria-label={mapMaximiseLabel}
+                      aria-pressed={maximised === 'map'}
+                      aria-keyshortcuts="M"
+                      onClick={() => toggleMaximised('map')}
+                      data-testid="map-maximise"
+                    />
+                  </Tooltip>
+                  <Tooltip title={scene3dOpen ? t('map.hideScene3d') : t('map.showScene3d')}>
+                    <Button
+                      size="small"
+                      type={scene3dOpen ? 'primary' : 'default'}
+                      icon={<GlobalOutlined />}
+                      aria-label={scene3dOpen ? t('map.hideScene3d') : t('map.showScene3d')}
+                      aria-pressed={scene3dOpen}
+                      onClick={() => setScene3dOpen(!scene3dOpen)}
+                      data-testid="map-scene3d-toggle"
+                    />
+                  </Tooltip>
+                  <Tooltip title={t('panel.popOut')}>
+                    <Button
+                      size="small"
+                      icon={<ExportOutlined />}
+                      aria-label={t('panel.popOut')}
+                      onClick={() => window.open('/panel/registry', 'silexgis-registry', 'popup,width=900,height=700')}
+                      data-testid="map-popout-registry"
+                    />
+                  </Tooltip>
+                  <Tooltip title={t('panel.popOutScene3d')}>
+                    <Button
+                      size="small"
+                      icon={<SelectOutlined />}
+                      aria-label={t('panel.popOutScene3d')}
+                      onClick={() => window.open('/panel/scene3d', 'silexgis-scene3d', 'popup,width=1100,height=800')}
+                      data-testid="map-popout-scene3d"
+                    />
+                  </Tooltip>
+                  <Tooltip title={t('panel.popOutSelection')}>
+                    <Button
+                      size="small"
+                      icon={<ProfileOutlined />}
+                      aria-label={t('panel.popOutSelection')}
+                      onClick={() =>
+                        window.open('/panel/selection', 'silexgis-selection', 'popup,width=520,height=900')}
+                      data-testid="map-popout-selection"
+                    />
+                  </Tooltip>
+                  <Tooltip title={t('panel.popOut3d')}>
+                    <Button
+                      size="small"
+                      icon={<CodeSandboxOutlined />}
+                      aria-label={t('panel.popOut3d')}
+                      onClick={() => window.open('/panel/viewer3d', 'silexgis-viewer3d', 'popup,width=1000,height=750')}
+                      data-testid="map-popout-viewer3d"
+                    />
+                  </Tooltip>
+                  <Tooltip title={t('shortcuts.open')}>
+                    <Button
+                      size="small"
+                      icon={<QuestionCircleOutlined />}
+                      aria-label={t('shortcuts.title')}
+                      onClick={() => setShortcutHelpOpen(true)}
+                      data-testid="map-shortcut-help"
+                    />
+                  </Tooltip>
+                </>
+              )}
+            </div>
+            {toolbarShown && editController && (
+              <div className={`map-edit-overlay map-chrome${isMobile ? ' map-edit-overlay-mobile' : ''}`}>
+                <EditToolbar controller={editController} mayModify={mayReshapeSaved} rightsPending={rightsPending} />
+              </div>
+            )}
+            <MapContextMenu
+              target={contextTarget}
+              featureTypes={(featureTypes ?? []).filter(isGenericFeatureType)}
+              canEdit={canEdit}
+              onClose={() => {
+                // A menu the keyboard opened hands focus back to the map it was opened from; a
+                // dialog an item opens takes it from there, and gives it back to the map in turn.
+                if (contextTarget?.viaKeyboard) {
+                  getWorkspaceMap().getTargetElement()?.focus();
+                }
+                setContextTarget(null);
+              }}
+              onAddFeature={(typeId, lonLat) => {
+                const picked = featureTypes?.find((ft) => Number(ft.id) === typeId);
+                const shape: DrawShape = drawShapeForType(picked) ?? 'Point';
+                if (shape === 'LineString' || shape === 'Polygon') {
+                  // Multi-click shapes start at the user's next clicks; just arm the tool.
+                  editController?.setMode('draw', shape, typeId);
+                } else {
+                  // Point types land exactly where the menu was opened.
+                  editController?.placePointAt(lonLat, typeId);
+                }
+              }}
+              onPlace={(mode, lonLat) => editController?.requestPlacement(mode, lonLat)}
+            />
+          </div>
+        </Panel>
+        {bottomShown && (
+          <Separator
+            className="map-workspace-handle map-workspace-handle-row"
+            aria-label={t('workspace.resizeBottom')}
+            inert={maximised !== null ? true : undefined}
+          />
+        )}
+        {bottomShown && (
+          <StablePanel
+            id="ws-bottom"
+            defaultSize={`${arrangement.bottomSize ?? 35}%`}
+            minSize={`${BOTTOM_SIZE_MIN}%`}
+            maxSize={`${BOTTOM_SIZE_MAX}%`}
+            className="map-workspace-panel"
+            onResize={(size) => {
+              // Remembered as it is dragged, rounded for the same reason the details width is.
+              const percent = Math.round(size.asPercentage);
+              const now = useUiPrefsStore.getState().workspace ?? DEFAULT_ARRANGEMENT;
+              if (percent >= BOTTOM_SIZE_MIN && percent <= BOTTOM_SIZE_MAX && percent !== now.bottomSize) {
+                setWorkspace({ ...now, bottomSize: percent });
+              }
+            }}
+          >
+            <Group orientation="horizontal" className="map-workspace-bottom">
+              {withSeparators(bottomPanels, 'map-workspace-handle', t('workspace.resizePanes'))}
+            </Group>
+          </StablePanel>
+        )}
+      </Group>
+    </Panel>
+  );
+
+  // The workspace's row, left to right: a dock, the panes sent left (the 3D scene nearest the
+  // map), the map's column, the panes sent right (the 3D scene nearest the map again), a dock.
+  const row: ReactElement[] = isMobile
+    ? [mapColumn]
+    : [
+        ...[dockPanelOn('left')].filter((panel): panel is ReactElement => panel !== null),
+        ...(caveViewShown && arrangement.caveViewPlace === 'left' ? [caveViewSlot('left')] : []),
+        ...(sceneShown && arrangement.scene3dPlace === 'left' ? [scene3dSlot('left')] : []),
+        mapColumn,
+        ...(sceneShown && arrangement.scene3dPlace === 'right' ? [scene3dSlot('right')] : []),
+        ...(caveViewShown && arrangement.caveViewPlace === 'right' ? [caveViewSlot('right')] : []),
+        ...[dockPanelOn('right')].filter((panel): panel is ReactElement => panel !== null),
+      ];
+
+  // Which panels the row and the strip hold. When that changes the layout library lays the row out
+  // afresh — from the sizes it last had for this same set of panels, or from their starting sizes —
+  // and reports each dock's new size as though somebody had dragged it, so a folded dock would come
+  // back unfolded and its being folded would be forgotten. For the frames that takes, a dock's report
+  // is not taken as the person's choice; afterwards each dock is put back as the stored state says.
+  const panelSetKey = [...row, ...bottomPanels].map((panel) => panel.key).join('|');
+  if (panelSetRef.current !== panelSetKey) {
+    panelSetRef.current = panelSetKey;
+    relayingOutRef.current = true;
+  }
+  useEffect(() => {
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        relayingOutRef.current = false;
+        const stored = useUiPrefsStore.getState().docks;
+        for (const [panel, hidden] of [
+          [layersPanelRef.current, stored.leftHidden],
+          [detailsPanelRef.current, stored.rightHidden],
+        ] as const) {
+          if (panel && panel.isCollapsed() !== hidden) {
+            if (hidden) {
+              panel.collapse();
+            } else {
+              panel.expand();
+            }
+          }
+        }
+      });
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [panelSetKey, layersPanelRef, detailsPanelRef]);
+
+  const scenePane = (
+    <div {...paneRoot('scene3d', 'workspace-pane')}>
+      <PaneHeader
+        title={t('workspace.scene3dName')}
+        name={t('workspace.scene3dName')}
+        testId="workspace-scene3d"
+        place={arrangement.scene3dPlace}
+        onMove={moveScene3d}
+        maximised={maximised === 'scene3d'}
+        onToggleMaximised={() => toggleMaximised('scene3d')}
+        onClose={() => setScene3dOpen(false)}
+      />
+      <div className="workspace-pane-body">
+        <Suspense fallback={<Spin style={{ margin: 48 }} />}>
+          <Scene3DView />
+        </Suspense>
+      </div>
+    </div>
+  );
+
+  const caveViewPane = (
+    <div {...paneRoot('caveview', 'workspace-pane map-caveview-pane')}>
+      <PaneHeader
+        title={caveViewModel?.name ?? t('workspace.surveyName')}
+        name={t('workspace.surveyName')}
+        testId="map-caveview"
+        place={arrangement.caveViewPlace}
+        onMove={moveCaveView}
+        mayPopOut={caveViewModel !== undefined}
+        maximised={maximised === 'caveview'}
+        onToggleMaximised={() => toggleMaximised('caveview')}
+        onClose={closeCaveView}
+        extra={
+          caveViewModel && (
+            <>
+              <Tooltip title={t('surveyModels.openOverlay')}>
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<ExpandOutlined />}
+                  aria-label={t('surveyModels.openOverlay')}
+                  onClick={() => setCaveViewOverlay(caveViewModel)}
+                  data-testid="map-caveview-overlay"
+                />
+              </Tooltip>
+              <Tooltip title={t('surveyModels.openInWindow')}>
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<ExportOutlined />}
+                  aria-label={t('surveyModels.openInWindow')}
+                  onClick={() => openModelWindow(caveViewModel.id)}
+                  data-testid="map-caveview-popout"
+                />
+              </Tooltip>
+            </>
+          )
+        }
+      />
+      <div className="map-caveview-body">
+        {caveViewModel ? (
+          <Suspense fallback={<Spin style={{ margin: 48 }} />}>
+            <CaveViewPanel
+              fileUrl={caveViewModel.modelUrl}
+              fileName={viewerFileName(caveViewModel)}
+              height="100%"
+              surveyModelId={caveViewModel.id}
+              compare={caveViewCompare}
+            />
+          </Suspense>
+        ) : (
+          <SurveyModelChooser onOpen={setCaveViewModelId} />
+        )}
+      </div>
+    </div>
+  );
+
+  const tablePane = (
+    <div {...paneRoot('table', 'workspace-pane')}>
+      <BottomTable
+        maximised={maximised === 'table'}
+        onToggleMaximised={() => toggleMaximised('table')}
+        onClose={() => setWorkspace({ ...arrangement, table: false })}
+      />
+    </div>
+  );
 
   return (
     <MapContext.Provider value={getWorkspaceMap()}>
-    {/* The side panes render conditionally, but the map's slot in this list never moves:
-        React keeps its DOM (and with it the OL target the map was attached to) across a
-        viewport crossing the breakpoint. */}
-    <Group orientation="horizontal" className="map-workspace">
-      {/* Panel sizes: bare numbers mean pixels in react-resizable-panels v4 — use percent strings. */}
-      {!isMobile && (
-        <Panel
-          panelRef={leftPanelRef}
-          collapsible
-          collapsedSize="0%"
-          defaultSize={initialDocks.leftHidden ? '0%' : '16%'}
-          minSize="10%"
-          className="map-workspace-panel"
-          onResize={() => setLeftCollapsed(leftPanelRef.current?.isCollapsed() ?? false)}
-        >
-          {layerDock}
-        </Panel>
-      )}
-      {!isMobile && <Separator className="map-workspace-handle" />}
-      <Panel minSize="30%">
-        <div
-          className={[
-            'map-canvas-wrap',
-            mapChromeHidden ? 'map-chrome-hidden' : '',
-            isMobile ? 'map-canvas-wrap-mobile' : '',
-          ].filter(Boolean).join(' ')}
-        >
-          {/* Focusable, because OpenLayers listens for its keyboard pan and zoom on this element
-              and nowhere else: without a place in the tab order the map could only be moved with
-              a pointer. An application to assistive technology, so that a screen reader hands the
-              arrow keys to the map instead of using them to read the page. */}
-          <div
-            ref={mapTarget}
-            id={MAP_CANVAS_ID}
-            className="map-canvas"
-            data-testid="map-canvas"
-            tabIndex={0}
-            role="application"
-            aria-label={t('a11y.map')}
-          />
-          {/* Search is the primary action on a phone: it gets the width the pop-out
-              buttons no longer need. The selector sits beside it — search asks what mentions
-              these words, the selector asks which of these things you mean — and stacks under
-              it on a phone, where they cannot both have the strip. */}
-          <div className={`map-search-overlay map-chrome${isMobile ? ' map-search-overlay-mobile' : ''}`}>
-            <MapSearch fullWidth={isMobile} />
-            <MapObjectSelector fullWidth={isMobile} />
-            {/* A row of its own under search: on the first row the button ran on past the
-                selector, under the pop-out buttons pinned at the top right, which then took
-                every press meant for it. */}
-            <div className="map-filter-row">
-              <MapListInViewButton filter={mapFilter} />
-              {/* The account's pinned saved filters: one click narrows the main entrance and
-                  feature layers to one of them, a second click lifts it again. */}
-              <QuickFilterChips
-                className="map-quick-filters"
-                activeId={mapFilter?.kind === 'saved' ? mapFilter.savedFilterId : null}
-                onApply={(filter) => adoptMapFilter({ kind: 'saved', savedFilterId: filter.id })}
-                onRelease={() => adoptMapFilter(null)}
-                data-testid="map-quick-filters"
-              />
-            </div>
-            <MapFilterNotice
-              filter={mapFilter}
-              unreadableLink={unreadableFilterLink}
-              onDismissUnreadableLink={() => setUnreadableFilterLink(false)}
-              refused={filterRefused}
-              onClear={() => adoptMapFilter(null)}
-            />
-          </div>
-          <Tooltip title={mapChromeHidden ? t('map.showChrome') : t('map.hideChrome')} placement="left">
-            <Button
-              className="map-chrome-toggle"
-              size="small"
-              aria-label={mapChromeHidden ? t('map.showChrome') : t('map.hideChrome')}
-              icon={mapChromeHidden ? <EyeOutlined /> : <EyeInvisibleOutlined />}
-              onClick={() => setMapChromeHidden(!mapChromeHidden)}
-              data-testid="map-chrome-toggle"
-            />
-          </Tooltip>
-          {mapChromeHidden && editDirty > 0 && (
-            <Button
-              className="map-dirty-pill"
-              size="small"
-              type="primary"
-              onClick={() => setMapChromeHidden(false)}
-              data-testid="map-dirty-pill"
-            >
-              {t('map.unsavedEdits', { count: editDirty })}
-            </Button>
-          )}
-          <Tooltip title={leftHidden ? t('map.showPanel') : t('map.hidePanel')} placement="right">
-            <Button
-              className="map-dock-toggle map-dock-toggle-left"
-              size="small"
-              aria-label={leftHidden ? t('map.showPanel') : t('map.hidePanel')}
-              icon={leftHidden ? <RightOutlined /> : <LeftOutlined />}
-              onClick={toggleLeftDock}
-              data-testid="map-dock-toggle-left"
-            />
-          </Tooltip>
-          <Tooltip title={rightHidden ? t('map.showPanel') : t('map.hidePanel')} placement="left">
-            <Button
-              className="map-dock-toggle map-dock-toggle-right"
-              size="small"
-              aria-label={rightHidden ? t('map.showPanel') : t('map.hidePanel')}
-              icon={rightHidden ? <LeftOutlined /> : <RightOutlined />}
-              onClick={toggleRightDock}
-              data-testid="map-dock-toggle-right"
-            />
-          </Tooltip>
-          {/* After the map in the tab order, beside the dock toggles it is a shortcut for, so it
-              never lengthens the way from the page start to the map. */}
-          <CenterlineWithheldNotice
-            centerlinesVisible={centerlinesVisible}
-            panelHidden={leftHidden}
-            chromeHidden={mapChromeHidden}
-            onOpenPanel={openLayerPanelAtCenterlines}
-          />
-          {baseOlLayers.length > 0 && (
-            <BaseLayerChooser
-              layers={baseOlLayers}
-              backgroundLayerFilter={(l) => getBaseLayerId(l as TileLayer) !== undefined}
-              buttonTooltip={t('map.changeBaseLayer')}
-            />
-          )}
-          {/* Jump-to-scale is niche clutter at phone size; OL's own scale line stays. */}
-          {!isMobile && (
-            <div className="map-scale-overlay map-chrome">
-              <ScaleBox map={getWorkspaceMap()} />
-            </div>
-          )}
-          {swipeActive && (
-            <div
-              className="map-swipe-handle"
-              style={{ left: `calc(${(swipePos * 100).toFixed(2)}% - 2px)` }}
-              onPointerDown={onSwipeHandleDown}
-              data-testid="raster-swipe-handle"
-            />
-          )}
-          <div className="map-popout-overlay map-chrome">
-            {visibleRasterIds.length > 0 && (
-              <Tooltip title={t('map.swipeCompare')}>
-                <Button
-                  size="small"
-                  type={swipeActive ? 'primary' : 'default'}
-                  icon={<BorderVerticleOutlined />}
-                  aria-label={t('map.swipeCompare')}
-                  aria-pressed={swipeActive}
-                  onClick={() => setSwipeActive((v) => !v)}
-                  data-testid="raster-swipe-toggle"
-                />
-              </Tooltip>
-            )}
-            <GeoLocationButton
-              size="small"
-              icon={<AimOutlined />}
-              pressedIcon={<AimOutlined />}
-              tooltip={t('map.locateMe')}
-              aria-label={t('map.locateMe')}
-              showMarker
-              follow
-              enableTracking
-              onError={() => message.error(t('map.geolocationFailed'))}
-            />
-            {/* Pop-out windows are meaningless on a phone; the 3D viewer stays reachable
-                from the cave detail page. */}
-            {!isMobile && (
-              <>
-                <Tooltip title={scene3dOpen ? t('map.hideScene3d') : t('map.showScene3d')}>
-                  <Button
-                    size="small"
-                    type={scene3dOpen ? 'primary' : 'default'}
-                    icon={<GlobalOutlined />}
-                    aria-label={scene3dOpen ? t('map.hideScene3d') : t('map.showScene3d')}
-                    aria-pressed={scene3dOpen}
-                    onClick={() => setScene3dOpen((open) => !open)}
-                    data-testid="map-scene3d-toggle"
-                  />
-                </Tooltip>
-                <Tooltip title={t('panel.popOut')}>
-                  <Button
-                    size="small"
-                    icon={<ExportOutlined />}
-                    aria-label={t('panel.popOut')}
-                    onClick={() => window.open('/panel/registry', 'silexgis-registry', 'popup,width=900,height=700')}
-                    data-testid="map-popout-registry"
-                  />
-                </Tooltip>
-                <Tooltip title={t('panel.popOutScene3d')}>
-                  <Button
-                    size="small"
-                    icon={<SelectOutlined />}
-                    aria-label={t('panel.popOutScene3d')}
-                    onClick={() => window.open('/panel/scene3d', 'silexgis-scene3d', 'popup,width=1100,height=800')}
-                    data-testid="map-popout-scene3d"
-                  />
-                </Tooltip>
-                <Tooltip title={t('panel.popOutSelection')}>
-                  <Button
-                    size="small"
-                    icon={<ProfileOutlined />}
-                    aria-label={t('panel.popOutSelection')}
-                    onClick={() =>
-                      window.open('/panel/selection', 'silexgis-selection', 'popup,width=520,height=900')}
-                    data-testid="map-popout-selection"
-                  />
-                </Tooltip>
-                <Tooltip title={t('panel.popOut3d')}>
-                  <Button
-                    size="small"
-                    icon={<CodeSandboxOutlined />}
-                    aria-label={t('panel.popOut3d')}
-                    onClick={() => window.open('/panel/viewer3d', 'silexgis-viewer3d', 'popup,width=1000,height=750')}
-                    data-testid="map-popout-viewer3d"
-                  />
-                </Tooltip>
-                <Tooltip title={t('shortcuts.open')}>
-                  <Button
-                    size="small"
-                    icon={<QuestionCircleOutlined />}
-                    aria-label={t('shortcuts.title')}
-                    onClick={() => setShortcutHelpOpen(true)}
-                    data-testid="map-shortcut-help"
-                  />
-                </Tooltip>
-              </>
-            )}
-          </div>
-          {toolbarShown && editController && (
-            <div className={`map-edit-overlay map-chrome${isMobile ? ' map-edit-overlay-mobile' : ''}`}>
-              <EditToolbar controller={editController} mayModify={mayReshapeSaved} rightsPending={rightsPending} />
-            </div>
-          )}
-          <MapContextMenu
-            target={contextTarget}
-            featureTypes={(featureTypes ?? []).filter(isGenericFeatureType)}
-            canEdit={canEdit}
-            onClose={() => {
-              // A menu the keyboard opened hands focus back to the map it was opened from; a
-              // dialog an item opens takes it from there, and gives it back to the map in turn.
-              if (contextTarget?.viaKeyboard) {
-                getWorkspaceMap().getTargetElement()?.focus();
-              }
-              setContextTarget(null);
-            }}
-            onAddFeature={(typeId, lonLat) => {
-              const picked = featureTypes?.find((ft) => Number(ft.id) === typeId);
-              const shape: DrawShape = drawShapeForType(picked) ?? 'Point';
-              if (shape === 'LineString' || shape === 'Polygon') {
-                // Multi-click shapes start at the user's next clicks; just arm the tool.
-                editController?.setMode('draw', shape, typeId);
-              } else {
-                // Point types land exactly where the menu was opened.
-                editController?.placePointAt(lonLat, typeId);
-              }
-            }}
-            onPlace={(mode, lonLat) => editController?.requestPlacement(mode, lonLat)}
-          />
-        </div>
-      </Panel>
-      {/* The 3D scene beside the map rather than instead of it. Rendered only while it is open,
-          so the graphics context exists exactly as long as the pane does: a collapsed pane keeps
-          its children mounted, which would leave a drawing surface alive at zero width. */}
-      {!isMobile && scene3dOpen && <Separator className="map-workspace-handle" />}
-      {!isMobile && scene3dOpen && (
-        <Panel defaultSize="34%" minSize="20%" className="map-workspace-panel">
-          <Suspense fallback={<Spin style={{ margin: 48 }} />}>
-            <Scene3DView />
-          </Suspense>
-        </Panel>
-      )}
-      {/* A cave's survey model beside the map, opened from the cave's model list. Rendered only
-          while it holds a model, for the same reason the 3D scene above is: a survey viewer keeps
-          a drawing context, and a collapsed pane would keep one alive at zero width. */}
-      {!isMobile && caveViewModel && <Separator className="map-workspace-handle" />}
-      {!isMobile && caveViewModel && (
-        <Panel defaultSize="30%" minSize="20%" className="map-workspace-panel">
-          <div className="map-caveview-pane">
-            <Flex align="center" justify="space-between" className="map-caveview-header" gap={8}>
-              <Typography.Text ellipsis strong title={caveViewModel.name}>
-                {caveViewModel.name}
-              </Typography.Text>
-              <Flex gap={4}>
-                <Tooltip title={t('surveyModels.openOverlay')}>
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<ExpandOutlined />}
-                    aria-label={t('surveyModels.openOverlay')}
-                    onClick={() => setCaveViewOverlay(caveViewModel)}
-                    data-testid="map-caveview-overlay"
-                  />
-                </Tooltip>
-                <Tooltip title={t('surveyModels.openInWindow')}>
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<ExportOutlined />}
-                    aria-label={t('surveyModels.openInWindow')}
-                    onClick={() => openModelWindow(caveViewModel.id)}
-                    data-testid="map-caveview-popout"
-                  />
-                </Tooltip>
-                <Tooltip title={t('common.close')}>
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<CloseOutlined />}
-                    aria-label={t('common.close')}
-                    onClick={() => setCaveViewModelId(null)}
-                    data-testid="map-caveview-close"
-                  />
-                </Tooltip>
-              </Flex>
-            </Flex>
-            <div className="map-caveview-body">
-              <Suspense fallback={<Spin style={{ margin: 48 }} />}>
-                <CaveViewPanel
-                  fileUrl={caveViewModel.modelUrl}
-                  fileName={viewerFileName(caveViewModel)}
-                  height="100%"
-                  surveyModelId={caveViewModel.id}
-                  compare={caveViewCompare}
-                />
-              </Suspense>
-            </div>
-          </div>
-        </Panel>
-      )}
-      {!isMobile && (
-        <Separator
-          className="map-workspace-handle"
-          // Double-click snaps between the width somebody dragged to and the one the panel
-          // ships at, which is the gesture every resizable pane has and the fastest way to get
-          // the map back whole without losing the width you chose.
-          onDoubleClick={() => {
-            const shipped = 22;
-            // The pane reports both units; the stored width is a percentage, so compare in one.
-            const size = rightPanelRef.current?.getSize();
-            const current = Math.round(
-              typeof size === 'number' ? size : (size?.asPercentage ?? shipped),
-            );
-            const next = current === shipped ? (rightWidth === shipped ? 34 : rightWidth) : shipped;
-            rightPanelRef.current?.resize(`${next}%`);
-            setPanelPrefs('main', { width: next });
-          }}
-        />
-      )}
-      {/* Pinned pushes the map aside; unpinned floats over it. A preference rather than a
-          breakpoint, because which one is right depends on the screen *and* on what somebody is
-          doing — a wide monitor still wants the map whole while tracing a passage. */}
-      {!isMobile && rightPinned && (
-        <Panel
-          panelRef={rightPanelRef}
-          collapsible
-          collapsedSize="0%"
-          defaultSize={initialDocks.rightHidden ? '0%' : `${rightWidth}%`}
-          minSize="12%"
-          className="map-workspace-panel"
-          onResize={(size) => {
-            setRightCollapsed(rightPanelRef.current?.isCollapsed() ?? false);
-            // Remembered as the person drags, so the width survives a reload. Rounded: a stored
-            // 21.7318% is noise that makes every save look like a change.
-            if (typeof size === 'number' && size > 0) {
-              setPanelPrefs('main', { width: Math.round(size) });
-            }
-          }}
-        >
-          {rightDock}
-        </Panel>
-      )}
+    {/* The map's column is keyed and never moves out of this row, so React keeps its DOM — and
+        with it the OL target the map was attached to — across a viewport crossing the breakpoint
+        and every pane coming, going or moving around it. Panel sizes: bare numbers mean pixels
+        in react-resizable-panels v4 — use percent strings. */}
+    <Group orientation="horizontal" className="map-workspace" elementRef={workspaceGroupRef}>
+      {withSeparators(row, 'map-workspace-handle', t('workspace.resizePanes'))}
     </Group>
+    {/* The panes that must survive a move, drawn here — in one place in the tree whatever slot is
+        showing them — and only while they are up, so a drawing context exists exactly as long as
+        its pane does: a collapsed pane would keep one alive at zero width. */}
+    {sceneShown && createPortal(scenePane, scenePaneElement)}
+    {caveViewShown && createPortal(caveViewPane, caveViewPaneElement)}
+    {tableShown && createPortal(tablePane, tablePaneElement)}
     {/* The pane's model over the whole window. Mounted here rather than reached for on the cave
         page, because a reader who arrived at the map from a link has no cave page open. */}
     <ShortcutHelpDialog open={shortcutHelpOpen} onClose={() => setShortcutHelpOpen(false)} />
@@ -1906,9 +2324,9 @@ export default function MapPage() {
     </Suspense>
     {!isMobile && !rightPinned && (
       <Drawer
-        placement="right"
-        open={!rightCollapsed}
-        onClose={() => setRightCollapsed(true)}
+        placement={sideOfDock('details')}
+        open={!detailsCollapsed}
+        onClose={() => setDetailsCollapsed(true)}
         // No mask: floating over the map is only useful if the map underneath still works.
         mask={false}
         size={`${rightWidth}%` as never}
@@ -1950,4 +2368,18 @@ export default function MapPage() {
     )}
     </MapContext.Provider>
   );
+}
+
+/** Which of the two docks a side holds. */
+type DockContent = 'layers' | 'details';
+
+/**
+ * A panel whose starting size is taken once, when it mounts. The layout library re-registers a
+ * panel whose `defaultSize` changes, which re-lays the whole row; a starting size read from stored
+ * preferences changes whenever the person drags, so it is frozen here at the value it had when the
+ * panel appeared — afterwards the panel itself is what is sized, and reports back.
+ */
+function StablePanel({ defaultSize, ...props }: PanelProps) {
+  const [initial] = useState(defaultSize);
+  return <Panel {...props} defaultSize={initial} />;
 }

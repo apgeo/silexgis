@@ -565,33 +565,43 @@ html[data-theme='dark'] .map-workspace-panel {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Jump-to-scale combo, stacked above the OL scale line (bottom-left). */
-.map-scale-overlay {
+/* The bottom-left corner: a column standing on OpenLayers' scale line, holding the jump-to-scale
+   combo and, over it, the notice of survey lines held back at this zoom. One column, so the notice
+   is pushed up by whatever the combo shows under it — a refused scale adds a line — rather than
+   placed at a height guessed for it. The column spans the map and lets clicks through; only what
+   is in it takes them. */
+.map-corner-stack {
   position: absolute;
-  bottom: 34px;
   left: 8px;
+  right: 8px;
+  bottom: 34px;
   z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
 }
 
-/* Survey lines held back at this zoom, said on the map while the layer panel is closed. Bottom
-   left, stacked above the scale controls: the other corners hold search, the pop-out and chrome
-   buttons, the background chooser and the attribution. A sentence, so it wraps rather than
-   running across the map. */
+.map-corner-stack > * {
+  pointer-events: auto;
+}
+
+/* Phone: no jump-to-scale combo, only OpenLayers' scale line under the column. */
+.map-corner-stack-mobile {
+  bottom: 36px;
+}
+
+/* Survey lines held back at this zoom, said on the map while the layer panel is closed. A
+   sentence, so it wraps rather than running across the map — and at most half the map's width,
+   because the bottom-right corner holds the background chooser and the attribution, and a notice
+   reaching across a narrow map (a phone, or the map beside the 3D scene) would lie over them. */
 .map-centerline-notice.ant-btn {
-  position: absolute;
-  bottom: 80px;
-  left: 8px;
-  z-index: 5;
-  max-width: min(320px, calc(100% - 16px));
+  max-width: min(320px, calc(50% - 8px));
   height: auto;
   padding-block: 2px;
   white-space: normal;
   text-align: start;
-}
-
-/* Phone: no jump-to-scale combo, only OpenLayers' scale line under it. */
-.map-canvas-wrap-mobile .map-centerline-notice.ant-btn {
-  bottom: 36px;
 }
 
 /* Dock drawers (phone): the hosted panels bring their own padding and scrolling, so the
@@ -782,25 +792,139 @@ html[data-theme='dark'] .map-workspace-panel {
   border-radius: 0;
 }
 
-/* The survey viewer beside the map: a title strip that names the model and offers the two other
-   places it can be opened, over a body the viewer fills. The body is the flexing child and has
-   min-height 0, without which a flex item refuses to shrink below its content and the viewer
-   pushes the strip off the top of the pane. */
-.map-caveview-pane {
+/* The survey viewer's body, under the pane's strip. It is the flexing child and has min-height 0,
+   without which a flex item refuses to shrink below its content and the viewer pushes the strip
+   off the top of the pane. */
+.map-caveview-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The map's column: the map over the strip under it. */
+.map-workspace-column,
+.map-workspace-bottom {
+  height: 100%;
+}
+
+/* The separator between the map and the strip under it runs across rather than up and down. */
+.map-workspace-handle.map-workspace-handle-row {
+  width: auto;
+  height: 4px;
+  cursor: row-resize;
+}
+
+/* A pane that can be moved: the element its content is drawn into, and the slot showing it, both
+   fill the panel they are in. */
+.workspace-pane-host,
+.workspace-pane-slot {
+  width: 100%;
+  height: 100%;
+}
+
+/* A movable pane: its strip over a body the content fills (min-height 0 for the reason above). */
+.workspace-pane {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
-.map-caveview-header {
-  padding: 4px 8px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+.workspace-pane-header {
   flex: 0 0 auto;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--ant-color-split, rgba(0, 0, 0, 0.06));
 }
 
-.map-caveview-body {
+.workspace-pane-body {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.workspace-pane-title {
+  min-width: 0;
+}
+
+/* A dock's content, which has no strip of its own: the floating restore button sits in its corner. */
+.workspace-dock {
+  position: relative;
+  height: 100%;
+}
+
+.workspace-restore-float {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+}
+
+/* A pane filling the workspace: drawn over the others at the workspace's own box, which the page
+   keeps in these variables while a pane is filled. Fixed rather than moved, so nothing is taken
+   out of the panel it lives in and nothing drawn in it is rebuilt. Under the antd overlays (1000
+   and up), so a drawer, a menu or a dialog opened from it still comes in front. */
+[data-workspace-pane].workspace-pane-maximised {
+  position: fixed;
+  top: var(--workspace-top);
+  left: var(--workspace-left);
+  width: var(--workspace-width);
+  height: var(--workspace-height);
+  z-index: 900;
+  background: #fff;
+}
+
+/* The same two backgrounds the docks have, for the same reason. */
+html[data-theme='dark'] [data-workspace-pane].workspace-pane-maximised {
+  background: var(--ant-color-bg-container);
+}
+
+/* The workspace menu: room for the mark of the entry in force, and each preset's one-line hint. */
+.workspace-menu-icon-gap {
+  display: inline-block;
+  width: 14px;
+}
+
+.workspace-menu-entry {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.workspace-menu-hint {
+  font-size: 12px;
+}
+
+/* The table under the map: tabs that fill the strip and scroll inside it. */
+.workspace-table-tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-table-tabs .ant-tabs-nav {
+  margin: 0;
+  padding: 0 8px;
+}
+
+.workspace-table-tabs .ant-tabs-content-holder {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.workspace-table-tabs .ant-tabs-content,
+.workspace-table-tabs .ant-tabs-tabpane {
+  height: 100%;
+}
+
+/* The in-view lists side by side in the wide strip. */
+.feature-list-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.feature-list-row-part {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 /* The map takes keyboard focus for its own pan and zoom keys, and shows it with a ring drawn over

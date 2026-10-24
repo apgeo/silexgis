@@ -3161,6 +3161,54 @@
     "scanHint": "Scanează acest cod cu aplicația de autentificare, apoi introdu codul afișat.",
     "scanAlt": "Cod QR pentru aplicația de autentificare"
   },
+  "workspace": {
+    "menu": "Spațiul de lucru: aranjări",
+    "presetsTitle": "Aranjări",
+    "preset": {
+      "map": "Hartă",
+      "map3d": "Hartă + 3D",
+      "survey": "Verificarea topografiilor",
+      "trip": "Planificarea turei",
+      "twoScreens": "Două ecrane"
+    },
+    "presetHint": {
+      "map": "Harta între cele două panouri",
+      "map3d": "Scena 3D lângă hartă",
+      "survey": "Modelul topo al unei peșteri lângă hartă",
+      "trip": "Sub hartă: ce este în vedere și relieful în 3D",
+      "twoScreens": "Harta aici, scena 3D într-o fereastră separată"
+    },
+    "savedTitle": "Aranjări salvate",
+    "saveCurrent": "Salvează aranjarea curentă…",
+    "saveTitle": "Salvează aranjarea curentă",
+    "saveHint": "Păstrează sub un nume panourile, panourile din jurul hărții și dacă scena 3D este deschisă. Aranjările salvate îți urmează contul.",
+    "tableToggle": "Tabel sub hartă",
+    "swapDocks": "Inversează panourile laterale",
+    "maximiseMap": "Extinde harta pe tot spațiul de lucru",
+    "mapName": "harta",
+    "scene3dName": "Scena 3D",
+    "surveyName": "Model topo",
+    "tableName": "tabelul",
+    "move": "Mută: {{name}}",
+    "maximise": "Extinde pe tot spațiul de lucru: {{name}}",
+    "restore": "Readu la mărimea proprie: {{name}}",
+    "restoreShort": "Readu",
+    "close": "Închide: {{name}}",
+    "place": {
+      "left": "În stânga hărții",
+      "right": "În dreapta hărții",
+      "bottom": "Sub hartă",
+      "window": "Într-o fereastră separată"
+    },
+    "pickedTab": "Alese ({{count}})",
+    "pickedEmpty": "Nu ai ales nimic. Ține apăsat Ctrl sau Shift când dai clic pe hartă ca să alegi mai multe obiecte.",
+    "surveyPickCave": "Alege o peșteră pe hartă: modelele ei topo apar aici.",
+    "surveyNone": "Peștera aceasta nu are niciun model topo care să poată fi deschis aici.",
+    "surveyChoose": "Deschide aici unul dintre modelele topo ale peșterii:",
+    "resizePanes": "Redimensionează panourile de o parte și de alta",
+    "resizeBottom": "Redimensionează harta și banda de sub ea",
+    "shortcutMaximise": "Extinde panoul în care te afli pe tot spațiul de lucru sau readu toate panourile la mărimea lor"
+  },
   "views": {
     "title": "Vederi salvate",
     "namePlaceholder": "Nume vedere…",
