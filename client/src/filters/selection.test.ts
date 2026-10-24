@@ -6,6 +6,7 @@ import {
   documentFor,
   effectiveState,
   initialState,
+  matchedLine,
   pressSort,
   readPrefix,
   rowsToShow,
@@ -252,5 +253,27 @@ describe('an arrangement that outlived what it referred to', () => {
     const stored = { ...initialState(), sort: 'occurred' as const };
 
     expect(effectiveState(stored, [], []).sort).toBe('occurred');
+  });
+});
+
+describe('why a row is in the list', () => {
+  const hit = (matched: FilterHit['matched']): FilterHit => ({
+    world: 'feature', id: 'x', title: 'Peștera Mare', subtitle: null, symbol: 'cave', placeable: false, matched,
+  });
+
+  it('says nothing when the title matched', () => {
+    expect(matchedLine(hit(null))).toBeNull();
+    expect(matchedLine(hit(undefined))).toBeNull();
+  });
+
+  it('names an other name or the code that found it', () => {
+    expect(matchedLine(hit({ field: 'otherToponyms', text: 'Gaura Mare' })))
+      .toEqual({ key: 'filters.selector.matchedOtherToponyms', text: 'Gaura Mare' });
+    expect(matchedLine(hit({ field: 'code', text: 'BH-17' })))
+      .toEqual({ key: 'filters.selector.matchedCode', text: 'BH-17' });
+  });
+
+  it('says nothing about a field it has no words for', () => {
+    expect(matchedLine(hit({ field: 'somethingNew', text: 'x' }))).toBeNull();
   });
 });

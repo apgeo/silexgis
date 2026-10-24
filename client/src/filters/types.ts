@@ -183,4 +183,15 @@ export interface FilterHit {
   subtitle: string | null;
   symbol: string | null;
   placeable: boolean;
+  /**
+   * Which other field found this row when its title does not contain what was typed — a cave's
+   * other names or its code — with that field's value. Absent or null when the title matched.
+   */
+  matched?: FilterHitMatch | null;
+}
+
+/** The field that found a row, and its value as the row's own page shows it. */
+export interface FilterHitMatch {
+  field: string;
+  text: string;
 }

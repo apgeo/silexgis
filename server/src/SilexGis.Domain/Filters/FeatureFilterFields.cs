@@ -79,6 +79,29 @@ public static class FeatureFilterFields
     /// </summary>
     public const string OtherToponyms = "otherToponyms";
 
+    /// <summary>
+    /// Any name a cave is looked up by: its name, its other names or its registry code. A text
+    /// condition on it matches when any of the three does, and is empty only when all three are —
+    /// for a feature that is not a cave that is its name alone.
+    /// </summary>
+    /// <remarks>
+    /// Declarable for the reason the other names are: the name, the other names and the code are
+    /// all on the cave's page for every caller who may read the cave, whether or not they may place
+    /// it, so a match on any of them says nothing the record does not already say. It is what a
+    /// picker matches typed text against, so a cave typed by its code or by an older name is found
+    /// in every place a cave is chosen.
+    /// </remarks>
+    public const string Names = "names";
+
+    /// <summary>The three fields <see cref="Names"/> stands for, in the order a hit reports a match.</summary>
+    public static IReadOnlyList<string> NamesStandsFor { get; } = [Name, OtherToponyms, Code];
+
+    /// <summary>
+    /// The cave's registry code. Not a declared field — it is reached through <see cref="Names"/>
+    /// only — but a hit names it when that is what matched.
+    /// </summary>
+    public const string Code = "code";
+
     /// <summary>Surveyed length in metres, as recorded on the cave.</summary>
     public const string SurveyedLength = "surveyedLength";
 
@@ -131,6 +154,7 @@ public static class FeatureFilterFields
             new FieldDescriptor(RockTypeId, "filters.fields.rockType", FieldKind.Id, Options: "rockTypes"),
             new FieldDescriptor(CaveTypeId, "filters.fields.caveType", FieldKind.Id, Options: "caveTypes"),
             new FieldDescriptor(OtherToponyms, "filters.fields.otherToponyms", FieldKind.Text),
+            new FieldDescriptor(Names, "filters.fields.names", FieldKind.Text),
             new FieldDescriptor(SurveyedLength, "filters.fields.surveyedLength", FieldKind.Number),
             new FieldDescriptor(Depth, "filters.fields.depth", FieldKind.Number),
             // Declared last, once every condition it admits is answered on shown positions.

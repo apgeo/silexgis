@@ -121,6 +121,7 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
                 FilterLeaves.Longs<Feature>(condition, f => (long?)f.Cave!.CaveTypeId),
             FeatureFilterFields.OtherToponyms =>
                 FilterLeaves.Text<Feature>(condition, f => f.Cave!.OtherToponyms),
+            FeatureFilterFields.Names => NamesLeaf(condition),
             FeatureFilterFields.SurveyedLength =>
                 FilterLeaves.Decimals<Feature>(condition, f => f.Cave!.SurveyedLength),
             FeatureFilterFields.Depth => FilterLeaves.Decimals<Feature>(condition, f => f.Cave!.Depth),
@@ -131,6 +132,34 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
     }
 
     // ---------- leaves ----------
+
+    /// <summary>
+    /// The columns <see cref="FeatureFilterFields.Names"/> stands for, keyed by the field a hit
+    /// reports when one of them is what matched. The single home of that list: the compiler
+    /// matches over it and the feature world asks it which one matched, so the two cannot drift.
+    /// </summary>
+    internal static IReadOnlyList<(string Field, Expression<Func<Feature, string?>> Column)> NameColumns { get; } =
+    [
+        (FeatureFilterFields.Name, f => f.Name),
+        (FeatureFilterFields.OtherToponyms, f => f.Cave!.OtherToponyms),
+        (FeatureFilterFields.Code, f => f.Cave!.IdentificationCode),
+    ];
+
+    /// <summary>
+    /// Any of the names: a match on any column matches, and "empty" means every column is.
+    /// </summary>
+    /// <remarks>
+    /// Each column goes through the ordinary text leaf, so accents, case and the meaning of each
+    /// operator are exactly those of the name field — a code typed in lower case or a former name
+    /// typed without its diacritics is found as the name would be.
+    /// </remarks>
+    private static Expression<Func<Feature, bool>> NamesLeaf(ConditionNode condition)
+    {
+        var leaves = NameColumns.Select(c => FilterLeaves.Text(condition, c.Column));
+        return condition.Op == FilterOp.IsEmpty
+            ? leaves.Aggregate((left, right) => left.And(right))
+            : leaves.Aggregate((left, right) => left.Or(right));
+    }
 
     /// <summary>
     /// Tags, spelled exactly as the feature list already spells them — an EXISTS over the

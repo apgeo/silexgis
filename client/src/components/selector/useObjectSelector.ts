@@ -56,7 +56,9 @@ export interface UseObjectSelectorOptions {
  * handed to a selector without an entry.
  */
 const TEXT_FIELD: Record<string, string> = {
-  feature: 'name',
+  // Any of a feature's names: its name, and for a cave its other names and its registry code, so a
+  // cave typed by its code or by a name it used to go by is found in every picker.
+  feature: 'names',
   tripLog: 'title',
   document: 'title',
   mapView: 'name',

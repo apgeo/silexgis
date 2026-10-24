@@ -117,6 +117,15 @@ public abstract class FilterWorld<TEntity> : IFilterWorld
         IReadOnlyList<TEntity> rows, AccessContext caller, CancellationToken ct);
 
     /// <summary>
+    /// Adds to the page's hits what only the question can explain — which field found a row whose
+    /// title does not show the typed text. Nothing by default; it runs over the page already
+    /// decided, so it can describe rows and never add, drop or reorder one.
+    /// </summary>
+    protected virtual ValueTask<IReadOnlyList<FilterHit>> AnnotateAsync(
+        IReadOnlyList<FilterHit> hits, WorldQuery query, CancellationToken ct) =>
+        ValueTask.FromResult(hits);
+
+    /// <summary>
     /// What the statements of one query run inside — nothing by default. A world whose statements
     /// are measured to need planner settings of their own opens them here, for the whole query.
     /// </summary>
@@ -164,7 +173,8 @@ public abstract class FilterWorld<TEntity> : IFilterWorld
             .Take(query.Take)
             .ToListAsync(ct);
 
-        return new WorldPage(await ProjectAsync(page, query.Caller, ct), total);
+        var hits = await ProjectAsync(page, query.Caller, ct);
+        return new WorldPage(await AnnotateAsync(hits, query, ct), total);
     }
 
     /// <summary>

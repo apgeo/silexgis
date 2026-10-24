@@ -231,7 +231,8 @@ public static class FilterEndpoints
             vocabulary.Sorts);
 
     private static FilterHitDto ToDto(FilterHit hit) =>
-        new(hit.World, hit.Id, hit.Title, hit.Subtitle, hit.Symbol, hit.Placeable);
+        new(hit.World, hit.Id, hit.Title, hit.Subtitle, hit.Symbol, hit.Placeable,
+            hit.Matched is { } m ? new FilterHitMatchDto(m.Field, m.Text) : null);
 
     // The radius ceiling read off a vocabulary the registry stamped, so the published number is the
     // one every validator reads.

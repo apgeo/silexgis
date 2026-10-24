@@ -276,3 +276,19 @@ export function sortsOffered(
     .reduce((all, sorts) => all.filter((s) => sorts.includes(s)))
     .filter((s) => hasAnchor || s !== 'proximity');
 }
+
+/** The translation key for each field a hit can say found it, other than its title. */
+const MATCHED_KEY: Record<string, string> = {
+  otherToponyms: 'filters.selector.matchedOtherToponyms',
+  code: 'filters.selector.matchedCode',
+};
+
+/**
+ * Why a row whose title does not contain what was typed is in the list: "also known as …" or its
+ * code. Null when the title matched, or when the server named a field this client has no words
+ * for — saying nothing is better than a line in the wrong words.
+ */
+export function matchedLine(hit: FilterHit): { key: string; text: string } | null {
+  const key = hit.matched ? MATCHED_KEY[hit.matched.field] : undefined;
+  return key && hit.matched ? { key, text: hit.matched.text } : null;
+}

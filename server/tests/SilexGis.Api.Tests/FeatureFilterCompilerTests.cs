@@ -143,6 +143,12 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
             { FeatureFilterFields.SurveyedLength, FilterOp.IsNotEmpty, [] },
             { FeatureFilterFields.Depth, FilterOp.Between, [new NumberValue(-5.5), new NumberValue(120.25)] },
             { FeatureFilterFields.Depth, FilterOp.IsNotEmpty, [] },
+            // Any of the names: the name, the other names and the code in one condition.
+            { FeatureFilterFields.Names, FilterOp.Contains, [new TextValue("urs")] },
+            { FeatureFilterFields.Names, FilterOp.StartsWith, [new TextValue("Pe")] },
+            { FeatureFilterFields.Names, FilterOp.Equals, [new TextValue("BH-17")] },
+            { FeatureFilterFields.Names, FilterOp.IsEmpty, [] },
+            { FeatureFilterFields.Names, FilterOp.IsNotEmpty, [] },
         };
 
         return data;

@@ -160,6 +160,8 @@ export const groups = {
     'FilterKindPositionTests',
     // Saved filters, and the surfaces that read a filter document through the narrowing seam.
     'SavedFilterTests', 'CaveRegistryFilterTests', 'MapFilterTests', 'FeatureListFilterTests',
+    // A cave typed by any of its names or its code, in every picker.
+    'CaveNameMatchTests',
   ],
   files: [
     'ErrorHandlerScopeTests',
@@ -510,9 +512,9 @@ export const crossCutting = {
     'AccessAnchorCleanupTests', 'AccessHistoryTests', 'AclAndCavingGroupTests',
     'AreaKarstStatisticsTests', 'AssociationDisclosureTests', 'AttachmentReachListingTests',
     'CalendarTests', 'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests',
-    'CaveFeatureTypeTests', 'CaveMeshesInViewTests', 'CaveOverburdenTests',
-    'CavePassageShapeTests', 'CaveProtectionParityTests', 'CaveRegistryFilterTests',
-    'CaveSurveyStatisticsTests', 'CaveWindowEntranceTests',
+    'CaveFeatureTypeTests', 'CaveMeshesInViewTests', 'CaveNameMatchTests',
+    'CaveOverburdenTests', 'CavePassageShapeTests', 'CaveProtectionParityTests',
+    'CaveRegistryFilterTests', 'CaveSurveyStatisticsTests', 'CaveWindowEntranceTests',
     'CenterlineColdCacheMeasurementTests', 'CenterlineTests', 'ClosestApproachTests',
     'ConcurrencyTests', 'DashboardTests', 'DemoSeedIdempotencyTests', 'DocumentAccessApiTests',
     'DocumentCommentNotificationTests', 'DocumentContentSearchTests',

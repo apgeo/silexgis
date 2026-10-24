@@ -20,7 +20,7 @@ import {
   SearchOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { choose, pressSort, toggleScope, type SelectorScope } from '../../filters/selection.ts';
+import { choose, matchedLine, pressSort, toggleScope, type SelectorScope } from '../../filters/selection.ts';
 import type { FilterHit, SortKey } from '../../filters/types.ts';
 import Button from '../Button.tsx';
 import List from '../List.tsx';
@@ -300,6 +300,7 @@ export default function ObjectSelector({
           }}
           renderItem={(hit: FilterHit) => {
             const picked = chosenIds.includes(hit.id);
+            const matched = matchedLine(hit);
             return (
               <List.Item
                 onClick={() => onRow(hit)}
@@ -337,7 +338,18 @@ export default function ObjectSelector({
                     {multiple && <Checkbox checked={picked} tabIndex={-1} aria-hidden />}
                     <List.Item.Meta
                       title={<Typography.Text strong={picked}>{hit.title}</Typography.Text>}
-                      description={hit.subtitle ?? undefined}
+                      description={
+                        matched ? (
+                          <>
+                            <div data-testid={testId ? `${testId}-matched` : undefined}>
+                              {t(matched.key, { text: matched.text })}
+                            </div>
+                            {hit.subtitle}
+                          </>
+                        ) : (
+                          hit.subtitle ?? undefined
+                        )
+                      }
                     />
                   </Flex>
                 </div>

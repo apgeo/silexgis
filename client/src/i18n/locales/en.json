@@ -5573,6 +5573,7 @@
       "depth": "Depth (m)",
       "caveType": "Cave type",
       "otherToponyms": "Other names",
+      "names": "Name, other names or code",
       "property": "Property",
       "mapKind": "Map kind",
       "surveyFormat": "Survey format",
@@ -5606,7 +5607,9 @@
       "mapPlaceholder": "Go to…",
       "noDestination": "Nothing to open for that yet.",
       "savedFilterNotForMap": "That saved filter does not ask about features, or cannot be run with your access, so it was not applied to the map.",
-      "clear": "Clear the choice"
+      "clear": "Clear the choice",
+      "matchedOtherToponyms": "also known as {{text}}",
+      "matchedCode": "code {{text}}"
     },
     "sorts": {
       "created": "Added",

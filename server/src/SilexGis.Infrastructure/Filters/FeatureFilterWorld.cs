@@ -492,6 +492,93 @@ public sealed class FeatureFilterWorld(
     }
 
     /// <summary>
+    /// Says which of a hit's other names or its code matched typed text, for a hit whose name did
+    /// not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asked of the database, over the page's own ids, with the very leaves the condition compiled
+    /// to — so "matched" here means exactly what it meant when the row was chosen, accents and
+    /// all, rather than a second matching rule written again in this language.
+    /// </para>
+    /// <para>
+    /// Only what was typed counts: a names condition under a negation found the rows by what they
+    /// are not called and has nothing to explain. The values reported are the cave's other names
+    /// and code, which its page shows to every caller who may read it, placed or not; nothing
+    /// positional is read.
+    /// </para>
+    /// </remarks>
+    protected override async ValueTask<IReadOnlyList<FilterHit>> AnnotateAsync(
+        IReadOnlyList<FilterHit> hits, WorldQuery query, CancellationToken ct)
+    {
+        var typed = TypedNameConditions(query.Where).ToList();
+        if (typed.Count == 0 || hits.Count == 0)
+        {
+            return hits;
+        }
+
+        var undecided = hits.Select(h => h.Id).ToHashSet();
+        var foundBy = new Dictionary<Guid, string>();
+        foreach (var (field, column) in FeatureFilterCompiler.NameColumns)
+        {
+            if (undecided.Count == 0)
+            {
+                break;
+            }
+
+            var leaf = typed.Select(c => FilterLeaves.Text(c, column)).Aggregate((l, r) => l.Or(r));
+            var asked = undecided.ToArray();
+            var matched = await db.Features.AsNoTracking()
+                .Where(f => asked.Contains(f.Id))
+                .Where(leaf)
+                .Select(f => f.Id)
+                .ToListAsync(ct);
+            foreach (var id in matched)
+            {
+                undecided.Remove(id);
+                if (field != FeatureFilterFields.Name)
+                {
+                    foundBy[id] = field;
+                }
+            }
+        }
+
+        if (foundBy.Count == 0)
+        {
+            return hits;
+        }
+
+        var keys = foundBy.Keys.ToArray();
+        var values = await db.Caves.AsNoTracking()
+            .Where(c => keys.Contains(c.Id))
+            .Select(c => new { c.Id, c.OtherToponyms, c.IdentificationCode })
+            .ToDictionaryAsync(c => c.Id, ct);
+
+        return
+        [
+            .. hits.Select(h =>
+            {
+                if (!foundBy.TryGetValue(h.Id, out var field) || !values.TryGetValue(h.Id, out var cave))
+                {
+                    return h;
+                }
+
+                var text = field == FeatureFilterFields.Code ? cave.IdentificationCode : cave.OtherToponyms;
+                return text is null ? h : h with { Matched = new FilterHitMatch(field, text) };
+            }),
+        ];
+    }
+
+    /// <summary>The text conditions on the names a question asks for, outside any negation.</summary>
+    private static IEnumerable<ConditionNode> TypedNameConditions(FilterNode? node) => node switch
+    {
+        ConditionNode { Field: FeatureFilterFields.Names, Op: FilterOp.Contains or FilterOp.StartsWith or FilterOp.Equals } c => [c],
+        AllOfNode all => all.Of.SelectMany(TypedNameConditions),
+        AnyOfNode any => any.Of.SelectMany(TypedNameConditions),
+        _ => [],
+    };
+
+    /// <summary>
     /// The symbol key for a row: the kind for the built-in ones, the type's own code otherwise.
     /// </summary>
     /// <remarks>

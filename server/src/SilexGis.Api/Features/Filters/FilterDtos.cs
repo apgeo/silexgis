@@ -30,13 +30,22 @@ public sealed record FilterQueryRequest(
 /// anything that puts a result on a map asks the map, which is the single place that decides how
 /// much of a protected position anybody sees.
 /// </param>
+/// <param name="Matched">
+/// Which other field found this row when its title did not match the typed text — for a cave, one
+/// of its other names or its registry code, with that field's value. Absent when the title matched.
+/// </param>
 public sealed record FilterHitDto(
     string World,
     Guid Id,
     string Title,
     string? Subtitle,
     string? Symbol,
-    bool Placeable);
+    bool Placeable,
+    FilterHitMatchDto? Matched);
+
+/// <param name="Field">The field that matched: <c>otherToponyms</c> or <c>code</c> for a feature.</param>
+/// <param name="Text">That field's value on the row.</param>
+public sealed record FilterHitMatchDto(string Field, string Text);
 
 /// <summary>One world's answer.</summary>
 /// <param name="Total">

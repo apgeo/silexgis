@@ -5586,6 +5586,7 @@
       "depth": "Denivelare (m)",
       "caveType": "Tip de peșteră",
       "otherToponyms": "Alte denumiri",
+      "names": "Nume, alte denumiri sau cod",
       "property": "Proprietate",
       "mapKind": "Tip de hartă",
       "surveyFormat": "Format topografie",
@@ -5619,7 +5620,9 @@
       "mapPlaceholder": "Mergi la…",
       "noDestination": "Încă nu se poate deschide nimic pentru asta.",
       "savedFilterNotForMap": "Filtrul salvat nu se referă la obiecte sau nu poate fi rulat cu accesul tău, așa că nu a fost aplicat hărții.",
-      "clear": "Renunță la alegere"
+      "clear": "Renunță la alegere",
+      "matchedOtherToponyms": "alte denumiri: {{text}}",
+      "matchedCode": "cod {{text}}"
     },
     "sorts": {
       "created": "Adăugat",

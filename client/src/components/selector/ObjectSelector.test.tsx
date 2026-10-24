@@ -27,6 +27,10 @@ const queryResult = {
       hits: [{
         world: 'feature', id: 'f1', title: 'Peștera Urșilor',
         subtitle: 'Cave', symbol: 'cave', placeable: true,
+      }, {
+        world: 'feature', id: 'f2', title: 'Avenul din Șesuri',
+        subtitle: 'Cave', symbol: 'cave', placeable: false,
+        matched: { field: 'code', text: 'BH-0417' },
       }],
       total: null,
     }],
@@ -97,6 +101,20 @@ describe('the object selector', () => {
     type('urs');
 
     expect(await screen.findByText('Peștera Urșilor')).toBeInTheDocument();
+  });
+
+  it('asks a cave by any of its names, and says which one found a row its title does not explain', async () => {
+    renderControl();
+    type('bh-04');
+
+    expect(await screen.findByText('Avenul din Șesuri')).toBeInTheDocument();
+    const lines = screen.getAllByTestId('picker-matched');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toHaveTextContent('code BH-0417');
+
+    const asked = JSON.stringify(lastAsked()?.body);
+    expect(asked).toContain('"field":"names"');
+    expect(asked).not.toContain('"field":"name"');
   });
 
   it('reports a choice it cannot describe without printing the identifier', async () => {

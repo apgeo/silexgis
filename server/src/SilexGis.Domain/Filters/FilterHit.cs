@@ -45,7 +45,21 @@ public sealed record FilterHit
 
     /// <summary>Whether this caller may be shown where this row actually is.</summary>
     public bool Placeable { get; init; }
+
+    /// <summary>
+    /// Which of the row's other names matched the typed text, when the row was found by one rather
+    /// than by its title — so a list can say why a row whose title does not contain what was typed
+    /// is there. Null when the title matched, or when nothing was typed.
+    /// </summary>
+    public FilterHitMatch? Matched { get; init; }
 }
+
+/// <summary>
+/// The field that found a row, and that field's value as the row holds it.
+/// </summary>
+/// <param name="Field">The world's own field key — for a feature, its other names or its code.</param>
+/// <param name="Text">The value of that field, as shown on the row's own page.</param>
+public sealed record FilterHitMatch(string Field, string Text);
 
 /// <summary>
 /// What one world is being asked, for one page.
