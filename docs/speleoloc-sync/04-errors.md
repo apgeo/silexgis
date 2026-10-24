@@ -114,10 +114,32 @@ set the signed-in account does not own however that setting stands.
 | 400 | `sync.cursor_invalid` | The `cursor` was not issued by this server: truncated, re-encoded, hand-made, or from an older contract | `apply-and-resubmit` — drop the cursor and start the set again from the beginning, accepting that this is a full re-read. Never resend it as sent |
 | 409 | `sync.cursor_stale` | The `cursor` was issued by this server, but against an older revision of the sync set: the selection or its settings have been edited since | `apply-and-resubmit` — drop the cursor and read the set from the beginning. Retrying the same cursor will never succeed |
 
+The documents catalogue (`GET /sync/sets/{id}/documents`) answers exactly these three codes, on
+exactly these terms: it is read the way the feature download is read. Its cursor is its own — a
+position the feature download issued is answered `sync.cursor_invalid` there, and the other way
+round — so a device keeps one cursor per stream and drops only the one refused.
+
 **The read routes carry no field validation, so `validation.failed` is not among them.** A
 `pageSize` outside the range the capabilities answer names is clamped rather than refused, and a
 cursor that cannot be read answers `sync.cursor_invalid` rather than a validation failure. The
-code exists on this surface only on the two set-writing routes and on the upload.
+code exists on this surface only on the two set-writing routes, on the upload and on the file-address
+route below.
+
+### 3.1 Fetching files
+
+`POST /sync/files/links` refuses a request whole only when it is malformed. Everything else is
+decided per item, and a refused item rides a `200` beside the addresses that were given, in the
+answer's `refused` list:
+
+| Status | Code | Means | Action |
+|---|---|---|---|
+| 400 | `validation.failed` | No items, more than 200, an empty document id, or a `rendition` that is neither `"original"` nor one of 2400, 1200, 480, 160 | `stop` — fix the client |
+| item | `sync.document_unavailable` | No such document, it was deleted, or this account may no longer read it — the three are one answer on purpose, so the route cannot be used to ask whether a document exists | `surface-to-user` — drop the file from the device's catalogue copy; the next catalogue read says whether it is still listed. Retrying the same item does not help |
+| item | `sync.original_withheld` | The file itself is not handed to this account — a video, a sound recording or a picture that cannot be rewritten without its location, for an account that may not have the location, or for every account while the installation keeps location out of photo files. Whether a position was ever read out of the file does not matter: a phone writes one into a video that nothing here reads. Pictures of it may still be offered | `apply-and-resubmit` — ask for a rendition instead where the catalogue lists any; otherwise `surface-to-user` |
+| item | `sync.rendition_unavailable` | The server draws no picture of this kind of file (anything but an image) | `apply-and-resubmit` — ask for `"original"` instead, if the catalogue's `reach` allows it |
+
+An address handed out is a signed URL that answers `404` once it expires — ask for a new one; that
+is not one of these codes, and the content route never says why.
 
 **`sync.cursor_invalid` is deliberately not silent.** A server that quietly restarted an
 unrecognised cursor would hand a device a full re-download that looks exactly like an incremental

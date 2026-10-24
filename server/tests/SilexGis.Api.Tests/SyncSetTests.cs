@@ -85,6 +85,7 @@ public sealed class SyncSetTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         var features = body.GetProperty("features").EnumerateArray().Select(x => x.GetString()).ToList();
         features.ShouldContain("download");
         features.ShouldContain("upload");
+        features.ShouldContain("documents");
     }
 
     [Fact]

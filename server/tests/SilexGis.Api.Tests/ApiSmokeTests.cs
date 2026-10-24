@@ -130,6 +130,7 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
             [
                 "syncCapabilities", "syncListSets", "syncCreateSet", "syncGetSet",
                 "syncReplaceSet", "syncDeleteSet", "syncDownload", "syncUpload",
+                "syncDocuments", "syncFileLinks",
             ],
             ignoreOrder: true);
     }
@@ -488,9 +489,13 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
         // halves of the mobile contract are named, the write half included: a generated client
         // that issued an upload with no credential would be pushing a caver's survey at whatever
         // the server does with an unauthenticated write.
-        foreach (var route in new[] { "download", "upload" })
+        foreach (var route in new[]
         {
-            var operation = paths.GetProperty($"/api/v1/sync/sets/{{id}}/{route}");
+            "/api/v1/sync/sets/{id}/download", "/api/v1/sync/sets/{id}/upload",
+            "/api/v1/sync/sets/{id}/documents", "/api/v1/sync/files/links",
+        })
+        {
+            var operation = paths.GetProperty(route);
             var verb = operation.TryGetProperty("get", out var get) ? get : operation.GetProperty("post");
             verb.TryGetProperty("security", out _).ShouldBeFalse();
         }

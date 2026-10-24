@@ -32,7 +32,7 @@ public static class SyncEndpoints
     /// failing at the first transfer — which is why reading rows is announced separately from
     /// writing them, and why a build that can only be read from says so.
     /// </summary>
-    public static readonly IReadOnlyList<string> ServedFeatures = ["download", "upload"];
+    public static readonly IReadOnlyList<string> ServedFeatures = ["download", "upload", "documents"];
 
     public static RouteGroupBuilder MapSyncEndpoints(this RouteGroupBuilder api)
     {
@@ -78,6 +78,8 @@ public static class SyncEndpoints
             .WithSummary("Deletes a sync set the caller owns.");
         sets.MapSyncDownloadEndpoints();
         sets.MapSyncUploadEndpoints();
+        sets.MapSyncDocumentEndpoints();
+        sync.MapSyncFileLinkEndpoints();
 
         return api;
     }

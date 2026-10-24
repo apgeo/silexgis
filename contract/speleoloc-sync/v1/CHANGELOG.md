@@ -144,3 +144,29 @@ Recorded exchanges written in this entry: none — neither change is a sync exch
 
 Codes: no API problem code appeared or changed. The new refusal is an OAuth `invalid_grant`, told
 apart from the others only by its `error_description`.
+
+## 2026-10-24 — photos and documents are listed for a phone, and fetched by name
+
+**Contract version: 1, unchanged. A build pinned to it keeps working.** Everything below is new and
+additive: two new routes, one new value in `features`, and no change to any existing route, field or
+recorded exchange. A build that has never heard of them carries on unaffected.
+
+- **`features` gains `documents`.** `GET /api/v1/sync/capabilities` answers
+  `["download", "upload", "documents"]`.
+- **`GET /api/v1/sync/sets/{id}/documents`** — a catalogue of the photos and documents hung on the
+  set's features, one row per link with its document embedded, paged and resumed exactly as the
+  feature download is, with a cursor of its own. Rows never carry a position. Each row's `reach` says
+  whether fetching the file itself hands over the stored file, the whole picture with its location data
+  removed, pictures of it only, or nothing.
+- **`POST /api/v1/sync/files/links`** — signed addresses for the files a phone chose to fetch,
+  `"original"` or a picture size, each item decided again against the account's access now.
+
+Described in `docs/speleoloc-sync/01-protocol.md` §11 and `02-field-mapping.md` §7.
+
+Recorded exchanges written or re-written in this entry: none (the new routes' recordings come with
+the cases numbered from 17). `07`–`16` are byte-for-byte unchanged.
+
+Codes: new on the address route, as per-item refusals in a `200` — `sync.document_unavailable`,
+`sync.original_withheld`, `sync.rendition_unavailable`; and `validation.failed` for a malformed
+request. The catalogue answers only the reading codes it shares with the feature download
+(`sync.set_not_found`, `sync.cursor_invalid`, `sync.cursor_stale`). See `04-errors.md` §3 and §3.1.

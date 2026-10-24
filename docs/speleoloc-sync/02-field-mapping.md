@@ -169,3 +169,36 @@ And two exceptions worth naming, because they look like identity and are not:
 - **The code-strategy configuration rows travel, but not as records.** They are title-keyed rather
   than identified by a uuid, and they move with the sync set as its settings document rather than as
   rows in a batch. The protocol document describes that document and how it is arbitrated.
+
+---
+
+## 7. Files: photos and documents
+
+A device's documentation files — the photos, sketches, sound notes and documents it keeps against a
+cave or a place — are, on the server, **a document hung on a feature by a link**. The document is the
+file and what is said about it; the link is the fact that it belongs to this cave or this place, with
+the role, caption and order it has there. One document may hang on several features, and then it is
+one document and several links. The protocol document's section on photos and documents says how a
+device reads them; this table is the vocabulary.
+
+| On the server | In a catalogue row | What it is |
+|---|---|---|
+| The link's identifier | `id` | What a tombstone names when the file stops belonging here |
+| The document's identifier | `documentId` | The file across every place it is hung on |
+| The link's target | `target` (`kind`: `feature`, `id`) | The cave, entrance, area or place the file belongs to |
+| The link's role | `role` | One of `photoEntrance`, `photoInterior`, `photoSurface`, `document`, `map2d`, `surveyData`, `other`, `report` |
+| The link's caption and order | `caption`, `sortOrder` | As shown under that feature |
+| The headline picture | `isPrimary` | At most one per feature — the picture a list or a card shows |
+| The default set | `inDefaultSet` | Chosen by somebody who may change the feature: among "the usual files" a phone offers to fetch |
+| The document's title | `document.title` | Its name, as the web interface shows it |
+| A photo's caption | `document.description` | The photo's own caption, where it has one; absent for other documents |
+| The file's kind | `document.fileKind` | `photo`, `video`, `audio`, `document`, `other` — every server kind that is not one of the first four (a survey file, a raster, a vector layer, a model) is `other` |
+| The file's type | `document.mimeType` | As read from the bytes on upload, not from the file name |
+| The revision | `document.versionId` | Changes whenever new bytes replace the file; the earlier revision is kept on the server |
+| Who took a photo | `document.photographerCaverId` | A caver identifier, where the photo names one — not an account, and not a device user |
+| When it was taken | `document.capturedAt` | As read from the file's own metadata, where it could be |
+
+**Never in a catalogue row: a position.** A photo's capture point lives in its file, and on the server
+beside it; neither is part of this row, on any reach. Whether the file itself is handed over with its
+location inside it is the `reach` member's business, decided by the server's location rules — a device
+does not decide it and cannot ask for it.

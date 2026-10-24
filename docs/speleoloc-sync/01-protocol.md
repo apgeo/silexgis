@@ -28,7 +28,7 @@ Authorization: Bearer <token>
   "contractVersion": 1,
   "pageSizeMax": 500,
   "uploadRowsMax": 500,
-  "features": ["download", "upload"]
+  "features": ["download", "upload", "documents"]
 }
 ```
 
@@ -40,7 +40,8 @@ Authorization: Bearer <token>
   tell how much it actually got without counting.
 - **`features`** names the optional halves of the contract this build actually serves. It is how a
   device meets a server that has shipped some of the protocol and not the rest, and takes what is
-  there.
+  there. `documents` means the photo and document catalogue of section 11 and the address route
+  beside it are served.
 
 Ask this first, once per server, and keep the answer. It is also the cheapest place to discover that
 a stored credential has lapsed: it answers `401` like everything else here.
@@ -627,8 +628,8 @@ generates code from it:
   That half matters most on the sign-in calls: a generated client must not demand a token on the one
   call whose purpose is to obtain one. No sync route is on that allow-list.
 - **Every operation is named.** The sync names are `syncCapabilities`, `syncListSets`,
-  `syncCreateSet`, `syncGetSet`, `syncReplaceSet`, `syncDeleteSet`, `syncDownload` and
-  `syncUpload`; they are chosen deliberately, are pinned by the server's own tests, and are part of
+  `syncCreateSet`, `syncGetSet`, `syncReplaceSet`, `syncDeleteSet`, `syncDownload`,
+  `syncUpload`, `syncDocuments` and `syncFileLinks`; they are chosen deliberately, are pinned by the server's own tests, and are part of
   the contract. Every other operation on the server is named too, after the code that handles it,
   so a generated client no longer invents a name from a path — but only the sync names are
   promised not to move.
@@ -650,3 +651,162 @@ in at least one place — the delete route declares the `404` it can answer and 
 also answer — and it never says which `code` a status arrives with, because that is a value rather
 than a type. The errors document is the
 authority for both, and it says what each code means and what the client is supposed to do about it.
+
+## 11. Photos and documents
+
+A set's features carry photos and documents — an entrance photo hung on a cave, a survey sheet, a
+report. A device is told about them through a **catalogue**, and fetches the files themselves only
+when its caver asks for them. Nothing is pushed: the catalogue is small, a photo is not, and a phone
+on a mountain decides what it can afford to carry. The server keeps no record of what a device
+fetched.
+
+Served when `features` names `documents`.
+
+### 11.1 The catalogue
+
+```
+GET /api/v1/sync/sets/{id}/documents?cursor=<opaque>&pageSize=<n>
+Authorization: Bearer <token>
+```
+
+It is read exactly as the feature download of section 3 is read — the same set resolution (a set
+another account owns answers `404 sync.set_not_found`), the same opaque cursor, refused with `400
+sync.cursor_invalid` when it was not issued by this stream and with `409 sync.cursor_stale` when the
+set changed, the same `pageSize` clamped to `pageSizeMax`, the same `setRevision` and `settings`, and
+tombstones interleaved with live rows on the one cursor. **The two streams have separate cursors**: a
+position the feature download issued is refused here, and the other way round, because each stream
+orders its own rows and one's position says nothing about where to resume the other.
+
+```json
+{
+  "setRevision": 4,
+  "settings": { },
+  "links": [
+    {
+      "id": "0199…",
+      "documentId": "0199…",
+      "target": { "kind": "feature", "id": "0199…" },
+      "role": "photoEntrance",
+      "caption": "Entrance in winter",
+      "sortOrder": 0,
+      "isPrimary": true,
+      "inDefaultSet": true,
+      "revision": "2026-10-24T09:14:52.113412Z",
+      "document": {
+        "id": "0199…",
+        "title": "entrance.jpg",
+        "description": null,
+        "fileKind": "photo",
+        "mimeType": "image/jpeg",
+        "sizeBytes": 2483112,
+        "sha256": "9f…",
+        "versionId": "0199…",
+        "reach": "original",
+        "renditions": [2400, 1200, 480, 160],
+        "photographerCaverId": null,
+        "capturedAt": "2026-02-11T10:02:00Z",
+        "createdAt": "2026-10-20T18:00:01.000001Z",
+        "updatedAt": "2026-10-20T18:00:01.000001Z"
+      }
+    }
+  ],
+  "tombstones": [ { "id": "0199…", "deletedAt": "2026-10-24T09:20:00.5Z" } ],
+  "nextCursor": "…",
+  "hasMore": false
+}
+```
+
+**A row is a link** — one document hung on one feature — with the document embedded. The same
+document hung on two caves is two rows with two identifiers; a device that keeps one copy of the file
+keys it on `documentId` and `versionId`.
+
+- **Which links are listed.** Only links on features the feature download would hand this account
+  right now: inside the set, readable, and not withheld (section 6). A link on a withheld cave is
+  **absent, not stubbed** — a row hanging there would say where to look. And only documents this
+  account may read by the document's own rules: a document hung on a cave the account reads is
+  normally readable through that cave, but a rule written against the document itself wins, and
+  then the link is absent though its cave is not.
+- **When a link changes.** Its change key is the latest of the link's own last change, its
+  document's and its feature's, so a renamed document, a new revision and a changed caption or flag
+  all bring the link back past a caught-up device's position — and so does any change that makes the
+  feature download hand the feature out again (its location guard lifted, say): the feature's links
+  come back with it. A device may therefore be sent a link it already holds, unchanged; it replaces
+  its copy. `revision` is the link's own last change.
+- **`inDefaultSet`** marks the files somebody curating the cave chose as the ones worth carrying by
+  default. A phone may offer "download the usual files" at a size its caver picks; the flag decides
+  nothing else.
+- **`fileKind`** is one of `photo`, `video`, `audio`, `document`, `other`.
+- **`reach`** says what fetching the file itself would hand this account, and is decided by the same
+  rule the web interface uses:
+  - `original` — the stored file, byte for byte. `sizeBytes` and `sha256` are its own.
+  - `locationFree` — the whole picture at full size, rewritten without its location data: the GPS
+    block, the XMP packet and the IPTC place names are removed, the camera, lens and exposure
+    details stay. Given to an account that may read the photo but may not be told where it was
+    taken, and to every account when the installation switched location in photo files off.
+    `sizeBytes` and `sha256` are **absent**: the rewritten copy is made the first time somebody asks
+    for it, and quoting the stored file's numbers would announce bytes the device will never
+    receive. Check what arrives against the response's own length.
+  - `renditions` — no file itself, only the pictures the server draws of it. What an image in a
+    format that cannot be rewritten is, for an account that may not have its location (or for every
+    account while location in photo files is switched off).
+  - `none` — neither: what a video or a sound recording is for the same accounts. A photo, a video
+    and a recording are treated as carrying a location whether or not one was ever read out of
+    them — a cleared position or a fix a phone wrote into a video is still in the bytes.
+- **`renditions`** lists the picture sizes the server draws, largest first; it is empty for any
+  file that is not an image.
+- **No position, ever.** Not the photo's capture point, not its target's coordinates. Where a picture
+  was taken is not part of this row on any reach; a device that needs the cave's position reads it
+  from the feature download, under that stream's rules.
+
+**Tombstones** are an identifier — the link's — and a moment, exactly as in section 5. A link goes in
+two ways: detached (by whatever path: a person, a regenerated report replacing the one it superseded,
+an import undone in bulk, a file deleted outright), or left behind by a document that was deleted —
+then every link to it is a tombstone at the moment the document went. Both are reported for links on
+features the set hands this account. A link that stops appearing for any other reason — its cave
+withheld, gone from the set, its document no longer readable — is not a deletion, and as in section 5
+a device should not treat it as one; a tombstone for a link it never held is a no-op. When a feature
+itself is deleted, its own tombstone arrives on the feature download; links on it are not repeated
+here.
+
+### 11.2 Fetching files
+
+```
+POST /api/v1/sync/files/links
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "items": [ { "documentId": "0199…", "rendition": "original" },
+             { "documentId": "0199…", "rendition": 480 } ] }
+```
+
+`rendition` is the word `"original"` or one of the sizes `2400`, `1200`, `480`, `160` as a number.
+One request names between 1 and 200 items; anything else, or an unknown rendition, refuses the
+request whole with `400`.
+
+```json
+{
+  "links":   [ { "documentId": "0199…", "rendition": "original",
+                 "url": "/api/v1/files/0199…/content?token=…", "expiresAt": "2026-10-24T13:14:52Z" } ],
+  "refused": [ { "documentId": "0199…", "rendition": 480, "code": "sync.rendition_unavailable" } ]
+}
+```
+
+**Every item is decided again** — the catalogue a device read may be hours old, and access can have
+been withdrawn since. An item is answered only if the account may read the document now, at the reach
+the rule gives it now; the URL opens the document's current revision. A refused item names its
+`code`, and the rest of the request is answered as usual:
+
+| Code | Meaning |
+|---|---|
+| `sync.document_unavailable` | No such document, deleted, or no longer readable by this account — one answer, so the three cannot be told apart |
+| `sync.original_withheld` | The file itself is not handed to this account; pictures of it may be (`reach` was `renditions` or `none`) |
+| `sync.rendition_unavailable` | The server draws no picture of this kind of file |
+
+The URLs are relative to the server, need no `Authorization` header — the signed token in them is the
+credential — and stop working at `expiresAt`. A file itself gets four hours, because the content route
+answers HTTP `Range` requests and a phone resumes a large file across a poor connection; a picture gets
+ten minutes, because it is small and fetched at once. A URL that has expired answers `404` — ask for
+a new one. A URL already handed out keeps opening until it expires even if access is withdrawn in the
+meantime; that bounded staleness is what the short lifetimes are for. An original fetched under
+`locationFree` reach is the rewritten copy; it has the same name and type as the stored file.
+
