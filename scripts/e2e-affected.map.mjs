@@ -28,6 +28,7 @@ export const specs = {
     'settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts',
     'users-admin.spec.ts',
     'feature-sets.spec.ts',
+    'users-admin.spec.ts', 'map-background-kinds.spec.ts',
   ],
   audit: ['panel.spec.ts'],
   cabinets: ['documents.spec.ts'],
@@ -104,10 +105,12 @@ export const specs = {
     'map-filter-layers.spec.ts',
     // The workspace's panes, presets, the table under the map, and the corner notice's place.
     'map-workspace.spec.ts', 'map-workspace-mobile.spec.ts',
+    // GeoTIFF and vector backgrounds drawn from catalogue entries.
+    'map-background-kinds.spec.ts',
   ],
   // A shared view opened with no account: its background and the public data its link draws.
   mapViews: ['shared-view.spec.ts', 'karst-layers.spec.ts', 'map-filters.spec.ts'],
-  basemap: [],
+  basemap: ['map-background-kinds.spec.ts'],
   me: ['settings.spec.ts', 'my-trips.spec.ts', 'workspace-state.spec.ts', 'sign-out.spec.ts'],
   messaging: ['announcements.spec.ts', 'notifications.spec.ts', 'notification-health.spec.ts'],
   metadata: ['documents.spec.ts', 'gallery.spec.ts'],

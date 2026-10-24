@@ -93,6 +93,19 @@ file from here. Test fixture only: nothing here is built into a shipped artifact
   Checksum:  sha256 898b4c198eba42980e21ef3be319b1dede24e6579fee3bc9dd39f8dc6c8d5da7
 
 --------------------------------------------------------------------------------
+OpenStreetMap vector tiles of a box in the Apuseni mountains
+--------------------------------------------------------------------------------
+client/e2e/fixtures/osm-apuseni-basemap.pmtiles — 17 vector tiles, zooms 11 to 13, of
+22.66–22.74°E, 46.54–46.60°N, cut with the pmtiles tool (1.31.2) from the Protomaps
+daily planet build of 2026-10-24, as a fixture for the vector-background browser spec.
+Test fixture only: nothing here is built into a shipped artifact.
+
+  Source:    https://build.protomaps.com/20261024.pmtiles
+  License:   OpenStreetMap data, © OpenStreetMap contributors, Open Database License
+             (ODbL) 1.0 — https://www.openstreetmap.org/copyright
+  Checksum:  sha256 6147b6d027aa5b51da88c56a8d1ced1c3586e1ca47ac3be16885f40fc1d9fc78
+
+--------------------------------------------------------------------------------
 Feature symbol icons
 --------------------------------------------------------------------------------
 The 19 PNG symbols under client/public/feature_symbols/ (used to render surface

@@ -1,0 +1,13 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Invented protected area" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[22.68, 46.56], [22.72, 46.56], [22.72, 46.585], [22.68, 46.585], [22.68, 46.56]]]
+      }
+    }
+  ]
+}
