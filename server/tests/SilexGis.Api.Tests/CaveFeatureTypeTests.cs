@@ -577,7 +577,11 @@ public sealed class CaveFeatureTypeTests : IAsyncLifetime, IDisposable, IClassFi
     private static async Task<string?> CodeOf(HttpResponseMessage response) =>
         (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString();
 
-    public async ValueTask DisposeAsync() => await Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

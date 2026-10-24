@@ -298,7 +298,11 @@ public sealed class CaveProtectionParityTests : IAsyncLifetime, IDisposable, ICl
         Math.Abs(coordinates[0].GetDouble() - GuardedLon).ShouldBeGreaterThan(1e-9);
     }
 
-    public async ValueTask DisposeAsync() => await Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {
