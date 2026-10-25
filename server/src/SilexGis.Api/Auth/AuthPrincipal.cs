@@ -16,8 +16,24 @@ internal static class AuthPrincipal
     public static async Task<ClaimsPrincipal> CreateAsync(
         UserManager<SilexGisUser> userManager, SilexGisUser user, ImmutableArray<string> scopes)
     {
-        var identity = new ClaimsIdentity(
-            TokenValidationParameters.DefaultAuthenticationType, Claims.Name, Claims.Role);
+        var identity = await IdentityAsync(
+            userManager, user, TokenValidationParameters.DefaultAuthenticationType);
+
+        var principal = new ClaimsPrincipal(identity);
+        principal.SetScopes(scopes);
+        principal.SetDestinations(GetDestinations);
+        return principal;
+    }
+
+    /// <summary>
+    /// The account's claims — subject, address, the protected label and roles — with nothing
+    /// token-specific attached. Shared with the personal access key handler, so a request made with
+    /// a key is seen by every reader of the principal exactly as one made after signing in.
+    /// </summary>
+    public static async Task<ClaimsIdentity> IdentityAsync(
+        UserManager<SilexGisUser> userManager, SilexGisUser user, string authenticationType)
+    {
+        var identity = new ClaimsIdentity(authenticationType, Claims.Name, Claims.Role);
 
         // Both name claims are the same protected label every other surface shows. A plain
         // "display name, or else user name" fallback would publish the email address of every
@@ -32,11 +48,7 @@ internal static class AuthPrincipal
             .SetClaim(Claims.PreferredUsername, label);
 
         identity.SetClaims(Claims.Role, [.. await userManager.GetRolesAsync(user)]);
-
-        var principal = new ClaimsPrincipal(identity);
-        principal.SetScopes(scopes);
-        principal.SetDestinations(GetDestinations);
-        return principal;
+        return identity;
     }
 
     private static IEnumerable<string> GetDestinations(Claim claim)

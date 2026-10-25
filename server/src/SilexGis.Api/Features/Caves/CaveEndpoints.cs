@@ -4,9 +4,11 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Auth;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
@@ -33,6 +35,7 @@ public static class CaveEndpoints
         // Each route declares the refusals its handler sends; the 401 every guarded route can
         // answer, and the 400 of a validated body, are declared for the whole API at once.
         caves.MapGet("/", ListAsync)
+            .AcceptsAccessKey(AccessKeyPurpose.SurveyUpload)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(

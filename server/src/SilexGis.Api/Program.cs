@@ -477,6 +477,9 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
         ]);
 
     app.UseAuthentication();
+    // Between the two on purpose: a personal access key is kept to the routes that declare its
+    // purpose before any route's own authorization is asked.
+    app.UseMiddleware<SilexGis.Api.Auth.AccessKeyRouteGate>();
     app.UseAuthorization();
     app.UseRateLimiter();
 
@@ -508,6 +511,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapMeDataExportEndpoints();
     api.MapMeCapabilityEndpoints();
     api.MapMeCalendarFeedEndpoints();
+    api.MapMeAccessKeyEndpoints();
     api.MapNotificationInboxEndpoints();
     api.MapNotificationConfigEndpoints();
     api.MapNotificationHealthEndpoints();

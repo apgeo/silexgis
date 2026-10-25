@@ -65,7 +65,7 @@ public static class ConnectEndpoints
     /// server is configured, exactly as the sign-in check is — the toggle must never be able to
     /// shut out an installation that has no way to confirm anything.
     /// </summary>
-    private static async Task<bool> ConfirmationRequiredAsync(
+    internal static async Task<bool> ConfirmationRequiredAsync(
         SilexGisUser user, IAppSettingsService settings, IEmailDelivery emailDelivery, CancellationToken ct) =>
         !user.EmailConfirmed
         && (await settings.GetSecurityAsync(ct)).RequireConfirmedEmail

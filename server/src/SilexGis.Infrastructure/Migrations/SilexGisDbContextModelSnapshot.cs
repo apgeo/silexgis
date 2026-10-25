@@ -760,6 +760,66 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("album_shares", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.ApiAccessKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("prefix");
+
+                    b.Property<short>("Purpose")
+                        .HasColumnType("smallint")
+                        .HasColumnName("purpose");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<byte[]>("SecretHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("secret_hash");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_api_access_keys");
+
+                    b.HasIndex(new[] { "SecretHash" }, "ix_api_access_keys_secret_hash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_api_access_keys_secret_hash");
+
+                    b.HasIndex(new[] { "UserId" }, "ix_api_access_keys_user_id")
+                        .HasDatabaseName("ix_api_access_keys_user_id");
+
+                    b.ToTable("api_access_keys", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.AppSetting", b =>
                 {
                     b.Property<string>("Key")
@@ -8274,6 +8334,16 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_album_shares_albums_album_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ApiAccessKey", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_api_access_keys_users_user_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Attachment", b =>

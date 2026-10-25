@@ -95,4 +95,26 @@ public static class AuthHelper
             "Bearer", payload.GetProperty("access_token").GetString());
         return client;
     }
+
+    /// <summary>
+    /// Makes a personal access key through the web route, as its holder would, and returns the
+    /// key text — shown once, exactly as a device is handed it.
+    /// </summary>
+    /// <param name="web">A client signed in the ordinary way; a key cannot make keys.</param>
+    public static async Task<string> CreateAccessKeyAsync(
+        HttpClient web, string name = "test device", int? expiresInDays = null)
+    {
+        var response = await web.PostAsJsonAsync("/api/v1/me/access-keys", new { name, expiresInDays });
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, body);
+        return JsonDocument.Parse(body).RootElement.GetProperty("secret").GetString()!;
+    }
+
+    /// <summary>A client that carries nothing but a personal access key, as a field device does.</summary>
+    public static HttpClient AccessKeyClient(SilexGisApiFactory factory, string key)
+    {
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Authorization = new("Bearer", key);
+        return client;
+    }
 }

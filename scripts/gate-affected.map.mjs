@@ -231,6 +231,8 @@ export const groups = {
   me: [
     'AccountEmailTests', 'AccountSettingsTests', 'CredentialRevocationTests',
     'PhoneCredentialTests', 'TwoFactorChannelTests', 'UiDefaultsTests',
+    // Personal access keys are made, listed and revoked under the account's own routes.
+    'AccessKeyTests', 'AccessKeySurfaceTests',
   ],
   users: [
     'AuthFlowTests', 'CredentialRevocationTests', 'EmailVerificationTests', 'ExternalAuthTests',
@@ -243,6 +245,8 @@ export const groups = {
     'TokenStorePruneTests',
     // Signing out cancels that sign-in's renewal key at the revocation endpoint.
     'SignOutRevocationTests',
+    // A personal access key is a second kind of bearer value, kept to the routes that declare it.
+    'AccessKeyTests', 'AccessKeySurfaceTests',
   ],
   resLinks: [
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
@@ -487,17 +491,17 @@ export const crossCutting = {
     location: { source: 'obfuscat|LocationProtect|protectedLocation|locationClass', flags: 'i' },
   },
   permissionClasses: [
-    'AccessApiTests', 'AccessHistoryTests', 'AccessModelTests', 'AclAndCavingGroupTests',
-    'AdminMessagingTests', 'AlbumAndPublicGalleryTests', 'AnnotatedTextApiTests',
-    'AuthFlowTests', 'BasemapDownloadTests', 'BulkImportTests', 'CabinetApiTests',
-    'CaveDomainTests', 'CaveExternalIdTests', 'CaveOverburdenTests', 'CaveQrPublicationTests',
-    'CaverRosterTests', 'CavingGroupAnnouncementTests', 'CavingGroupMembershipTests',
-    'CenterlineTests', 'ChecklistAuthoringTests', 'DocumentAccessApiTests',
-    'DocumentCommentApiTests', 'DocumentLanguageTests', 'DocumentMetadataTests',
-    'EntrancePlacementGuardTests', 'EventAuthoringTests', 'EventInvitationTests',
-    'EventLifecycleTests', 'EventPolymorphicTests', 'EventReminderSweepTests',
-    'EventSeriesBulkTests', 'ExpeditionMembershipTests', 'ExpeditionReportTests',
-    'ExpeditionRosterRoleVocabularyTests', 'ExpeditionRosterTests',
+    'AccessApiTests', 'AccessHistoryTests', 'AccessKeyTests', 'AccessModelTests',
+    'AclAndCavingGroupTests', 'AdminMessagingTests', 'AlbumAndPublicGalleryTests',
+    'AnnotatedTextApiTests', 'AuthFlowTests', 'BasemapDownloadTests', 'BulkImportTests',
+    'CabinetApiTests', 'CaveDomainTests', 'CaveExternalIdTests', 'CaveOverburdenTests',
+    'CaveQrPublicationTests', 'CaverRosterTests', 'CavingGroupAnnouncementTests',
+    'CavingGroupMembershipTests', 'CenterlineTests', 'ChecklistAuthoringTests',
+    'DocumentAccessApiTests', 'DocumentCommentApiTests', 'DocumentLanguageTests',
+    'DocumentMetadataTests', 'EntrancePlacementGuardTests', 'EventAuthoringTests',
+    'EventInvitationTests', 'EventLifecycleTests', 'EventPolymorphicTests',
+    'EventReminderSweepTests', 'EventSeriesBulkTests', 'ExpeditionMembershipTests',
+    'ExpeditionReportTests', 'ExpeditionRosterRoleVocabularyTests', 'ExpeditionRosterTests',
     'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
     'FeatureHierarchyTests', 'FeatureLinkTests', 'FeatureRestoreTests', 'FeatureShareTests',
     'FeatureTests', 'FeatureTypeWriteTests', 'FileAttachmentTests', 'GeofileTests',

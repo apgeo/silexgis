@@ -190,6 +190,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<CalendarFeedToken> CalendarFeedTokens => Set<CalendarFeedToken>();
 
+    public DbSet<ApiAccessKey> ApiAccessKeys => Set<ApiAccessKey>();
+
     public DbSet<ChecklistItem> ChecklistItems => Set<ChecklistItem>();
 
     /// <summary>What each trip has confirmed of the list it works through: who, and when.</summary>
