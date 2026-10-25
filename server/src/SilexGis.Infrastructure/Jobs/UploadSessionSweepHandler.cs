@@ -20,10 +20,14 @@ namespace SilexGis.Infrastructure.Jobs;
 /// nothing.
 /// </para>
 /// <para>
-/// The bytes go first and the row second. A row deleted before its blob leaves a file nothing
-/// knows the name of, which is the very state this exists to prevent; a blob deleted before
-/// its row leaves a session that resumes onto missing content, which the next sweep clears
-/// anyway.
+/// Each row is claimed before its bytes are touched: deleted in a statement of its own, which
+/// commits at once, and the blob deleted only when that statement is what removed the row. Bytes
+/// staged for a phone's upload are adopted by the upload that names them, which takes the row
+/// away inside its own transaction and keeps the blob as the new document's file; a sweep that
+/// deleted the blob first and the row second could do so while that transaction was still open,
+/// and leave a document whose bytes are gone. The claim waits for that transaction instead, and
+/// finds nothing left to claim. The price is a blob left behind if the process dies between the
+/// two steps — a stranded file an operator can sweep, rather than a document that serves nothing.
 /// </para>
 /// </summary>
 public sealed class UploadSessionSweepHandler(
@@ -43,31 +47,38 @@ public sealed class UploadSessionSweepHandler(
     {
         var now = DateTimeOffset.UtcNow;
 
-        var expired = await db.UploadSessions
+        var expired = await db.UploadSessions.AsNoTracking()
             .Where(s => s.ExpiresAt <= now)
             .OrderBy(s => s.ExpiresAt)
             .Take(BatchSize)
+            .Select(s => new { s.Id, s.StoragePath })
             .ToListAsync(ct);
 
         foreach (var session in expired)
         {
+            // Re-checked against the expiry, so a session whose retention moved since it was read
+            // is not claimed; zero rows means somebody else took it — an upload that adopted the
+            // bytes, or another sweep — and its blob is not this pass's to delete.
+            var claimed = await db.UploadSessions
+                .Where(s => s.Id == session.Id && s.ExpiresAt <= now)
+                .ExecuteDeleteAsync(ct);
+            if (claimed == 0)
+            {
+                continue;
+            }
+
             try
             {
                 await fileStore.DeleteAsync(session.StoragePath, ct);
             }
             catch (IOException e)
             {
-                // A blob that will not delete is a stranded file an operator can sweep. The
-                // row goes anyway: keeping it would mean retrying the same failure for ever
-                // and never collecting anything behind it.
+                // A blob that will not delete is a stranded file an operator can sweep; the row
+                // is gone already, so the same failure is not retried for ever.
                 logger.LogWarning(
                     e, "Could not delete the partial content of upload session {SessionId}", session.Id);
             }
-
-            db.UploadSessions.Remove(session);
         }
-
-        await db.SaveChangesAsync(ct);
     }
 }
 

@@ -11,6 +11,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Jobs;
@@ -48,6 +49,13 @@ public sealed class FileUpdateRequestValidator : AbstractValidator<FileUpdateReq
 /// completed transfer is measured against it as well — a declaration is a claim, and the
 /// bytes are the fact.
 /// </param>
+/// <param name="StageForSync">
+/// A phone sending a file ahead of the sync upload that will name it. Completing such a
+/// transfer makes no document: the bytes are described and wait, under the session's id,
+/// until an upload adopts them or the staging retention runs out. A staged transfer has no
+/// destination of its own — where it ends up is the upload's to say — so it names no
+/// cabinet, folder, attachment, batch or club.
+/// </param>
 public sealed record UploadSessionOpenRequest(
     string FileName,
     long SizeBytes,
@@ -57,13 +65,19 @@ public sealed record UploadSessionOpenRequest(
     Guid? AttachEntityId,
     AttachmentRole? AttachRole,
     Guid? BatchId,
-    Guid? CavingGroupId);
+    Guid? CavingGroupId,
+    bool? StageForSync = null);
 
 public sealed class UploadSessionOpenRequestValidator : AbstractValidator<UploadSessionOpenRequest>
 {
     public UploadSessionOpenRequestValidator()
     {
         RuleFor(x => x.FileName).NotEmpty().MaximumLength(500);
+
+        // Staged bytes become a stored file under this name when a sync upload names them without
+        // a name of its own, and a stored file's name is kept in a narrower column than a
+        // transfer's: refused here rather than failing the whole upload that adopts them.
+        RuleFor(x => x.FileName).MaximumLength(255).When(x => x.StageForSync == true);
         RuleFor(x => x.SizeBytes).GreaterThan(0);
         RuleFor(x => x.RelativePath).MaximumLength(2000);
         RuleFor(x => x.AttachRole).IsInEnum();
@@ -73,6 +87,23 @@ public sealed class UploadSessionOpenRequestValidator : AbstractValidator<Upload
         RuleFor(x => x.AttachEntityId).NotNull()
             .When(x => !string.IsNullOrWhiteSpace(x.AttachEntityType))
             .WithMessage("An attachment target needs both a type and an id.");
+
+        // Refused rather than ignored: a phone that names a destination for staged bytes
+        // believes it will be honoured, and quietly dropping it would file the photograph
+        // somewhere other than where its sender thinks it went.
+        RuleFor(x => x)
+            .Must(x => x.CabinetId is null
+                && string.IsNullOrWhiteSpace(x.RelativePath)
+                && string.IsNullOrWhiteSpace(x.AttachEntityType)
+                && x.AttachEntityId is null
+                && x.AttachRole is null
+                && x.BatchId is null
+                && x.CavingGroupId is null)
+            .When(x => x.StageForSync == true)
+            .WithName(nameof(UploadSessionOpenRequest.StageForSync))
+            .WithMessage(
+                "Bytes staged for a sync upload have no destination of their own; the upload that "
+                + "names them says where they go.");
     }
 }
 
@@ -130,7 +161,7 @@ public static class FileEndpoints
             .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maxRequestBodyBytes))
             .WithSummary("Appends the next piece at the given offset.");
         uploads.MapPost("/{id:guid}/complete", CompleteUploadAsync)
-            .WithSummary("Finishes a resumable upload and files the assembled document.");
+            .WithSummary("Finishes a resumable upload and files the assembled document, or stages its described bytes for a sync upload to adopt.");
         uploads.MapDelete("/{id:guid}", AbandonUploadAsync)
             .WithSummary("Abandons a resumable upload and drops its partial content.");
         files.MapGet("/{id:guid}", GetAsync)
@@ -738,6 +769,11 @@ public static class FileEndpoints
             return TypedResults.Unauthorized();
         }
 
+        if (request.StageForSync == true)
+        {
+            return await OpenStagedUploadAsync(request, ctx, db, fileStore, allowances, ct);
+        }
+
         if (await GuardCreationAsync(ctx, db, request.CavingGroupId, ct) is { } createProblem)
         {
             return createProblem;
@@ -790,6 +826,63 @@ public static class FileEndpoints
             AttachEntityId = destination.AttachEntityId,
             AttachFeatureId = destination.AttachFeatureId,
             RelativePath = request.RelativePath,
+            ExpiresAt = UploadSessionRules.ExpiryFrom(DateTimeOffset.UtcNow),
+        };
+        db.UploadSessions.Add(session);
+        await db.SaveChangesAsync(ct);
+
+        return TypedResults.Created($"/api/v1/files/uploads/{session.Id}", ToDto(session));
+    }
+
+    /// <summary>
+    /// Opens a transfer of bytes a phone will name in a later sync upload.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Who may stage is asked as broadly as it can be answered here: the right to create a
+    /// document anywhere — installation-wide, or in one of the caller's own clubs. The real
+    /// question, whether this caller may make this document under this sync set's club, belongs
+    /// to the upload that adopts the bytes, because only it knows the set. Asking nothing at all
+    /// here would let an account that may never add a document fill the disk for a week.
+    /// </para>
+    /// <para>
+    /// The quota is judged exactly as for any upload, before a byte moves, and staged bytes
+    /// count against it from this moment.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Created<UploadSessionDto>, UnauthorizedHttpResult, ProblemHttpResult>> OpenStagedUploadAsync(
+        UploadSessionOpenRequest request,
+        AccessContext ctx,
+        SilexGisDbContext db,
+        IFileStore fileStore,
+        UploadAllowanceService allowances,
+        CancellationToken ct)
+    {
+        if (!CreateRules.MayCreate(ctx, AccessDomain.Documents)
+            && CreateRules.CavingGroupsToCreateIn(ctx, AccessDomain.Documents).Count == 0)
+        {
+            return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
+        }
+
+        var allowance = await allowances.ForAsync(ctx.UserId, ct);
+        if (UploadLimits.Refuse(allowance, request.FileName, request.SizeBytes) is { } refusal)
+        {
+            return RefusalProblem(refusal, allowance);
+        }
+
+        var storagePath = await fileStore.SaveAsync(
+            Stream.Null, Path.GetExtension(request.FileName), ct);
+
+        // While the bytes are still arriving this is an ordinary transfer, with the ordinary
+        // idle lifetime: the staging retention starts when the last piece has landed and the
+        // content has been described, not when somebody announced a file.
+        var session = new UploadSession
+        {
+            UserId = ctx.UserId,
+            OriginalName = Path.GetFileName(request.FileName),
+            DeclaredSizeBytes = request.SizeBytes,
+            StoragePath = storagePath,
+            StagedForSync = true,
             ExpiresAt = UploadSessionRules.ExpiryFrom(DateTimeOffset.UtcNow),
         };
         db.UploadSessions.Add(session);
@@ -894,9 +987,10 @@ public static class FileEndpoints
 
     /// <summary>
     /// Finishes a resumable upload: the assembled blob is described and filed exactly as a
-    /// single-request upload would have been.
+    /// single-request upload would have been — or, for bytes a phone staged for a sync upload,
+    /// described and left waiting for the upload that names them.
     /// </summary>
-    private static async Task<Results<Created<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> CompleteUploadAsync(
+    private static async Task<Results<Created<FileDto>, Ok<StagedUploadDto>, UnauthorizedHttpResult, ProblemHttpResult>> CompleteUploadAsync(
         Guid id,
         bool? allowDuplicate,
         SilexGisDbContext db,
@@ -906,6 +1000,7 @@ public static class FileEndpoints
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         PhotoPositionDisclosure photos,
+        IAppSettingsService settings,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -928,11 +1023,35 @@ public static class FileEndpoints
                 $"Only {session.ReceivedBytes} of {session.DeclaredSizeBytes} bytes have arrived.");
         }
 
+        // Completing staged bytes twice answers the same thing twice, so a phone that lost the
+        // first answer can ask again; it neither re-reads the file nor moves the retention.
+        if (session.StagedAt is not null)
+        {
+            return TypedResults.Ok(ToStagedDto(session));
+        }
+
         // Described now rather than piece by piece: the hash, the format and a photograph's
         // capture facts are all properties of the whole file, and none of them can be read
         // from a fragment.
         var content = await intake.FromStoredAsync(
             session.StoragePath, session.OriginalName, declaredMediaType: null, ct);
+
+        if (session.StagedForSync)
+        {
+            // No document: the row stays as the staged upload, carrying what the adopting
+            // upload checks. The camera facts are not copied onto it — they are read again from
+            // these same bytes, by the same reader, when the document is made, so there is one
+            // reading of a photograph's metadata rather than a stored copy that could drift.
+            var now = DateTimeOffset.UtcNow;
+            var sync = await settings.GetSyncAsync(ct);
+            session.StagedAt = now;
+            session.Sha256 = content.Sha256;
+            session.MimeType = content.MimeType;
+            session.Kind = content.Kind;
+            session.ExpiresAt = UploadSessionRules.StagedExpiryFrom(now, sync.StagedUploadRetentionDays);
+            await db.SaveChangesAsync(ct);
+            return TypedResults.Ok(ToStagedDto(session));
+        }
 
         var destination = new UploadDestination(
             session.CabinetId,
@@ -1029,6 +1148,19 @@ public static class FileEndpoints
         session.ReceivedBytes,
         session.DeclaredSizeBytes,
         UploadSessionRules.SuggestedChunkBytes,
+        session.ExpiresAt,
+        session.StagedForSync,
+        session.StagedAt,
+        session.Sha256);
+
+    private static StagedUploadDto ToStagedDto(UploadSession session) => new(
+        session.Id,
+        session.OriginalName,
+        session.DeclaredSizeBytes,
+        session.Sha256!,
+        session.MimeType!,
+        session.Kind!.Value,
+        session.StagedAt!.Value,
         session.ExpiresAt);
 
     private static async Task<Results<Ok<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(

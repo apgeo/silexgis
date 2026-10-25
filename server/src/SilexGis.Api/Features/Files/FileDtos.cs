@@ -152,9 +152,51 @@ public sealed record DuplicateCheckDto(bool Duplicate, Guid? DocumentId, string?
 /// </param>
 /// <param name="DeclaredSizeBytes">What the file was said to be, and what completion measures against.</param>
 /// <param name="ChunkBytes">The piece size to send.</param>
-/// <param name="ExpiresAt">When the session stops being resumable and its bytes are swept up.</param>
+/// <param name="ExpiresAt">
+/// When the session stops being resumable and its bytes are swept up. For staged bytes, when
+/// they go if no sync upload has adopted them.
+/// </param>
+/// <param name="StagedForSync">Whether the transfer was opened to stage bytes for a sync upload.</param>
+/// <param name="StagedAt">
+/// When staged bytes were completed and described; absent while they are still arriving. A
+/// phone asking whether its staged bytes are still waiting reads this, and an answer of
+/// "not found" means they are gone and must be sent again.
+/// </param>
+/// <param name="Sha256">The hash the server computed for staged bytes, once they are staged.</param>
 public sealed record UploadSessionDto(
-    Guid Id, long ReceivedBytes, long DeclaredSizeBytes, int ChunkBytes, DateTimeOffset ExpiresAt);
+    Guid Id,
+    long ReceivedBytes,
+    long DeclaredSizeBytes,
+    int ChunkBytes,
+    DateTimeOffset ExpiresAt,
+    bool StagedForSync,
+    DateTimeOffset? StagedAt,
+    string? Sha256);
+
+/// <summary>
+/// Bytes a phone sent ahead of the sync upload that will name them, completed and described
+/// but not yet anybody's document.
+/// </summary>
+/// <param name="Id">What the upload names to adopt them — the transfer's own id.</param>
+/// <param name="FileName">The name the transfer was opened with.</param>
+/// <param name="SizeBytes">How many bytes are held.</param>
+/// <param name="Sha256">
+/// The lowercase hex SHA-256 the server computed. The upload's document row must state the
+/// same hash, so a phone can compare it with its own before it sends the row.
+/// </param>
+/// <param name="MimeType">The type sniffed from the content, not taken from the name.</param>
+/// <param name="Kind">What kind of file the content is.</param>
+/// <param name="StagedAt">When the bytes were staged.</param>
+/// <param name="ExpiresAt">When they are swept if no upload has adopted them.</param>
+public sealed record StagedUploadDto(
+    Guid Id,
+    string FileName,
+    long SizeBytes,
+    string Sha256,
+    string MimeType,
+    FileKind Kind,
+    DateTimeOffset StagedAt,
+    DateTimeOffset ExpiresAt);
 
 /// <summary>
 /// The extracted words of one page. The text is what a reader wrote into the search index,
