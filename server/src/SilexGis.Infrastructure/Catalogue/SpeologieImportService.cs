@@ -79,7 +79,8 @@ public sealed class SpeologieImportService(
     SpeologieClient client,
     FeatureWriteService writer,
     IAccessService access,
-    IOptions<SpeologieOptions> options)
+    IOptions<SpeologieOptions> options,
+    IChangeContext changes)
 {
     /// <summary>Type a cave gets when its name says nothing about what kind of cave it is.</summary>
     private const string DefaultCaveTypeCode = "cave";
@@ -142,6 +143,10 @@ public sealed class SpeologieImportService(
             Mode = ImportBatchMode.Reviewed,
             Options = JsonSerializer.Serialize(importOptions),
         };
+
+        // A catalogue selection is confirmed like a file import and undone like one, so it is
+        // filed as one; the batch it names says which register the caves came from.
+        changes.Begin(ChangeSource.FileImport, batch.Id);
 
         var failures = new List<SpeologieFailure>();
         var items = new List<ImportBatchItem>();

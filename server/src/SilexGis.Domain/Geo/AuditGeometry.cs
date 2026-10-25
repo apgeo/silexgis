@@ -73,4 +73,33 @@ public static class AuditGeometry
             ["omitted"] = true,
         };
     }
+
+    /// <summary>
+    /// The geometry as the well-known binary kept beside a summary so that it can be put back: in
+    /// its own dimensions (an altitude only where it has one), without the SRID, which every
+    /// feature geometry shares.
+    /// </summary>
+    public static byte[] PreImage(Geometry geometry)
+    {
+        ArgumentNullException.ThrowIfNull(geometry);
+        var hasZ = geometry.Coordinates.Any(c => !double.IsNaN(c.Z));
+        return new WKBWriter(ByteOrder.LittleEndian, handleSRID: false, emitZ: hasZ).Write(geometry);
+    }
+
+    /// <summary>A kept pre-image read back as a feature geometry (SRID 4326).</summary>
+    public static Geometry ReadPreImage(byte[] wkb)
+    {
+        ArgumentNullException.ThrowIfNull(wkb);
+        var geometry = new WKBReader().Read(wkb);
+        geometry.SRID = 4326;
+        return geometry;
+    }
+
+    /// <summary>
+    /// Whether a geometry is the one a summary describes: the same fingerprint over the same bytes.
+    /// What lets a kept pre-image be trusted to be the shape the history row recorded.
+    /// </summary>
+    public static bool Matches(Geometry geometry, string? sha256) =>
+        sha256 is not null
+        && string.Equals((string?)Summary(geometry)["sha256"], sha256, StringComparison.OrdinalIgnoreCase);
 }

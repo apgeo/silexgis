@@ -28,7 +28,16 @@ public sealed record HistoryEventDto(
     /// <summary>Per-property diff/snapshot with noise and protection-redacted props removed.</summary>
     JsonElement? Changes,
     /// <summary>Names removed by location protection ([] otherwise) — the UI renders "hidden".</summary>
-    string[] RedactedProperties);
+    string[] RedactedProperties,
+    /// <summary>
+    /// What wrote the change: a web edit, a file import, a phone upload, a restore, an undo, a job…
+    /// Null for history written before it was recorded.
+    /// </summary>
+    ChangeSource? Source,
+    /// <summary>Groups every event one logical action wrote (one request, one upload, one undo). Null for older history.</summary>
+    Guid? ChangeSetId,
+    /// <summary>The import batch (an upload or a file import) the change belongs to, when it belongs to one.</summary>
+    Guid? ImportBatchId);
 
 /// <summary>
 /// Per-entity change history, derived from the audit trail. A feature's timeline covers its
@@ -59,6 +68,10 @@ public static class HistoryEndpoints
         api.MapGet("/history", ListAsync)
             .WithTags("History")
             .WithSummary("Change history for an entity (features incl. their subtree); protection-redacted, visibility-gated.");
+        api.MapPost("/history/restore", HistoryRestoreEndpoint.RestoreAsync)
+            .WithValidation<HistoryRestoreRequest>()
+            .WithTags("History")
+            .WithSummary("Put fields of a feature back to their value before one edit of its history; answers per field.");
         return api;
     }
 
@@ -168,7 +181,10 @@ public static class HistoryEndpoints
                 r.Row.Id, r.Row.At, r.Row.UserId, r.UserName, r.Row.Action,
                 r.Row.EntityType!, r.Row.EntityId!,
                 changes is null ? null : JsonSerializer.SerializeToElement(changes),
-                [.. redacted]);
+                [.. redacted],
+                r.Row.Source,
+                r.Row.ChangeSetId,
+                r.Row.ImportBatchId);
         }).ToList();
 
         return TypedResults.Ok(new PagedResult<HistoryEventDto>(items, p, size, total));

@@ -183,6 +183,13 @@ public static class AuthenticationSetup
         // no-request defaults whichever call ran first (they are TryAdd for the same reason).
         services.Replace(ServiceDescriptor.Singleton<ICurrentUser, Common.HttpContextCurrentUser>());
         services.Replace(ServiceDescriptor.Singleton<IRequestOrigin, Common.HttpContextRequestOrigin>());
+        // The logical action every history row names: a request starts as a web edit of its own
+        // change set; a scope with no request behind it (the job queue, a hosted worker) starts as
+        // a job's. Replaced for the same reason as the two above.
+        services.Replace(ServiceDescriptor.Scoped<IChangeContext>(sp => new ChangeContext(
+            sp.GetRequiredService<IHttpContextAccessor>().HttpContext is null
+                ? SilexGis.Domain.Entities.ChangeSource.Job
+                : SilexGis.Domain.Entities.ChangeSource.Web)));
         // Mail and SMS delivery, the message templates, and the settings behind all three.
         services.AddSilexGisMessaging();
 

@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
 using SilexGis.Infrastructure.Notifications;
@@ -101,6 +102,14 @@ public abstract class ProcessingJobWorkerBase(
 
         var job = await db.ProcessingJobs.FindAsync([jobId.Value], ct)
             ?? throw new InvalidOperationException($"Claimed job {jobId} not found.");
+
+        // One job run is one change set, recorded as done for the account that asked for it: no
+        // request is behind the work to say who the caller is, and a history row of "nobody"
+        // would hide who caused it. A handler that starts an action of its own (confirming an
+        // import) names that action itself and keeps the user.
+        var changes = scope.ServiceProvider.GetRequiredService<IChangeContext>();
+        changes.Begin(ChangeSource.Job);
+        changes.ActFor(job.RequestedBy);
 
         var handler = scope.ServiceProvider
             .GetServices<IProcessingJobHandler>()

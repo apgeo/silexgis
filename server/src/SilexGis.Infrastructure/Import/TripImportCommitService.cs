@@ -111,7 +111,8 @@ public sealed class TripImportCommitService(
     TripImportResolver resolver,
     TripLogWriteService trips,
     FeatureWriteService features,
-    IOptions<ImportLimitOptions> limits)
+    IOptions<ImportLimitOptions> limits,
+    IChangeContext changes)
 {
     /// <summary>The area kind a massif column becomes: a stretch of country, with no geometry yet.</summary>
     private const string MassifTypeCode = TripImportKinds.Massif;
@@ -193,6 +194,10 @@ public sealed class TripImportCommitService(
             Mode = ImportBatchMode.Reviewed,
             Options = ImportJson.Serialize(options),
         };
+
+        // Everything this confirmation writes is one change set of the batch, so the history can
+        // say where each trip, cave and area came from and an undo can find it.
+        changes.Begin(ChangeSource.FileImport, batch.Id);
 
         var items = new List<ImportBatchItem>();
         var failures = new List<TripImportFailure>();

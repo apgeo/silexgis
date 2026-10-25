@@ -391,6 +391,97 @@ public sealed class FeatureWriteService(
         await ValidatePropertiesAsync(feature, featureType, ct);
     }
 
+    // ---------- values put back from the history ----------
+
+    /// <summary>
+    /// The type of a column of the feature aggregate — the feature row or its cave or entrance row —
+    /// by the name the history records it under, or null when neither row has one by that name.
+    /// </summary>
+    public Type? FieldType(Feature feature, string field) =>
+        AggregateRowHolding(feature, field) is { } row ? db.Entry(row).Property(field).Metadata.ClrType : null;
+
+    /// <summary>The current value of a column of the feature aggregate, by its recorded name; null when there is none.</summary>
+    public object? FieldValue(Feature feature, string field) =>
+        AggregateRowHolding(feature, field) is { } row ? db.Entry(row).Property(field).CurrentValue : null;
+
+    /// <summary>Whether a column of the feature aggregate holds a JSON document (compared by content, not by text).</summary>
+    public bool IsDocumentField(Feature feature, string field) =>
+        AggregateRowHolding(feature, field) is { } row
+        && string.Equals(db.Entry(row).Property(field).Metadata.GetColumnType(), "jsonb", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Writes values taken out of the history back onto a feature, as an ordinary edit would: the
+    /// entrance point keeps its altitude as its Z, the cave's main entrance and its point follow,
+    /// and a property document is validated against the kind's schema. The caller has decided
+    /// which fields the person may have put back (permission, exact view, what their history
+    /// shows); the caller saves.
+    /// </summary>
+    /// <param name="feature">The tracked feature, with its cave or entrance row loaded.</param>
+    /// <param name="values">Decoded values by recorded field name; every one must name a column of the aggregate.</param>
+    public async Task ApplyHistoricalValuesAsync(
+        Feature feature, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
+    {
+        foreach (var (field, value) in values)
+        {
+            if (field == nameof(CaveEntrance.IsMain))
+            {
+                continue; // promotion and demotion go through the main-entrance rule below
+            }
+
+            var row = AggregateRowHolding(feature, field)
+                ?? throw new FeatureWriteException("history.field_unknown", [$"no column {field} on this feature"]);
+            db.Entry(row).Property(field).CurrentValue = value;
+        }
+
+        if (feature.Entrance is { } entrance)
+        {
+            // The entrance point carries the altitude as its Z, exactly as the edit form stores it,
+            // so the map and the attribute cannot disagree after one of them is put back alone.
+            if ((values.ContainsKey(nameof(Feature.Geom)) || values.ContainsKey(nameof(CaveEntrance.Altitude)))
+                && feature.Geom is Point point)
+            {
+                Coordinate coordinate = entrance.Altitude is { } altitude
+                    ? new CoordinateZ(point.X, point.Y, (double)altitude)
+                    : new Coordinate(point.X, point.Y);
+                feature.Geom = new Point(coordinate) { SRID = 4326 };
+            }
+
+            if (values.TryGetValue(nameof(CaveEntrance.IsMain), out var main) && main is true && !entrance.IsMain)
+            {
+                await SetMainEntranceAsync(entrance.CaveFeatureId, entrance.Id, ct);
+            }
+            else
+            {
+                if (values.TryGetValue(nameof(CaveEntrance.IsMain), out var demoted) && demoted is false)
+                {
+                    entrance.IsMain = false;
+                }
+
+                await SyncCaveMirrorAsync(entrance.CaveFeatureId, ct);
+            }
+        }
+
+        if (values.ContainsKey(nameof(Feature.Properties)))
+        {
+            await ValidatePropertiesAsync(feature, ct);
+        }
+    }
+
+    // The row of the aggregate a recorded field lives on. Names cannot collide between the two:
+    // one id has exactly one kind, and the history merges the two rows under that rule.
+    private object? AggregateRowHolding(Feature feature, string field)
+    {
+        if (db.Entry(feature).Metadata.FindProperty(field) is { } own && !own.IsShadowProperty())
+        {
+            return feature;
+        }
+
+        object? subtype = (object?)feature.Cave ?? feature.Entrance;
+        return subtype is not null && db.Entry(subtype).Metadata.FindProperty(field) is { } sub && !sub.IsShadowProperty()
+            ? subtype
+            : null;
+    }
+
     // ---------- lifecycle ----------
 
     /// <summary>Soft-deletes a feature and its whole containment subtree (one shared stamp, so restore can undo exactly this deletion).</summary>

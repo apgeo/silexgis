@@ -28,7 +28,8 @@ public sealed class PhotoCommitService(
     SilexGisDbContext db,
     FeatureWriteService writer,
     PhotoCandidateService candidates,
-    IAccessService access)
+    IAccessService access,
+    IChangeContext changes)
 {
     /// <summary>
     /// The most places a single confirmation creates. Lower than a vector import's ceiling
@@ -80,6 +81,10 @@ public sealed class PhotoCommitService(
             Options = ImportJson.Serialize(options),
             SkippedCount = built.Count - selection.Count,
         };
+
+        // Everything this confirmation writes is one change set of the batch, so the history can
+        // say where each place and picture came from and an undo can find it.
+        changes.Begin(ChangeSource.FileImport, batch.Id);
 
         var failures = new List<ImportFailure>();
         var items = new List<ImportBatchItem>();

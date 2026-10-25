@@ -35,6 +35,22 @@ public class AuditEntry
     public string? Changes { get; set; }
 
     public IPAddress? Ip { get; set; }
+
+    /// <summary>
+    /// The logical action that wrote this row — one web request, one upload, one import, one
+    /// restore, one undo, one job run. Every row the action wrote shares it. Null on rows written
+    /// before the history named its source.
+    /// </summary>
+    public Guid? ChangeSetId { get; set; }
+
+    /// <summary>What kind of action wrote this row. Null on rows written before it was recorded.</summary>
+    public ChangeSource? Source { get; set; }
+
+    /// <summary>
+    /// The import batch this change belongs to — the upload or the import that made it, or the one
+    /// an undo took back. What lets the rows a batch wrote be found again and reversed.
+    /// </summary>
+    public Guid? ImportBatchId { get; set; }
 }
 
 /// <summary>Well-known audit action names (extensible — string column by design).</summary>

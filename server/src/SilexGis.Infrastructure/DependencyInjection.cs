@@ -69,6 +69,10 @@ public static class DependencyInjection
         // the two registration calls runs first; the web host replaces both explicitly as well.
         services.TryAddSingleton<ICurrentUser, AnonymousCurrentUser>();
         services.TryAddSingleton<IRequestOrigin, NoRequestOrigin>();
+        // The logical action every history row names. Outside a web host there is no request, so
+        // a unit of work starts as a job's; the web host replaces this with one that starts a
+        // request's as a web edit.
+        services.TryAddScoped<IChangeContext>(_ => new ChangeContext(Domain.Entities.ChangeSource.Job));
         services.AddSingleton<TimestampInterceptor>();
         services.AddSingleton<AuditInterceptor>();
         services.AddSingleton<FeatureAggregateInterceptor>();
@@ -100,6 +104,7 @@ public static class DependencyInjection
         services.AddSingleton<Surveys.SurveyGraphExtractor>();
         services.AddSingleton<Surveys.SurveyCompilationLogReader>();
         services.AddScoped<Features.FeatureWriteService>();
+        services.AddScoped<Features.HistoryRestoreService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
         services.AddScoped<Permissions.AccessOrphanSweep>();
         services.AddScoped<Import.TermRuleSetStore>();

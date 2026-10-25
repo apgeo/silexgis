@@ -2,6 +2,9 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
+using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
@@ -21,6 +24,18 @@ namespace SilexGis.Infrastructure.Persistence;
 /// Every audit row added in a save — the ones written here and the ones a feature adds itself (an
 /// export, a permission change) — carries the client address of the request that caused it, when
 /// there is one.
+/// </para>
+/// <para>
+/// Every one of them also names the logical action that wrote it — its change set, its source and
+/// the import batch it belongs to — from the unit of work's <see cref="IChangeContext"/>. Stamped
+/// here, over every added row, rather than by each writer, so that no write path can forget it:
+/// the soft-delete, restore and purge rows a feature adds by hand get it the same way.
+/// </para>
+/// <para>
+/// An edit of a feature's own shape that is too large to record as text (the history keeps a
+/// summary of it instead) also keeps both full shapes beside the row, in
+/// <see cref="AuditGeometryValue"/>, so that a restore can put the shape back exactly.
+/// Centerlines are left out: they are rebuilt from their survey files, and they are the large ones.
 /// </para>
 /// </summary>
 public sealed class AuditInterceptor(ICurrentUser currentUser, IRequestOrigin origin) : SaveChangesInterceptor
@@ -46,7 +61,13 @@ public sealed class AuditInterceptor(ICurrentUser currentUser, IRequestOrigin or
         string? RootEntityType,
         string? RootEntityId,
         Dictionary<string, Dictionary<string, object?>> Changes,
+        Dictionary<string, GeometryPair> Geometries,
         bool FeatureWorld);
+
+    /// <summary>Both sides of a geometry whose diff could only record a summary.</summary>
+    private sealed record GeometryPair(Geometry? Old, Geometry? New);
+
+    private static readonly string CenterlineType = FeatureAudit.TypeName(FeatureKind.Centerline);
 
     private void Apply(DbContext? context)
     {
@@ -55,6 +76,7 @@ public sealed class AuditInterceptor(ICurrentUser currentUser, IRequestOrigin or
             return;
         }
 
+        var change = ChangeContextOf(context);
         var pending = new List<PendingEntry>();
         foreach (var entry in context.ChangeTracker.Entries<IAuditable>())
         {
@@ -72,13 +94,15 @@ public sealed class AuditInterceptor(ICurrentUser currentUser, IRequestOrigin or
             }
 
             var kind = FeatureKindOf(entry.Entity);
+            var geometries = new Dictionary<string, GeometryPair>();
             pending.Add(new PendingEntry(
                 action,
                 kind is null ? entry.Metadata.ClrType.Name : FeatureAudit.TypeName(kind.Value),
                 entry.Entity.AuditId,
                 (entry.Entity as IAuditChild)?.RootEntityType,
                 (entry.Entity as IAuditChild)?.RootEntityId,
-                CollectChanges(entry, action),
+                CollectChanges(entry, action, geometries),
+                geometries,
                 kind is not null));
         }
 
@@ -93,10 +117,15 @@ public sealed class AuditInterceptor(ICurrentUser currentUser, IRequestOrigin or
             var changes = parts.SelectMany(p => p.Changes)
                 .GroupBy(kv => kv.Key)
                 .ToDictionary(g => g.Key, g => g.First().Value);
-            entries.Add(ToRow(head with { Changes = changes }));
+            var geometries = parts.SelectMany(p => p.Geometries)
+                .GroupBy(kv => kv.Key)
+                .ToDictionary(g => g.Key, g => g.First().Value);
+            var row = ToRow(head with { Changes = changes }, change);
+            entries.Add(row);
+            AddPreImages(context, row, head with { Geometries = geometries });
         }
 
-        entries.AddRange(pending.Where(p => !p.FeatureWorld).Select(ToRow));
+        entries.AddRange(pending.Where(p => !p.FeatureWorld).Select(p => ToRow(p, change)));
 
         if (entries.Count > 0)
         {
@@ -104,23 +133,60 @@ public sealed class AuditInterceptor(ICurrentUser currentUser, IRequestOrigin or
         }
 
         var address = origin.ClientAddress;
-        if (address is null)
-        {
-            return;
-        }
-
         foreach (var added in context.ChangeTracker.Entries<AuditEntry>())
         {
-            if (added.State == EntityState.Added && added.Entity.Ip is null)
+            if (added.State != EntityState.Added)
             {
-                added.Entity.Ip = address;
+                continue;
+            }
+
+            var row = added.Entity;
+            row.Ip ??= address;
+
+            // A writer that already named the action (or the user) keeps its answer; the context
+            // fills in what it left empty.
+            if (change is not null)
+            {
+                row.ChangeSetId ??= change.ChangeSetId;
+                row.Source ??= change.Source;
+                row.ImportBatchId ??= change.ImportBatchId;
+                row.UserId ??= change.ActingUserId;
             }
         }
     }
 
-    private AuditEntry ToRow(PendingEntry p) => new()
+    // The interceptor is one instance shared by every context, while the change context belongs to
+    // one unit of work, so it is read from the services the context itself was created in rather
+    // than taken in the constructor. Null for a context created by hand outside dependency
+    // injection, whose rows are then written without attribution rather than with a wrong one.
+    private static IChangeContext? ChangeContextOf(DbContext context) =>
+        context.GetService<IDbContextOptions>()
+            .FindExtension<CoreOptionsExtension>()
+            ?.ApplicationServiceProvider
+            ?.GetService<IChangeContext>();
+
+    // Only an edit's pre-image is ever put back (a creation has no "before", and a hard delete's
+    // snapshot is not restored from), so only update rows keep shapes; the new side is kept too,
+    // because undoing an upload compares the current shape with what the upload wrote.
+    private static void AddPreImages(DbContext context, AuditEntry row, PendingEntry p)
     {
-        UserId = currentUser.UserId,
+        if (p.Action != AuditActions.Updated || p.EntityType == CenterlineType || p.Geometries.Count == 0)
+        {
+            return;
+        }
+
+        context.Set<AuditGeometryValue>().AddRange(p.Geometries.Select(g => new AuditGeometryValue
+        {
+            AuditEntry = row,
+            Property = g.Key,
+            OldWkb = g.Value.Old is null ? null : AuditGeometry.PreImage(g.Value.Old),
+            NewWkb = g.Value.New is null ? null : AuditGeometry.PreImage(g.Value.New),
+        }));
+    }
+
+    private AuditEntry ToRow(PendingEntry p, IChangeContext? change) => new()
+    {
+        UserId = currentUser.UserId ?? change?.ActingUserId,
         Action = p.Action,
         EntityType = p.EntityType,
         EntityId = p.EntityId,
@@ -145,14 +211,29 @@ public sealed class AuditInterceptor(ICurrentUser currentUser, IRequestOrigin or
     // survive. Skipped: primary keys (the audit row's EntityId already) and shadow properties
     // (computed search vectors, ltree paths, the subtype kind FK — store bookkeeping, not
     // domain change).
+    //
+    // An updated geometry whose diff records a summary on either side is also handed back in
+    // geometries, with both full shapes, for the pre-image kept beside the row.
     private static Dictionary<string, Dictionary<string, object?>> CollectChanges(
-        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry, string action)
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
+        string action,
+        Dictionary<string, GeometryPair> geometries)
     {
         var scalars = entry.Properties.Where(p => !p.Metadata.IsPrimaryKey() && !p.Metadata.IsShadowProperty());
         return action switch
         {
             AuditActions.Updated => scalars.Where(p => p.IsModified)
-                .ToDictionary(p => p.Metadata.Name, p => Pair(p.OriginalValue, p.CurrentValue)),
+                .ToDictionary(p => p.Metadata.Name, p =>
+                {
+                    var pair = Pair(p.OriginalValue, p.CurrentValue);
+                    if (pair["old"] is Dictionary<string, object?> || pair["new"] is Dictionary<string, object?>)
+                    {
+                        geometries[p.Metadata.Name] = new GeometryPair(
+                            p.OriginalValue as Geometry, p.CurrentValue as Geometry);
+                    }
+
+                    return pair;
+                }),
             AuditActions.Created => scalars.Where(p => p.CurrentValue is not null)
                 .ToDictionary(p => p.Metadata.Name, p => Pair(null, p.CurrentValue)),
             AuditActions.Deleted => scalars.Where(p => p.OriginalValue is not null)
@@ -171,7 +252,7 @@ public sealed class AuditInterceptor(ICurrentUser currentUser, IRequestOrigin or
     private static object? Plain(object? value) => value switch
     {
         null => null,
-        NetTopologySuite.Geometries.Geometry geometry => AuditGeometry.Record(geometry),
+        Geometry geometry => AuditGeometry.Record(geometry),
         Enum e => JsonNamingPolicy.CamelCase.ConvertName(e.ToString()),
         Guid[] ids => string.Join(',', ids),
         string[] values => string.Join(',', values),

@@ -112,7 +112,7 @@ internal static class FeatureDeletionEndpoints
             .Where(r => FeatureDeletionRules.IsRestorableKind(r.Kind)
                 && FeatureDeletionRules.DeletedContainers(r.Id, r.AncestorIds, deletedIds.Contains).Count == 0)
             .ToList();
-        var allowed = await MayRestoreAsync(db, access, ctx, [.. restorable.Select(r => r.ToFeature())], ct);
+        var allowed = await FeatureRestoreRights.MayRestoreAsync(db, access, ctx, [.. restorable.Select(r => r.ToFeature())], ct);
 
         var (p, size) = Paging.Normalize(page, pageSize);
         var mine = restorable
@@ -219,7 +219,7 @@ internal static class FeatureDeletionEndpoints
                 : ApiProblems.NotFound("feature.not_found");
         }
 
-        if (!(await MayRestoreAsync(db, access, ctx, [feature], ct)).Contains(feature.Id))
+        if (!(await FeatureRestoreRights.MayRestoreAsync(db, access, ctx, [feature], ct)).Contains(feature.Id))
         {
             return ApiProblems.Forbidden();
         }
@@ -323,78 +323,6 @@ internal static class FeatureDeletionEndpoints
             "Something containing this feature is deleted, and has to be restored first.",
             "restoreFirst",
             restoreFirst);
-
-    /// <summary>
-    /// Of the given features, the ones this caller may put back: the ones they could delete.
-    /// Reading is the caller's to have established already — it is asked in the database, of the
-    /// feature's audience as it stood before the deletion.
-    /// </summary>
-    /// <remarks>
-    /// Decided by the same evaluator every guard uses, over each row's own facts. An entrance is
-    /// also deleted from its cave's page by whoever may edit the cave, so that right on the cave
-    /// restores it too. The cave is read past the filter because an entrance deleted before its
-    /// cave was is asked about here as well — and is then refused for the cave being in the way,
-    /// which is the answer that says what to do, rather than for a right its caller does hold.
-    /// </remarks>
-    private static async Task<HashSet<Guid>> MayRestoreAsync(
-        SilexGisDbContext db,
-        IAccessService access,
-        AccessContext ctx,
-        IReadOnlyCollection<Feature> features,
-        CancellationToken ct)
-    {
-        if (ctx.IsFullAdmin || features.Count == 0)
-        {
-            return [.. features.Select(f => f.Id)];
-        }
-
-        var facts = await access.FactsOfManyAsync([.. features], ct);
-        var allowed = features
-            .Where(f => AccessEvaluator.Decide(ctx, AccessDomain.Features, AccessAction.Delete, facts[f.Id]).Allowed)
-            .Select(f => f.Id)
-            .ToHashSet();
-
-        var entranceIds = features
-            .Where(f => f.Kind == FeatureKind.CaveEntrance && !allowed.Contains(f.Id))
-            .Select(f => f.Id)
-            .ToArray();
-        if (entranceIds.Length == 0)
-        {
-            return allowed;
-        }
-
-        var caveOf = await db.CaveEntrances.AsNoTracking().IgnoreQueryFilters()
-            .Where(e => entranceIds.Contains(e.Id))
-            .ToDictionaryAsync(e => e.Id, e => e.CaveFeatureId, ct);
-        var caveIds = caveOf.Values.Distinct().ToArray();
-        var caves = await db.Features.AsNoTracking().IgnoreQueryFilters()
-            .Where(f => caveIds.Contains(f.Id))
-            .Select(f => new DeletedRow
-            {
-                Id = f.Id,
-                Kind = f.Kind,
-                FeatureTypeId = f.FeatureTypeId,
-                Name = null,
-                OwnerUserId = f.OwnerUserId,
-                CavingGroupId = f.CavingGroupId,
-                Visibility = f.Visibility,
-                AncestorIds = f.AncestorIds,
-                DeletedAt = default,
-            })
-            .ToListAsync(ct);
-        var caveFacts = await access.FactsOfManyAsync([.. caves.Select(c => c.ToFeature())], ct);
-        foreach (var (entranceId, caveId) in caveOf)
-        {
-            if (caveFacts.TryGetValue(caveId, out var cave)
-                && AccessEvaluator.Decide(ctx, AccessDomain.Features, AccessAction.Read, cave).Allowed
-                && AccessEvaluator.Decide(ctx, AccessDomain.Features, AccessAction.Write, cave).Allowed)
-            {
-                allowed.Add(entranceId);
-            }
-        }
-
-        return allowed;
-    }
 
     /// <summary>
     /// What is read of one deleted feature: the columns its access is decided on and what the

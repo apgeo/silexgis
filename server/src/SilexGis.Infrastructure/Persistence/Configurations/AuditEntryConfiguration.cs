@@ -24,5 +24,18 @@ public sealed class AuditEntryConfiguration : IEntityTypeConfiguration<AuditEntr
         builder.HasIndex(x => new { x.RootEntityType, x.RootEntityId, x.Id })
             .HasFilter("root_entity_type IS NOT NULL")
             .IsDescending(false, false, true);
+
+        // Everything one logical action wrote, read back as a group (a timeline's "this upload",
+        // an undo collecting what to reverse). Rows from before attribution are null and never
+        // looked up by it, hence partial.
+        builder.HasIndex(x => x.ChangeSetId)
+            .HasDatabaseName("ix_audit_log_change_set_id")
+            .HasFilter("change_set_id IS NOT NULL");
+
+        // The rows an import batch wrote, which is how an undo of that batch finds them. Most rows
+        // belong to no batch, hence partial.
+        builder.HasIndex(x => x.ImportBatchId)
+            .HasDatabaseName("ix_audit_log_import_batch_id")
+            .HasFilter("import_batch_id IS NOT NULL");
     }
 }

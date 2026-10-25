@@ -78,6 +78,7 @@ public static class SyncUploadEndpoints
             IAccessService access,
             IAccessContextAccessor accessAccessor,
             IOptions<SyncOptions> options,
+            IChangeContext changes,
             CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -173,6 +174,11 @@ public static class SyncUploadEndpoints
             Mode = ImportBatchMode.AutoCreated,
             Options = JsonSerializer.Serialize(new { syncSetId = set.Id }),
         };
+
+        // Everything this upload writes — the batch's own row, every row it creates, edits or
+        // deletes — is one change set filed under the batch, so the history says it came from a
+        // phone and an undo of the upload can find exactly what it did.
+        changes.Begin(ChangeSource.DeviceSync, batch.Id);
 
         var results = new List<SyncUploadRowResultDto>(request.Rows.Count);
         var items = new List<ImportBatchItem>();

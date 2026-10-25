@@ -68,7 +68,8 @@ public sealed class SpeleolocTripImportCommitService(
     SpeleolocArchiveReader reader,
     SpeleolocTripImportResolver resolver,
     TripLogWriteService trips,
-    IOptions<ImportLimitOptions> limits)
+    IOptions<ImportLimitOptions> limits,
+    IChangeContext changes)
 {
     public async Task<SpeleolocImportCommitResult> CommitAsync(
         StoredFile file,
@@ -147,6 +148,10 @@ public sealed class SpeleolocTripImportCommitService(
             Mode = ImportBatchMode.Reviewed,
             Options = ImportJson.Serialize(options),
         };
+
+        // Everything this confirmation writes is one change set of the batch, so the history can
+        // say which recording each position came from and an undo can find it.
+        changes.Begin(ChangeSource.SpeleolocArchive, batch.Id);
 
         var failures = new List<SpeleolocImportFailure>();
         var items = new List<ImportBatchItem>();
