@@ -106,6 +106,10 @@ const SavedFilterSettingsPage = lazy(() => import('./pages/settings/SavedFilterS
 const CoordinateSettingsPage = lazy(() => import('./pages/settings/CoordinateSettingsPage.tsx'));
 const CoordinateConverterPage = lazy(() => import('./pages/tools/CoordinateConverterPage.tsx'));
 const SyncSettingsPage = lazy(() => import('./pages/settings/SyncSettingsPage.tsx'));
+const PublicSurveyResultPage = lazy(() => import('./pages/public/PublicSurveyResultPage.tsx'));
+const SurveyUploadStatusPage = lazy(() => import('./pages/surveyUploads/SurveyUploadStatusPage.tsx'));
+const AccessKeysSettingsPage = lazy(() => import('./pages/settings/AccessKeysSettingsPage.tsx'));
+const SurveyUploadSettingsPage = lazy(() => import('./pages/settings/SurveyUploadSettingsPage.tsx'));
 const AdvancedSettingsPage = lazy(() => import('./pages/settings/AdvancedSettingsPage.tsx'));
 
 function Loadable({ children }: { children: ReactNode }) {
@@ -161,6 +165,10 @@ export const routes: RouteObject[] = guarded([
   // the last separator and never looks past a '#', so a code carried in a fragment would be
   // discarded before anything could resolve it.
   { path: '/q/:code', element: <Loadable><QrLandingPage /></Loadable> },
+  // The result of one survey upload, opened from a link its owner handed out. Anonymous: the
+  // answer behind it is a closed envelope (title, cave name, progress, files), and a wrong,
+  // withdrawn or no-longer-permitted token is answered exactly like an invented one.
+  { path: '/p/survey/:token', element: <Loadable><PublicSurveyResultPage /></Loadable> },
   {
     element: <RequireAuth />,
     children: [
@@ -184,6 +192,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/caves/new', element: <Loadable><CaveFormPage /></Loadable> },
           { path: '/caves/:id', element: <Loadable><CaveDetailPage /></Loadable> },
           { path: '/caves/:id/edit', element: <Loadable><CaveFormPage /></Loadable> },
+          { path: '/caves/:caveId/surveys/:surveyId/uploads/:uploadId', element: <Loadable><SurveyUploadStatusPage /></Loadable> },
           { path: '/features', element: <Loadable><FeatureListPage /></Loadable> },
           { path: '/features/deleted', element: <Loadable><DeletedFeaturesPage /></Loadable> },
           { path: '/features/:id', element: <Loadable><FeatureDetailPage /></Loadable> },
@@ -258,6 +267,8 @@ export const routes: RouteObject[] = guarded([
               { path: 'filters', element: <Loadable><SavedFilterSettingsPage /></Loadable> },
               { path: 'coordinates', element: <Loadable><CoordinateSettingsPage /></Loadable> },
               { path: 'sync', element: <Loadable><SyncSettingsPage /></Loadable> },
+              { path: 'access-keys', element: <Loadable><AccessKeysSettingsPage /></Loadable> },
+              { path: 'survey-uploads', element: <Loadable><SurveyUploadSettingsPage /></Loadable> },
               { path: 'advanced', element: <Loadable><AdvancedSettingsPage /></Loadable> },
             ],
           },

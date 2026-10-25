@@ -66,6 +66,8 @@ describe('SettingsLayout', () => {
       'Saved filters',
       'Coordinates',
       'Sync',
+      'Access keys',
+      'Survey uploads',
       'Advanced',
     ]);
 
