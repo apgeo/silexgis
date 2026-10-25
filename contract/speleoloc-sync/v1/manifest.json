@@ -4,7 +4,8 @@
   "features": [
     "download",
     "upload",
-    "documents"
+    "documents",
+    "documentUpload"
   ],
   "reserved": [
     "01-login",
@@ -18,7 +19,7 @@
     "manifest.json"
   ],
   "fileCount": 35,
-  "digest": "dcc6877b1ed5dbe241a346f388a010d30718519937ddef13ab1a9fb63092df03",
+  "digest": "847c8619edf0aa48d73ee5ba6b5c64b2a980f86a7a8bda28869e7be8a32bb7bb",
   "files": {
     "07-download-first-page/request.txt": {
       "bytes": 37,
@@ -153,8 +154,8 @@
       "sha256": "b5250d764721aa67681630221c6398cdaecb4cc961bf39d4b84764036242a3d8"
     },
     "CHANGELOG.md": {
-      "bytes": 12911,
-      "sha256": "8cca67158fa76519b1ea4b324f3c4b3270751f3245f53394ee9e5097021f8780"
+      "bytes": 15510,
+      "sha256": "e11164a3a48fc9070dd2c893fec9c2474314cebba05e91bc50815467177e4666"
     },
     "README.md": {
       "bytes": 8990,

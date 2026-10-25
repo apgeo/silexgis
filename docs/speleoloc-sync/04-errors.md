@@ -252,6 +252,41 @@ a link made in the browser was kept and only the names were taken — or one of 
 | `rejected` | `sync.person_not_listed` | The `caverId` is not a caver the people directory lists for this account. Nothing about this phone user was written | `apply-and-resubmit` — read the directory again and choose from it, or send the phone user without `caverId` |
 | `rejected` | `sync.feature_disabled` | The installation has the people directory switched off, so it takes no links from phone users to cavers. Nothing about this phone user was written | `apply-and-resubmit` — send the phone user without `caverId`; stop offering the choice while `people` is missing from `features` |
 
+An entry in `documents` (protocol, *Sending photos and documents*) is answered in the same shape,
+with the document's `id` and, when it was written, its new `revision`. It is `created`, `updated`
+(what is said about it changed, or new bytes became its current revision), `deleted` or `unchanged`,
+or `conflict` with `sync.conflict` exactly as a feature row is — re-read the document from the
+catalogue and send the row again against the revision it carries. A `baseVersionId` that is no longer
+the document's current revision is the same `conflict`: somebody gave it new bytes since, and the
+row is sent again against the `versionId` the catalogue now names. Refusals a feature row also meets
+mean the same here: `sync.row_not_found`, `sync.id_conflict`, `sync.row_deleted`,
+`sync.row_forbidden`, `sync.row_delete_forbidden` and `access.create_forbidden`. Those of its own:
+
+| `status` | `code` | Means | Action |
+|---|---|---|---|
+| `rejected` | `sync.file_bytes_missing` | The row brings content the server does not have — a new document, or (on an edit naming no `baseVersionId`) a hash different from the current revision's — and names no staged upload this account still holds: none was named, it was never completed, it was withdrawn or already adopted, or it waited past the staging retention | `apply-and-resubmit` — send the bytes (`stageForSync: true`), then send the row again naming the new transfer |
+| `rejected` | `sync.file_hash_mismatch` | The staged upload the row names holds different bytes: its hash, or the size the row states, is not the row's | `apply-and-resubmit` — compare the hash `complete` answered with the phone's own; send the right bytes, or name the transfer that holds them. The staged bytes are left where they are |
+| `rejected` | `sync.caving_group_forbidden` | On **a new document**: this account may not add documents to the caving group the selection is bound to | `stop` for this row |
+| `rejected` | `sync.document_unavailable` | The document has no file of its own here, so there is nothing for new bytes to replace | `stop` for this row |
+
+A refused document row adopts nothing: whatever it named stays staged until its retention runs out,
+so the corrected row can name the same transfer.
+
+An entry in `documentLinks` (protocol, *Hanging a document on a feature*) is answered in the same
+shape, **in the order the links were sent**, with the link's identifier as its `id` — or the
+document's, for a link refused before it existed — and, when written, the link's `revision`. It is
+`created`, `updated` (its role, caption or place changed), `deleted` (taken down) or `unchanged`
+(already hung, already down, or nothing different), `conflict` with `sync.conflict` when the link
+went between the check and the write, or one of these:
+
+| `status` | `code` | Means | Action |
+|---|---|---|---|
+| `rejected` | `sync.document_unavailable` | The document is not on this server, has been removed, or is not one this account may read. A link hands the document to everyone who can read the target, so the account must be able to read it itself | `apply-and-resubmit` — send the document first (in the same upload, before the link, is enough); otherwise `stop` for this link |
+| `rejected` | `sync.target_not_found` | The target is not on this server, is not readable by this account, or is not in this selection — answered alike, so the field cannot be used to ask what exists | `stop` for this link; re-read the selection |
+| `rejected` | `sync.location_forbidden` | The target is a feature whose location this account may not see, so the catalogue would never hand it a file hanging there. A feature the same upload created in its `rows` is exempt; a document sent under a feature's identifier is not | `stop` for this link — keep the file on the phone, or ask somebody who may see the location to hang it |
+| `rejected` | `sync.row_forbidden` | The account may read the target but not change what hangs on it (Write on the target) | `stop` for this link |
+| `rejected` | `sync.kind_unsupported` | The target's `kind` is not one a phone may hang files on in this contract version — only `feature` is | `stop` for this link, permanently in this contract version |
+
 **A field the device sent that is silently not applied is not an error.** An account that may write
 a row but may not see its position exactly keeps its name and description edits and loses only the
 geometry, the altitude and the position quality — the row comes back `updated`, and it is
@@ -289,6 +324,24 @@ web interface.
 | `feature.properties_invalid` | The property document failed the kind's schema, an undeclared key included — the schemas that exist are closed. **Only a kind that carries a schema can answer this**, which on this channel means `cave_place` and `surface_area`. A cave, an entrance or a generic row of a schema-less kind has its property document stored unread, so a coordinate smuggled into one of those earns no refusal at all; keeping positions out of the property document is the client's rule to hold, not this server's to enforce |
 | `cave.not_found` | The cave a row hangs from is not here or not readable |
 | `entrance.not_of_cave` | The entrance names a cave it does not belong to |
+
+### 6.4 Sending file bytes ahead of an upload
+
+The bytes a document row names travel first, through the resumable transfer routes opened with
+`stageForSync: true` (protocol, *Sending photos and documents*). Their refusals are the transfer
+routes' own:
+
+| Status | Code | Means | Action |
+|---|---|---|---|
+| 400 | `validation.failed` | No file name, a size of zero, or a destination (cabinet, folder, attachment, batch or club) named beside `stageForSync` | `stop` — fix the client |
+| 400 | `file.too_large` | The file is larger than this installation accepts | `surface-to-user` — the file cannot be sent as it is |
+| 400 | `file.type_not_accepted` | The installation does not accept files of this type | `surface-to-user` |
+| 403 | `access.create_forbidden` | This account may not add documents anywhere | `stop` — keep the file on the phone |
+| 409 | `file.quota_exceeded` | Not enough storage room left for this account or for the installation; staged bytes already count | `surface-to-user` — send the rows that need no file, or withdraw staged files nothing will adopt |
+| 409 | `upload.chunk_out_of_order` | The piece does not continue the file; the detail names the offset to send from | `apply-and-resubmit` — send from that offset |
+| 400 | `upload.size_mismatch` | The pieces add up to more than the declared size — including any piece sent after the bytes were staged | `stop` — open a new transfer with the right size |
+| 409 | `upload.incomplete` | Completed before every byte arrived | `apply-and-resubmit` — ask how far it got (`GET`), send the rest, complete again |
+| 404 | `upload.session_not_found` | No such transfer for this account: it never existed, belongs to another account, was withdrawn, or waited past its retention (or 24 hours idle while still arriving) | `apply-and-resubmit` — open a new transfer and send the bytes again |
 
 ## 7. The QR landing route
 

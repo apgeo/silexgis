@@ -202,3 +202,40 @@ Recorded exchanges written or re-written in this entry: none.
 
 Codes: new — `sync.feature_disabled` (`409` from the directory; per item in `people` when a link is
 sent while it is off) and `sync.person_not_listed` (per item in `people`).
+
+## 2026-10-25 — phones send photos and documents
+
+**Contract version: 1, unchanged. A build pinned to it keeps working.** An upload without the new
+arrays is answered byte for byte as before; `07`–`16` are byte-for-byte unchanged.
+
+- **Staged bytes.** `POST /api/v1/files/uploads` takes `stageForSync: true`; completing such a
+  transfer hashes and types the bytes and keeps them waiting, under the transfer's id, for the
+  installation's staging retention (seven days by default). They count against the account's
+  storage room until adopted, withdrawn or swept.
+- **`documents`** — a new optional upload array of the phone's photos and documents (`id`,
+  `baseRevision`, `deleted`, `title`, `description`, `fileName`, `sha256`, `sizeBytes`,
+  `stagedUploadId`, `capturedAt`, `createdByDeviceUserId`, `clientUpdatedAt`, `baseVersionId`),
+  answered in a `documents` array present only when the request carried it. A new id becomes a
+  document under it; new bytes on an existing one become a new revision that keeps the old. An edit
+  names `baseVersionId` — the catalogue's `versionId` for the bytes the phone holds — and then says
+  by naming a staged upload or not whether it brings new bytes, which a phone holding a copy without
+  location data cannot say by hash. A document's revision moves on a new revision or a caption
+  written in the web interface too, so such a change is a `conflict` for a phone that read it before.
+- **`documentLinks`** — a new optional upload array of where documents hang (`documentId`,
+  `target`, `role`, `caption`, `sortOrder`, `deleted`), applied after `documents` and answered in a
+  `documentLinks` array, in the order sent, under each link's identifier.
+- **The upload's undo** takes these back too: a created document removed, new bytes stepped back to
+  the revision before them, a link hung taken down, a link taken down hung again. An undo line
+  answers a `documentId`.
+- **`features`** names `documentUpload` on every installation running this build.
+
+Described in `docs/speleoloc-sync/01-protocol.md` §11.3, `02-field-mapping.md` §7.1–7.2,
+`04-errors.md` §6.2 and §6.4.
+
+Recorded exchanges written or re-written in this entry: none. `manifest.json` lists the new feature
+name.
+
+Codes: new — `sync.file_hash_mismatch`, `sync.file_bytes_missing` (per item in `documents`),
+`sync.target_not_found` (per item in `documentLinks`); existing codes met in the new arrays:
+`sync.document_unavailable`, `sync.location_forbidden`, `sync.row_forbidden`,
+`sync.row_delete_forbidden`, `sync.kind_unsupported`, `sync.caving_group_forbidden`.

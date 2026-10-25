@@ -28,7 +28,7 @@ Authorization: Bearer <token>
   "contractVersion": 1,
   "pageSizeMax": 500,
   "uploadRowsMax": 500,
-  "features": ["download", "upload", "documents"]
+  "features": ["download", "upload", "documents", "documentUpload"]
 }
 ```
 
@@ -41,7 +41,9 @@ Authorization: Bearer <token>
 - **`features`** names the optional halves of the contract this build actually serves. It is how a
   device meets a server that has shipped some of the protocol and not the rest, and takes what is
   there. `documents` means the photo and document catalogue of section 11 and the address route
-  beside it are served; `people` means the people directory and the upload's `people` section of
+  beside it are served; `documentUpload` means a phone may send photos and documents back (§11.3):
+staged bytes through the transfer routes, and the upload's `documents` and `documentLinks` sections;
+`people` means the people directory and the upload's `people` section of
   section 12 are, which an installation can switch off and which is named only to an account that
   may be told who people are. The list is worked out for each request, not fixed for the build: a part an
   installation can switch off is named only while it is on, so read it from the answer every time
@@ -849,6 +851,216 @@ catalogue and gets no numbers here; a picture never does. Should the copy fail t
 comes without numbers and fetching it answers `404` either way. The catalogue never quotes the copy's
 numbers, whatever the switch says.
 
+
+### 11.3 Sending photos and documents
+
+A phone sends a file in two moves: **the bytes first**, through the server's ordinary resumable
+transfer routes, and then **the row that names them**, in an upload batch. The bytes travel on their
+own because a photograph is megabytes and the link is often poor: a transfer resumes where it stopped,
+and a batch of rows is never held hostage to a half-sent picture.
+
+#### Sending the bytes
+
+```
+POST /api/v1/files/uploads
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "fileName": "IMG_0001.jpg", "sizeBytes": 2483112, "stageForSync": true }
+```
+
+`stageForSync: true` is what makes this a phone's staged file rather than a browser upload. The answer
+is `201` with the transfer's `id`, how much has arrived (`receivedBytes`, `0`), the piece size to send
+(`chunkBytes`, 8 MiB) and `expiresAt`. A staged transfer has no destination of its own — where the
+file ends up is the upload's to say — so naming a cabinet, folder, attachment, batch or club beside
+`stageForSync` is refused with `400`.
+
+Send the bytes in order, each piece as the raw request body:
+
+```
+PUT /api/v1/files/uploads/{id}?offset=0
+Content-Type: application/octet-stream
+```
+
+Each answer says how far the file has got. A piece the server already holds is answered `200` again,
+so a piece whose answer was lost can simply be sent again; a piece that does not continue the file is
+`409 upload.chunk_out_of_order` with the offset to send from. `GET /api/v1/files/uploads/{id}` says
+how far a transfer got after a dropped connection. While the bytes are still arriving the transfer
+lives for 24 hours after its last piece.
+
+When every byte has arrived:
+
+```
+POST /api/v1/files/uploads/{id}/complete
+```
+
+```json
+{ "id": "0199…", "fileName": "IMG_0001.jpg", "sizeBytes": 2483112,
+  "sha256": "9f2c…", "mimeType": "image/jpeg", "kind": "image",
+  "stagedAt": "2026-10-25T09:30:00Z", "expiresAt": "2026-11-01T09:30:00Z" }
+```
+
+**Completing makes no document.** The server hashes the bytes (`sha256`, lower-case hex), types them
+by their content rather than their name (`mimeType`, `kind`), and keeps them waiting under the
+transfer's `id` — the **staged upload** a document row then names as `stagedUploadId`. Compare
+`sha256` with the phone's own hash of the file: the row must state the same one. Completing again
+answers the same thing and does not move `expiresAt`, so a lost answer costs one request.
+
+A staged upload waits until `expiresAt` — **the installation's staging retention** after it was
+staged (seven days unless the administrator chose otherwise on the settings page, *Sync*). One that no
+upload has adopted by then is deleted with its bytes, and the transfer's routes answer `404
+upload.session_not_found` for it from that moment, before the sweep has even run: send the bytes
+again. `GET /api/v1/files/uploads/{id}` on a staged upload answers `stagedForSync: true`, its
+`stagedAt` and `sha256` — the way to ask whether the bytes are still there before sending the row
+that needs them. `DELETE /api/v1/files/uploads/{id}` withdraws a staged upload and its bytes.
+
+Staging needs an account that may add documents — anywhere, or in one of its own caving groups.
+Whether it may add this document under this set's group is decided when a row adopts the bytes.
+**Staged bytes count against the account's storage room from the moment the transfer opens**, by the
+size it was opened with, until a row adopts them (they then count as the document they became) or
+they are withdrawn or swept. `GET /api/v1/files/config` reports the room left, and an open that would
+not fit is refused before a byte moves (`409 file.quota_exceeded`). The same transfer limits apply as
+for any upload: the largest file the installation accepts, and the types it refuses.
+
+A staged upload is the account's own. Another account — an administrator included — is answered
+`404 upload.session_not_found` for it on every route, the same answer as for an id that never
+existed, so that a transfer id says nothing about who is sending what.
+
+#### Sending the row
+
+The row travels in the upload's `documents` array, beside `rows` and `people`, and is applied after
+them — so a document row and the feature rows sent with it land in one batch, one transaction and one
+undo:
+
+```json
+{ "batchId": "0199…", "contractVersion": 1,
+  "documents": [
+    { "id": "0199…", "baseRevision": null, "deleted": false,
+      "title": "Shaft entrance", "description": "Looking down the shaft",
+      "fileName": "IMG_0001.jpg", "sha256": "9f2c…", "sizeBytes": 2483112,
+      "stagedUploadId": "0199…", "capturedAt": "2026-07-14T10:30:00Z",
+      "createdByDeviceUserId": null, "clientUpdatedAt": "2026-07-14T10:31:12Z",
+      "baseVersionId": null } ] }
+```
+
+Every row that is not a removal states `sha256`, the lower-case hex hash of the content the document
+has on the phone — except an edit that names its `baseVersionId` and brings no staged bytes, which
+may leave it out. `fileName` is at most 255 characters, the width a stored file's name is kept in;
+a staged transfer opened with `stageForSync: true` is held to the same width when it opens. Each is answered in the answer's `documents` array, in the per-row shape the feature
+rows use, with the document's new `revision` when it was written; the array is absent when the upload
+carried none. A resend of the same `batchId` is answered from the record and writes nothing.
+
+- **A new `id`** becomes a document under that identifier — adopted as a feature row's is — whose
+  first revision is the staged bytes `stagedUploadId` names. The server re-reads them as it reads every
+  upload: their type from the content, the camera's position, direction and time from the file. The
+  staged upload's hash must be the row's `sha256` (and its size the row's `sizeBytes`, when stated),
+  otherwise `rejected sync.file_hash_mismatch`; no staged upload this account still holds is
+  `rejected sync.file_bytes_missing`. Adopted, the staged upload is gone — its bytes are the
+  document's now — and a later row cannot name it again.
+- **The document is owned by the account that uploaded it**, bound to the selection's caving group,
+  filed on no shelf, and given the visibility a plain upload with no destination gets — private —
+  until somebody changes it in the web interface or hangs it on a feature. Adding a document needs the right to add one under that
+  group (`access.create_forbidden`, `sync.caving_group_forbidden` otherwise).
+- **An `id` the server has** is arbitrated on `baseRevision`, which is the document's own revision,
+  exactly as a feature row is: a stale one is `conflict sync.conflict` with the revision that won, and
+  a row without one is a create resent after its answer was lost, answered `unchanged`. The revision
+  moves on every change to what the catalogue says about the document, wherever it was made — a new
+  revision of its bytes or a caption written in the web interface included — so a phone that read the
+  document before such a change is answered `conflict` rather than writing over it.
+- **Whether the row brings new bytes** is said by `baseVersionId` — the catalogue's
+  `document.versionId` for the bytes the phone holds. **Send it on every edit.** A phone handed a copy
+  without location data, or only a rendition (`originalReach` `locationFree`, `renditions` or `none`),
+  holds a file whose hash was never the stored one and is not told the stored one, so the hash alone
+  cannot tell its caption edit from new content. With `baseVersionId`:
+  - a row naming **no `stagedUploadId`** changes only what is said about the file — its title and,
+    for a photo, its caption — and is `unchanged` if neither differs; `sha256` is not consulted;
+  - a row naming a **`stagedUploadId`** whose bytes differ from the stored file's makes them a **new
+    revision**: they become what the document serves, everything hanging on it follows them, and the
+    earlier revision stays in the document's history, readable by whoever may edit it. Staged bytes
+    identical to the stored file's are an edit of what is said, and leave the staged upload waiting;
+  - a `baseVersionId` that is **not the current revision** — somebody gave the document new bytes
+    since — is `conflict sync.conflict` with the document's revision: read it again.
+
+  Without `baseVersionId` the hash decides, which is right only for a phone holding the stored file
+  itself (`originalReach: original`): **the same `sha256` as the current revision** is an edit of
+  what is said, **a different one** is a new revision, and new bytes without a staged upload are
+  `rejected sync.file_bytes_missing`.
+- **`deleted: true`** removes the document. That is a right of its own — in practice the document's
+  owner's and an administrator's; an account that may only edit it is answered `rejected
+  sync.row_delete_forbidden`, and should take the document off its feature instead. Removing a
+  document the server does not have, or has already removed, is `unchanged`; editing one it has
+  removed is `rejected sync.row_deleted`.
+
+`description` is a photo's caption (the catalogue's `document.description`); it is ignored for a file
+that is not a picture. An absent member says nothing — the caption stands — and an empty one clears it.
+`title`, absent or blank, keeps the name the document has; on a create the file name stands in.
+`capturedAt` is kept only when the file itself states no capture time, because the file is the better
+witness. `createdByDeviceUserId` is accepted and not yet kept; `clientUpdatedAt` is informational.
+
+#### Hanging a document on a feature
+
+Where a document hangs travels in the upload's `documentLinks` array, applied after `documents`, so a
+link may name a document sent in the same upload:
+
+```json
+{ "batchId": "0199…", "contractVersion": 1,
+  "documentLinks": [
+    { "documentId": "0199…", "target": { "kind": "feature", "id": "0199…" },
+      "role": null, "caption": null, "sortOrder": null, "deleted": false } ] }
+```
+
+A link is named by its **document and its target together** — a document hangs on an object once, and
+the phone keeps no identifier of its own for a link. Each is answered in the answer's `documentLinks`
+array, **in the order sent**, in the per-row shape, under **the link's identifier** — the one the
+catalogue (§11.1) names the link by and later reports its removal under — or, for a link refused
+before it existed, under its document's. The array is absent when the upload carried none.
+
+- **A new link** hangs the document's current file on the target. Without a `role`, the role follows
+  from the file and the target: a photo on an entrance is `photoEntrance`, on a cave place or a cave
+  area `photoInterior`, on a cave as a whole (or anything else) `other`; a file that is not a photo is
+  `document` wherever it hangs. A link already there is answered `unchanged`.
+- **An existing link** takes the row's `role`, `caption` (the link's own — what the file is called on
+  that feature, not the photo's description) and `sortOrder`; an absent member leaves the link's as
+  it is. Nothing different is `unchanged`.
+- **`deleted: true`** takes the document down from the target; the document itself stays. A link
+  that is not there is `unchanged`.
+
+Hanging a document or taking it down needs **Write on the target** (`rejected sync.row_forbidden`),
+and hanging it needs a document the account may read (`rejected sync.document_unavailable` — send the
+document first). The target must be **in the selection** and readable (`rejected
+sync.target_not_found`), and **not withheld from the account** (`rejected sync.location_forbidden`):
+a link on a cave whose location the account may not see is a row the catalogue would never have
+handed it, because a file hanging there says where to look. Both are answered by the same rule that
+decides what the catalogue hands the account, so a link is accepted exactly where the catalogue would
+list it. A feature the same upload created in its `rows` is exempt from both, as it is for the
+feature rows; a document sent under the same identifier as a feature is not a feature, and exempts
+nothing. Only `feature` targets are accepted; any other kind
+is `rejected sync.kind_unsupported`.
+
+#### Undoing an upload that sent files
+
+The upload's undo (§8, `POST /import-batches/{id}/revert`) takes back the photo sections too, one line
+per document and one per link, newest first, by the rule the feature rows follow — a value goes back
+only while it still holds what the upload left (`force` overrides that), and each line answers its
+`documentId`:
+
+- a document the upload **created** is removed (into the bin, restorable from the web interface), and
+  the catalogue reports its links gone;
+- **new bytes** it gave a document step back: the revision before them is current again, everything
+  hanging on the document follows it back, and the stepped-back revision stays in the version list
+  (`applied` names `file`). If somebody has given the document newer bytes since, the step is left
+  and reported `superseded` — even when forced, because stepping back past a later revision would
+  discard it;
+- a **title or caption** it changed goes back;
+- a document it **removed** comes back, for an account that may remove it;
+- a **link it hung** is taken down, and a **link it took down** is hung again as it was — role,
+  caption, place and the phones' default-download mark — on the document's current file, under a
+  new identifier (the old one has already been reported removed). Both need Write on the target, and
+  hanging a link again needs a document the account undoing may still read (`forbidden` otherwise),
+  because a link hands the document to every reader of the target.
+
+The phone learns the undone state through its ordinary cursors: every document and link the undo
+touches moves its revision.
 
 ## 12. People
 

@@ -203,6 +203,46 @@ beside it; neither is part of this row, on any reach. Whether the file itself is
 location inside it is the `reach` member's business, decided by the server's location rules — a device
 does not decide it and cannot ask for it.
 
+### 7.1 A document row sent up
+
+What a phone's document row in an upload's `documents` array becomes on the server (the protocol's
+*Sending photos and documents* says how it is arbitrated):
+
+| In the row | On the server | Notes |
+|---|---|---|
+| `id` | The document's identifier | Adopted verbatim on a create |
+| `baseRevision` | The document's revision | Compared, never written |
+| `deleted` | The document's removal | Needs the right to remove it |
+| `title` | The document's title | Blank keeps the name it has; the file name on a create |
+| `description` | A photo's caption | Ignored for a file that is not a picture; absent leaves the caption |
+| `fileName` | The file's original name | The staged transfer's name when absent; at most 255 characters |
+| `baseVersionId` | The revision of the bytes the phone holds (the catalogue's `versionId`) | Compared, never written. With it, no `stagedUploadId` means a description edit and staged bytes of another hash a new revision; a revision that is not the current one is a conflict |
+| `sha256` | The current revision's hash | Without `baseVersionId` — only for a phone holding the stored file — the same hash is a description edit and a different one a new revision. May be left out of an edit naming `baseVersionId` and no staged bytes |
+| `sizeBytes` | — | Checked against the staged bytes |
+| `stagedUploadId` | The staged bytes the revision is made of | Consumed on adoption |
+| `capturedAt` | The file's capture time | Only when the file states none |
+| `createdByDeviceUserId` | — | Not kept yet |
+| `clientUpdatedAt` | — | Informational |
+
+The type, the position, the direction and the capture time inside the file are read from the bytes,
+as for every upload; a row never states them.
+
+### 7.2 A link row sent up
+
+What a row in an upload's `documentLinks` array becomes:
+
+| In the row | On the server | Notes |
+|---|---|---|
+| `documentId` + `target` | The link, found by the pair | A document hangs on a feature once; the link's own identifier comes back in the answer |
+| `target.kind` | — | `feature` only, in this contract version |
+| `role` | The link's role | When absent on a new link: a photo on an entrance `photoEntrance`, on a `cave_place` or `cave_area` `photoInterior`, on anything else `other`; any file that is not a photo `document`. Absent on an existing link, the role stands |
+| `caption` | The link's caption | The file's name on that feature — not the photo's description. Absent leaves it; empty clears it |
+| `sortOrder` | The link's order | Absent leaves it; `0` on a new link |
+| `deleted` | The link's removal | The document stays |
+
+The headline mark and the default-set mark are not sent up: they are chosen in the web interface.
+A new link hangs the document's current file, and moves with the document when new bytes replace it.
+
 ## 8. People: the phone's users
 
 A phone's own users are recorded on the server as **one phone user each**, keyed by the phone's
