@@ -14,5 +14,9 @@ model the same project publishes as its Cheddar demonstration survey, credited i
 the one above. It is read from the server's fixtures rather than copied here, because two copies
 of a binary file drift into two different caves.
 
+The survey-upload specs (`survey-uploads.spec.ts`, `public-survey.spec.ts`) likewise send
+`server/tests/SilexGis.Api.Tests/Fixtures/topodroid/pestera_inventata.zip`, an invented TopoDroid
+archive, read from the server's fixtures for the same reason.
+
 A new fixture is invented unless its source is a public one that can be named and credited the
 same way. A file that came from somebody's own survey, register or trip does not belong here.
