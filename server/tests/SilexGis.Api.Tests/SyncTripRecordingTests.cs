@@ -405,7 +405,11 @@ public sealed class SyncTripRecordingTests : IAsyncLifetime, IDisposable, IClass
         kept.ConvertedTripLogId.ShouldBeNull("the recording outlives its report and may be made into one again");
     }
 
-    public async ValueTask DisposeAsync() => await factory.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await factory.DisposeAsync();
+        Dispose();
+    }
 
     public void Dispose()
     {

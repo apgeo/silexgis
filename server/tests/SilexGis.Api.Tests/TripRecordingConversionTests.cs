@@ -105,7 +105,11 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
         anonymous = factory.CreateClient();
     }
 
-    public async ValueTask DisposeAsync() => await factory.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await factory.DisposeAsync();
+        Dispose();
+    }
 
     public void Dispose()
     {
