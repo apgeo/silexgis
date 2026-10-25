@@ -10,9 +10,8 @@ import { seedUpload } from './surveyUploads.ts';
  * The first test runs against a stubbed answer: that the address opens without a sign-in, that the
  * visitor is not sent to the login form, and that what the envelope carries is drawn. The stub
  * also carries members a public answer must never hold (a log, input files, a team); the page must
- * not draw them even if a server wrongly sent them. The describe below drives the real route, and
- * is skipped, with its reason, on a server that does not answer it: the route is recognised by the
- * stable `code` a refusal from it carries, which an unmatched address's bare 404 lacks.
+ * not draw them even if a server wrongly sent them. The second test drives the real route: an
+ * upload sent the way a device sends one, its public link opened by a visitor without an account.
  */
 test('the page behind a public link opens without signing in and draws the envelope it is given', async ({
   browser,
@@ -72,18 +71,6 @@ test('the page behind a public link opens without signing in and draws the envel
 });
 
 test.describe('the public result page, against the real route', () => {
-  test.beforeEach(async ({ request }) => {
-    // Every unmatched address is answered with a problem document too, so the content type says
-    // nothing. What only a real route adds is the stable `code` its refusals carry.
-    const probe = await request.get('/api/v1/public/survey-uploads/e2e-invented-token');
-    const body = (await probe.json().catch(() => null)) as { code?: unknown } | null;
-    const hasRoute = typeof body?.code === 'string';
-    test.skip(
-      !hasRoute,
-      'the server does not answer the anonymous public-link route (no stable code on a 404)',
-    );
-  });
-
   test('a link shows the run to a visitor without an account, and a wrong one says it does not work', async ({
     browser,
     page,
