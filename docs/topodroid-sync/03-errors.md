@@ -77,6 +77,29 @@ problem (`errors` keyed by member) before any of the above.
 `complete` repeated on a completed upload answers `202` with where it stands; `DELETE` repeated on
 an abandoned one answers `204`.
 
+## The public link
+
+The status answer's `publicLinkRefusal` says why an upload has no public link — not an error, a
+reason to show beside the missing link:
+
+| Value | Meaning |
+|---|---|
+| `installation-off` | this installation makes no public links |
+| `account-off` | the uploader turned public links off in their SilexGIS settings |
+| `no-share-right` | the account that completed the upload may not share the cave with people outside the installation |
+| `protected-cave` | the cave's position is protected, so its survey results are never published — also when protection was switched on after the link was made |
+| `revoked` | someone who may write to the cave withdrew the link on the web |
+
+The web's routes for making a link again and withdrawing it (not opened by an access key):
+
+| Code | Status | Route | When |
+|---|---|---|---|
+| `survey_upload.not_completed` | 409 | `POST …/public-link` | the upload is still receiving files, or was abandoned |
+| `survey_upload.public_links_disabled` | 409 | `POST …/public-link` | the installation makes no public links |
+| `survey_upload.public_link_forbidden` | 403 | `POST …/public-link` | the account may not share the cave |
+| `survey_upload.public_link_refused_protected` | 409 | `POST …/public-link` | the cave's position is protected |
+| `survey_upload.public_link_not_found` | 404 | `GET /api/v1/public/survey-uploads/{token}` | **one answer for everything**: an invented, malformed, withdrawn or replaced token, a cave protected now, an installation that turned links off, an upload or cave that is gone. `11-errors/public-link-not-found` |
+
 ## How a processing run ended *(row)*
 
 | Code | Stage | When |
@@ -86,11 +109,21 @@ an abandoned one answers `204`.
 | `survey_pipeline.archive_too_large` | `unpack` | over 10,000 entries, more unpacked bytes than the installation allows, or an entry that inflates suspiciously (over 200:1) |
 | `survey_pipeline.unexpected` | any | a defect on the server; its log holds the detail |
 
-Reserved for the stages that compile (not sent by this version of the server; listed so a tool can
-be written once): `survey_pipeline.source_missing` (compiling asked for, no `.th` sent),
-`survey_pipeline.source_invalid`, `survey_pipeline.compiler_unavailable` (a compiler is configured
-but could not be reached — the files are archived), `survey_pipeline.compile_failed`,
-`survey_pipeline.compile_timeout`, `survey_pipeline.output_missing`, `survey_pipeline.store_failed`.
+Sent by a server that compiles: `survey_pipeline.source_missing` (compiling asked for, no `.th`
+sent), `survey_pipeline.source_invalid` (more than one `.th`, or a survey that reads a file not sent
+with it), `survey_pipeline.compiler_unavailable` (a compiler is configured but could not be reached
+— the files are archived), `survey_pipeline.compile_failed`, `survey_pipeline.compile_timeout`,
+`survey_pipeline.output_missing`, `survey_pipeline.store_failed`.
+
+## What is wrong with one output *(on an artefact entry)*
+
+These sit in `artefacts[].error` (`{ code, message }`) on a run that **succeeded**; the `message` is a
+fixed English sentence per code.
+
+| Code | Entry | When |
+|---|---|---|
+| `survey_pipeline.output_missing` | any output `kind`; `sizeBytes` and `contentUrl` are `null` | the output was asked for and Therion did not write it (a KML or a georeferenced map of a survey with no position, say). The same code fails the whole run, at `compile`, only when nothing asked for was written |
+| `survey_pipeline.crs_unknown` | `lox` | the survey is fixed in a coordinate system the server has no EPSG code for, so the model is stored and not read into stations (`modelStatus: failed`); `message` on the run says the same |
 
 **A server with no compiler does not fail.** When the capabilities say `compiler.available: false`,
 a run ends `succeeded` at stage `unpack` with a sentence in `message` saying the survey was archived

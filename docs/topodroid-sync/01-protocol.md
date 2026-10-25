@@ -75,7 +75,7 @@ sent**. Nothing is stored yet; the answer is `201` with the upload's status body
 |---|---|
 | `caveSurvey: { id }` | an existing survey of a cave, by the id the server answered for it before. **Keep the `caveSurvey.id` of every answer per survey in the tool** and send it next time: the upload becomes the survey's next version (`07-open-next-version`). |
 | `cave: { id }` | an existing cave (from `GET /api/v1/caves?names=…`). The survey is matched among the cave's surveys by `surveyName`, else a new survey of the cave is made. |
-| `newCave: { name?, visibility?, cavingGroupId?, caveTypeId? }` | make a cave. `visibility` ∈ `private`, `cavingGroup`, `authenticated`, `public`; when empty, the account's caving group, else private. |
+| `newCave: { name?, visibility?, cavingGroupId?, caveTypeId?, locationProtected? }` | make a cave. `visibility` ∈ `private`, `cavingGroup`, `authenticated`, `public`; when empty, the account's caving group, else private. `locationProtected` (default `false`, as on the web's form) protects the cave's position from the moment it exists, so the entrance the survey's fixed station places is protected from its first second. |
 | *(none)* | the server makes a cave named after `surveyTitle` (else `surveyName`). If a cave **the account can see** already has that name, the new one is `<title> (2)`, `(3)`, … The answer's `caveCreated` is `true` (`02-open`). |
 
 A new cave has no position until the survey's fixed point is read into an entrance; it is
@@ -137,13 +137,14 @@ application/octet-stream`), `{name}` URL-escaped. The answer is `200` (`03-put-f
 | `version` | this upload's version of its survey: the UTC moment it was opened, to the second. Result files are named `<survey>-<yyyyMMddTHHmmssZ>.<ext>` from it. |
 | `caveCreated` | whether this upload made its cave |
 | `survey` | `{ title, name, date, team }` — `date` and `team` once the archive has been read |
-| `files[]` | every declared file: `status` (`declared`, `received`, `stored`, `refused`), sizes, `sha256`, `refusalCode`, and `contentUrl` once stored |
-| `artefacts[]` | what the run produced: `{ kind, name, sizeBytes, contentUrl, surveyModelId?, documentId?, sourceId?, viewUrl? }` — empty on a server that does not compile |
+| `files[]` | every declared file: `status` (`declared`, `received`, `stored`, `refused`), sizes, `sha256`, `refusalCode`, and `contentUrl` once stored; after a compile also the two files the run generated around the survey (`role: generatedConfig` — the Therion configuration `<survey>-<stamp>.thconfig` and the wrapper survey `<survey>-<stamp>.wrapper.th`), which are kept with the inputs |
+| `artefacts[]` | what the run produced: `{ kind, name, sizeBytes, contentUrl, surveyModelId?, documentId?, sourceId?, viewUrl?, modelStatus?, error? }` — `kind` is the output's catalogue name (`lox`, `3d`, `plan-pdf`, …) or `log`; `name` carries the version stamp; `modelStatus` (`pending`, `processing`, `ready`, `failed`) is how far a model's reading has got; `error` (`{ code, message }`, else `null`) says what is wrong with that one output — **an entry whose `error.code` is `survey_pipeline.output_missing` was asked for and not produced, and has no file (`sizeBytes` and `contentUrl` are `null`)**; `survey_pipeline.crs_unknown` on a `lox` entry means it was stored but not read (see below). Empty on a server that does not compile (`06b-status-compiled` records a compiled run) |
 | `compiler` | `{ version }` once a compiler ran |
 | `outputs`, `compile` | what the run was asked for, after the server combined the request with the account's and the installation's standing choices |
 | `logTail` | the compiler's last lines; only for an account that may write to the cave |
 | `statusPageUrl` | the signed-in web page the run is watched on, relative to the installation — offer *Open in browser* |
-| `publicLink` | a public page of the results, when the installation makes one; `null` otherwise |
+| `publicLink` | `{ url, createdAt }` — the public page of the results (`url` is `/p/survey/<token>`, relative to the installation), shown to an account that may write to the cave; `null` when there is none, or for an account that may only read. Offer *Copy* and *Open* (see "The public link" below) |
+| `publicLinkRefusal` | why there is no public link, as a code: `installation-off`, `account-off`, `no-share-right`, `protected-cave`, `revoked` (`03-errors.md`); `null` while there is a link, or before the upload is complete |
 | `createdAt`, `expiresAt`, `startedAt`, `finishedAt` | the upload's times |
 
 **`contentUrl` is a signed, short-lived download address** (`/api/v1/files/{id}/content?token=…`):
@@ -154,6 +155,40 @@ caver typed.
 On a server with no compiler a run checks the archive, reads it, and ends `succeeded` at `unpack`
 with progress 100 and a `message` saying it was not compiled (`06-status-succeeded`). That is the
 expected end there, not a failure.
+
+On a server that compiles, a run goes on through `scaffold`, `compile` and `store` and ends
+`succeeded` at `read`. What it stored, by `kind`:
+
+| `kind` | Stored as | Name |
+|---|---|---|
+| `lox` | a survey model of the cave (`surveyModelId`), read into stations and legs when the survey is fixed to a position — `modelStatus` goes `pending` → `ready`; a survey fixed to no position is stored unread (`failed`, and the `message` says why); a survey fixed in a coordinate system the server has no EPSG code for is stored unread too, with `error.code` `survey_pipeline.crs_unknown` on the entry | `<survey>-<stamp>.lox` |
+| `3d` | a survey model, for download and viewers; not read | `<survey>-<stamp>.3d` |
+| `plan-pdf`, `extended-pdf`, `plan-svg`, … | a document attached to the cave (`documentId`), tagged `survey-output` | `<survey>-<stamp>.plan.pdf`, `.extended.pdf`, `.plan.svg`, … |
+| `log` | the compiler's log, archived as a survey source of the cave (`sourceId`) with its loop closures read from it | `<survey>-<stamp>.log` |
+
+An output that was asked for and not produced — a KML of a survey with no position is the ordinary
+case — is listed with its name and `error.code: survey_pipeline.output_missing`, and the run still
+succeeds on the rest; the run fails with that code only when none of what was asked for came out.
+
+A run whose compile failed (`compile_failed`, `compile_timeout`, or `output_missing` for the whole
+run) still keeps what it compiled — the two `generatedConfig` files in `files[]` — and the
+compiler's whole log, listed in `artefacts[]` as `kind: log`, so the caver can read the error and
+carry on in Therion.
+
+A model somebody deleted on the web drops off `artefacts[]` (and off the public page) at the next
+read.
+
+The run reports `succeeded` without waiting for the model's reading; poll on while `modelStatus` is
+`pending` or `processing` if the tool shows it. **None of it becomes the cave's current model** —
+which model draws the cave is chosen on the web. Every upload is a version: a second upload of the
+same survey stores its own files under its own stamp beside the first's, and running an upload again
+(`rerun`) replaces that upload's own outputs as new revisions of the same files. An installation may
+keep the outputs of the newest versions only (`SILEXGIS__SurveyUploads__KeepArtefactVersions`); an
+older version's `artefacts[]` is then empty, and *Rerun* compiles it again from its kept inputs.
+
+A cave the upload made is placed at the survey's fixed station (the archive's `fixeds` row), as its
+main entrance, whether or not the survey is compiled. A cave that was named in the request is never
+moved.
 
 ## 7. Running again — `POST /survey-uploads/{id}/rerun`
 
@@ -182,3 +217,33 @@ answered `404` like an upload that never existed, and it is absent from the list
 `total`. This holds for the uploader too, if their access to the cave's position is later taken
 away. Changing an upload — sending a file, completing, abandoning, running again — needs write
 access to the cave as well.
+
+## 10. The public link
+
+When the installation makes public links (on by default) and the uploader's SilexGIS settings have
+not turned them off, completing an upload makes **a public page of its results** — if the account
+completing it may share the cave, and the cave's position is not protected. The status answer
+carries it as `publicLink.url` from the `complete` answer on (`04-complete`); running the upload
+again keeps the same link. Without one, `publicLinkRefusal` says why. On the web, the upload's page
+can withdraw the link or make a new one in its place; the old address then stops working.
+
+The page is `GET /api/v1/public/survey-uploads/{token}` — the token is the last part of
+`publicLink.url` — read **without any account or key** (`12-public-link`). Its answer is its own,
+smaller shape:
+
+| Member | Meaning |
+|---|---|
+| `survey` | `{ title }` |
+| `cave` | `{ name }` — the cave's name and nothing else |
+| `version` | the upload's version, as in the status answer |
+| `status`, `stage`, `progress`, `message` | as in the status answer |
+| `stages[]` | `{ stage, state }` for all six stages, `state` ∈ `pending`, `active`, `done`, `failed`, `skipped` |
+| `error` | `{ code, message }` when failed |
+| `artefacts[]` | `{ kind, name, sizeBytes, contentUrl }` — the outputs stored; never the log, never an output that was not produced (`12b-public-link-compiled`) |
+| `createdAt`, `finishedAt` | the upload's times |
+
+It never carries the archive, the Therion sources, the log, the party, a station name, the cave's
+id or any coordinate. **Every refusal is the same `404 survey_upload.public_link_not_found`**, an
+invented token's: a withdrawn link, a cave protected since, an installation that turned links off.
+`contentUrl`s are short-lived; read the page again for fresh ones. Public pages are rate-limited per
+address (`429` with `Retry-After`).
