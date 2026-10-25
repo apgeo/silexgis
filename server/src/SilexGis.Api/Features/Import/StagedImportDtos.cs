@@ -190,7 +190,15 @@ public sealed record ImportBatchItemDto(
     /// When an undo took this line back, wholly or in part. A phone upload can be undone a few
     /// lines at a time, so this is what says which of its lines are still in force.
     /// </summary>
-    DateTimeOffset? UndoneAt);
+    DateTimeOffset? UndoneAt,
+    /// <summary>
+    /// The name of the row an updating or deleting line changed (<c>AttachedToFeatureId</c>), read
+    /// as <c>FeatureName</c> is: only what the caller may see. A phone upload's lines are mostly
+    /// of this kind, and without a name each would read as a line that created nothing.
+    /// </summary>
+    string? AttachedToFeatureName,
+    /// <summary>Whether that row is deleted now.</summary>
+    bool AttachedToFeatureDeleted);
 
 /// <summary>
 /// Where an object came from: which file, which rule, who confirmed it, when. The source

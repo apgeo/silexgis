@@ -41,6 +41,10 @@ public sealed record PhotoPage(
 /// What the picture states about how it was taken — camera, lens, exposure. Shown to anyone who
 /// may read the file: how a photograph was taken is not a position and is not protected.
 /// </param>
+/// <param name="LocationRemoved">
+/// True when <c>ContentUrl</c> hands over a copy of the picture with its location data taken
+/// out rather than the stored bytes.
+/// </param>
 public sealed record PhotoDto(
     Guid DocumentId,
     Guid FileId,
@@ -60,7 +64,8 @@ public sealed record PhotoDto(
     bool MayDownloadOriginal,
     PhotoCreditDto Credit,
     PhotoExif? Photo,
-    PhotoPositionDto? Position);
+    PhotoPositionDto? Position,
+    bool LocationRemoved);
 
 /// <summary>
 /// Who took a photograph and what may be done with it.

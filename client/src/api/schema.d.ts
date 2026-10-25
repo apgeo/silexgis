@@ -1255,7 +1255,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Change history for an entity (features incl. their subtree); protection-redacted, visibility-gated. */
+        /** Change history for an entity (features incl. their subtree), optionally only the events of one import batch; protection-redacted, visibility-gated. */
         get: operations["historyList"];
         put?: never;
         post?: never;
@@ -10467,6 +10467,7 @@ export interface components {
             contentCreatedAt: null | string;
             photo: null | components["schemas"]["PhotoExif"];
             position: null | components["schemas"]["PhotoPositionDto"];
+            locationRemoved: boolean;
         };
         /** @enum {unknown} */
         FileKind: "image" | "document" | "survey" | "raster" | "vector" | "model" | "other" | "audio" | "video";
@@ -10880,6 +10881,8 @@ export interface components {
             tripDeleted: boolean;
             /** Format: date-time */
             undoneAt: null | string;
+            attachedToFeatureName: null | string;
+            attachedToFeatureDeleted: boolean;
         };
         /** @enum {unknown} */
         ImportBatchMode: "reviewed" | "autoCreated";
@@ -12383,6 +12386,7 @@ export interface components {
             credit: components["schemas"]["PhotoCreditDto"];
             photo: null | components["schemas"]["PhotoExif"];
             position: null | components["schemas"]["PhotoPositionDto"];
+            locationRemoved: boolean;
         };
         PhotoDuplicateGroupDto: {
             sha256: string;
@@ -18952,6 +18956,7 @@ export interface operations {
                 entityId?: string;
                 page?: number;
                 pageSize?: number;
+                importBatchId?: string;
             };
             header?: never;
             path?: never;

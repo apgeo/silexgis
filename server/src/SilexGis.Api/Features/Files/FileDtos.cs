@@ -53,6 +53,12 @@ namespace SilexGis.Api.Features.Files;
 /// a photograph's fix is a position rather than a fact about one. Splitting it from <paramref name="Photo"/> above
 /// is what lets a viewer be shown the camera and not the coordinates.
 /// </param>
+/// <param name="LocationRemoved">
+/// True when <see cref="ContentUrl"/> hands over a copy of the picture with its location data
+/// taken out rather than the stored bytes, so a page can say so beside the picture. It is the
+/// delivery decision itself, not a guess from the position above: a photograph with no fix still
+/// travels as a rewritten copy for these readers.
+/// </param>
 public sealed record FileDto(
     Guid Id,
     Guid DocumentId,
@@ -72,7 +78,8 @@ public sealed record FileDto(
     ConversionState Conversion,
     DateTimeOffset? ContentCreatedAt,
     PhotoExif? Photo,
-    PhotoPositionDto? Position);
+    PhotoPositionDto? Position,
+    bool LocationRemoved);
 
 /// <summary>
 /// Upload limits this installation applies, and how much room the caller has left.
@@ -235,7 +242,8 @@ internal static class FileMapping
             // Gated on the disclosure answer, never on the switch: the switch decides what travels
             // inside the file, and a reader who may not be told where the photo was taken is not
             // told it here either, whichever bytes the address above opens.
-            reach.PositionDisclosable(f.Id) ? PositionOf(f) : null);
+            reach.PositionDisclosable(f.Id) ? PositionOf(f) : null,
+            delivery == FileDelivery.LocationFree);
     }
 
     private static PhotoExif? PhotoExifOf(StoredFile f)

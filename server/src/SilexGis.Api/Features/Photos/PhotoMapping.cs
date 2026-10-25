@@ -71,7 +71,8 @@ internal static class PhotoMapping
             // Gated on the disclosure answer, never on the switch: the switch decides what travels
             // inside the file, and a reader who may not be told where the picture was taken is
             // not told it here either, whichever bytes the address above opens.
-            reach.PositionDisclosable(file.Id) ? PositionOf(file) : null);
+            reach.PositionDisclosable(file.Id) ? PositionOf(file) : null,
+            delivery == FileDelivery.LocationFree);
     }
 
     /// <summary>
