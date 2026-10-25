@@ -2721,7 +2721,11 @@
       "locationNotes": "Note despre locație",
       "caveId": "Peșteră asociată",
       "visibility": "Vizibilitate",
-      "caption": "Legendă"
+      "caption": "Legendă",
+      "title": "Titlu",
+      "file": "Fișier",
+      "role": "Rol",
+      "sortOrder": "Poziția între fișiere"
     },
     "changesOf": "Modificări făcute la {{when}}"
   },

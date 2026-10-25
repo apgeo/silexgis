@@ -2721,7 +2721,11 @@
       "locationNotes": "Location notes",
       "caveId": "Linked cave",
       "visibility": "Visibility",
-      "caption": "Caption"
+      "caption": "Caption",
+      "title": "Title",
+      "file": "File",
+      "role": "Role",
+      "sortOrder": "Position among the files"
     },
     "changesOf": "Changes made {{when}}"
   },

@@ -230,6 +230,12 @@ async function completeResumable(
     throw new ApiError(response.status, codeOf(error));
   }
 
+  // The route also answers bytes a phone staged for its sync upload, which become no document.
+  // This client never opens such a transfer, so a staged answer means the session was not ours.
+  if (!('documentId' in data)) {
+    throw new ApiError(response.status);
+  }
+
   options.onProgress?.(1);
   return { fileId: data.id, documentId: data.documentId };
 }

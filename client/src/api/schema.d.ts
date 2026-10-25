@@ -4271,7 +4271,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Finishes a resumable upload and files the assembled document. */
+        /** Finishes a resumable upload and files the assembled document, or stages its described bytes for a sync upload to adopt. */
         post: operations["fileCompleteUpload"];
         delete?: never;
         options?: never;
@@ -11135,6 +11135,8 @@ export interface components {
             skipped: components["schemas"]["ImportBatchUndoSkippedDto"][];
             /** Format: uuid */
             devicePersonId?: null | string;
+            /** Format: uuid */
+            documentId?: null | string;
         };
         ImportBatchUndoSkippedDto: {
             field: string;
@@ -14134,6 +14136,20 @@ export interface components {
             maxSelection: number;
             portalUrl: string;
         };
+        StagedUploadDto: {
+            /** Format: uuid */
+            id: string;
+            fileName: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            sha256: string;
+            mimeType: string;
+            kind: components["schemas"]["FileKind"];
+            /** Format: date-time */
+            stagedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
         /** Format: binary */
         Stream: string;
         SurveyCaveCreationCapabilitiesDto: {
@@ -14770,6 +14786,41 @@ export interface components {
             /** Format: date-time */
             deletedAt: string;
         };
+        SyncUploadDocumentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            baseRevision?: null | string;
+            /** @default false */
+            deleted: boolean;
+            title?: null | string;
+            description?: null | string;
+            fileName?: null | string;
+            sha256?: null | string;
+            /** Format: int64 */
+            sizeBytes?: null | number;
+            /** Format: uuid */
+            stagedUploadId?: null | string;
+            /** Format: date-time */
+            capturedAt?: null | string;
+            /** Format: uuid */
+            createdByDeviceUserId?: null | string;
+            /** Format: date-time */
+            clientUpdatedAt?: null | string;
+            /** Format: uuid */
+            baseVersionId?: null | string;
+        };
+        SyncUploadDocumentLinkDto: {
+            /** Format: uuid */
+            documentId: string;
+            target: components["schemas"]["SyncLinkTargetDto"];
+            role?: null | components["schemas"]["AttachmentRole"];
+            caption?: null | string;
+            /** Format: int32 */
+            sortOrder?: null | number;
+            /** @default false */
+            deleted: boolean;
+        };
         SyncUploadPersonDto: {
             /** Format: uuid */
             deviceUserId: string;
@@ -14787,6 +14838,8 @@ export interface components {
             rows?: null | components["schemas"]["SyncUploadRowDto"][];
             clientFeatures?: null | string[];
             people?: null | components["schemas"]["SyncUploadPersonDto"][];
+            documents?: null | components["schemas"]["SyncUploadDocumentDto"][];
+            documentLinks?: null | components["schemas"]["SyncUploadDocumentLinkDto"][];
         };
         SyncUploadResultDto: {
             /** Format: uuid */
@@ -14802,6 +14855,8 @@ export interface components {
             conflicts: components["schemas"]["SyncFeatureDto"][];
             duplicates: components["schemas"]["SyncDuplicateDto"][];
             people?: null | components["schemas"]["SyncUploadRowResultDto"][];
+            documents?: null | components["schemas"]["SyncUploadRowResultDto"][];
+            documentLinks?: null | components["schemas"]["SyncUploadRowResultDto"][];
         };
         SyncUploadRowDto: {
             /** Format: uuid */
@@ -16396,6 +16451,10 @@ export interface components {
             chunkBytes: number;
             /** Format: date-time */
             expiresAt: string;
+            stagedForSync: boolean;
+            /** Format: date-time */
+            stagedAt: null | string;
+            sha256: null | string;
         };
         UploadSessionOpenRequest: {
             fileName: string;
@@ -16412,6 +16471,7 @@ export interface components {
             batchId: null | string;
             /** Format: uuid */
             cavingGroupId: null | string;
+            stageForSync?: null | boolean;
         };
         /** @enum {unknown} */
         UploadSource: "interactive" | "archive" | "serverDirectory" | "surveyUpload";
@@ -27515,6 +27575,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StagedUploadDto"];
+                };
+            };
             /** @description Created */
             201: {
                 headers: {
