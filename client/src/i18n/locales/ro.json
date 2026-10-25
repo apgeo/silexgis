@@ -1143,7 +1143,8 @@
     "batchSourceValues": {
       "interactive": "Browser",
       "archive": "Arhivă",
-      "serverDirectory": "Director pe server"
+      "serverDirectory": "Director pe server",
+      "surveyUpload": "Dispozitiv de teren"
     },
     "batchStatus": "Stare",
     "batchStatusValues": {

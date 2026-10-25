@@ -1143,7 +1143,8 @@
     "batchSourceValues": {
       "interactive": "Browser",
       "archive": "Archive",
-      "serverDirectory": "Server directory"
+      "serverDirectory": "Server directory",
+      "surveyUpload": "Field device"
     },
     "batchStatus": "Status",
     "batchStatusValues": {
