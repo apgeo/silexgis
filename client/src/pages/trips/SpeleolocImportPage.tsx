@@ -541,6 +541,7 @@ export default function SpeleolocImportPage() {
             onChange={changeOptions}
             deviceUsers={data?.deviceUsers ?? []}
             unmappedDeviceUsers={data?.unmappedDeviceUsers ?? []}
+            knownLinks={data?.knownLinks ?? {}}
             caversNotOnRoster={data?.caversNotOnRoster ?? []}
           />
         </Flex>

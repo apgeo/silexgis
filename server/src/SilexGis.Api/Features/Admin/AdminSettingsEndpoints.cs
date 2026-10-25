@@ -58,6 +58,9 @@ public static class AdminSettingsEndpoints
         admin.MapPut("/announcements", SaveAnnouncementsAsync)
             .WithValidation<AnnouncementSettingsDto>()
             .WithSummary("Saves whether an announcement to a caving group may cost money, and how much in a day.");
+        admin.MapPut("/sync", SaveSyncAsync)
+            .WithValidation<SyncSettingsDto>()
+            .WithSummary("Saves what the installation offers phones: the people directory and whom it lists, trip conversion, and how long waiting bytes are kept.");
         admin.MapPut("/photo-libraries", SavePhotoLibrariesAsync)
             .WithValidation<PhotoLibrarySuspensionDto>()
             .WithSummary(
@@ -213,6 +216,40 @@ public static class AdminSettingsEndpoints
                 SmsTwoFactorEnabled = request.SmsTwoFactorEnabled,
                 TwoFactorCodeLifetimeMinutes = request.TwoFactorCodeLifetimeMinutes,
                 TwoFactorResendIntervalSeconds = request.TwoFactorResendIntervalSeconds,
+            },
+            ct);
+
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+    }
+
+    private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveSyncAsync(
+        SyncSettingsDto request,
+        IAccessContextAccessor accessAccessor,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        await settings.SaveAsync(
+            AppSettingSections.Sync,
+            new SyncSettings
+            {
+                PeopleDirectoryEnabled = request.PeopleDirectoryEnabled,
+                PeopleDirectoryScope = request.PeopleDirectoryScope,
+                ConvertTripsWithProblems = request.ConvertTripsWithProblems,
+                StagedUploadRetentionDays = request.StagedUploadRetentionDays,
+                RejectedHeldBytesRetentionDays = request.RejectedHeldBytesRetentionDays,
             },
             ct);
 
@@ -538,6 +575,7 @@ public static class AdminSettingsEndpoints
         var notifications = await settings.GetNotificationsAsync(ct);
         var announcements = await settings.GetAnnouncementsAsync(ct);
         var photoLibraries = await settings.GetPhotoLibrarySuspensionAsync(ct);
+        var sync = await settings.GetSyncAsync(ct);
 
         return new AdminSettingsDto(
             new MailSettingsDto(
@@ -588,6 +626,12 @@ public static class AdminSettingsEndpoints
                 announcements.PaidChannelsEnabled, announcements.EffectiveDailyPaidMessageCap),
             new PhotoLibrarySuspensionDto(
                 photoLibraries.ImmichSuspended, photoLibraries.PhotoPrismSuspended),
+            new SyncSettingsDto(
+                sync.PeopleDirectoryEnabled,
+                sync.PeopleDirectoryScope,
+                sync.ConvertTripsWithProblems,
+                sync.StagedUploadRetentionDays,
+                sync.RejectedHeldBytesRetentionDays),
             await emailDelivery.IsConfiguredAsync(ct),
             await smsDelivery.IsConfiguredAsync(ct));
     }

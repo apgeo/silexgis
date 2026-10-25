@@ -202,3 +202,31 @@ device reads them; this table is the vocabulary.
 beside it; neither is part of this row, on any reach. Whether the file itself is handed over with its
 location inside it is the `reach` member's business, decided by the server's location rules — a device
 does not decide it and cannot ask for it.
+
+## 8. People: the phone's users
+
+A phone's own users are recorded on the server as **one phone user each**, keyed by the phone's
+identifier, and linked to at most one caver. One caver may be several phone users (the same person on
+two phones).
+
+| On the phone | In an upload's `people` item | On the server |
+|---|---|---|
+| `users.uuid` | `deviceUserId` | The phone user's identifier, adopted verbatim |
+| `users.username` | `username` | Kept as last sent |
+| `users.first_name`, `users.last_name` | `firstName`, `lastName` | Kept as last sent |
+| The caver chosen from the directory | `caverId` | The link, unless somebody keeping the roster made one — that one stands |
+
+| In the directory answer | From |
+|---|---|
+| `people[].id` | The caver's identifier |
+| `people[].fullName`, `shortName` | The roster's names (an account holder's own label wins) |
+| `people[].hasAccount`, `isMe` | Whether the caver signs in here, and whether it is the caller |
+| `links[]` | Each phone user this account has sent, and the caver it stands linked to |
+
+**What never travels here:** a caver's e-mail address, telephone number and roster remarks, and any
+caver the directory does not list for the account. The archive import's review uses the same links:
+an archive's phone user with a link is reviewed as already mapped — the review's answer carries those
+links as `knownLinks`, and the review screen shows each as the phone user's choice — and the
+reviewer's choice is written back as the phone user's link (never over one made by somebody keeping
+the roster, and never to a caver no longer on the roster).
+

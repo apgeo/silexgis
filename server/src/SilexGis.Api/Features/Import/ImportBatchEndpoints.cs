@@ -162,6 +162,7 @@ public static class ImportBatchEndpoints
                 {
                     var feature = i.FeatureId is { } fid ? visible.GetValueOrDefault(fid) : null;
                     var trip = i.TripLogId is { } tid ? trips.GetValueOrDefault(tid) : null;
+                    var attached = i.AttachedToFeatureId is { } aid ? visible.GetValueOrDefault(aid) : null;
                     return new ImportBatchItemDto(
                         i.Id,
                         i.FeatureId,
@@ -176,7 +177,9 @@ public static class ImportBatchEndpoints
                         i.TripLogId,
                         trip?.Title ?? (recordsTripTitles ? RecordedTitle(i.SourceProperties) : null),
                         trip?.DeletedAt is not null,
-                        i.UndoneAt);
+                        i.UndoneAt,
+                        attached?.Name,
+                        attached?.DeletedAt is not null);
                 })
             ]));
     }
@@ -256,7 +259,8 @@ public static class ImportBatchEndpoints
                     r.Outcome,
                     r.Reason,
                     [.. r.Applied],
-                    [.. r.Skipped.Select(s => new ImportBatchUndoSkippedDto(s.Field, s.Reason))]))];
+                    [.. r.Skipped.Select(s => new ImportBatchUndoSkippedDto(s.Field, s.Reason))],
+                    r.DevicePersonId))];
             }
             catch (SyncUndoException e)
             {
@@ -316,6 +320,17 @@ public static class ImportBatchEndpoints
             return ApiProblems.NotFound("import_batch.not_found");
         }
 
+        // The row an updating line changed is named only if the caller may see it, as in a batch's
+        // own detail.
+        var attached = item.AttachedToFeatureId is { } aid
+            ? await db.Features.AsNoTracking()
+                .IgnoreQueryFilters()
+                .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+                .Where(f => f.Id == aid)
+                .Select(f => new { f.Name, f.DeletedAt })
+                .FirstOrDefaultAsync(ct)
+            : null;
+
         var names = await GeofileNamesAsync(db, [batch], ct);
         return TypedResults.Ok(new ImportProvenanceDto(
             StagedImportEndpoints.ToDto(
@@ -336,7 +351,9 @@ public static class ImportBatchEndpoints
                 null,
                 null,
                 false,
-                item.UndoneAt),
+                item.UndoneAt,
+                attached?.Name,
+                attached?.DeletedAt is not null),
             ParseProperties(item.SourceProperties)));
     }
 
@@ -421,6 +438,7 @@ public sealed record ImportBatchUndoSkippedDto(string Field, string Reason);
 /// </param>
 /// <param name="Applied">The fields of an edited row put back.</param>
 /// <param name="Skipped">The fields of an edited row left as they are.</param>
+/// <param name="DevicePersonId">For a line about one of the phone's users rather than a row: that phone user.</param>
 public sealed record ImportBatchUndoItemDto(
     long ItemId,
     Guid? FeatureId,
@@ -428,7 +446,8 @@ public sealed record ImportBatchUndoItemDto(
     string Outcome,
     string? Reason,
     string[] Applied,
-    ImportBatchUndoSkippedDto[] Skipped);
+    ImportBatchUndoSkippedDto[] Skipped,
+    Guid? DevicePersonId = null);
 
 /// <summary>
 /// The answer to taking a confirmation back: the batch as it now stands, and for a phone upload

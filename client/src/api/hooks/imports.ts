@@ -66,6 +66,9 @@ export type ImportPreviewRequest = components['schemas']['ImportPreviewRequest']
 export type ImportSession = components['schemas']['ImportSessionDto'];
 export type ImportCommitResult = components['schemas']['ImportCommitResultDto'];
 export type ImportBatch = components['schemas']['ImportBatchDto'];
+export type ImportBatchItem = components['schemas']['ImportBatchItemDto'];
+export type ImportBatchUndoItem = components['schemas']['ImportBatchUndoItemDto'];
+export type ImportBatchRevertRequest = components['schemas']['ImportBatchRevertRequest'];
 export type ImportFailure = components['schemas']['ImportFailureDto'];
 export type ImportBatchDetail = components['schemas']['ImportBatchDetailDto'];
 export type ImportProvenance = components['schemas']['ImportProvenanceDto'];
@@ -685,11 +688,21 @@ export function useImportBatch(id: string | undefined) {
   });
 }
 
+/**
+ * Takes an import back. `itemIds` takes back only those lines (a phone upload only) and `force`
+ * puts back fields that were changed after the upload. The answer says, line by line, what was
+ * put back and what was left; it is empty for an import that is undone as one unit.
+ */
 export function useRevertImportBatch() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(api.POST('/api/v1/import-batches/{id}/revert', { params: { path: { id } } })),
+    mutationFn: ({ id, itemIds, force }: { id: string } & Partial<ImportBatchRevertRequest>) =>
+      unwrap(
+        api.POST('/api/v1/import-batches/{id}/revert', {
+          params: { path: { id } },
+          body: itemIds || force ? { itemIds: itemIds ?? null, force: force ?? null } : undefined,
+        }),
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
       void queryClient.invalidateQueries({ queryKey: ['features'] });
@@ -697,6 +710,8 @@ export function useRevertImportBatch() {
       // An undo deletes the trips a batch created, so the list they leave and the list of
       // deleted trips they arrive on are both behind.
       void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+      // A phone upload's undo writes history of its own.
+      void queryClient.invalidateQueries({ queryKey: ['history'] });
     },
   });
 }

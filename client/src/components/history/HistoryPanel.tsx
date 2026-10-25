@@ -1,26 +1,58 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { LockOutlined, UndoOutlined } from '@ant-design/icons';
-import { App, Card, Empty, Spin, Table, Tag, Timeline, Tooltip, Typography } from 'antd';
+import { Link } from 'react-router-dom';
+import { Alert, App, Card, Empty, Spin, Table, Tag, Timeline, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
 import dayjs from 'dayjs';
 import './HistoryPanel.css';
 import { useTranslation } from 'react-i18next';
-import { useHistory, type HistoryEvent } from '../../api/hooks.ts';
+import {
+  useHistory,
+  useRestoreFromHistory,
+  type HistoryEvent,
+  type HistoryRestoreResult,
+} from '../../api/hooks.ts';
 import {
   changeRows,
+  entityLabelKey,
   formatValue,
+  groupByChangeSet,
+  humanize,
   isGeometrySummary,
   restorableProps,
+  restoreRequest,
   rosterTimesAct,
+  serverRestorableProps,
   toWriteField,
   type HistoryFieldRow,
+  type HistoryGroup,
 } from './historyModel.ts';
 
-/** Enables per-field restore for updated rows of the given CLR entity type (e.g. "Cave"). */
-export interface HistoryRestore {
+/**
+ * Enables per-field restore for updated rows of the given audit entity type (e.g. "Feature:Cave").
+ * The panel puts the fields back through the server unless the host composes the write itself.
+ */
+export type HistoryRestore = ServerHistoryRestore | ClientHistoryRestore;
+
+/**
+ * A feature's row: the server puts the fields back as an ordinary edit and says which it wrote
+ * and which it left, so the screen holds no copy of the rule that decides.
+ */
+export interface ServerHistoryRestore {
+  entityType: string;
+  /** Called once the server has written something — for a host that keeps its own picture of the feature. */
+  onRestored?: (result: HistoryRestoreResult) => void;
+}
+
+/** A row the server does not restore (a trip report): the host composes the write from the old values. */
+export interface ClientHistoryRestore {
   entityType: string;
   onRestore: (event: HistoryEvent, props: string[]) => Promise<void> | void;
+}
+
+function composesItself(handler: HistoryRestore): handler is ClientHistoryRestore {
+  return 'onRestore' in handler;
 }
 
 /**
@@ -62,10 +94,15 @@ export default function HistoryPanel({
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('history.empty')} />
       ) : (
         <Timeline
-          items={events.map((event) => ({
-            key: event.id,
-            color: ACTION_COLOR[event.action] ?? 'gray',
-            content: <HistoryEventItem event={event} restore={restore} />,
+          items={groupByChangeSet(events).map((group) => ({
+            key: group.key,
+            color: ACTION_COLOR[group.events[0].action] ?? 'gray',
+            content:
+              group.events.length > 1 ? (
+                <HistoryGroupItem group={group} restore={restore} />
+              ) : (
+                <HistoryEventItem event={group.events[0]} restore={restore} />
+              ),
           }))}
         />
       )}
@@ -83,10 +120,82 @@ export default function HistoryPanel({
   );
 }
 
-function HistoryEventItem({ event, restore }: { event: HistoryEvent; restore?: HistoryRestoreProp }) {
+const SOURCE_COLOR: Record<string, string> = {
+  deviceSync: 'purple',
+  fileImport: 'geekblue',
+  speleolocArchive: 'cyan',
+  restore: 'orange',
+  undo: 'orange',
+  reviewDecision: 'gold',
+};
+
+/** Where a change came from, and — when it belongs to an import — a way to the import it is part of. */
+function SourceBadge({ event }: { event: HistoryEvent }) {
+  const { t } = useTranslation();
+  if (!event.source) {
+    // History from before the source was recorded: say nothing rather than guess.
+    return null;
+  }
+  return (
+    <>
+      <Tag color={SOURCE_COLOR[event.source]} data-testid="history-source">
+        {t(`history.source.${event.source}`, { defaultValue: event.source })}
+      </Tag>
+      {event.importBatchId && (
+        <Link
+          to={`/geodata?tab=batches&batch=${event.importBatchId}`}
+          data-testid="history-batch-link"
+          style={{ marginInlineEnd: 8 }}
+        >
+          {t('history.openBatch')}
+        </Link>
+      )}
+    </>
+  );
+}
+
+const timeOf = (event: HistoryEvent) => dayjs(event.at).format('YYYY-MM-DD HH:mm');
+
+/** Several events one action wrote: who and when once, with each event's own changes under it. */
+function HistoryGroupItem({ group, restore }: { group: HistoryGroup<HistoryEvent>; restore?: HistoryRestoreProp }) {
+  const { t } = useTranslation();
+  const first = group.events[0];
+  return (
+    <div data-testid="history-change-set">
+      <Typography.Text>
+        <SourceBadge event={first} />
+        {first.userName ?? t('history.systemUser')}
+        {' · '}
+        <Typography.Text type="secondary">{timeOf(first)}</Typography.Text>
+        {' · '}
+        <Typography.Text type="secondary">{t('history.changesInSet', { count: group.events.length })}</Typography.Text>
+      </Typography.Text>
+      <div style={{ marginInlineStart: 8, paddingInlineStart: 12, borderInlineStart: '2px solid rgba(128,128,128,0.3)' }}>
+        {group.events.map((event) => (
+          <div key={event.id} style={{ marginTop: 8 }}>
+            <HistoryEventItem event={event} restore={restore} grouped />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HistoryEventItem({
+  event,
+  restore,
+  grouped = false,
+}: {
+  event: HistoryEvent;
+  restore?: HistoryRestoreProp;
+  /** Inside a change set, whose header already says who, when and from where. */
+  grouped?: boolean;
+}) {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const restoreOnServer = useRestoreFromHistory();
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<HistoryRestoreResult | null>(null);
 
   // An entry that records an act is worded as one; only a real set of changed fields is
   // drawn as a table of before and after.
@@ -96,16 +205,31 @@ function HistoryEventItem({ event, restore }: { event: HistoryEvent; restore?: H
   const handler = event.action === 'updated'
     ? handlers.find((h) => h.entityType === event.entityType)
     : undefined;
-  const restorable = handler ? restorableProps(rows) : [];
+  const restorable = !handler ? [] : composesItself(handler) ? restorableProps(rows) : serverRestorableProps(rows);
 
   const doRestore = async (props: string[]) => {
     if (!handler) {
       return;
     }
     setRestoring(props.join(',') || '*');
+    setOutcome(null);
     try {
-      await handler.onRestore(event, props);
-      message.success(t('history.restored'));
+      if (composesItself(handler)) {
+        await handler.onRestore(event, props);
+        message.success(t('history.restored'));
+      } else {
+        const result = await restoreOnServer.mutateAsync(restoreRequest(event, props));
+        if (result.applied.length > 0) {
+          handler.onRestored?.(result);
+        }
+        if (result.skipped.length === 0) {
+          message.success(t('history.restored'));
+        } else {
+          // A field left as it is is said where the person is looking, with why — a toast
+          // would be gone before the reason could be read.
+          setOutcome(result);
+        }
+      }
     } catch {
       message.error(t('common.saveFailed'));
     } finally {
@@ -123,11 +247,18 @@ function HistoryEventItem({ event, restore }: { event: HistoryEvent; restore?: H
     <div>
       <Typography.Text>
         <Tag color={ACTION_COLOR[event.action] ?? 'default'}>{t(`history.action.${event.action}`, { defaultValue: event.action })}</Tag>
-        <Typography.Text strong>{t(`history.entity.${event.entityType}`, { defaultValue: event.entityType })}</Typography.Text>
-        {' · '}
-        {event.userName ?? t('history.systemUser')}
-        {' · '}
-        <Typography.Text type="secondary">{dayjs(event.at).format('YYYY-MM-DD HH:mm')}</Typography.Text>
+        <Typography.Text strong>
+          {t(`history.entity.${entityLabelKey(event.entityType)}`, { defaultValue: event.entityType })}
+        </Typography.Text>
+        {!grouped && (
+          <>
+            {' · '}
+            <SourceBadge event={event} />
+            {event.userName ?? t('history.systemUser')}
+            {' · '}
+            <Typography.Text type="secondary">{timeOf(event)}</Typography.Text>
+          </>
+        )}
       </Typography.Text>
 
       {act !== null && (
@@ -210,12 +341,33 @@ function HistoryEventItem({ event, restore }: { event: HistoryEvent; restore?: H
           {t('history.restoreAll')}
         </Button>
       )}
+
+      {outcome && (
+        <Alert
+          type="warning"
+          showIcon
+          closable
+          onClose={() => setOutcome(null)}
+          style={{ marginTop: 6 }}
+          data-testid="history-restore-outcome"
+          title={
+            outcome.applied.length > 0
+              ? t('history.restoredPartly', { count: outcome.applied.length })
+              : t('history.restoredNothing')
+          }
+          description={
+            <ul style={{ margin: 0, paddingInlineStart: 18 }}>
+              {outcome.skipped.map((skip) => (
+                <li key={skip.field}>
+                  <Typography.Text strong>{label(skip.field)}</Typography.Text>
+                  {' — '}
+                  {t(`history.skipReason.${skip.reason}`, { defaultValue: skip.reason })}
+                </li>
+              ))}
+            </ul>
+          }
+        />
+      )}
     </div>
   );
-}
-
-/** "ClosestAddress" → "Closest address" — a readable fallback when no i18n key exists. */
-function humanize(prop: string): string {
-  const spaced = prop.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
 }

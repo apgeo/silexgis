@@ -6,16 +6,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { ImportBatch } from '../../api/hooks.ts';
 
-const { batchesSpy, detailSpy, configSpy } = vi.hoisted(() => ({
+const { batchesSpy, detailSpy, configSpy, revertSpy, historySpy } = vi.hoisted(() => ({
   batchesSpy: vi.fn(),
   detailSpy: vi.fn(),
   configSpy: vi.fn(),
+  revertSpy: vi.fn(),
+  historySpy: vi.fn(),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
   useImportBatches: () => batchesSpy(),
   useImportBatch: (id: string | undefined) => detailSpy(id),
-  useRevertImportBatch: () => ({ mutateAsync: vi.fn() }),
+  useRevertImportBatch: () => ({ mutateAsync: revertSpy }),
+  useBatchHistory: (id: string | undefined, batch: string) => historySpy(id, batch),
   useTripLogConfig: () => configSpy(),
 }));
 
@@ -69,6 +72,8 @@ beforeEach(() => {
   batchesSpy.mockReset();
   detailSpy.mockReset().mockReturnValue({ data: undefined, isLoading: false });
   configSpy.mockReset().mockReturnValue({ data: { deletedRetentionDays: 30 } });
+  revertSpy.mockReset().mockResolvedValue({ batch: {}, items: [] });
+  historySpy.mockReset().mockReturnValue({ data: { items: [] }, isLoading: false });
 });
 
 describe('the imports this account made', () => {
@@ -177,5 +182,93 @@ describe('the imports this account made', () => {
     // Removed for good: its name, and nowhere to go.
     expect(within(drawer).getByText('A treia tura')).toBeTruthy();
     expect(within(drawer).queryByRole('link', { name: 'A treia tura' })).toBeNull();
+  });
+
+  describe('a phone upload', () => {
+    const BATCH_ID = 'aaaaaaaa-0000-0000-0000-000000000009';
+    const ROW = 'eeeeeeee-0000-0000-0000-000000000001';
+
+    function openUpload(over: Partial<ImportBatch> = {}) {
+      const upload = batch({ id: BATCH_ID, source: 'deviceSync', ...over });
+      detailSpy.mockReturnValue({
+        isLoading: false,
+        data: {
+          batch: upload,
+          items: [
+            {
+              id: 41,
+              featureId: null,
+              attachedToFeatureId: ROW,
+              attachedToFeatureName: 'Pestera Test',
+              attachedToFeatureDeleted: false,
+              action: 'attach',
+              undoneAt: null,
+            },
+          ],
+        },
+      });
+      show([upload]);
+      fireEvent.click(screen.getByText('Phone upload'));
+      return screen.getByTestId('import-batch-detail');
+    }
+
+    it('names the row an updating line changed instead of saying nothing was created', () => {
+      const drawer = openUpload();
+      expect(within(drawer).getByRole('link', { name: 'Pestera Test' }).getAttribute('href')).toBe(`/features/${ROW}`);
+      expect(within(drawer).queryByText('Nothing created')).toBeNull();
+    });
+
+    it('undoes the whole upload, or the whole upload past what changed since, or one row', () => {
+      const drawer = openUpload();
+      const confirm = async (button: HTMLElement) => {
+        fireEvent.click(button);
+        const pop = await screen.findAllByRole('tooltip');
+        fireEvent.click(within(pop[pop.length - 1]).getByRole('button', { name: /OK/ }));
+      };
+
+      return (async () => {
+        await confirm(within(drawer).getByTestId('upload-undo'));
+        expect(revertSpy).toHaveBeenLastCalledWith({ id: BATCH_ID });
+
+        await confirm(within(drawer).getByTestId('upload-undo-anyway'));
+        expect(revertSpy).toHaveBeenLastCalledWith({ id: BATCH_ID, force: true });
+
+        await confirm(within(drawer).getByTestId('upload-undo-row'));
+        expect(revertSpy).toHaveBeenLastCalledWith({ id: BATCH_ID, itemIds: [41] });
+      })();
+    });
+
+    it('offers no undo to somebody who may not take the upload back', () => {
+      const drawer = openUpload({ canRevert: false });
+      expect(within(drawer).queryByTestId('upload-undo')).toBeNull();
+      expect(within(drawer).queryByTestId('upload-undo-row')).toBeNull();
+      // Reading what it changed is not an undo and stays.
+      expect(within(drawer).getByRole('link', { name: 'Pestera Test' })).toBeTruthy();
+    });
+
+    it('says, line by line, what an undo left and why', async () => {
+      revertSpy.mockResolvedValue({
+        batch: {},
+        items: [
+          {
+            itemId: 41,
+            featureId: ROW,
+            change: 'updated',
+            outcome: 'partly',
+            reason: null,
+            applied: ['Description'],
+            skipped: [{ field: 'Name', reason: 'superseded' }],
+          },
+        ],
+      });
+      const drawer = openUpload();
+      fireEvent.click(within(drawer).getByTestId('upload-undo'));
+      const pop = await screen.findAllByRole('tooltip');
+      fireEvent.click(within(pop[pop.length - 1]).getByRole('button', { name: /OK/ }));
+
+      const result = await within(drawer).findByTestId('upload-undo-result');
+      expect(result.textContent).toContain('Partly undone');
+      expect(result.textContent).toContain('Name was left: it has been changed since');
+    });
   });
 });

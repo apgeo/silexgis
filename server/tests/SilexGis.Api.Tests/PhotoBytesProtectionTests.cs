@@ -133,6 +133,7 @@ public sealed class PhotoBytesProtectionTests : IAsyncLifetime, IDisposable, ICl
         // The whole picture too, and the response says so — but the record's position is still
         // not printed beside it: the switch is about what is inside the file.
         seen.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeTrue();
+        seen.GetProperty("locationRemoved").GetBoolean().ShouldBeTrue();
         seen.GetProperty("position").ValueKind.ShouldBe(JsonValueKind.Null);
 
         var copy = await ContentBytesAsync(reader, seen);
@@ -147,6 +148,7 @@ public sealed class PhotoBytesProtectionTests : IAsyncLifetime, IDisposable, ICl
         // everybody gets.
         var held = await ReadJsonAsync(await owner.GetAsync($"/api/v1/files/{fileId}"));
         held.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeTrue();
+        held.GetProperty("locationRemoved").GetBoolean().ShouldBeFalse();
         held.GetProperty("position").ValueKind.ShouldBe(JsonValueKind.Object);
         Sha(await ContentBytesAsync(owner, held)).ShouldBe(Sha(uploaded));
     }
@@ -272,6 +274,8 @@ public sealed class PhotoBytesProtectionTests : IAsyncLifetime, IDisposable, ICl
 
         var seen = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{fileId}"));
         seen.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeFalse();
+        // Withheld is not "location removed": no copy exists, so the page must not claim one.
+        seen.GetProperty("locationRemoved").GetBoolean().ShouldBeFalse();
         (await reader.GetAsync(seen.GetProperty("contentUrl").GetString()))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
 

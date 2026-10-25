@@ -233,6 +233,42 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable, IClassFixtur
     // ---- merge: the remedy the RESTRICT points at ----
 
     /// <summary>
+    /// A phone user linked to the duplicate is linked to the survivor afterwards, under the same
+    /// source, and deleting a person leaves their phone users unlinked rather than gone.
+    /// </summary>
+    [Fact]
+    public async Task Merging_moves_phone_users_to_the_survivor_and_deleting_unlinks_them()
+    {
+        var survivorId = await CreateCaverAsync($"Phone Survivor {suffix}");
+        var duplicateId = await CreateCaverAsync($"Phone Duplicate {suffix}");
+        var leavingId = await CreateCaverAsync($"Phone Leaving {suffix}");
+        var onDuplicate = Guid.CreateVersion7();
+        var onLeaving = Guid.CreateVersion7();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.DevicePersons.AddRange(
+                new DevicePerson { DeviceUserId = onDuplicate, Username = "dup", CaverId = duplicateId, LinkSource = DevicePersonLinkSource.Administrator },
+                new DevicePerson { DeviceUserId = onLeaving, Username = "leaving", CaverId = leavingId, LinkSource = DevicePersonLinkSource.Device });
+            await db.SaveChangesAsync();
+        }
+
+        var merged = await keeper.PostAsJsonAsync($"/api/v1/cavers/{survivorId}/merge", new { sourceCaverId = duplicateId });
+        merged.StatusCode.ShouldBe(HttpStatusCode.OK, await merged.Content.ReadAsStringAsync());
+        (await admin.DeleteAsync($"/api/v1/cavers/{leavingId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var moved = await db.DevicePersons.AsNoTracking().SingleAsync(p => p.DeviceUserId == onDuplicate);
+            moved.CaverId.ShouldBe(survivorId);
+            moved.LinkSource.ShouldBe(DevicePersonLinkSource.Administrator);
+            var unlinked = await db.DevicePersons.AsNoTracking().SingleAsync(p => p.DeviceUserId == onLeaving);
+            unlinked.CaverId.ShouldBeNull();
+        }
+    }
+
+    /// <summary>
     /// The refusal names the trips the caller may read and says of everything else only that
     /// there is something: a trip they may not read and a deleted trip are neither named nor
     /// counted. Somebody who reads every trip is named the hidden one — so its absence above is

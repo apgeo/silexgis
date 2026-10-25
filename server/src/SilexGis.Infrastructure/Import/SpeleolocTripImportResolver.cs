@@ -63,6 +63,13 @@ public sealed class SpeleolocTripImportResolver(SilexGisDbContext db)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // The links the installation already holds for these phone users — made by a phone, by
+        // somebody keeping the roster, or by an earlier import — stand in for a choice the
+        // reviewer has not made, so a phone user mapped once is not asked about again. The
+        // reviewer's own choice still wins.
+        var known = await DevicePersonMapping.LinksOfAsync(
+            db, [.. points.Where(p => p.DeviceUserId is not null).Select(p => p.DeviceUserId!.Value).Distinct()], ct);
+
         // The trip's tracking configuration is used only when it is a configuration of the cave the
         // scans are being placed in. Its reference station and its depth filter are station
         // vocabulary, held under the tracking row's own cave anchor and withheld by the live surface
@@ -92,7 +99,7 @@ public sealed class SpeleolocTripImportResolver(SilexGisDbContext db)
         foreach (var point in points)
         {
             var deviceUser = point.DeviceUserId?.ToString();
-            var caverId = CaverOf(options, deviceUser);
+            var caverId = CaverOf(options, deviceUser) ?? KnownCaverOf(known, deviceUser);
 
             if (model is null)
             {
@@ -160,14 +167,26 @@ public sealed class SpeleolocTripImportResolver(SilexGisDbContext db)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        return new SpeleolocImportResolutionSet(resolutions, deviceUsers, unmapped, model is not null);
+        return new SpeleolocImportResolutionSet(
+            resolutions,
+            deviceUsers,
+            unmapped,
+            known.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
+            model is not null);
     }
 
     /// <summary>
-    /// Who this scan is about, out of the mapping the reviewer filled in by hand. There is no
-    /// second path: a device account is a login on a phone, and nothing here turns one into a
-    /// person by matching a name, an email or a device identifier. An account nobody mapped
-    /// produces no caver, and every scan it made waits.
+    /// Who this scan is about, out of the link the installation holds for its phone user — a
+    /// statement somebody made, never an inference.
+    /// </summary>
+    private static Guid? KnownCaverOf(Dictionary<Guid, Guid> known, string? deviceUser) =>
+        Guid.TryParse(deviceUser, out var id) && known.TryGetValue(id, out var caverId) ? caverId : null;
+
+    /// <summary>
+    /// Who this scan is about, out of the mapping the reviewer chose. Nothing here or in the link
+    /// behind it turns a phone user into a person by matching a name, an email or a device
+    /// identifier: a device account is a login on a phone, and one nobody has mapped produces no
+    /// caver, and every scan it made waits.
     /// </summary>
     private static Guid? CaverOf(SpeleolocImportOptions options, string? deviceUser)
     {

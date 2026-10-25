@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using FluentValidation;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
@@ -102,14 +103,47 @@ public sealed record SyncUploadRowDto(
 /// written rather than after.
 /// </param>
 /// <param name="Rows">
-/// In dependency order: a cave before its entrances, an area before the places inside it. They
-/// are applied in the order given, so a row whose container is created earlier in the same batch
-/// finds it.
+/// The feature rows, in dependency order: a cave before its entrances, an area before the places
+/// inside it. They are applied in the order given, so a row whose container is created earlier in
+/// the same batch finds it. Optional since an upload can carry other sections instead; a request
+/// must carry at least one item in some section.
 /// </param>
+/// <param name="ClientFeatures">
+/// The protocol behaviours this device understands beyond the first contract, by name. A server
+/// only ever answers in a way a device opted into here, so a build that predates a behaviour is
+/// never handed an answer it would misread. Values this server does not recognise are kept and
+/// otherwise ignored, exactly as a device ignores members of an answer it does not recognise.
+/// </param>
+/// <param name="People">
+/// The phone's own users, as the phone describes them, each optionally linked to a caver the
+/// people directory listed. Applied after the feature rows.
+/// </param>
+/// <remarks>
+/// Each array is a section, applied in a fixed order whatever order the arrays sit in here —
+/// feature rows first — and answered in the array of the same name.
+/// </remarks>
 public sealed record SyncUploadRequest(
     Guid BatchId,
     int ContractVersion,
-    IReadOnlyList<SyncUploadRowDto> Rows);
+    IReadOnlyList<SyncUploadRowDto>? Rows = null,
+    IReadOnlyList<string>? ClientFeatures = null,
+    IReadOnlyList<SyncUploadPersonDto>? People = null);
+
+/// <summary>One of the phone's own users, as the phone describes them.</summary>
+/// <param name="DeviceUserId">The phone's identifier for this user, adopted verbatim and never translated.</param>
+/// <param name="Username">The user name the phone shows.</param>
+/// <param name="CaverId">
+/// The caver this user is, chosen from the people directory; absent or null says nothing about
+/// the link, so a phone that has not been told leaves an existing link as it stands. A caver the
+/// directory does not list for this account is refused, and a link somebody made in the browser
+/// is kept whatever a phone sends — the directory's <c>links</c> say what stands.
+/// </param>
+public sealed record SyncUploadPersonDto(
+    Guid DeviceUserId,
+    string Username,
+    string? FirstName = null,
+    string? LastName = null,
+    Guid? CaverId = null);
 
 /// <summary>What became of one uploaded row.</summary>
 /// <param name="Revision">
@@ -154,6 +188,11 @@ public sealed record SyncUploadRowResultDto(
 /// and the device is expected to read it the same way: the row changed, and re-reading it is how
 /// to find out what to.
 /// </remarks>
+/// <param name="People">
+/// What became of each phone user the upload described, in the per-row answer shape; present only
+/// when the upload carried the section, so an upload of feature rows alone is answered exactly as
+/// it always was.
+/// </param>
 /// <param name="Duplicates">
 /// What was already here, near a row this batch created. A report and never a verdict: every row
 /// listed was written, and its entry in <c>Rows</c> says so. It is here because a device is
@@ -169,7 +208,9 @@ public sealed record SyncUploadResultDto(
     int Refused,
     IReadOnlyList<SyncUploadRowResultDto> Rows,
     IReadOnlyList<SyncFeatureDto> Conflicts,
-    IReadOnlyList<SyncDuplicateDto> Duplicates);
+    IReadOnlyList<SyncDuplicateDto> Duplicates,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<SyncUploadRowResultDto>? People = null);
 
 /// <summary>One created row and what it landed next to.</summary>
 public sealed record SyncDuplicateDto(Guid Id, IReadOnlyList<SyncDuplicateCandidateDto> Nearby);
@@ -196,16 +237,27 @@ public sealed record SyncDuplicateCandidateDto(
 
 public sealed class SyncUploadRequestValidator : AbstractValidator<SyncUploadRequest>
 {
+    private const int MaxClientFeatures = 16;
+    private const int MaxClientFeatureLength = 64;
+
     public SyncUploadRequestValidator()
     {
         RuleFor(x => x.BatchId).NotEmpty();
-        RuleFor(x => x.Rows).NotNull();
 
-        // The ceiling is announced rather than discovered, so the validator asks the same source
-        // the capabilities endpoint answers from instead of restating a number beside it.
-        RuleFor(x => x.Rows)
-            .Must(rows => rows is null || rows.Count > 0)
-            .WithMessage("An upload carries at least one row.");
+        // Counted over every section, the same way the ceiling is: an upload is empty only when
+        // no array carries anything. The ceiling itself is checked by the handler against the
+        // value the capabilities endpoint announces, rather than restated as a number here.
+        RuleFor(x => x)
+            .Must(request => SyncUploadSections.ItemCount(request) > 0)
+            .OverridePropertyName(nameof(SyncUploadRequest.Rows))
+            .WithMessage("An upload carries at least one item.");
+
+        // Named behaviours, not free text: bounded so the list kept on the batch stays a list of
+        // names whatever a client sends.
+        RuleFor(x => x.ClientFeatures)
+            .Must(features => features is null || features.Count <= MaxClientFeatures)
+            .WithMessage($"An upload names at most {MaxClientFeatures} client features.");
+        RuleForEach(x => x.ClientFeatures).NotEmpty().MaximumLength(MaxClientFeatureLength);
 
         // A batch is applied in one transaction, so a row named twice would be arbitrated against
         // a revision the earlier copy had already moved. Refused as a whole rather than
@@ -213,6 +265,20 @@ public sealed class SyncUploadRequestValidator : AbstractValidator<SyncUploadReq
         RuleFor(x => x.Rows)
             .Must(rows => rows is null || rows.Select(r => r.Id).Distinct().Count() == rows.Count)
             .WithMessage("A row may appear only once in a batch.");
+
+        RuleFor(x => x.People)
+            .Must(people => people is null || people.Select(p => p.DeviceUserId).Distinct().Count() == people.Count)
+            .WithMessage("A phone user may appear only once in a batch.");
+
+        // The widths of the columns the description is kept in.
+        RuleForEach(x => x.People).ChildRules(person =>
+        {
+            person.RuleFor(p => p.DeviceUserId).NotEmpty();
+            person.RuleFor(p => p.Username).NotEmpty().MaximumLength(200);
+            person.RuleFor(p => p.FirstName).MaximumLength(200);
+            person.RuleFor(p => p.LastName).MaximumLength(200);
+            person.RuleFor(p => p.CaverId).NotEqual(Guid.Empty);
+        });
 
         RuleForEach(x => x.Rows).ChildRules(row =>
         {

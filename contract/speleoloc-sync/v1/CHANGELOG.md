@@ -177,3 +177,28 @@ Codes: new on the address route, as per-item refusals in a `200` — `sync.docum
 `sync.original_withheld`, `sync.rendition_unavailable`; and `validation.failed` for a malformed
 request. The catalogue answers only the reading codes it shares with the feature download
 (`sync.set_not_found`, `sync.cursor_invalid`, `sync.cursor_stale`). See `04-errors.md` §3 and §3.1.
+
+## 2026-10-25 — an upload is made of sections; phones get a people directory
+
+**Contract version: 1, unchanged. A build pinned to it keeps working.** An upload of `rows` alone is
+answered byte for byte as before; `07`–`16` are byte-for-byte unchanged.
+
+- **The upload request's arrays are all optional** (an upload carries at least one item in some
+  array), applied in a fixed order with `rows` first, and `uploadRowsMax` counts items over all of
+  them. An optional `clientFeatures` list (at most 16 names) is accepted and kept; no name changes
+  anything yet.
+- **`people`** — a new optional upload array of the phone's own users
+  (`deviceUserId`, `username`, `firstName`, `lastName`, optional `caverId`), answered in a `people`
+  array of the per-row shape that is present only when the request carried it.
+- **`GET /api/v1/sync/people`** — the people directory (names only) and the current links of the
+  phone users this account has sent.
+- **`features` is computed per request.** `people` is named while the installation has the directory
+  switched on and the account may be told who people are.
+
+Described in `docs/speleoloc-sync/01-protocol.md` §8 (sections) and §12 (People), `02-field-mapping.md`
+§8, `04-errors.md` §3.2 and §6.2.
+
+Recorded exchanges written or re-written in this entry: none.
+
+Codes: new — `sync.feature_disabled` (`409` from the directory; per item in `people` when a link is
+sent while it is off) and `sync.person_not_listed` (per item in `people`).

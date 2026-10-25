@@ -259,6 +259,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<SyncLinkRemoval> SyncLinkRemovals => Set<SyncLinkRemoval>();
 
+    public DbSet<DevicePerson> DevicePersons => Set<DevicePerson>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

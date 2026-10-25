@@ -82,6 +82,16 @@ cave whose exact position you may not see. Then you are told:
 
 The rendering is still shown. See [Location protection](../admin/location-protection.md).
 
+Where the application can rewrite the picture, you are not refused: you get the **full-size
+picture with its location data taken out** (the GPS position and any place names written into the
+file; camera and exposure details stay), and the picture is marked **Location removed**. The same
+happens to everybody when the administrator has switched off *Keep the location inside photo
+files*. The stored file is never changed — people who may see where the photograph was taken
+still get it exactly as it was uploaded.
+
+Videos, recordings and pictures in formats the application cannot rewrite have no such copy; for
+those the original is still refused unless the administrator has allowed it.
+
 ---
 
 ## Albums
@@ -188,7 +198,8 @@ If the library does not answer, the page says so rather than showing an empty gr
 ## What is never done to your files
 
 - Nothing is ever **written back into a photograph file**. Positions, names and decisions
-  live in the records.
+  live in the records. (A reader who may not be given a photograph's location is handed a
+  separate copy with it removed; the stored file keeps it.)
 - A photograph published or shared goes out as a **rendering**, with camera metadata
   stripped — never the original.
 

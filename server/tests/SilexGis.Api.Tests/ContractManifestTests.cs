@@ -152,7 +152,7 @@ public sealed class ContractManifestTests
             writer.WriteNumber("contractVersion", SyncEndpoints.ContractVersion);
 
             writer.WriteStartArray("features");
-            foreach (var feature in SyncEndpoints.ServedFeatures)
+            foreach (var feature in SyncFeatures.Unconditional)
             {
                 writer.WriteStringValue(feature);
             }

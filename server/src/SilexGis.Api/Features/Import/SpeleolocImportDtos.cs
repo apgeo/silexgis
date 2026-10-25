@@ -70,6 +70,11 @@ public sealed record SpeleolocPointDto(
 /// on a trip is a statement about who went and this import will not make it. Empty when the
 /// confirmation is to create the trip, which it creates with exactly these people on it.
 /// </param>
+/// <param name="KnownLinks">
+/// Device account (canonical form) to the caver the installation already links it to — by the
+/// phone, by somebody keeping the roster or by an earlier import. An account the reviewer has made
+/// no choice for is imported as this caver, so the review shows it as the account's choice.
+/// </param>
 public sealed record SpeleolocImportPreviewDto(
     IReadOnlyList<SpeleolocPointDto> Points,
     int Page,
@@ -78,6 +83,7 @@ public sealed record SpeleolocImportPreviewDto(
     IReadOnlyList<string> SelectablePointIds,
     IReadOnlyList<string> DeviceUsers,
     IReadOnlyList<string> UnmappedDeviceUsers,
+    IReadOnlyDictionary<string, Guid> KnownLinks,
     IReadOnlyList<Guid> CaversNotOnRoster,
     bool ModelUsable,
     int ProposedCount,

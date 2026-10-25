@@ -29,6 +29,7 @@ const file: FileInfo = {
   contentCreatedAt: null,
   photo: null,
   position: null,
+  locationRemoved: false,
 };
 
 /** A provider with a cache of its own, built once so a re-render does not empty it. */

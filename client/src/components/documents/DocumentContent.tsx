@@ -143,6 +143,11 @@ export default function DocumentContent({
               {t('attachments.originalWithheld')}
             </Typography.Text>
           )}
+          {file.locationRemoved && (
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('attachments.locationRemovedHint')}
+            </Typography.Text>
+          )}
         </Flex>
       );
     }

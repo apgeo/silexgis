@@ -960,6 +960,11 @@
     "inaccessible": "Inaccesibil"
   },
   "attachments": {
+    "locationRemoved": "Locație eliminată",
+    "locationRemovedHint": "Copia pe care o primești este imaginea la dimensiune completă, fără datele de locație. Fișierul păstrat le are, pentru cei care au voie să le vadă.",
+    "locationRemovedDownload": "Descarcă o copie fără datele de locație.",
+    "inDeviceDefaultSet": "Include în descărcarea implicită a telefoanelor",
+    "inDeviceDefaultSetHint": "Un telefon care cere fișierele obișnuite îl descarcă și pe acesta. Telefonul îl descarcă doar dacă cel care îl folosește alege asta și doar dacă are voie să îl citească.",
     "originalWithheld": "Nu poți descărca originalul acestei fotografii: el înregistrează unde a fost făcută, iar tu nu ai dreptul de a localiza ceea ce arată.",
     "title": "Fotografii și documente",
     "photos": "Fotografii",
@@ -2654,6 +2659,30 @@
     "restoreField": "Restaurează această valoare",
     "restoreAll": "Restaurează toate valorile dinaintea acestei modificări",
     "restored": "Valoare restaurată.",
+    "restoredPartly_one": "O valoare a fost restaurată. Unele au rămas neschimbate:",
+    "restoredPartly": "{{count}} valori au fost restaurate. Unele au rămas neschimbate:",
+    "restoredNothing": "Nu s-a restaurat nimic:",
+    "openBatch": "Vezi acest import",
+    "changesInSet_one": "{{count}} modificare",
+    "changesInSet": "{{count}} modificări",
+    "source": {
+      "web": "Modificat în browser",
+      "fileImport": "Import din fișier",
+      "deviceSync": "Încărcare de pe telefon",
+      "speleolocArchive": "Import de arhivă de pe telefon",
+      "restore": "Restaurat din istoric",
+      "undo": "Anulare",
+      "reviewDecision": "Decizie de revizuire",
+      "job": "Sarcină în fundal",
+      "tripConversion": "Tură convertită dintr-o înregistrare"
+    },
+    "skipReason": {
+      "not_restorable": "istoricul nu poate restaura această valoare",
+      "redacted": "valoarea anterioară îți este ascunsă, pentru că locația este protejată",
+      "no_pre_image": "forma anterioară nu a fost păstrată, pentru că modificarea a fost înregistrată înainte ca formele mari să fie salvate integral",
+      "forbidden": "poți modifica această trăsătură, dar nu poziția, altitudinea sau calitatea ei",
+      "superseded": "a fost modificată de atunci"
+    },
     "action": {
       "created": "Creat",
       "updated": "Modificat",
@@ -5322,6 +5351,40 @@
       "reviewed": "Verificat",
       "autoCreated": "Fără verificare"
     },
+    "upload": {
+      "intro": "Un telefon a trimis aceste modificări. Deschide o linie ca să vezi ce a schimbat în rândul respectiv. Anularea readuce fiecare valoare cum era înainte de încărcare; o valoare schimbată de altcineva între timp rămâne cum este.",
+      "undo": "Anulează această încărcare",
+      "undoConfirm": "Anulezi această încărcare?",
+      "undoLeaves": "Peșterile și obiectele create de ea sunt șterse, ce a șters revine, iar fiecare valoare schimbată de ea se întoarce. O valoare schimbată din nou între timp rămâne cum este, iar rezultatul spune care.",
+      "undoAnyway": "Anulează oricum",
+      "undoAnywayConfirm": "Anulezi această încărcare, chiar și valorile schimbate între timp?",
+      "undoAnywayRowConfirm": "Anulezi acest rând, chiar și valorile schimbate între timp?",
+      "undoAnywayExplain": "Modificările de după sunt înlocuite cu valoarea de dinaintea încărcării. Rămân în istoric, deci pot fi readuse de acolo. O poziție pe care nu ai voie să o vezi exact nu este niciodată readusă.",
+      "undoRow": "Anulează acest rând",
+      "undoRowConfirm": "Anulezi doar acest rând?",
+      "lineUndone": "Anulat",
+      "supersededHint": "Un câmp pe care cineva l-a modificat din nou după încărcare este lăsat de „Anulează acest rând”; rezultatul spune care. „Anulează oricum” îl readuce și pe acesta.",
+      "createdRow": "Încărcarea a creat acest rând.",
+      "noRecordedChange": "Istoricul nu are nicio modificare a acestui rând din această încărcare.",
+      "undone": "Încărcarea a fost anulată.",
+      "undoneWithLeft_one": "Anulat, în afară de {{count}} linie. Vezi mai jos.",
+      "undoneWithLeft": "Anulat, în afară de {{count}} linii. Vezi mai jos.",
+      "fieldLeft": "{{field}} a rămas: {{reason}}",
+      "outcome": {
+        "undone": "Anulat",
+        "partly": "Anulat în parte",
+        "not_undone": "Neanulat"
+      },
+      "reason": {
+        "already_undone": "deja anulat",
+        "purged": "rândul a fost șters definitiv",
+        "container_deleted": "peștera căreia îi aparține este încă ștearsă",
+        "superseded": "a fost șters din nou după încărcare",
+        "fields_left": "alte modificări ale lui au rămas",
+        "no_history": "această încărcare e mai veche decât istoricul care spune ce a schimbat",
+        "forbidden": "nu ai voie să schimbi acest rând"
+      }
+    },
     "revert": "Anulează",
     "reverted": "Importul a fost anulat.",
     "revertedTag": "Anulat",
@@ -6965,6 +7028,7 @@
     "peopleNone": "Înregistrarea aleasă nu numește niciun cont de dispozitiv.",
     "deviceAccount": "Contul {{id}}",
     "chooseCaver": "Spune cine este",
+    "knownLink": "Asociat anterior",
     "unnamedCaver": "Cineva pe care pagina nu îl poate numi",
     "columns": {
       "take": "Ia",

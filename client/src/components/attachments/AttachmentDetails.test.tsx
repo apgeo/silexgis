@@ -5,14 +5,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { AttachmentInfo } from '../../api/hooks.ts';
 
-const { updateAttachmentSpy, updateFileSpy } = vi.hoisted(() => ({
+const { updateAttachmentSpy, updateFileSpy, defaultSetSpy } = vi.hoisted(() => ({
   updateAttachmentSpy: vi.fn(() => Promise.resolve()),
   updateFileSpy: vi.fn(() => Promise.resolve()),
+  defaultSetSpy: vi.fn((_: { id: string; included: boolean }) => Promise.resolve()),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
   useUpdateAttachment: () => ({ mutateAsync: updateAttachmentSpy, isPending: false }),
   useUpdateFile: () => ({ mutateAsync: updateFileSpy, isPending: false }),
+  useSetDeviceDefaultSet: () => ({ mutateAsync: defaultSetSpy, isPending: false }),
   // TagChips (rendered inside the details popover) reaches for these.
   useTaggings: () => ({ data: [] }),
   useTags: () => ({ data: [] }),
@@ -53,6 +55,7 @@ const attachment: AttachmentInfo = {
   contentCreatedAt: null,
   photo: null,
   position: null,
+  locationRemoved: false,
   },
 };
 
@@ -65,7 +68,10 @@ function open() {
   fireEvent.click(screen.getByRole('button', { name: 'Details' }));
 }
 
-afterEach(cleanup); // popover content renders into a portal — clear it between cases
+afterEach(() => {
+  vi.clearAllMocks();
+  cleanup();
+}); // popover content renders into a portal — clear it between cases
 
 describe('AttachmentDetails', () => {
   it('shows current metadata and keeps Save disabled until something changes', async () => {
@@ -94,6 +100,17 @@ describe('AttachmentDetails', () => {
       }),
     );
     // The document date did not change, so the file endpoint is not called.
+    expect(updateFileSpy).not.toHaveBeenCalled();
+  });
+
+  it('flips the phones\' default download on its own route, without touching the other fields', async () => {
+    open();
+    const toggle = await screen.findByRole('switch', { name: "Include in the phones' default download" });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(toggle);
+
+    await waitFor(() => expect(defaultSetSpy).toHaveBeenCalledWith({ id: 'att-1', included: true }));
+    expect(updateAttachmentSpy).not.toHaveBeenCalled();
     expect(updateFileSpy).not.toHaveBeenCalled();
   });
 });

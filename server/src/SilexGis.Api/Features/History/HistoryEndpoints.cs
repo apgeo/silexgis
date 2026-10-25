@@ -67,7 +67,7 @@ public static class HistoryEndpoints
     {
         api.MapGet("/history", ListAsync)
             .WithTags("History")
-            .WithSummary("Change history for an entity (features incl. their subtree); protection-redacted, visibility-gated.");
+            .WithSummary("Change history for an entity (features incl. their subtree), optionally only the events of one import batch; protection-redacted, visibility-gated.");
         api.MapPost("/history/restore", HistoryRestoreEndpoint.RestoreAsync)
             .WithValidation<HistoryRestoreRequest>()
             .WithTags("History")
@@ -86,6 +86,7 @@ public static class HistoryEndpoints
         Guid? entityId,
         int? page,
         int? pageSize,
+        Guid? importBatchId,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -102,6 +103,15 @@ public static class HistoryEndpoints
         if (query is null)
         {
             return ApiProblems.NotFound("history.entity_not_found");
+        }
+
+        // Narrowed after the timeline is chosen, so the visibility of the entity is decided first
+        // and the batch id only picks among events the caller may already read. It lets a screen
+        // ask what one upload did to a row without the page being filled by the row's later,
+        // unrelated history.
+        if (importBatchId is { } batchId)
+        {
+            query = query.Where(a => a.ImportBatchId == batchId);
         }
 
         var (p, size) = Paging.Normalize(page, pageSize);

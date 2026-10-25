@@ -63,6 +63,12 @@ public sealed class AppSettingsService(
     public ValueTask<AnnouncementSettings> GetAnnouncementsAsync(CancellationToken ct = default) =>
         GetAsync<AnnouncementSettings>(AppSettingSections.Announcements, "Announcements", ct);
 
+    // The configuration section is the one the mobile contract's deployment limits are bound from
+    // as well. The two records share no member name, so an operator configures both under one
+    // prefix and neither reads the other's keys.
+    public ValueTask<SyncSettings> GetSyncAsync(CancellationToken ct = default) =>
+        GetAsync<SyncSettings>(AppSettingSections.Sync, "Sync", ct);
+
     /// <summary>
     /// The brakes on the neighbouring photo libraries.
     /// </summary>

@@ -55,7 +55,7 @@ not a protection.
 | **Tables and lists** | Precise-location fields withheld |
 | **Exports** (GeoJSON, GPX, KML, CSV, shapefile) | The same protection as the screen |
 | **Share links and shared views** | The same protection. Sharing is not a route around it. A [shared view's link](../features/saved-views-and-windows.md#saved-views) goes further: it draws **no protected cave or feature at all** — not approximately, not counted in a cluster — even where every account may see it exactly, because nothing granted to accounts follows a link |
-| **Photographs** | The **original** of a photo whose capture point would place the cave is refused. The rendering is shown |
+| **Photographs** | A photo whose capture point would place the cave is handed over as the **full-size picture with its location data taken out**, marked *Location removed*; the stored file is never changed. Only where no such copy can be made (a video, a format that cannot be rewritten) is the original refused. The rendering is always shown |
 | **Trip pages and reports** | Caves you may not open are **not named**; you are told *how many* are not named. A trip's generated write-up withholds a station and a depth the same way — but see the limit below for a write-up **already filed** |
 | **Notification emails** | **Never name a cave.** Not trip mail, not the overdue-party alarm |
 | **The calendar** | A row **never names a cave**, nor a count of caves left out |
@@ -134,6 +134,32 @@ carries **only the titles, dates and links** of what that member is on — never
 position or a participant — and is read through the member's own permissions every time it is
 polled, so a protected cave is no more reachable through a feed than through the calendar page.
 Switching it off again stops every address already handed out.
+
+### The photo-file settings
+
+Three more switches on the same tab decide what travels *inside* a photograph file. None of them
+changes who may be told a photograph's position — that follows the rules above.
+
+- **Keep the location inside photo files.** On by default. *On:* someone who may see where a
+  photo was taken downloads it exactly as it was uploaded, GPS included. *Off:* everyone downloads
+  the full-size picture with its location data removed (GPS, the embedded XMP block and the place
+  names in IPTC; camera and exposure details stay). Either way, someone who may *not* see where it
+  was taken only ever gets the copy without its location. The copy is made the first time it is asked
+  for and kept beside the thumbnails; the stored file is never touched.
+- **With the location switch off, still let people who may see the location download videos,
+  recordings and pictures that cannot be rewritten.** Off by default, and it matters only while the
+  switch above is off. Videos, recordings and pictures in formats the application cannot rewrite
+  (anything but JPEG, PNG and WebP) have no copy without a location, so with the switch above off
+  nobody could download them. Turning this on lets readers who may see the location have them as
+  stored.
+- **Tell phones the size and fingerprint of photos sent without their location.** When the phone
+  app asks to download a photo it will receive without its location, the server makes that copy then
+  and there and tells the app its size and SHA-256 fingerprint, so the app can show the size and check
+  that the download arrived whole. Those requests are slower (up to 200 photos can be rewritten in
+  one), and each copy uses disk space.
+
+A photograph handed over this way is marked **Location removed** wherever it is shown or offered for
+download.
 
 ---
 

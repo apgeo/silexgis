@@ -422,6 +422,51 @@ public sealed record PhotoLibrarySuspensionSettings
     };
 }
 
+/// <summary>Who the phone's people directory lists.</summary>
+public enum PeopleDirectoryScope
+{
+    /// <summary>
+    /// The cavers in any caving group the caller belongs to, and the caller's own caver: the people
+    /// somebody on a trip is likely to be out with, and nobody the club has no business showing them.
+    /// </summary>
+    MyGroups = 0,
+
+    /// <summary>Every caver on the roster.</summary>
+    Everyone = 1,
+}
+
+/// <summary>
+/// What an installation has decided about the mobile contract. The ceilings of a single exchange
+/// (page sizes, how many items an upload may carry) are deployment limits bound from the
+/// environment and are not here; this section holds the choices an administrator makes while the
+/// application runs.
+/// </summary>
+public sealed record SyncSettings
+{
+    /// <summary>
+    /// Whether a phone may read the people directory — the names it offers when a phone user is
+    /// matched to a caver — and send its own users' links to cavers. Off, the directory answers that
+    /// the part is switched off and is not announced among the served parts.
+    /// </summary>
+    public bool PeopleDirectoryEnabled { get; init; } = true;
+
+    /// <summary>Who the people directory lists.</summary>
+    public PeopleDirectoryScope PeopleDirectoryScope { get; init; } = PeopleDirectoryScope.MyGroups;
+
+    /// <summary>
+    /// Whether a trip recorded on a phone is still turned into a trip when its places or its people
+    /// do not match unambiguously — marked as needing somebody's attention — rather than left as a
+    /// recording.
+    /// </summary>
+    public bool ConvertTripsWithProblems { get; init; } = true;
+
+    /// <summary>How many days file bytes a phone sent ahead of the upload that uses them are kept waiting for it.</summary>
+    public int StagedUploadRetentionDays { get; init; } = 7;
+
+    /// <summary>How many days the file bytes of a held change that a reviewer rejected are kept before they go.</summary>
+    public int RejectedHeldBytesRetentionDays { get; init; } = 30;
+}
+
 public static class AppSettingSections
 {
     public const string Mail = "mail";
@@ -447,6 +492,9 @@ public static class AppSettingSections
     /// </summary>
     public const string PhotoLibrarySuspension = "photoLibrarySuspension";
 
+    /// <summary>What the installation has decided about the mobile contract.</summary>
+    public const string Sync = "sync";
+
     public static IReadOnlyList<string> All { get; } =
-        [Mail, Sms, Security, Protection, Import, Interface, Notifications, Announcements, PhotoLibrarySuspension];
+        [Mail, Sms, Security, Protection, Import, Interface, Notifications, Announcements, PhotoLibrarySuspension, Sync];
 }

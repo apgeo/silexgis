@@ -172,6 +172,98 @@ public sealed class SyncUndoTests : IAsyncLifetime, IDisposable, IClassFixture<P
     }
 
     [Fact]
+    public async Task The_detail_of_an_upload_names_the_row_an_updating_line_changed()
+    {
+        var cave = await CreateCaveAsync($"Named cave {marker}");
+        var place = await CreatePlaceAsync(cave, $"Named place {marker}", 25.40, 45.40);
+        var set = await CreateSetAsync(owner, [cave]);
+        var upload = await UploadAsync(owner, set, Guid.CreateVersion7(),
+            Place(place, cave, $"Named place {marker}", 25.40, 45.40, await RevisionAsync(place), description: "Edited"));
+        var batchId = upload.GetProperty("importBatchId").GetGuid();
+
+        var detail = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/import-batches/{batchId}");
+        var line = detail.GetProperty("items").EnumerateArray()
+            .Single(i => i.GetProperty("attachedToFeatureId").ValueKind == JsonValueKind.String);
+        line.GetProperty("attachedToFeatureId").GetGuid().ShouldBe(place);
+        line.GetProperty("attachedToFeatureName").GetString().ShouldBe($"Named place {marker}");
+        line.GetProperty("attachedToFeatureDeleted").GetBoolean().ShouldBeFalse();
+
+        // After the row is deleted, the line still names it and says it is deleted.
+        (await owner.DeleteAsync($"/api/v1/features/{place}")).EnsureSuccessStatusCode();
+        var after = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/import-batches/{batchId}");
+        var deleted = after.GetProperty("items").EnumerateArray()
+            .Single(i => i.GetProperty("attachedToFeatureId").ValueKind == JsonValueKind.String);
+        deleted.GetProperty("attachedToFeatureDeleted").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task The_detail_of_an_upload_names_the_row_only_to_a_reader_who_may_see_it()
+    {
+        var cave = await CreateCaveAsync($"Gated cave {marker}");
+        var place = await CreatePlaceAsync(cave, $"Gated place {marker}", 25.41, 45.41);
+        var set = await CreateSetAsync(owner, [cave]);
+        var upload = await UploadAsync(owner, set, Guid.CreateVersion7(),
+            Place(place, cave, $"Gated place {marker}", 25.41, 45.41, await RevisionAsync(place), description: "Edited"));
+        var batchId = upload.GetProperty("importBatchId").GetGuid();
+
+        // The reader is made the batch's confirmer, which is how a batch reader loses sight of a
+        // row: they may read the batch, and the row is private to somebody else.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            _ = await db.ImportBatches.Where(b => b.Id == batchId)
+                .ExecuteUpdateAsync(u => u.SetProperty(b => b.ConfirmedByUserId, readerId));
+        }
+
+        async Task<JsonElement> LineAsync(HttpClient client)
+        {
+            var detail = await client.GetFromJsonAsync<JsonElement>($"/api/v1/import-batches/{batchId}");
+            return detail.GetProperty("items").EnumerateArray()
+                .Single(i => i.GetProperty("attachedToFeatureId").ValueKind == JsonValueKind.String);
+        }
+
+        // Without a right on the row the line still points at it, and says nothing about it.
+        var unseen = await LineAsync(reader);
+        unseen.GetProperty("attachedToFeatureId").GetGuid().ShouldBe(place);
+        unseen.GetProperty("attachedToFeatureName").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The same reader, once the row is theirs to read, is told its name: the null above is the
+        // visibility rule at work and not a line that never had a name.
+        await GrantAsync(place, "read");
+        (await LineAsync(reader)).GetProperty("attachedToFeatureName").GetString().ShouldBe($"Gated place {marker}");
+    }
+
+    [Fact]
+    public async Task The_history_of_a_row_can_be_narrowed_to_one_upload()
+    {
+        var cave = await CreateCaveAsync($"Narrow cave {marker}");
+        var place = await CreatePlaceAsync(cave, $"Narrow place {marker}", 25.42, 45.42);
+        var set = await CreateSetAsync(owner, [cave]);
+        var upload = await UploadAsync(owner, set, Guid.CreateVersion7(),
+            Place(place, cave, $"Narrow place {marker}", 25.42, 45.42, await RevisionAsync(place), description: "Edited"));
+        var batchId = upload.GetProperty("importBatchId").GetGuid();
+
+        // Later uploads fill the row's history with events that are not this upload's.
+        for (var i = 0; i < 3; i++)
+        {
+            _ = await UploadAsync(owner, set, Guid.CreateVersion7(),
+                Place(place, cave, $"Narrow place {marker} {i}", 25.42, 45.42, await RevisionAsync(place), description: $"Later {i}"));
+        }
+
+        var all = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/history?entityType=feature&entityId={place}");
+        var narrowed = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/history?entityType=feature&entityId={place}&importBatchId={batchId}");
+        var other = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/history?entityType=feature&entityId={place}&importBatchId={Guid.NewGuid()}");
+
+        narrowed.GetProperty("totalItems").GetInt32().ShouldBeGreaterThan(0);
+        narrowed.GetProperty("totalItems").GetInt32().ShouldBeLessThan(all.GetProperty("totalItems").GetInt32());
+        narrowed.GetProperty("items").EnumerateArray()
+            .ShouldAllBe(e => e.GetProperty("importBatchId").GetGuid() == batchId);
+        other.GetProperty("totalItems").GetInt32().ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Undoing_some_lines_leaves_the_batch_open_and_the_rest_in_force()
     {
         var cave = await CreateCaveAsync($"Partial cave {marker}");

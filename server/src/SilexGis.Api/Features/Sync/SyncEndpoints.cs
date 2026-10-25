@@ -7,6 +7,7 @@ using Npgsql;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Sync;
@@ -25,14 +26,6 @@ public static class SyncEndpoints
     /// pinned to the previous value; anything additive is announced through the feature list.
     /// </summary>
     public const int ContractVersion = 1;
-
-    /// <summary>
-    /// The optional parts of the contract this build serves, announced by name. A device that
-    /// meets a server serving only some of them takes the parts that are there instead of
-    /// failing at the first transfer — which is why reading rows is announced separately from
-    /// writing them, and why a build that can only be read from says so.
-    /// </summary>
-    public static readonly IReadOnlyList<string> ServedFeatures = ["download", "upload", "documents"];
 
     public static RouteGroupBuilder MapSyncEndpoints(this RouteGroupBuilder api)
     {
@@ -80,12 +73,15 @@ public static class SyncEndpoints
         sets.MapSyncUploadEndpoints();
         sets.MapSyncDocumentEndpoints();
         sync.MapSyncFileLinkEndpoints();
+        sync.MapSyncPeopleEndpoints();
+        api.MapSyncPhoneUserEndpoints();
 
         return api;
     }
 
     private static async Task<Results<Ok<SyncCapabilitiesDto>, UnauthorizedHttpResult>> CapabilitiesAsync(
         IOptions<SyncOptions> options,
+        IAppSettingsService settings,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -102,7 +98,7 @@ public static class SyncEndpoints
             ContractVersion,
             options.Value.ResolvedPageSizeMax,
             options.Value.ResolvedUploadRowsMax,
-            ServedFeatures));
+            SyncFeatures.Answered(await settings.GetSyncAsync(ct), ctx)));
     }
 
     private static async Task<Results<Ok<List<SyncSetDto>>, UnauthorizedHttpResult>> ListAsync(

@@ -28,6 +28,8 @@ import FileVersions from './FileVersions.tsx';
 import PhotoFactsPanel from './PhotoFactsPanel.tsx';
 import PhotoPositionAction from './PhotoPositionAction.tsx';
 import { formatSize } from './fileFormat.ts';
+import LocationRemovedTag from './LocationRemovedTag.tsx';
+import { downloadTitle } from './downloadTitle.ts';
 
 interface AttachmentSectionProps {
   entityType: AttachedEntityType;
@@ -183,7 +185,7 @@ export default function AttachmentSection({
                     // file, so the control says why instead of failing when followed.
                     <Tooltip
                       key="download"
-                      title={attachment.file.mayDownloadOriginal ? undefined : t('attachments.originalWithheld')}
+                      title={downloadTitle(attachment.file, t)}
                     >
                       <Button
                         type="primary"
@@ -286,6 +288,7 @@ export default function AttachmentSection({
                     <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
                       {attachment.caption ?? attachment.file.originalName}
                     </Typography.Text>
+                    <LocationRemovedTag file={attachment.file} />
                     <Flex align="center">
                       {/* The one picture that stands for this object wherever it is named — a
                           list row, a card, the panel beside the map. Clicking the current one
@@ -370,7 +373,7 @@ export default function AttachmentSection({
                   />,
                   <Tooltip
                     key="download"
-                    title={attachment.file.mayDownloadOriginal ? undefined : t('attachments.originalWithheld')}
+                    title={downloadTitle(attachment.file, t)}
                   >
                     <Button
                       size="small"

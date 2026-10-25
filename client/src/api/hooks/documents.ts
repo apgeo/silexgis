@@ -57,6 +57,43 @@ export function useHistory(entityType: string, entityId: string | undefined, ena
 }
 
 /**
+ * The history events of one feature that one import batch wrote. The server narrows the list, so
+ * the answer is not crowded out by the row's later history.
+ */
+export function useBatchHistory(featureId: string | undefined, importBatchId: string) {
+  return useQuery({
+    queryKey: [...queryKeys.history('feature', featureId ?? ''), 'batch', importBatchId],
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/history', {
+        params: { query: { entityType: 'feature', entityId: featureId!, importBatchId, pageSize: 100 } },
+      })),
+    enabled: !!featureId,
+  });
+}
+
+export type HistoryRestoreResult = components['schemas']['HistoryRestoreResultDto'];
+export type HistoryRestoreRequest = components['schemas']['HistoryRestoreRequest'];
+
+/**
+ * Puts fields of a feature back to the value they had before one history event, on the server.
+ * The server runs it as an ordinary edit, so its validation and protection rules apply, and it
+ * answers which fields it wrote and which it left with the reason. A restore writes a feature
+ * and adds history of its own, so the readings of its history, its features, its caves and their entrances are refreshed.
+ */
+export function useRestoreFromHistory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: HistoryRestoreRequest) => unwrap(api.POST('/api/v1/history/restore', { body })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['history'] });
+      void queryClient.invalidateQueries({ queryKey: ['features'] });
+      void queryClient.invalidateQueries({ queryKey: ['caves'] });
+      void queryClient.invalidateQueries({ queryKey: ['entrances'] });
+    },
+  });
+}
+
+/**
  * One stored file, with delivery URLs minted for this caller.
  *
  * The document endpoint says what a document *is*; only this one says how to fetch its

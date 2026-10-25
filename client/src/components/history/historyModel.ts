@@ -115,6 +115,92 @@ export function restorableProps(rows: HistoryFieldRow[]): string[] {
     .map((r) => r.prop);
 }
 
+/**
+ * Props of an event the server may be asked to put back: present, non-redacted, with a recorded
+ * old value. Unlike {@link restorableProps}, a summarised geometry is included — the server keeps
+ * the full shape beside the summary for history written since it began to, and says
+ * `no_pre_image` for the rest, so whether it can be put back is the server's to say, not the
+ * screen's.
+ */
+export function serverRestorableProps(rows: HistoryFieldRow[]): string[] {
+  return rows.filter((r) => !r.redacted && r.old !== undefined).map((r) => r.prop);
+}
+
+/** The body of `POST /history/restore` for one history event and the fields wanted back. */
+export interface RestoreRequestBody {
+  entityType: 'feature';
+  entityId: string;
+  auditEntryId: number;
+  fields: string[];
+}
+
+/**
+ * The request that puts fields of an event back on the server. The event's own entity id is
+ * sent, not the id of the page the timeline is on: an entrance's change shows in its cave's
+ * timeline but is a change to the entrance.
+ */
+export function restoreRequest(event: { id: number; entityId: string }, fields: string[]): RestoreRequestBody {
+  return { entityType: 'feature', entityId: event.entityId, auditEntryId: event.id, fields };
+}
+
+/** Events of one change set, in the order the timeline lists them. */
+export interface HistoryGroup<E> {
+  /** Stable across re-renders: the change set's id, or the single event's id when it stands alone. */
+  key: string;
+  /** Null for an event on its own or from before change sets were recorded. */
+  changeSetId: string | null;
+  events: E[];
+}
+
+/**
+ * Groups a timeline's events by the change set they were written in, so one upload, one restore
+ * or one request reads as one entry with its parts under it. A group sits where its first
+ * (newest) event does. An event with no change set — history from before they were recorded —
+ * stands alone, and so does a change set that only one event of this timeline belongs to.
+ */
+export function groupByChangeSet<E extends { id: number; changeSetId?: string | null }>(
+  events: E[],
+): HistoryGroup<E>[] {
+  const bySet = new Map<string, E[]>();
+  for (const event of events) {
+    if (event.changeSetId) {
+      const members = bySet.get(event.changeSetId);
+      if (members) {
+        members.push(event);
+      } else {
+        bySet.set(event.changeSetId, [event]);
+      }
+    }
+  }
+
+  const groups: HistoryGroup<E>[] = [];
+  const placed = new Set<string>();
+  for (const event of events) {
+    const set = event.changeSetId;
+    const members = set ? bySet.get(set) : undefined;
+    if (set && members && members.length > 1) {
+      if (!placed.has(set)) {
+        placed.add(set);
+        groups.push({ key: `set-${set}`, changeSetId: set, events: members });
+      }
+    } else {
+      groups.push({ key: `event-${event.id}`, changeSetId: null, events: [event] });
+    }
+  }
+
+  return groups;
+}
+
+/**
+ * The i18n key under which an audit entity type is worded. Feature history is kind-qualified
+ * (`Feature:Cave`, `Feature:CaveEntrance`, `Feature:Generic`), and a colon is the namespace
+ * separator to i18next, so the qualified name cannot be a key as it stands.
+ */
+export function entityLabelKey(entityType: string): string {
+  const kind = entityType.startsWith('Feature:') ? entityType.slice('Feature:'.length) : entityType;
+  return kind === 'Generic' ? 'SurfaceFeature' : kind;
+}
+
 /** A short human label for a JSON value in the diff table. */
 export function formatValue(value: unknown): string {
   if (value === null || value === undefined) {
@@ -124,6 +210,12 @@ export function formatValue(value: unknown): string {
     return String(value);
   }
   return JSON.stringify(value);
+}
+
+/** A readable label for an audit property name nobody has translated: `LocationNotes` becomes `Location notes`. */
+export function humanize(prop: string): string {
+  const spaced = prop.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
 }
 
 /** Audit property names are PascalCase (CLR); write-DTO fields are camelCase. */
@@ -224,28 +316,4 @@ export function applyTripRestore<T extends Record<string, unknown>>(
   }
 
   return next as T;
-}
-
-/**
- * Restore composer for surface features, which need two entity-specific fixups the generic
- * name mapping can't infer: the geometry is audited under the CLR name `Geom` but the write
- * DTO field is `geometry`, and Properties is stored as a jsonb *string* in the audit trail
- * while the write DTO expects a JSON object.
- */
-export function applyFeatureRestore<T extends Record<string, unknown>>(
-  current: T,
-  changes: unknown,
-  props: string[],
-): T {
-  const next = applyRestore(current, changes, props, { Geom: 'geometry' });
-  const holder = next as { properties?: unknown };
-  if (typeof holder.properties === 'string') {
-    try {
-      holder.properties = JSON.parse(holder.properties) as unknown;
-    } catch {
-      // Leave a malformed value untouched; the server validator rejects it clearly.
-    }
-  }
-
-  return next;
 }

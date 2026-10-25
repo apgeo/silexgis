@@ -43,6 +43,15 @@ describe('Lightbox', () => {
     expect(image.getAttribute('src')).toContain('/thumbnail?');
   });
 
+  it('says in view, not only in a tooltip, that the location was removed from this copy', () => {
+    const removed: LightboxPhoto[] = [{ ...photos[0], locationRemoved: true }, photos[1]];
+    const { rerender } = render(<Lightbox photos={removed} index={0} onClose={vi.fn()} onIndexChange={vi.fn()} />);
+    expect(screen.getByTestId('location-removed')).toBeTruthy();
+
+    rerender(<Lightbox photos={removed} index={1} onClose={vi.fn()} onIndexChange={vi.fn()} />);
+    expect(screen.queryByTestId('location-removed')).toBeNull();
+  });
+
   it('moves with the arrow keys and wraps at the ends', () => {
     const onIndexChange = vi.fn();
     render(<Lightbox photos={photos} index={1} onClose={vi.fn()} onIndexChange={onIndexChange} />);

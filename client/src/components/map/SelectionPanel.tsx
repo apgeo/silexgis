@@ -19,7 +19,6 @@ import {
   useTripLog,
   useTripTypes,
   useUpdateFeature,
-  type FeatureUpdate,
 } from '../../api/hooks.ts';
 import { useFeatureRights } from '../../api/hooks/objectRights.ts';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
@@ -37,7 +36,6 @@ import {
   type TripSelection,
 } from '../../stores/workspaceStore.ts';
 import { type HistoryRestore } from '../history/HistoryPanel.tsx';
-import { applyFeatureRestore } from '../history/historyModel.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import TripStateTag from '../trips/TripStateTag.tsx';
 import { tripTypeLabelOf } from '../trips/tripTypes.ts';
@@ -432,18 +430,6 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
   };
   const geometryType = feature.geometry ? (baseShapes[feature.geometry.type] ?? null) : null;
 
-  // The detail DTO names the type by code; the write contract wants its id.
-  const writeDto = (): FeatureUpdate => ({
-    name: feature.name,
-    featureTypeId: Number(featureType?.id ?? 0),
-    geometry: feature.geometry,
-    description: feature.description,
-    properties: feature.properties,
-    locationProtected: feature.locationProtected,
-    cavingGroupId: feature.cavingGroupId,
-    visibility: feature.visibility,
-  });
-
   const onEditSubmit = async (values: FeatureAttributeValues) => {
     try {
       await updateFeatureM.mutateAsync({
@@ -572,13 +558,7 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
             ? ({
                 // Audit rows carry the kind-qualified entity name.
                 entityType: 'Feature:Generic',
-                onRestore: async (event, props) => {
-                  await updateFeatureM.mutateAsync({
-                    id: feature.id,
-                    body: applyFeatureRestore(writeDto(), event.changes, props),
-                  });
-                  surfaceFeaturesChanged();
-                },
+                onRestored: () => surfaceFeaturesChanged(),
               } satisfies HistoryRestore)
             : undefined,
         }}

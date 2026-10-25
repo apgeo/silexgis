@@ -209,6 +209,10 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         // looking for something nobody can find. Cascade, so the line goes with the row.
         builder.HasOne<TripPositionEvent>().WithMany().HasForeignKey(x => x.TripPositionEventId)
             .OnDelete(DeleteBehavior.Cascade);
+        // A phone user an undo removes, or one deleted afterwards, leaves the line that says the
+        // upload sent them, for the reason the trip pointer outlives its trip.
+        builder.HasOne<DevicePerson>().WithMany().HasForeignKey(x => x.DevicePersonId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.ImportBatchId);
         // "Where did this cave come from?" is a lookup by feature, and it is the question the
@@ -223,5 +227,9 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         // "Which import produced this position?" — and, the way an undo asks it, "which positions
         // did this import produce?", which the batch index above already answers.
         builder.HasIndex(x => x.TripPositionEventId).HasFilter("trip_position_event_id is not null");
+        // "Which uploads sent this phone user?" — how the directory finds the links an account has
+        // made, and how removing a phone user finds the lines to clear.
+        builder.HasIndex(x => x.DevicePersonId).HasFilter("device_person_id is not null")
+            .HasDatabaseName("ix_import_batch_items_device_person_id");
     }
 }

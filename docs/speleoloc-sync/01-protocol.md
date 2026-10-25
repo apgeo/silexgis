@@ -41,7 +41,11 @@ Authorization: Bearer <token>
 - **`features`** names the optional halves of the contract this build actually serves. It is how a
   device meets a server that has shipped some of the protocol and not the rest, and takes what is
   there. `documents` means the photo and document catalogue of section 11 and the address route
-  beside it are served.
+  beside it are served; `people` means the people directory and the upload's `people` section of
+  section 12 are, which an installation can switch off and which is named only to an account that
+  may be told who people are. The list is worked out for each request, not fixed for the build: a part an
+  installation can switch off is named only while it is on, so read it from the answer every time
+  rather than once per build. A name a device does not recognise is ignored.
 
 Ask this first, once per server, and keep the answer. It is also the cheapest place to discover that
 a stored credential has lapsed: it answers `401` like everything else here.
@@ -343,6 +347,22 @@ Authorization: Bearer <token>
 Four ideas hold this half together, and each of them exists because of a way an offline device
 breaks.
 
+**An upload is made of sections.** `rows` — the feature rows above — is the first; the request may
+carry further arrays beside it as later parts of the contract are served (each announced through
+`features`), and each array is answered in the array of the same name, item by item, in the shape
+`rows` is answered in. All arrays are optional, but an upload carries at least one item in some
+array. The sections are applied in a fixed order, whatever order the arrays sit in the request —
+`rows` always first — so a later section may refer to what an earlier one created. `uploadRowsMax`
+counts the items of every section together; `written` and `refused` count them together too. A
+device that sends only `rows`, as every device did before sections, sends a complete upload, and is
+answered exactly as before.
+
+**`clientFeatures`** (optional, a list of names, at most 16) says which protocol behaviours beyond
+the first contract this device understands. A server only answers in a way a device opted into here,
+so a build that predates a behaviour is never handed an answer it would misread. The list is kept with
+the upload's batch as sent; names this server does not recognise are kept and otherwise ignored. No
+name changes anything yet; each one is defined in the section that introduces it.
+
 ### 8.1 The batch identifier, which is what makes a retry safe
 
 **The device mints `batchId`, and sending the same one again returns the first answer and writes
@@ -547,7 +567,7 @@ the alternative is answering a position to somebody entitled to none.
 ### 8.8 Whole-batch refusals
 
 Some failures are the batch's, not a row's, and then the answer is a problem document and nothing at
-all was written: a `contractVersion` this server does not speak, more rows than `uploadRowsMax`, a
+all was written: a `contractVersion` this server does not speak, more items than `uploadRowsMax`, a
 set that is not this account's, a caving-group binding this account is no longer entitled to, and
 the same batch identifier arriving twice at once. They are listed with their codes in the errors
 document.
@@ -829,3 +849,79 @@ catalogue and gets no numbers here; a picture never does. Should the copy fail t
 comes without numbers and fetching it answers `404` either way. The catalogue never quotes the copy's
 numbers, whatever the switch says.
 
+
+## 12. People
+
+A phone has users of its own — the people sharing it on a trip — each with an identifier the phone
+minted (`users.uuid`). They are not accounts here and never become accounts or cavers by being seen.
+What the server keeps is **one record per phone user**: the names the phone last sent and, once
+somebody has said so, which caver they are. Everything that later needs to say who on a phone did
+something resolves the phone's identifier through that record, and so does the archive import's
+review, so a phone user mapped once — on the phone, in the browser or while importing an archive —
+is not asked about again.
+
+This part is announced as `people` in `features`, **only while the installation offers it** (the
+*people directory* switch, on by default) **and the account may be told who people are**. Read it
+from each capabilities answer.
+
+### 12.1 The directory
+
+```
+GET /api/v1/sync/people
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "people": [
+    { "id": "…", "fullName": "Ana Pop", "shortName": "Ana", "hasAccount": true, "isMe": true }
+  ],
+  "links": [
+    { "deviceUserId": "…", "caverId": "…" }
+  ]
+}
+```
+
+- **`people`** are the cavers a phone may say one of its users is — by default the members of any
+  caving group the account belongs to and the account's own caver; an installation may list the whole
+  roster instead. **Names only**: no e-mail address, telephone number or roster remark ever travels
+  here. `id` is the caver identifier an upload names; `fullName` is the name the account is shown for
+  that person anywhere else (an account holder's own label wins over the roster's name).
+- **`links`** is the current link of every phone user this account has sent, whoever made it, with
+  `caverId` null for one nobody has mapped. It is how a phone learns of a mapping made in the browser:
+  replace the phone's own choice with what `links` says.
+- Switched off, the route answers `409 sync.feature_disabled`; an account that may not be told who
+  people are gets `403 access.forbidden`. Neither is a reason to retry.
+
+### 12.2 The `people` section of an upload
+
+An upload may carry a `people` array beside `rows`; it is applied **after** `rows` and answered in a
+`people` array of the same per-item shape (`id` is the `deviceUserId`; `revision` is always null —
+people are not arbitrated on a revision). An upload without the array is answered without it.
+
+```json
+"people": [
+  { "deviceUserId": "…", "username": "ana", "firstName": "Ana", "lastName": "Pop", "caverId": "…" }
+]
+```
+
+- `deviceUserId` and `username` are required; a phone user appears at most once per upload.
+- **`caverId` is optional and absent means "nothing to say about the link"**: an existing link is left
+  as it stands. There is no way to unlink from a phone; that is done in the browser, by somebody
+  keeping the roster (`PUT` and `DELETE /api/v1/phone-users/{deviceUserId}/link`, web routes a
+  device does not call).
+- A `caverId` must be one the directory lists for this account, or the item is `rejected` with
+  `sync.person_not_listed` and nothing about that phone user is written. While the directory is
+  switched off every `caverId` is refused with `sync.feature_disabled`; a phone user sent without one
+  is still recorded.
+- **A link somebody made in the browser is not replaced by a phone.** The item is still applied — its
+  names are taken — and answered `updated` or `unchanged`; the directory's `links` then says which
+  caver stands. A link the phone made earlier is replaced by its new choice.
+- A phone user sent again exactly as recorded is `unchanged`, and nothing is added to the history.
+- Undoing the upload takes back what it did to each phone user: a link it made is removed, names it
+  changed go back. A phone user it described for the first time stays recorded, without the link. A
+  value somebody changed since is left, as for rows — and a link is changed since when its caver or
+  who made it is: a link the roster's keeper has confirmed is theirs, and stays. A link a forced undo
+  puts back is put back as the phone's.
+
+`uploadRowsMax` counts the items of `rows` and `people` together.

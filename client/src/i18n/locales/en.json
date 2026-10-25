@@ -960,6 +960,11 @@
     "inaccessible": "Not accessible"
   },
   "attachments": {
+    "locationRemoved": "Location removed",
+    "locationRemovedHint": "The copy you are given is the full-size picture with its location data taken out. The stored file keeps it for those who may see it.",
+    "locationRemovedDownload": "Downloads a copy with its location data taken out.",
+    "inDeviceDefaultSet": "Include in the phones' default download",
+    "inDeviceDefaultSetHint": "A phone that asks for the usual files fetches this one. Phones only fetch it if the caver chooses to, and only if its holder may read it.",
     "originalWithheld": "You may not download the original of this photo: it records where it was taken, and you do not have the right to place what it shows.",
     "title": "Photos & documents",
     "photos": "Photos",
@@ -2654,6 +2659,30 @@
     "restoreField": "Restore this value",
     "restoreAll": "Restore all values from before this change",
     "restored": "Value restored.",
+    "restoredPartly_one": "{{count}} value was put back. Some were left as they are:",
+    "restoredPartly": "{{count}} values were put back. Some were left as they are:",
+    "restoredNothing": "Nothing was put back:",
+    "openBatch": "View this import",
+    "changesInSet_one": "{{count}} change",
+    "changesInSet": "{{count}} changes",
+    "source": {
+      "web": "Edited in the browser",
+      "fileImport": "File import",
+      "deviceSync": "Phone upload",
+      "speleolocArchive": "Phone archive import",
+      "restore": "Restored from history",
+      "undo": "Undo",
+      "reviewDecision": "Review decision",
+      "job": "Background job",
+      "tripConversion": "Trip converted from a recording"
+    },
+    "skipReason": {
+      "not_restorable": "history cannot put this one back",
+      "redacted": "its earlier value is hidden from you because the location is protected",
+      "no_pre_image": "the earlier shape was not kept, because this change was recorded before large shapes were saved in full",
+      "forbidden": "you may edit this feature, but not its position, altitude or quality",
+      "superseded": "it has been changed since"
+    },
     "action": {
       "created": "Created",
       "updated": "Updated",
@@ -5309,6 +5338,40 @@
       "reviewed": "Reviewed",
       "autoCreated": "Without review"
     },
+    "upload": {
+      "intro": "A phone sent these changes. Open a line to see what it changed in that row. Undoing puts every value back as it was before the upload; a value somebody has changed since is left as it is.",
+      "undo": "Undo this upload",
+      "undoConfirm": "Undo this upload?",
+      "undoLeaves": "Caves and features it created are deleted, what it deleted comes back, and each value it changed goes back. A value changed again since is left as it is, and the result says which.",
+      "undoAnyway": "Undo anyway",
+      "undoAnywayConfirm": "Undo this upload, even the values changed since?",
+      "undoAnywayRowConfirm": "Undo this row, even the values changed since?",
+      "undoAnywayExplain": "The later changes are overwritten with the value from before the upload. They stay in the history, so they can be put back from there. A position you may not see exactly is never put back.",
+      "undoRow": "Undo this row",
+      "undoRowConfirm": "Undo this row only?",
+      "lineUndone": "Undone",
+      "supersededHint": "A field somebody has edited again since the upload is left by \"Undo this row\"; the result says which. \"Undo anyway\" puts it back too.",
+      "createdRow": "The upload created this row.",
+      "noRecordedChange": "The history holds no change to this row from this upload.",
+      "undone": "The upload was undone.",
+      "undoneWithLeft_one": "Undone, except {{count}} line. See below.",
+      "undoneWithLeft": "Undone, except {{count}} lines. See below.",
+      "fieldLeft": "{{field}} was left: {{reason}}",
+      "outcome": {
+        "undone": "Undone",
+        "partly": "Partly undone",
+        "not_undone": "Not undone"
+      },
+      "reason": {
+        "already_undone": "already undone",
+        "purged": "the row has been removed for good",
+        "container_deleted": "the cave it belongs to is still deleted",
+        "superseded": "it was deleted again after the upload",
+        "fields_left": "other changes to it are left",
+        "no_history": "this upload is older than the history that says what it changed",
+        "forbidden": "you may not change this row"
+      }
+    },
     "revert": "Undo",
     "reverted": "The import was undone.",
     "revertedTag": "Undone",
@@ -6952,6 +7015,7 @@
     "peopleNone": "The chosen recording names no device accounts.",
     "deviceAccount": "Account {{id}}",
     "chooseCaver": "Say who this is",
+    "knownLink": "Linked earlier",
     "unnamedCaver": "Somebody this page cannot name",
     "columns": {
       "take": "Take",

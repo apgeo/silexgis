@@ -4,15 +4,18 @@ import { UndoOutlined } from '@ant-design/icons';
 import { App, Drawer, Flex, Popconfirm, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   useImportBatch,
   useImportBatches,
   useRevertImportBatch,
   useTripLogConfig,
   type ImportBatch,
+  type ImportBatchItem,
+  type ImportBatchUndoItem,
 } from '../../api/hooks.ts';
 import { formatDays } from '../../components/trips/tripRestoreWindow.ts';
+import { UndoOutcome, UploadRowChanges } from './PhoneUploadParts.tsx';
 
 /**
  * The confirmations this account has made, newest first, each with the one action a
@@ -29,11 +32,25 @@ export default function ImportBatchesTab() {
   const { message } = App.useApp();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [open, setOpen] = useState<string | null>(null);
+  // A link from a history entry arrives with the batch it names in the address.
+  const [searchParams] = useSearchParams();
+  const [open, setOpen] = useState<string | null>(searchParams.get('batch'));
+  // How the last undo of a phone upload ended, line by line. Kept with the drawer it is shown in:
+  // it is the answer to a question the reader just asked, not part of the batch.
+  const [lastUndo, setLastUndo] = useState<ImportBatchUndoItem[] | null>(null);
 
   const batches = useImportBatches({ page, pageSize });
   const detail = useImportBatch(open ?? undefined);
   const revert = useRevertImportBatch();
+  // A phone upload is the one source whose lines change rows that already existed, and the one
+  // that can be taken back a line at a time.
+  const phone = detail.data?.batch?.source === 'deviceSync';
+  const lineNames = new Map(
+    (detail.data?.items ?? []).map((i) => [
+      i.id,
+      i.featureName ?? i.attachedToFeatureName ?? i.tripTitle ?? t('vectorImport.unnamed'),
+    ]),
+  );
   // How long a deleted trip can be put back, for the undo of a batch that created trips.
   const { data: tripConfig } = useTripLogConfig();
 
@@ -97,10 +114,26 @@ export default function ImportBatchesTab() {
     }
   };
 
-  const onRevert = async (id: string) => {
+  /**
+   * Takes an import back, or — for a phone upload — some of its lines, or all of them past what
+   * was changed since. A phone upload's answer is a list of lines that ended differently, so it is
+   * shown in the drawer; a file import is simply undone.
+   */
+  const onRevert = async (id: string, options: { itemIds?: number[]; force?: boolean } = {}) => {
     try {
-      await revert.mutateAsync(id);
-      message.success(t('vectorImport.reverted'));
+      const result = await revert.mutateAsync({ id, ...options });
+      const left = result.items.filter((line) => line.outcome !== 'undone');
+      if (result.items.length === 0) {
+        message.success(t('vectorImport.reverted'));
+        return;
+      }
+      setLastUndo(result.items);
+      setOpen(id);
+      if (left.length === 0) {
+        message.success(t('vectorImport.upload.undone'));
+      } else {
+        message.warning(t('vectorImport.upload.undoneWithLeft', { count: left.length }));
+      }
     } catch {
       message.error(t('common.saveFailed'));
     }
@@ -164,20 +197,24 @@ export default function ImportBatchesTab() {
           {
             title: '',
             key: 'actions',
-            width: 140,
+            width: 170,
             render: (_: unknown, row) =>
               row.revertedAt ? (
                 <Tag>{t('vectorImport.revertedTag')}</Tag>
               ) : (
                 row.canRevert && (
                   <Popconfirm
-                    title={t('vectorImport.revertConfirm', { count: row.createdCount })}
-                    description={restorable(row.source)}
+                    title={
+                      row.source === 'deviceSync'
+                        ? t('vectorImport.upload.undoConfirm')
+                        : t('vectorImport.revertConfirm', { count: row.createdCount })
+                    }
+                    description={row.source === 'deviceSync' ? t('vectorImport.upload.undoLeaves') : restorable(row.source)}
                     onConfirm={() => void onRevert(row.id)}
                     okButtonProps={{ danger: true }}
                   >
                     <Button size="small" danger icon={<UndoOutlined />}>
-                      {t('vectorImport.revert')}
+                      {row.source === 'deviceSync' ? t('vectorImport.upload.undo') : t('vectorImport.revert')}
                     </Button>
                   </Popconfirm>
                 )
@@ -191,15 +228,76 @@ export default function ImportBatchesTab() {
         size="min(760px, 96vw)"
         title={t('vectorImport.batchDetail')}
         data-testid="import-batch-detail"
-        onClose={() => setOpen(null)}
+        onClose={() => {
+          setOpen(null);
+          setLastUndo(null);
+        }}
         destroyOnHidden
       >
-        <Table
+        {phone && detail.data?.batch && (
+          <Flex vertical gap={12} style={{ marginBottom: 16 }}>
+            <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
+              {t('vectorImport.upload.intro')}
+            </Typography.Paragraph>
+            {detail.data.batch.revertedAt ? (
+              <div>
+                <Tag>{t('vectorImport.revertedTag')}</Tag>
+              </div>
+            ) : (
+              detail.data.batch.canRevert && (
+                <Flex gap={8} wrap>
+                  <Popconfirm
+                    title={t('vectorImport.upload.undoConfirm')}
+                    description={t('vectorImport.upload.undoLeaves')}
+                    onConfirm={() => void onRevert(detail.data!.batch.id)}
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Button danger icon={<UndoOutlined />} data-testid="upload-undo">
+                      {t('vectorImport.upload.undo')}
+                    </Button>
+                  </Popconfirm>
+                  <Popconfirm
+                    title={t('vectorImport.upload.undoAnywayConfirm')}
+                    description={t('vectorImport.upload.undoAnywayExplain')}
+                    onConfirm={() => void onRevert(detail.data!.batch.id, { force: true })}
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Button icon={<UndoOutlined />} data-testid="upload-undo-anyway">
+                      {t('vectorImport.upload.undoAnyway')}
+                    </Button>
+                  </Popconfirm>
+                </Flex>
+              )
+            )}
+            {lastUndo && <UndoOutcome lines={lastUndo} names={lineNames} />}
+          </Flex>
+        )}
+        <Table<ImportBatchItem>
           rowKey="id"
           size="small"
           loading={detail.isLoading}
           dataSource={detail.data?.items}
           pagination={{ pageSize: 50 }}
+          expandable={
+            phone
+              ? {
+                  rowExpandable: (row) => (row.attachedToFeatureId ?? row.featureId) != null,
+                  expandedRowRender: (row) => (
+                    <UploadRowChanges
+                      batchId={detail.data!.batch.id}
+                      rowId={(row.attachedToFeatureId ?? row.featureId)!}
+                      created={row.attachedToFeatureId == null}
+                      undone={row.undoneAt != null}
+                      onUndoAnyway={
+                        detail.data!.batch.canRevert && row.undoneAt == null
+                          ? () => void onRevert(detail.data!.batch.id, { itemIds: [row.id], force: true })
+                          : undefined
+                      }
+                    />
+                  ),
+                }
+              : undefined
+          }
           columns={[
             {
               title: t('vectorImport.columns.name'),
@@ -208,16 +306,7 @@ export default function ImportBatchesTab() {
               // map file, and a batch of trips read off a spreadsheet. Branching on the feature
               // alone made every trip in a five-hundred-trip batch read "Nothing created",
               // directly under a header row saying five hundred were.
-              render: (
-                name: string | null,
-                row: {
-                  featureId?: string | null;
-                  featureDeleted?: boolean;
-                  tripLogId?: string | null;
-                  tripTitle?: string | null;
-                  tripDeleted?: boolean;
-                },
-              ) => {
+              render: (name: string | null, row: ImportBatchItem) => {
                 // A deleted cave or feature answers as not found at its own address, as a deleted
                 // trip does, so the line does not link there either: it says the object is
                 // deleted and sends the reader to where it can be put back.
@@ -234,6 +323,25 @@ export default function ImportBatchesTab() {
                 }
                 if (row.featureId) {
                   return <Link to={`/features/${row.featureId}`}>{name ?? t('vectorImport.unnamed')}</Link>;
+                }
+                // A line that changed a row rather than creating one: a phone upload's usual line.
+                if (row.attachedToFeatureId && row.attachedToFeatureDeleted) {
+                  return (
+                    <Flex gap={8} align="center" wrap>
+                      <Typography.Text>{row.attachedToFeatureName ?? t('vectorImport.unnamed')}</Typography.Text>
+                      <Tag>{t('vectorImport.deletedTag')}</Tag>
+                      <Link to="/features/deleted" data-testid="import-batch-feature-restore">
+                        {t('vectorImport.featureDeletedRestore')}
+                      </Link>
+                    </Flex>
+                  );
+                }
+                if (row.attachedToFeatureId) {
+                  return (
+                    <Link to={`/features/${row.attachedToFeatureId}`}>
+                      {row.attachedToFeatureName ?? t('vectorImport.unnamed')}
+                    </Link>
+                  );
                 }
                 // A deleted trip answers as not found at its own address, so the line does not
                 // link there: it says the trip is deleted and sends the reader to where it can
@@ -274,8 +382,35 @@ export default function ImportBatchesTab() {
               title: t('vectorImport.columns.decision'),
               dataIndex: 'action',
               width: 130,
-              render: (action: string) => <Tag>{t(`vectorImport.actions.${action}`)}</Tag>,
+              render: (action: string, row: ImportBatchItem) => (
+                <Flex gap={4} wrap>
+                  <Tag>{t(`vectorImport.actions.${action}`)}</Tag>
+                  {row.undoneAt && <Tag color="green">{t('vectorImport.upload.lineUndone')}</Tag>}
+                </Flex>
+              ),
             },
+            ...(phone && detail.data?.batch.canRevert
+              ? [
+                  {
+                    title: '',
+                    key: 'undoRow',
+                    width: 140,
+                    render: (_: unknown, row: ImportBatchItem) =>
+                      row.undoneAt ? null : (
+                        <Popconfirm
+                          title={t('vectorImport.upload.undoRowConfirm')}
+                          description={t('vectorImport.upload.undoLeaves')}
+                          onConfirm={() => void onRevert(detail.data!.batch.id, { itemIds: [row.id] })}
+                          okButtonProps={{ danger: true }}
+                        >
+                          <Button size="small" icon={<UndoOutlined />} data-testid="upload-undo-row">
+                            {t('vectorImport.upload.undoRow')}
+                          </Button>
+                        </Popconfirm>
+                      ),
+                  },
+                ]
+              : []),
           ]}
         />
       </Drawer>

@@ -93,6 +93,7 @@ public class OptionsDocumentationTests
         ("Notifications", typeof(NotificationSettings)),
         ("Announcements", typeof(AnnouncementSettings)),
         ("PhotoLibrarySuspension", typeof(PhotoLibrarySuspensionSettings)),
+        ("Sync", typeof(SyncSettings)),
     ];
 
     public static TheoryData<string> Documents() => new()
