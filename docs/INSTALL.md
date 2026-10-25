@@ -8,6 +8,7 @@ are a database password, an admin account, and the public URL.
 - [Enabling HTTPS](#enabling-https)
 - [Encryption at rest](#encryption-at-rest)
 - [Showing Word and Excel files](#showing-word-and-excel-files)
+- [Survey compiler (optional)](#survey-compiler-optional)
 - [Terrain (optional)](#terrain-optional)
 - [Backups](#backups)
 - [Upgrades](#upgrades)
@@ -259,7 +260,9 @@ connections without writing the header — for which the count must **not** be r
 above. It changes nothing about how requests are counted.
 
 Allow request bodies at least as large as
-`SILEXGIS__Files__MaxUploadBytes` (512 MB by default) — nginx's `client_max_body_size` and
+`SILEXGIS__Files__MaxUploadBytes` (512 MB by default) and
+`SILEXGIS__SurveyUploads__MaxFileBytes` (250 MB by default — one file of a survey sent from a
+field device, sent as the raw body of one request) — nginx's `client_max_body_size` and
 IIS's `maxAllowedContentLength` both default well below that, and an upload refused at the
 proxy fails with an error the application never sees and cannot explain.
 
@@ -754,6 +757,51 @@ It also works offline — an expedition laptop running SilexGIS locally has a wh
 - **Without Docker.** The setting `SILEXGIS__Basemap__SelfHosted` is what offers the basemap; the packaged
   stack sets it from the overlay. A native installation that runs no Martin should set it to `false`, or
   a download will produce a basemap nothing serves.
+
+## Survey compiler (optional)
+
+TopoDroid can send a survey straight to SilexGIS. Without a compiler the upload is archived against
+its cave and its archive read, and that is all: the run ends saying the survey was not compiled.
+With one, the Therion files in the upload are compiled into a 3D model of the cave, a Survex file,
+plan and extended-elevation drawings, and whichever other outputs the upload or your settings ask
+for, each stored under the survey with the upload's date and time in its name.
+
+**In Docker**, start the compiler overlay and tell the application to use it:
+
+```bash
+# in deploy/.env
+SILEXGIS__SurveyCompiler__Mode=service
+
+docker compose -f docker-compose.yml -f docker-compose.therion.yml up -d
+```
+
+The overlay builds an image of about 1.6 GB from the server sources (Therion 6.3.4 and the TeX
+programs it draws maps with, on Ubuntu 26.04) and starts it as `therion`, with no published port, on
+an internal network the application shares with it and which has no way out. It runs with a
+read-only filesystem, no capabilities, a memory limit (`SILEXGIS_THERION_MEMORY`, default `6g`), a
+processor limit (`SILEXGIS_THERION_CPUS`, default `2`) and a process limit, and holds nothing worth
+reading — no database password, no stored files, none of the application's settings — because the
+compiler runs over files somebody uploaded, and a Therion survey can name any file to read. Each
+compile is further bounded by `SILEXGIS__SurveyCompiler__TimeoutSeconds`, `__MaxMemoryBytes` and
+`__MaxOutputFileBytes`, runs one at a time (`SILEXGIS__TherionService__MaxConcurrentCompiles`,
+default `1`), takes a project of at most `SILEXGIS__TherionService__MaxProjectBytes` (default
+256 MB), and its directory (on the `silexgis-therion-work` volume) is deleted when it ends.
+
+Inside the container Therion is not wrapped in bubblewrap as it is in `local` mode: under Docker's
+default security profile bubblewrap cannot create the namespaces its sandbox is made of, and the
+profile changes that would let it weaken the container's own boundary towards the host by more
+than the inner sandbox adds. The container is the sandbox there.
+
+**Natively**, install `therion`, `texlive-base`, `texlive-metapost` and `bubblewrap` from your
+distribution and set `SILEXGIS__SurveyCompiler__Mode=local`: the API then starts Therion itself,
+inside a bubblewrap sandbox, and refuses to compile without one unless
+`SILEXGIS__SurveyCompiler__AllowUnsandboxed=true`.
+
+To check the compiler is there, open the device capabilities the phone reads,
+`GET /api/v1/survey-uploads/capabilities` (signed in): `compiler.available` is `true` and
+`compiler.version` names Therion once the service has answered. To stop compiling, stop the
+service and set the mode back to `none`; runs that fail meanwhile say the compiler is not available
+and can be run again with *Rerun*.
 
 ## Terrain (optional)
 
@@ -1700,9 +1748,10 @@ setting and says how to write what was probably meant:
 - `SILEXGIS__TripTracking__ShareLifetime` — zero or less;
 - `SILEXGIS__TripTracking__ShareGraceAfterClose` — negative (`00:00:00` is allowed);
 - `SILEXGIS__TripPastTracks__Retention` — zero or less (unset is "no limit");
-- the four per-minute limits, `SILEXGIS__Auth__RateLimitPerMinute`,
-  `SILEXGIS__Qr__RateLimitPerMinute`, `SILEXGIS__TripTracking__PublicRateLimitPerMinute` and
-  `SILEXGIS__CalendarFeed__RateLimitPerMinute` — zero or less.
+- the per-minute limits, `SILEXGIS__Auth__RateLimitPerMinute`,
+  `SILEXGIS__Qr__RateLimitPerMinute`, `SILEXGIS__TripTracking__PublicRateLimitPerMinute`,
+  `SILEXGIS__CalendarFeed__RateLimitPerMinute` and
+  `SILEXGIS__SurveyUploads__PublicRateLimitPerMinute` — zero or less.
 
 An installation that never set them, or set them sensibly, sees no difference. One that had such
 a value was already not working — links that stopped answering at the midnight their trip ended
@@ -2244,6 +2293,7 @@ the reasoning beside each one.
 | `SILEXGIS__Proxy__Hops` | `1` | how many reverse proxies stand between a caller and the application, **exactly**. The three per-address limits above and below find the caller by walking `X-Forwarded-For` back this many hops. The packaged stack has one (its web front); the HTTPS overlay has two and sets `2` itself; your own proxy in front of the web service makes two, and you set it — see "Your own proxy" under [Enabling HTTPS](#enabling-https). Too low, and every caller counts as your proxy and shares one allowance; too high, and a caller can write an address of their own into the header |
 | `SILEXGIS__Proxy__TrustedNetworks__0`, `__1`, … | loopback and the private ranges | the networks those proxies speak from, in CIDR notation, one per index. Only needed for a proxy on a public address (a CDN, a proxy on another machine). **Naming any replaces the built-in list** rather than adding to it, so name the private range your own services speak from too |
 | `SILEXGIS__Auth__SpeleoLocRefreshTokenDays` | `45` | how long the SpeleoLoc mobile app may stay offline before a caver has to sign in on it again. The clock restarts at every successful sync, not at sign-in. Values outside 1 to 365 days are brought back inside that range |
+| `SILEXGIS__Auth__AccessKeyMaxDays` | `365` | the longest a personal access key may be made to last. A caver makes a key under *Settings › Access keys* and pastes it into a field device (TopoDroid) to send surveys; the form offers 30, 90 and 365 days, capped by this figure, and there is no "never". A key opens only the survey-upload routes, the caver's own profile and the cave search — every other route refuses it — and changing or resetting the password, or locking the account, stops every key at once. Values outside 1 to 3650 days are brought back inside that range |
 | `SILEXGIS__Auth__SigningCertificatePath` | *(unset)* | a PKCS#12 (`.pfx`) file, private key included, to sign sign-in tokens with. Unset, the API makes one on first start and keeps it in the keys directory as `token-signing.pfx` (owner-readable only), renewing it by itself thirty days before its five years run out and keeping the outgoing one so nobody is signed out. A file of your own is never renewed: the log warns at every start in its last thirty days, and replacing it signs everybody out once |
 | `SILEXGIS__Auth__SigningCertificatePassword` | *(unset)* | the password of that file, if it has one |
 | `SILEXGIS__Auth__EncryptionCertificatePath` | *(unset)* | the same for the certificate that encrypts the tokens only the server reads (refresh tokens, authorization codes); made and kept as `token-encryption.pfx` when unset |
@@ -2253,6 +2303,29 @@ the reasoning beside each one.
 | `SILEXGIS__Sync__AllowAdministratorRead` | `false` | lets a full administrator read a sync set belonging to another account — the named selection of caves a caver's phone carries, the club its uploads are created for, its code-generation settings and when it was last edited. Off unless you turn it on: a sync set is the one thing in the installation that says where a particular person goes, so an installation opts into that support ability deliberately rather than inheriting it. It widens **reading one set whose identifier the administrator already knows**, and nothing else — the listing still answers with the caller's own sets so it cannot be used to count anybody's, replacing and deleting a set stay the owner's alone, and no device can download or upload through a set it does not own however privileged the account it is signed in as. The identifier has to come from the caver, their phone or the database — nothing in the web interface shows another account's set identifier, and this setting deliberately adds no way to find one: it answers "what does this set carry?" for somebody already handed the identifier, never "which sets does that caver have?" |
 | `SILEXGIS__Sync__UploadRowsMax` | `500` | the most rows one upload batch from a phone may carry. A batch is applied as a unit, so this bounds what a single failed or repeated request costs. Values outside 1 to 5000 are brought back inside that range |
 | `SILEXGIS__Sync__DuplicateRadiusMeters` | `50` | how close something already in the registry has to be to a row a phone just created before the answer mentions it. Reporting only — it never refuses a row. `0` turns the report off; values above 5000 are brought back to 5000. The same figure a file import uses, because how close two entrances can be before they are probably one is a property of the karst rather than of the channel |
+| `SILEXGIS__SurveyUploads__MaxFileBytes` | `262144000` | the largest single file a field device (TopoDroid) may send in a survey upload, in bytes — 250 MB. A phone's survey archive carries its sketches and photos, so this is well above any survey source. The reverse proxy must let a body this size through: both packaged nginx configurations accept 1 GB, so raising this past that means raising `client_max_body_size` too |
+| `SILEXGIS__SurveyUploads__MaxFilesPerUpload` | `64` | the most files one survey upload may declare (the archive, its Therion sources and sketches, and other exports) |
+| `SILEXGIS__SurveyUploads__CaveCreation` | `true` | whether a survey upload that names no cave may make one, named after the survey's title (numbered `(2)`, `(3)`… when a cave the uploader can see already has the name), on the uploader's ordinary right to create caves. `false` refuses such an upload, and the device has to name a cave the account can write to |
+| `SILEXGIS__SurveyUploads__DefaultCaveTypeId` | *(unset)* | the cave type a cave made from a survey upload gets when the upload names none. Unset, the installation's ordinary cave type |
+| `SILEXGIS__SurveyUploads__DefaultOutputs` | `lox,3d,plan-pdf,extended-pdf` | the outputs a survey upload's processing produces when the upload asks for none, as catalogue names separated by commas. The account's own *always produce* list and the setting below are added to it, never taken away |
+| `SILEXGIS__SurveyUploads__AlwaysOutputs` | *(empty)* | outputs every survey upload on this installation produces whatever the upload and the account ask for, as catalogue names separated by commas |
+| `SILEXGIS__SurveyUploads__UploadSessionHours` | `24` | how long an opened survey upload waits for its files before it is abandoned. The files that did arrive stay archived. Values outside 1 to 168 hours are brought back inside that range |
+| `SILEXGIS__SurveyUploads__MaxUnpackedBytes` | `2147483648` | the most a survey archive from a field device may unpack to, in bytes, counting every entry it declares — its photos included (2 GB). Only the archive's manifest and its survey dump are ever unpacked, and only into memory; an archive declaring more than this, holding more than 10,000 entries, or with an entry that expands past what it declares (the shape of a decompression bomb) is refused as `survey_pipeline.archive_too_large`, and its files stay archived |
+| `SILEXGIS__SurveyUploads__KeepArtefactVersions` | `0` | how many versions of each survey keep what their compile produced — the survey models, the drawings and other outputs, and the compiler's log. `0` keeps every version's; `1` keeps only the newest version's, and so on. Older versions' outputs are removed by the periodic sweep (every 30 minutes). What a version was compiled from — the device's archive, its Therion files and the generated configuration — is kept for every version, so a pruned version can be compiled again with *Rerun* |
+| `SILEXGIS__SurveyUploads__PublicLinks` | `true` | whether a completed survey upload gets a public link to its results — a page anybody holding the address can open without an account, showing the survey's title, the cave's name, the run's progress and the files it produced (never the uploaded files, the compiler's log, the party, station names or any coordinate). Each account can still turn links off for its own uploads in its settings, and **a cave whose position is protected never gets one** — also when protection is switched on after the link was made, which stops it at once. `false` makes no new links and stops every link already made from opening, for as long as it is off |
+| `SILEXGIS__SurveyUploads__PublicRateLimitPerMinute` | `120` | requests one address may make per minute to public survey-upload pages. A page watching a run reads again every few seconds while it runs, so this is **cost control, not a secret** — the link cannot be guessed. **Checked at start** like the other per-minute limits: zero or less stops the application with a message naming the setting |
+| `SILEXGIS__SurveyCompiler__Mode` | `none` | whether and where uploaded surveys are compiled with Therion. `none` compiles nothing: an upload is archived, its archive read, and the run ends saying it was not compiled. `local` runs the `therion` program installed beside the API (a native install, or an image you built with it), inside a bubblewrap sandbox. `service` hands each upload's project to the survey compiler container (see *Survey compiler (optional)*); a service that does not answer fails that run as `survey_pipeline.compiler_unavailable`, which *Rerun* recovers once it is back. Any other value is read as `none` |
+| `SILEXGIS__SurveyCompiler__Url` | *(empty)* | the survey compiler service's address in `service` mode. The overlay sets it to `http://therion:3100`; `service` with no address is read as `none` |
+| `SILEXGIS__SurveyCompiler__MaxOutputBytes` | `536870912` | in `service` mode, the most one compile may hand back — its log and every output together (512 MB). A larger answer fails the run rather than being stored. Never below 1 MB |
+| `SILEXGIS__SurveyCompiler__TherionPath` | *(empty)* | the Therion program `local` mode runs. Empty, the first `therion` on the search path |
+| `SILEXGIS__SurveyCompiler__BwrapPath` | *(empty)* | the bubblewrap program `local` mode starts Therion through. Empty, the first `bwrap` on the search path. The sandbox gives Therion no network, none of the API's environment, the system's programs read-only, and the run's own directory as the only place it can read survey files from or write to — an uploaded survey can otherwise make Therion read any file the API can read, and Therion quotes what it read into a log the uploader is shown |
+| `SILEXGIS__SurveyCompiler__AllowUnsandboxed` | `false` | whether `local` mode may run Therion without the sandbox when bubblewrap is not found. `false` refuses to compile at all (the capabilities say no compiler, and the API log says why); `true` runs Therion directly with the same limits and an emptied environment, and the API log warns at start-up |
+| `SILEXGIS__SurveyCompiler__TimeoutSeconds` | `600` | how long one compile may run before it is stopped, as `survey_pipeline.compile_timeout`. Values outside 10 to 7200 seconds are brought back inside that range |
+| `SILEXGIS__SurveyCompiler__MaxMemoryBytes` | `4294967296` | the address space one compile may use (4 GB): Therion and the TeX programs it starts for drawings. Never below 256 MB |
+| `SILEXGIS__SurveyCompiler__MaxOutputFileBytes` | `1073741824` | the largest single file one compile may write (1 GB). Never below 1 MB |
+| `SILEXGIS__TherionService__MaxConcurrentCompiles` | `1` | *read by the survey compiler container, not the API* (the overlay passes it through): how many compiles it runs at once; the rest wait their turn. Each compile can use up to `SILEXGIS__SurveyCompiler__MaxMemoryBytes`, so raise `SILEXGIS_THERION_MEMORY` with it. One at a time also means a run's files are the only survey files in the container while it compiles |
+| `SILEXGIS__TherionService__MaxProjectBytes` | `268435456` | *read by the survey compiler container, not the API* (the overlay passes it through): the most one project sent to it may hold, sources and drawings together (256 MB). A larger one is refused, that run fails (as `survey_pipeline.unexpected`), and the API log names the refusal. Never below 1 MB |
+| `SILEXGIS__SurveyCompiler__WorkDir` | *(empty)* | where compile runs are made, one directory per run, deleted when the run ends however it ends. Empty, `survey-work` under `SILEXGIS__Files__Root` — on the volume already sized for files. Do not point it at a memory-backed temporary directory: a run writes the project, Therion's own temporary files and every output |
 | `SILEXGIS__TripTracking__PublishRealNames` | `true` | whether a **published** trip names the party for real. On by default, and the one setting here that defaults to showing something: a club publishes a trip so that families and friends can watch a party come out, and a page that will not say which person is still underground does not answer the question it was opened for. Set it to `false` and every published page in this installation goes back to naming nobody — each person appears as their place in the party ("Caver 2") and the page says nothing else about who they are. It applies as each page is read rather than being stored on a share, so it moves links already handed out in both directions: turning it off closes the disclosure on every live link with nothing to re-issue, and turning it on — which is what upgrading from a build before this setting existed does — opens it on links minted when the page named nobody. An installation with follow links in circulation should decide in the same step as the upgrade; see "Upgrading across the release that names the party on published trips" above. Two things it does not decide. An administrator can give one person a name of their own for a trip's page, and that name is what the page shows whichever way this is set — which is how somebody who does not want to appear is kept off a public page without the club turning names off for everybody. And a cave whose coordinates are protected still cannot be published at all, whatever this says. Note that where a club has also allowed its own website to embed the page, that site is told the party the same way |
 | `SILEXGIS__TripTracking__PublishExpectedReturn` | `false` | whether a **published** trip says the hour its party planned to be out by. **Off by decision, not by oversight:** the question "may a published page show the hour a party planned to be out?" was put to this project's owner, who answered no, so this default is deliberate, is not waiting to be flipped, and should not be "corrected" to `true` by a later change on the assumption that somebody forgot it. The setting stays because it is how an installation whose own answer differs — or a later change of mind — gets it without new code. Off unless you turn it on: it tells people without an account something about the party's plan that a published page does not otherwise say, and whether your club wants that said in public is yours to decide. Set it to `true` and the page of a trip that is being followed gains one line under "followed since" — "planned out by 17:00" — for as long as somebody of that party is still underground; once the hour has passed the line says so in the same calm words and nothing more. It is the hour typed into the trip as "expected back", and only that: the alarm hour of the trip's overdue callout, whether that callout has gone off or been stood down, and anything else about it are never published, and switching this on sends nothing and alerts nobody. An hour that is not later than the moment the watch was started is left out, because it belongs to an earlier outing of the same trip record. Finished trips never show it — not in the list of past trips and not in a replay. Like the setting above it is read as each page is drawn, so it applies to links already handed out, in both directions |
 | `SILEXGIS__TripTracking__PublishClubs` | `false` | whether a **published** trip says which caving groups each person named on it belongs to. Off unless you turn it on: whom somebody caves with is a fact about them no published page said before, and whether people without an account read it is yours to decide. Set it to `true` and each person named by their own name carries the names of their caving groups, in alphabetical order, on a trip being followed, on the list of trips being followed and on a finished trip's replay — what a club's journal page needs to count its figures per club without keeping a list of its own. Never beside a caption (that is how somebody is kept off a public page, and their club beside it would point at them), never where `PublishRealNames` is off, and nothing about a person's role in a group. Read as each page is drawn, so a person who joins or leaves a group is shown so on the next read, and it applies to links already handed out, in both directions |

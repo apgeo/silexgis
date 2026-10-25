@@ -58,6 +58,17 @@ public sealed class AuthOptions
         TimeSpan.FromDays(Math.Clamp(SpeleoLocRefreshTokenDays, 1, 365));
 
     /// <summary>
+    /// The longest a personal access key may be made to last, in days. The creation form offers
+    /// 30, 90 and 365 days; this caps what it offers and what the API accepts.
+    /// </summary>
+    /// <remarks>
+    /// A key is pasted into a field device and lives there unattended, so every key expires and
+    /// there is no "never". Clamped to one day to ten years by
+    /// <see cref="SilexGis.Domain.Auth.AccessKeyLifetime.Ceiling"/>, against a mistyped figure.
+    /// </remarks>
+    public int AccessKeyMaxDays { get; set; } = SilexGis.Domain.Auth.AccessKeyLifetime.DefaultDays;
+
+    /// <summary>
     /// A PKCS#12 (.pfx) file holding the certificate tokens are signed with, private key included.
     /// Unset (the default), one is made on first start and kept in the keys directory.
     /// </summary>

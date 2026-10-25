@@ -110,6 +110,32 @@ public class HistoryProtectionTests
         result.Redacted.ShouldContain("TotalLengthM");
     }
 
+    [Theory]
+    [InlineData(nameof(SurveyUpload))]
+    [InlineData(nameof(CaveSurvey))]
+    public void A_surveys_and_its_uploads_payload_dropped_entirely_when_hidden(string entityType)
+    {
+        // A survey's title and an upload's status are read only through records withheld whole
+        // from a caller who may not place the cave; the timeline withholds them the same way.
+        var changes = Changes(("SurveyTitle", null, "Inventata"), ("Title", null, "Inventata"), ("Status", "Receiving", "Queued"));
+
+        var result = HistoryProtection.Redact(entityType, changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
+
+        result.Changes.ShouldBeNull();
+        result.Redacted.ShouldContain("Status");
+    }
+
+    [Fact]
+    public void An_uploads_log_tail_never_reaches_the_timeline_and_the_rest_does_with_the_exact_view()
+    {
+        var changes = Changes(("LogTail", "invented log line", null), ("Status", "Failed", "Queued"));
+
+        var result = HistoryProtection.Redact(nameof(SurveyUpload), changes, governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: true, peopleHidden: false, memberHidden: NoMemberHidden);
+
+        result.Changes!.ContainsKey("LogTail").ShouldBeFalse();
+        result.Changes.ContainsKey("Status").ShouldBeTrue();
+    }
+
     [Fact]
     public void Survey_compilation_figures_kept_when_caller_can_view_exact()
     {

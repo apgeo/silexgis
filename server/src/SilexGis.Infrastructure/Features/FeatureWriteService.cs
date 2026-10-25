@@ -123,8 +123,14 @@ public sealed class FeatureWriteService(
         return feature;
     }
 
+    /// <summary>
+    /// Writes a centerline of a cave. The first centerline of a cave becomes its default — its
+    /// shape, and with it the current mark of the model it was read out of — unless
+    /// <paramref name="firstBecomesDefault"/> is false, for a centerline whose model must not take
+    /// that mark by the route that wrote it.
+    /// </summary>
     public async Task<Feature> CreateCenterlineAsync(
-        Feature feature, Centerline centerline, CancellationToken ct = default)
+        Feature feature, Centerline centerline, bool firstBecomesDefault = true, CancellationToken ct = default)
     {
         feature.Kind = FeatureKind.Centerline;
         feature.Category = FeatureCategory.Underground;
@@ -136,7 +142,8 @@ public sealed class FeatureWriteService(
         centerline.Id = feature.Id;
         // The first centerline of a cave becomes the cave's shape.
         centerline.IsDefault = centerline.IsDefault
-            || (!await db.Centerlines.AnyAsync(c => c.CaveFeatureId == centerline.CaveFeatureId, ct)
+            || (firstBecomesDefault
+                && !await db.Centerlines.AnyAsync(c => c.CaveFeatureId == centerline.CaveFeatureId, ct)
                 && !db.Centerlines.Local.Any(c => c.CaveFeatureId == centerline.CaveFeatureId));
         if (centerline.IsDefault)
         {

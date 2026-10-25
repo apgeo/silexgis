@@ -1,0 +1,59 @@
+{
+  "id": "<upload>",
+  "status": "queued",
+  "stage": null,
+  "progress": 0,
+  "message": null,
+  "error": null,
+  "cave": {
+    "id": "<cave>",
+    "name": "Pestera Inventata <marker>",
+    "url": "/caves/<cave>"
+  },
+  "caveSurvey": {
+    "id": "<survey>",
+    "title": "Pestera Inventata <marker>"
+  },
+  "version": "<timestamp>",
+  "caveCreated": true,
+  "survey": {
+    "title": "Pestera Inventata <marker>",
+    "name": "pestera_inventata",
+    "date": null,
+    "team": null
+  },
+  "files": [
+    {
+      "name": "pestera_inventata.zip",
+      "role": "archive",
+      "status": "stored",
+      "declaredSize": 2276,
+      "receivedSize": 2276,
+      "sha256": "8191644bc7b21701cee8f2d58f37fe313d4ff0ee97a733f929fad656bc574206",
+      "refusalCode": null,
+      "sourceId": "<archive-source>",
+      "documentId": "<archive-document>",
+      "contentUrl": "/api/v1/files/<uuid-1>/content?token=<token>"
+    }
+  ],
+  "artefacts": [],
+  "compiler": null,
+  "outputs": [
+    "lox",
+    "3d",
+    "plan-pdf",
+    "extended-pdf"
+  ],
+  "compile": true,
+  "logTail": null,
+  "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<upload>",
+  "publicLink": {
+    "url": "/p/survey/<public-token>",
+    "createdAt": "<timestamp>"
+  },
+  "publicLinkRefusal": null,
+  "createdAt": "<timestamp>",
+  "expiresAt": "<timestamp>",
+  "startedAt": null,
+  "finishedAt": null
+}

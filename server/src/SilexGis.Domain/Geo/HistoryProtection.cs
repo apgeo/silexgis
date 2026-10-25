@@ -106,6 +106,13 @@ public static class HistoryProtection
         [nameof(Entities.TripTracking.ReferenceStationName), nameof(Entities.TripTracking.DepthFilter),
          nameof(Entities.TripTracking.SurveyModelId), nameof(Entities.TripTracking.CaveFeatureId)];
 
+    // A compiler's log tail is told only to the cave's writers: station names and fixed
+    // coordinates appear in it. The timeline has no per-row answer to "may this caller write the
+    // cave", so the tail never appears in it for anybody; its writes are direct updates and do
+    // not reach the audit trail in the first place, and this keeps it out should one ever be a
+    // tracked save.
+    private static readonly string[] SurveyUploadNoise = [nameof(SurveyUpload.LogTail)];
+
     private static readonly string FeatureCave = FeatureAudit.TypeName(FeatureKind.Cave);
     private static readonly string FeatureEntrance = FeatureAudit.TypeName(FeatureKind.CaveEntrance);
     private static readonly string FeatureCenterline = FeatureAudit.TypeName(FeatureKind.Centerline);
@@ -117,6 +124,7 @@ public static class HistoryProtection
         : entityType == nameof(StoredFile) ? [.. AlwaysNoise, .. FileNoise]
         : entityType == nameof(TripPositionEvent) ? [.. AlwaysNoise, .. TripPositionEventNoise]
         : entityType == nameof(Entities.TripTracking) ? [.. AlwaysNoise, .. TripTrackingNoise]
+        : entityType == nameof(SurveyUpload) ? [.. AlwaysNoise, .. SurveyUploadNoise]
         : AlwaysNoise;
 
     /// <summary>
@@ -202,14 +210,17 @@ public static class HistoryProtection
         }
         else if (entityType == FeatureCenterline
             || entityType == nameof(SurveyModel)
-            || entityType == nameof(SurveyCompilation))
+            || entityType == nameof(SurveyCompilation)
+            || entityType == nameof(CaveSurvey)
+            || entityType == nameof(SurveyUpload))
         {
             // Survey-borne rows in a protected timeline: when hidden, drop the whole payload
             // but keep the event. These rows only reach a caller who already failed the
-            // exact-location check. A compilation's figures are not themselves a position,
-            // but they are only readable through a survey record that is withheld whole from
-            // that caller, and they inherit its gate rather than getting a looser one — the
-            // timeline must not become the one surface that hands over what the others refuse.
+            // exact-location check. A compilation's figures, a survey's title or an upload's
+            // status are not themselves a position, but they are only readable through survey
+            // records that are withheld whole from that caller, and they inherit that gate
+            // rather than getting a looser one — the timeline must not become the one surface
+            // that hands over what the others refuse.
             if (governingHidden && changes.Count > 0)
             {
                 redacted.AddRange(changes.Select(kv => kv.Key));

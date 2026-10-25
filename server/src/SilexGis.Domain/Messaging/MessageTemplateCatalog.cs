@@ -188,6 +188,12 @@ public static class MessageTemplateCatalog
 
     public const string NotifyJobFailed = "notify.job-failed";
 
+    /// <summary>A survey this person sent from a field device has been processed.</summary>
+    public const string NotifySurveyUploadSucceeded = "notify.survey-upload-succeeded";
+
+    /// <summary>A survey this person sent from a field device could not be processed.</summary>
+    public const string NotifySurveyUploadFailed = "notify.survey-upload-failed";
+
     public const string NotifySecurityPasswordChanged = "notify.security-password-changed";
 
     /// <summary>Warns the address an account is moving away from. Sent to the old address.</summary>
@@ -1063,6 +1069,78 @@ public static class MessageTemplateCatalog
 
                     Poți încerca din nou de la {siteUrl} — dacă eșuează în continuare, anunță un
                     administrator.
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        // A survey sent from a field device names its survey and its cave and links to the page
+        // the run is watched on. It declares no placeholder a position, a station name, the party
+        // or the compiler's words could arrive in: the run's messages and log quote all of them,
+        // and they are the cave's to show, on that page, to whoever may still read it there.
+        new(
+            NotifySurveyUploadSucceeded,
+            MessageChannel.Email,
+            "A survey someone sent from a field device has been processed.",
+            [AppName, DisplayName, "surveyTitle", "caveName", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "Your survey {surveyTitle} has been processed",
+                    """
+                    Hello {displayName},
+
+                    The survey {surveyTitle} you sent to {appName} for the cave {caveName} has been
+                    processed. What it produced is listed on its page:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Ridicarea ta {surveyTitle} a fost procesată",
+                    """
+                    Bună ziua {displayName},
+
+                    Ridicarea {surveyTitle} pe care ai trimis-o pe {appName} pentru peștera
+                    {caveName} a fost procesată. Ce a rezultat este pe pagina ei:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifySurveyUploadFailed,
+            MessageChannel.Email,
+            "A survey someone sent from a field device could not be processed.",
+            [AppName, DisplayName, "surveyTitle", "caveName", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "Your survey {surveyTitle} could not be processed",
+                    """
+                    Hello {displayName},
+
+                    The survey {surveyTitle} you sent to {appName} for the cave {caveName} could not
+                    be processed. Its files are kept; its page says what went wrong, and it can be run
+                    again from there:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Ridicarea ta {surveyTitle} nu a putut fi procesată",
+                    """
+                    Bună ziua {displayName},
+
+                    Ridicarea {surveyTitle} pe care ai trimis-o pe {appName} pentru peștera
+                    {caveName} nu a putut fi procesată. Fișierele ei sunt păstrate; pagina ei spune
+                    ce nu a mers și de acolo poate fi rulată din nou:
+
+                    {url}
 
                     {unsubscribeUrl}
                     """),

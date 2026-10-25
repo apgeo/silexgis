@@ -210,6 +210,20 @@ public static class ProcessingJobKinds
     public const string BasemapExtract = "basemap-extract";
 
     /// <summary>
+    /// Process one survey upload from a device, stage by stage, writing where it has got to on the
+    /// upload's own status row. Payload: <c>{ "surveyUploadId": "…" }</c>. Queued when the device
+    /// says every file has arrived, and again by a rerun. Someone is watching a progress bar, so it
+    /// is not a background kind.
+    /// </summary>
+    public const string SurveyUploadPipeline = "survey-upload-pipeline";
+
+    /// <summary>
+    /// Closes survey uploads whose device stopped sending before every file arrived. The files
+    /// that did arrive stay archived — they are the caver's. Payload: <c>{}</c>.
+    /// </summary>
+    public const string SurveyUploadSweep = "survey-upload-sweep";
+
+    /// <summary>
     /// The kinds that run on a worker of their own rather than on the general one.
     /// </summary>
     /// <remarks>
@@ -257,6 +271,6 @@ public static class ProcessingJobKinds
     [
         PhotoGeoBackfill, SurveyReadingBackfill, TextExtraction, TextExtractionBackfill,
         DocumentConversion, DocumentConversionBackfill, AccessHistoryPrune, FeatureIntegrityVerify,
-        UploadSessionSweep, DocumentPurge, TripPurge, TerrainUploadSweep,
+        UploadSessionSweep, DocumentPurge, TripPurge, TerrainUploadSweep, SurveyUploadSweep,
     ];
 }

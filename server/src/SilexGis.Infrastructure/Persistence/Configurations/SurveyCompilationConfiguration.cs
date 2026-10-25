@@ -34,6 +34,12 @@ public sealed class SurveyCompilationConfiguration : IEntityTypeConfiguration<Su
             .HasForeignKey(x => x.SurveyCompilationId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // The model the same run produced. It may be deleted on its own terms, and the figures of
+        // the log then stand on their own, as they do for a log archived without a model.
+        builder.HasOne<SurveyModel>().WithMany().HasForeignKey(x => x.SurveyModelId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => x.SurveyModelId, "ix_survey_compilations_survey_model_id")
+            .HasDatabaseName("ix_survey_compilations_survey_model_id");
+
         builder.HasIndex(x => x.CaveFeatureId);
 
         // One reading per archived log. A log read a second time replaces the figures of the read

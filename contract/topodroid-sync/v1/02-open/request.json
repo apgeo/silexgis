@@ -1,0 +1,20 @@
+{
+  "source": "topodroid",
+  "client": {
+    "name": "TopoDroid",
+    "version": "6.5.34"
+  },
+  "surveyTitle": "Pestera Inventata <marker>",
+  "surveyName": "pestera_inventata",
+  "description": "Invented survey for the recorded contract",
+  "files": [
+    {
+      "name": "pestera_inventata.zip",
+      "size": 2276,
+      "role": "archive"
+    }
+  ],
+  "pipeline": {
+    "compile": true
+  }
+}

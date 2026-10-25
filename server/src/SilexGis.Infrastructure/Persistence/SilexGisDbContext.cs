@@ -192,12 +192,24 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<CalendarFeedToken> CalendarFeedTokens => Set<CalendarFeedToken>();
 
+    public DbSet<ApiAccessKey> ApiAccessKeys => Set<ApiAccessKey>();
+
     public DbSet<ChecklistItem> ChecklistItems => Set<ChecklistItem>();
 
     /// <summary>What each trip has confirmed of the list it works through: who, and when.</summary>
     public DbSet<TripChecklistTick> TripChecklistTicks => Set<TripChecklistTick>();
 
     public DbSet<SurveyModel> SurveyModels => Set<SurveyModel>();
+
+    public DbSet<CaveSurvey> CaveSurveys => Set<CaveSurvey>();
+
+    public DbSet<SurveyUpload> SurveyUploads => Set<SurveyUpload>();
+
+    public DbSet<SurveyUploadFile> SurveyUploadFiles => Set<SurveyUploadFile>();
+
+    public DbSet<SurveyUploadPreference> SurveyUploadPreferences => Set<SurveyUploadPreference>();
+
+    public DbSet<SurveyUploadPublicLink> SurveyUploadPublicLinks => Set<SurveyUploadPublicLink>();
 
     public DbSet<SurveySource> SurveySources => Set<SurveySource>();
 

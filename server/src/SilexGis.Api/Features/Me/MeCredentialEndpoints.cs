@@ -116,6 +116,7 @@ public static class MeCredentialEndpoints
         IOpenIddictTokenManager issuedTokens,
         IOpenIddictAuthorizationManager grants,
         SilexGisDbContext db,
+        TimeProvider clock,
         CancellationToken ct)
     {
         var user = await userManager.GetUserAsync(principal);
@@ -154,7 +155,7 @@ public static class MeCredentialEndpoints
         // it has to end the sessions that credential opened — on every client and every device,
         // not merely on the one asking. Nothing else reaches them: an issued token carries no
         // security stamp, and the exchange that renews one never asks when the password changed.
-        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, user.Id, ct);
+        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, db, clock.GetUtcNow(), user.Id, ct);
 
         await signInManager.RefreshSignInAsync(user);
         return TypedResults.NoContent();

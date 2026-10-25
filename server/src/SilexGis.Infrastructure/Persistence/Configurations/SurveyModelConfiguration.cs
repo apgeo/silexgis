@@ -43,5 +43,14 @@ public sealed class SurveyModelConfiguration : IEntityTypeConfiguration<SurveyMo
             .HasDatabaseName("ix_survey_models_current_wall_mesh")
             .HasFilter($"is_current AND format = {(short)SurveyModelFormat.Stl}")
             .IsUnique();
+
+        // The survey and the upload a model was compiled from, when a run produced it. Released
+        // rather than held when they go, as the cave's other survey material is.
+        builder.HasOne<CaveSurvey>().WithMany().HasForeignKey(x => x.CaveSurveyId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<SurveyUpload>().WithMany().HasForeignKey(x => x.SurveyUploadId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => x.CaveSurveyId, "ix_survey_models_cave_survey_id")
+            .HasDatabaseName("ix_survey_models_cave_survey_id");
+        builder.HasIndex(x => x.SurveyUploadId, "ix_survey_models_survey_upload_id")
+            .HasDatabaseName("ix_survey_models_survey_upload_id");
     }
 }

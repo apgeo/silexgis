@@ -148,6 +148,8 @@ export const specs = {
     'tracking-therion.spec.ts', 'caveview-label-size.spec.ts',
     'caveview-label-size-mobile.spec.ts',
   ],
+  // Surveys sent from a field device: no page of their own yet, so no browser spec answers for them.
+  surveyUploads: [],
   sync: ['settings.spec.ts'],
   tags: ['trips.spec.ts'],
   taxonomies: [],

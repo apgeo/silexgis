@@ -4,8 +4,10 @@ using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Auth;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Identity;
@@ -33,6 +35,7 @@ public static class MeEndpoints
         var me = api.MapGroup("/me").WithTags("Me");
 
         me.MapGet("/", GetAsync)
+            .AcceptsAccessKey(AccessKeyPurpose.SurveyUpload)
             .WithSummary("Profile, settings and addresses of the authenticated caller.");
         me.MapPut("/", UpdateAsync)
             .WithValidation<MeUpdateRequest>()

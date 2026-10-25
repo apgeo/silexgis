@@ -13,15 +13,18 @@ apply to those files and are reproduced alongside them.
 
 --------------------------------------------------------------------------------
 ThIDE — Therion.Blender, Therion.Build, Therion.Core,
-        Therion.Processing.Abstractions
+        Therion.Processing.Abstractions, Therion.Semantics, Therion.Syntax,
+        Therion.Workspace
 --------------------------------------------------------------------------------
 Readers for the compiled cave-survey formats (Therion Loch .lox and Survex .3d),
-and the reader for what a Therion compilation printed while it ran. Not vendored:
+the reader for what a Therion compilation printed while it ran, the runner that
+starts a Therion compilation, and the builder of a compilable Therion project
+around a survey uploaded from a field device. Not vendored:
 the source is a Git submodule at server/external/ThIDE, pinned to the commit
 below, and the built assemblies are redistributed inside the server image.
 
   Source:    https://github.com/apgeo/ThIDE
-  Commit:    bedfdc71aa972d39b3f6f3f0313c8c7699871534
+  Commit:    0a7196cfe85dce359ea57bdc9ddfb0092d5e6432
   License:   MPL-2.0 — see the LICENSE file beside each module under
              server/external/ThIDE/src/
 

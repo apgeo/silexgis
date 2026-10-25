@@ -75,6 +75,13 @@ public class SurveyCompilation : ITimestamped, IAuditable, IAuditChild
     /// </summary>
     public int LogVersionNumber { get; set; }
 
+    /// <summary>
+    /// The survey model the same compiler run produced, when the log came out of a run on this
+    /// server: the model's loops and closure are these figures. Null for a log archived on its own,
+    /// and once that model is deleted.
+    /// </summary>
+    public Guid? SurveyModelId { get; set; }
+
     /// <summary>How far this application has got with the log.</summary>
     public SurveyCompilationStatus Status { get; set; } = SurveyCompilationStatus.Pending;
 

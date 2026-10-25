@@ -12,6 +12,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 using Therion.Blender;
+using CaveSurvey = Therion.Blender.CaveSurvey;
 using Therion.Blender.Parsing;
 
 namespace SilexGis.Api.Tests;

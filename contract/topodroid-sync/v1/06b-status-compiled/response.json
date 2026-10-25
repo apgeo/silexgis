@@ -1,0 +1,170 @@
+{
+  "id": "<upload>",
+  "status": "succeeded",
+  "stage": "read",
+  "progress": 100,
+  "message": "Compiled: 4 of 4 outputs produced and stored.",
+  "error": null,
+  "cave": {
+    "id": "<cave>",
+    "name": "Compilata <marker>",
+    "url": "/caves/<cave>"
+  },
+  "caveSurvey": {
+    "id": "<survey>",
+    "title": "Compilata <marker>"
+  },
+  "version": "<timestamp>",
+  "caveCreated": true,
+  "survey": {
+    "title": "Compilata <marker>",
+    "name": "pestera_inventata",
+    "date": "2026-10-25",
+    "team": "Test A.; Test B."
+  },
+  "files": [
+    {
+      "name": "pestera_inventata-1p.th2",
+      "role": "therionSketch",
+      "status": "stored",
+      "declaredSize": 719,
+      "receivedSize": 719,
+      "sha256": "a884ca420ef29403190d78581d143ba823504d95950772c7b8600431aa03a195",
+      "refusalCode": null,
+      "sourceId": "<th2-source>",
+      "documentId": "<th2-document>",
+      "contentUrl": "/api/v1/files/<uuid-1>/content?token=<token>"
+    },
+    {
+      "name": "pestera_inventata.th",
+      "role": "therionSource",
+      "status": "stored",
+      "declaredSize": 1431,
+      "receivedSize": 1431,
+      "sha256": "0331d36ae6d46dd9ebe5830238b5da5d7369f576ffa881a83475fc166f5d1675",
+      "refusalCode": null,
+      "sourceId": "<th-source>",
+      "documentId": "<th-document>",
+      "contentUrl": "/api/v1/files/<uuid-2>/content?token=<token>"
+    },
+    {
+      "name": "pestera_inventata.zip",
+      "role": "archive",
+      "status": "stored",
+      "declaredSize": 2276,
+      "receivedSize": 2276,
+      "sha256": "8191644bc7b21701cee8f2d58f37fe313d4ff0ee97a733f929fad656bc574206",
+      "refusalCode": null,
+      "sourceId": "<zip-source>",
+      "documentId": "<zip-document>",
+      "contentUrl": "/api/v1/files/<uuid-3>/content?token=<token>"
+    },
+    {
+      "name": "pestera_inventata-<version-stamp>.thconfig",
+      "role": "generatedConfig",
+      "status": "stored",
+      "declaredSize": 377,
+      "receivedSize": 377,
+      "sha256": "<config-sha256>",
+      "refusalCode": null,
+      "sourceId": "<config-source>",
+      "documentId": "<config-document>",
+      "contentUrl": "/api/v1/files/<uuid-4>/content?token=<token>"
+    },
+    {
+      "name": "pestera_inventata-<version-stamp>.wrapper.th",
+      "role": "generatedConfig",
+      "status": "stored",
+      "declaredSize": 179,
+      "receivedSize": 179,
+      "sha256": "<wrapper-sha256>",
+      "refusalCode": null,
+      "sourceId": "<wrapper-source>",
+      "documentId": "<wrapper-document>",
+      "contentUrl": "/api/v1/files/<uuid-5>/content?token=<token>"
+    }
+  ],
+  "artefacts": [
+    {
+      "kind": "3d",
+      "name": "pestera_inventata-<version-stamp>.3d",
+      "sizeBytes": 22,
+      "contentUrl": "/api/v1/files/<uuid-6>/content?token=<token>",
+      "surveyModelId": "<uuid-7>",
+      "documentId": null,
+      "sourceId": null,
+      "viewUrl": null,
+      "modelStatus": "ready",
+      "error": null
+    },
+    {
+      "kind": "lox",
+      "name": "pestera_inventata-<version-stamp>.lox",
+      "sizeBytes": 23,
+      "contentUrl": "/api/v1/files/<uuid-8>/content?token=<token>",
+      "surveyModelId": "<uuid-9>",
+      "documentId": null,
+      "sourceId": null,
+      "viewUrl": null,
+      "modelStatus": "pending",
+      "error": null
+    },
+    {
+      "kind": "plan-pdf",
+      "name": "pestera_inventata-<version-stamp>.plan.pdf",
+      "sizeBytes": 28,
+      "contentUrl": "/api/v1/files/<uuid-10>/content?token=<token>",
+      "surveyModelId": null,
+      "documentId": "<uuid-11>",
+      "sourceId": null,
+      "viewUrl": null,
+      "modelStatus": null,
+      "error": null
+    },
+    {
+      "kind": "extended-pdf",
+      "name": "pestera_inventata-<version-stamp>.extended.pdf",
+      "sizeBytes": 32,
+      "contentUrl": "/api/v1/files/<uuid-12>/content?token=<token>",
+      "surveyModelId": null,
+      "documentId": "<uuid-13>",
+      "sourceId": null,
+      "viewUrl": null,
+      "modelStatus": null,
+      "error": null
+    },
+    {
+      "kind": "log",
+      "name": "pestera_inventata-<version-stamp>.log",
+      "sizeBytes": 254,
+      "contentUrl": "/api/v1/files/<uuid-14>/content?token=<token>",
+      "surveyModelId": null,
+      "documentId": null,
+      "sourceId": "<uuid-15>",
+      "viewUrl": null,
+      "modelStatus": null,
+      "error": null
+    }
+  ],
+  "compiler": {
+    "version": "fake-compiler 1.0"
+  },
+  "outputs": [
+    "lox",
+    "3d",
+    "plan-pdf",
+    "extended-pdf"
+  ],
+  "compile": true,
+  "logTail": "invented tail",
+  "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<upload>",
+  "publicLink": {
+    "url": "/p/survey/<public-token>",
+    "createdAt": "<timestamp>"
+  },
+  "publicLinkRefusal": null,
+  "createdAt": "<timestamp>",
+  "expiresAt": "<timestamp>",
+  "startedAt": "<timestamp>",
+  "finishedAt": "<timestamp>"
+}

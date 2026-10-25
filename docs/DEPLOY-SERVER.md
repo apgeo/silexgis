@@ -407,8 +407,9 @@ above. `docker compose logs api` shows the failing step; a line beginning
 **Login returns 500 while health checks pass.** The data-protection key ring cannot be written.
 Check that `silexgis-keys` is mounted and owned by the container's `app` user.
 
-**Uploads fail at a certain size.** Three ceilings must agree: `SILEXGIS__Files__MaxUploadBytes`,
-Kestrel's limits (derived from it automatically), and the proxy's `client_max_body_size`, which
+**Uploads fail at a certain size.** Three ceilings must agree: `SILEXGIS__Files__MaxUploadBytes`
+(and, for a survey sent from a field device, `SILEXGIS__SurveyUploads__MaxFileBytes`),
+Kestrel's limits (derived from them automatically), and the proxy's `client_max_body_size`, which
 is baked into the `web` image at build time. INSTALL.md, "Upload sizes", has the detail.
 
 **Disk filling.** `docker system df`. Image layers live under `/var/lib/docker` and old build

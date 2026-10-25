@@ -180,6 +180,7 @@ public static class AuthEndpoints
         IOpenIddictTokenManager issuedTokens,
         IOpenIddictAuthorizationManager grants,
         SilexGisDbContext db,
+        TimeProvider clock,
         CancellationToken ct)
     {
         var user = string.IsNullOrWhiteSpace(request.Email) ? null : await userManager.FindByEmailAsync(request.Email);
@@ -215,7 +216,7 @@ public static class AuthEndpoints
         // This is the path taken by somebody who has lost the device the sessions live on, so it is
         // the path where ending them matters most: whoever completes a reset is not going to be
         // able to sign the lost device out afterwards, and cannot list what it holds.
-        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, user.Id, ct);
+        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, db, clock.GetUtcNow(), user.Id, ct);
 
         return TypedResults.NoContent();
     }

@@ -21,6 +21,19 @@
          process-starting types are named individually in the architecture test that asserts nothing
          here reaches them, because a namespace-wide exclusion would have banned the reader too. -->
     <ProjectReference Include="..\..\external\ThIDE\src\Therion.Build\Therion.Build.csproj" />
+    <!-- The builder of a compilable Therion project around a survey a field device uploaded: it
+         reads the survey's header, plans the configuration file and the sketch copies around it,
+         and names the outputs that configuration asks for. Same repository, pin and MPL-2.0 terms
+         as the two modules above. It costs the most of the three: it brings Therion.Syntax and
+         Therion.Semantics with it, and with them the first NuGet packages any of this library
+         declares — MessagePack (for a parse cache this application never opens), Superpower and
+         three Microsoft packages. The project owner accepted MessagePack's published advisories for
+         this reference rather than wait for the library to be split or the package bumped
+         upstream; they are suppressed by name in Directory.Build.props, where the reasoning is
+         written out. The scaffold plans in memory and touches no file and no process; the one type
+         here that does start the compiler is named in the architecture test, which also says which
+         class alone may name it. -->
+    <ProjectReference Include="..\..\external\ThIDE\src\Therion.Workspace\Therion.Workspace.csproj" />
   </ItemGroup>
 
   <ItemGroup>

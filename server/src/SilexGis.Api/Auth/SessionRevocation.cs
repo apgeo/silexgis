@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.EntityFrameworkCore;
 using OpenIddict.Abstractions;
+using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Auth;
 
@@ -33,12 +35,21 @@ namespace SilexGis.Api.Auth;
 /// that lasts: no new access token can be minted, because the refresh tokens are revoked here and
 /// the browser session that could authorize a fresh one is refused by the rotated security stamp.
 /// </para>
+/// <para>
+/// Personal access keys are revoked here too, and have no such window: a key is looked up on every
+/// request, so the stamp written here refuses it on the device's very next call. A key lives on a
+/// device, which is exactly the thing that was lost, so leaving keys out would leave out the
+/// credential this action most needs to take back. Each key is stamped through a tracked save so
+/// that its revocation is in the change history like one made by hand.
+/// </para>
 /// </remarks>
 internal static class SessionRevocation
 {
     public static async Task EndAllSessionsAsync(
         IOpenIddictTokenManager tokens,
         IOpenIddictAuthorizationManager authorizations,
+        SilexGisDbContext db,
+        DateTimeOffset now,
         Guid accountId,
         CancellationToken ct)
     {
@@ -46,5 +57,18 @@ internal static class SessionRevocation
 
         await tokens.RevokeBySubjectAsync(subject, ct);
         await authorizations.RevokeBySubjectAsync(subject, ct);
+
+        var keys = await db.ApiAccessKeys
+            .Where(k => k.UserId == accountId && k.RevokedAt == null)
+            .ToListAsync(ct);
+        if (keys.Count > 0)
+        {
+            foreach (var key in keys)
+            {
+                key.RevokedAt = now;
+            }
+
+            await db.SaveChangesAsync(ct);
+        }
     }
 }

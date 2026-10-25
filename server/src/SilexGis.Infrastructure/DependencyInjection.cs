@@ -111,6 +111,10 @@ public static class DependencyInjection
         services.AddScoped<Import.VisibleProximitySearch>();
         services.Configure<Import.ImportLimitOptions>(
             configuration.GetSection(Import.ImportLimitOptions.SectionName));
+        services.Configure<Surveys.SurveyUploadOptions>(
+            configuration.GetSection(Surveys.SurveyUploadOptions.SectionName));
+        services.Configure<Surveys.SurveyCompilerOptions>(
+            configuration.GetSection(Surveys.SurveyCompilerOptions.SectionName));
         services.AddScoped<Import.ImportCandidateService>();
         services.AddScoped<Import.ImportCommitService>();
         services.AddScoped<Import.DeviceSyncUndoService>();
@@ -389,6 +393,25 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, DirectoryImportHandler>();
         services.AddScoped<IProcessingJobHandler, ImportCommitHandler>();
         services.AddScoped<IProcessingJobHandler, UploadSessionSweepHandler>();
+        services.AddScoped<Surveys.SurveyUploadArtefactStore>();
+        services.AddScoped<IProcessingJobHandler, SurveyUploadPipelineHandler>();
+        services.AddScoped<IProcessingJobHandler, SurveyUploadSweepHandler>();
+        // Which compiler is the installation's choice, made once at start-up: none unless it asked.
+        var compilerChoice = configuration.GetSection(Surveys.SurveyCompilerOptions.SectionName).Get<Surveys.SurveyCompilerOptions>();
+        if (compilerChoice?.IsLocal == true)
+        {
+            services.AddSingleton<Surveys.ISurveyCompiler, Surveys.LocalSurveyCompiler>();
+        }
+        else if (compilerChoice?.IsService == true)
+        {
+            services.AddHttpClient(Surveys.ServiceSurveyCompiler.HttpClientName);
+            services.AddSingleton<Surveys.ISurveyCompiler, Surveys.ServiceSurveyCompiler>();
+        }
+        else
+        {
+            services.AddSingleton<Surveys.ISurveyCompiler, Surveys.NoSurveyCompiler>();
+        }
+
         services.AddScoped<IProcessingJobHandler, DocumentPurgeHandler>();
         services.AddScoped<IProcessingJobHandler, CavingGroupAnnouncementHandler>();
 
@@ -486,6 +509,7 @@ public static class DependencyInjection
         // for its whole duration.
         services.AddHostedService<TerrainProcessingJobWorker>();
         services.AddHostedService<UploadSessionScheduler>();
+        services.AddHostedService<SurveyUploadSweepScheduler>();
         services.AddHostedService<TerrainUploadSweepScheduler>();
 
         services.Configure<DocumentRetentionOptions>(

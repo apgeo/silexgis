@@ -1,0 +1,24 @@
+<Project>
+  <!--
+    Everything under this directory is another repository's source, checked out as a submodule and
+    built as that repository builds it. MSBuild picks the nearest Directory.Packages.props above a
+    project, so without this file the solution's central version list one level up would govern
+    these projects too — and a project that writes its own package versions, as the survey
+    library's do, is a build error under central management (NU1008). The submodule cannot be
+    edited from here, and its versions are its own maintainers' choice, so central management is
+    switched off for it rather than imitated.
+
+    The package audit is switched off for these projects too, and nothing goes unaudited by it.
+    Every project here is in the solution only because an application project references it, so
+    every package one of them declares reaches that application project transitively and is
+    audited there — with warnings as errors, and against the one list of accepted advisories in
+    ../Directory.Build.props. Audited here as well, the same advisories would come out a second
+    time as warnings, since these projects import their own repository's settings (warnings not
+    errors, and none of this solution's suppressions), and a build that always prints warnings is
+    one where nobody sees the next one.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+</Project>

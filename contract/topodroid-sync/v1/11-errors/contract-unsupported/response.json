@@ -1,0 +1,9 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.22",
+  "title": "Upgrade Required",
+  "status": 426,
+  "detail": "This server speaks version 1 of the survey upload exchange.",
+  "code": "survey_upload.contract_unsupported",
+  "contractVersion": 1,
+  "traceId": "<trace>"
+}

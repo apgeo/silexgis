@@ -33,6 +33,7 @@ import type {
   SurveyModelInfo,
   TerrainDerivativeLayerInfo,
 } from '../api/hooks.ts';
+import type { components } from '../api/schema';
 import { FEATURE_TYPE_GROUP_ORDER } from '../components/map/featureTypeGroups.ts';
 import { MOVIE_PRESETS } from '../caveview/movie/moviePresets.ts';
 import { MOVIE_VIEW_DIRECTIONS, MOVIE_VIEW_LAYERS } from '../caveview/movie/movieSettings.ts';
@@ -213,6 +214,17 @@ const retryOutcomes: Record<NotificationRetryOutcome, true> = {
   unreachable: true,
   suppressed: true,
   queued: true,
+};
+
+/**
+ * Every source an upload batch can come from. The uploads page prints a batch's source through a
+ * key built from the value, so a source added on the server would show as its own lookup key.
+ */
+const uploadSources: Record<components['schemas']['UploadSource'], true> = {
+  interactive: true,
+  archive: true,
+  serverDirectory: true,
+  surveyUpload: true,
 };
 
 const accessScopeKinds: Record<AccessScopeKind, true> = {
@@ -732,6 +744,16 @@ describe('i18n locales', () => {
     expect(choices.filter((choice) => !enChoices[choice])).toEqual([]);
     expect(choices.filter((choice) => !roChoices[choice])).toEqual([]);
     expect(Object.keys(enChoices).sort()).toEqual(choices.sort());
+  });
+
+  it('every source an upload batch can come from is named in both locales, and none is left over', () => {
+    const sources = Object.keys(uploadSources);
+    const enSources: Record<string, string> = en.uploads.batchSourceValues;
+    const roSources: Record<string, string> = ro.uploads.batchSourceValues;
+    expect(sources.filter((name) => !enSources[name])).toEqual([]);
+    expect(sources.filter((name) => !roSources[name])).toEqual([]);
+    expect(Object.keys(enSources).sort()).toEqual(sources.sort());
+    expect(Object.keys(roSources).sort()).toEqual(sources.sort());
   });
 
   it('every delivery state and retry outcome is named in both locales', () => {

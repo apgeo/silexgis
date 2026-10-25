@@ -81,6 +81,15 @@ public class SurveySource : ITimestamped, IAuditable, IAuditChild
 
     public string? Description { get; set; }
 
+    /// <summary>
+    /// The survey this source belongs to, when it came with an upload of one; null for a source
+    /// archived by hand, which belongs to the cave alone.
+    /// </summary>
+    public Guid? CaveSurveyId { get; set; }
+
+    /// <summary>The upload that archived this source, when one did.</summary>
+    public Guid? SurveyUploadId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

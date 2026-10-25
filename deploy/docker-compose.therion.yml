@@ -1,0 +1,94 @@
+# Survey compiler overlay: compiles the Therion surveys field devices upload (TopoDroid's export to
+# SilexGIS) into a 3D model, a Survex file, plan and extended-elevation drawings and the other
+# outputs an upload asks for.
+#
+# Entirely optional, and off unless you start it. Without it an upload is still archived against its
+# cave and its archive read; the run ends saying the survey was not compiled, and the files can be
+# compiled later with *Rerun* once a compiler is there.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.therion.yml up -d
+#
+# Requires in .env (or `up` stops and says so):
+#   SILEXGIS__SurveyCompiler__Mode=service
+#
+# Optional in .env:
+#   SILEXGIS__SurveyCompiler__TimeoutSeconds=600            # per compile; maps take longest
+#   SILEXGIS__SurveyCompiler__MaxMemoryBytes=4294967296     # per compile, inside the container's own limit
+#   SILEXGIS__SurveyCompiler__MaxOutputBytes=536870912      # the most one compile may hand back
+#   SILEXGIS__TherionService__MaxConcurrentCompiles=1       # compiles at once; raise the memory with it
+#   SILEXGIS__TherionService__MaxProjectBytes=268435456     # the most one project sent to it may hold
+#   SILEXGIS_THERION_MEMORY=6g                              # the container's limit, above MaxMemoryBytes
+#   SILEXGIS_THERION_CPUS=2
+#
+# The image is built here, from the same sources as the application (about 1.6 GB: Therion and the
+# TeX programs it draws maps with), which is the reason it is an overlay rather than part of the
+# stack. An installation that never compiles surveys should never build it.
+#
+# Why a container of its own: the compiler runs over files somebody uploaded from a phone, and a
+# Therion survey can name any file to read and makes TeX and MetaPost run over text derived from it.
+# So it runs where there is nothing to read — no database password, no stored files, none of the
+# application's settings — on a network with no way out, with a read-only filesystem, no
+# capabilities, and limits on memory, processors and processes. It publishes no port; the
+# application is its only caller. Each compile is also bounded inside it by time, memory and file
+# size, and its directory is deleted when it ends.
+#
+# Stop it again with:
+#   docker compose -f docker-compose.yml -f docker-compose.therion.yml stop therion
+# and set SILEXGIS__SurveyCompiler__Mode back to none, or every upload's run will fail saying the
+# compiler is not available (a *Rerun* recovers each one once it is back).
+name: silexgis
+
+services:
+  api:
+    environment:
+      # Guarded rather than merely documented: a compiler beside an application that has not been
+      # told to use it looks exactly like no compiler at all, and every upload would end "not
+      # compiled" with nobody the wiser. This turns it into a sentence at `up`.
+      SILEXGIS__SurveyCompiler__Mode: ${SILEXGIS__SurveyCompiler__Mode:?set SILEXGIS__SurveyCompiler__Mode=service in .env so the application hands its uploads to the compiler}
+      SILEXGIS__SurveyCompiler__Url: http://therion:3100
+    # The base file names no network for the application, which puts it on the default one; naming
+    # one here would take it off that unless the default is named too.
+    networks:
+      - default
+      - therion
+
+  therion:
+    build:
+      context: ../server
+      dockerfile: ../deploy/therion/Dockerfile
+    restart: unless-stopped
+    # No published ports on purpose — see the note above.
+    networks:
+      - therion
+    environment:
+      SILEXGIS__SurveyCompiler__TimeoutSeconds: ${SILEXGIS__SurveyCompiler__TimeoutSeconds:-600}
+      SILEXGIS__SurveyCompiler__MaxMemoryBytes: ${SILEXGIS__SurveyCompiler__MaxMemoryBytes:-4294967296}
+      SILEXGIS__SurveyCompiler__MaxOutputFileBytes: ${SILEXGIS__SurveyCompiler__MaxOutputFileBytes:-1073741824}
+      SILEXGIS__TherionService__MaxConcurrentCompiles: ${SILEXGIS__TherionService__MaxConcurrentCompiles:-1}
+      SILEXGIS__TherionService__MaxProjectBytes: ${SILEXGIS__TherionService__MaxProjectBytes:-268435456}
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${SILEXGIS_THERION_MEMORY:-6g}
+    cpus: ${SILEXGIS_THERION_CPUS:-2}
+    # Therion, the TeX programs it starts and the service itself need a few dozen processes; a
+    # survey that makes them fork without end stops here.
+    pids_limit: 256
+    tmpfs:
+      # The service's own temporary files only; every compile's go to its run directory.
+      - /tmp:size=64m
+    volumes:
+      # Compile runs, one directory each, deleted when the run ends: on a volume rather than in
+      # memory, because a run holds the project, Therion's working files and every output.
+      - silexgis-therion-work:/work
+
+networks:
+  # Internal: the compiler can answer the application and reach nothing else, the internet included.
+  therion:
+    internal: true
+
+volumes:
+  silexgis-therion-work:

@@ -1,0 +1,8 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.11",
+  "title": "Gone",
+  "status": 410,
+  "detail": "This upload waited too long for its files and was closed; open a new one.",
+  "code": "survey_upload.expired",
+  "traceId": "<trace>"
+}

@@ -237,6 +237,10 @@ export const groups = {
   me: [
     'AccountEmailTests', 'AccountSettingsTests', 'CredentialRevocationTests',
     'PhoneCredentialTests', 'TwoFactorChannelTests', 'UiDefaultsTests',
+    // Personal access keys are made, listed and revoked under the account's own routes.
+    'AccessKeyTests', 'AccessKeySurfaceTests',
+    // The account's standing choices for the surveys it uploads from a device.
+    'SurveyUploadPreferenceTests',
   ],
   users: [
     'AuthFlowTests', 'CredentialRevocationTests', 'EmailVerificationTests', 'ExternalAuthTests',
@@ -249,6 +253,8 @@ export const groups = {
     'TokenStorePruneTests',
     // Signing out cancels that sign-in's renewal key at the revocation endpoint.
     'SignOutRevocationTests',
+    // A personal access key is a second kind of bearer value, kept to the routes that declare it.
+    'AccessKeyTests', 'AccessKeySurfaceTests',
   ],
   resLinks: [
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
@@ -306,6 +312,11 @@ export const groups = {
     'SurveyGraphExtractorTests', 'SurveyGraphTests', 'SurveyMeshTests', 'SurveyModelReadingTests',
     'SurveyModelTests', 'SurveyPlacementTests', 'SurveySegmentSubstrateTests', 'SurveySourceTests',
     'SurveyTopologyTests', 'SurveyWallBuilderTests', 'SurveyWallsTests',
+    // A cave's surveys and the uploads that are versions of them, and the run that reads them.
+    'SurveyUploadSchemaTests', 'SurveyUploadRouteTests', 'SurveyUploadPipelineTests',
+    'TopoDroidArchiveReaderTests', 'SurveyUploadTherionTests', 'SurveyUploadPublicLinkTests',
+    // The compiler service and the application's side of it.
+    'TherionServiceTests', 'ServiceSurveyCompilerTests',
   ],
   // What a device asks of this installation, and what it may carry away. The protocol suites
   // and the registration and seed paths a device signs in through are one selection: they fail
@@ -326,6 +337,20 @@ export const groups = {
   qr: ['AnonymousSurfaceTests', 'CaveQrPublicationTests', 'PublicQrLandingTests'],
   metadata: ['ContentMetadataTests', 'DocumentMetadataTests', 'JsonSchemaPropertiesValidatorTests'],
   workAreas: ['WorkAreaTests'],
+  // Surveys sent from a field device: the routes, the tables behind them, the account's standing
+  // choices, the key a device carries and the settings that shape what it may send.
+  surveyUploads: [
+    'SurveyUploadRouteTests', 'SurveyUploadSchemaTests', 'SurveyUploadPreferenceTests',
+    'AccessKeySurfaceTests', 'AccessKeyTests', 'OptionsDocumentationTests', 'SurveySourceTests',
+    'SurveyUploadPipelineTests', 'TopoDroidArchiveReaderTests', 'SurveyUploadContractTests',
+    // The real compiler in its sandbox, where the machine has it.
+    'SurveyUploadTherionTests',
+    // The compiler service, and the application handing it a project.
+    'TherionServiceTests', 'ServiceSurveyCompilerTests',
+    // The public link to an upload's results, the page it opens without an account, and the
+    // anonymous surface it joins.
+    'SurveyUploadPublicLinkTests', 'AnonymousSurfaceTests',
+  ],
   // The external cave register this installation reads from and imports out of.
   catalogue: ['SpeologieCatalogueTests'],
   // The elevation surface: the chain that builds it, the phases it runs, and the settings and
@@ -390,6 +415,7 @@ export const areas = {
   'server/src/SilexGis.Api/Features/ResLinks/': 'resLinks',
   'server/src/SilexGis.Api/Features/QrLanding/': 'qr',
   'server/src/SilexGis.Api/Features/Sync/': 'sync',
+  'server/src/SilexGis.Api/Features/SurveyUploads/': 'surveyUploads',
   'server/src/SilexGis.Api/Features/Search/': 'search',
   'server/src/SilexGis.Api/Features/PhotoLibraries/': 'photoLibraries',
   'server/src/SilexGis.Api/Features/Statistics/': 'statistics',
@@ -445,6 +471,9 @@ export const areas = {
   // The two jobs that belong to terrain: running a build, and sweeping the rasters no build names.
   'server/src/SilexGis.Infrastructure/Jobs/TerrainBuildHandler.cs': 'terrain',
   'server/src/SilexGis.Infrastructure/Jobs/TerrainUploadSweepHandler.cs': 'terrain',
+  // The run that reads a survey upload from a device, and the sweep that closes stalled ones.
+  'server/src/SilexGis.Infrastructure/Jobs/SurveyUploadPipelineHandler.cs': 'surveyUploads',
+  'server/src/SilexGis.Infrastructure/Jobs/SurveyUploadSweepHandler.cs': 'surveyUploads',
   'server/src/SilexGis.Infrastructure/Messaging/': 'messaging',
   'server/src/SilexGis.Infrastructure/Metadata/': 'metadata',
   'server/src/SilexGis.Infrastructure/Notifications/': 'notifications',
@@ -453,6 +482,8 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Settings/': 'settings',
   'server/src/SilexGis.Infrastructure/Sms/': 'sms',
   'server/src/SilexGis.Infrastructure/Surveys/': 'surveys',
+  // The survey compiler service, which runs beside the application in a container of its own.
+  'server/src/SilexGis.TherionService/': 'surveyUploads',
   'server/src/SilexGis.Infrastructure/Terrain/': 'terrain',
   'server/src/SilexGis.Infrastructure/Statistics/': 'statistics',
   'server/src/SilexGis.Infrastructure/Trips/': 'trips',
@@ -501,17 +532,17 @@ export const crossCutting = {
     location: { source: 'obfuscat|LocationProtect|protectedLocation|locationClass', flags: 'i' },
   },
   permissionClasses: [
-    'AccessApiTests', 'AccessHistoryTests', 'AccessModelTests', 'AclAndCavingGroupTests',
-    'AdminMessagingTests', 'AlbumAndPublicGalleryTests', 'AnnotatedTextApiTests',
-    'AuthFlowTests', 'BasemapDownloadTests', 'BulkImportTests', 'CabinetApiTests',
-    'CaveDomainTests', 'CaveExternalIdTests', 'CaveOverburdenTests', 'CaveQrPublicationTests',
-    'CaverRosterTests', 'CavingGroupAnnouncementTests', 'CavingGroupMembershipTests',
-    'CenterlineTests', 'ChecklistAuthoringTests', 'DocumentAccessApiTests',
-    'DocumentCommentApiTests', 'DocumentLanguageTests', 'DocumentMetadataTests',
-    'EntrancePlacementGuardTests', 'EventAuthoringTests', 'EventInvitationTests',
-    'EventLifecycleTests', 'EventPolymorphicTests', 'EventReminderSweepTests',
-    'EventSeriesBulkTests', 'ExpeditionMembershipTests', 'ExpeditionReportTests',
-    'ExpeditionRosterRoleVocabularyTests', 'ExpeditionRosterTests',
+    'AccessApiTests', 'AccessHistoryTests', 'AccessKeyTests', 'AccessModelTests',
+    'AclAndCavingGroupTests', 'AdminMessagingTests', 'AlbumAndPublicGalleryTests',
+    'AnnotatedTextApiTests', 'AuthFlowTests', 'BasemapDownloadTests', 'BulkImportTests',
+    'CabinetApiTests', 'CaveDomainTests', 'CaveExternalIdTests', 'CaveOverburdenTests',
+    'CaveQrPublicationTests', 'CaverRosterTests', 'CavingGroupAnnouncementTests',
+    'CavingGroupMembershipTests', 'CenterlineTests', 'ChecklistAuthoringTests',
+    'DocumentAccessApiTests', 'DocumentCommentApiTests', 'DocumentLanguageTests',
+    'DocumentMetadataTests', 'EntrancePlacementGuardTests', 'EventAuthoringTests',
+    'EventInvitationTests', 'EventLifecycleTests', 'EventPolymorphicTests',
+    'EventReminderSweepTests', 'EventSeriesBulkTests', 'ExpeditionMembershipTests',
+    'ExpeditionReportTests', 'ExpeditionRosterRoleVocabularyTests', 'ExpeditionRosterTests',
     'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
     'FeatureHierarchyTests', 'FeatureLinkTests', 'FeatureRestoreTests', 'FeatureShareTests',
     'FeatureTests', 'FeatureTypeWriteTests', 'FileAttachmentTests', 'GeofileTests',
@@ -523,6 +554,7 @@ export const crossCutting = {
     'ReportTemplateTests', 'ResLinkApiTests', 'SavedFilterTests', 'SpeleolocTripImportTests',
     'SpeologieCatalogueTests', 'StagedImportTests', 'SurveyCompilationTests',
     'SurveyModelReadingTests', 'SurveyModelTests', 'SurveySourceTests',
+    'SurveyUploadPreferenceTests', 'SurveyUploadPublicLinkTests', 'SurveyUploadRouteTests',
     'SyncDocumentStreamTests', 'SyncSetTests', 'TermRuleSetTests', 'TerrainActivationTests',
     'TerrainBuildApiTests', 'TerrainBuildCancelRetryTests', 'TerrainBuildPipelineTests',
     'TerrainDerivativeApiTests', 'TerrainProbeTests', 'TerrainSourceTests',
@@ -570,18 +602,19 @@ export const crossCutting = {
     'SurveyGraphTests', 'SurveyModelReadingTests', 'SurveyModelTests',
     'SurveyModelTrackedTripCountsTests', 'SurveyModelTrackedTripReplayTests',
     'SurveyModelTrackedTripsTests', 'SurveySegmentSubstrateTests', 'SurveySourceTests',
-    'SurveyWallsTests', 'SyncDocumentStreamTests', 'SyncPageSizeTests', 'SyncProtocolTests',
-    'SyncUndoTests', 'SyncUploadTests', 'TerrainProbeTests',
-    'TrackingCsvImportReplacementTests', 'TrackingCsvImportTests', 'TripAndTagTests',
-    'TripCalloutSweepTests', 'TripCaveReachTests', 'TripHandoverTests', 'TripImportCommitTests',
-    'TripImportPreviewResolutionTests', 'TripImportResolutionTests', 'TripListFacetTests',
-    'TripLiveSiblingTests', 'TripMapDerivedPositionTests', 'TripMeetingPointTests',
-    'TripPastTrackTests', 'TripPlanNotificationTests', 'TripPurgeTests',
-    'TripReportDocumentTests', 'TripReportTrackingTests', 'TripRoleLinkUnitOfWorkTests',
-    'TripSoftDeleteTests', 'TripStatisticsTests', 'TripStatsTests', 'TripTrackingCaveNoteTests',
-    'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
-    'TripTrackingStationNamesTests', 'TripTrackingStretchTests', 'TripTrackingTests',
-    'WorkAreaTests', 'WorkingSridBehaviourTests',
+    'SurveyUploadPipelineTests', 'SurveyUploadPublicLinkTests', 'SurveyUploadRouteTests',
+    'SurveyUploadSchemaTests', 'SurveyWallsTests', 'SyncDocumentStreamTests',
+    'SyncPageSizeTests', 'SyncProtocolTests', 'SyncUndoTests', 'SyncUploadTests',
+    'TerrainProbeTests', 'TrackingCsvImportReplacementTests', 'TrackingCsvImportTests',
+    'TripAndTagTests', 'TripCalloutSweepTests', 'TripCaveReachTests', 'TripHandoverTests',
+    'TripImportCommitTests', 'TripImportPreviewResolutionTests', 'TripImportResolutionTests',
+    'TripListFacetTests', 'TripLiveSiblingTests', 'TripMapDerivedPositionTests',
+    'TripMeetingPointTests', 'TripPastTrackTests', 'TripPlanNotificationTests',
+    'TripPurgeTests', 'TripReportDocumentTests', 'TripReportTrackingTests',
+    'TripRoleLinkUnitOfWorkTests', 'TripSoftDeleteTests', 'TripStatisticsTests',
+    'TripStatsTests', 'TripTrackingCaveNoteTests', 'TripTrackingPicturesTests',
+    'TripTrackingPublicationTests', 'TripTrackingStationNamesTests', 'TripTrackingStretchTests',
+    'TripTrackingTests', 'WorkAreaTests', 'WorkingSridBehaviourTests',
   ],
 };
 

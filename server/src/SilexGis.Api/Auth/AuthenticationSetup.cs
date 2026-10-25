@@ -166,11 +166,26 @@ public static class AuthenticationSetup
         services.AddSingleton<IConfigureOptions<OpenIddict.Server.OpenIddictServerOptions>, TokenCertificateSetup>();
         services.AddHostedService<TokenStorePruneWorker>();
 
+        // A bearer value is either a sign-in access token or a personal access key, told apart by
+        // the key's fixed marker. The policy scheme only routes: a key goes to the key handler,
+        // everything else — a sign-in token, garbage, or no header at all — to the token
+        // validation exactly as before keys existed. Challenge and forbid always go to the token
+        // validation, so every refusal of a bad credential reads the same whichever kind it was.
+        services.AddAuthentication()
+            .AddPolicyScheme(AccessKeySchemes.Bearer, displayName: null, options =>
+            {
+                options.ForwardDefaultSelector = AccessKeySchemes.Select;
+                options.ForwardChallenge = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+                options.ForwardForbid = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+            })
+            .AddScheme<AuthenticationSchemeOptions, AccessKeyAuthenticationHandler>(
+                AccessKeySchemes.AccessKey, displayName: null, _ => { });
+
         // AddIdentity made the cookie the default scheme; the API default is bearer.
         services.Configure<AuthenticationOptions>(options =>
         {
-            options.DefaultScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
-            options.DefaultAuthenticateScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+            options.DefaultScheme = AccessKeySchemes.Bearer;
+            options.DefaultAuthenticateScheme = AccessKeySchemes.Bearer;
             options.DefaultChallengeScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
         });
 

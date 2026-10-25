@@ -56,6 +56,13 @@ namespace SilexGis.Api.Tests.Support;
 /// </item>
 /// </list>
 /// <para>
+/// Two more follow from the same reasoning. An identifier can sit inside a string — a page
+/// address such as <c>/caves/{id}</c> — and is replaced there by the same name it gets standing
+/// alone, so a link and the row it points at read as one. And a signed delivery address carries a
+/// fresh token every time it is minted; its <c>token=</c> value becomes <c>&lt;token&gt;</c>, the
+/// address around it stays, because its shape is what a client follows.
+/// </para>
+/// <para>
 /// Only the response body and the request line are recorded. Headers are not, which is worth
 /// saying because the obvious next candidate is a row version tag: an <c>ETag</c> on a sync
 /// response would be derived from the database's own transaction counter, would advance with every
@@ -72,7 +79,28 @@ public sealed class ContractFixture
     /// <summary>Set to <c>1</c> to rewrite the committed files instead of asserting against them.</summary>
     public const string RecordVariable = "SILEXGIS_CONTRACT_RECORD";
 
+    /// <summary>The field-device sync protocol's directory under <c>contract/</c>.</summary>
+    public const string SpeleoLocSurface = "speleoloc-sync";
+
+    /// <summary>The survey-upload protocol's directory under <c>contract/</c>.</summary>
+    public const string TopoDroidSurface = "topodroid-sync";
+
     private const string Version = "v1";
+
+    /// <summary>
+    /// An identifier anywhere inside a string. Only applied after the whole-string checks, so a
+    /// value that is nothing but an identifier is still told apart from one that merely holds one.
+    /// </summary>
+    private static readonly Regex EmbeddedUuid = new(
+        @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>The token of a signed delivery address, which is minted afresh on every answer.</summary>
+    private static readonly Regex DeliveryToken = new(
+        @"(?<=[?&]token=)[^&#\s]+",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private readonly string surface;
 
     /// <summary>
     /// Times as this API writes them: an ISO-8601 instant with an offset or a trailing Z. Anchored
@@ -89,6 +117,10 @@ public sealed class ContractFixture
     private readonly Dictionary<string, string> named = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> discovered = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<(string Value, string Placeholder)> literals = [];
+
+    /// <summary>A fixture writing under one protocol's directory of <c>contract/</c>.</summary>
+    /// <param name="surface">The protocol's directory name; the field-device sync protocol's when omitted.</param>
+    public ContractFixture(string surface = SpeleoLocSurface) => this.surface = surface;
 
     public static bool Recording =>
         Environment.GetEnvironmentVariable(RecordVariable) is "1" or "true";
@@ -145,6 +177,25 @@ public sealed class ContractFixture
         string caseName, string requestLine, HttpResponseMessage response) =>
         AssertRefusalAsync(caseName, requestLine, requestBody: null, response);
 
+    /// <summary>
+    /// Writes or checks one successful exchange whose status is not a plain 200 — a 201 for
+    /// something made, a 202 for work queued — with the status beside it, because a client
+    /// branches on it as surely as on a refusal's.
+    /// </summary>
+    public Task AssertWithStatusAsync(
+        string caseName, string requestLine, string? requestBody, HttpResponseMessage response)
+    {
+        ((int)response.StatusCode).ShouldBeLessThan(
+            400, $"{caseName} is recorded as a success, so the server refusing it is what has changed.");
+
+        return WriteExchangeAsync(
+            caseName,
+            requestLine,
+            requestBody,
+            response,
+            status: $"{(int)response.StatusCode} {response.StatusCode}\n");
+    }
+
     /// <inheritdoc cref="AssertRefusalAsync(string, string, HttpResponseMessage)"/>
     public Task AssertRefusalAsync(
         string caseName, string requestLine, string? requestBody, HttpResponseMessage response)
@@ -178,7 +229,7 @@ public sealed class ContractFixture
         var body = Render(document.RootElement);
         var request = Scrub(requestLine) + "\n";
 
-        var directory = Path.Combine(ContractRoot(), caseName);
+        var directory = Path.Combine(ContractRoot(surface), caseName);
         await CompareOrWriteAsync(Path.Combine(directory, "request.txt"), request);
         if (sent is not null)
         {
@@ -264,7 +315,7 @@ public sealed class ContractFixture
     /// hard-coding a depth. The assembly runs from a build output directory, and writing the
     /// recording there would leave it where nothing can commit it.
     /// </summary>
-    internal static string ContractRoot()
+    internal static string ContractRoot(string surface = SpeleoLocSurface)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null
@@ -274,7 +325,7 @@ public sealed class ContractFixture
         }
 
         directory.ShouldNotBeNull("Could not find the working tree above the test assembly.");
-        return Path.Combine(directory.FullName, "contract", "speleoloc-sync", Version);
+        return Path.Combine(directory.FullName, "contract", surface, Version);
     }
 
     private void Write(Utf8JsonWriter writer, JsonElement element)
@@ -341,18 +392,7 @@ public sealed class ContractFixture
 
         if (Uuid.IsMatch(value))
         {
-            if (named.TryGetValue(value, out var label))
-            {
-                return label;
-            }
-
-            if (!discovered.TryGetValue(value, out var placeholder))
-            {
-                placeholder = $"<uuid-{discovered.Count + 1}>";
-                discovered[value] = placeholder;
-            }
-
-            return placeholder;
+            return Placeholder(value);
         }
 
         foreach (var (literal, placeholder) in literals)
@@ -365,6 +405,23 @@ public sealed class ContractFixture
             value = value.Replace(id, label, StringComparison.OrdinalIgnoreCase);
         }
 
-        return value;
+        value = DeliveryToken.Replace(value, "<token>");
+        return EmbeddedUuid.Replace(value, match => Placeholder(match.Value));
+    }
+
+    private string Placeholder(string uuid)
+    {
+        if (named.TryGetValue(uuid, out var label))
+        {
+            return label;
+        }
+
+        if (!discovered.TryGetValue(uuid, out var placeholder))
+        {
+            placeholder = $"<uuid-{discovered.Count + 1}>";
+            discovered[uuid] = placeholder;
+        }
+
+        return placeholder;
     }
 }

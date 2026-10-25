@@ -16,6 +16,9 @@ public enum UploadSource : short
 
     /// <summary>A directory the server itself can reach was walked and copied in.</summary>
     ServerDirectory = 2,
+
+    /// <summary>A survey sent from a field device, file by file, as one survey upload.</summary>
+    SurveyUpload = 3,
 }
 
 /// <summary>How far a batch has got.</summary>

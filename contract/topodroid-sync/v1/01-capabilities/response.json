@@ -1,0 +1,73 @@
+{
+  "contractVersion": 1,
+  "sources": [
+    "topodroid"
+  ],
+  "maxFileBytes": 262144000,
+  "maxFilesPerUpload": 64,
+  "acceptedExtensions": [
+    ".zip",
+    ".th",
+    ".th2",
+    ".thconfig",
+    ".svx",
+    ".log",
+    ".svg",
+    ".pdf",
+    ".dxf",
+    ".kml",
+    ".gpx",
+    ".csv",
+    ".dat",
+    ".tro",
+    ".trox",
+    ".srv",
+    ".plt",
+    ".shz",
+    ".csx",
+    ".cave",
+    ".cav",
+    ".sur",
+    ".trb",
+    ".txt"
+  ],
+  "compiler": {
+    "available": false,
+    "version": null,
+    "outputs": []
+  },
+  "caveCreation": {
+    "allowed": true,
+    "defaultCaveTypeId": 1,
+    "visibilities": [
+      "private",
+      "cavingGroup",
+      "authenticated",
+      "public"
+    ]
+  },
+  "outputs": {
+    "catalogue": [
+      "lox",
+      "3d",
+      "plan-pdf",
+      "extended-pdf",
+      "plan-svg",
+      "extended-svg",
+      "kml",
+      "dxf",
+      "sql",
+      "csv",
+      "survey-list-html",
+      "continuation-list-html",
+      "shp"
+    ],
+    "defaults": [
+      "lox",
+      "3d",
+      "plan-pdf",
+      "extended-pdf"
+    ]
+  },
+  "pollIntervalSeconds": 3
+}
