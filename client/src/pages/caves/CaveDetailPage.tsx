@@ -75,6 +75,7 @@ import CaveExternalIdsSection from './CaveExternalIdsSection.tsx';
 import CaveTripsSection from './CaveTripsSection.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
+import CaveSurveysSection from './CaveSurveysSection.tsx';
 import SurveyModelSection from './SurveyModelSection.tsx';
 import SurveySourceSection from './SurveySourceSection.tsx';
 import SurveyQualityPanel from './SurveyQualityPanel.tsx';
@@ -478,6 +479,10 @@ export default function CaveDetailPage() {
 
       {/* A cave is a feature to the link vocabulary — the same identity its map row carries. */}
       {id && <LinksSection entityType="feature" entityId={id} canAdd entityTitle={cave.name} />}
+
+      {/* Which upload each piece of survey work came from, grouped by survey and version. The two
+          lists below are the cave's whole set of models and sources and are left whole. */}
+      {id && <CaveSurveysSection caveId={id} />}
 
       {id && <SurveyModelSection caveId={id} canEdit={canEdit} />}
 

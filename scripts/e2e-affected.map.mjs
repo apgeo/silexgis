@@ -148,8 +148,9 @@ export const specs = {
     'tracking-therion.spec.ts', 'caveview-label-size.spec.ts',
     'caveview-label-size-mobile.spec.ts',
   ],
-  // Surveys sent from a field device: no page of their own yet, so no browser spec answers for them.
-  surveyUploads: [],
+  // Surveys sent from a field device: the access-key and upload settings, the cave's list of
+  // surveys, the status page of one upload and the page behind its public link.
+  surveyUploads: ['access-keys.spec.ts', 'survey-uploads.spec.ts', 'public-survey.spec.ts'],
   sync: ['settings.spec.ts'],
   tags: ['trips.spec.ts'],
   taxonomies: [],
@@ -203,6 +204,7 @@ export const clientAreas = {
   'client/src/components/cavingGroups/': ['cavingGroups', 'settings', 'trips'],
   'client/src/components/cavers/': 'cavers',
   'client/src/components/caves/': 'caves',
+  'client/src/components/surveyUploads/': 'surveyUploads',
   'client/src/components/caveview/': ['surveys', 'trips'],
   'client/src/components/documents/': 'documents',
   'client/src/components/events/': 'events',
@@ -231,6 +233,7 @@ export const clientAreas = {
   'client/src/pages/catalogue/': 'catalogue',
   'client/src/pages/cavers/': 'cavers',
   'client/src/pages/caves/': 'caves',
+  'client/src/pages/caves/CaveSurveysSection': 'surveyUploads',
   'client/src/pages/cavingGroups/': 'cavingGroups',
   'client/src/pages/checklists/': 'checklists',
   'client/src/pages/dashboard/': 'dashboard',
@@ -247,6 +250,10 @@ export const clientAreas = {
   'client/src/pages/photolibrary/': 'photoLibraries',
   'client/src/pages/public/': 'trips',
   'client/src/pages/settings/': 'settings',
+  'client/src/pages/settings/AccessKeysSettingsPage': 'surveyUploads',
+  'client/src/pages/settings/SurveyUploadSettingsPage': 'surveyUploads',
+  'client/src/pages/surveyUploads/': 'surveyUploads',
+  'client/src/pages/public/PublicSurveyResultPage': 'surveyUploads',
   'client/src/pages/statistics/': 'statistics',
   'client/src/pages/trips/': 'trips',
   'client/src/pages/tools/': 'map',

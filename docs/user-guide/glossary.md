@@ -11,6 +11,10 @@ something narrower here than in ordinary caving speech, that is said.
 
 ---
 
+**Access key** — A long secret text a field device (TopoDroid on a phone) holds instead of your password,
+able only to upload surveys as you. Shown once when made, revocable at any time, and managed only
+when you are signed in with your password. → [Uploading surveys from TopoDroid](features/topodroid-uploads.md#an-access-key-for-the-phone)
+
 **Account** — Somebody who can sign in. Distinct from a **caver**.
 
 **Account invitation** — How an account is opened by somebody else: **Invite someone** on

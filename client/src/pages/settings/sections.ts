@@ -14,6 +14,8 @@ export const SETTINGS_SECTIONS = [
   'filters',
   'coordinates',
   'sync',
+  'access-keys',
+  'survey-uploads',
   'advanced',
 ] as const;
 

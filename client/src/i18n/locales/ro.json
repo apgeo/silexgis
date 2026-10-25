@@ -3882,6 +3882,8 @@
       "filters": "Filtre salvate",
       "coordinates": "Coordonate",
       "sync": "Sincronizare",
+      "access-keys": "Chei de acces",
+      "survey-uploads": "Încărcări de ridicări",
       "advanced": "Avansat"
     },
     "visibility": {
@@ -4112,6 +4114,14 @@
       "title": "Alege un punct",
       "hint": "Fă clic pe hartă sau scrie coordonatele.",
       "use": "Folosește punctul"
+    },
+    "surveyUploads": {
+      "loadFailed": "Setările pentru încărcarea ridicărilor nu au putut fi încărcate.",
+      "outputsTitle": "Produce întotdeauna",
+      "outputsIntro": "Când o ridicare este încărcată de pe un dispozitiv, aceste rezultate sunt produse în plus față de cele cerute de dispozitiv. Dacă nu se cere nimic, instalația produce: {{defaults}}.",
+      "linksTitle": "Legături publice",
+      "linksIntro": "Fiecare încărcare poate primi o legătură care arată rezultatele oricui o deține, fără autentificare. Nu include niciodată fișierele ridicării, echipa sau numele stațiilor. O peșteră cu locație protejată nu primește niciodată una.",
+      "linksSwitch": "Legături publice pentru încărcările mele"
     },
     "sync": {
       "intro": "Alege peșterile pe care un telefon le poartă offline. O selecție doar numește peșteri — nu le preia — deci încheierea ei aici oprește cererile unui dispozitiv și nu schimbă nimic despre peșterile în sine.",
@@ -4715,6 +4725,11 @@
     "loginRequired": "Autentifică-te pentru a vedea această înregistrare partajată.",
     "signIn": "Autentificare",
     "qrLabel": "Linkul de partajare ca cod QR"
+  },
+  "publicSurvey": {
+    "notFound": "Acest link nu funcționează. Poate a fost retras sau poate nu a existat niciodată.",
+    "loadFailed": "Rezultatul nu a putut fi încărcat.",
+    "caveAndVersion": "{{cave}} — încărcat {{when}}"
   },
   "publicTrip": {
     "notFoundTitle": "Nimic de arătat pentru acest link",
@@ -6064,6 +6079,183 @@
     "loadFailed": "Zonele de lucru nu au putut fi încărcate.",
     "truncated": "Nu sunt afișate toate zonele de lucru: instalația conține mai multe decât listează această vizualizare.",
     "subAreaCount": "Zone în interior: {{count}}"
+  },
+  "accessKeys": {
+    "title": "Chei de acces",
+    "intro": "O cheie de acces permite unui dispozitiv din teren — TopoDroid pe telefon — să încarce ridicări în contul tău fără parola ta. Cheia poate doar încărca ridicări: nu poate citi restul contului, nu poate lista sau crea chei și nu poate schimba nimic altceva. Fă câte o cheie pentru fiecare dispozitiv, ca un telefon pierdut să însemne o singură revocare.",
+    "signInRequired": "Cheile de acces se gestionează doar când ești autentificat cu parola, nu de pe un dispozitiv care deține o cheie.",
+    "loadFailed": "Cheile de acces nu au putut fi încărcate.",
+    "createFailed": "Cheia de acces nu a putut fi creată.",
+    "createdTitle": "Cheia pentru „{{name}}” — copiaz-o acum, se afișează o singură dată.",
+    "createdWarning": "Lipește-o imediat în setările dispozitivului. După ce închizi acest mesaj nu o mai poate citi nimeni, nici tu; dacă se pierde, revoc-o și fă alta. Oricine o deține poate încărca ridicări în numele tău.",
+    "form": {
+      "name": "Nume",
+      "namePlaceholder": "TopoDroid pe telefonul meu",
+      "lifetime": "Valabilă",
+      "days": "{{count}} de zile"
+    },
+    "create": "Creează cheia",
+    "revoke": "Revocă",
+    "revokeConfirm": "Revoci „{{name}}”? Dispozitivul care o deține va fi refuzat la următoarea încărcare.",
+    "revokedMessage": "Cheie revocată.",
+    "empty": "Nu ai nicio cheie de acces încă.",
+    "neverUsed": "Niciodată",
+    "columns": {
+      "name": "Nume",
+      "prefix": "Cheia începe cu",
+      "purpose": "Pentru",
+      "created": "Creată",
+      "lastUsed": "Ultima folosire",
+      "expires": "Expiră",
+      "state": "Stare"
+    },
+    "purposes": {
+      "surveyUpload": "Încărcări de ridicări"
+    },
+    "states": {
+      "active": "Activă",
+      "expired": "Expirată",
+      "revoked": "Revocată"
+    }
+  },
+  "surveyUploads": {
+    "stages": {
+      "archive": "Arhivare",
+      "unpack": "Citirea arhivei",
+      "scaffold": "Pregătirea compilării",
+      "compile": "Compilare",
+      "store": "Salvarea rezultatelor",
+      "read": "Citirea rezultatelor"
+    },
+    "stageStates": {
+      "skipped": "Nu era nevoie"
+    },
+    "status": {
+      "receiving": "Se primesc fișiere",
+      "queued": "Așteaptă să ruleze",
+      "running": "Rulează",
+      "succeeded": "Terminat",
+      "failed": "Eșuat",
+      "abandoned": "Abandonat"
+    },
+    "origins": {
+      "topodroid": "TopoDroid",
+      "therion": "Therion",
+      "other": "Altă sursă"
+    },
+    "fileRoles": {
+      "archive": "Arhiva topografiei",
+      "therionSource": "Sursă Therion",
+      "therionSketch": "Schiță",
+      "other": "Alt fișier",
+      "generatedConfig": "Configurație generată",
+      "output": "Rezultat",
+      "log": "Jurnal"
+    },
+    "fileStates": {
+      "declared": "Nu a ajuns",
+      "received": "Primit",
+      "stored": "Salvat",
+      "refused": "Refuzat"
+    },
+    "artefacts": {
+      "title": "Rezultate",
+      "empty": "Nu s-a produs nimic.",
+      "download": "Descarcă",
+      "view": "Vezi"
+    },
+    "problems": {
+      "filesMissing": "Un fișier al acestei încărcări nu mai este în depozitul serverului. Cere administratorului să-l restaureze, apoi rulează încărcarea din nou.",
+      "archiveInvalid": "Arhiva nu este o arhivă de topografie TopoDroid sau este prea veche ori deteriorată ca să fie citită. Exportă din nou topografia din TopoDroid și încarc-o de la capăt.",
+      "archiveTooLarge": "Arhiva conține mai mult decât citește acest server. Exportă o topografie mai mică.",
+      "unexpected": "Serverul a eșuat la procesarea acestei încărcări. Administratorul găsește detaliile în jurnalul serverului.",
+      "sourceMissing": "S-a cerut compilarea, dar nu a fost trimisă nicio sursă Therion.",
+      "sourceInvalid": "O sursă Therion nu a putut fi citită.",
+      "compilerUnavailable": "Compilatorul nu a putut fi contactat. Fișierele sunt arhivate; rulează încărcarea din nou mai târziu.",
+      "compileFailed": "Therion nu a putut compila topografia. Jurnalul de mai jos arată unde.",
+      "compileTimeout": "Compilarea a durat mai mult decât permite acest server.",
+      "outputMissing": "Compilarea nu a produs un rezultat care fusese cerut.",
+      "storeFailed": "Rezultatele nu au putut fi salvate.",
+      "notFound": "Această încărcare nu există sau nu ai voie să o vezi.",
+      "notCompleted": "Această încărcare nu a primit toate fișierele, așa că nu poate fi rulată din nou.",
+      "runInProgress": "O rulare a acestei încărcări așteaptă deja sau este în curs.",
+      "outputUnknown": "Unul dintre rezultatele cerute nu este produs de acest server.",
+      "forbidden": "Poți vedea această peșteră, dar nu o poți modifica.",
+      "requestFailed": "Nu a mers. Încearcă din nou."
+    },
+    "page": {
+      "versionsTitle": "Versiunile acestui releveu",
+      "thisVersion": "(aceasta)",
+      "newerExists": "Există o versiune mai nouă a acestui releveu. Deschide-o din lista de mai jos.",
+      "notFound": "Încărcarea nu a fost găsită sau nu ai voie să o vezi.",
+      "loadFailed": "Încărcarea nu a putut fi încărcată.",
+      "version": "Versiunea din {{when}}",
+      "rerun": "Rulează din nou",
+      "rerunStarted": "Încărcarea va rula din nou.",
+      "progressTitle": "Progres",
+      "logTitle": "Jurnal",
+      "noLog": "Jurnalul este gol.",
+      "filesTitle": "Fișiere trimise",
+      "noFiles": "Niciun fișier.",
+      "fileRole": "Tip",
+      "fileStatus": "Stare",
+      "detailsTitle": "Despre această încărcare",
+      "cave": "Peșteră",
+      "caveCreated": "Creată din această încărcare",
+      "surveyName": "Numele topografiei",
+      "surveyDate": "Data topografiei",
+      "surveyTeam": "Echipa",
+      "uploaded": "Încărcată",
+      "started": "Pornită",
+      "finished": "Terminată",
+      "notFinished": "Încă nu",
+      "outputsAsked": "Rezultate cerute",
+      "noCompile": "Niciunul — fișierele au fost arhivate și citite, nu compilate"
+    },
+    "link": {
+      "title": "Link public",
+      "none": "Această încărcare nu are link public. Motivul poate fi setarea contului, a instalării sau poziția protejată a peșterii.",
+      "make": "Fă un link",
+      "madeAt": "Făcut {{when}}",
+      "remint": "Fă un link nou",
+      "remintConfirm": "Faci un link nou? Adresa veche nu va mai funcționa.",
+      "revoke": "Retrage",
+      "revokeConfirm": "Retragi linkul? Cine îl are nu va mai putea deschide rezultatele.",
+      "made": "Link făcut.",
+      "open": "Deschide",
+      "refusal": {
+        "protected-cave": "Nu se face link public pentru această încărcare, deoarece poziția peșterii este protejată.",
+        "account-off": "Nu s-a făcut link public, deoarece „Linkuri publice pentru încărcările mele\" este oprit pentru contul care a trimis-o.",
+        "installation-off": "Nu s-a făcut link public, deoarece această instalare are linkurile publice oprite.",
+        "no-share-right": "Nu s-a făcut link public, deoarece contul care a trimis încărcarea nu poate partaja peștera."
+      },
+      "revoked": "Link retras."
+    },
+    "surveys": {
+      "title": "Topografii",
+      "explanation": "Topografiile trimise acestei peșteri de pe un dispozitiv, cu fiecare versiune, cea mai nouă prima. Fiecare versiune arată ce a fost trimis și ce s-a făcut din el; modelele și sursele de mai jos sunt setul întreg al peșterii.",
+      "survey": "Topografie",
+      "source": "De la",
+      "versions": "Versiuni",
+      "newest": "Cea mai nouă versiune",
+      "sent": "Fișiere trimise",
+      "openStatus": "Pagina de stare"
+    },
+    "outputs": {
+      "lox": "Model 3D Therion (.lox)",
+      "3d": "Model 3D Survex (.3d)",
+      "plan-pdf": "Plan (PDF)",
+      "extended-pdf": "Profil dezvoltat (PDF)",
+      "plan-svg": "Plan (SVG)",
+      "extended-svg": "Profil dezvoltat (SVG)",
+      "kml": "Google Earth (KML)",
+      "dxf": "Desen CAD (DXF)",
+      "sql": "Date de ridicare (SQL)",
+      "csv": "Date de ridicare (CSV)",
+      "survey-list-html": "Lista ridicărilor (HTML)",
+      "continuation-list-html": "Lista continuărilor (HTML)",
+      "shp": "Shapefile GIS (SHP)"
+    }
   },
   "surveySources": {
     "title": "Surse topografice",

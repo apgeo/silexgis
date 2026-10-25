@@ -98,6 +98,7 @@ vi.mock('../../components/caves/EntranceEditorModal.tsx', () => ({ default: () =
 vi.mock('./CaveClosestApproachSection.tsx', () => ({ default: () => null }));
 vi.mock('./CaveTripsSection.tsx', () => ({ default: () => null }));
 vi.mock('./CenterlineSection.tsx', () => ({ default: () => null }));
+vi.mock('./CaveSurveysSection.tsx', () => ({ default: () => null }));
 vi.mock('./SurveyModelSection.tsx', () => ({ default: () => null }));
 vi.mock('./SurveySourceSection.tsx', () => ({ default: () => null }));
 vi.mock('./SurveyQualityPanel.tsx', () => ({ default: () => null }));

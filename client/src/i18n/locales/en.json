@@ -3869,6 +3869,8 @@
       "filters": "Saved filters",
       "coordinates": "Coordinates",
       "sync": "Sync",
+      "access-keys": "Access keys",
+      "survey-uploads": "Survey uploads",
       "advanced": "Advanced"
     },
     "visibility": {
@@ -4099,6 +4101,14 @@
       "title": "Pick a point",
       "hint": "Click the map, or type the coordinates.",
       "use": "Use this point"
+    },
+    "surveyUploads": {
+      "loadFailed": "The survey-upload settings could not be loaded.",
+      "outputsTitle": "Always produce",
+      "outputsIntro": "When a survey is uploaded from a device, these results are produced in addition to what the device asks for. With nothing asked for, the installation produces: {{defaults}}.",
+      "linksTitle": "Public links",
+      "linksIntro": "Each upload can get a link that shows its results to anyone who has it, without signing in. It never includes the survey files themselves, the team or station names. A cave with a protected location never gets one.",
+      "linksSwitch": "Public links for my uploads"
     },
     "sync": {
       "intro": "Choose the caves a phone carries offline. A selection names caves — it never takes them over — so ending one here stops a device asking for them and changes nothing about the caves themselves.",
@@ -4702,6 +4712,11 @@
     "loginRequired": "Sign in to view this shared record.",
     "signIn": "Sign in",
     "qrLabel": "The share link as a QR code"
+  },
+  "publicSurvey": {
+    "notFound": "This link does not work. It may have been withdrawn, or it may never have existed.",
+    "loadFailed": "The result could not be loaded.",
+    "caveAndVersion": "{{cave}} — uploaded {{when}}"
   },
   "publicTrip": {
     "notFoundTitle": "Nothing to show for this link",
@@ -6051,6 +6066,183 @@
     "loadFailed": "The work areas could not be loaded.",
     "truncated": "Not every work area is shown: this installation holds more than this view lists.",
     "subAreaCount": "Areas inside: {{count}}"
+  },
+  "accessKeys": {
+    "title": "Access keys",
+    "intro": "An access key lets a field device — TopoDroid on a phone — upload surveys to your account without your password. The key can only upload surveys: it cannot read the rest of your account, list or make keys, or change anything else. Make one per device, so a lost phone is one revocation.",
+    "signInRequired": "Access keys can only be managed when you are signed in with your password, not from a device that holds a key.",
+    "loadFailed": "The access keys could not be loaded.",
+    "createFailed": "The access key could not be created.",
+    "createdTitle": "The key for \"{{name}}\" — copy it now, it is shown only once.",
+    "createdWarning": "Paste it into the device's settings straight away. Once you close this message nobody, including you, can read it again; if it is lost, revoke it and make another. Anyone holding it can upload surveys as you.",
+    "form": {
+      "name": "Name",
+      "namePlaceholder": "TopoDroid on my phone",
+      "lifetime": "Valid for",
+      "days": "{{count}} days"
+    },
+    "create": "Create key",
+    "revoke": "Revoke",
+    "revokeConfirm": "Revoke \"{{name}}\"? The device holding it is refused at its next upload.",
+    "revokedMessage": "Key revoked.",
+    "empty": "No access keys yet.",
+    "neverUsed": "Never",
+    "columns": {
+      "name": "Name",
+      "prefix": "Key starts with",
+      "purpose": "For",
+      "created": "Created",
+      "lastUsed": "Last used",
+      "expires": "Expires",
+      "state": "State"
+    },
+    "purposes": {
+      "surveyUpload": "Survey uploads"
+    },
+    "states": {
+      "active": "Active",
+      "expired": "Expired",
+      "revoked": "Revoked"
+    }
+  },
+  "surveyUploads": {
+    "stages": {
+      "archive": "Archiving",
+      "unpack": "Reading the archive",
+      "scaffold": "Preparing the compilation",
+      "compile": "Compiling",
+      "store": "Storing the results",
+      "read": "Reading the results"
+    },
+    "stageStates": {
+      "skipped": "Not needed"
+    },
+    "status": {
+      "receiving": "Receiving files",
+      "queued": "Waiting to run",
+      "running": "Running",
+      "succeeded": "Finished",
+      "failed": "Failed",
+      "abandoned": "Abandoned"
+    },
+    "origins": {
+      "topodroid": "TopoDroid",
+      "therion": "Therion",
+      "other": "Other"
+    },
+    "fileRoles": {
+      "archive": "Survey archive",
+      "therionSource": "Therion source",
+      "therionSketch": "Sketch",
+      "other": "Other file",
+      "generatedConfig": "Generated configuration",
+      "output": "Result",
+      "log": "Log"
+    },
+    "fileStates": {
+      "declared": "Not received",
+      "received": "Received",
+      "stored": "Stored",
+      "refused": "Refused"
+    },
+    "artefacts": {
+      "title": "Results",
+      "empty": "Nothing was produced.",
+      "download": "Download",
+      "view": "View"
+    },
+    "problems": {
+      "filesMissing": "A file of this upload is no longer in the server's store. Ask the administrator to restore it, then run the upload again.",
+      "archiveInvalid": "The archive is not a TopoDroid survey archive, or is too old or damaged to read. Export the survey again from TopoDroid and upload it afresh.",
+      "archiveTooLarge": "The archive holds more than this server reads. Export a smaller survey.",
+      "unexpected": "The server failed while processing this upload. The administrator can find the detail in the server log.",
+      "sourceMissing": "Compiling was asked for, but no Therion source was sent.",
+      "sourceInvalid": "A Therion source could not be read.",
+      "compilerUnavailable": "The compiler could not be reached. The files are archived; run the upload again later.",
+      "compileFailed": "Therion could not compile the survey. The log below says where.",
+      "compileTimeout": "Compiling took longer than this server allows.",
+      "outputMissing": "The compilation did not produce a result that was asked for.",
+      "storeFailed": "The results could not be stored.",
+      "notFound": "This upload does not exist, or you may not see it.",
+      "notCompleted": "This upload never received all its files, so it cannot be run again.",
+      "runInProgress": "A run of this upload is already waiting or running.",
+      "outputUnknown": "One of the requested results is not produced by this server.",
+      "forbidden": "You may see this cave but not change it.",
+      "requestFailed": "That did not work. Please try again."
+    },
+    "page": {
+      "versionsTitle": "Versions of this survey",
+      "thisVersion": "(this one)",
+      "newerExists": "A newer version of this survey exists. Open it from the list below.",
+      "notFound": "This upload was not found, or you may not see it.",
+      "loadFailed": "The upload could not be loaded.",
+      "version": "Version of {{when}}",
+      "rerun": "Run again",
+      "rerunStarted": "The upload will run again.",
+      "progressTitle": "Progress",
+      "logTitle": "Log",
+      "noLog": "The log is empty.",
+      "filesTitle": "Files sent",
+      "noFiles": "No files.",
+      "fileRole": "Kind",
+      "fileStatus": "State",
+      "detailsTitle": "About this upload",
+      "cave": "Cave",
+      "caveCreated": "Made from this upload",
+      "surveyName": "Survey name",
+      "surveyDate": "Survey date",
+      "surveyTeam": "Team",
+      "uploaded": "Uploaded",
+      "started": "Started",
+      "finished": "Finished",
+      "notFinished": "Not yet",
+      "outputsAsked": "Results asked for",
+      "noCompile": "None — the files were archived and read, not compiled"
+    },
+    "link": {
+      "title": "Public link",
+      "none": "This upload has no public link. The account's setting, the installation's, or a protected cave position can each be the reason.",
+      "make": "Make a link",
+      "madeAt": "Made {{when}}",
+      "remint": "Make a new link",
+      "remintConfirm": "Make a new link? The old address stops working.",
+      "revoke": "Withdraw",
+      "revokeConfirm": "Withdraw the link? Anyone holding it can no longer open the results.",
+      "made": "Link made.",
+      "open": "Open",
+      "refusal": {
+        "protected-cave": "No public link is made for this upload because the cave's position is protected.",
+        "account-off": "No public link was made because \"Public links for my uploads\" is switched off for the account that sent it.",
+        "installation-off": "No public link was made because this installation has public links switched off.",
+        "no-share-right": "No public link was made because the account that sent this upload may not share the cave."
+      },
+      "revoked": "Link withdrawn."
+    },
+    "surveys": {
+      "title": "Surveys",
+      "explanation": "Surveys sent to this cave from a device, with every version, newest first. Each version shows what it was sent and what was made from it; the models and sources further down are the cave's whole set.",
+      "survey": "Survey",
+      "source": "From",
+      "versions": "Versions",
+      "newest": "Newest version",
+      "sent": "Files sent",
+      "openStatus": "Status page"
+    },
+    "outputs": {
+      "lox": "Therion 3D model (.lox)",
+      "3d": "Survex 3D model (.3d)",
+      "plan-pdf": "Plan map (PDF)",
+      "extended-pdf": "Extended elevation (PDF)",
+      "plan-svg": "Plan map (SVG)",
+      "extended-svg": "Extended elevation (SVG)",
+      "kml": "Google Earth (KML)",
+      "dxf": "CAD drawing (DXF)",
+      "sql": "Survey data (SQL)",
+      "csv": "Survey data (CSV)",
+      "survey-list-html": "List of surveys (HTML)",
+      "continuation-list-html": "List of continuations (HTML)",
+      "shp": "GIS shapefile (SHP)"
+    }
   },
   "surveySources": {
     "title": "Survey sources",

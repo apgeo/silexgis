@@ -69,6 +69,7 @@ detail those walkthroughs link into.
 |---|---|
 | [Sharing, QR codes and public pages](sharing-and-public-pages.md) | Every anonymous surface the application has |
 | [Mobile and offline sync](mobile-sync.md) | The companion phone app and what it carries |
+| [Uploading surveys from TopoDroid](topodroid-uploads.md) | Access keys, a cave's surveys and their versions, the status page of an upload, the public result link |
 
 ## Keeping the record honest
 

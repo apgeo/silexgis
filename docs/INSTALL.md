@@ -288,7 +288,8 @@ on being written out in full beside it, once a minute per follower. Both halves 
 request line and in the `Referer` header:
 
 - **the one path segment after** `/shared/trips/`, `/api/v1/public/trips/`,
-  `/api/v1/shared/features/`, `/api/v1/shared/views/` or `/api/v1/public/albums/` — up to the next
+  `/api/v1/shared/features/`, `/api/v1/shared/views/`, `/api/v1/public/albums/`, `/p/survey/` or
+  `/api/v1/public/survey-uploads/` — up to the next
   `/`, `?` or `#` and no further, so that a trailing slash and a sub-path such as
   `…/<token>/cover` are covered too; keeping what follows is what leaves the line useful.
 - **the value of every `token=` parameter** in the query — every one, not the first.
@@ -302,8 +303,8 @@ log {
     format filter {
         wrap console
         fields {
-            request>uri regexp "(/(?:shared/trips|api/v1/public/trips|api/v1/shared/features|api/v1/shared/views|api/v1/public/albums)/)[^/?#]+|([?&]token=)[^&]*" "$1$2[redacted]"
-            request>headers>Referer regexp "(/(?:shared/trips|api/v1/public/trips|api/v1/shared/features|api/v1/shared/views|api/v1/public/albums)/)[^/?#]+|([?&]token=)[^&]*" "$1$2[redacted]"
+            request>uri regexp "(/(?:shared/trips|api/v1/public/trips|api/v1/shared/features|api/v1/shared/views|api/v1/public/albums|p/survey|api/v1/public/survey-uploads)/)[^/?#]+|([?&]token=)[^&]*" "$1$2[redacted]"
+            request>headers>Referer regexp "(/(?:shared/trips|api/v1/public/trips|api/v1/shared/features|api/v1/shared/views|api/v1/public/albums|p/survey|api/v1/public/survey-uploads)/)[^/?#]+|([?&]token=)[^&]*" "$1$2[redacted]"
         }
     }
 }

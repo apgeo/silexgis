@@ -334,4 +334,13 @@ export const queryKeys = {
   event: (id: string) => ['events', 'detail', id] as const,
   eventDefaults: ['events', 'defaults'] as const,
   eventInvitations: (id: string) => ['events', 'invitations', id] as const,
+  accessKeys: ['access-keys'] as const,
+  // Every survey-upload key starts with this one, so a rerun or a finished run that invalidates it
+  // reaches the listings, the per-cave groupings and each upload's own status together.
+  surveyUploads: ['survey-uploads'] as const,
+  surveyUploadCapabilities: ['survey-uploads', 'capabilities'] as const,
+  surveyUploadPreferences: ['survey-upload-preferences'] as const,
+  surveyUpload: (id: string) => ['survey-uploads', 'detail', id] as const,
+  caveSurveys: (caveId: string) => ['survey-uploads', 'cave', caveId] as const,
+  publicSurveyUpload: (token: string) => ['public-survey-uploads', token] as const,
 };
