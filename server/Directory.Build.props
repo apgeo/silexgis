@@ -44,4 +44,48 @@
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-jjfr-hcj7-qf5w" />
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wmxv-xphr-5c9g" />
   </ItemGroup>
+
+  <!--
+    Twelve advisories against MessagePack 2.5.187, accepted here by name on the project owner's
+    ruling.
+
+    The package arrives with the survey library's Therion.Workspace module, which this solution
+    references for the builder that wraps an uploaded Therion survey in a compilable project. The
+    library declares MessagePack for one optional parse cache — a desktop editor's way of keeping
+    parsed files on disk between sessions — and nothing this solution calls constructs it. The
+    owner was asked whether the library should first be split, or the package bumped upstream, and
+    ruled that the reference goes ahead with the advisories accepted instead.
+
+    What is being accepted. Every one of the twelve is in reading MessagePack bytes: depth and
+    length limits the deserialiser fails to enforce (nested arrays, Skip, union and JSON-conversion
+    paths, multi-dimensional arrays, the Unity blit formatter), LZ4 decompression trusting a
+    declared length, typeless and interface formatters bypassing their type and comparer
+    restrictions, and the ASP.NET Core input formatter trusting request bodies. This solution reads
+    no MessagePack bytes from anywhere, does not register that formatter, and no upload reaches the
+    library's cache. All twelve are fixed within the same 2.5 line (2.5.301 for eleven, 2.5.303 for
+    the nested-array one), so the version the library pins is the whole problem.
+
+    Named advisories and not the NU1902/NU1903 categories, for the same reason as the block above:
+    the next advisory against anything is still an error. Suppressed here, where every project of
+    this solution reads it, because a suppression does not cross a project reference. The
+    submodule's own projects import their repository's settings instead; they skip the audit, since
+    every package they declare is audited again, with warnings as errors, in the projects that
+    reference them (see external/Directory.Packages.props).
+
+    Revisit, and delete this block, when the survey library moves MessagePack to 2.5.303 or later.
+  -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2f33-pr97-265q" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2x83-8g95-xh59" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-cj9g-3mj2-g8vv" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-cxmj-83gh-fp49" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-hv8m-jj95-wg3x" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-q2h6-ghwm-5qm8" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-qhmf-xw27-6rqr" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-qhrr-8q5h-9q3h" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-v72x-2h86-7f8m" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-vh6j-jc39-fggf" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-w567-gjr2-hm5j" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wfr3-xj75-pfwh" />
+  </ItemGroup>
 </Project>
