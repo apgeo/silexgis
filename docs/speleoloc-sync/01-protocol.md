@@ -358,6 +358,24 @@ worked out afresh — an account's right to see a position can be withdrawn betw
 the registry and take all of it back through the same screen and the same button that undoes a bad
 file. `importBatchId` is that batch.
 
+**Taking an upload back is a true undo** (`POST /api/v1/import-batches/{importBatchId}/revert`, the
+confirmer's or a full administrator's act, called by the web interface, not by a device): the rows the
+upload created are deleted, the rows it deleted come back, and every field it changed returns to its
+value before the upload — read out of the history, where every row an upload writes is filed under
+its batch. A field somebody changed after the upload is left and reported as superseded unless the
+undo is forced; a position goes back only for a caller with exact view. The phone's own edit time
+(`clientUpdatedAt`) goes back with the other fields. A cave's main entrance goes back to the entrance
+that held the role before the upload — whether the upload promoted another one or deleted the main
+one — so the cave plots where it did; a role somebody moved since is left where they put it. A row the
+upload deleted comes back only for a caller who may still delete it, the right any restore asks. A
+line of an upload that wrote nothing to its row (a row sent back as it stood) counts as undone; a
+line of an upload made before the history named its batch cannot be taken back and is answered
+`no_history`, and closed with the rest. The undo can take a few lines at a time (`itemIds`), and the
+batch counts as reverted once every line has been. **A device needs
+nothing new for this**: every row the undo touches is written anew, so the next download from the
+device's cursor hands over the undone state — the edited rows as they were, the deleted ones back,
+the created ones as tombstones.
+
 ### 8.2 The row identifier, adopted verbatim
 
 **A new row carries `baseRevision: null` and the identifier the device gave it, and the server

@@ -265,8 +265,8 @@ it belongs in one catalogue with the rest because the same application calls bot
 
 ## 8. Codes this document deliberately does not carry
 
-Three families a device can meet are documented elsewhere or not at all, and the boundary is stated
-so that a gap is not mistaken for an omission.
+The families below are documented elsewhere, or are a web route's rather than a device's, and the
+boundary is stated so that a gap is not mistaken for an omission.
 
 - **The `auth.*` family and the OAuth `error` values** are in the sign-in document, with the calls
   that answer them. They are not repeated here.
@@ -279,6 +279,33 @@ so that a gap is not mistaken for an omission.
   `DELETE` on `/api/v1/caves/{id}/qr-publication`. Publishing a cave is an act of the web interface,
   performed by somebody with sharing rights; a device does not call these. `cave.not_found` there
   answers a cave that is absent, that is not a cave, or that the caller may not read, alike.
+- **The undo of an upload** — `POST /api/v1/import-batches/{id}/revert`, the web interface's route
+  for taking an upload back (the protocol's section 8.1). A device does not call it. Its codes, for
+  whoever builds that screen: `import_batch.not_found` (404 — no such batch, or not the caller's),
+  `import_batch.revert_forbidden` (403), `import_batch.already_reverted` (400),
+  `import_batch.items_unknown` (400 — `itemIds` names a line that is not this batch's; nothing was
+  undone), `import_batch.partial_undo_unsupported` (400 — `itemIds` sent for a file import, which is
+  undone whole) and `validation.failed` (400). A `200` answers each line with `outcome` `undone`,
+  `partly` or `not_undone`; a `not_undone` line's `reason` is one of `already_undone`, `purged`,
+  `container_deleted`, `superseded`, `fields_left`, `no_history`, `forbidden`, or a write-service
+  code from section 6.3 when putting the values back was refused; a field left on an edited line is
+  `superseded`, `forbidden`, `redacted`, `no_pre_image` or `not_restorable`. `forbidden` on a deleted
+  line means the caller may no longer delete the row, which is the right that restores it; `no_history`
+  answers a line of an upload made before the history named its batch — nothing of it was taken back,
+  and it is closed all the same. A line whose upload moved the cave's main entrance may also carry a
+  skipped `IsMain` (`superseded` or `forbidden`) when the role could not be given back to the entrance
+  that held it.
+- **Restoring a value from the history** — `POST /api/v1/history/restore`, the web interface's route
+  for putting fields of a feature back to what they held before one recorded change. A device does not
+  call it. Its codes: `history.entity_not_found` (404 — no such feature, or one the caller may not
+  read), `history.entry_not_found` (404 — no such history row of that feature, or one that is not a
+  feature's), `acl.forbidden` (403 — the caller may read the feature but not change it; an entrance
+  asks this of its cave), `history.entry_not_restorable` (400 — the row is a creation or a deletion,
+  not an edit), `validation.failed` (400 — a malformed request), and, as 400, `history.field_unknown`
+  or a write-service code from section 6.3 when the values put back fail the ordinary edit's rules. A
+  `200` lists the fields put back in `applied` and each field left in `skipped` with its `reason`:
+  `not_restorable`, `redacted` (the caller's history hides it), `no_pre_image` (a large shape whose
+  full copy was never kept) or `forbidden` (a position, for a caller without exact view).
 
 ## 9. Where these codes appear in the served description
 
