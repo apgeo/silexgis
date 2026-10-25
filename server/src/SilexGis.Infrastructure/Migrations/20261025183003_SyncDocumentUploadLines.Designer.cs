@@ -15,8 +15,8 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    [Migration("20261025122206_TripRecordings")]
-    partial class TripRecordings
+    [Migration("20261025183003_SyncDocumentUploadLines")]
+    partial class SyncDocumentUploadLines
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -3955,6 +3955,14 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("device_person_id");
 
+                    b.Property<Guid?>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<Guid?>("DocumentVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_version_id");
+
                     b.Property<Guid?>("FeatureId")
                         .HasColumnType("uuid")
                         .HasColumnName("feature_id");
@@ -3996,14 +4004,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("trip_position_event_id");
 
-                    b.Property<Guid?>("TripRecordingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("trip_recording_id");
-
-                    b.Property<Guid?>("TripRecordingPointId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("trip_recording_point_id");
-
                     b.Property<DateTimeOffset?>("UndoneAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("undone_at");
@@ -4017,6 +4017,14 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("DevicePersonId")
                         .HasDatabaseName("ix_import_batch_items_device_person_id")
                         .HasFilter("device_person_id is not null");
+
+                    b.HasIndex("DocumentId")
+                        .HasDatabaseName("ix_import_batch_items_document_id")
+                        .HasFilter("document_id is not null");
+
+                    b.HasIndex("DocumentVersionId")
+                        .HasDatabaseName("ix_import_batch_items_document_version_id")
+                        .HasFilter("document_version_id is not null");
 
                     b.HasIndex("FeatureId")
                         .HasDatabaseName("ix_import_batch_items_feature_id")
@@ -4036,14 +4044,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("TripPositionEventId")
                         .HasDatabaseName("ix_import_batch_items_trip_position_event_id")
                         .HasFilter("trip_position_event_id is not null");
-
-                    b.HasIndex("TripRecordingId")
-                        .HasDatabaseName("ix_import_batch_items_trip_recording_id")
-                        .HasFilter("trip_recording_id is not null");
-
-                    b.HasIndex("TripRecordingPointId")
-                        .HasDatabaseName("ix_import_batch_items_trip_recording_point_id")
-                        .HasFilter("trip_recording_point_id is not null");
 
                     b.ToTable("import_batch_items", (string)null);
                 });
@@ -7378,149 +7378,6 @@ namespace SilexGis.Infrastructure.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripRecording", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("CaveFeatureId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("cave_feature_id");
-
-                    b.Property<Guid?>("CavingGroupId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("caving_group_id");
-
-                    b.Property<DateTimeOffset?>("ClientUpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("client_updated_at");
-
-                    b.Property<Guid?>("ConvertedTripLogId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("converted_trip_log_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid?>("CreatedByDeviceUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by_device_user_id");
-
-                    b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<DateTimeOffset?>("EndedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("ended_at");
-
-                    b.Property<string>("Log")
-                        .HasColumnType("text")
-                        .HasColumnName("log");
-
-                    b.Property<Guid>("OwnerUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("owner_user_id");
-
-                    b.Property<DateTimeOffset>("StartedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("started_at");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("title");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<short>("Visibility")
-                        .HasColumnType("smallint")
-                        .HasColumnName("visibility");
-
-                    b.HasKey("Id")
-                        .HasName("pk_trip_recordings");
-
-                    b.HasIndex("CaveFeatureId")
-                        .HasDatabaseName("ix_trip_recordings_cave_feature_id");
-
-                    b.HasIndex("CavingGroupId")
-                        .HasDatabaseName("ix_trip_recordings_caving_group_id");
-
-                    b.HasIndex("ConvertedTripLogId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_trip_recordings_converted_trip_log_id")
-                        .HasFilter("converted_trip_log_id is not null");
-
-                    b.HasIndex("DeletedAt")
-                        .HasDatabaseName("ix_trip_recordings_deleted_at")
-                        .HasFilter("deleted_at is not null");
-
-                    b.HasIndex("OwnerUserId")
-                        .HasDatabaseName("ix_trip_recordings_owner_user_id");
-
-                    b.ToTable("trip_recordings", (string)null);
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripRecordingPoint", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid?>("CreatedByDeviceUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by_device_user_id");
-
-                    b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text")
-                        .HasColumnName("notes");
-
-                    b.Property<Guid?>("PlaceFeatureId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("place_feature_id");
-
-                    b.Property<Guid>("RecordingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("recording_id");
-
-                    b.Property<DateTimeOffset>("ScannedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("scanned_at");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_trip_recording_points");
-
-                    b.HasIndex("PlaceFeatureId")
-                        .HasDatabaseName("ix_trip_recording_points_place_feature_id")
-                        .HasFilter("place_feature_id is not null");
-
-                    b.HasIndex("RecordingId", "UpdatedAt")
-                        .HasDatabaseName("ix_trip_recording_points_recording_updated");
-
-                    b.ToTable("trip_recording_points", (string)null);
-                });
-
             modelBuilder.Entity("SilexGis.Domain.Entities.TripTeam", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8020,6 +7877,15 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
+                    b.Property<short?>("Kind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("MimeType")
+                        .HasMaxLength(127)
+                        .HasColumnType("character varying(127)")
+                        .HasColumnName("mime_type");
+
                     b.Property<string>("OriginalName")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -8034,6 +7900,19 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("relative_path");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<DateTimeOffset?>("StagedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("staged_at");
+
+                    b.Property<bool>("StagedForSync")
+                        .HasColumnType("boolean")
+                        .HasColumnName("staged_for_sync");
 
                     b.Property<string>("StoragePath")
                         .IsRequired()
@@ -8071,6 +7950,8 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("upload_sessions", null, t =>
                         {
                             t.HasCheckConstraint("ck_upload_sessions_received_within_declared", "received_bytes >= 0 and received_bytes <= declared_size_bytes");
+
+                            t.HasCheckConstraint("ck_upload_sessions_staged_described", "staged_at is null or (staged_for_sync and received_bytes = declared_size_bytes and sha256 is not null and mime_type is not null and kind is not null)");
                         });
                 });
 
@@ -9329,6 +9210,18 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_import_batch_items_device_persons_device_person_id");
 
+                    b.HasOne("SilexGis.Domain.Entities.Document", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_import_batch_items_documents_document_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.DocumentVersion", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentVersionId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_import_batch_items_document_versions_document_version_id");
+
                     b.HasOne("SilexGis.Domain.Entities.Feature", null)
                         .WithMany()
                         .HasForeignKey("FeatureId")
@@ -9359,18 +9252,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasForeignKey("TripPositionEventId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .HasConstraintName("fk_import_batch_items_trip_position_events_trip_position_event");
-
-                    b.HasOne("SilexGis.Domain.Entities.TripRecording", null)
-                        .WithMany()
-                        .HasForeignKey("TripRecordingId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_import_batch_items_trip_recordings_trip_recording_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.TripRecordingPoint", null)
-                        .WithMany()
-                        .HasForeignKey("TripRecordingPointId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_import_batch_items_trip_recording_points_trip_recording_poi");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.MapView", b =>
@@ -9987,47 +9868,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Navigation("TripLog");
                 });
 
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripRecording", b =>
-                {
-                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
-                        .WithMany()
-                        .HasForeignKey("CaveFeatureId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_trip_recordings_features_cave_feature_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
-                        .WithMany()
-                        .HasForeignKey("CavingGroupId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_trip_recordings_caving_groups_caving_group_id");
-
-                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
-                        .WithMany()
-                        .HasForeignKey("OwnerUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_trip_recordings_users_owner_user_id");
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripRecordingPoint", b =>
-                {
-                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
-                        .WithMany()
-                        .HasForeignKey("PlaceFeatureId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_trip_recording_points_features_place_feature_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.TripRecording", "Recording")
-                        .WithMany("Points")
-                        .HasForeignKey("RecordingId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_trip_recording_points_trip_recordings_recording_id");
-
-                    b.Navigation("Recording");
-                });
-
             modelBuilder.Entity("SilexGis.Domain.Entities.TripTeam", b =>
                 {
                     b.HasOne("SilexGis.Domain.Entities.TripLog", "TripLog")
@@ -10222,11 +10062,6 @@ namespace SilexGis.Infrastructure.Migrations
             modelBuilder.Entity("SilexGis.Domain.Entities.SurveyCompilation", b =>
                 {
                     b.Navigation("Loops");
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripRecording", b =>
-                {
-                    b.Navigation("Points");
                 });
 #pragma warning restore 612, 618
         }

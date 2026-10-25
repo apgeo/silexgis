@@ -15,7 +15,7 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    [Migration("20261025134311_TripAttention")]
+    [Migration("20261025183004_TripAttention")]
     partial class TripAttention
     {
         /// <inheritdoc />
