@@ -30,7 +30,7 @@ export const specs = {
     'feature-sets.spec.ts',
     'users-admin.spec.ts', 'map-background-kinds.spec.ts',
   ],
-  audit: ['panel.spec.ts'],
+  audit: ['panel.spec.ts', 'history-phone-upload.spec.ts'],
   cabinets: ['documents.spec.ts'],
   calendar: ['calendar.spec.ts', 'calendar-feed.spec.ts'],
   catalogue: ['speologie-catalogue.spec.ts'],
@@ -73,7 +73,10 @@ export const specs = {
   ],
   featureSets: ['doline-morphometry.spec.ts', 'vector-import.spec.ts', 'feature-sets.spec.ts'],
   featureShares: [],
-  files: ['uploads.spec.ts', 'documents.spec.ts', 'gallery.spec.ts', 'cave-attachments.spec.ts'],
+  files: [
+    'uploads.spec.ts', 'documents.spec.ts', 'gallery.spec.ts', 'cave-attachments.spec.ts',
+    'attachment-default-set.spec.ts',
+  ],
   filters: [
     'trip-list.spec.ts', 'trip-map.spec.ts', 'registry-statistics.spec.ts',
     'cave-registry-filters.spec.ts', 'gallery-filters.spec.ts', 'reslinks.spec.ts',
@@ -94,7 +97,7 @@ export const specs = {
     'rastermap-tracking.spec.ts', 'rastermap-mobile.spec.ts',
   ],
   history: ['panel.spec.ts', 'map-editing.spec.ts'],
-  imports: ['vector-import.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts'],
+  imports: ['vector-import.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts', 'import-batch-undo.spec.ts'],
   jobs: ['survey-extraction.spec.ts', 'documents.spec.ts'],
   map: [
     'map-editing.spec.ts', 'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
