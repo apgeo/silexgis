@@ -190,6 +190,19 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     /// </summary>
     public string? RootSurveyName { get; set; }
 
+    /// <summary>
+    /// The survey this model was compiled from, when a survey upload produced it; null for a model
+    /// uploaded by hand, which belongs to the cave alone.
+    /// </summary>
+    public Guid? CaveSurveyId { get; set; }
+
+    /// <summary>
+    /// The upload whose run produced this model, when one did. Such a model never takes the cave's
+    /// current mark on its own — which model a cave shows is a person's choice, not a side effect
+    /// of a phone sending a survey.
+    /// </summary>
+    public Guid? SurveyUploadId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

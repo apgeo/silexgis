@@ -512,6 +512,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapMeCapabilityEndpoints();
     api.MapMeCalendarFeedEndpoints();
     api.MapMeAccessKeyEndpoints();
+    api.MapMeSurveyUploadPreferenceEndpoints();
     api.MapNotificationInboxEndpoints();
     api.MapNotificationConfigEndpoints();
     api.MapNotificationHealthEndpoints();

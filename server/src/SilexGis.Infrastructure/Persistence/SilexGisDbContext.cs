@@ -199,6 +199,14 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<SurveyModel> SurveyModels => Set<SurveyModel>();
 
+    public DbSet<CaveSurvey> CaveSurveys => Set<CaveSurvey>();
+
+    public DbSet<SurveyUpload> SurveyUploads => Set<SurveyUpload>();
+
+    public DbSet<SurveyUploadFile> SurveyUploadFiles => Set<SurveyUploadFile>();
+
+    public DbSet<SurveyUploadPreference> SurveyUploadPreferences => Set<SurveyUploadPreference>();
+
     public DbSet<SurveySource> SurveySources => Set<SurveySource>();
 
     /// <summary>What one archived compilation log said about the survey it was written for.</summary>

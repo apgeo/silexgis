@@ -29,5 +29,14 @@ public sealed class SurveySourceConfiguration : IEntityTypeConfiguration<SurveyS
         // One row per archived document: a source is a thread of revisions, and a second row
         // pointing at the same document would be the same source listed twice.
         builder.HasIndex(x => x.DocumentId).IsUnique();
+
+        // The survey and the upload a source came with, when it came with one. Never holding the
+        // source: an archived input is the survey itself and outlives the grouping it was filed under.
+        builder.HasOne<CaveSurvey>().WithMany().HasForeignKey(x => x.CaveSurveyId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<SurveyUpload>().WithMany().HasForeignKey(x => x.SurveyUploadId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => x.CaveSurveyId, "ix_survey_sources_cave_survey_id")
+            .HasDatabaseName("ix_survey_sources_cave_survey_id");
+        builder.HasIndex(x => x.SurveyUploadId, "ix_survey_sources_survey_upload_id")
+            .HasDatabaseName("ix_survey_sources_survey_upload_id");
     }
 }

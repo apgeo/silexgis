@@ -7,6 +7,7 @@ using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Surveys;
 using Therion.Blender;
+using CaveSurvey = Therion.Blender.CaveSurvey;
 using Therion.Blender.Geometry;
 using Therion.Blender.Parsing;
 

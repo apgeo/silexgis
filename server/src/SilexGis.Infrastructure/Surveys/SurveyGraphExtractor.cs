@@ -477,7 +477,7 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
     /// </summary>
     private static Dictionary<uint, string> SurveyPaths(CaveModel model)
     {
-        var byId = new Dictionary<uint, CaveSurvey>(model.Surveys.Count);
+        var byId = new Dictionary<uint, Therion.Blender.CaveSurvey>(model.Surveys.Count);
         foreach (var survey in model.Surveys)
         {
             byId[survey.Id] = survey;
