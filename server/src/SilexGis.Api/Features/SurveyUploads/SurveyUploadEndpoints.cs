@@ -152,6 +152,7 @@ public static partial class SurveyUploadEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithSummary("Abandons an upload still receiving files. The files already sent stay archived.");
 
+        MapPublicLinkEndpoints(api);
         return api;
     }
 
@@ -185,6 +186,7 @@ public static partial class SurveyUploadEndpoints
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
         IFileAccessTokenService tokens,
+        SurveyUploadPublicLinkService links,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -200,7 +202,7 @@ public static partial class SurveyUploadEndpoints
         }
 
         var writable = await SurveyModelAccess.WritableAsync(access, ctx, found.Cave, ct);
-        return TypedResults.Ok(await ToDtoAsync(db, tokens, found.Upload, found.Cave, writable, ct));
+        return TypedResults.Ok(await ToDtoAsync(db, tokens, links, found.Upload, found.Cave, writable, ct));
     }
 
     private static async Task<Results<Accepted<SurveyUploadDto>, UnauthorizedHttpResult, ProblemHttpResult>> CompleteAsync(
@@ -210,6 +212,7 @@ public static partial class SurveyUploadEndpoints
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
         IFileAccessTokenService tokens,
+        SurveyUploadPublicLinkService links,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -238,7 +241,7 @@ public static partial class SurveyUploadEndpoints
         if (upload.Status is SurveyUploadStatus.Queued or SurveyUploadStatus.Running
             or SurveyUploadStatus.Succeeded or SurveyUploadStatus.Failed)
         {
-            return Accepted(await ToDtoAsync(db, tokens, upload, found.Cave, writable: true, ct));
+            return Accepted(await ToDtoAsync(db, tokens, links, upload, found.Cave, writable: true, ct));
         }
 
         if (upload.Status != SurveyUploadStatus.Receiving)
@@ -271,9 +274,13 @@ public static partial class SurveyUploadEndpoints
         upload.Message = null;
         Queue(db, upload);
         await CloseBatchAsync(db, upload.UploadBatchId, now, ct);
+
+        // The public link is made with the completion, in the same save, by whoever completes it:
+        // the cave's protection is known by now, a cave the upload made included.
+        await links.MintAtCompletionAsync(access, ctx, upload, found.Cave, ct);
         await db.SaveChangesAsync(ct);
 
-        return Accepted(await ToDtoAsync(db, tokens, upload, found.Cave, writable: true, ct));
+        return Accepted(await ToDtoAsync(db, tokens, links, upload, found.Cave, writable: true, ct));
     }
 
     private static async Task<Results<Accepted<SurveyUploadDto>, UnauthorizedHttpResult, ProblemHttpResult>> RerunAsync(
@@ -284,6 +291,7 @@ public static partial class SurveyUploadEndpoints
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
         IFileAccessTokenService tokens,
+        SurveyUploadPublicLinkService links,
         IOptions<SurveyUploadOptions> options,
         CancellationToken ct)
     {
@@ -344,7 +352,7 @@ public static partial class SurveyUploadEndpoints
 
         await db.Entry(upload).ReloadAsync(ct);
 
-        return Accepted(await ToDtoAsync(db, tokens, upload, found.Cave, writable: true, ct));
+        return Accepted(await ToDtoAsync(db, tokens, links, upload, found.Cave, writable: true, ct));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> AbandonAsync(
@@ -646,6 +654,7 @@ public static partial class SurveyUploadEndpoints
     private static async Task<SurveyUploadDto> ToDtoAsync(
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
+        SurveyUploadPublicLinkService links,
         SurveyUpload upload,
         Feature cave,
         bool writable,
@@ -663,6 +672,49 @@ public static partial class SurveyUploadEndpoints
             db, [.. files.Where(f => f.DocumentId is not null).Select(f => f.DocumentId!.Value)], ct);
         var options = ReadOptions(upload);
 
+        // What the run produced is listed apart from what the device sent and what the run was
+        // compiled from, in the order the run stored it.
+        var produced = files.Where(f => f.Role is SurveyUploadFileRole.Output or SurveyUploadFileRole.Log).ToList();
+        var modelIds = produced.Where(f => f.SurveyModelId is not null).Select(f => f.SurveyModelId!.Value).ToList();
+        var models = modelIds.Count == 0
+            ? []
+            : await db.SurveyModels.AsNoTracking()
+                .Where(m => modelIds.Contains(m.Id))
+                .ToDictionaryAsync(m => m.Id, m => m.Status, ct);
+        var artefacts = new List<SurveyUploadArtefactDto>();
+        foreach (var f in produced)
+        {
+            var kind = f.Role == SurveyUploadFileRole.Log ? SurveyUploadArtefacts.LogKind : f.Output ?? "";
+            var error = f.RefusalCode is { } refusal ? new SurveyUploadErrorDto(refusal, SurveyPipelineNotes.ForArtefact(refusal)) : null;
+            if (f.Status == SurveyUploadFileStatus.Refused && error is not null)
+            {
+                // Asked for and not produced: listed, with no file, so a screen can say which.
+                artefacts.Add(new SurveyUploadArtefactDto(kind, f.Name, null, null, null, null, null, null, null, error));
+                continue;
+            }
+
+            if (f.Status != SurveyUploadFileStatus.Stored || f.DocumentId is not { } d || !revisions.TryGetValue(d, out var revision)
+                || !SurveyUploadArtefacts.Listable(f.Output, f.SurveyModelId))
+            {
+                continue;
+            }
+
+            SurveyModelStatus? modelStatus = f.SurveyModelId is { } m && models.TryGetValue(m, out var status) ? status : null;
+            artefacts.Add(new SurveyUploadArtefactDto(
+                kind,
+                f.Name,
+                revision.SizeBytes,
+                ContentUrl(tokens, revision.FileId),
+                f.SurveyModelId,
+                f.SurveyModelId is null && f.SurveySourceId is null ? f.DocumentId : null,
+                f.SurveySourceId,
+                null,
+                modelStatus,
+                error));
+        }
+
+        var (publicLink, publicLinkRefusal) = await links.StateAsync(upload, writable, ct);
+
         return new SurveyUploadDto(
             upload.Id,
             upload.Status,
@@ -675,7 +727,7 @@ public static partial class SurveyUploadEndpoints
             upload.VersionAt,
             upload.CreatedCave,
             new SurveyUploadSurveyDto(upload.SurveyTitle, upload.SurveyName, upload.SurveyDate, upload.Team),
-            [.. files.Select(f => new SurveyUploadFileDto(
+            [.. files.Where(f => f.Role is not (SurveyUploadFileRole.Output or SurveyUploadFileRole.Log)).Select(f => new SurveyUploadFileDto(
                 f.Name,
                 f.Role,
                 f.Status,
@@ -686,7 +738,7 @@ public static partial class SurveyUploadEndpoints
                 f.SurveySourceId,
                 f.DocumentId,
                 f.DocumentId is { } doc && revisions.TryGetValue(doc, out var r) ? ContentUrl(tokens, r.FileId) : null))],
-            [],
+            artefacts,
             upload.CompilerVersion is { } compiler ? new SurveyUploadCompilerDto(compiler) : null,
             options.Outputs,
             options.Compile,
@@ -694,7 +746,8 @@ public static partial class SurveyUploadEndpoints
             // coordinates can appear in them, and they are the cave's writers' to read.
             writable ? upload.LogTail : null,
             SurveyUploadLinks.StatusPage(cave.Id, upload.CaveSurveyId, upload.Id),
-            null,
+            publicLink,
+            publicLinkRefusal,
             upload.CreatedAt,
             upload.ExpiresAt,
             upload.StartedAt,

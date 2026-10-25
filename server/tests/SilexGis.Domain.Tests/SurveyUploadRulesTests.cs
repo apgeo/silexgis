@@ -341,3 +341,105 @@ public class SurveyDocumentAudienceTests
             .ShouldBe(new SurveyCaveAudience(Visibility.Private, null));
     }
 }
+
+public class SurveyUploadArtefactsTests
+{
+    private static readonly DateTimeOffset Version = new(2026, 10, 25, 1, 32, 0, TimeSpan.Zero);
+
+    [Theory]
+    [InlineData("lox", "inventata-20261025T013200Z.lox", SurveyArtefactStorage.LinePlot)]
+    [InlineData("3d", "inventata-20261025T013200Z.3d", SurveyArtefactStorage.Survex)]
+    [InlineData("plan-pdf", "inventata-20261025T013200Z.plan.pdf", SurveyArtefactStorage.Document)]
+    [InlineData("extended-svg", "inventata-20261025T013200Z.extended.svg", SurveyArtefactStorage.Document)]
+    [InlineData("shp", "inventata-20261025T013200Z.shp.zip", SurveyArtefactStorage.Document)]
+    public void Every_output_is_named_for_its_version_and_stored_as_what_it_is(string output, string name, SurveyArtefactStorage storage)
+    {
+        var kind = SurveyUploadArtefacts.KindOf(output).ShouldNotBeNull();
+
+        SurveyUploadArtefacts.FileName("inventata", Version, kind).ShouldBe(name);
+        kind.Storage.ShouldBe(storage);
+    }
+
+    [Fact]
+    public void Every_output_of_the_catalogue_has_a_name_of_its_own()
+    {
+        var names = SurveyOutputs.Catalogue
+            .Select(o => SurveyUploadArtefacts.FileName("inventata", Version, SurveyUploadArtefacts.KindOf(o).ShouldNotBeNull()))
+            .Append(SurveyUploadArtefacts.LogFileName("inventata", Version))
+            .Append(SurveyUploadArtefacts.ConfigFileName("inventata", Version))
+            .Append(SurveyUploadArtefacts.WrapperFileName("inventata", Version))
+            .ToList();
+
+        names.Distinct(StringComparer.OrdinalIgnoreCase).Count().ShouldBe(names.Count);
+        SurveyUploadArtefacts.KindOf("nothing").ShouldBeNull();
+    }
+
+    [Fact]
+    public void Nothing_is_pruned_by_default_and_never_the_newest_versions_or_one_still_running()
+    {
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var c = Guid.NewGuid();
+        var d = Guid.NewGuid();
+        (Guid, DateTimeOffset, bool, bool)[] versions =
+        [
+            (a, Version, true, true), (b, Version.AddHours(1), false, true), (c, Version.AddHours(2), true, true),
+            (d, Version.AddHours(3), true, true),
+        ];
+
+        SurveyUploadArtefacts.Prunable(versions, 0).ShouldBeEmpty();
+        SurveyUploadArtefacts.Prunable(versions, 1).ShouldBe([c, a]);
+        SurveyUploadArtefacts.Prunable(versions, 3).ShouldBe([a]);
+        SurveyUploadArtefacts.Prunable(versions, 4).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_newer_version_that_produced_nothing_does_not_take_the_place_of_the_last_that_did()
+    {
+        var good = Guid.NewGuid();
+        var older = Guid.NewGuid();
+        (Guid, DateTimeOffset, bool, bool)[] versions =
+        [
+            (older, Version, true, true), (good, Version.AddHours(1), true, true),
+            // Abandoned on the way, and failed to compile: neither holds anything.
+            (Guid.NewGuid(), Version.AddHours(2), true, false), (Guid.NewGuid(), Version.AddHours(3), true, false),
+        ];
+
+        SurveyUploadArtefacts.Prunable(versions, 1).ShouldBe([older]);
+    }
+
+    [Theory]
+    [InlineData("UTM35", 32635)]
+    [InlineData("UTM35N", 32635)]
+    [InlineData("utm34s", 32734)]
+    [InlineData("EPSG:31700", 31700)]
+    [InlineData("lat-long", 4326)]
+    [InlineData("UTM61", null)]
+    [InlineData("S-JTSK", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void A_coordinate_system_as_Therion_names_it_is_read_as_its_EPSG_code(string? cs, int? epsg)
+    {
+        TherionCoordinateSystems.EpsgOf(cs).ShouldBe(epsg);
+    }
+
+    [Theory]
+    [InlineData("lox", false, false)]
+    [InlineData("3d", false, false)]
+    [InlineData("lox", true, true)]
+    [InlineData("3d", true, true)]
+    [InlineData("plan-pdf", false, true)]
+    [InlineData(null, false, true)]
+    public void A_model_output_whose_model_was_deleted_is_no_longer_listed(string? output, bool hasModel, bool listed)
+    {
+        SurveyUploadArtefacts.Listable(output, hasModel ? Guid.NewGuid() : null).ShouldBe(listed);
+    }
+
+    [Fact]
+    public void Only_the_per_output_codes_have_an_artefact_sentence()
+    {
+        SurveyPipelineNotes.ForArtefact(SurveyPipelineFailures.OutputMissing).ShouldNotBeNullOrEmpty();
+        SurveyPipelineNotes.ForArtefact(SurveyPipelineFailures.CrsUnknown).ShouldNotBeNullOrEmpty();
+        SurveyPipelineNotes.ForArtefact(SurveyPipelineFailures.CompileFailed).ShouldBeNull();
+    }
+}

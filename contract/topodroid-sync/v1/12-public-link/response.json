@@ -1,0 +1,43 @@
+{
+  "survey": {
+    "title": "Pestera Inventata <marker>"
+  },
+  "cave": {
+    "name": "Pestera Inventata <marker>"
+  },
+  "version": "<timestamp>",
+  "status": "succeeded",
+  "stage": "unpack",
+  "stages": [
+    {
+      "stage": "archive",
+      "state": "done"
+    },
+    {
+      "stage": "unpack",
+      "state": "done"
+    },
+    {
+      "stage": "scaffold",
+      "state": "skipped"
+    },
+    {
+      "stage": "compile",
+      "state": "skipped"
+    },
+    {
+      "stage": "store",
+      "state": "skipped"
+    },
+    {
+      "stage": "read",
+      "state": "skipped"
+    }
+  ],
+  "progress": 100,
+  "message": "Archived and read. Not compiled: this server has no survey compiler.",
+  "error": null,
+  "artefacts": [],
+  "createdAt": "<timestamp>",
+  "finishedAt": "<timestamp>"
+}

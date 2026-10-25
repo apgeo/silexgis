@@ -5,13 +5,16 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Profiles;
+using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Tests;
 
@@ -39,6 +42,7 @@ public sealed class SurveyUploadContractTests : IAsyncLifetime, IDisposable, ICl
 {
     private const string Uploads = "/api/v1/survey-uploads";
 
+    private readonly PostgresFixture postgres;
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];
@@ -50,6 +54,7 @@ public sealed class SurveyUploadContractTests : IAsyncLifetime, IDisposable, ICl
 
     public SurveyUploadContractTests(PostgresFixture postgres)
     {
+        this.postgres = postgres;
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-supct-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
@@ -115,6 +120,8 @@ public sealed class SurveyUploadContractTests : IAsyncLifetime, IDisposable, ICl
         var caveId = first.GetProperty("cave").GetProperty("id").GetGuid();
         var surveyId = first.GetProperty("caveSurvey").GetProperty("id").GetGuid();
         Guid? nextId = null;
+        string? publicToken = null;
+        string? nextPublicToken = null;
         var archived = new List<(Guid Id, string Label)>();
         ContractFixture Named()
         {
@@ -127,6 +134,17 @@ public sealed class SurveyUploadContractTests : IAsyncLifetime, IDisposable, ICl
             foreach (var (id, label) in archived)
             {
                 fixture.Name(id, label);
+            }
+
+            // The public link's token is minted afresh on every run, like a delivery token.
+            if (publicToken is not null)
+            {
+                fixture.Literal(publicToken, "public-token");
+            }
+
+            if (nextPublicToken is not null)
+            {
+                fixture.Literal(nextPublicToken, "next-public-token");
             }
 
             return nextId is { } next ? fixture.Name(next, "next-upload") : fixture;
@@ -142,12 +160,25 @@ public sealed class SurveyUploadContractTests : IAsyncLifetime, IDisposable, ICl
             "03-put-file", $"PUT {Uploads}/{uploadId}/files/pestera_inventata.zip", put);
 
         var completed = await device.PostAsync($"{Uploads}/{uploadId}/complete", null);
+        var publicUrl = (await BodyAsync(completed, HttpStatusCode.Accepted)).GetProperty("publicLink").GetProperty("url").GetString()!;
+        publicToken = publicUrl["/p/survey/".Length..];
         await Named().AssertWithStatusAsync("04-complete", $"POST {Uploads}/{uploadId}/complete", null, completed);
 
         await Named().AssertAsync("05-status-queued", $"GET {Uploads}/{uploadId}", await device.GetAsync($"{Uploads}/{uploadId}"));
 
         await RunPipelineAsync(uploadId);
         await Named().AssertAsync("06-status-succeeded", $"GET {Uploads}/{uploadId}", await device.GetAsync($"{Uploads}/{uploadId}"));
+
+        // The public page the link opens, read with no account at all.
+        using (var anonymous = factory.CreateClient())
+        {
+            await Named().AssertAsync(
+                "12-public-link", $"GET /api/v1/public/survey-uploads/{publicToken}", await anonymous.GetAsync($"/api/v1/public/survey-uploads/{publicToken}"));
+            await Named().AssertRefusalAsync(
+                "11-errors/public-link-not-found",
+                "GET /api/v1/public/survey-uploads/<invented>",
+                await anonymous.GetAsync($"/api/v1/public/survey-uploads/{new string('A', 43)}"));
+        }
 
         // The same survey again, by the id the server answered for it: its next version.
         var nextBody = Json(new
@@ -166,7 +197,8 @@ public sealed class SurveyUploadContractTests : IAsyncLifetime, IDisposable, ICl
         var storedNext = await BodyAsync(await PutAsync(device, nextId.Value, "no_manifest.zip", broken), HttpStatusCode.OK);
         archived.Add((storedNext.GetProperty("sourceId").GetGuid(), "next-archive-source"));
         archived.Add((storedNext.GetProperty("documentId").GetGuid(), "next-archive-document"));
-        (await device.PostAsync($"{Uploads}/{nextId}/complete", null)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var nextCompleted = await BodyAsync(await device.PostAsync($"{Uploads}/{nextId}/complete", null), HttpStatusCode.Accepted);
+        nextPublicToken = nextCompleted.GetProperty("publicLink").GetProperty("url").GetString()!["/p/survey/".Length..];
         await Should.ThrowAsync<InvalidOperationException>(RunPipelineAsync(nextId.Value));
         await Named().AssertAsync("08-status-failed", $"GET {Uploads}/{nextId}", await device.GetAsync($"{Uploads}/{nextId}"));
 
@@ -185,6 +217,99 @@ public sealed class SurveyUploadContractTests : IAsyncLifetime, IDisposable, ICl
             $"POST {Uploads}/{nextId}/rerun",
             rerunBody,
             await device.PostAsync($"{Uploads}/{nextId}/rerun", JsonContent(rerunBody)));
+    }
+
+    [Fact]
+    public async Task A_compiled_run_is_the_recorded_status_and_public_page()
+    {
+        // The same database and store with a compiler: a stand-in that writes every output asked
+        // for with invented content, so the bytes, sizes and names it answers are the same on
+        // every run.
+        using var compiling = new SilexGisApiFactory(
+            postgres.ConnectionString,
+            new Dictionary<string, string?>
+            {
+                ["Files:Root"] = filesRoot,
+                ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+            },
+            services =>
+            {
+                JobWorkers.RemoveFrom(services);
+                services.Replace(ServiceDescriptor.Singleton<ISurveyCompiler>(new FakeSurveyCompiler()));
+            });
+        using var phone = AuthHelper.AccessKeyClient(compiling, deviceKey);
+        phone.DefaultRequestHeaders.Add("X-SilexGis-Contract", "1");
+
+        string[] names = ["pestera_inventata.zip", "pestera_inventata.th", "pestera_inventata-1p.th2"];
+        var body = Json(new
+        {
+            source = "topodroid",
+            client = new { name = "TopoDroid", version = "6.5.34" },
+            surveyTitle = $"Compilata {suffix}",
+            surveyName = "pestera_inventata",
+            files = names.Select(n => new
+            {
+                name = n,
+                size = ArchiveFile(n).LongLength,
+                role = n.EndsWith(".zip", StringComparison.Ordinal) ? "archive"
+                    : n.EndsWith(".th2", StringComparison.Ordinal) ? "therionSketch" : "therionSource",
+            }),
+            pipeline = new { compile = true },
+        });
+        var opened = await BodyAsync(await phone.PostAsync(Uploads, JsonContent(body)), HttpStatusCode.Created);
+        var uploadId = opened.GetProperty("id").GetGuid();
+        var fixture = Fixture()
+            .Name(uploadId, "upload")
+            .Name(opened.GetProperty("cave").GetProperty("id").GetGuid(), "cave")
+            .Name(opened.GetProperty("caveSurvey").GetProperty("id").GetGuid(), "survey")
+            .Name(ownerId, "uploader")
+            .Literal(ProfileProtection.AnonymousLabelPrefix + ownerId.ToString("N")[..8], "uploader-label")
+            .Literal(suffix, "marker")
+            .Literal(SurveyVersionStamp.Of(opened.GetProperty("version").GetDateTimeOffset()), "version-stamp");
+        foreach (var name in names)
+        {
+            var stored = await BodyAsync(await PutAsync(phone, uploadId, name, ArchiveFile(name)), HttpStatusCode.OK);
+            var label = Path.GetExtension(name).TrimStart('.');
+            foreach (var member in new[] { "sourceId", "documentId" })
+            {
+                if (stored.TryGetProperty(member, out var stamped) && stamped.ValueKind == JsonValueKind.String)
+                {
+                    fixture.Name(stamped.GetGuid(), $"{label}-{member[..^2]}");
+                }
+            }
+        }
+
+        var completed = await BodyAsync(await phone.PostAsync($"{Uploads}/{uploadId}/complete", null), HttpStatusCode.Accepted);
+        var token = completed.GetProperty("publicLink").GetProperty("url").GetString()!["/p/survey/".Length..];
+        fixture.Literal(token, "public-token");
+        await RunPipelineAsync(uploadId, compiling);
+
+        var status = await phone.GetAsync($"{Uploads}/{uploadId}");
+        var read = JsonDocument.Parse(await status.Content.ReadAsStringAsync()).RootElement;
+        read.GetProperty("status").GetString().ShouldBe("succeeded", read.ToString());
+
+        // The files generated around the survey carry its title, marker and all, so their digests
+        // vary with it; the recording names them rather than fixing them.
+        foreach (var file in read.GetProperty("files").EnumerateArray().Where(f => f.GetProperty("role").GetString() == "generatedConfig"))
+        {
+            var kind = file.GetProperty("name").GetString()!.EndsWith(".thconfig", StringComparison.Ordinal) ? "config" : "wrapper";
+            fixture.Literal(file.GetProperty("sha256").GetString()!, $"{kind}-sha256");
+            foreach (var member in new[] { "sourceId", "documentId" })
+            {
+                if (file.GetProperty(member).ValueKind == JsonValueKind.String)
+                {
+                    fixture.Name(file.GetProperty(member).GetGuid(), $"{kind}-{member[..^2]}");
+                }
+            }
+        }
+
+        await fixture.AssertAsync("06b-status-compiled", $"GET {Uploads}/{uploadId}", status);
+
+        using var anonymous = compiling.CreateClient();
+        await fixture.AssertAsync(
+            "12b-public-link-compiled",
+            $"GET /api/v1/public/survey-uploads/{token}",
+            await anonymous.GetAsync($"/api/v1/public/survey-uploads/{token}"));
     }
 
     [Fact]
@@ -332,10 +457,11 @@ public sealed class SurveyUploadContractTests : IAsyncLifetime, IDisposable, ICl
         System.IO.File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "topodroid", name));
 
     /// <summary>Runs the processing job the upload's completion queued, exactly once, as the worker would.</summary>
-    private async Task RunPipelineAsync(Guid uploadId)
+    private async Task RunPipelineAsync(Guid uploadId, SilexGisApiFactory? host = null)
     {
+        host ??= factory;
         long jobId;
-        await using (var scope = factory.Services.CreateAsyncScope())
+        await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             var queued = await db.ProcessingJobs.AsNoTracking()
@@ -345,6 +471,6 @@ public sealed class SurveyUploadContractTests : IAsyncLifetime, IDisposable, ICl
                 JsonSerializer.Deserialize<SurveyUploadPipelinePayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyUploadId == uploadId).Id;
         }
 
-        await QueuedJob.RunAsync(factory.Services, jobId);
+        await QueuedJob.RunAsync(host.Services, jobId);
     }
 }

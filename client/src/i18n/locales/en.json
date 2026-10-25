@@ -4607,6 +4607,8 @@
       "name_notify_trip_callout_overdue_sms": "A trip is overdue and the party is unaccounted for, by text",
       "name_notify_job_completed": "Processing finished",
       "name_notify_job_failed": "Processing failed",
+      "name_notify_survey_upload_succeeded": "A survey you sent was processed",
+      "name_notify_survey_upload_failed": "A survey you sent could not be processed",
       "name_notify_security_password_changed": "Password changed",
       "name_notify_security_email_changed": "Email address changed",
       "name_notify_security_two_factor_disabled": "Two-step sign-in switched off",

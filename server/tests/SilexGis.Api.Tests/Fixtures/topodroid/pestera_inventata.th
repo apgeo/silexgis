@@ -1,0 +1,65 @@
+encoding utf-8
+# 2026.10.25 created by TopoDroid 6.5.34
+
+survey pestera_inventata -title "pestera inventata"
+    # Pestera Inventata - invented sample data 
+
+  centerline
+    cs long-lat
+    # fix 0 24.000000 46.000000 500 # 5.0
+    date 2026.10.25 
+    # team Test A.; Test B. 
+    # declination 0.0000 degrees
+    units length meter
+    units compass clino degree
+    data normal from to length compass clino
+    # extend auto
+    0 - 1.00 300.0 0.0
+    0 - 1.50 120.0 0.0
+    extend vertical
+    0 - 2.00 0.0 90.0
+    0 - 0.50 0.0 -90.0
+    extend right
+    0 1 5.20 30.0 -10.0
+    # extend auto
+    1 - 0.80 345.0 0.0
+    1 - 1.20 165.0 0.0
+    extend vertical
+    1 - 1.60 0.0 90.0
+    1 - 0.40 0.0 -90.0
+    extend right
+    1 2 7.80 75.0 -5.0
+    extend left
+    2 3 4.10 120.0 -20.0
+    # extend auto
+    3 - 2.10 5.0 0.0
+    3 - 0.90 185.0 0.0
+    extend vertical
+    3 - 3.00 0.0 90.0
+    3 - 0.60 0.0 -90.0
+    3 4 6.50 95.0 2.0
+    extend left
+    4 5 3.90 160.0 -15.0
+    # extend auto
+    5 - 1.10 110.0 0.0
+    5 - 1.40 290.0 0.0
+    extend vertical
+    5 - 2.20 0.0 90.0
+    5 - 0.70 0.0 -90.0
+    extend left
+    5 6 8.30 200.0 -3.0
+    extend right
+    3 . 2.40 10.0 35.0
+  endcenterline
+
+  # input "pestera_inventata-1p.th2"
+  # input "pestera_inventata-1s.th2"
+
+  # map m1p -projection plan
+  #   pestera_inventata-1p
+  # endmap
+  # map m1s -projection extended
+  #   pestera_inventata-1s
+  # endmap
+
+endsurvey

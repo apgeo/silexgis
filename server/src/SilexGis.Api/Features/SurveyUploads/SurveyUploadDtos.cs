@@ -55,7 +55,12 @@ public sealed record SurveyUploadCaveSurveyReference(Guid Id);
 /// <param name="Visibility">Who the cave is open to; the uploader's club, else private, when empty.</param>
 /// <param name="CavingGroupId">The caving group to bind the cave to; needed for a group-visible cave when the account is in several.</param>
 /// <param name="CaveTypeId">The cave type; the installation's default when empty.</param>
-public sealed record SurveyUploadNewCave(string? Name, Visibility? Visibility, Guid? CavingGroupId, long? CaveTypeId);
+/// <param name="LocationProtected">
+/// Whether the cave's position is protected from the moment it exists — before the entrance the
+/// survey's fixed station places is written. Off when not sent, as on the web's form.
+/// </param>
+public sealed record SurveyUploadNewCave(
+    string? Name, Visibility? Visibility, Guid? CavingGroupId, long? CaveTypeId, bool LocationProtected = false);
 
 /// <summary>One file the device will send.</summary>
 /// <param name="Name">The file name, unique within the upload, with no path.</param>
@@ -143,21 +148,33 @@ public sealed record SurveyUploadFileDto(
 /// <summary>Something a run produced.</summary>
 /// <param name="Kind">The output's catalogue name, or <c>log</c>.</param>
 /// <param name="Name">The file name, stamped with the upload's version.</param>
-/// <param name="SizeBytes">The size of the stored file.</param>
-/// <param name="ContentUrl">A signed, short-lived address of the bytes.</param>
+/// <param name="SizeBytes">The size of the stored file; null for an output that was not produced.</param>
+/// <param name="ContentUrl">A signed, short-lived address of the bytes; null for an output that was not produced.</param>
 /// <param name="SurveyModelId">The survey model it was stored as, for a model.</param>
 /// <param name="DocumentId">The document it was stored as, for a drawing.</param>
 /// <param name="SourceId">The survey source it was stored as, for the log.</param>
 /// <param name="ViewUrl">A page to view it on, relative to the installation's public address.</param>
+/// <param name="ModelStatus">
+/// For a model, how far its reading has got: a run reports success before the model has been read
+/// into stations, and this says when it has.
+/// </param>
+/// <param name="Error">
+/// What is wrong with this one output, with a stable code: <c>survey_pipeline.output_missing</c>
+/// for an output asked for and not produced (listed with no file), or
+/// <c>survey_pipeline.crs_unknown</c> for a Therion model stored and not read because its
+/// coordinate system cannot be converted. Null for an output stored as asked.
+/// </param>
 public sealed record SurveyUploadArtefactDto(
     string Kind,
     string Name,
-    long SizeBytes,
-    string ContentUrl,
+    long? SizeBytes,
+    string? ContentUrl,
     Guid? SurveyModelId,
     Guid? DocumentId,
     Guid? SourceId,
-    string? ViewUrl);
+    string? ViewUrl,
+    SurveyModelStatus? ModelStatus,
+    SurveyUploadErrorDto? Error);
 
 /// <summary>A public link to an upload's results.</summary>
 public sealed record SurveyUploadPublicLinkDto(string Url, DateTimeOffset CreatedAt);
@@ -181,7 +198,15 @@ public sealed record SurveyUploadPublicLinkDto(string Url, DateTimeOffset Create
 /// <param name="Compile">Whether the run was asked to compile.</param>
 /// <param name="LogTail">The last lines of the compiler's output — only for callers who may write to the cave.</param>
 /// <param name="StatusPageUrl">The signed-in page the run is watched on, relative to the installation's public address.</param>
-/// <param name="PublicLink">The public link to the results, when there is one.</param>
+/// <param name="PublicLink">
+/// The public link to the results, when there is one and the caller may write to the cave — those
+/// who may also withdraw it.
+/// </param>
+/// <param name="PublicLinkRefusal">
+/// Why the upload has no public link, when it was given none or its link no longer opens:
+/// <c>installation-off</c>, <c>account-off</c>, <c>no-share-right</c>, <c>protected-cave</c> or
+/// <c>revoked</c>; null otherwise.
+/// </param>
 /// <param name="CreatedAt">When the upload was opened.</param>
 /// <param name="ExpiresAt">When an upload still receiving files is abandoned.</param>
 /// <param name="StartedAt">When the first run started.</param>
@@ -206,6 +231,7 @@ public sealed record SurveyUploadDto(
     string? LogTail,
     string StatusPageUrl,
     SurveyUploadPublicLinkDto? PublicLink,
+    string? PublicLinkRefusal,
     DateTimeOffset CreatedAt,
     DateTimeOffset ExpiresAt,
     DateTimeOffset? StartedAt,

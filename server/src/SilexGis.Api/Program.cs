@@ -307,6 +307,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // to know. Registered concretely: it is called from one place and substituted by nothing, so an
     // interface would be ceremony rather than a seam.
     builder.Services.AddScoped<SilexGis.Api.Features.TripTracking.TripPublicationAnnouncer>();
+    builder.Services.AddScoped<SilexGis.Api.Features.SurveyUploads.SurveyUploadPublicLinkService>();
     // A trip's tracking journal for whatever is printed about the trip outside the tracking
     // screen. An interface because the asker is another feature area, which may not reach into
     // this one: it asks, and tracking answers with its own reads, so one rule decides what of a
@@ -362,6 +363,12 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // request, and asked again on every pan — see SharedViewRateLimits.
     var sharedViewPermitLimit = PerMinuteLimit.Read(
         builder.Configuration, SharedViewRateLimits.ConfigurationKey, SharedViewRateLimits.DefaultPerMinute);
+    // Cost control on the public page of a survey upload's results: anonymous, and read again every
+    // few seconds while the run it watches is going — see PublicSurveyUploadRateLimits.
+    var publicSurveyUploadPermitLimit = PerMinuteLimit.Read(
+        builder.Configuration,
+        SilexGis.Api.Features.SurveyUploads.PublicSurveyUploadRateLimits.ConfigurationKey,
+        SilexGis.Api.Features.SurveyUploads.PublicSurveyUploadRateLimits.DefaultPerMinute);
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -410,6 +417,15 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
                 {
                     Window = TimeSpan.FromMinutes(1),
                     PermitLimit = publicTripPermitLimit,
+                    QueueLimit = 0,
+                }));
+        options.AddPolicy(SilexGis.Api.Features.SurveyUploads.PublicSurveyUploadRateLimits.PolicyName, context =>
+            System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = publicSurveyUploadPermitLimit,
                     QueueLimit = 0,
                 }));
         options.AddPolicy(SharedViewRateLimits.PolicyName, context =>

@@ -31,6 +31,66 @@ turns every future addition into an outage of its own making.
 
 ---
 
+## 2026-10-25 — per-output errors and a recorded compiled run
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — no tool has been
+built against the artefact list yet, and everything here only adds to it.
+
+- Added member: `artefacts[].error` — `{ code, message }` for what is wrong with one output, else
+  `null`. Two codes: `survey_pipeline.output_missing` (asked for, not produced) and
+  `survey_pipeline.crs_unknown` (a `lox` stored unread: its coordinate system has no known EPSG
+  code). The second is new; the first was listed already as a run's code.
+- An entry with `error.code: survey_pipeline.output_missing` names an output that has no file:
+  its `sizeBytes` and `contentUrl` are `null`. Check `error` before offering a download.
+- A failed compile now keeps the configuration and the whole log: `files[]` lists the
+  `generatedConfig` files and `artefacts[]` the `log` on a `failed` status too.
+- Recordings added: `06b-status-compiled` (the status after a compiled run, against a stand-in
+  compiler writing invented outputs) and `12b-public-link-compiled` (that upload's public page).
+  None rewritten.
+
+---
+
+## 2026-10-25 — public links to an upload's results
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working**: everything here is an
+added member, a value of a member already announced, or a route a tool may ignore.
+
+- `publicLink` (announced in version 1, always `null` until now) is filled from the `complete`
+  answer on: `{ url: "/p/survey/<token>", createdAt }`, for an account that may write to the cave.
+- Added member: `publicLinkRefusal` — why there is no link (`installation-off`, `account-off`,
+  `no-share-right`, `protected-cave`, `revoked`), or `null`.
+- Added route, read with no account: `GET /api/v1/public/survey-uploads/{token}`, the public page's
+  own shape (`12-public-link`); every refusal is `404 survey_upload.public_link_not_found`
+  (`11-errors/public-link-not-found`).
+- Added codes on the web's routes for withdrawing and remaking a link (not opened by an access key):
+  `survey_upload.public_links_disabled`, `survey_upload.public_link_forbidden`,
+  `survey_upload.public_link_refused_protected`.
+- Recordings rewritten: `02-open` and `07-open-next-version` (`publicLinkRefusal: null`),
+  `04-complete`, `05-status-queued`, `06-status-succeeded`, `08-status-failed` and `10-rerun` (the
+  link, its token recorded as a placeholder); added `12-public-link` and
+  `11-errors/public-link-not-found`.
+
+---
+
+## 2026-10-25 — compiled uploads: stored artefacts and a model's reading
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working**: everything here is an
+added member or a value already announced.
+
+- A server that compiles now ends a run at stage `read` (announced in version 1's stage list) and
+  lists what it stored in `artefacts[]` — `kind` is an output's catalogue name or `log`, `name`
+  carries the version stamp.
+- Added member: `artefacts[].modelStatus` (`pending`, `processing`, `ready`, `failed`), how far a
+  stored model's reading has got.
+- `files[]` also lists the two files a compile generates around the survey, with
+  `role: generatedConfig` (a role value already in version 1).
+- Added member of the open request: `newCave.locationProtected` (boolean, default `false`), so a
+  cave made by the upload can start with its position protected — before the entrance the survey's
+  fixed station places is written.
+- No code appeared or changed. Recordings rewritten: none — the recorded server does not compile.
+
+---
+
 ## 2026-10-25 — contract version 1
 
 **Contract version: 1. Nothing is pinned to an earlier version, because there is none.** This is the

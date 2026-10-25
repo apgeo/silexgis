@@ -1,0 +1,68 @@
+{
+  "survey": {
+    "title": "Compilata <marker>"
+  },
+  "cave": {
+    "name": "Compilata <marker>"
+  },
+  "version": "<timestamp>",
+  "status": "succeeded",
+  "stage": "read",
+  "stages": [
+    {
+      "stage": "archive",
+      "state": "done"
+    },
+    {
+      "stage": "unpack",
+      "state": "done"
+    },
+    {
+      "stage": "scaffold",
+      "state": "done"
+    },
+    {
+      "stage": "compile",
+      "state": "done"
+    },
+    {
+      "stage": "store",
+      "state": "done"
+    },
+    {
+      "stage": "read",
+      "state": "done"
+    }
+  ],
+  "progress": 100,
+  "message": "Compiled: 4 of 4 outputs produced and stored.",
+  "error": null,
+  "artefacts": [
+    {
+      "kind": "3d",
+      "name": "pestera_inventata-<version-stamp>.3d",
+      "sizeBytes": 22,
+      "contentUrl": "/api/v1/files/<uuid-6>/content?token=<token>"
+    },
+    {
+      "kind": "lox",
+      "name": "pestera_inventata-<version-stamp>.lox",
+      "sizeBytes": 23,
+      "contentUrl": "/api/v1/files/<uuid-8>/content?token=<token>"
+    },
+    {
+      "kind": "plan-pdf",
+      "name": "pestera_inventata-<version-stamp>.plan.pdf",
+      "sizeBytes": 28,
+      "contentUrl": "/api/v1/files/<uuid-10>/content?token=<token>"
+    },
+    {
+      "kind": "extended-pdf",
+      "name": "pestera_inventata-<version-stamp>.extended.pdf",
+      "sizeBytes": 32,
+      "contentUrl": "/api/v1/files/<uuid-12>/content?token=<token>"
+    }
+  ],
+  "createdAt": "<timestamp>",
+  "finishedAt": "<timestamp>"
+}

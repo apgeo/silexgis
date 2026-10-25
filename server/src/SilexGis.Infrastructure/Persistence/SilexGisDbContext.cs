@@ -207,6 +207,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<SurveyUploadPreference> SurveyUploadPreferences => Set<SurveyUploadPreference>();
 
+    public DbSet<SurveyUploadPublicLink> SurveyUploadPublicLinks => Set<SurveyUploadPublicLink>();
+
     public DbSet<SurveySource> SurveySources => Set<SurveySource>();
 
     /// <summary>What one archived compilation log said about the survey it was written for.</summary>

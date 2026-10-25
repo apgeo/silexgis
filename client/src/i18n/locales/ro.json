@@ -4620,6 +4620,8 @@
       "name_notify_trip_callout_overdue_sms": "O tură a depășit termenul și echipa nu s-a anunțat, prin SMS",
       "name_notify_job_completed": "Procesarea s-a încheiat",
       "name_notify_job_failed": "Procesarea a eșuat",
+      "name_notify_survey_upload_succeeded": "O ridicare trimisă de tine a fost procesată",
+      "name_notify_survey_upload_failed": "O ridicare trimisă de tine nu a putut fi procesată",
       "name_notify_security_password_changed": "Parola a fost schimbată",
       "name_notify_security_email_changed": "Adresa de e-mail a fost schimbată",
       "name_notify_security_two_factor_disabled": "Autentificarea în doi pași a fost oprită",

@@ -72,6 +72,7 @@ public class OptionsDocumentationTests
         "TripTracking:PublicRateLimitPerMinute",
         "CalendarFeed:RateLimitPerMinute",
         "Map:SharedViewRateLimitPerMinute",
+        "SurveyUploads:PublicRateLimitPerMinute",
         TrustedProxies.HopsKey,
         TrustedProxies.NetworksKey + ":0",
     ];

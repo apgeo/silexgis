@@ -29,6 +29,8 @@ public static class SurveyUploadWrites
     /// <summary>The width of the survey party column.</summary>
     private const int TeamLength = 1000;
 
+    private const int CompilerVersionLength = 100;
+
     /// <summary>
     /// Marks the upload as picked up, keeping the first start time across reruns. Answers false —
     /// and writes nothing — when the upload is no longer waiting for a run: a job left over from a
@@ -90,6 +92,26 @@ public static class SurveyUploadWrites
                 .SetProperty(u => u.SurveyDate, u => date ?? u.SurveyDate)
                 .SetProperty(u => u.Team, u => team ?? u.Team)
                 .SetProperty(u => u.Declination, u => declination ?? u.Declination)
+                .SetProperty(u => u.UpdatedAt, now), ct);
+    }
+
+    /// <summary>
+    /// Keeps which compiler compiled the upload and the end of what it printed. The printed tail
+    /// is served only to those who may change the cave, and is written by a direct update so it
+    /// never lands in the cave's history.
+    /// </summary>
+    public static Task RecordCompileAsync(
+        SilexGisDbContext db, Guid uploadId, string? compilerVersion, string? logTail, CancellationToken ct)
+    {
+        var version = Head(compilerVersion, CompilerVersionLength);
+        var tail = Tail(logTail, SurveyUploadConfiguration.LogTailLength);
+        var now = DateTimeOffset.UtcNow;
+
+        return db.SurveyUploads
+            .Where(u => u.Id == uploadId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.CompilerVersion, version)
+                .SetProperty(u => u.LogTail, tail)
                 .SetProperty(u => u.UpdatedAt, now), ct);
     }
 
@@ -165,4 +187,8 @@ public static class SurveyUploadWrites
 
     private static string? Head(string? text, int length) =>
         text is null || text.Length <= length ? text : text[..length];
+
+    // The end of a log is the part worth keeping: it holds the error that stopped the run.
+    private static string? Tail(string? text, int length) =>
+        text is null || text.Length <= length ? text : text[^length..];
 }

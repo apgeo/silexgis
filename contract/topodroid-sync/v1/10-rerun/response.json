@@ -47,7 +47,11 @@
   "compile": false,
   "logTail": null,
   "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<next-upload>",
-  "publicLink": null,
+  "publicLink": {
+    "url": "/p/survey/<next-public-token>",
+    "createdAt": "<timestamp>"
+  },
+  "publicLinkRefusal": null,
   "createdAt": "<timestamp>",
   "expiresAt": "<timestamp>",
   "startedAt": "<timestamp>",

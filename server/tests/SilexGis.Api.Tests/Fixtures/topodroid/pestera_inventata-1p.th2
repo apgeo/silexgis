@@ -1,0 +1,44 @@
+encoding utf-8
+##XTHERION## xth_me_area_adjust 84.2 -348.7 337.2 -65.1
+##XTHERION## xth_me_area_zoom_to 25
+
+# 2026.10.25 created by TopoDroid v. 6.5.34
+
+scrap pestera_inventata-1p -projection plan -scale [0 0 39.3701 0 0 0 1 0 m]
+
+line wall
+  184.15 -242.96
+  191.82 -231.43
+  200.48 -217.99
+  205.26 -210.32
+  210.11 -202.59
+  214.89 -194.92
+  219.68 -187.25
+  224.53 -179.52
+  230.29 -169.95
+endline
+
+line wall
+  204.34 -248.73
+  212.01 -237.20
+  220.66 -223.76
+  225.45 -216.09
+  230.29 -208.36
+  234.91 -198.78
+endline
+
+
+line u:splay -visibility off
+  196.85 -236.22
+  162.75 -216.54
+endline
+line u:splay -visibility off
+  196.85 -236.22
+  247.99 -265.75
+endline
+
+point 196.85 -236.22 station -name "0"
+
+
+endscrap
+

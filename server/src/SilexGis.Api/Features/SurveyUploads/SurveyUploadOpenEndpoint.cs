@@ -29,6 +29,7 @@ public static partial class SurveyUploadEndpoints
         IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         IFileAccessTokenService tokens,
+        SurveyUploadPublicLinkService links,
         IOptions<SurveyUploadOptions> options,
         TimeProvider clock,
         CancellationToken ct)
@@ -216,7 +217,7 @@ public static partial class SurveyUploadEndpoints
             return ApiProblems.Conflict(BusyCode, "Another upload of this survey arrived at the same moment; send it again.");
         }
 
-        var dto = await ToDtoAsync(db, tokens, upload, cave, writable: true, ct);
+        var dto = await ToDtoAsync(db, tokens, links, upload, cave, writable: true, ct);
         return TypedResults.Created($"/api/v1/survey-uploads/{upload.Id}", dto);
     }
 
@@ -292,6 +293,10 @@ public static partial class SurveyUploadEndpoints
             Name = name,
             Visibility = audience.Visibility,
             CavingGroupId = audience.CavingGroupId,
+            // Safe to set directly on create, as the web's form does: the write service works out
+            // the cave's effective protection while it establishes the cave, so the entrance the
+            // survey's fixed station places later is protected from its first second.
+            LocationProtected = asked?.LocationProtected ?? false,
         };
         var cave = new Cave { CaveTypeId = caveTypeId };
         feature.Cave = cave;

@@ -58,6 +58,23 @@ public sealed class SurveyUploadOptions
     /// </summary>
     public long MaxUnpackedBytes { get; set; } = 2L * 1024 * 1024 * 1024;
 
+    /// <summary>
+    /// How many versions of each survey keep what their compile produced — the models, drawings
+    /// and log. 0 (the default) keeps every version's; 1 keeps the newest version's only, and so
+    /// on. What a version was compiled from — the archive, the survey files, the generated
+    /// configuration — is kept for every version whatever this says, so a pruned version can be
+    /// compiled again. Pruning is done by the periodic sweep.
+    /// </summary>
+    public int KeepArtefactVersions { get; set; }
+
+    /// <summary>
+    /// Whether uploads get a public link to their results — a page anybody holding the address can
+    /// open without an account. On by default; each account can still turn it off for its own
+    /// uploads, and a cave whose position is protected never gets one. Turning this off also stops
+    /// every link already made from opening, for as long as it is off.
+    /// </summary>
+    public bool PublicLinks { get; set; } = true;
+
     /// <summary>The unpacking cap, never below one byte.</summary>
     public long UnpackedCap => Math.Max(1, MaxUnpackedBytes);
 

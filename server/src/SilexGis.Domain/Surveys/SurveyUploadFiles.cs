@@ -181,4 +181,7 @@ public static class SurveyUploadLinks
     /// </summary>
     public static string StatusPage(Guid caveId, Guid caveSurveyId, Guid uploadId) =>
         $"/caves/{caveId}/surveys/{caveSurveyId}/uploads/{uploadId}";
+
+    /// <summary>The public page of an upload's results, opened by its link's token without an account.</summary>
+    public static string PublicPage(string token) => $"/p/survey/{token}";
 }

@@ -154,10 +154,11 @@ public class SurveyPipelineProgressTests
     }
 
     [Fact]
-    public void A_run_that_does_not_compile_says_why()
+    public void A_run_that_does_not_compile_says_why_and_one_that_can_compile_goes_on()
     {
         SurveyPipelineNotes.WithoutCompiling(compileAsked: false, compilerAvailable: false).ShouldBe(SurveyPipelineNotes.NotAsked);
+        SurveyPipelineNotes.WithoutCompiling(compileAsked: false, compilerAvailable: true).ShouldBe(SurveyPipelineNotes.NotAsked);
         SurveyPipelineNotes.WithoutCompiling(compileAsked: true, compilerAvailable: false).ShouldBe(SurveyPipelineNotes.NoCompiler);
-        SurveyPipelineNotes.WithoutCompiling(compileAsked: true, compilerAvailable: true).ShouldBe(SurveyPipelineNotes.CompileNotBuilt);
+        SurveyPipelineNotes.WithoutCompiling(compileAsked: true, compilerAvailable: true).ShouldBeNull();
     }
 }

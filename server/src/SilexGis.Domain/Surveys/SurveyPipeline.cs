@@ -48,11 +48,20 @@ public static class SurveyPipelineFailures
     /// <summary>The compiler ran past the time this installation allows a compile.</summary>
     public const string CompileTimeout = "survey_pipeline.compile_timeout";
 
-    /// <summary>An output that was asked for was not produced. Per artefact; the run still succeeds.</summary>
+    /// <summary>
+    /// An output that was asked for was not produced. On the artefact list, per output, while the
+    /// run succeeds on what was produced; the run's own failure only when none of it was.
+    /// </summary>
     public const string OutputMissing = "survey_pipeline.output_missing";
 
     /// <summary>Nothing the compiler produced could be stored.</summary>
     public const string StoreFailed = "survey_pipeline.store_failed";
+
+    /// <summary>
+    /// The survey is fixed in a coordinate system no EPSG code is known for, so its model is stored
+    /// and not read into stations. On the Therion model's artefact entry; the run still succeeds.
+    /// </summary>
+    public const string CrsUnknown = "survey_pipeline.crs_unknown";
 
     /// <summary>
     /// Something went wrong that the run did not expect. The server's own log has the whole of it;
@@ -113,11 +122,68 @@ public static class SurveyPipelineNotes
 
     public const string NoCompiler = "Archived and read. Not compiled: this server has no survey compiler.";
 
-    public const string CompileNotBuilt = "Archived and read. Not compiled: this server does not compile uploaded surveys yet.";
-
-    /// <summary>The note a run ends with when it stops after reading the archive.</summary>
-    public static string WithoutCompiling(bool compileAsked, bool compilerAvailable) =>
+    /// <summary>
+    /// The note a run ends with when it stops after reading the archive, or null when it goes on
+    /// to compile.
+    /// </summary>
+    public static string? WithoutCompiling(bool compileAsked, bool compilerAvailable) =>
         !compileAsked ? NotAsked
         : !compilerAvailable ? NoCompiler
-        : CompileNotBuilt;
+        : null;
+
+    /// <summary>Added to the note of a compiled run whose model could not be placed, and so was not read.</summary>
+    public const string ModelUnplaced =
+        " The survey is fixed to no position, so its model was stored but not read into stations.";
+
+    /// <summary>Added to the note of a compiled run whose coordinate system could not be converted, so its model was not read.</summary>
+    public const string ModelCrsUnknown =
+        " The survey's coordinate system is one this server cannot convert, so its model was stored but not read into stations.";
+
+    /// <summary>
+    /// The sentence an artefact entry carries beside its code, or null for a code that is not an
+    /// artefact's. Fixed per code: nothing out of the survey goes into it.
+    /// </summary>
+    public static string? ForArtefact(string code) => code switch
+    {
+        SurveyPipelineFailures.OutputMissing => "Asked for, but Therion did not write it.",
+        SurveyPipelineFailures.CrsUnknown =>
+            "Stored, not read into stations: the survey's coordinate system is one this server cannot convert.",
+        _ => null,
+    };
+
+    /// <summary>
+    /// The note of a run that compiled: how many of the outputs asked for the compiler wrote, and
+    /// whether the survey's sketches were drawn.
+    /// </summary>
+    public static string Compiled(int produced, int asked, bool sketchesDrawn) =>
+        string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"Compiled: {produced} of {asked} outputs produced and stored.")
+        + (sketchesDrawn ? "" : " No sketch was uploaded with the survey, so its drawings show the centreline only.");
+}
+
+/// <summary>What a compile came to, by the rule every compiler is judged by.</summary>
+public enum SurveyCompileVerdict
+{
+    /// <summary>The compiler finished, its log does not say it failed, and at least one output asked for exists.</summary>
+    Succeeded,
+
+    /// <summary>The compiler exited with an error, or its log says the compile failed.</summary>
+    CompilerFailed,
+
+    /// <summary>The compiler said it finished, but nothing that was asked for was written.</summary>
+    NothingProduced,
+}
+
+/// <summary>
+/// Whether a compiled upload counts as compiled. An output asked for and not written is a gap in
+/// that output alone — a KML of a survey that has no position is the ordinary case — so a run
+/// fails only when the compiler did, or when none of what was asked for came out.
+/// </summary>
+public static class SurveyCompileOutcome
+{
+    public static SurveyCompileVerdict Judge(int exitCode, bool logSaysFailed, int producedCount) =>
+        exitCode != 0 || logSaysFailed ? SurveyCompileVerdict.CompilerFailed
+        : producedCount == 0 ? SurveyCompileVerdict.NothingProduced
+        : SurveyCompileVerdict.Succeeded;
 }

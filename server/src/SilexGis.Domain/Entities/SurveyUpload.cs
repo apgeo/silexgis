@@ -165,6 +165,12 @@ public class SurveyUpload : ITimestamped, IAuditable, IAuditChild
     /// <summary>The compiler the run used and its version, as the run reported it.</summary>
     public string? CompilerVersion { get; set; }
 
+    /// <summary>
+    /// Why the upload has no public link, as a stable code, when it was not given one at
+    /// completion or its link was withdrawn; null while it has one, or before completion.
+    /// </summary>
+    public string? PublicLinkRefusal { get; set; }
+
     /// <summary>The account that opened the upload.</summary>
     public Guid RequestedBy { get; set; }
 
@@ -271,6 +277,12 @@ public class SurveyUploadFile : ITimestamped
     public Guid? SurveySourceId { get; set; }
 
     public Guid? SurveyModelId { get; set; }
+
+    /// <summary>
+    /// For something the compiler produced, the output's catalogue name (<c>lox</c>,
+    /// <c>plan-pdf</c>, …); null for every other file.
+    /// </summary>
+    public string? Output { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

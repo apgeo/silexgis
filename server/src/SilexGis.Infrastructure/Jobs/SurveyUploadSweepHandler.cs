@@ -3,13 +3,18 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Infrastructure.Jobs;
 
 /// <summary>
-/// Closes survey uploads whose device stopped sending before every file arrived.
+/// Closes survey uploads whose device stopped sending before every file arrived, and removes what
+/// older versions of a survey produced when the installation keeps outputs for its newest versions
+/// only.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -23,11 +28,21 @@ namespace SilexGis.Infrastructure.Jobs;
 /// A tracked save rather than a direct update: closing an upload is a change of state worth its
 /// line in the cave's history, as it is when the device abandons the upload itself.
 /// </para>
+/// <para>
+/// Pruning takes only what a compile produced — models, drawings, the log — never what it was
+/// compiled from, so a pruned version can be compiled again with a rerun.
+/// </para>
 /// </remarks>
-public sealed class SurveyUploadSweepHandler(SilexGisDbContext db) : IProcessingJobHandler
+public sealed class SurveyUploadSweepHandler(
+    SilexGisDbContext db,
+    SurveyUploadArtefactStore artefacts,
+    IOptions<SurveyUploadOptions> options) : IProcessingJobHandler
 {
     /// <summary>How many are closed in one pass, so a long backlog does not hold the queue.</summary>
     private const int BatchSize = 200;
+
+    /// <summary>How many older versions one pass prunes, so a newly lowered setting is worked off over several passes.</summary>
+    private const int PruneBatchSize = 50;
 
     public string Kind => ProcessingJobKinds.SurveyUploadSweep;
 
@@ -35,6 +50,61 @@ public sealed class SurveyUploadSweepHandler(SilexGisDbContext db) : IProcessing
     public bool RetriesPassingFailures => true;
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
+    {
+        await CloseExpiredAsync(ct);
+        await PruneOlderVersionsAsync(ct);
+    }
+
+    /// <summary>
+    /// Removes what older versions of each survey produced, beyond the newest versions the
+    /// installation keeps outputs for. Nothing when it keeps every version's, which is the default.
+    /// </summary>
+    private async Task PruneOlderVersionsAsync(CancellationToken ct)
+    {
+        var keep = options.Value.KeepArtefactVersions;
+        if (keep <= 0)
+        {
+            return;
+        }
+
+        // Only surveys holding more versions than are kept can have anything to prune.
+        var surveys = await db.SurveyUploads.AsNoTracking()
+            .GroupBy(u => u.CaveSurveyId)
+            .Where(g => g.Count() > keep)
+            .Select(g => g.Key)
+            .ToListAsync(ct);
+
+        var pruned = 0;
+        foreach (var surveyId in surveys)
+        {
+            var versions = await db.SurveyUploads.AsNoTracking()
+                .Where(u => u.CaveSurveyId == surveyId)
+                .Select(u => new
+                {
+                    u.Id,
+                    u.VersionAt,
+                    Finished = u.Status == SurveyUploadStatus.Succeeded || u.Status == SurveyUploadStatus.Failed
+                        || u.Status == SurveyUploadStatus.Abandoned,
+                    // A stored output, not merely a log: a version whose compile failed keeps its
+                    // log and no output, and must not count as one of the newest versions kept in
+                    // place of one that produced something.
+                    HasOutputs = db.SurveyUploadFiles.Any(f => f.SurveyUploadId == u.Id
+                        && f.Role == SurveyUploadFileRole.Output && f.Status == SurveyUploadFileStatus.Stored),
+                })
+                .ToListAsync(ct);
+            foreach (var uploadId in SurveyUploadArtefacts.Prunable(
+                versions.Select(v => (v.Id, v.VersionAt, v.Finished, v.HasOutputs)), keep))
+            {
+                await artefacts.PruneAsync(uploadId, ct);
+                if (++pruned >= PruneBatchSize)
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    private async Task CloseExpiredAsync(CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
 

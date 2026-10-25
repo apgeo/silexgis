@@ -234,7 +234,7 @@ public static class CenterlineEndpoints
 
         try
         {
-            await writes.CreateCenterlineAsync(feature, centerline, ct);
+            await writes.CreateCenterlineAsync(feature, centerline, ct: ct);
         }
         catch (FeatureWriteException ex)
         {

@@ -72,6 +72,7 @@ public sealed class SurveyUploadConfiguration : IEntityTypeConfiguration<SurveyU
         builder.Property(x => x.ErrorMessage).HasMaxLength(ErrorMessageLength);
         builder.Property(x => x.LogTail).HasMaxLength(LogTailLength);
         builder.Property(x => x.CompilerVersion).HasMaxLength(100);
+        builder.Property(x => x.PublicLinkRefusal).HasMaxLength(40);
 
         builder.HasOne<Cave>().WithMany().HasForeignKey(x => x.CaveFeatureId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<CaveSurvey>().WithMany().HasForeignKey(x => x.CaveSurveyId).OnDelete(DeleteBehavior.Cascade);
@@ -126,6 +127,7 @@ public sealed class SurveyUploadFileConfiguration : IEntityTypeConfiguration<Sur
         builder.HasOne<Document>().WithMany().HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<SurveySource>().WithMany().HasForeignKey(x => x.SurveySourceId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<SurveyModel>().WithMany().HasForeignKey(x => x.SurveyModelId).OnDelete(DeleteBehavior.SetNull);
+        builder.Property(x => x.Output).HasMaxLength(OutputLength);
 
         // A file is addressed by its name within its upload.
         builder.HasIndex(x => new { x.SurveyUploadId, x.Name }, "ux_survey_upload_files_name")
@@ -137,6 +139,39 @@ public sealed class SurveyUploadFileConfiguration : IEntityTypeConfiguration<Sur
             .HasDatabaseName("ix_survey_upload_files_survey_source_id");
         builder.HasIndex(x => x.SurveyModelId, "ix_survey_upload_files_survey_model_id")
             .HasDatabaseName("ix_survey_upload_files_survey_model_id");
+    }
+
+    /// <summary>The longest output name the catalogue has, with room to spare.</summary>
+    public const int OutputLength = 40;
+}
+
+public sealed class SurveyUploadPublicLinkConfiguration : IEntityTypeConfiguration<SurveyUploadPublicLink>
+{
+    public void Configure(EntityTypeBuilder<SurveyUploadPublicLink> builder)
+    {
+        builder.ToTable("survey_upload_public_links");
+        builder.Property(x => x.Id).ValueGeneratedNever();
+
+        builder.Property(x => x.TokenHash).HasMaxLength(64);
+        builder.Property(x => x.TokenProtected).HasMaxLength(1000);
+
+        builder.HasOne<SurveyUpload>().WithMany().HasForeignKey(x => x.SurveyUploadId).OnDelete(DeleteBehavior.Cascade);
+
+        // Who made a link is kept for as long as the link is, like the upload's own sender.
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+
+        // A request presents a token and is answered by its hash alone.
+        builder.HasIndex(x => x.TokenHash, "ux_survey_upload_public_links_token_hash")
+            .HasDatabaseName("ux_survey_upload_public_links_token_hash")
+            .IsUnique();
+
+        // One live link per upload: making a new one revokes the old one in the same save.
+        builder.HasIndex(x => x.SurveyUploadId, "ux_survey_upload_public_links_live")
+            .HasDatabaseName("ux_survey_upload_public_links_live")
+            .IsUnique()
+            .HasFilter("revoked_at IS NULL");
+        builder.HasIndex(x => x.CreatedBy, "ix_survey_upload_public_links_created_by")
+            .HasDatabaseName("ix_survey_upload_public_links_created_by");
     }
 }
 
