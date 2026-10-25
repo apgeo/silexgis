@@ -118,6 +118,8 @@ public class CredentialUrlScrubberTests
                      "/api/v1/shared/features/",
                      "/api/v1/shared/views/",
                      "/api/v1/public/albums/",
+                     "/p/survey/",
+                     "/api/v1/public/survey-uploads/",
                  })
         {
             var scrubbed = CredentialUrlScrubber.Scrub($"{prefix}{Token}")!;

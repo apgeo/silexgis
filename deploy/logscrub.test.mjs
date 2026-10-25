@@ -156,6 +156,8 @@ const credentialPrefixes = [
   ['/api/v1/shared/features/', 'a feature share link somebody chose to hand out'],
   ['/api/v1/shared/views/', 'a map view share link somebody chose to hand out'],
   ['/api/v1/public/albums/', 'a published album link somebody chose to hand out'],
+  ['/p/survey/', "the page behind a survey upload's public link, which is the whole of the holder's claim"],
+  ['/api/v1/public/survey-uploads/', 'the envelope that page reads'],
 ];
 
 // ---- what the log must say ----------------------------------------------------------------

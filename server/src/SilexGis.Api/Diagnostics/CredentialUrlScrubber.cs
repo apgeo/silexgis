@@ -69,6 +69,10 @@ public static class CredentialUrlScrubber
     [
         // The follower's own address, served by the web server as the single-page application.
         "/shared/trips/",
+        // The result page of an uploaded survey, seen as the follower's address (it reaches the log
+        // as a Referer) and as the anonymous envelope the page reads while a run is unfinished.
+        "/p/survey/",
+        "/api/v1/public/survey-uploads/",
         // The envelope that page reads, and the one the framed viewer reads.
         "/api/v1/public/trips/",
         "/api/v1/shared/features/",
