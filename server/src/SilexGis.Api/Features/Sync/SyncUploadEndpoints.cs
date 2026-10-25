@@ -144,6 +144,8 @@ public static class SyncUploadEndpoints
             new SyncRowsSection(writer, protection, access),
             new SyncPeopleSection(await settings.GetSyncAsync(ct)),
             new SyncDocumentsSection(documents, ingest, intake, access),
+            new SyncTripRecordingsSection(access),
+            new SyncTripPointsSection(access),
             new SyncDocumentLinksSection(protection, access),
         ];
 
@@ -208,6 +210,23 @@ public static class SyncUploadEndpoints
             db.ImportBatches.Update(batch);
             items.ForEach(i => i.ImportBatchId = batch.Id);
             db.ImportBatchItems.AddRange(items);
+
+            // Recordings this upload wrote or changed are made into trips by a job, queued in this
+            // same save: it exists exactly when the upload does, and the worker can only ever see
+            // it beside what the upload committed. Once per upload, never per recording.
+            if (items.Any(i => i.TripRecordingId is not null || i.TripRecordingPointId is not null))
+            {
+                db.ProcessingJobs.Add(new ProcessingJob
+                {
+                    Kind = ProcessingJobKinds.TripRecordingConvert,
+                    Payload = JsonSerializer.Serialize(
+                        new Infrastructure.Jobs.TripRecordingConvertPayload(batch.Id), JsonSerializerOptions.Web),
+                    // Nobody asked for a message saying the conversion ran; what it makes is told
+                    // through the trip and, when something needs looking at, through its own notice.
+                    RequestedBy = null,
+                });
+            }
+
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
 
@@ -288,12 +307,19 @@ public static class SyncUploadEndpoints
             rows,
             await ConflictEchoAsync(db, protection, ctx, rows, ct),
             await DuplicatesAsync(db, proximity, ctx, rows, duplicateRadiusMeters, ct),
-            // Absent rather than empty when the upload carried no phone users, so an upload of rows
-            // alone is answered byte for byte as it was before the request had sections.
-            sections.TryGetValue(SyncUploadSections.People, out var people) && people.Count > 0 ? people : null,
-            sections.TryGetValue(SyncUploadSections.Documents, out var sent) && sent.Count > 0 ? sent : null,
-            sections.TryGetValue(SyncUploadSections.DocumentLinks, out var hung) && hung.Count > 0 ? hung : null);
+            // Each absent rather than empty when the upload carried none of that section's items,
+            // so an upload of rows alone is answered byte for byte as it was before sections.
+            Present(sections, SyncUploadSections.People),
+            Present(sections, SyncUploadSections.Documents),
+            Present(sections, SyncUploadSections.DocumentLinks),
+            Present(sections, SyncUploadSections.TripRecordings),
+            Present(sections, SyncUploadSections.TripPoints));
     }
+
+    /// <summary>A section's answers, or null when the upload carried none of its items.</summary>
+    private static IReadOnlyList<SyncUploadRowResultDto>? Present(
+        IReadOnlyDictionary<string, IReadOnlyList<SyncUploadRowResultDto>> sections, string section) =>
+        sections.TryGetValue(section, out var results) && results.Count > 0 ? results : null;
 
     /// <summary>
     /// The answer an earlier request with this batch identifier recorded, or null if there was

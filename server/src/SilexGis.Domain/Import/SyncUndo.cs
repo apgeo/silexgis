@@ -61,4 +61,16 @@ public static class SyncUndoReasons
 
     /// <summary>The caller may no longer change this row — or, for a row the upload deleted, may no longer delete it, which is the right that restores it.</summary>
     public const string Forbidden = "forbidden";
+
+    /// <summary>
+    /// For the trip report made from a recording the undo took back: somebody has changed the trip
+    /// since it was made — an edit, a person added, a flag cleared — so it is theirs now and is left.
+    /// </summary>
+    public const string TripChanged = "trip_changed";
+
+    /// <summary>
+    /// For the trip report made from a recording the undo took back: the report was not made by the
+    /// conversion of one of the recording's own uploads — an archive import made it — and is left.
+    /// </summary>
+    public const string ConvertedElsewhere = "converted_elsewhere";
 }

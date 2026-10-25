@@ -166,6 +166,19 @@ internal abstract class SyncUploadSection<TItem, TProposal> : ISyncUploadSection
 }
 
 /// <summary>
+/// Whether the revision a device sends back is the one this server stamped — the one comparison
+/// every section arbitrates by. Compared at the precision the database keeps rather than the
+/// precision .NET keeps: the value goes out with tick resolution and comes back off a column that
+/// stores microseconds, so an exact comparison would report a conflict against a row nobody had
+/// touched.
+/// </summary>
+internal static class SyncRevisions
+{
+    public static bool Same(DateTimeOffset stored, DateTimeOffset claimed) =>
+        stored.UtcTicks / 10 == claimed.UtcTicks / 10;
+}
+
+/// <summary>
 /// How item answers are counted — into the batch's own counters and into the answer's
 /// <c>written</c> and <c>refused</c> — stated once, so the live answer, a resend's answer and the
 /// batch's record cannot count the same upload three different ways.
@@ -216,14 +229,24 @@ internal static class SyncUploadSections
     /// <summary>Where a phone hung its photos and documents, and where it took them down.</summary>
     public const string DocumentLinks = "documentLinks";
 
+    /// <summary>The phone's trip recordings.</summary>
+    public const string TripRecordings = "tripRecordings";
+
+    /// <summary>The scans on the phone's trip recordings, applied after the recordings.</summary>
+    public const string TripPoints = "tripPoints";
+
     /// <summary>
     /// How many items an upload carries, over every section together. The announced ceiling is a
     /// bound on one transaction's work, and that work is the same whichever array an item sits
     /// in — so a device cannot pass a large upload by spreading it over several of them.
     /// </summary>
     public static int ItemCount(SyncUploadRequest request) =>
-        (request.Rows?.Count ?? 0) + (request.People?.Count ?? 0) + (request.Documents?.Count ?? 0)
-        + (request.DocumentLinks?.Count ?? 0);
+        (request.Rows?.Count ?? 0)
+        + (request.People?.Count ?? 0)
+        + (request.Documents?.Count ?? 0)
+        + (request.DocumentLinks?.Count ?? 0)
+        + (request.TripRecordings?.Count ?? 0)
+        + (request.TripPoints?.Count ?? 0);
 }
 
 /// <summary>

@@ -92,6 +92,18 @@ public enum NotificationCategory : short
     /// </para>
     /// </remarks>
     TripPublished = 10,
+
+    /// <summary>
+    /// A trip recorded on a phone could not be made into a trip report on its own: a scanned place
+    /// is unknown, a place's depth fits no single station, or a phone user is mapped to nobody. Or
+    /// a recording already made into a report changed afterwards. Either way a person has to look.
+    /// </summary>
+    /// <remarks>
+    /// Sent to the people who look after what phones send and to the account whose upload brought
+    /// the recording. Mutable like every other category: missing one costs a flag that stays on
+    /// the trip until somebody clears it, not a party nobody went to find.
+    /// </remarks>
+    TripNeedsAttention = 11,
 }
 
 /// <summary>
@@ -240,6 +252,7 @@ public static class NotificationCategories
         // needs while standing outside a cave with no data, which is the only argument this
         // application accepts for spending an operator's money per recipient.
         NotificationCategory.TripPublished => InboxAndMail,
+        NotificationCategory.TripNeedsAttention => InboxAndMail,
         NotificationCategory.JobCompleted => InboxAndMail,
         NotificationCategory.SecurityAlerts => InboxAndMail,
         NotificationCategory.TripPlanning => InboxAndMail,

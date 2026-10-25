@@ -72,6 +72,7 @@ public static class SyncEndpoints
         sets.MapSyncDownloadEndpoints();
         sets.MapSyncUploadEndpoints();
         sets.MapSyncDocumentEndpoints();
+        sets.MapSyncTripEndpoints();
         sync.MapSyncFileLinkEndpoints();
         sync.MapSyncPeopleEndpoints();
         api.MapSyncPhoneUserEndpoints();

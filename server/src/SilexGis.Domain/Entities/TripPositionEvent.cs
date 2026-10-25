@@ -58,6 +58,12 @@ public enum TripPositionEventSource : short
     /// itself was made underground at a marked place; which station that place is was settled here.
     /// </summary>
     SpeleolocArchive = 1,
+
+    /// <summary>
+    /// Made from a recording a phone sent through sync, with no reviewer: the scan was made at a
+    /// marked place, and the station is the only one that place's depth could mean.
+    /// </summary>
+    SpeleolocSync = 2,
 }
 
 /// <summary>

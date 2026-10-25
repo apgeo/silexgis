@@ -9,6 +9,7 @@ using SilexGis.Domain.Import;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Infrastructure.Import;
 
@@ -22,6 +23,11 @@ namespace SilexGis.Infrastructure.Import;
 /// <param name="Skipped">The fields of an edit left as they are, each with its reason.</param>
 /// <param name="DevicePersonId">The phone user the line is about, for a line that sent one; null otherwise.</param>
 /// <param name="DocumentId">The photo or document the line is about, for a line that sent one or hung one; null otherwise.</param>
+/// <param name="TripRecordingId">The phone recording the line is about, for a recording line.</param>
+/// <param name="TripRecordingPointId">The scan the line is about, for a scan line.</param>
+/// <param name="TripLogId">For a recording taken back: the trip report that had been made from it.</param>
+/// <param name="TripOutcome">What became of that report: <c>undone</c> (deleted with it) or <c>not_undone</c>.</param>
+/// <param name="TripReason">Why the report was left (<see cref="SyncUndoReasons.TripChanged"/>, <see cref="SyncUndoReasons.ConvertedElsewhere"/>).</param>
 public sealed record SyncUndoItemResult(
     long ItemId,
     Guid? FeatureId,
@@ -31,7 +37,12 @@ public sealed record SyncUndoItemResult(
     IReadOnlyList<string> Applied,
     IReadOnlyList<HistoryRestoreSkip> Skipped,
     Guid? DevicePersonId = null,
-    Guid? DocumentId = null);
+    Guid? DocumentId = null,
+    Guid? TripRecordingId = null,
+    Guid? TripRecordingPointId = null,
+    Guid? TripLogId = null,
+    string? TripOutcome = null,
+    string? TripReason = null);
 
 /// <summary>A request to undo an upload that cannot be answered line by line.</summary>
 public sealed class SyncUndoException(string code, string message) : InvalidOperationException(message)
@@ -88,7 +99,8 @@ public sealed partial class DeviceSyncUndoService(
     HistoryRestoreService history,
     IAccessService access,
     IChangeContext changes,
-    DocumentWriteService documents)
+    DocumentWriteService documents,
+    TripLogWriteService trips)
 {
     public const string ItemsUnknownCode = "import_batch.items_unknown";
 
@@ -119,9 +131,14 @@ public sealed partial class DeviceSyncUndoService(
         // Newest first: what the upload did last is taken back first, so a row it created inside
         // a row it also created goes before its container, and a container it deleted comes back
         // before the rows inside it are looked at.
+        //
+        // A phone recording is the one exception: its lines go before its scans' lines whatever
+        // their order, because a scan the upload deleted comes back only inside a recording that is
+        // there, and an upload that deleted a recording sent its scans' deletions after it.
         var items = allItems
             .Where(i => wanted is null || wanted.Contains(i.Id))
-            .OrderByDescending(i => i.Id)
+            .OrderBy(i => i.TripRecordingId is not null ? 0 : 1)
+            .ThenByDescending(i => i.Id)
             .ToList();
 
         // What the upload itself wrote — not what an earlier undo of it wrote, which carries the
@@ -180,7 +197,9 @@ public sealed partial class DeviceSyncUndoService(
                         ? await UndoLinkLineAsync(item, byDocument, ctx, force, ct)
                         : item.DocumentId is { } documentId
                             ? await UndoDocumentLineAsync(item, documentId, byDocument, ctx, force, ct)
-                            : await UndoLineAsync(item, byRow, attributed, ctx, force, ct);
+                            : item.TripRecordingId is not null || item.TripRecordingPointId is not null
+                                ? await UndoRecordingLineAsync(item, batch.Id, written, ctx, force, ct)
+                                : await UndoLineAsync(item, byRow, attributed, ctx, force, ct);
                 await db.SaveChangesAsync(ct);
                 await transaction.ReleaseSavepointAsync(LineSavepoint, ct);
             }
@@ -233,7 +252,7 @@ public sealed partial class DeviceSyncUndoService(
         // always did. Its answer still says that nothing of it was taken back.
         var takenBack = results
             .Where(r => r.Outcome is SyncUndoOutcomes.Undone or SyncUndoOutcomes.Partly
-                || r.Reason == SyncUndoReasons.NoHistory)
+                || r.Reason is SyncUndoReasons.NoHistory)
             .Select(r => r.ItemId)
             .ToList();
         if (takenBack.Count > 0)
@@ -826,6 +845,474 @@ public sealed partial class DeviceSyncUndoService(
         IReadOnlyList<string> applied,
         IReadOnlyList<HistoryRestoreSkip> skipped) =>
         new(item.Id, null, change, outcome, reason, applied, skipped, personId);
+
+    /// <summary>
+    /// A phone recording or scan line. One the upload created is deleted — a deletion, not a
+    /// removal, so the phones carrying it are told — and a recording's trip report goes with it when
+    /// a conversion of this recording's own uploads made the report and nobody has touched it since.
+    /// One the upload changed or deleted gets its fields back, or comes back, out of the history the
+    /// upload wrote, as a feature does.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// "Touched" is read from the trip's history: every row on the trip, or on anything of it — its
+    /// people, its positions, its tracking, its flag — has to be one the conversion that made it
+    /// wrote. Anything else there means somebody worked on the report, and a report somebody worked
+    /// on is theirs: it is left, and the answer names it so a person can decide.
+    /// </para>
+    /// <para>
+    /// The conversion that made the report may be that of a later upload than the one that created
+    /// the recording — the upload that closed a recording sent while the trip was still under way.
+    /// Undoing either takes the untouched report back: the creating upload's undo because the
+    /// recording goes, the closing upload's because the recording is open again. A report an archive
+    /// import made is not an upload's to take back, and is left the same way.
+    /// </para>
+    /// <para>
+    /// The report is named only to a caller who may read it: which trip it is belongs to the trip's
+    /// own audience, as the archive import's refusal has it.
+    /// </para>
+    /// </remarks>
+    private async Task<SyncUndoItemResult> UndoRecordingLineAsync(
+        ImportBatchItem item, Guid batchId, List<AuditEntry> written, AccessContext ctx, bool force, CancellationToken ct)
+    {
+        var recordingLine = item.TripRecordingId is not null;
+        var change = item.Action == ImportDecisionAction.Create ? SyncUndoChanges.Created : SyncUndoChanges.Updated;
+        SyncUndoItemResult Line(
+            string outcome,
+            string? reason,
+            ReportOutcome? report = null,
+            IReadOnlyList<string>? applied = null,
+            IReadOnlyList<HistoryRestoreSkip>? skipped = null) =>
+            new(item.Id, null, change, outcome, reason, applied ?? [], skipped ?? [], null,
+                TripRecordingId: item.TripRecordingId, TripRecordingPointId: item.TripRecordingPointId,
+                TripLogId: report?.TripLogId, TripOutcome: report?.Outcome, TripReason: report?.Reason);
+
+        if (item.UndoneAt is not null)
+        {
+            return Line(SyncUndoOutcomes.NotUndone, SyncUndoReasons.AlreadyUndone);
+        }
+
+        if (item.Action != ImportDecisionAction.Create)
+        {
+            return await UndoRecordingChangeAsync(item, batchId, written, ctx, force, ct);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (!recordingLine)
+        {
+            var point = await db.TripRecordingPoints.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(p => p.Id == item.TripRecordingPointId, ct);
+            if (point is null)
+            {
+                return Line(SyncUndoOutcomes.NotUndone, SyncUndoReasons.Purged);
+            }
+
+            point.DeletedAt ??= now;
+            return Line(SyncUndoOutcomes.Undone, null);
+        }
+
+        var recording = await db.TripRecordings.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(r => r.Id == item.TripRecordingId, ct);
+        if (recording is null)
+        {
+            return Line(SyncUndoOutcomes.NotUndone, SyncUndoReasons.Purged);
+        }
+
+        recording.DeletedAt ??= now;
+        return Line(SyncUndoOutcomes.Undone, null, await TakeBackReportAsync(recording, batchId, creatingLine: true, ctx, ct));
+    }
+
+    /// <summary>What became of a recording's trip report; the trip named only to a caller who may read it.</summary>
+    private sealed record ReportOutcome(Guid? TripLogId, string Outcome, string? Reason);
+
+    /// <summary>
+    /// The report made from <paramref name="recording"/>, taken back when a conversion of one of the
+    /// right uploads made it and nobody has touched it since. For the line that created the
+    /// recording the right uploads are any of the recording's own uploads; for a line that changed
+    /// it, this upload only — and then the recording loses its mark, so the change that undo puts
+    /// back can make a report again. Null when there is nothing to say about a report.
+    /// </summary>
+    private async Task<ReportOutcome?> TakeBackReportAsync(
+        TripRecording recording, Guid batchId, bool creatingLine, AccessContext ctx, CancellationToken ct)
+    {
+        if (recording.ConvertedTripLogId is not { } tripId)
+        {
+            return null;
+        }
+
+        // A report already deleted is not named: nobody may read it any more, which is the question
+        // that decides naming.
+        var trip = await db.TripLogs.FirstOrDefaultAsync(t => t.Id == tripId, ct);
+        var named = trip is not null && (await access.DecideAsync(ctx, AccessAction.Read, trip, ct)).Allowed
+            ? tripId
+            : (Guid?)null;
+
+        var key = tripId.ToString();
+        var ofTheTrip = db.AuditEntries.AsNoTracking().Where(a =>
+            (a.EntityType == nameof(TripLog) && a.EntityId == key)
+            || (a.RootEntityType == nameof(TripLog) && a.RootEntityId == key));
+        var madeBy = await ofTheTrip
+            .Where(a => a.EntityType == nameof(TripLog)
+                && a.Action == AuditActions.Created
+                && a.Source == ChangeSource.TripConversion)
+            .Select(a => a.ImportBatchId)
+            .FirstOrDefaultAsync(ct);
+
+        bool ours;
+        if (madeBy is not { } conversion)
+        {
+            ours = false;
+        }
+        else if (creatingLine)
+        {
+            ours = await db.ImportBatchItems.AsNoTracking()
+                .AnyAsync(i => i.ImportBatchId == conversion && i.TripRecordingId == recording.Id, ct);
+        }
+        else
+        {
+            ours = conversion == batchId;
+        }
+
+        if (!ours)
+        {
+            // A change line has nothing to say about a report somebody else's work made.
+            return creatingLine
+                ? trip is null
+                    ? new ReportOutcome(named, SyncUndoOutcomes.Undone, null)
+                    : new ReportOutcome(named, SyncUndoOutcomes.NotUndone, SyncUndoReasons.ConvertedElsewhere)
+                : null;
+        }
+
+        if (trip is null)
+        {
+            // Already out of the registry, which is where the undo would have put it.
+            return new ReportOutcome(named, SyncUndoOutcomes.Undone, null);
+        }
+
+        var touched = await ofTheTrip.AnyAsync(a => a.Source != ChangeSource.TripConversion || a.ImportBatchId != madeBy, ct);
+        if (touched)
+        {
+            return new ReportOutcome(named, SyncUndoOutcomes.NotUndone, SyncUndoReasons.TripChanged);
+        }
+
+        trips.SoftDelete(trip, ctx.UserId);
+        if (!creatingLine)
+        {
+            recording.ConvertedTripLogId = null;
+        }
+
+        return new ReportOutcome(named, SyncUndoOutcomes.Undone, null);
+    }
+
+    /// <summary>The fields of a recording an undo puts back; the rest is bookkeeping the write keeps.</summary>
+    private static readonly string[] RecordingFields =
+    [
+        nameof(TripRecording.CaveFeatureId), nameof(TripRecording.Title), nameof(TripRecording.Description),
+        nameof(TripRecording.Log), nameof(TripRecording.StartedAt), nameof(TripRecording.EndedAt),
+        nameof(TripRecording.ClientUpdatedAt),
+    ];
+
+    /// <summary>The fields of a scan an undo puts back.</summary>
+    private static readonly string[] PointFields =
+    [
+        nameof(TripRecordingPoint.PlaceFeatureId), nameof(TripRecordingPoint.ScannedAt),
+        nameof(TripRecordingPoint.Notes), nameof(TripRecordingPoint.CreatedByDeviceUserId),
+    ];
+
+    /// <summary>
+    /// A recording or scan the upload changed or deleted, put back out of the history rows the upload
+    /// wrote: a deleted one comes back, and each changed field returns to what it held before while
+    /// it still holds what the upload wrote. A field changed since is left and named, as a feature's
+    /// is; <c>force</c> puts it back anyway.
+    /// </summary>
+    /// <remarks>
+    /// The rights asked are the ones the upload needed: the recording's change right for its fields
+    /// and its scans, its delete right to bring it back. A cave or place the recording or scan named
+    /// before the upload goes back only for a caller who may read it, so an undo is never the way to
+    /// pin a recording on something the caller cannot see. A put-back row has its write time moved,
+    /// so the trips stream hands it to the phones again. A recording already made into a report is
+    /// left with its report; the report was flagged when the change arrived, and the undo of that
+    /// change takes the report back only when this upload's own conversion made it.
+    /// </remarks>
+    private async Task<SyncUndoItemResult> UndoRecordingChangeAsync(
+        ImportBatchItem item, Guid batchId, List<AuditEntry> written, AccessContext ctx, bool force, CancellationToken ct)
+    {
+        var recordingLine = item.TripRecordingId is not null;
+        var rowId = (item.TripRecordingId ?? item.TripRecordingPointId)!.Value;
+        var key = rowId.ToString();
+        var entityType = recordingLine ? nameof(TripRecording) : nameof(TripRecordingPoint);
+        var edits = written.Where(a => a.EntityType == entityType && a.EntityId == key && a.Action == AuditActions.Updated).ToList();
+
+        SyncUndoItemResult Line(
+            string change,
+            string outcome,
+            string? reason,
+            ReportOutcome? report = null,
+            IReadOnlyList<string>? applied = null,
+            IReadOnlyList<HistoryRestoreSkip>? skipped = null) =>
+            new(item.Id, null, change, outcome, reason, applied ?? [], skipped ?? [], null,
+                TripRecordingId: item.TripRecordingId, TripRecordingPointId: item.TripRecordingPointId,
+                TripLogId: report?.TripLogId, TripOutcome: report?.Outcome, TripReason: report?.Reason);
+
+        if (edits.Count == 0)
+        {
+            return Line(SyncUndoChanges.Updated, SyncUndoOutcomes.NotUndone, SyncUndoReasons.NoHistory);
+        }
+
+        // Per field, the value before the upload's first edit of it and the value its last edit left.
+        var span = new Dictionary<string, (JsonNode? Old, JsonNode? New)>(StringComparer.Ordinal);
+        foreach (var edit in edits)
+        {
+            foreach (var (field, pair) in HistoryRestoreService.ChangesOf(edit))
+            {
+                var old = (pair as JsonObject)?["old"];
+                var @new = (pair as JsonObject)?["new"];
+                span[field] = span.TryGetValue(field, out var seen) ? (seen.Old, @new) : (old, @new);
+            }
+        }
+
+        var deletedByUpload = span.TryGetValue(nameof(TripRecording.DeletedAt), out var deletion)
+            && deletion.Old is null && deletion.New is not null;
+        var change = deletedByUpload ? SyncUndoChanges.Deleted : SyncUndoChanges.Updated;
+
+        TripRecording? recording;
+        TripRecordingPoint? point = null;
+        if (recordingLine)
+        {
+            recording = await db.TripRecordings.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.Id == rowId, ct);
+        }
+        else
+        {
+            point = await db.TripRecordingPoints.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == rowId, ct);
+            recording = point is null
+                ? null
+                : await db.TripRecordings.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.Id == point.RecordingId, ct);
+        }
+
+        if (recording is null || (!recordingLine && point is null))
+        {
+            return Line(change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.Purged);
+        }
+
+        var needed = recordingLine && deletedByUpload ? AccessAction.Delete : AccessAction.Write;
+        if (!(await access.DecideAsync(ctx, needed, recording, ct)).Allowed)
+        {
+            return Line(change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.Forbidden);
+        }
+
+        DateTimeOffset? currentDeletedAt = recordingLine ? recording.DeletedAt : point!.DeletedAt;
+        if (!recordingLine && recording.DeletedAt is not null)
+        {
+            // A scan comes back only inside a recording that is there.
+            return Line(change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.ContainerDeleted);
+        }
+
+        if (deletedByUpload)
+        {
+            if (currentDeletedAt is null)
+            {
+                // Brought back by somebody since.
+                return Line(change, SyncUndoOutcomes.Undone, null);
+            }
+
+            if (!force && !SameMoment(deletion.New, currentDeletedAt))
+            {
+                // Brought back and deleted again since: the newer deletion is somebody's decision.
+                return Line(change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.Superseded);
+            }
+
+            if (recordingLine)
+            {
+                recording.DeletedAt = null;
+            }
+            else
+            {
+                point!.DeletedAt = null;
+            }
+
+            return Line(change, SyncUndoOutcomes.Undone, null);
+        }
+
+        if (currentDeletedAt is not null)
+        {
+            // Changed by the upload and deleted since: the deletion is the newer state.
+            return Line(change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.Superseded);
+        }
+
+        var fields = recordingLine ? RecordingFields : PointFields;
+        var applied = new List<string>();
+        var skipped = new List<HistoryRestoreSkip>();
+        foreach (var field in fields)
+        {
+            if (!span.TryGetValue(field, out var values) || JsonNode.DeepEquals(values.Old, values.New))
+            {
+                continue;
+            }
+
+            var (type, current) = recordingLine ? FieldOf(recording, field) : FieldOf(point!, field);
+            if (!force && !SameValue(values.New, current, type))
+            {
+                skipped.Add(new HistoryRestoreSkip(field, HistoryRestoreReasons.Superseded));
+                continue;
+            }
+
+            var old = ValueOf(values.Old, type);
+            if (old is Guid named && field is nameof(TripRecording.CaveFeatureId) or nameof(TripRecordingPoint.PlaceFeatureId))
+            {
+                var feature = await db.Features.AsNoTracking().FirstOrDefaultAsync(f => f.Id == named, ct);
+                if (feature is null || !(await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed)
+                {
+                    skipped.Add(new HistoryRestoreSkip(field, HistoryRestoreReasons.Redacted));
+                    continue;
+                }
+            }
+
+            if (recordingLine)
+            {
+                SetField(recording, field, old);
+            }
+            else
+            {
+                SetField(point!, field, old);
+            }
+
+            applied.Add(field);
+        }
+
+        var report = applied.Count > 0 && recordingLine
+            ? await TakeBackReportAsync(recording, batchId, creatingLine: false, ctx, ct)
+            : null;
+        if (applied.Count == 0 && skipped.Count == 0)
+        {
+            // Sent back unchanged: the upload changed nothing there was to take back.
+            return Line(change, SyncUndoOutcomes.Undone, null, report);
+        }
+
+        return skipped.Count == 0
+            ? Line(change, SyncUndoOutcomes.Undone, null, report, applied)
+            : applied.Count > 0
+                ? Line(change, SyncUndoOutcomes.Partly, null, report, applied, skipped)
+                : Line(change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.FieldsLeft, null, [], skipped);
+    }
+
+    private static (Type Type, object? Value) FieldOf(TripRecording r, string field) => field switch
+    {
+        nameof(TripRecording.CaveFeatureId) => (typeof(Guid), r.CaveFeatureId),
+        nameof(TripRecording.Title) => (typeof(string), r.Title),
+        nameof(TripRecording.Description) => (typeof(string), r.Description),
+        nameof(TripRecording.Log) => (typeof(string), r.Log),
+        nameof(TripRecording.StartedAt) => (typeof(DateTimeOffset), r.StartedAt),
+        nameof(TripRecording.EndedAt) => (typeof(DateTimeOffset?), r.EndedAt),
+        nameof(TripRecording.ClientUpdatedAt) => (typeof(DateTimeOffset?), r.ClientUpdatedAt),
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
+
+    private static (Type Type, object? Value) FieldOf(TripRecordingPoint p, string field) => field switch
+    {
+        nameof(TripRecordingPoint.PlaceFeatureId) => (typeof(Guid?), p.PlaceFeatureId),
+        nameof(TripRecordingPoint.ScannedAt) => (typeof(DateTimeOffset), p.ScannedAt),
+        nameof(TripRecordingPoint.Notes) => (typeof(string), p.Notes),
+        nameof(TripRecordingPoint.CreatedByDeviceUserId) => (typeof(Guid?), p.CreatedByDeviceUserId),
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
+
+    /// <summary>
+    /// A field set back to its value before the upload. A required field whose old value cannot be
+    /// read is left as it is rather than emptied.
+    /// </summary>
+    private static void SetField(TripRecording r, string field, object? value)
+    {
+        switch (field)
+        {
+            case nameof(TripRecording.CaveFeatureId) when value is Guid cave:
+                r.CaveFeatureId = cave;
+                break;
+            case nameof(TripRecording.Title) when value is string title:
+                r.Title = title;
+                break;
+            case nameof(TripRecording.Description):
+                r.Description = value as string;
+                break;
+            case nameof(TripRecording.Log):
+                r.Log = value as string;
+                break;
+            case nameof(TripRecording.StartedAt) when value is DateTimeOffset started:
+                r.StartedAt = started;
+                break;
+            case nameof(TripRecording.EndedAt):
+                r.EndedAt = value as DateTimeOffset?;
+                break;
+            case nameof(TripRecording.ClientUpdatedAt):
+                r.ClientUpdatedAt = value as DateTimeOffset?;
+                break;
+        }
+    }
+
+    private static void SetField(TripRecordingPoint p, string field, object? value)
+    {
+        switch (field)
+        {
+            case nameof(TripRecordingPoint.PlaceFeatureId):
+                p.PlaceFeatureId = value as Guid?;
+                break;
+            case nameof(TripRecordingPoint.ScannedAt) when value is DateTimeOffset scanned:
+                p.ScannedAt = scanned;
+                break;
+            case nameof(TripRecordingPoint.Notes):
+                p.Notes = value as string;
+                break;
+            case nameof(TripRecordingPoint.CreatedByDeviceUserId):
+                p.CreatedByDeviceUserId = value as Guid?;
+                break;
+        }
+    }
+
+    /// <summary>A history value read as the property's type; null for a null or unreadable one.</summary>
+    private static object? ValueOf(JsonNode? node, Type type)
+    {
+        if (node is not JsonValue value)
+        {
+            return null;
+        }
+
+        var target = Nullable.GetUnderlyingType(type) ?? type;
+        if (target == typeof(string))
+        {
+            return value.TryGetValue<string>(out var text) ? text : null;
+        }
+
+        if (target == typeof(Guid))
+        {
+            return value.TryGetValue<Guid>(out var id) ? id : null;
+        }
+
+        if (target == typeof(DateTimeOffset))
+        {
+            return value.TryGetValue<DateTimeOffset>(out var at) ? at : null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether the row still holds what the upload wrote. Moments are compared to the microsecond the
+    /// database keeps, since the history recorded the value as the upload sent it.
+    /// </summary>
+    private static bool SameValue(JsonNode? recorded, object? current, Type type)
+    {
+        var written = ValueOf(recorded, type);
+        return written switch
+        {
+            null => current is null,
+            DateTimeOffset at => current is DateTimeOffset now && Microseconds(at) == Microseconds(now),
+            _ => Equals(written, current),
+        };
+    }
+
+    private static bool SameMoment(JsonNode? recorded, DateTimeOffset? current) =>
+        SameValue(recorded, current, typeof(DateTimeOffset?));
+
+    private static long Microseconds(DateTimeOffset at) => at.UtcTicks / 10;
 
     private static SyncUndoItemResult Done(ImportBatchItem item, Guid rowId, string change) =>
         new(item.Id, rowId, change, SyncUndoOutcomes.Undone, null, [], []);

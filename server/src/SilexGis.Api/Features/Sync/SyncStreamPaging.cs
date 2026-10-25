@@ -21,6 +21,9 @@ public enum SyncStream
 
     /// <summary>The documents hanging on the set's features, as links with the document embedded.</summary>
     Documents,
+
+    /// <summary>The trips phones recorded in the set's caves, each with its scans embedded.</summary>
+    Trips,
 }
 
 /// <summary>

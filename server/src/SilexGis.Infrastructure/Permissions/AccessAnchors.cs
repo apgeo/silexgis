@@ -85,7 +85,7 @@ public static class AccessAnchors
 {
     public static IReadOnlyList<AccessAnchorArm> Arms { get; } =
     [
-        ObjectArm(AccessDomain.TripLogs, typeof(TripLog)),
+        ObjectArm(AccessDomain.TripLogs, typeof(TripLog), typeof(TripRecording)),
         ObjectArm(AccessDomain.Geofiles, typeof(Geofile)),
         ObjectArm(AccessDomain.GeoreferencedMaps, typeof(GeoreferencedMap)),
         ObjectArm(AccessDomain.MapViews, typeof(MapView), typeof(SavedFilter)),

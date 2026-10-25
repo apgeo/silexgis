@@ -130,7 +130,7 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
             [
                 "syncCapabilities", "syncListSets", "syncCreateSet", "syncGetSet",
                 "syncReplaceSet", "syncDeleteSet", "syncDownload", "syncUpload",
-                "syncDocuments", "syncFileLinks", "syncPeople",
+                "syncDocuments", "syncFileLinks", "syncPeople", "syncTrips",
             ],
             ignoreOrder: true);
     }
@@ -493,6 +493,7 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
         {
             "/api/v1/sync/sets/{id}/download", "/api/v1/sync/sets/{id}/upload",
             "/api/v1/sync/sets/{id}/documents", "/api/v1/sync/files/links",
+            "/api/v1/sync/sets/{id}/trips",
         })
         {
             var operation = paths.GetProperty(route);

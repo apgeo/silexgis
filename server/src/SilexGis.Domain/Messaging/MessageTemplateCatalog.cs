@@ -102,6 +102,23 @@ public static class MessageTemplateCatalog
     /// </remarks>
     public const string NotifyTripPublished = "notify.trip-published";
 
+    /// <summary>
+    /// A trip was made automatically from a phone recording and needs somebody to look at it: some
+    /// scans could not be settled, or the recording changed after the trip was made.
+    /// </summary>
+    /// <remarks>
+    /// It names the recording's title and date and how many scans were left out, and never the cave
+    /// or a station: who may learn where the party was is decided on the trip's page, per reader,
+    /// and a message is read wherever its recipient's mail is.
+    /// </remarks>
+    public const string NotifyTripNeedsAttention = "notify.trip-needs-attention";
+
+    /// <summary>
+    /// A phone recording could not be made into a trip automatically and, because the installation
+    /// says so, was left as a recording for somebody to make into one by hand.
+    /// </summary>
+    public const string NotifyTripRecordingWaiting = "notify.trip-recording-waiting";
+
     // A trip being planned. All four name the trip and its date and nothing else: the places a
     // trip is about are readable by fewer people than its roster, and a message is as much an
     // outbound copy of that as anything the API returns.
@@ -668,6 +685,87 @@ public static class MessageTemplateCatalog
 
                     Deschide tura pentru a vedea cum te numește pagina și până când funcționează
                     linkul:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripNeedsAttention,
+            MessageChannel.Email,
+            "A trip made automatically from a phone recording needs somebody to look at it.",
+            [AppName, DisplayName, "tripTitle", "tripDate", "unsettledCount", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "The trip {tripTitle} needs attention",
+                    """
+                    Hello {displayName},
+
+                    The trip {tripTitle} of {tripDate} was made on {appName} from a recording a phone
+                    sent. Not everything in the recording could be settled automatically: {unsettledCount}
+                    scans were left out of the trip, or the recording changed after the trip was made.
+
+                    Open the trip to see what needs looking at, and clear the flag once it is done:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Tura {tripTitle} are nevoie de atenție",
+                    """
+                    Bună ziua {displayName},
+
+                    Tura {tripTitle} din {tripDate} a fost creată pe {appName} dintr-o înregistrare
+                    trimisă de un telefon. Nu tot ce conține înregistrarea a putut fi stabilit automat:
+                    {unsettledCount} scanări au rămas în afara turei, sau înregistrarea s-a schimbat
+                    după ce tura a fost creată.
+
+                    Deschide tura pentru a vedea ce trebuie verificat și scoate marcajul când ai terminat:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripRecordingWaiting,
+            MessageChannel.Email,
+            "A phone recording could not be made into a trip automatically and waits as a recording.",
+            [AppName, DisplayName, "tripTitle", "tripDate", "unsettledCount", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "The recording {tripTitle} was not made into a trip",
+                    """
+                    Hello {displayName},
+
+                    A phone sent the recording {tripTitle} of {tripDate} to {appName}. {unsettledCount}
+                    of its scans could not be settled automatically, and this installation makes a
+                    trip from a recording only when everything in it can be. The recording is kept
+                    and waits for somebody to make it into a trip by hand.
+
+                    The cave it was recorded in:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Înregistrarea {tripTitle} nu a devenit tură",
+                    """
+                    Bună ziua {displayName},
+
+                    Un telefon a trimis înregistrarea {tripTitle} din {tripDate} pe {appName}.
+                    {unsettledCount} dintre scanările ei nu au putut fi stabilite automat, iar această
+                    instalare face o tură dintr-o înregistrare numai când totul în ea poate fi stabilit.
+                    Înregistrarea este păstrată și așteaptă să fie transformată în tură de mână.
+
+                    Peștera în care a fost înregistrată:
 
                     {url}
 

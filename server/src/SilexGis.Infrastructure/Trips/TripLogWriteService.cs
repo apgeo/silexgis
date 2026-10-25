@@ -277,6 +277,13 @@ public sealed class TripLogWriteService(
             .Where(x => x.EntityType == AttachedEntityType.TripLog && x.EntityId == trip.Id)
             .ExecuteDeleteAsync(ct);
 
+        // A phone's recording the trip was made from stays — other phones carry it — and is left
+        // with no report, so it can be made into one again. Read past the filter so a removed
+        // recording does not keep naming a trip that is gone.
+        await db.TripRecordings.IgnoreQueryFilters()
+            .Where(r => r.ConvertedTripLogId == trip.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.ConvertedTripLogId, (Guid?)null), ct);
+
         // Asked now that the trip's own attachment rows are gone, so that an attachment still
         // pointing at a write-up is somebody else's, and keeps it.
         var removedFiles = await GeneratedWriteUpCleanup.RemoveUnheldAsync(

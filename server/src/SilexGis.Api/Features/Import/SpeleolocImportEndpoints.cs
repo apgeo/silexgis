@@ -53,6 +53,18 @@ public static class SpeleolocImportEndpoints
         import.MapPost("/commit", CommitAsync).WithValidation<SpeleolocImportCommitRequest>()
             .WithSummary("Records the chosen scans as tracking positions, as one batch that reverts as a unit.");
 
+        // The same review over a recording a phone sent rather than one read out of an archive:
+        // how a recording the automatic conversion left waiting, or could not make, becomes a trip
+        // by hand. Same requests, same answers, same refusals; there is no saved review, so the
+        // decisions travel with the confirmation.
+        var kept = api.MapGroup("/speleoloc-imports/recordings/{recordingId:guid}").WithTags("Import");
+        kept.MapPost("/preview", PreviewRecordingAsync).WithValidation<SpeleolocImportPreviewRequest>()
+            .WithName("previewTripRecordingImport")
+            .WithSummary("Reads a recording a phone sent and answers each scan with the stations it could be.");
+        kept.MapPost("/commit", CommitRecordingAsync).WithValidation<SpeleolocImportCommitRequest>()
+            .WithName("commitTripRecordingImport")
+            .WithSummary("Makes a recording a phone sent into tracking positions on a trip, as one batch that reverts as a unit.");
+
         return api;
     }
 
@@ -236,6 +248,7 @@ public static class SpeleolocImportEndpoints
         IAccessContextAccessor accessAccessor,
         SpeleolocArchiveReader reader,
         SpeleolocTripImportResolver resolver,
+        SpeleolocTripImportCommitService commits,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -277,6 +290,74 @@ public static class SpeleolocImportEndpoints
             return ApiProblems.NotFound(SpeleolocImportCodes.RecordingNotFound);
         }
 
+        var decisions = ReadDecisions(await SessionDecisionsAsync(db, file!.Id, ctx.UserId, ct));
+        return await PreviewReadAsync(
+            read.Value.Trip, read.Value.Points, decisions, request, db, access, protection, ctx, resolver, commits, ct);
+    }
+
+    private static async Task<Results<Ok<SpeleolocImportPreviewDto>, UnauthorizedHttpResult, ProblemHttpResult>> PreviewRecordingAsync(
+        Guid recordingId,
+        SpeleolocImportPreviewRequest request,
+        SilexGisDbContext db,
+        IAccessService access,
+        FeatureProtection protection,
+        IAccessContextAccessor accessAccessor,
+        SpeleolocTripImportResolver resolver,
+        SpeleolocTripImportCommitService commits,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (RefuseCreate(ctx, request.Options!) is { } refusal)
+        {
+            return refusal;
+        }
+
+        var (recording, points, problem) = await LoadKeptRecordingAsync(recordingId, db, access, ctx, ct);
+        if (problem is not null)
+        {
+            return problem;
+        }
+
+        return await PreviewReadAsync(
+            SpeleolocTripImportCommitService.ArchiveTripOf(recording!, points.Count),
+            [.. points.Select(p => SpeleolocTripImportResolver.ScanOf(recording!, p))],
+            new Dictionary<string, SpeleolocPointDecision>(StringComparer.OrdinalIgnoreCase),
+            request, db, access, protection, ctx, resolver, commits, ct);
+    }
+
+    /// <summary>The dry run over a recording already read, whichever way it arrived.</summary>
+    private static async Task<Results<Ok<SpeleolocImportPreviewDto>, UnauthorizedHttpResult, ProblemHttpResult>> PreviewReadAsync(
+        SpeleolocArchiveTrip recording,
+        IReadOnlyList<SpeleolocArchivePoint> scans,
+        Dictionary<string, SpeleolocPointDecision> decisions,
+        SpeleolocImportPreviewRequest request,
+        SilexGisDbContext db,
+        IAccessService access,
+        FeatureProtection protection,
+        AccessContext ctx,
+        SpeleolocTripImportResolver resolver,
+        SpeleolocTripImportCommitService commits,
+        CancellationToken ct)
+    {
+        var options = request.Options!;
+
+        // A recording that already has its report, or is kept here under an account this caller
+        // may not write for, is refused here exactly as the confirmation refuses it, so the dry run
+        // never offers what the confirmation would turn down.
+        try
+        {
+            await commits.CheckHeldAsync(recording.Id, ctx, ct);
+        }
+        catch (SpeleolocImportCommitException e)
+        {
+            return await HeldProblemAsync(db, access, ctx, e);
+        }
+
         // The model the scans are placed in, only when this caller may both read its cave and
         // place it. Missing, unreadable and location-closed are one answer: a preview that told
         // them apart would say that a cave exists to anybody who can name a model.
@@ -309,8 +390,7 @@ public static class SpeleolocImportEndpoints
         }
 
         var resolution = await resolver.ResolveAsync(
-            read.Value.Points, options, usable?.Model, tracking, ctx, ct);
-        var decisions = ReadDecisions(await SessionDecisionsAsync(db, file!.Id, ctx.UserId, ct));
+            scans, options, usable?.Model, tracking, ctx, ct);
 
         var (page, pageSize) = Paging.Normalize(request.Page, request.PageSize);
         var pageItems = resolution.Points.Skip((page - 1) * pageSize).Take(pageSize).ToList();
@@ -359,10 +439,10 @@ public static class SpeleolocImportEndpoints
             resolution.ModelUsable,
             resolution.Points.Count(p => p.State == SpeleolocPointState.Proposed),
             resolution.Points.Count(p => p.State != SpeleolocPointState.Proposed),
-            read.Value.Trip.Title,
-            read.Value.Trip.StartedAt,
-            read.Value.Trip.EndedAt,
-            read.Value.Trip.DocumentCount));
+            recording.Title,
+            recording.StartedAt,
+            recording.EndedAt,
+            recording.DocumentCount));
     }
 
     // ---------- the confirmation ----------
@@ -395,42 +475,11 @@ public static class SpeleolocImportEndpoints
             return problem;
         }
 
-        // Where the positions go. Onto a trip this caller may write — 404 for one they were never
-        // shown, 403 for one they may read and not run, which is the masking every trip write
-        // route uses — or into one the confirmation creates, which the rights above decided.
-        TripLog? trip = null;
-        if (options.TripLogId is { } tripLogId)
+        var (target, problemOfTarget) = await CommitTargetAsync(options, db, access, protection, ctx, ct);
+        if (problemOfTarget is not null)
         {
-            trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
-            if (await WriteGuardAsync(access, ctx, trip, ct) is { } denied)
-            {
-                return denied;
-            }
+            return problemOfTarget;
         }
-        else if (!options.CreateTrip)
-        {
-            return ApiProblems.BadRequest(
-                SpeleolocImportCodes.TripMissing,
-                "A recording is recorded onto a trip, or into one this confirmation creates.");
-        }
-
-        if (options.SurveyModelId is null)
-        {
-            return ApiProblems.Conflict(
-                SpeleolocImportCodes.ModelMissing, "A position is a station of a survey model, and none was chosen.");
-        }
-
-        var usable = await ModelUsableAsync(db, access, protection, ctx, options.SurveyModelId, ct);
-        if (usable is null)
-        {
-            return ApiProblems.Conflict(
-                SpeleolocImportCodes.ModelUnavailable,
-                "The survey model does not exist here, or its cave cannot be placed by this account.");
-        }
-
-        var tracking = trip is null
-            ? null
-            : await db.TripTrackings.FirstOrDefaultAsync(t => t.TripLogId == trip.Id, ct);
 
         var stored = ReadDecisions(await SessionDecisionsAsync(db, file!.Id, ctx.UserId, ct));
         var decisions = request.Decisions is null
@@ -439,38 +488,188 @@ public static class SpeleolocImportEndpoints
 
         try
         {
-            var result = await commits.CommitAsync(
+            return Committed(await commits.CommitAsync(
                 file,
                 options,
-                usable.Value.Model,
-                usable.Value.Cave,
-                trip,
-                tracking,
+                target.Model,
+                target.Cave,
+                target.Trip,
+                target.Tracking,
                 request.PointIds!,
                 decisions,
                 ctx,
-                ct);
-            return TypedResults.Ok(new SpeleolocImportCommitResultDto(
-                result.Batch.Id,
-                result.TripLogId,
-                result.CreatedTrip,
-                result.CreatedEventCount,
-                result.Batch.SkippedCount,
-                [.. result.Failures.Select(f => new SpeleolocImportFailureDto(f.PointId, f.ScannedAt, f.Code, f.Reason))]));
+                ct));
         }
-        catch (SpeleolocArchiveException e)
+        catch (Exception e) when (e is SpeleolocArchiveException or SpeleolocImportCommitException)
         {
-            return ApiProblems.BadRequest(e.Code, e.Message);
+            return await CommitProblemAsync(db, access, ctx, e);
         }
-        catch (SpeleolocImportCommitException e) when (e.Code == CreateRules.ForbiddenCode
-            || e.Code == CavingGroupBindingRules.ForbiddenCode)
+    }
+
+    private static async Task<Results<Ok<SpeleolocImportCommitResultDto>, UnauthorizedHttpResult, ProblemHttpResult>> CommitRecordingAsync(
+        Guid recordingId,
+        SpeleolocImportCommitRequest request,
+        SilexGisDbContext db,
+        IAccessService access,
+        FeatureProtection protection,
+        IAccessContextAccessor accessAccessor,
+        SpeleolocTripImportCommitService commits,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
-            return ApiProblems.Forbidden(e.Code);
+            return TypedResults.Unauthorized();
         }
-        catch (SpeleolocImportCommitException e)
+
+        var options = request.Options!;
+        if (RefuseCreate(ctx, options) is { } refusal)
         {
-            return ApiProblems.BadRequest(e.Code, e.Message);
+            return refusal;
         }
+
+        var (recording, points, problem) = await LoadKeptRecordingAsync(recordingId, db, access, ctx, ct);
+        if (problem is not null)
+        {
+            return problem;
+        }
+
+        var (target, problemOfTarget) = await CommitTargetAsync(options, db, access, protection, ctx, ct);
+        if (problemOfTarget is not null)
+        {
+            return problemOfTarget;
+        }
+
+        try
+        {
+            return Committed(await commits.CommitRecordingAsync(
+                recording!,
+                points,
+                options,
+                target.Model,
+                target.Cave,
+                target.Trip,
+                target.Tracking,
+                request.PointIds!,
+                ReadDecisions(ImportJson.Serialize(request.Decisions ?? new Dictionary<string, SpeleolocPointDecision>())),
+                ctx,
+                ct));
+        }
+        catch (Exception e) when (e is SpeleolocArchiveException or SpeleolocImportCommitException)
+        {
+            return await CommitProblemAsync(db, access, ctx, e);
+        }
+    }
+
+    /// <summary>Where a confirmation's positions go, and the model they are placed on.</summary>
+    private sealed record CommitTarget(TripLog? Trip, Domain.Entities.TripTracking? Tracking, SurveyModel Model, Feature Cave);
+
+    /// <summary>
+    /// The trip and the model a confirmation writes to, guarded. Onto a trip this caller may write —
+    /// 404 for one they were never shown, 403 for one they may read and not run, which is the
+    /// masking every trip write route uses — or into one the confirmation creates, which the create
+    /// rights already decided.
+    /// </summary>
+    private static async Task<(CommitTarget Target, ProblemHttpResult? Problem)> CommitTargetAsync(
+        SpeleolocImportOptions options,
+        SilexGisDbContext db,
+        IAccessService access,
+        FeatureProtection protection,
+        AccessContext ctx,
+        CancellationToken ct)
+    {
+        TripLog? trip = null;
+        if (options.TripLogId is { } tripLogId)
+        {
+            trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
+            if (await WriteGuardAsync(access, ctx, trip, ct) is { } denied)
+            {
+                return (null!, denied);
+            }
+        }
+        else if (!options.CreateTrip)
+        {
+            return (null!, ApiProblems.BadRequest(
+                SpeleolocImportCodes.TripMissing,
+                "A recording is recorded onto a trip, or into one this confirmation creates."));
+        }
+
+        if (options.SurveyModelId is null)
+        {
+            return (null!, ApiProblems.Conflict(
+                SpeleolocImportCodes.ModelMissing, "A position is a station of a survey model, and none was chosen."));
+        }
+
+        var usable = await ModelUsableAsync(db, access, protection, ctx, options.SurveyModelId, ct);
+        if (usable is null)
+        {
+            return (null!, ApiProblems.Conflict(
+                SpeleolocImportCodes.ModelUnavailable,
+                "The survey model does not exist here, or its cave cannot be placed by this account."));
+        }
+
+        var tracking = trip is null
+            ? null
+            : await db.TripTrackings.FirstOrDefaultAsync(t => t.TripLogId == trip.Id, ct);
+        return (new CommitTarget(trip, tracking, usable.Value.Model, usable.Value.Cave), null);
+    }
+
+    private static Ok<SpeleolocImportCommitResultDto> Committed(SpeleolocImportCommitResult result) =>
+        TypedResults.Ok(new SpeleolocImportCommitResultDto(
+            result.Batch.Id,
+            result.TripLogId,
+            result.CreatedTrip,
+            result.CreatedEventCount,
+            result.Batch.SkippedCount,
+            [.. result.Failures.Select(f => new SpeleolocImportFailureDto(f.PointId, f.ScannedAt, f.Code, f.Reason))]));
+
+    private static async Task<ProblemHttpResult> CommitProblemAsync(
+        SilexGisDbContext db, IAccessService access, AccessContext ctx, Exception error) => error switch
+    {
+        SpeleolocArchiveException e => ApiProblems.BadRequest(e.Code, e.Message),
+        SpeleolocImportCommitException e when e.Code == CreateRules.ForbiddenCode
+            || e.Code == CavingGroupBindingRules.ForbiddenCode => ApiProblems.Forbidden(e.Code),
+        SpeleolocImportCommitException e when e.Code is SpeleolocImportCodes.RecordingAlreadyConverted
+            or SpeleolocImportCodes.RecordingNotWritable => await HeldProblemAsync(db, access, ctx, e),
+        SpeleolocImportCommitException e => ApiProblems.BadRequest(e.Code, e.Message),
+        _ => throw error,
+    };
+
+    /// <summary>
+    /// The refusal for a recording this installation holds and this confirmation may not make into
+    /// a report: it has one already (named only to a caller who may read it), or it is not the
+    /// caller's to change.
+    /// </summary>
+    private static async Task<ProblemHttpResult> HeldProblemAsync(
+        SilexGisDbContext db, IAccessService access, AccessContext ctx, SpeleolocImportCommitException e) =>
+        e.Code == SpeleolocImportCodes.RecordingAlreadyConverted
+            ? await AlreadyConvertedProblemAsync(db, access, ctx, e.TripLogId, ct: default)
+            : e.Code == SpeleolocImportCodes.RecordingNotWritable
+                ? ApiProblems.Conflict(e.Code, e.Message)
+                : ApiProblems.BadRequest(e.Code, e.Message);
+
+    /// <summary>
+    /// A recording a phone sent, and its live scans, read-gated. Missing, deleted and unreadable are
+    /// one answer.
+    /// </summary>
+    private static async Task<(TripRecording? Recording, List<TripRecordingPoint> Points, ProblemHttpResult? Problem)> LoadKeptRecordingAsync(
+        Guid recordingId,
+        SilexGisDbContext db,
+        IAccessService access,
+        AccessContext ctx,
+        CancellationToken ct)
+    {
+        var recording = await db.TripRecordings.AsNoTracking().FirstOrDefaultAsync(r => r.Id == recordingId, ct);
+        if (recording is null || !(await access.DecideAsync(ctx, AccessAction.Read, recording, ct)).Allowed)
+        {
+            return (null, [], ApiProblems.NotFound(SpeleolocImportCodes.KeptRecordingNotFound));
+        }
+
+        var points = await db.TripRecordingPoints.AsNoTracking()
+            .Where(p => p.RecordingId == recording.Id)
+            .OrderBy(p => p.ScannedAt).ThenBy(p => p.Id)
+            .ToListAsync(ct);
+        return (recording, points, null);
     }
 
     // ---------- helpers ----------
@@ -530,6 +729,32 @@ public static class SpeleolocImportEndpoints
         return (await access.DecideAsync(ctx, AccessAction.Read, trip, ct)).Allowed
             ? ApiProblems.Forbidden()
             : ApiProblems.NotFound(SpeleolocImportCodes.TripNotFound);
+    }
+
+    /// <summary>
+    /// The refusal naming the report the recording became — named only to a caller who may read
+    /// it. The caller holds the recording, so being told that it has a report says nothing they do
+    /// not have; which trip it is, and so that a trip they were never shown exists, is the trip's
+    /// own audience's to know.
+    /// </summary>
+    private static async Task<ProblemHttpResult> AlreadyConvertedProblemAsync(
+        SilexGisDbContext db, IAccessService access, AccessContext ctx, Guid? tripLogId, CancellationToken ct)
+    {
+        Guid? named = null;
+        if (tripLogId is { } id)
+        {
+            var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, ct);
+            if (trip is not null && (await access.DecideAsync(ctx, AccessAction.Read, trip, ct)).Allowed)
+            {
+                named = id;
+            }
+        }
+
+        return ApiProblems.Conflict(
+            SpeleolocImportCodes.RecordingAlreadyConverted,
+            "This recording has already been made into a trip report, so its positions are already recorded.",
+            "tripLogId",
+            named);
     }
 
     private static ProblemHttpResult? RefuseCreate(AccessContext ctx, SpeleolocImportOptions options) =>

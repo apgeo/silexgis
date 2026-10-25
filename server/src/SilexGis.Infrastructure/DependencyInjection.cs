@@ -128,6 +128,7 @@ public static class DependencyInjection
         services.AddScoped<Import.TripImportCommitService>();
         services.AddScoped<Import.SpeleolocArchiveReader>();
         services.AddScoped<Import.SpeleolocTripImportResolver>();
+        services.AddScoped<Trips.TripRecordingConverter>();
         services.AddScoped<Import.SpeleolocTripImportCommitService>();
 
         // The Romanian community cave catalogue, which this installation reads and imports from.
@@ -536,6 +537,7 @@ public static class DependencyInjection
         services.Configure<TripRetentionOptions>(
             configuration.GetSection(TripRetentionOptions.SectionName));
         services.AddScoped<IProcessingJobHandler, TripPurgeHandler>();
+        services.AddScoped<IProcessingJobHandler, TripRecordingConvertHandler>();
         services.AddHostedService<TripPurgeScheduler>();
         return services;
     }

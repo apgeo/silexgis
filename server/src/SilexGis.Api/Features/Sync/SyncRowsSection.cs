@@ -317,7 +317,7 @@ internal sealed class SyncRowsSection(
     /// exact comparison of the two would report a conflict against a row nobody had touched.
     /// </summary>
     private static bool SameRevision(DateTimeOffset stored, DateTimeOffset claimed) =>
-        stored.UtcTicks / 10 == claimed.UtcTicks / 10;
+        SyncRevisions.Same(stored, claimed);
 
     private static SyncUploadRowResultDto Ok(Guid id, SyncRowStatus status, DateTimeOffset? revision = null) =>
         new(id, status, revision, null, null);

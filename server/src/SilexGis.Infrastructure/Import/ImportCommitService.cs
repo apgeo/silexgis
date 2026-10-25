@@ -273,6 +273,14 @@ public sealed class ImportCommitService(
         e.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } violation
         && violation.ConstraintName == BatchPrimaryKey;
 
+    /// <summary>Whether an archive import's recording line says the import brought a deleted recording back.</summary>
+    private static bool ImportedRecordingWasRevived(string sourceProperties)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(sourceProperties);
+        return document.RootElement.TryGetProperty("revived", out var revived)
+            && revived.ValueKind == System.Text.Json.JsonValueKind.True;
+    }
+
     /// <summary>
     /// The batch another runner of this confirmation created, read back as this one's answer.
     /// </summary>
@@ -418,6 +426,31 @@ public sealed class ImportCommitService(
             foreach (var trip in trips)
             {
                 tripWrites.SoftDelete(trip, userId);
+            }
+
+            await db.SaveChangesAsync(ct);
+        }
+
+        // The recording an archive import marked as made into its trip. The mark comes off, so the
+        // recording can become a report again — by a phone's upload or by the next import — instead
+        // of being refused forever for a report that was taken back. A recording the import brought
+        // into being, or back from deleted, goes again: deleted, so the phones carrying it are told.
+        var recordingLines = allItems.Where(i => i.TripRecordingId is not null).ToList();
+        if (recordingLines.Count > 0 && batch.TripLogId is { } reportId)
+        {
+            var recordingIds = recordingLines.Select(i => i.TripRecordingId!.Value).ToList();
+            await db.TripRecordings.IgnoreQueryFilters()
+                .Where(r => recordingIds.Contains(r.Id) && r.ConvertedTripLogId == reportId)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.ConvertedTripLogId, (Guid?)null), ct);
+
+            var broughtIn = recordingLines
+                .Where(i => i.Action == ImportDecisionAction.Create || ImportedRecordingWasRevived(i.SourceProperties))
+                .Select(i => i.TripRecordingId!.Value)
+                .ToList();
+            var going = await db.TripRecordings.Where(r => broughtIn.Contains(r.Id)).ToListAsync(ct);
+            foreach (var recording in going)
+            {
+                recording.DeletedAt = DateTimeOffset.UtcNow;
             }
 
             await db.SaveChangesAsync(ct);

@@ -31,10 +31,16 @@ public static class SyncFeatures
     public const string DocumentUpload = "documentUpload";
 
     /// <summary>
+    /// Phone trip recordings both ways: <c>GET /sync/sets/{id}/trips</c> and the upload's
+    /// <c>tripRecordings</c> and <c>tripPoints</c> sections.
+    /// </summary>
+    public const string Trips = "trips";
+
+    /// <summary>
     /// The parts every installation running this build serves, whatever it has switched — the
     /// baseline the recorded exchanges are pinned to.
     /// </summary>
-    public static readonly IReadOnlyList<string> Unconditional = [Download, Upload, Documents, DocumentUpload];
+    public static readonly IReadOnlyList<string> Unconditional = [Download, Upload, Documents, DocumentUpload, Trips];
 
     /// <summary>
     /// The people directory and the phone-user links (<c>GET /sync/people</c> and the upload's

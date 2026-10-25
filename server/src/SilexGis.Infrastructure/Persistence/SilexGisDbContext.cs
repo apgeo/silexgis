@@ -261,6 +261,13 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<DevicePerson> DevicePersons => Set<DevicePerson>();
 
+    /// <summary>Trips as phones recorded them, kept beside any report made from them.</summary>
+    public DbSet<TripRecording> TripRecordings => Set<TripRecording>();
+
+    public DbSet<TripRecordingPoint> TripRecordingPoints => Set<TripRecordingPoint>();
+
+    public DbSet<TripAttention> TripAttentions => Set<TripAttention>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

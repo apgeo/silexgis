@@ -27,6 +27,9 @@ public sealed record SpeleolocImportCommitResult(
 public sealed class SpeleolocImportCommitException(string code, string message) : Exception(message)
 {
     public string Code { get; } = code;
+
+    /// <summary>For a recording that already has its report: that report.</summary>
+    public Guid? TripLogId { get; init; }
 }
 
 /// <summary>
@@ -69,8 +72,10 @@ public sealed class SpeleolocTripImportCommitService(
     SpeleolocTripImportResolver resolver,
     TripLogWriteService trips,
     IOptions<ImportLimitOptions> limits,
-    IChangeContext changes)
+    IChangeContext changes,
+    IAccessService access)
 {
+    /// <summary>Confirms a recording read out of an uploaded archive.</summary>
     public async Task<SpeleolocImportCommitResult> CommitAsync(
         StoredFile file,
         SpeleolocImportOptions options,
@@ -84,6 +89,81 @@ public sealed class SpeleolocTripImportCommitService(
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(file);
+        CheckRequest(options, model, cave, selection, decisions, ctx);
+
+        // The archive is read again rather than trusted from the preview: what the reviewer
+        // approved is a set of point identifiers under a set of choices, and reading the archive
+        // under those choices is the only thing that turns them back into scans.
+        var read = await ReadRecordingAsync(file, options, ct);
+        return await CommitReadAsync(
+            read.Trip, read.Points, file, options, model, cave, trip, tracking, selection, decisions, ctx, ct);
+    }
+
+    /// <summary>
+    /// Confirms a recording a phone sent, reviewed exactly as an archive's recording is — the way
+    /// a recording the automatic conversion left waiting, or could not make, becomes a trip by
+    /// hand. The caller has already decided the recording is one this account may read.
+    /// </summary>
+    public async Task<SpeleolocImportCommitResult> CommitRecordingAsync(
+        TripRecording recording,
+        IReadOnlyList<TripRecordingPoint> points,
+        SpeleolocImportOptions options,
+        SurveyModel model,
+        Feature cave,
+        TripLog? trip,
+        TripTracking? tracking,
+        IReadOnlyCollection<string> selection,
+        IReadOnlyDictionary<string, SpeleolocPointDecision> decisions,
+        AccessContext ctx,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+        ArgumentNullException.ThrowIfNull(points);
+        CheckRequest(options, model, cave, selection, decisions, ctx);
+        return await CommitReadAsync(
+            ArchiveTripOf(recording, points.Count),
+            [.. points.Select(p => SpeleolocTripImportResolver.ScanOf(recording, p))],
+            null, options, model, cave, trip, tracking, selection, decisions, ctx, ct);
+    }
+
+    /// <summary>A kept recording in the shape an archive's recording has, so both are confirmed by one body.</summary>
+    public static SpeleolocArchiveTrip ArchiveTripOf(TripRecording recording, int pointCount)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+        return new SpeleolocArchiveTrip(
+            recording.Id,
+            recording.CaveFeatureId,
+            CaveTitle: null,
+            recording.Title,
+            recording.Description,
+            recording.Log,
+            recording.StartedAt,
+            recording.EndedAt,
+            recording.CreatedByDeviceUserId,
+            DocumentCount: 0,
+            pointCount);
+    }
+
+    /// <summary>
+    /// Refuses a recording this installation already holds when this confirmation may not make it
+    /// into a report: it has its report already, or it is somebody else's that this account may
+    /// not change. Asked by the dry run as well, so the two never disagree; and before anything is
+    /// written, because making it the report writes on it.
+    /// </summary>
+    public async Task CheckHeldAsync(Guid recordingId, AccessContext ctx, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        _ = await HeldAsync(recordingId, ctx, ct);
+    }
+
+    private void CheckRequest(
+        SpeleolocImportOptions options,
+        SurveyModel model,
+        Feature cave,
+        IReadOnlyCollection<string> selection,
+        IReadOnlyDictionary<string, SpeleolocPointDecision> decisions,
+        AccessContext ctx)
+    {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(cave);
@@ -119,11 +199,23 @@ public sealed class SpeleolocTripImportCommitService(
             throw new SpeleolocImportCommitException(
                 SpeleolocImportCodes.ModelUnavailable, "The survey model does not belong to that cave.");
         }
+    }
 
-        // The archive is read again rather than trusted from the preview: what the reviewer
-        // approved is a set of point identifiers under a set of choices, and reading the archive
-        // under those choices is the only thing that turns them back into scans.
-        var read = await ReadRecordingAsync(file, options, ct);
+    private async Task<SpeleolocImportCommitResult> CommitReadAsync(
+        SpeleolocArchiveTrip recording,
+        IReadOnlyList<SpeleolocArchivePoint> scans,
+        StoredFile? file,
+        SpeleolocImportOptions options,
+        SurveyModel model,
+        Feature cave,
+        TripLog? trip,
+        TripTracking? tracking,
+        IReadOnlyCollection<string> selection,
+        IReadOnlyDictionary<string, SpeleolocPointDecision> decisions,
+        AccessContext ctx,
+        CancellationToken ct)
+    {
+        var read = (Trip: recording, Points: scans);
         var points = read.Points.ToDictionary(p => p.Id.ToString(), StringComparer.OrdinalIgnoreCase);
         var resolution = await resolver.ResolveAsync(read.Points, options, model, tracking, ctx, ct);
         var byPoint = resolution.Points.ToDictionary(p => p.PointId, StringComparer.OrdinalIgnoreCase);
@@ -139,6 +231,13 @@ public sealed class SpeleolocTripImportCommitService(
             .Select(s => s.Name)
             .ToListAsync(ct);
         var knownStations = new HashSet<string>(stationNames, StringComparer.Ordinal);
+
+        // The recording's identifier is the phone's, on this path as on a phone upload, so a
+        // recording a phone already sent — or an archive already imported — is the same row here.
+        // One that already has its report, or that this account may not change, is refused before
+        // anything is written; the claim below asks again, and that is the answer that counts when
+        // two paths race.
+        var held = await HeldAsync(read.Trip.Id, ctx, ct);
 
         var now = DateTimeOffset.UtcNow;
         var batch = new ImportBatch
@@ -190,6 +289,8 @@ public sealed class SpeleolocTripImportCommitService(
                 }),
             });
         }
+
+        items.Add(await AdoptRecordingAsync(read.Trip, read.Points, held, trip, cave, ctx, ct));
 
         var participants = await db.TripLogParticipants.AsNoTracking()
             .Where(p => p.TripLogId == trip.Id)
@@ -356,9 +457,12 @@ public sealed class SpeleolocTripImportCommitService(
 
         // The review is spent: its decisions describe scans that are now positions, and leaving it
         // would offer to record them a second time.
-        await db.SpeleolocImportSessions
-            .Where(s => s.StoredFileId == file.Id && s.UserId == ctx.UserId)
-            .ExecuteDeleteAsync(ct);
+        if (file is not null)
+        {
+            await db.SpeleolocImportSessions
+                .Where(s => s.StoredFileId == file.Id && s.UserId == ctx.UserId)
+                .ExecuteDeleteAsync(ct);
+        }
 
         await transaction.CommitAsync(ct);
         return new SpeleolocImportCommitResult(batch, trip.Id, createdTrip, events.Count, failures);
@@ -382,6 +486,175 @@ public sealed class SpeleolocTripImportCommitService(
 
     private static SpeleolocImportFailure Failure(SpeleolocArchivePoint point, string code, string reason) =>
         new(point.Id.ToString(), point.ScannedAt, code, reason);
+
+    /// <summary>What this installation already holds of the recording, read before anything is written.</summary>
+    private sealed record HeldRecording(Guid? ConvertedTripLogId, bool Deleted);
+
+    /// <summary>
+    /// The recording as held here, or null when it is new to this installation; refused when it
+    /// already has its report, or when this account may not write it.
+    /// </summary>
+    /// <remarks>
+    /// Making a held recording the report writes on it — its mark, and for a deleted one its return
+    /// — so it takes the right to change it, and for a deleted one the right to delete it, which is
+    /// the right that brings a row back. The refusal does not say whose it is or what it holds: the
+    /// caller already has the recording's identifier and contents in hand, and learns only that this
+    /// installation keeps it under an account whose recording they may not change.
+    /// </remarks>
+    private async Task<HeldRecording?> HeldAsync(Guid recordingId, AccessContext ctx, CancellationToken ct)
+    {
+        var held = await db.TripRecordings.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == recordingId, ct);
+        if (held is null)
+        {
+            return null;
+        }
+
+        if (held.ConvertedTripLogId is { } convertedInto)
+        {
+            throw AlreadyConverted(convertedInto);
+        }
+
+        var writable = (await access.DecideAsync(ctx, AccessAction.Write, held, ct)).Allowed
+            && (held.DeletedAt is null || (await access.DecideAsync(ctx, AccessAction.Delete, held, ct)).Allowed);
+        if (!writable)
+        {
+            throw new SpeleolocImportCommitException(
+                SpeleolocImportCodes.RecordingNotWritable,
+                "This recording is already kept here under an account whose recordings you may not change.");
+        }
+
+        return new HeldRecording(held.ConvertedTripLogId, held.DeletedAt is not null);
+    }
+
+    private static SpeleolocImportCommitException AlreadyConverted(Guid? tripLogId) =>
+        new(SpeleolocImportCodes.RecordingAlreadyConverted,
+            "This recording has already been made into a trip report, so its positions are already recorded.")
+        {
+            TripLogId = tripLogId,
+        };
+
+    /// <summary>
+    /// The recording as this installation keeps it, marked as made into <paramref name="trip"/>:
+    /// created from the archive when the installation has never seen it, claimed when a phone
+    /// already sent it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A recording a phone already sent is kept as the phone sent it — the phone's copy is the one
+    /// other phones carry, and an archive is an export of the same phone's database, never newer
+    /// than what it has already said. Only the mark that it now has its report is written.
+    /// </para>
+    /// <para>
+    /// One deleted here is brought back. An import is a person saying that this recording happened
+    /// and is to be the report, after reading every scan of it; the deletion it outranks is either
+    /// the undo of an earlier import of the same recording or a phone's, and a report standing on
+    /// a recording nobody can see would be one the trips stream never tells the other phones about.
+    /// </para>
+    /// <para>
+    /// The claim is guarded by "has no report yet", as the phone path's is, so an import and a
+    /// conversion of the same recording at the same moment make one report between them.
+    /// </para>
+    /// </remarks>
+    private async Task<ImportBatchItem> AdoptRecordingAsync(
+        SpeleolocArchiveTrip recording,
+        IReadOnlyList<SpeleolocArchivePoint> points,
+        HeldRecording? held,
+        TripLog trip,
+        Feature cave,
+        AccessContext ctx,
+        CancellationToken ct)
+    {
+        if (held is null)
+        {
+            // A scan keeps its place only when this installation holds that place at all; the
+            // column is a key, and a scan of a place nobody sent stays a scan at no place.
+            var placeIds = points.Where(p => p.PlaceId is not null).Select(p => p.PlaceId!.Value).Distinct().ToList();
+            var heldPlaces = (await db.Features.IgnoreQueryFilters().AsNoTracking()
+                    .Where(f => placeIds.Contains(f.Id))
+                    .Select(f => f.Id)
+                    .ToListAsync(ct))
+                .ToHashSet();
+            var title = string.IsNullOrWhiteSpace(recording.Title)
+                ? recording.StartedAt.UtcDateTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+                : recording.Title.Trim();
+
+            // The audience a phone recording has is its club — the club's phones carry it through
+            // the trips stream — and here it is never wider than the report's own. A report kept
+            // private keeps its recording private, since the recording carries the same title,
+            // description, log and scan notes. And a recording is bound to the club only for an
+            // importer who may add trips to that club and bind them to it, the rights the phone
+            // upload asks before it keeps a recording there: somebody writing onto one club trip by
+            // a grant on that trip alone keeps the recording as their own, seen by nobody else.
+            var clubbed = trip.CavingGroupId is { } group
+                && trip.Visibility != Visibility.Private
+                && CreateRules.MayCreate(ctx, AccessDomain.TripLogs, group)
+                && CavingGroupBindingRules.MayBind(ctx, AccessDomain.TripLogs, group);
+
+            db.TripRecordings.Add(new TripRecording
+            {
+                Id = recording.Id,
+                // The cave the import placed the recording in, which is the cave of the model it
+                // was reviewed against — not whatever the phone's own cave row said.
+                CaveFeatureId = cave.Id,
+                Title = title.Length > 255 ? title[..255] : title,
+                Description = Trimmed(recording.Description),
+                Log = Trimmed(recording.Log),
+                StartedAt = recording.StartedAt,
+                EndedAt = recording.EndedAt,
+                CreatedByDeviceUserId = recording.DeviceUserId,
+                OwnerUserId = ctx.UserId,
+                CavingGroupId = clubbed ? trip.CavingGroupId : null,
+                Visibility = clubbed ? Visibility.CavingGroup : Visibility.Private,
+                ConvertedTripLogId = trip.Id,
+                Points = [.. points.Select(p => new TripRecordingPoint
+                {
+                    Id = p.Id,
+                    RecordingId = recording.Id,
+                    PlaceFeatureId = p.PlaceId is { } place && heldPlaces.Contains(place) ? place : null,
+                    ScannedAt = p.ScannedAt,
+                    Notes = p.Notes,
+                    CreatedByDeviceUserId = p.DeviceUserId,
+                })],
+            });
+            await db.SaveChangesAsync(ct);
+            return RecordingLine(recording.Id, ImportDecisionAction.Create, revived: false);
+        }
+
+        var claimed = held.Deleted
+            ? await db.TripRecordings.IgnoreQueryFilters()
+                .Where(r => r.Id == recording.Id && r.ConvertedTripLogId == null)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(r => r.ConvertedTripLogId, trip.Id)
+                    .SetProperty(r => r.DeletedAt, (DateTimeOffset?)null)
+                    // Moved, so the trips stream hands the recording back to the phones it was
+                    // taken from as deleted.
+                    .SetProperty(r => r.UpdatedAt, DateTimeOffset.UtcNow), ct)
+            : await db.TripRecordings
+                .Where(r => r.Id == recording.Id && r.ConvertedTripLogId == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.ConvertedTripLogId, trip.Id), ct);
+        if (claimed == 0)
+        {
+            throw AlreadyConverted(await db.TripRecordings.IgnoreQueryFilters()
+                .Where(r => r.Id == recording.Id)
+                .Select(r => r.ConvertedTripLogId)
+                .FirstOrDefaultAsync(ct));
+        }
+
+        return RecordingLine(recording.Id, ImportDecisionAction.Attach, held.Deleted);
+    }
+
+    /// <summary>
+    /// The batch line naming the recording. It names nothing else — a line naming a trip and
+    /// nothing more is the line that created that trip — and it says whether this import brought
+    /// the recording into being or back, which is what its undo takes away again.
+    /// </summary>
+    private static ImportBatchItem RecordingLine(Guid recordingId, ImportDecisionAction action, bool revived) => new()
+    {
+        TripRecordingId = recordingId,
+        Action = action,
+        SourceProperties = ImportJson.Serialize(new { recordingId = recordingId.ToString(), revived }),
+    };
 
     /// <summary>
     /// A trip out of what the recording itself says. Its title and dates are the device's; its

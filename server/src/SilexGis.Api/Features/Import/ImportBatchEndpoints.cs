@@ -261,7 +261,12 @@ public static class ImportBatchEndpoints
                     [.. r.Applied],
                     [.. r.Skipped.Select(s => new ImportBatchUndoSkippedDto(s.Field, s.Reason))],
                     r.DevicePersonId,
-                    r.DocumentId))];
+                    r.DocumentId,
+                    r.TripRecordingId,
+                    r.TripRecordingPointId,
+                    r.TripLogId,
+                    r.TripOutcome,
+                    r.TripReason))];
             }
             catch (SyncUndoException e)
             {
@@ -445,6 +450,14 @@ public sealed record ImportBatchUndoSkippedDto(string Field, string Reason);
 /// Such a line's <c>Applied</c> names <c>file</c> when the bytes stepped back to the revision before
 /// the upload's, the fields put back, or the links taken down or hung again.
 /// </param>
+/// <param name="TripRecordingId">For a line about a phone recording: that recording.</param>
+/// <param name="TripRecordingPointId">For a line about one scan of a phone recording: that scan.</param>
+/// <param name="TripLogId">
+/// For a recording line whose recording had been made into a trip report: that report — null when the
+/// caller may not read it, while the outcome is still given.
+/// </param>
+/// <param name="TripOutcome">What became of the report: undone (deleted with its recording, or with the change that closed it) | not_undone.</param>
+/// <param name="TripReason">Why the report was left: trip_changed | converted_elsewhere.</param>
 public sealed record ImportBatchUndoItemDto(
     long ItemId,
     Guid? FeatureId,
@@ -454,7 +467,12 @@ public sealed record ImportBatchUndoItemDto(
     string[] Applied,
     ImportBatchUndoSkippedDto[] Skipped,
     Guid? DevicePersonId = null,
-    Guid? DocumentId = null);
+    Guid? DocumentId = null,
+    Guid? TripRecordingId = null,
+    Guid? TripRecordingPointId = null,
+    Guid? TripLogId = null,
+    string? TripOutcome = null,
+    string? TripReason = null);
 
 /// <summary>
 /// The answer to taking a confirmation back: the batch as it now stands, and for a phone upload

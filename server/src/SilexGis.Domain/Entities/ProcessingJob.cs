@@ -180,6 +180,12 @@ public static class ProcessingJobKinds
     public const string TripPurge = "trip-purge";
 
     /// <summary>
+    /// Make trip reports out of the phone recordings one upload wrote or changed. Queued in the
+    /// upload's own save, once per upload, so it only ever reads what the upload committed.
+    /// </summary>
+    public const string TripRecordingConvert = "trip-recording-convert";
+
+    /// <summary>
     /// Build the terrain the 3D scene draws over one rectangle: obtain the elevation rasters,
     /// prepare them, bake the pyramid, check it and publish it. One row drives the whole chain
     /// and reports which step it has reached.

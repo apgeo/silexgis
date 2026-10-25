@@ -239,3 +239,29 @@ Codes: new — `sync.file_hash_mismatch`, `sync.file_bytes_missing` (per item in
 `sync.target_not_found` (per item in `documentLinks`); existing codes met in the new arrays:
 `sync.document_unavailable`, `sync.location_forbidden`, `sync.row_forbidden`,
 `sync.row_delete_forbidden`, `sync.kind_unsupported`, `sync.caving_group_forbidden`.
+
+## 2026-10-25 — phones send and receive trip recordings
+
+**Contract version: 1, unchanged. A build pinned to it keeps working.** An upload without the new
+arrays is answered as before; `07`–`16` are byte-for-byte unchanged.
+
+- **`tripRecordings` and `tripPoints`** — two new optional upload arrays: a recording of a trip in a
+  cave (the phone's own identifier, cave, title, description, log, start, end, the phone user who
+  started it) and its scans (place, time, notes, phone user), applied after `people`, recordings
+  before scans. Answered in `tripRecordings` and `tripPoints` arrays of the per-row shape, present
+  only when the request carried them. Arbitration and replay are the rows'.
+- **`GET /api/v1/sync/sets/{id}/trips`** — the recordings of the caves in the set that this account
+  may read, a page at a time with the set's cursor, each with its scans embedded; a scan at a place
+  the caller may not be given is left out of the recording, and deletions arrive as tombstones.
+- **`features` names `trips`** on every installation running this build.
+- What the server makes of a recording — a trip report, made automatically when everything in it
+  settles — is not part of the exchange; a phone sees only the recording it sent.
+
+Described in `docs/speleoloc-sync/01-protocol.md` §13 (Trips), `02-field-mapping.md` §9,
+`04-errors.md` §3, §6.1 and §6.2.
+
+Recorded exchanges written or re-written in this entry: none.
+
+Codes: new, per item — `sync.cave_not_found` (`tripRecordings`), `sync.recording_not_found` and
+`sync.place_not_found` (`tripPoints`). Not sent to phones: `import.recording_already_converted`
+answers the browser's archive import.

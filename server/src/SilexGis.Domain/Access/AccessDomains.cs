@@ -10,6 +10,10 @@ public static class AccessDomains
     {
         Feature => AccessDomain.Features,
         TripLog => AccessDomain.TripLogs,
+        // A phone's recording of a trip is governed with the trips: one right over "the club's
+        // trips" should reach the recordings they are made from, and a second domain would mean
+        // writing every rule twice.
+        TripRecording => AccessDomain.TripLogs,
         Geofile => AccessDomain.Geofiles,
         GeoreferencedMap => AccessDomain.GeoreferencedMaps,
         MapView => AccessDomain.MapViews,

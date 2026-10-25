@@ -219,6 +219,11 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
             .OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<DocumentVersion>().WithMany().HasForeignKey(x => x.DocumentVersionId)
             .OnDelete(DeleteBehavior.SetNull);
+        // A recording or a scan removed for good leaves the line that says the upload sent it.
+        builder.HasOne<TripRecording>().WithMany().HasForeignKey(x => x.TripRecordingId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<TripRecordingPoint>().WithMany().HasForeignKey(x => x.TripRecordingPointId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.ImportBatchId);
         // "Where did this cave come from?" is a lookup by feature, and it is the question the
@@ -243,5 +248,12 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
             .HasDatabaseName("ix_import_batch_items_document_id");
         builder.HasIndex(x => x.DocumentVersionId).HasFilter("document_version_id is not null")
             .HasDatabaseName("ix_import_batch_items_document_version_id");
+
+        // "Which uploads sent this recording?" — how an undo and the conversion find what an upload
+        // brought, and how a recording's own provenance is read.
+        builder.HasIndex(x => x.TripRecordingId).HasFilter("trip_recording_id is not null")
+            .HasDatabaseName("ix_import_batch_items_trip_recording_id");
+        builder.HasIndex(x => x.TripRecordingPointId).HasFilter("trip_recording_point_id is not null")
+            .HasDatabaseName("ix_import_batch_items_trip_recording_point_id");
     }
 }

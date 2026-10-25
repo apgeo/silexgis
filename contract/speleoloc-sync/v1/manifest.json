@@ -5,7 +5,8 @@
     "download",
     "upload",
     "documents",
-    "documentUpload"
+    "documentUpload",
+    "trips"
   ],
   "reserved": [
     "01-login",

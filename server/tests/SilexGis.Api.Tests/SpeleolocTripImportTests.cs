@@ -12,6 +12,7 @@ using NetTopologySuite.Geometries;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
@@ -490,7 +491,10 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         var cave = await CreateCaveAsync(editor, locationProtected: false);
         var model = await SeedModelWithStationsAsync(cave);
         await SeedPlacesAsync(cave);
-        var fileId = await UploadArchiveAsync();
+        // Two recordings from the same phone: the first is imported, the second is the next review.
+        // (The first itself cannot be reviewed again once it has its report.)
+        var nextRecording = Guid.CreateVersion7();
+        var fileId = await UploadAsync("speleo_loc_two.zip", BuildArchive(crowdedRecording: nextRecording, crowdedScans: 2));
         var (trip, cavers) = await CreateTripAsync(editor, "Links", guests: 1);
 
         // Nothing is known about the phone user yet: the review asks.
@@ -512,7 +516,7 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         }
 
         // The same phone user, a review with no choice made: prefilled from the link.
-        var again = await PreviewAsync(editor, fileId, unmapped);
+        var again = await PreviewAsync(editor, fileId, Options(model, trip, caver: null, recording: nextRecording));
         again.GetProperty("unmappedDeviceUsers").GetArrayLength().ShouldBe(0);
         again.GetProperty("points").EnumerateArray()
             .Where(p => p.GetProperty("state").GetString() == "proposed")
@@ -588,39 +592,42 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         firstCommit.GetProperty("createdTrip").GetBoolean().ShouldBeFalse();
         var firstBatch = firstCommit.GetProperty("batchId").GetGuid();
 
-        // Into one the confirmation creates. The reviewer maps the device account to the same
-        // person, who is put on the created trip's roster because nothing else would.
-        var creating = Options(model, trip: null, caver: cavers[0], createTrip: true);
-        var secondPreview = await PreviewAsync(editor, fileId, creating);
-        var secondResponse = await CommitAsync(editor, fileId, creating, ProposedPointsOf(secondPreview));
-        secondResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await secondResponse.Content.ReadAsStringAsync());
-        var secondCommit = await BodyAsync(secondResponse);
-        secondCommit.GetProperty("createdTrip").GetBoolean().ShouldBeTrue();
-        var createdTrip = secondCommit.GetProperty("tripLogId").GetGuid();
-        var secondBatch = secondCommit.GetProperty("batchId").GetGuid();
-        createdTrip.ShouldNotBe(existing);
-
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             (await db.TripPositionEvents.CountAsync(e => e.TripLogId == existing)).ShouldBe(2);
-            (await db.TripPositionEvents.CountAsync(e => e.TripLogId == createdTrip)).ShouldBe(2);
-            // A trip this confirmation created is created tracked and closed, against the model the
-            // reviewer chose — there is nobody else whose arrangement that could be overwriting.
-            (await db.TripTrackings.SingleAsync(t => t.TripLogId == createdTrip)).SurveyModelId.ShouldBe(model);
-            // And a trip that already existed is left exactly as it was. Writing a configuration
+            // A trip that already existed is left exactly as it was. Writing a configuration
             // for somebody else's trip is an operational statement about it — tracked, closed,
             // against this model, anchored to this cave — and it is one the undo below cannot take
             // back: nothing on a batch line points at a tracking row, the lifecycle has no
             // transition back to off, and no route deletes one. The positions do not need it: each
             // carries its own model and its own cave anchor.
             (await db.TripTrackings.CountAsync(t => t.TripLogId == existing)).ShouldBe(0);
+            // The recording is kept as a recording, under the phone's identifier, marked as made
+            // into that trip — the same row a phone sending it would have written.
+            var kept = await db.TripRecordings.AsNoTracking().Include(r => r.Points).SingleAsync(r => r.Id == recordingId);
+            kept.ConvertedTripLogId.ShouldBe(existing);
+            kept.CaveFeatureId.ShouldBe(cave);
+            kept.Points.Count.ShouldBe(4);
         }
+
+        // The same recording a second time is refused — on the dry run and on the confirmation
+        // alike — naming the trip it already became, rather than recording every position twice.
+        var creating = Options(model, trip: null, caver: cavers[0], createTrip: true);
+        var twicePreview = await editor.PostAsJsonAsync(
+            $"/api/v1/speleoloc-imports/{fileId}/preview", new { options = creating, page = 1, pageSize = 100 });
+        var twicePreviewBody = await twicePreview.Content.ReadAsStringAsync();
+        twicePreview.StatusCode.ShouldBe(HttpStatusCode.Conflict, twicePreviewBody);
+        CodeOf(twicePreviewBody).ShouldBe("import.recording_already_converted");
+        JsonDocument.Parse(twicePreviewBody).RootElement.GetProperty("tripLogId").GetGuid().ShouldBe(existing);
+        var twice = await CommitAsync(editor, fileId, creating, ProposedPointsOf(preview));
+        var twiceBody = await twice.Content.ReadAsStringAsync();
+        twice.StatusCode.ShouldBe(HttpStatusCode.Conflict, twiceBody);
+        CodeOf(twiceBody).ShouldBe("import.recording_already_converted");
+        JsonDocument.Parse(twiceBody).RootElement.GetProperty("tripLogId").GetGuid().ShouldBe(existing);
 
         var firstRevert = await editor.PostAsync($"/api/v1/import-batches/{firstBatch}/revert", null);
         firstRevert.StatusCode.ShouldBe(HttpStatusCode.OK, await firstRevert.Content.ReadAsStringAsync());
-        var secondRevert = await editor.PostAsync($"/api/v1/import-batches/{secondBatch}/revert", null);
-        secondRevert.StatusCode.ShouldBe(HttpStatusCode.OK, await secondRevert.Content.ReadAsStringAsync());
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {
@@ -637,12 +644,48 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
             // The trip the import wrote onto is still there — undoing an import must not delete
             // somebody's trip because positions were once recorded onto it.
             (await db.TripLogs.CountAsync(t => t.Id == existing)).ShouldBe(1);
+            // The recording the import brought in goes with it, and is no longer anybody's report.
+            var gone = await db.TripRecordings.IgnoreQueryFilters().AsNoTracking().SingleAsync(r => r.Id == recordingId);
+            gone.DeletedAt.ShouldNotBeNull();
+            gone.ConvertedTripLogId.ShouldBeNull();
+        }
+
+        // Taken back, the recording may become a report again. Into one the confirmation creates
+        // this time: the reviewer maps the device account to the same person, who is put on the
+        // created trip's roster because nothing else would.
+        var secondPreview = await PreviewAsync(editor, fileId, creating);
+        var secondResponse = await CommitAsync(editor, fileId, creating, ProposedPointsOf(secondPreview));
+        secondResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await secondResponse.Content.ReadAsStringAsync());
+        var secondCommit = await BodyAsync(secondResponse);
+        secondCommit.GetProperty("createdTrip").GetBoolean().ShouldBeTrue();
+        var createdTrip = secondCommit.GetProperty("tripLogId").GetGuid();
+        var secondBatch = secondCommit.GetProperty("batchId").GetGuid();
+        createdTrip.ShouldNotBe(existing);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripPositionEvents.CountAsync(e => e.TripLogId == createdTrip)).ShouldBe(2);
+            // A trip this confirmation created is created tracked and closed, against the model the
+            // reviewer chose — there is nobody else whose arrangement that could be overwriting.
+            (await db.TripTrackings.SingleAsync(t => t.TripLogId == createdTrip)).SurveyModelId.ShouldBe(model);
+            // The same recording row, brought back and marked as made into the new trip.
+            (await db.TripRecordings.AsNoTracking().SingleAsync(r => r.Id == recordingId)).ConvertedTripLogId.ShouldBe(createdTrip);
+        }
+
+        var secondRevert = await editor.PostAsync($"/api/v1/import-batches/{secondBatch}/revert", null);
+        secondRevert.StatusCode.ShouldBe(HttpStatusCode.OK, await secondRevert.Content.ReadAsStringAsync());
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             // The trip the import created is not, to any reader — and neither is anything that
             // hangs on it: its positions and its tracking row are keyed by the trip and hidden
             // with it. Nothing the confirmation made is left showing.
             (await db.TripLogs.CountAsync(t => t.Id == createdTrip)).ShouldBe(0);
             (await db.TripPositionEvents.CountAsync(e => e.TripLogId == createdTrip)).ShouldBe(0);
             (await db.TripTrackings.CountAsync(t => t.TripLogId == createdTrip)).ShouldBe(0);
+            (await db.TripRecordings.CountAsync(r => r.Id == recordingId)).ShouldBe(0);
 
             // It is deleted rather than removed, though, with its recording still on it: an undo
             // deletes a trip the way a person would, so this one can be put back.
@@ -666,6 +709,241 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         var again = await editor.PostAsync($"/api/v1/import-batches/{firstBatch}/revert", null);
         again.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         CodeOf(await again.Content.ReadAsStringAsync()).ShouldBe("import_batch.already_reverted");
+    }
+
+    /// <summary>
+    /// A recording a phone already sent and that was made into a trip report is refused by the
+    /// archive import, naming the report, and nothing is written.
+    /// </summary>
+    [Fact]
+    public async Task A_recording_already_made_into_a_report_from_a_phone_is_refused_by_the_archive()
+    {
+        var cave = await CreateCaveAsync(editor, locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        await SeedPlacesAsync(cave);
+        var fileId = await UploadArchiveAsync();
+        var (report, cavers) = await CreateTripAsync(editor, "From the phone", guests: 1);
+
+        // What a phone upload and its conversion leave: the recording under the phone's own
+        // identifier, marked as made into a report the editor owns.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var owner = await db.TripLogs.AsNoTracking().Where(t => t.Id == report).Select(t => t.OwnerUserId).SingleAsync();
+            db.TripRecordings.Add(new TripRecording
+            {
+                Id = recordingId,
+                CaveFeatureId = cave,
+                Title = "Sent from a phone",
+                StartedAt = ScanOne.AddHours(-1),
+                EndedAt = ScanFour.AddHours(1),
+                OwnerUserId = owner,
+                Visibility = Visibility.Private,
+                ConvertedTripLogId = report,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var creating = Options(model, trip: null, caver: cavers[0], createTrip: true);
+        var refused = await CommitAsync(editor, fileId, creating, [Guid.CreateVersion7().ToString()]);
+        var body = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict, body);
+        CodeOf(body).ShouldBe("import.recording_already_converted");
+        JsonDocument.Parse(body).RootElement.GetProperty("tripLogId").GetGuid().ShouldBe(report);
+
+        // The report is named only to somebody who may read it. Another editor, refused that one
+        // trip, is told the recording has its report — which the archive in their hands already
+        // says — and not which trip it is, on the dry run and on the confirmation alike.
+        await DenyTripAsync($"spl-str-{tag}@t.local", report);
+        (await editor.GetAsync($"/api/v1/trip-logs/{report}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await stranger.GetAsync($"/api/v1/trip-logs/{report}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        foreach (var (client, named) in new[] { (editor, (Guid?)report), (stranger, null) })
+        {
+            var dryRun = await client.PostAsJsonAsync(
+                $"/api/v1/speleoloc-imports/{fileId}/preview", new { options = creating, page = 1, pageSize = 100 });
+            var dryBody = await dryRun.Content.ReadAsStringAsync();
+            dryRun.StatusCode.ShouldBe(HttpStatusCode.Conflict, dryBody);
+            CodeOf(dryBody).ShouldBe("import.recording_already_converted");
+            NamedTrip(dryBody).ShouldBe(named);
+
+            var confirmation = await CommitAsync(client, fileId, creating, [Guid.CreateVersion7().ToString()]);
+            var confirmationBody = await confirmation.Content.ReadAsStringAsync();
+            confirmation.StatusCode.ShouldBe(HttpStatusCode.Conflict, confirmationBody);
+            NamedTrip(confirmationBody).ShouldBe(named);
+        }
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripPositionEvents.CountAsync(e => e.TripLogId == report)).ShouldBe(0);
+            (await db.ImportBatches.CountAsync(b => b.Source == ImportSource.SpeleolocArchive && b.TripLogId == report)).ShouldBe(0);
+        }
+    }
+
+    /// <summary>
+    /// A recording kept here is made into the archive's report only by somebody who may change it:
+    /// another editor, refused that recording, is turned away on the dry run and the confirmation
+    /// and the recording stays deleted and unclaimed; its owner's import brings it back as the report.
+    /// </summary>
+    [Fact]
+    public async Task A_held_recording_is_claimed_only_by_somebody_who_may_change_it()
+    {
+        var cave = await CreateCaveAsync(editor, locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        await SeedPlacesAsync(cave);
+        var fileId = await UploadArchiveAsync();
+        var (_, cavers) = await CreateTripAsync(editor, "Guests", guests: 1);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var owner = await db.Users.Where(u => u.Email == $"spl-ed-{tag}@t.local").Select(u => u.Id).SingleAsync();
+            db.TripRecordings.Add(new TripRecording
+            {
+                Id = recordingId,
+                CaveFeatureId = cave,
+                Title = "Sent from a phone, then deleted there",
+                StartedAt = ScanOne.AddHours(-1),
+                EndedAt = ScanFour.AddHours(1),
+                OwnerUserId = owner,
+                Visibility = Visibility.Private,
+                DeletedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await DenyRecordingWriteAsync($"spl-str-{tag}@t.local", recordingId);
+        var options = Options(model, caver: cavers[0], createTrip: true);
+        var dryRun = await stranger.PostAsJsonAsync(
+            $"/api/v1/speleoloc-imports/{fileId}/preview", new { options, page = 1, pageSize = 100 });
+        var dryBody = await dryRun.Content.ReadAsStringAsync();
+        dryRun.StatusCode.ShouldBe(HttpStatusCode.Conflict, dryBody);
+        CodeOf(dryBody).ShouldBe("import.recording_not_writable");
+        var refused = await CommitAsync(stranger, fileId, options, [Guid.CreateVersion7().ToString()]);
+        var refusedBody = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict, refusedBody);
+        CodeOf(refusedBody).ShouldBe("import.recording_not_writable");
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var held = await db.TripRecordings.IgnoreQueryFilters().AsNoTracking().SingleAsync(r => r.Id == recordingId);
+            held.DeletedAt.ShouldNotBeNull();
+            held.ConvertedTripLogId.ShouldBeNull();
+        }
+
+        var preview = await PreviewAsync(editor, fileId, options);
+        var committed = await CommitAsync(editor, fileId, options, ProposedPointsOf(preview));
+        committed.StatusCode.ShouldBe(HttpStatusCode.OK, await committed.Content.ReadAsStringAsync());
+        var trip = (await BodyAsync(committed)).GetProperty("tripLogId").GetGuid();
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var claimed = await db.TripRecordings.AsNoTracking().SingleAsync(r => r.Id == recordingId);
+            claimed.ConvertedTripLogId.ShouldBe(trip);
+        }
+    }
+
+    /// <summary>
+    /// One recording by both paths, archive first: what the import keeps is the row a phone sending
+    /// the same recording afterwards writes on, and that phone makes no second report — its new scan
+    /// flags the import's report instead. A phone account that may not read the import's recording is
+    /// refused it alike. And the recording the import keeps is never seen more widely than its report:
+    /// a report kept private keeps its recording off the club's phones, a club-visible one puts it on.
+    /// </summary>
+    [Fact]
+    public async Task An_archive_recording_is_the_one_a_phone_sends_afterwards_and_is_seen_no_wider_than_its_report()
+    {
+        var cave = await CreateCaveAsync(editor, locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        await SeedPlacesAsync(cave);
+        var clubbed = Guid.CreateVersion7();
+        var fileId = await UploadAsync("speleo_loc_two.zip", BuildArchive(crowdedRecording: clubbed, crowdedScans: 1));
+        var (_, cavers) = await CreateTripAsync(editor, "Guests", guests: 1);
+
+        Guid club;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var group = new CavingGroup { Name = $"Club {tag}", Slug = $"club-{tag}" };
+            db.CavingGroups.Add(group);
+            await db.SaveChangesAsync();
+            club = group.Id;
+            foreach (var email in new[] { $"spl-ed-{tag}@t.local", $"spl-vw-{tag}@t.local" })
+            {
+                var userId = await db.Users.Where(u => u.Email == email).Select(u => u.Id).SingleAsync();
+                await RosterHelper.AddMemberAsync(db, club, userId);
+            }
+        }
+
+        // The first recording into a report its importer keeps private, though it names the club;
+        // the second into one the club sees.
+        Guid privateReport;
+        Guid clubReport;
+        {
+            var options = Options(model, caver: cavers[0], createTrip: true, club: club, visibility: "private");
+            var committed = await CommitAsync(editor, fileId, options, ProposedPointsOf(await PreviewAsync(editor, fileId, options)));
+            committed.StatusCode.ShouldBe(HttpStatusCode.OK, await committed.Content.ReadAsStringAsync());
+            privateReport = (await BodyAsync(committed)).GetProperty("tripLogId").GetGuid();
+
+            var clubOptions = Options(model, caver: cavers[0], createTrip: true, recording: clubbed, club: club, visibility: "cavingGroup");
+            var clubCommitted = await CommitAsync(
+                editor, fileId, clubOptions, ProposedPointsOf(await PreviewAsync(editor, fileId, clubOptions)));
+            clubCommitted.StatusCode.ShouldBe(HttpStatusCode.OK, await clubCommitted.Content.ReadAsStringAsync());
+            clubReport = (await BodyAsync(clubCommitted)).GetProperty("tripLogId").GetGuid();
+        }
+
+        DateTimeOffset revision;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var kept = await db.TripRecordings.AsNoTracking().SingleAsync(r => r.Id == recordingId);
+            kept.Visibility.ShouldBe(Visibility.Private);
+            kept.CavingGroupId.ShouldBeNull();
+            kept.ConvertedTripLogId.ShouldBe(privateReport);
+            revision = kept.UpdatedAt;
+            var shared = await db.TripRecordings.AsNoTracking().SingleAsync(r => r.Id == clubbed);
+            shared.Visibility.ShouldBe(Visibility.CavingGroup);
+            shared.CavingGroupId.ShouldBe(club);
+            shared.ConvertedTripLogId.ShouldBe(clubReport);
+        }
+
+        // The club's Viewer, whose phone carries the cave, is handed the club-visible recording and
+        // not the private one — the same stream, the same cave, the same club.
+        var viewersSet = await CreateSyncSetAsync(viewer, cave);
+        var stream = await BodyAsync(await viewer.GetAsync($"/api/v1/sync/sets/{viewersSet}/trips"));
+        var streamed = stream.GetProperty("recordings").EnumerateArray().Select(r => r.GetProperty("id").GetGuid()).ToList();
+        streamed.ShouldContain(clubbed);
+        streamed.ShouldNotContain(recordingId);
+
+        // The importer's own phone sends the recording again, changed, with a scan the archive did
+        // not have: one row, written on; no second report; the import's report flagged.
+        var editorsSet = await CreateSyncSetAsync(editor, cave);
+        var lateScan = Guid.CreateVersion7();
+        var phone = await SyncUploadAsync(editor, editorsSet, recordingId, cave, revision, lateScan);
+        phone.GetProperty("tripRecordings")[0].GetProperty("status").GetString().ShouldBe("updated", phone.ToString());
+        phone.GetProperty("tripPoints")[0].GetProperty("status").GetString().ShouldBe("created", phone.ToString());
+        await RunConversionAsync(phone.GetProperty("importBatchId").GetGuid());
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripRecordings.AsNoTracking().SingleAsync(r => r.Id == recordingId)).ConvertedTripLogId.ShouldBe(privateReport);
+            (await db.AuditEntries.AsNoTracking().CountAsync(a => a.EntityType == nameof(TripLog)
+                && a.Action == AuditActions.Created && a.Source == ChangeSource.TripConversion
+                && a.ImportBatchId == phone.GetProperty("importBatchId").GetGuid())).ShouldBe(0);
+            var attention = await db.TripAttentions.AsNoTracking().SingleAsync(a => a.TripLogId == privateReport);
+            attention.ClearedAt.ShouldBeNull();
+            var reasons = Domain.Trips.TripRecordingConversionRules.Parse(attention.Reasons);
+            reasons.Single(r => r.Code == Domain.Trips.TripAttentionReasons.RecordingChangedAfterConversion)
+                .PointIds.ShouldBe([lateScan.ToString()]);
+        }
+
+        // A phone account that may not read the import's recording is told only that the
+        // identifier is taken, and its scan finds no recording to belong to.
+        var viewersPhone = await SyncUploadAsync(viewer, viewersSet, recordingId, cave, revision: null, Guid.CreateVersion7());
+        viewersPhone.GetProperty("tripRecordings")[0].GetProperty("code").GetString().ShouldBe("sync.id_conflict");
+        viewersPhone.GetProperty("tripPoints")[0].GetProperty("code").GetString().ShouldBe("sync.recording_not_found");
     }
 
     /// <summary>
@@ -1404,7 +1682,9 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         Guid? trip = null,
         Guid? caver = null,
         bool createTrip = false,
-        Guid? recording = null) => new
+        Guid? recording = null,
+        Guid? club = null,
+        string visibility = "private") => new
     {
         tripUuid = (recording ?? recordingId).ToString(),
         tripLogId = trip,
@@ -1413,7 +1693,8 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         cavers = caver is null
             ? new Dictionary<string, Guid>()
             : new Dictionary<string, Guid> { [deviceUserId.ToString()] = caver.Value },
-        visibility = "private",
+        cavingGroupId = club,
+        visibility,
         candidateCount = 5,
     };
 
@@ -1474,6 +1755,115 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
     private static JsonElement Json(string body) => JsonDocument.Parse(body).RootElement.Clone();
 
     private Task<Guid> UploadArchiveAsync() => UploadAsync("speleo_loc_2026-09-10_12-00-00.zip", BuildArchive());
+
+    private static async Task<Guid> CreateSyncSetAsync(HttpClient client, Guid cave)
+    {
+        var response = await client.PostAsJsonAsync("/api/v1/sync/sets/", new
+        {
+            name = $"Phone {Guid.NewGuid():N}"[..20],
+            uploadVisibility = "private",
+            rootFeatureIds = new[] { cave },
+            settings = new { },
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>A phone sending one recording of this archive, with one new scan at the 50 m marker.</summary>
+    private async Task<JsonElement> SyncUploadAsync(
+        HttpClient client, Guid set, Guid recording, Guid cave, DateTimeOffset? revision, Guid scan)
+    {
+        var response = await client.PostAsJsonAsync($"/api/v1/sync/sets/{set}/upload", new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            tripRecordings = new object[]
+            {
+                new
+                {
+                    id = recording,
+                    baseRevision = revision,
+                    caveId = cave,
+                    title = "Tura inventata, din telefon",
+                    startedAt = ScanOne.AddMinutes(-5),
+                    endedAt = ScanFour.AddMinutes(20),
+                    createdByDeviceUserId = deviceUserId,
+                },
+            },
+            tripPoints = new object[]
+            {
+                new
+                {
+                    id = scan,
+                    recordingId = recording,
+                    placeId = placeAtFifty,
+                    scannedAt = ScanFour.AddMinutes(10),
+                    notes = "scanare tarzie",
+                    createdByDeviceUserId = deviceUserId,
+                },
+            },
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement.Clone();
+    }
+
+    private async Task RunConversionAsync(Guid importBatchId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var jobs = await db.ProcessingJobs.AsNoTracking()
+            .Where(j => j.Kind == ProcessingJobKinds.TripRecordingConvert)
+            .ToListAsync();
+        var job = jobs.Single(j => JsonSerializer.Deserialize<TripRecordingConvertPayload>(
+            j.Payload, JsonSerializerOptions.Web)!.ImportBatchId == importBatchId);
+        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
+            .Single(h => h.Kind == ProcessingJobKinds.TripRecordingConvert);
+        await handler.ExecuteAsync(job, CancellationToken.None);
+    }
+
+    private static Guid? NamedTrip(string problemBody) =>
+        JsonDocument.Parse(problemBody).RootElement.GetProperty("tripLogId") is { ValueKind: JsonValueKind.String } id
+            ? id.GetGuid()
+            : null;
+
+    /// <summary>A rule refusing one account the right to change one phone recording.</summary>
+    private async Task DenyRecordingWriteAsync(string email, Guid recording)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var userId = await db.Users.Where(u => u.Email == email).Select(u => u.Id).SingleAsync();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = userId,
+            Effect = AccessEffect.Deny,
+            Domain = AccessDomain.TripLogs,
+            Actions = AccessAction.Write,
+            ScopeKind = AccessScopeKind.Object,
+            ScopeId = recording,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>A rule refusing one account one trip, written straight into storage.</summary>
+    private async Task DenyTripAsync(string email, Guid tripId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var userId = await db.Users.Where(u => u.Email == email).Select(u => u.Id).SingleAsync();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = userId,
+            Effect = AccessEffect.Deny,
+            Domain = AccessDomain.TripLogs,
+            Actions = AccessAction.Read,
+            ScopeKind = AccessScopeKind.Object,
+            ScopeId = tripId,
+        });
+        await db.SaveChangesAsync();
+    }
 
     private async Task<Guid> UploadAsync(string fileName, byte[] content)
     {

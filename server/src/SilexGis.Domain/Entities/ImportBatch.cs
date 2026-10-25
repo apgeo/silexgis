@@ -405,6 +405,19 @@ public class ImportBatchItem
     /// </summary>
     public Guid? DocumentVersionId { get; set; }
 
+    /// <summary>
+    /// The phone's trip recording this line created, edited or removed, for a phone upload that
+    /// sent one. Goes null rather than taking the line with it when the recording is removed for
+    /// good, like the trip pointer.
+    /// </summary>
+    public Guid? TripRecordingId { get; set; }
+
+    /// <summary>
+    /// The scan on a recording this line created, edited or removed. A line names a recording or one
+    /// of its points, never both: each is arbitrated, answered and taken back on its own.
+    /// </summary>
+    public Guid? TripRecordingPointId { get; set; }
+
     /// <summary>The geofile row this came from. Kept even after a re-import replaces those rows.</summary>
     public long? SourceFeatureId { get; set; }
 

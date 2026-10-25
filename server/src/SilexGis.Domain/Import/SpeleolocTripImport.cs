@@ -292,6 +292,25 @@ public static class SpeleolocImportCodes
     /// <summary>Every chosen point failed, so the batch would record only failures.</summary>
     public const string NothingCreated = "speleoloc_import.nothing_created";
 
+    /// <summary>
+    /// The recording already has its trip report — made from a phone upload, or by an earlier
+    /// import of an archive holding the same recording. A recording becomes one report, so a
+    /// second path offering to make it again is refused rather than doubling every position.
+    /// </summary>
+    public const string RecordingAlreadyConverted = "import.recording_already_converted";
+
+    /// <summary>
+    /// The recording is already kept here, under an account whose recordings this caller may not
+    /// change. Making it a report writes on it, so it is refused rather than claimed for them.
+    /// </summary>
+    public const string RecordingNotWritable = "import.recording_not_writable";
+
+    /// <summary>
+    /// The phone recording named for a review is not here, or this caller may not read it — one
+    /// answer for both.
+    /// </summary>
+    public const string KeptRecordingNotFound = "trip_recording.not_found";
+
     /// <summary>A chosen point is not one the archive reads as a point of this recording.</summary>
     public const string PointMissing = "speleoloc_import.point_missing";
 

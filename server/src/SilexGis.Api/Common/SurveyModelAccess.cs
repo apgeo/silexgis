@@ -5,6 +5,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Common;
 
@@ -26,24 +27,24 @@ public static class SurveyModelAccess
     /// the cave's exact location open to them. The second half is not decoration — a model
     /// is a measured drawing of a passage, so serving one to a caller without exact-location
     /// view would hand over the position the protection exists to withhold. Metadata is
-    /// closed with the file for the same reason.
+    /// closed with the file for the same reason. The rule itself lives with the work done on an
+    /// account's behalf, which asks it too.
     /// </summary>
-    public static async Task<bool> VisibleAsync(
+    public static Task<bool> VisibleAsync(
         IAccessService access,
         FeatureProtection protection,
         AccessContext? ctx,
         Feature cave,
         CancellationToken ct) =>
-        (await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed
-        && await LocationOpenAsync(protection, ctx, cave.Id, ct);
+        SurveyModelVisibility.VisibleAsync(access, protection, ctx, cave, ct);
 
     /// <summary>
     /// The exact-location half on its own, for the one surface that needs to tell "you may
     /// not see this cave" apart from "you may see the cave but not its models".
     /// </summary>
-    public static async Task<bool> LocationOpenAsync(
+    public static Task<bool> LocationOpenAsync(
         FeatureProtection protection, AccessContext? ctx, Guid caveFeatureId, CancellationToken ct) =>
-        (await protection.ExactViewIdsAsync(ctx, [caveFeatureId], ct)).Contains(caveFeatureId);
+        SurveyModelVisibility.LocationOpenAsync(protection, ctx, caveFeatureId, ct);
 
     /// <summary>
     /// The cave whose survey may be measured, or null when it may not be.

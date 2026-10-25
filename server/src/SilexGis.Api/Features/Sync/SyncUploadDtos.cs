@@ -128,6 +128,13 @@ public sealed record SyncUploadRowDto(
 /// document and the object it hangs on, and is applied after the documents, so a link may name a
 /// document sent in the same upload.
 /// </param>
+/// <param name="TripRecordings">
+/// The phone's recordings of trips, each arbitrated on its own. Applied after the phone users.
+/// </param>
+/// <param name="TripPoints">
+/// The scans on those recordings, applied after the recordings so a scan sent beside its new
+/// recording finds it.
+/// </param>
 /// <remarks>
 /// Each array is a section, applied in a fixed order whatever order the arrays sit in here —
 /// feature rows first — and answered in the array of the same name.
@@ -139,7 +146,9 @@ public sealed record SyncUploadRequest(
     IReadOnlyList<string>? ClientFeatures = null,
     IReadOnlyList<SyncUploadPersonDto>? People = null,
     IReadOnlyList<SyncUploadDocumentDto>? Documents = null,
-    IReadOnlyList<SyncUploadDocumentLinkDto>? DocumentLinks = null);
+    IReadOnlyList<SyncUploadDocumentLinkDto>? DocumentLinks = null,
+    IReadOnlyList<SyncUploadTripRecordingDto>? TripRecordings = null,
+    IReadOnlyList<SyncUploadTripPointDto>? TripPoints = null);
 
 /// <summary>One of the phone's own users, as the phone describes them.</summary>
 /// <param name="DeviceUserId">The phone's identifier for this user, adopted verbatim and never translated.</param>
@@ -291,6 +300,12 @@ public sealed record SyncUploadRowResultDto(
 /// identifier — or, for a link refused before it existed, under its document's; present only when
 /// the upload carried the section.
 /// </param>
+/// <param name="TripRecordings">
+/// What became of each trip recording the upload carried; present only when it carried the section.
+/// </param>
+/// <param name="TripPoints">
+/// What became of each scan the upload carried; present only when it carried the section.
+/// </param>
 /// <param name="Duplicates">
 /// What was already here, near a row this batch created. A report and never a verdict: every row
 /// listed was written, and its entry in <c>Rows</c> says so. It is here because a device is
@@ -312,7 +327,11 @@ public sealed record SyncUploadResultDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<SyncUploadRowResultDto>? Documents = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<SyncUploadRowResultDto>? DocumentLinks = null);
+    IReadOnlyList<SyncUploadRowResultDto>? DocumentLinks = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<SyncUploadRowResultDto>? TripRecordings = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<SyncUploadRowResultDto>? TripPoints = null);
 
 /// <summary>One created row and what it landed next to.</summary>
 public sealed record SyncDuplicateDto(Guid Id, IReadOnlyList<SyncDuplicateCandidateDto> Nearby);
@@ -344,6 +363,12 @@ public sealed class SyncUploadRequestValidator : AbstractValidator<SyncUploadReq
 
     /// <summary>The width of the column a stored file's name is kept in.</summary>
     public const int StoredFileNameMaxLength = 255;
+
+    /// <summary>The longest description or log a recording carries.</summary>
+    private const int TripTextMax = 20_000;
+
+    /// <summary>The longest note on one scan.</summary>
+    private const int TripNoteMax = 4_000;
 
     public SyncUploadRequestValidator()
     {
@@ -424,6 +449,36 @@ public sealed class SyncUploadRequestValidator : AbstractValidator<SyncUploadReq
             person.RuleFor(p => p.FirstName).MaximumLength(200);
             person.RuleFor(p => p.LastName).MaximumLength(200);
             person.RuleFor(p => p.CaverId).NotEqual(Guid.Empty);
+        });
+
+        RuleFor(x => x.TripRecordings)
+            .Must(items => items is null || items.Select(r => r.Id).Distinct().Count() == items.Count)
+            .WithMessage("A recording may appear only once in a batch.");
+        RuleFor(x => x.TripPoints)
+            .Must(items => items is null || items.Select(p => p.Id).Distinct().Count() == items.Count)
+            .WithMessage("A scan may appear only once in a batch.");
+
+        // A removal names the recording and nothing else; anything written needs its cave and
+        // its start. The widths are the columns' own.
+        RuleForEach(x => x.TripRecordings).ChildRules(recording =>
+        {
+            recording.RuleFor(r => r.Id).NotEmpty();
+            recording.RuleFor(r => r.CaveId).NotNull().NotEqual(Guid.Empty).When(r => !r.Deleted);
+            recording.RuleFor(r => r.StartedAt).NotNull().When(r => !r.Deleted);
+            recording.RuleFor(r => r.Title).MaximumLength(255);
+            recording.RuleFor(r => r.Description).MaximumLength(TripTextMax);
+            recording.RuleFor(r => r.Log).MaximumLength(TripTextMax);
+            recording.RuleFor(r => r.CreatedByDeviceUserId).NotEqual(Guid.Empty);
+        });
+
+        RuleForEach(x => x.TripPoints).ChildRules(point =>
+        {
+            point.RuleFor(p => p.Id).NotEmpty();
+            point.RuleFor(p => p.RecordingId).NotEmpty();
+            point.RuleFor(p => p.ScannedAt).NotNull().When(p => !p.Deleted);
+            point.RuleFor(p => p.PlaceId).NotEqual(Guid.Empty);
+            point.RuleFor(p => p.Notes).MaximumLength(TripNoteMax);
+            point.RuleFor(p => p.CreatedByDeviceUserId).NotEqual(Guid.Empty);
         });
 
         RuleForEach(x => x.Rows).ChildRules(row =>

@@ -112,6 +112,7 @@ public readonly record struct SyncCursor(long SetRevision, DateTimeOffset Change
     {
         SyncStream.Features => null,
         SyncStream.Documents => "documents",
+        SyncStream.Trips => "trips",
         _ => throw new ArgumentOutOfRangeException(nameof(stream), stream, "A stream with no cursor name."),
     };
 }

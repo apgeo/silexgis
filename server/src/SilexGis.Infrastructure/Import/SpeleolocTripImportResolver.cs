@@ -176,6 +176,46 @@ public sealed class SpeleolocTripImportResolver(SilexGisDbContext db)
     }
 
     /// <summary>
+    /// What each scan of a recording a phone sent through sync would mean. The same reading as an
+    /// archive's — one resolver whichever way the recording arrived, so a recording converted
+    /// automatically and the same recording reviewed out of an export are placed by one rule.
+    /// </summary>
+    public Task<SpeleolocImportResolutionSet> ResolveAsync(
+        TripRecording recording,
+        IReadOnlyList<TripRecordingPoint> points,
+        SpeleolocImportOptions options,
+        SurveyModel? model,
+        TripTracking? tracking,
+        AccessContext ctx,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+        ArgumentNullException.ThrowIfNull(points);
+        return ResolveAsync([.. points.Select(p => ScanOf(recording, p))], options, model, tracking, ctx, ct);
+    }
+
+    /// <summary>
+    /// A synced scan in the shape an archive scan has. It carries no depth or title of its own —
+    /// the register's are the ones the resolver prefers anyway — and a scan whose phone named no
+    /// author is taken as the scan of whoever started the recording, which is what a phone that
+    /// records one person's trip leaves unsaid.
+    /// </summary>
+    public static SpeleolocArchivePoint ScanOf(TripRecording recording, TripRecordingPoint point)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+        ArgumentNullException.ThrowIfNull(point);
+        return new SpeleolocArchivePoint(
+            point.Id,
+            point.PlaceFeatureId,
+            PlaceTitle: null,
+            PlaceDepthM: null,
+            PlaceIsEntrance: false,
+            point.ScannedAt,
+            point.Notes,
+            point.CreatedByDeviceUserId ?? recording.CreatedByDeviceUserId);
+    }
+
+    /// <summary>
     /// Who this scan is about, out of the link the installation holds for its phone user — a
     /// statement somebody made, never an inference.
     /// </summary>
