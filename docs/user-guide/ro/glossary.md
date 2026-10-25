@@ -14,6 +14,11 @@ mai îngust decât în vorbirea speologică obișnuită, se spune.
 **Administratori deplini** — Singurul grup al cărui *drept vine din apartenența însăși*, decis
 înaintea consultării oricărei reguli. Nu are reguli.
 
+**Cheie de acces** — Un text lung și secret pe care un dispozitiv de teren (TopoDroid pe un telefon) îl
+ține în loc de parola ta, bun doar să încarce topografii în numele tău. Se arată o singură dată, la
+creare, se poate revoca oricând și se gestionează doar când ești autentificat cu parola.
+→ [Încărcarea topografiilor din TopoDroid](features/topodroid-uploads.md#o-cheie-de-acces-pentru-telefon)
+
 **Album** — Un aranjament îngrijit și ordonat de fotografii, cu o copertă, partajabil printr-un
 link propriu. Ștergerea lui nu șterge fotografiile.
 → [Fotografii](features/photographs.md#albume)

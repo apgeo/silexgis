@@ -69,6 +69,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 |---|---|
 | [Partajare, coduri QR și pagini publice](sharing-and-public-pages.md) | Fiecare suprafață anonimă a aplicației |
 | [Telefon și sincronizare offline](mobile-sync.md) | Aplicația de telefon și ce transportă |
+| [Încărcarea topografiilor din TopoDroid](topodroid-uploads.md) | Chei de acces, topografiile unei peșteri și versiunile lor, pagina de stare a unei încărcări, linkul public al rezultatului |
 
 ## Păstrarea unei evidențe corecte
 

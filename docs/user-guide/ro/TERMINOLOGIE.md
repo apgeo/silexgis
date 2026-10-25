@@ -389,6 +389,10 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Sync | Sincronizare |
 | Export | Exportă |
 | Bake (terrain) | Generare |
+| Access keys · Create key · Revoke | Chei de acces · Creează cheia · Revocă |
+| Survey uploads (a Settings page) | Încărcări de ridicări |
+| Public link (an upload's) · Withdraw | Link public · Retrage |
+| Not needed (a stage the run skipped) | Nu era nevoie |
 
 ---
 

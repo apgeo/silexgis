@@ -81,7 +81,8 @@ linking out to the reference pages for detail.
 
 **Reaching outside the installation**
 [Sharing, QR codes and public pages](features/sharing-and-public-pages.md) ·
-[Mobile and offline sync](features/mobile-sync.md)
+[Mobile and offline sync](features/mobile-sync.md) ·
+[Uploading surveys from TopoDroid](features/topodroid-uploads.md)
 
 **Keeping the record honest**
 [History and audit](features/history-and-audit.md)
