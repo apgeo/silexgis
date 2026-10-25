@@ -5,18 +5,20 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Button from '../Button.tsx';
 import { formatSize } from '../attachments/fileFormat.ts';
-import type { PublicSurveyArtefact } from '../../api/hooks.ts';
+import type { SurveyUploadArtefactView } from '../../api/hooks.ts';
+import { surveyUploadRunErrorText } from './surveyUploadProblems.ts';
 
 /**
  * What a run produced, each with the file to download and — where the application has a page for
  * it — the way to open it.
  *
- * Takes the narrow shape the anonymous answer has, which the signed-in artefact satisfies, so the
- * status page and the public page draw the same list. The delivery addresses are short-lived
+ * Takes the narrow shape both answers satisfy, so the status page and the public page draw the
+ * same list. An output that was asked for and not produced has no file; it is listed with what the
+ * server says went wrong with it instead of a download button. The delivery addresses are short-lived
  * signed links; the page asks the server again rather than keeping them, and a link past its
  * lifetime is refused by the server, not guessed at here.
  */
-export default function SurveyUploadArtefacts({ artefacts }: { artefacts: readonly PublicSurveyArtefact[] }) {
+export default function SurveyUploadArtefacts({ artefacts }: { artefacts: readonly SurveyUploadArtefactView[] }) {
   const { t } = useTranslation();
 
   if (artefacts.length === 0) {
@@ -35,11 +37,20 @@ export default function SurveyUploadArtefacts({ artefacts }: { artefacts: readon
         <Flex key={`${artefact.kind}:${artefact.name}`} align="center" gap={8} wrap>
           <Tag>{t(`surveyUploads.outputs.${artefact.kind}`, { defaultValue: artefact.kind })}</Tag>
           <Typography.Text>{artefact.name}</Typography.Text>
-          <Typography.Text type="secondary">{formatSize(artefact.sizeBytes)}</Typography.Text>
-          <Button size="small" icon={<DownloadOutlined />} href={artefact.contentUrl} target="_blank" rel="noreferrer">
-            {t('surveyUploads.artefacts.download')}
-          </Button>
+          {artefact.sizeBytes !== null && (
+            <Typography.Text type="secondary">{formatSize(artefact.sizeBytes)}</Typography.Text>
+          )}
+          {artefact.contentUrl && (
+            <Button size="small" icon={<DownloadOutlined />} href={artefact.contentUrl} target="_blank" rel="noreferrer">
+              {t('surveyUploads.artefacts.download')}
+            </Button>
+          )}
           {artefact.viewUrl && <ViewLink url={artefact.viewUrl} />}
+          {artefact.error && (
+            <Typography.Text type="warning" data-testid="survey-upload-artefact-error">
+              {surveyUploadRunErrorText(artefact.error.code, t) ?? artefact.error.message ?? artefact.error.code}
+            </Typography.Text>
+          )}
         </Flex>
       ))}
     </Flex>

@@ -6,8 +6,8 @@ type Translate = ReturnType<typeof useTranslation>['t'];
 
 /**
  * How a processing run can end badly, in the words of somebody who has to act on it. These codes
- * sit in the `error` member of an upload's status — the status call itself answers 200 — so they
- * are looked up from the status, not from a failed request.
+ * sit in the `error` member of an upload's status, or of one of its artefacts — the status call
+ * itself answers 200 — so they are looked up from the status, not from a failed request.
  *
  * Exported so the wording can be checked against both locales: the keys are looked up through a
  * variable, which hides every one of them from the scan that catches a key nobody translated.
@@ -23,6 +23,7 @@ export const SURVEY_UPLOAD_RUN_ERROR_KEYS: Record<string, string> = {
   'survey_pipeline.compile_failed': 'surveyUploads.problems.compileFailed',
   'survey_pipeline.compile_timeout': 'surveyUploads.problems.compileTimeout',
   'survey_pipeline.output_missing': 'surveyUploads.problems.outputMissing',
+  'survey_pipeline.crs_unknown': 'surveyUploads.problems.crsUnknown',
   'survey_pipeline.store_failed': 'surveyUploads.problems.storeFailed',
 };
 
@@ -36,6 +37,9 @@ export const SURVEY_UPLOAD_REQUEST_ERROR_KEYS: Record<string, string> = {
   'survey_upload.not_completed': 'surveyUploads.problems.notCompleted',
   'survey_upload.run_in_progress': 'surveyUploads.problems.runInProgress',
   'survey_upload.output_unknown': 'surveyUploads.problems.outputUnknown',
+  'survey_upload.public_links_disabled': 'surveyUploads.problems.publicLinksDisabled',
+  'survey_upload.public_link_forbidden': 'surveyUploads.problems.publicLinkForbidden',
+  'survey_upload.public_link_refused_protected': 'surveyUploads.problems.publicLinkProtected',
   'acl.forbidden': 'surveyUploads.problems.forbidden',
 };
 

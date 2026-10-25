@@ -67,6 +67,7 @@ describe('PublicSurveyResultPage', () => {
       version: '2026-10-25T10:15:00Z',
       status: 'succeeded',
       stage: 'unpack',
+      stages: [],
       progress: 100,
       message: null,
       error: null,

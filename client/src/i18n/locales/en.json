@@ -6162,11 +6162,15 @@
       "compileFailed": "Therion could not compile the survey. The log below says where.",
       "compileTimeout": "Compiling took longer than this server allows.",
       "outputMissing": "The compilation did not produce a result that was asked for.",
+      "crsUnknown": "Stored, but not read into stations: the survey is fixed in a coordinate system this server does not know.",
       "storeFailed": "The results could not be stored.",
       "notFound": "This upload does not exist, or you may not see it.",
       "notCompleted": "This upload never received all its files, so it cannot be run again.",
       "runInProgress": "A run of this upload is already waiting or running.",
       "outputUnknown": "One of the requested results is not produced by this server.",
+      "publicLinksDisabled": "This installation makes no public links.",
+      "publicLinkForbidden": "Making a public link takes the right to share the cave.",
+      "publicLinkProtected": "The cave's position is protected, so its survey results are not published.",
       "forbidden": "You may see this cave but not change it.",
       "requestFailed": "That did not work. Please try again."
     },
@@ -6214,7 +6218,8 @@
         "protected-cave": "No public link is made for this upload because the cave's position is protected.",
         "account-off": "No public link was made because \"Public links for my uploads\" is switched off for the account that sent it.",
         "installation-off": "No public link was made because this installation has public links switched off.",
-        "no-share-right": "No public link was made because the account that sent this upload may not share the cave."
+        "no-share-right": "No public link was made because the account that sent this upload may not share the cave.",
+        "revoked": "The public link of this upload was withdrawn. Somebody who may change the cave can make a new one."
       },
       "revoked": "Link withdrawn."
     },

@@ -236,7 +236,8 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
  *
  * Whether a link exists is the server's word (`publicLink`). Without one the page says why when the
  * server gave a reason (`publicLinkRefusal`), and offers to make one to somebody who may write —
- * except when the cave's protection is the reason, which no press of the button can change. With
+ * except when the cave's protection or the installation's switch is the reason, which no press of
+ * the button can change. With
  * no reason given it falls back to a sentence naming the possible ones.
  */
 function PublicLinkCard({ upload, canWrite }: { upload: SurveyUpload; canWrite: boolean }) {
@@ -310,7 +311,7 @@ function PublicLinkCard({ upload, canWrite }: { upload: SurveyUpload; canWrite: 
           <Typography.Text type="secondary" data-testid="survey-upload-no-link">
             {refusal ? t(`surveyUploads.link.refusal.${refusal}`) : t('surveyUploads.link.none')}
           </Typography.Text>
-          {canWrite && refusal !== 'protected-cave' && (
+          {canWrite && refusal !== 'protected-cave' && refusal !== 'installation-off' && (
             <Flex>
               <Button size="small" loading={mint.isPending} onClick={() => void make()} data-testid="survey-upload-link-make">
                 {t('surveyUploads.link.make')}

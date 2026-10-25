@@ -59,6 +59,7 @@ function made(over: Partial<SurveyUpload> = {}): SurveyUpload {
     logTail: 'line one of the log',
     statusPageUrl: '/caves/c1/surveys/s1/uploads/u1',
     publicLink: null,
+    publicLinkRefusal: null,
     createdAt: '2026-10-25T10:15:00Z',
     expiresAt: '2026-10-26T10:15:00Z',
     startedAt: '2026-10-25T10:15:01Z',
@@ -168,16 +169,42 @@ describe('the upload status page', () => {
   });
 
   it('says why there is no link when the server gives a reason, and offers no button for a protected cave', () => {
-    upload = { ...made(), publicLinkRefusal: 'protected-cave' } as SurveyUpload;
+    upload = made({ publicLinkRefusal: 'protected-cave' });
     show();
     expect(screen.getByTestId('survey-upload-no-link')).toHaveTextContent('position is protected');
     expect(screen.queryByTestId('survey-upload-link-make')).toBeNull();
 
     cleanup();
-    upload = { ...made(), publicLinkRefusal: 'account-off' } as SurveyUpload;
+    upload = made({ publicLinkRefusal: 'account-off' });
     show();
     expect(screen.getByTestId('survey-upload-no-link')).toHaveTextContent('switched off');
     expect(screen.getByTestId('survey-upload-link-make')).toBeInTheDocument();
+  });
+
+  it('says a withdrawn link was withdrawn and offers a new one, but none on an installation that makes no links', () => {
+    upload = made({ publicLinkRefusal: 'revoked' });
+    show();
+    expect(screen.getByTestId('survey-upload-no-link')).toHaveTextContent('withdrawn');
+    expect(screen.getByTestId('survey-upload-link-make')).toBeInTheDocument();
+
+    cleanup();
+    upload = made({ publicLinkRefusal: 'installation-off' });
+    show();
+    expect(screen.getByTestId('survey-upload-no-link')).toHaveTextContent('public links switched off');
+    expect(screen.queryByTestId('survey-upload-link-make')).toBeNull();
+  });
+
+  it('reads a refusal code it has no wording for as no reason known', () => {
+    upload = made({ publicLinkRefusal: 'some-later-reason' });
+    show();
+    expect(screen.getByTestId('survey-upload-no-link')).toHaveTextContent('can each be the reason');
+  });
+
+  it('turns the server\'s refusal to make a link into its sentence', async () => {
+    mintMutate.mockRejectedValueOnce(new ApiError(409, 'survey_upload.public_link_refused_protected'));
+    show();
+    fireEvent.click(screen.getByTestId('survey-upload-link-make'));
+    expect(await screen.findByText(/position is protected, so its survey results are not published/)).toBeInTheDocument();
   });
 
   it('lists the survey\'s versions and points to a newer one', () => {

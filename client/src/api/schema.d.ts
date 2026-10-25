@@ -1558,6 +1558,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/survey-uploads/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The public page of an upload's results: its survey title, the cave's name, the run's progress and the files it produced. */
+        get: operations["publicSurveyUpload"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -2175,6 +2192,59 @@ export interface paths {
         post?: never;
         /** Withdraws one of the caller's feed addresses. A calendar still polling it is answered as though it never existed. */
         delete: operations["meCalendarFeedRevoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/access-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's personal access keys — descriptions only, never a key — and the lifetimes a new one may have. */
+        get: operations["meAccessKeyList"];
+        put?: never;
+        /** Makes a personal access key for a field device; the key is returned once and never stored. */
+        post: operations["meAccessKeyCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/access-keys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revokes one of the caller's keys. The device holding it is refused on its next call. */
+        delete: operations["meAccessKeyRevoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/survey-upload-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's survey-upload choices: outputs always produced, and whether results get a public link. */
+        get: operations["meSurveyUploadPreferenceGet"];
+        /** Replaces the caller's survey-upload choices. 400 survey_upload_preferences.output_unknown names an output the catalogue does not have. */
+        put: operations["meSurveyUploadPreferencePut"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -7860,6 +7930,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-uploads/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What this server takes from a survey tool: sizes, file kinds, the compiler, cave creation, outputs. */
+        get: operations["surveyUploadCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Uploads of caves whose survey the caller may see with the exact location, newest first. */
+        get: operations["listSurveyUploads"];
+        put?: never;
+        /** Opens an upload of one survey: where it goes (a cave, a survey, a new cave, or one made from the title) and every file that will be sent. */
+        post: operations["openSurveyUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An upload and how its processing is getting on. */
+        get: operations["getSurveyUpload"];
+        put?: never;
+        post?: never;
+        /** Abandons an upload still receiving files. The files already sent stay archived. */
+        delete: operations["abandonSurveyUpload"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/{id}/files/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sends one declared file as the raw request body; archives it at once. A repeat for a file already archived answers what the first did. */
+        put: operations["putSurveyUploadFile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Says every file has been sent, and queues the processing run. */
+        post: operations["completeSurveyUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/{id}/rerun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Runs a finished upload's processing again on its archived files, with its options or new ones. */
+        post: operations["rerunSurveyUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/{id}/public-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Makes a new public link to the upload's results, withdrawing the one it had (Write and Share on the cave; never for a protected cave). */
+        post: operations["mintSurveyUploadPublicLink"];
+        /** Withdraws the upload's public link; it then answers as an address that never existed (Write on the cave). */
+        delete: operations["revokeSurveyUploadPublicLink"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -7931,6 +8123,43 @@ export interface components {
             ruleName: null | string;
             redacted: boolean;
         };
+        AccessKeyCreatedDto: {
+            key: components["schemas"]["AccessKeyDto"];
+            secret: string;
+        };
+        AccessKeyCreateRequest: {
+            name: string;
+            /** Format: int32 */
+            expiresInDays: null | number;
+        };
+        AccessKeyDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            purpose: components["schemas"]["AccessKeyPurpose"];
+            prefix: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            lastUsedAt: null | string;
+            /** Format: date-time */
+            revokedAt: null | string;
+            state: components["schemas"]["AccessKeyState"];
+        };
+        AccessKeyListDto: {
+            /** Format: int32 */
+            maxDays: number;
+            offeredDays: number[];
+            /** Format: int32 */
+            defaultDays: number;
+            keys: components["schemas"]["AccessKeyDto"][];
+        };
+        /** @enum {unknown} */
+        AccessKeyPurpose: "surveyUpload";
+        /** @enum {unknown} */
+        AccessKeyState: "active" | "expired" | "revoked";
         /** @enum {unknown} */
         AccessLevel: "object" | "collection" | "global";
         AccessPreviewDto: {
@@ -12681,6 +12910,45 @@ export interface components {
         PublicQrDto: {
             instanceName: string;
         };
+        PublicSurveyUploadArtefactDto: {
+            kind: string;
+            name: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            contentUrl: string;
+        };
+        PublicSurveyUploadCaveDto: {
+            name: string;
+        };
+        PublicSurveyUploadDto: {
+            survey: components["schemas"]["PublicSurveyUploadSurveyDto"];
+            cave: components["schemas"]["PublicSurveyUploadCaveDto"];
+            /** Format: date-time */
+            version: string;
+            status: components["schemas"]["SurveyUploadStatus"];
+            stage: null | components["schemas"]["SurveyUploadStage"];
+            stages: components["schemas"]["PublicSurveyUploadStageDto"][];
+            /** Format: int32 */
+            progress: number;
+            message: null | string;
+            error: null | components["schemas"]["PublicSurveyUploadErrorDto"];
+            artefacts: components["schemas"]["PublicSurveyUploadArtefactDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            finishedAt: null | string;
+        };
+        PublicSurveyUploadErrorDto: {
+            code: string;
+            message: null | string;
+        };
+        PublicSurveyUploadStageDto: {
+            stage: components["schemas"]["SurveyUploadStage"];
+            state: components["schemas"]["SurveyUploadStageState"];
+        };
+        PublicSurveyUploadSurveyDto: {
+            title: string;
+        };
         PublicTripExpeditionDto: {
             /** Format: uuid */
             id: string;
@@ -13755,6 +14023,14 @@ export interface components {
             maxSelection: number;
             portalUrl: string;
         };
+        /** Format: binary */
+        Stream: string;
+        SurveyCaveCreationCapabilitiesDto: {
+            allowed: boolean;
+            /** Format: int64 */
+            defaultCaveTypeId: null | number;
+            visibilities: components["schemas"]["Visibility"][];
+        };
         SurveyCompilationDto: {
             /** Format: uuid */
             id: string;
@@ -13799,6 +14075,11 @@ export interface components {
         SurveyCompilationOutcome: "succeeded" | "succeededWithWarnings" | "failed";
         /** @enum {unknown} */
         SurveyCompilationStatus: "pending" | "read" | "unreadable";
+        SurveyCompilerCapabilitiesDto: {
+            available: boolean;
+            version: null | string;
+            outputs: string[];
+        };
         SurveyLoopErrorDto: {
             /** Format: int32 */
             ordinal: number;
@@ -13869,6 +14150,12 @@ export interface components {
             surveyedAt: null | string;
         };
         /** @enum {unknown} */
+        SurveyOrigin: "topodroid" | "therion" | "other";
+        SurveyOutputCapabilitiesDto: {
+            catalogue: string[];
+            defaults: string[];
+        };
+        /** @enum {unknown} */
         SurveySegmentBasis: "unavailable" | "surveyFlags" | "skeletonHeuristic";
         SurveyShotDto: {
             fromStationName: null | string;
@@ -13930,6 +14217,237 @@ export interface components {
             flags: string[];
             isEntrance: boolean;
             isFixed: boolean;
+        };
+        SurveyUploadArtefactDto: {
+            kind: string;
+            name: string;
+            /** Format: int64 */
+            sizeBytes: null | number;
+            contentUrl: null | string;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            /** Format: uuid */
+            documentId: null | string;
+            /** Format: uuid */
+            sourceId: null | string;
+            viewUrl: null | string;
+            modelStatus: null | components["schemas"]["SurveyModelStatus"];
+            error: null | components["schemas"]["SurveyUploadErrorDto"];
+        };
+        SurveyUploadCapabilitiesDto: {
+            /** Format: int32 */
+            contractVersion: number;
+            sources: string[];
+            /** Format: int64 */
+            maxFileBytes: number;
+            /** Format: int32 */
+            maxFilesPerUpload: number;
+            acceptedExtensions: string[];
+            compiler: components["schemas"]["SurveyCompilerCapabilitiesDto"];
+            caveCreation: components["schemas"]["SurveyCaveCreationCapabilitiesDto"];
+            outputs: components["schemas"]["SurveyOutputCapabilitiesDto"];
+            /** Format: int32 */
+            pollIntervalSeconds: number;
+        };
+        SurveyUploadCaveDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            url: string;
+        };
+        SurveyUploadCaveReference: {
+            /** Format: uuid */
+            id: string;
+        };
+        SurveyUploadCaveSurveyDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+        };
+        SurveyUploadCaveSurveyReference: {
+            /** Format: uuid */
+            id: string;
+        };
+        SurveyUploadClientInfo: {
+            name: null | string;
+            version: null | string;
+        };
+        SurveyUploadCompilerDto: {
+            version: string;
+        };
+        SurveyUploadDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["SurveyUploadStatus"];
+            stage: null | components["schemas"]["SurveyUploadStage"];
+            /** Format: int32 */
+            progress: number;
+            message: null | string;
+            error: null | components["schemas"]["SurveyUploadErrorDto"];
+            cave: components["schemas"]["SurveyUploadCaveDto"];
+            caveSurvey: components["schemas"]["SurveyUploadCaveSurveyDto"];
+            /** Format: date-time */
+            version: string;
+            caveCreated: boolean;
+            survey: components["schemas"]["SurveyUploadSurveyDto"];
+            files: components["schemas"]["SurveyUploadFileDto"][];
+            artefacts: components["schemas"]["SurveyUploadArtefactDto"][];
+            compiler: null | components["schemas"]["SurveyUploadCompilerDto"];
+            outputs: string[];
+            compile: boolean;
+            logTail: null | string;
+            statusPageUrl: string;
+            publicLink: null | components["schemas"]["SurveyUploadPublicLinkDto"];
+            publicLinkRefusal: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            startedAt: null | string;
+            /** Format: date-time */
+            finishedAt: null | string;
+        };
+        SurveyUploadErrorDto: {
+            code: string;
+            message: null | string;
+        };
+        SurveyUploadFileDeclaration: {
+            name: string;
+            /** Format: int64 */
+            size: number;
+            role: components["schemas"]["SurveyUploadFileRole"];
+        };
+        SurveyUploadFileDto: {
+            name: string;
+            role: components["schemas"]["SurveyUploadFileRole"];
+            status: components["schemas"]["SurveyUploadFileStatus"];
+            /** Format: int64 */
+            declaredSize: number;
+            /** Format: int64 */
+            receivedSize: null | number;
+            sha256: null | string;
+            refusalCode: null | string;
+            /** Format: uuid */
+            sourceId: null | string;
+            /** Format: uuid */
+            documentId: null | string;
+            contentUrl: null | string;
+        };
+        SurveyUploadFileReceivedDto: {
+            name: string;
+            status: components["schemas"]["SurveyUploadFileStatus"];
+            sha256: string;
+            /** Format: int64 */
+            receivedSize: number;
+            /** Format: uuid */
+            sourceId: null | string;
+            /** Format: uuid */
+            documentId: null | string;
+        };
+        /** @enum {unknown} */
+        SurveyUploadFileRole: "archive" | "therionSource" | "therionSketch" | "other" | "generatedConfig" | "output" | "log";
+        /** @enum {unknown} */
+        SurveyUploadFileStatus: "declared" | "received" | "stored" | "refused";
+        SurveyUploadListFileDto: {
+            name: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            contentUrl: string;
+        };
+        SurveyUploadListItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            caveId: string;
+            caveName: string;
+            caveSurvey: components["schemas"]["SurveyUploadCaveSurveyDto"];
+            /** Format: date-time */
+            version: string;
+            source: components["schemas"]["SurveyOrigin"];
+            surveyTitle: string;
+            surveyName: null | string;
+            /** Format: date */
+            surveyDate: null | string;
+            uploadedBy: components["schemas"]["SurveyUploadUploaderDto"];
+            status: components["schemas"]["SurveyUploadStatus"];
+            /** Format: date-time */
+            createdAt: string;
+            archive: null | components["schemas"]["SurveyUploadListFileDto"];
+            therionSources: components["schemas"]["SurveyUploadListFileDto"][];
+            statusPageUrl: string;
+        };
+        SurveyUploadNewCave: {
+            name: null | string;
+            visibility: null | components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            /** Format: int64 */
+            caveTypeId: null | number;
+            /** @default false */
+            locationProtected: boolean;
+        };
+        SurveyUploadOpenRequest: {
+            source: string;
+            client: null | components["schemas"]["SurveyUploadClientInfo"];
+            cave: null | components["schemas"]["SurveyUploadCaveReference"];
+            caveSurvey: null | components["schemas"]["SurveyUploadCaveSurveyReference"];
+            newCave: null | components["schemas"]["SurveyUploadNewCave"];
+            surveyTitle: null | string;
+            surveyName: null | string;
+            description: null | string;
+            files: components["schemas"]["SurveyUploadFileDeclaration"][];
+            pipeline: null | components["schemas"]["SurveyUploadPipelineRequest"];
+            documentsVisibility: null | components["schemas"]["Visibility"];
+        };
+        SurveyUploadPageDto: {
+            items: components["schemas"]["SurveyUploadListItemDto"][];
+            /** Format: int32 */
+            total: number;
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+        };
+        SurveyUploadPipelineRequest: {
+            compile: null | boolean;
+            outputs: null | string[];
+            /** Format: int32 */
+            mapScale: null | number;
+        };
+        SurveyUploadPreferencesDto: {
+            alwaysOutputs: string[];
+            publicLinks: boolean;
+        };
+        SurveyUploadPreferencesWriteRequest: {
+            alwaysOutputs: string[];
+            publicLinks: boolean;
+        };
+        SurveyUploadPublicLinkDto: {
+            url: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SurveyUploadRerunRequest: {
+            pipeline: null | components["schemas"]["SurveyUploadPipelineRequest"];
+        };
+        /** @enum {unknown} */
+        SurveyUploadStage: "archive" | "unpack" | "scaffold" | "compile" | "store" | "read";
+        /** @enum {unknown} */
+        SurveyUploadStageState: "pending" | "active" | "done" | "failed" | "skipped";
+        /** @enum {unknown} */
+        SurveyUploadStatus: "receiving" | "queued" | "running" | "succeeded" | "failed" | "abandoned";
+        SurveyUploadSurveyDto: {
+            title: string;
+            name: null | string;
+            /** Format: date */
+            date: null | string;
+            team: null | string;
+        };
+        SurveyUploadUploaderDto: {
+            /** Format: uuid */
+            id: string;
+            displayName: string;
         };
         SyncCapabilitiesDto: {
             /** Format: int32 */
@@ -15746,7 +16264,7 @@ export interface components {
             cavingGroupId: null | string;
         };
         /** @enum {unknown} */
-        UploadSource: "interactive" | "archive" | "serverDirectory";
+        UploadSource: "interactive" | "archive" | "serverDirectory" | "surveyUpload";
         UserAddressDto: {
             /** Format: uuid */
             id: string;
@@ -19541,6 +20059,46 @@ export interface operations {
             };
         };
     };
+    publicSurveyUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSurveyUploadDto"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     authLogin: {
         parameters: {
             query?: never;
@@ -21114,6 +21672,213 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    meAccessKeyList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessKeyListDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    meAccessKeyCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessKeyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessKeyCreatedDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    meAccessKeyRevoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    meSurveyUploadPreferenceGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadPreferencesDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    meSurveyUploadPreferencePut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurveyUploadPreferencesWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadPreferencesDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
             /** @description Unauthorized */
             401: {
@@ -37635,6 +38400,587 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyUploadCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadCapabilitiesDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    listSurveyUploads: {
+        parameters: {
+            query?: {
+                caveId?: string;
+                caveSurveyId?: string;
+                source?: string;
+                mine?: boolean;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadPageDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    openSurveyUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurveyUploadOpenRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Upgrade Required */
+            426: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    getSurveyUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    abandonSurveyUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    putSurveyUploadFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": components["schemas"]["Stream"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadFileReceivedDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Gone */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    completeSurveyUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Gone */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    rerunSurveyUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["SurveyUploadRerunRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    mintSurveyUploadPublicLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadPublicLinkDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    revokeSurveyUploadPublicLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

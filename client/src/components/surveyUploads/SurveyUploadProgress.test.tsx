@@ -96,6 +96,27 @@ describe('the progress view', () => {
     expect(screen.getAllByRole('link', { name: 'View' })).toHaveLength(1);
     expect(screen.getByText('Therion 3D model (.lox)')).toBeInTheDocument();
   });
+
+  it('lists an output that was asked for and not produced with its reason and no download', () => {
+    show({
+      status: 'succeeded',
+      progress: 100,
+      artefacts: [
+        { kind: 'plan-pdf', name: 'plan.pdf', sizeBytes: 2048, contentUrl: '/files/2', viewUrl: null, error: null },
+        {
+          kind: 'kml',
+          name: 'cave-20261025T101500Z.kml',
+          sizeBytes: null,
+          contentUrl: null,
+          viewUrl: null,
+          error: { code: 'survey_pipeline.output_missing', message: 'Therion wrote no kml file.' },
+        },
+      ],
+    });
+
+    expect(screen.getAllByRole('link', { name: 'Download' })).toHaveLength(1);
+    expect(screen.getByTestId('survey-upload-artefact-error')).toHaveTextContent(en.surveyUploads.problems.outputMissing);
+  });
 });
 
 describe('the wording for errors', () => {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Alert, Flex, Progress, Steps, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import type { PublicSurveyArtefact, StageProgress, SurveyUploadStatus } from '../../api/hooks.ts';
+import type { StageProgress, SurveyUploadArtefactView, SurveyUploadStatus } from '../../api/hooks.ts';
 import SurveyUploadArtefacts from './SurveyUploadArtefacts.tsx';
 import { surveyUploadRunErrorText } from './surveyUploadProblems.ts';
 
@@ -12,7 +12,7 @@ export interface SurveyUploadProgressView {
   message: string | null;
   error: { code: string; message: string | null } | null;
   stages: StageProgress[];
-  artefacts: readonly PublicSurveyArtefact[];
+  artefacts: readonly SurveyUploadArtefactView[];
 }
 
 const STEP_STATUS = {

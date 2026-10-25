@@ -6175,11 +6175,15 @@
       "compileFailed": "Therion nu a putut compila topografia. Jurnalul de mai jos arată unde.",
       "compileTimeout": "Compilarea a durat mai mult decât permite acest server.",
       "outputMissing": "Compilarea nu a produs un rezultat care fusese cerut.",
+      "crsUnknown": "Salvat, dar necitit în stații: topografia este fixată într-un sistem de coordonate pe care acest server nu îl cunoaște.",
       "storeFailed": "Rezultatele nu au putut fi salvate.",
       "notFound": "Această încărcare nu există sau nu ai voie să o vezi.",
       "notCompleted": "Această încărcare nu a primit toate fișierele, așa că nu poate fi rulată din nou.",
       "runInProgress": "O rulare a acestei încărcări așteaptă deja sau este în curs.",
       "outputUnknown": "Unul dintre rezultatele cerute nu este produs de acest server.",
+      "publicLinksDisabled": "Această instalare nu face linkuri publice.",
+      "publicLinkForbidden": "Pentru un link public trebuie să ai dreptul de a partaja peștera.",
+      "publicLinkProtected": "Poziția peșterii este protejată, așa că rezultatele topografiei nu se publică.",
       "forbidden": "Poți vedea această peșteră, dar nu o poți modifica.",
       "requestFailed": "Nu a mers. Încearcă din nou."
     },
@@ -6225,9 +6229,10 @@
       "open": "Deschide",
       "refusal": {
         "protected-cave": "Nu se face link public pentru această încărcare, deoarece poziția peșterii este protejată.",
-        "account-off": "Nu s-a făcut link public, deoarece „Linkuri publice pentru încărcările mele\" este oprit pentru contul care a trimis-o.",
+        "account-off": "Nu s-a făcut link public, deoarece „Linkuri publice pentru încărcările mele” este oprit pentru contul care a trimis-o.",
         "installation-off": "Nu s-a făcut link public, deoarece această instalare are linkurile publice oprite.",
-        "no-share-right": "Nu s-a făcut link public, deoarece contul care a trimis încărcarea nu poate partaja peștera."
+        "no-share-right": "Nu s-a făcut link public, deoarece contul care a trimis încărcarea nu poate partaja peștera.",
+        "revoked": "Linkul public al acestei încărcări a fost retras. Cine poate modifica peștera poate face unul nou."
       },
       "revoked": "Link retras."
     },

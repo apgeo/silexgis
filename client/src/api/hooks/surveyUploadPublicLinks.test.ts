@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../client.ts';
-import { isUnknownPublicLink, publicResultView, type PublicSurveyUploadEnvelope } from './surveyUploadPublicLinks.ts';
+import {
+  isUnknownPublicLink,
+  publicResultView,
+  surveyUploadPublicLinkRefusal,
+  type PublicSurveyUpload,
+} from './surveyUploadPublicLinks.ts';
 
-const envelope = (over: Partial<PublicSurveyUploadEnvelope> = {}): PublicSurveyUploadEnvelope => ({
+const envelope = (over: Partial<PublicSurveyUpload> = {}): PublicSurveyUpload => ({
   survey: { title: 'Invented survey' },
   cave: { name: 'Invented cave' },
   version: '2026-10-25T01:32:00Z',
   status: 'succeeded',
   stage: 'unpack',
+  stages: [],
   progress: 100,
   message: 'Archived and read.',
   error: null,
@@ -24,7 +30,7 @@ describe('publicResultView', () => {
     expect(view).toMatchObject({ title: 'Invented survey', caveName: 'Invented cave', progress: 100, status: 'succeeded' });
   });
 
-  it('works the stage states out from stage and status when the server states none', () => {
+  it('works the stage states out from stage and status when the answer names no stages', () => {
     expect(publicResultView(envelope()).stages.map((s) => s.state)).toEqual([
       'done', 'done', 'skipped', 'skipped', 'skipped', 'skipped',
     ]);
@@ -60,6 +66,16 @@ describe('publicResultView', () => {
     );
     expect(view.error?.code).toBe('survey_pipeline.compile_failed');
     expect(view.artefacts).toHaveLength(1);
+  });
+});
+
+describe('surveyUploadPublicLinkRefusal', () => {
+  it('reads every code the server writes, and nothing else', () => {
+    for (const code of ['installation-off', 'account-off', 'no-share-right', 'protected-cave', 'revoked']) {
+      expect(surveyUploadPublicLinkRefusal({ publicLinkRefusal: code })).toBe(code);
+    }
+    expect(surveyUploadPublicLinkRefusal({ publicLinkRefusal: 'a-later-reason' })).toBeNull();
+    expect(surveyUploadPublicLinkRefusal({ publicLinkRefusal: null })).toBeNull();
   });
 });
 
