@@ -4,6 +4,7 @@ import { Tooltip } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import type { FileInfo } from '../../api/hooks.ts';
+import { downloadTitle } from '../attachments/downloadTitle.ts';
 
 /**
  * Download of the stored bytes. Present for every document and disabled — with the reason —
@@ -18,7 +19,7 @@ import type { FileInfo } from '../../api/hooks.ts';
 export default function DownloadDocument({ file, block }: { file: FileInfo; block?: boolean }) {
   const { t } = useTranslation();
   return (
-    <Tooltip title={file.mayDownloadOriginal ? undefined : t('attachments.originalWithheld')}>
+    <Tooltip title={downloadTitle(file, t)}>
       <Button
         icon={<DownloadOutlined />}
         block={block}

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState, type ReactNode } from 'react';
 import { EditOutlined } from '@ant-design/icons';
-import { App, DatePicker, Flex, Input, Popover, Select, Typography } from 'antd';
+import { App, DatePicker, Flex, Input, Popover, Select, Switch, Typography } from 'antd';
 import Button from '../Button.tsx';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
   useUpdateAttachment,
+  useSetDeviceDefaultSet,
   useUpdateFile,
   type AttachmentInfo,
   type AttachmentRole,
@@ -52,6 +53,7 @@ export default function AttachmentDetails({ attachment }: { attachment: Attachme
   );
   const updateAttachment = useUpdateAttachment();
   const updateFile = useUpdateFile();
+  const setDefaultSet = useSetDeviceDefaultSet();
 
   // Re-sync from server state whenever the popover opens (another edit may have landed).
   useEffect(() => {
@@ -90,6 +92,16 @@ export default function AttachmentDetails({ attachment }: { attachment: Attachme
     }
   };
 
+  // Saved the moment it is flipped, not with the fields above: it is not an edit of this
+  // attachment's description but a choice about what phones fetch, and it has its own route.
+  const flipDefaultSet = async (included: boolean) => {
+    try {
+      await setDefaultSet.mutateAsync({ id: attachment.id, included });
+    } catch {
+      message.error(t('common.saveFailed'));
+    }
+  };
+
   const content = (
     <Flex vertical gap={10} style={{ width: 280 }}>
       <Field label={t('attachments.caption')}>
@@ -114,6 +126,21 @@ export default function AttachmentDetails({ attachment }: { attachment: Attachme
       <Field label={t('tags.title')}>
         <TagChips entityType="storedFile" entityId={attachment.file.id} canEdit />
       </Field>
+      <Flex vertical gap={2}>
+        <Flex align="center" gap={8}>
+          <Switch
+            size="small"
+            checked={attachment.inDeviceDefaultSet}
+            loading={setDefaultSet.isPending}
+            onChange={(checked) => void flipDefaultSet(checked)}
+            aria-label={t('attachments.inDeviceDefaultSet')}
+          />
+          <Typography.Text>{t('attachments.inDeviceDefaultSet')}</Typography.Text>
+        </Flex>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t('attachments.inDeviceDefaultSetHint')}
+        </Typography.Text>
+      </Flex>
       <Button
         type="primary"
         size="small"

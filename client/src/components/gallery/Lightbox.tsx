@@ -7,6 +7,8 @@ import {
 import { Descriptions, Drawer, Flex, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { downloadTitle } from '../attachments/downloadTitle.ts';
+import LocationRemovedTag from '../attachments/LocationRemovedTag.tsx';
 import { LIGHTBOX_SHORTCUTS, matchesAny } from '../../hooks/shortcutRegistry.ts';
 
 /** What the viewer needs of a picture. The public gallery supplies a subset. */
@@ -21,6 +23,8 @@ export interface LightboxPhoto {
   originalName?: string;
   contentUrl?: string;
   mayDownloadOriginal?: boolean;
+  /** The original this viewer hands over is a copy with its location data taken out. */
+  locationRemoved?: boolean;
   photo?: {
     cameraMake?: string | null;
     cameraModel?: string | null;
@@ -168,9 +172,14 @@ export default function Lightbox({
       }}
     >
       <Flex justify="space-between" align="center" style={{ padding: 12 }}>
-        <Typography.Text style={{ color: '#fff' }} ellipsis>
-          {photo.caption ?? photo.title}
-        </Typography.Text>
+        <Flex align="center" gap={8} style={{ minWidth: 0 }}>
+          <Typography.Text style={{ color: '#fff' }} ellipsis>
+            {photo.caption ?? photo.title}
+          </Typography.Text>
+          {/* Shown where the picture is, not only in the download control's tooltip, which a
+              touch screen never opens. */}
+          <LocationRemovedTag file={photo} />
+        </Flex>
         <Flex gap={4}>
           <Button
             type="text"
@@ -208,7 +217,7 @@ export default function Lightbox({
               photograph whose subject this reader may not place is delivered as renderings, and
               following the link would answer as a missing file — so the control says why
               instead of failing when used. */}
-          <Tooltip title={photo.mayDownloadOriginal ? undefined : t('attachments.originalWithheld')}>
+          <Tooltip title={downloadTitle(photo, t)}>
             <Button
               type="text"
               icon={<DownloadOutlined />}

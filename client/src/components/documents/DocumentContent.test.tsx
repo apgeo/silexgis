@@ -28,6 +28,7 @@ const photo: FileInfo = {
   contentCreatedAt: null,
   photo: null,
   position: null,
+  locationRemoved: false,
 };
 
 /**

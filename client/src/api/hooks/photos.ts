@@ -299,6 +299,22 @@ export function useSetPrimaryAttachment() {
   });
 }
 
+/**
+ * Puts one attachment in, or takes it out of, the files a phone fetches when its holder asks for
+ * the usual set. Write on the target decides who may; the answer is the attachment's own flag, so
+ * the lists that carry it are refreshed.
+ */
+export function useSetDeviceDefaultSet() {
+  const invalidate = useInvalidatePhotos();
+  return useMutation({
+    mutationFn: ({ id, included }: { id: string; included: boolean }) =>
+      unwrapVoid(api.PUT('/api/v1/attachments/{id}/device-default-set', {
+        params: { path: { id }, query: { included } },
+      })),
+    onSuccess: () => invalidate(),
+  });
+}
+
 /** The installation's curated public gallery. Reachable without signing in. */
 export function usePublicPhotos(page = 1) {
   return useQuery({

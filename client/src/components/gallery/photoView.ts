@@ -34,6 +34,7 @@ export function viewPhoto(photo: PhotoInfo): LightboxPhoto & GridPhoto {
     originalName: photo.originalName,
     contentUrl: photo.contentUrl,
     mayDownloadOriginal: photo.mayDownloadOriginal,
+    locationRemoved: photo.locationRemoved,
     photo: photo.photo,
   };
 }
