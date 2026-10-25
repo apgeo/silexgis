@@ -73,8 +73,31 @@ fiecare astfel de obiect ca *Șters* și trimite acolo de unde poate fi restaura
 Dacă fișierul-sursă a fost șters între timp, rândul o spune; dacă importul nu a creat nimic, o
 spune și pe asta.
 
-> Încărcările de pe **telefon** apar tot aici și se anulează la fel. Vezi
-> [Telefon și sincronizare offline](mobile-sync.md).
+### Anularea unei încărcări de pe telefon
+
+Încărcările de pe **telefon** apar tot aici, dar diferă de un import de fișier: majoritatea liniilor
+lor **schimbă peșteri și obiecte care existau deja**, nu creează altele noi. De aceea o încărcare se
+anulează punând lucrurile înapoi, nu doar ștergând.
+
+Deschide o încărcare ca să-i vezi liniile. Fiecare linie numește peștera sau obiectul vizat;
+deschide o linie ca să vezi **ce a schimbat încărcarea în el** — fiecare câmp cu valoarea dinainte și
+de după. Ecranul nu ghicește care câmpuri au fost schimbate din nou între timp: asta o stabilește
+serverul, cu aceeași regulă după care anulează.
+
+- **Anulează această încărcare** pune fiecare valoare înapoi cum era înainte de încărcare, șterge ce a
+  creat încărcarea și aduce înapoi ce a șters. Un câmp pe care altcineva l-a schimbat din nou după încărcare **rămâne cum
+  este**, iar rezultatul de dedesubt spune ce câmpuri au rămas și de ce.
+- **Anulează acest rând** face la fel pentru o singură linie și lasă restul încărcării în vigoare.
+  Încărcarea se consideră anulată când toate liniile au fost anulate.
+- **Anulează oricum** pune înapoi și câmpurile schimbate între timp. Modificările de după sunt
+  înlocuite, dar rămân în [istoricul](history-and-audit.md) peșterii, de unde pot fi readuse. O
+  poziție pe care nu ai voie s-o vezi exact nu este niciodată pusă înapoi, orice ai apăsa.
+
+O încărcare o poate anula doar contul care a confirmat-o sau un administrator. După ce o linie a fost
+anulată — chiar și cu un câmp rămas — nu mai poate fi anulată de aici; câmpul rămas poate fi readus
+din istoricul peșterii.
+
+Vezi și [Telefon și sincronizare offline](mobile-sync.md).
 
 ---
 

@@ -23,7 +23,19 @@ Every cave, entrance, feature, trip, centerline, survey model, attachment, tag, 
 camp, invitation and event carries a **History** section.
 
 It shows, per change: **when**, **who** (or *System*), the **action** (Created · Updated ·
-Deleted), and the fields that changed with their before and after values.
+Deleted), **where the change came from**, and the fields that changed with their before and
+after values.
+
+### Where a change came from
+
+Each entry carries a label naming its source: *Edited in the browser*, *File import*, *Phone
+upload*, *Phone archive import*, *Restored from history*, *Undo*, *Review decision*, *Background
+job* or *Trip converted from a recording*. History written before sources were recorded carries
+no label.
+
+Several records written by one action — one phone upload, one restore — are shown as **one
+entry** with the number of changes in it, and each change listed beneath. An entry that belongs
+to an import has a **View this import** link, which opens that import in Geodata → Imports.
 
 ### Restoring
 
@@ -32,6 +44,14 @@ Two actions:
 - **Restore this value** — put one field back,
 - **Restore all values from before this change** — put the whole record back to its prior
   state.
+
+A cave's, entrance's or feature's value is put back **by the server**, as an ordinary edit: the
+same checks apply as to any edit you make by hand, and the restore is recorded in the history
+as *Restored from history*. If some of the values you asked for could not be put back, the entry
+says which and why: the value is hidden from you because the location is protected; you may edit
+the feature but not its position, altitude or quality; the earlier shape was not kept because the
+change was recorded before large shapes were saved in full; or history cannot put that kind of
+value back at all. The others are still restored.
 
 This is what makes it safe for several people to maintain the same records. A wrong bulk edit
 is a nuisance, not a disaster.
@@ -47,9 +67,11 @@ which a withheld coordinate escapes, and it is closed.
 ### Large shapes are summarised
 
 A small shape — an entrance's point, a feature's outline — is recorded in full, so a moved point
-can be read and put back. A large one, such as a survey's whole line work, is recorded as a
-summary: **"Geometry of n points (too large to record in full)"**. A summary is never offered for
-restore, and it carries no coordinate, so it cannot place a protected cave either.
+can be read and put back. A large one is shown in the history as a summary: **"Geometry of n
+points (too large to record in full)"**. The summary carries no coordinate, so it cannot place a
+protected cave. For a feature edited since full copies began to be kept, the server holds the
+whole earlier shape beside the summary, so it can still be put back; for older history, and for
+a survey's line work, which is rebuilt from its file, it cannot, and the restore says so.
 
 ### Fields with readable names
 

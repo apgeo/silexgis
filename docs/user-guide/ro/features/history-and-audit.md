@@ -22,7 +22,20 @@ Fiecare peșteră, intrare, obiect, tură, drumuire, model topografic, atașamen
 participant, tabără, invitație și eveniment poartă o secțiune **Istoric**.
 
 Arată, per modificare: **când**, **cine** (sau *Sistem*), **acțiunea** (Creat · Modificat ·
-Șters) și câmpurile care s-au schimbat, cu valorile de dinainte și de după.
+Șters), **de unde a venit modificarea** și câmpurile care s-au schimbat, cu valorile de dinainte
+și de după.
+
+### De unde a venit o modificare
+
+Fiecare intrare poartă o etichetă care îi numește sursa: *Modificat în browser*, *Import din
+fișier*, *Încărcare de pe telefon*, *Import de arhivă de pe telefon*, *Restaurat din istoric*,
+*Anulare*, *Decizie de revizuire*, *Sarcină în fundal* sau *Tură convertită dintr-o înregistrare*.
+Istoricul scris înainte ca sursele să fie înregistrate nu are etichetă.
+
+Mai multe înregistrări scrise de o singură acțiune — o încărcare de pe telefon, o restaurare — se
+arată ca **o singură intrare**, cu numărul de modificări din ea și cu fiecare modificare listată
+dedesubt. O intrare care aparține unui import are o legătură **Vezi acest import**, care deschide
+importul în Geodate → Importuri.
 
 ### Restaurarea
 
@@ -31,6 +44,15 @@ Două acțiuni:
 - **Restaurează această valoare** — pune un câmp la loc,
 - **Restaurează toate valorile dinaintea acestei modificări** — readuce toată înregistrarea
   la starea anterioară.
+
+Valoarea unei peșteri, a unei intrări sau a unui obiect este pusă la loc **de server**, ca o
+editare obișnuită: se aplică aceleași verificări ca la orice editare făcută de mână, iar
+restaurarea este înregistrată în istoric ca *Restaurat din istoric*. Dacă unele dintre valorile
+cerute nu au putut fi puse la loc, intrarea spune care și de ce: valoarea îți este ascunsă pentru
+că locația este protejată; poți modifica obiectul, dar nu poziția, altitudinea sau calitatea lui;
+forma anterioară nu a fost păstrată, pentru că modificarea a fost înregistrată înainte ca formele
+mari să fie salvate integral; sau istoricul nu poate pune la loc acest fel de valoare. Celelalte
+sunt restaurate oricum.
 
 Aceasta este ce face sigură întreținerea acelorași înregistrări de către mai mulți oameni. O
 editare în masă greșită este o neplăcere, nu un dezastru.
@@ -46,10 +68,12 @@ coordonată reținută, și este închisă.
 ### Formele mari sunt rezumate
 
 O formă mică — punctul unei intrări, conturul unui obiect — este înregistrată integral, astfel
-încât un punct mutat poate fi citit și pus la loc. Una mare, cum este întreaga linie topografică a
-unei ridicări, este înregistrată ca rezumat: **„Geometrie cu n puncte (prea mare pentru a fi
-înregistrată integral)"**. Un rezumat nu este oferit niciodată pentru restaurare și nu conține
-nicio coordonată, deci nici el nu poate localiza o peșteră protejată.
+încât un punct mutat poate fi citit și pus la loc. Una mare se arată în istoric ca rezumat: **„Geometrie cu n puncte (prea mare pentru a fi
+înregistrată integral)"**. Rezumatul nu conține nicio coordonată, deci nu poate localiza o peșteră
+protejată. Pentru un obiect modificat după ce au început să se păstreze copii integrale, serverul
+ține forma anterioară întreagă lângă rezumat, așa că ea poate fi pusă la loc; pentru istoricul mai
+vechi și pentru liniile unei ridicări, care se reconstruiesc din fișierul ei, nu poate, iar
+restaurarea spune acest lucru.
 
 ### Câmpuri cu nume lizibile
 

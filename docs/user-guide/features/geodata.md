@@ -74,8 +74,31 @@ undone import marks each such object *Deleted* and links to where it is put back
 If the source file has since been deleted, the row says so; if the import created nothing, it
 says that too.
 
-> Uploads from a **phone** are listed here too, and are undone the same way. See
-> [Mobile and offline sync](mobile-sync.md).
+### Undoing an upload from a phone
+
+Uploads from a **phone** are listed here too, but they are different from a file import: most of
+their lines **change caves and features that already existed** rather than creating new ones. So
+an upload is undone by putting things back, not only by deleting.
+
+Open an upload to see its lines. Each line names the cave or feature it concerns; open a line to
+see **what the upload changed in it** — every field with its value before and after. The screen
+does not guess which fields were changed again since: the server decides that, by the rule the undo
+applies, and the result of an undo says which fields it left.
+
+- **Undo this upload** puts every value back as it was before the upload, deletes what the upload
+  created, and brings back what it deleted. A field somebody has changed again since the upload is **left as it is**,
+  and the result below says which fields were left and why.
+- **Undo this row** does the same for one line only, and leaves the rest of the upload in force.
+  The upload counts as undone once every line has been.
+- **Undo anyway** puts back the fields that were changed since as well. The later changes are
+  overwritten, but they stay in the cave's [history](history-and-audit.md), so they can be put back
+  from there. A position you may not see exactly is never put back, whatever you press.
+
+Only the account that confirmed the upload, or an administrator, can undo it. Once a line has
+been undone — even with a field left — it cannot be undone again from here; the field that was
+left can be put back from the cave's history.
+
+See also [Mobile and offline sync](mobile-sync.md).
 
 ---
 

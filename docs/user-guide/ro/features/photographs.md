@@ -84,6 +84,16 @@ peșteră a cărei poziție exactă nu ai voie s-o vezi. Atunci ți se spune:
 Randarea se vede în continuare. Vezi
 [Protecția locațiilor](../admin/location-protection.md).
 
+Acolo unde aplicația poate rescrie imaginea, nu ești refuzat: primești **imaginea la dimensiune
+completă, fără datele de locație** (poziția GPS și numele de locuri scrise în fișier; detaliile
+aparatului și ale expunerii rămân), iar imaginea este marcată **Locație eliminată**. Același lucru li
+se întâmplă tuturor când administratorul a oprit *Păstrează locația în fișierele foto*. Fișierul
+păstrat nu se schimbă niciodată — cei care au voie să vadă unde a fost făcută fotografia o primesc
+exact cum a fost încărcată.
+
+Filmele, înregistrările și imaginile în formate pe care aplicația nu le poate rescrie nu au o astfel
+de copie; pentru ele originalul rămâne refuzat, dacă administratorul nu a permis altfel.
+
 ---
 
 ## Albume
@@ -192,7 +202,8 @@ Dacă fototeca nu răspunde, pagina o spune, în loc să arate o grilă goală.
 
 
 - Nu se scrie niciodată nimic **înapoi într-un fișier de fotografie**. Pozițiile, numele și
-  deciziile trăiesc în înregistrări.
+  deciziile trăiesc în înregistrări. (Cine nu are voie să primească locația unei fotografii primește
+  o copie separată fără ea; fișierul păstrat o are.)
 - O fotografie publicată sau partajată pleacă drept **randare**, cu metadatele aparatului
   îndepărtate — niciodată originalul.
 

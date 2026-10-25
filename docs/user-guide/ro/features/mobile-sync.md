@@ -128,7 +128,22 @@ Importuri**, marcată ca încărcare de pe telefon — ceea ce înseamnă că un
 pus un telefon în registru și poate **lua totul înapoi printr-un singur act**, prin același ecran
 și același buton **Anulează** care întoarce un GPX greșit.
 
-Vezi [Geodate → Importuri](geodata.md#importuri).
+Vezi [Geodate → Importuri](geodata.md#importuri) și
+[Anularea unei încărcări de pe telefon](geodata.md#anularea-unei-încărcări-de-pe-telefon) pentru ce
+arată ecranul din fiecare linie și cum se ia înapoi un singur rând sau întreaga încărcare.
+
+Aceeași încărcare se vede și din partea cealaltă: în [istoricul](history-and-audit.md) unei peșteri
+sau al unui obiect, fiecare modificare făcută de ea este etichetată *Încărcare de pe telefon* și
+trimite la încărcarea din care face parte.
+
+### Alegerea a ceea ce descarcă implicit un telefon
+
+Un telefon poate cere **fișierele obișnuite** ale a ceea ce deține. Care sunt acelea se hotărăște în
+browser, câte un atașament: deschide **Detalii** la atașament (creionul de lângă el) și pornește
+**Include în descărcarea implicită a telefoanelor**. O poate face oricine are drept de scriere asupra
+peșterii sau obiectului. Comutatorul spune doar că fișierul este *oferit*; telefonul îl descarcă dacă
+cel care îl folosește cere setul implicit și doar dacă acel cont are voie să îl citească. O fotografie
+ajunge pe telefon la fel ca în browser — vezi [Fotografii](photographs.md#descărcarea-originalului).
 
 ### Valori implicite și avertismente de duplicat
 

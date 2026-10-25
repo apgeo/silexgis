@@ -53,7 +53,7 @@ protecție.
 | **Tabele și liste** | Câmpurile de localizare precisă sunt reținute |
 | **Exporturi** (GeoJSON, GPX, KML, CSV, shapefile) | Aceeași protecție ca ecranul |
 | **Linkuri și vederi partajate** | Aceeași protecție. Partajarea nu este o cale de ocolire. [Linkul unei vederi partajate](../features/saved-views-and-windows.md#vederi-salvate) merge mai departe: nu desenează **deloc o peșteră sau un obiect protejat** — nici aproximativ, nici numărat într-un grup — chiar și acolo unde orice cont îl poate vedea exact, pentru că nimic din ce li se acordă conturilor nu urmează un link |
-| **Fotografii** | **Originalul** unei poze al cărei punct de capturare ar localiza peștera este refuzat. Randarea se arată |
+| **Fotografii** | O poză al cărei punct de capturare ar localiza peștera se dă ca **imagine la dimensiune completă, fără datele de locație**, marcată *Locație eliminată*; fișierul păstrat nu se schimbă niciodată. Doar acolo unde nu se poate face o asemenea copie (un film, un format care nu poate fi rescris) originalul este refuzat. Randarea se arată întotdeauna |
 | **Pagini și rapoarte de tură** | Peșterile pe care nu le poți deschide **nu sunt numite**; ți se spune *câte* nu sunt numite. Raportul generat al unei ture reține la fel o stație și o adâncime — dar vezi limita de mai jos pentru un raport **deja clasat** |
 | **E-mailuri de notificare** | **Nu numesc niciodată o peșteră.** Nici mesajele de tură, nici alarma de echipă întârziată |
 | **Calendarul** | Un rând **nu numește niciodată o peșteră**, nici un număr de peșteri omise |
@@ -134,6 +134,33 @@ ceea la care participă membrul — niciodată un loc, o poziție sau un partici
 permisiunile proprii ale membrului la fiecare interogare, așa că o peșteră protejată nu este mai
 accesibilă printr-un flux decât prin pagina de calendar. Oprirea lui din nou oprește toate adresele
 deja distribuite.
+
+### Setările fișierelor foto
+
+Alte trei comutatoare de pe aceeași filă hotărăsc ce călătorește *în interiorul* unui fișier
+fotografic. Niciunul nu schimbă cui i se poate spune poziția unei fotografii — aceea urmează regulile
+de mai sus.
+
+- **Păstrează locația în fișierele foto.** Pornit implicit. *Pornit:* cine are voie să vadă unde a
+  fost făcută o poză o descarcă exact cum a fost încărcată, cu GPS cu tot. *Oprit:* toți descarcă
+  imaginea la dimensiune completă fără datele de locație (GPS, blocul XMP încorporat și numele de
+  locuri din IPTC; detaliile aparatului și ale expunerii rămân). Oricum, cine *nu* are voie să vadă
+  unde a fost făcută primește doar copia fără locație. Copia se face prima dată când este cerută și
+  se păstrează lângă miniaturi; fișierul păstrat nu se atinge niciodată.
+- **Cu opțiunea de locație dezactivată, permite totuși celor care au voie să vadă locația să descarce
+  filmele, înregistrările și imaginile care nu pot fi rescrise.** Oprit implicit și contează doar cât
+  timp comutatorul de mai sus este oprit. Filmele, înregistrările și imaginile în formate pe care
+  aplicația nu le poate rescrie (orice în afară de JPEG, PNG și WebP) nu au o copie fără locație, deci
+  cu comutatorul de mai sus oprit nimeni nu le-ar putea descărca. Pornit, cititorii care au voie să
+  vadă locația le primesc așa cum sunt păstrate.
+- **Spune telefoanelor mărimea și amprenta fotografiilor trimise fără locație.** Când aplicația de pe
+  telefon cere o fotografie pe care o va primi fără locație, serverul face copia pe loc și îi spune
+  aplicației mărimea și amprenta SHA-256, ca aplicația să poată arăta mărimea și verifica dacă
+  descărcarea a ajuns întreagă. Cererile acestea sunt mai lente (până la 200 de fotografii pot fi
+  rescrise într-una) și fiecare copie ocupă spațiu pe disc.
+
+O fotografie dată în acest fel este marcată **Locație eliminată** oriunde este arătată sau oferită la
+descărcare.
 
 ---
 

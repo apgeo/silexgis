@@ -126,7 +126,22 @@ This is the part worth knowing as a user.
 put into the registry and **take all of it back in one act**, through the same screen and the
 same **Undo** button that reverses a bad GPX.
 
-See [Geodata → Imports](geodata.md#imports).
+See [Geodata → Imports](geodata.md#imports), and
+[Undoing an upload from a phone](geodata.md#undoing-an-upload-from-a-phone) for what the screen
+shows of each line and how a single row, or the whole upload, is taken back.
+
+The same upload is visible from the other end: in a cave's or feature's
+[history](history-and-audit.md), each change it made is tagged *Phone upload* and links to the
+upload it belongs to.
+
+### Choosing what a phone downloads by default
+
+A phone can ask for **the usual files** of what it holds. Which attachments those are is decided in
+the browser, one attachment at a time: open the attachment's **Details** (the pencil beside it) and
+switch on **Include in the phones' default download**. Anyone with write access to the cave or
+feature can do it. The switch only says the file is *offered*; a phone fetches it if its holder asks
+for the default set, and only if that account may read it. A photograph still reaches a phone the way
+it reaches the browser — see [Photographs](photographs.md#downloading-the-original).
 
 ### Defaults and duplicate warnings
 
