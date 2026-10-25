@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import {
-  applyFeatureRestore,
   applyRestore,
   applyTripRestore,
   changeRows,
+  entityLabelKey,
   formatValue,
+  groupByChangeSet,
   isGeometrySummary,
   restorableProps,
+  restoreRequest,
   rosterTimesAct,
+  serverRestorableProps,
   toWriteField,
   toWriteValue,
 } from './historyModel.ts';
@@ -159,21 +162,48 @@ describe('historyModel', () => {
     expect(restored.safety).toBeNull();
   });
 
-  it('applyFeatureRestore maps Geom to the geometry field and parses a Properties string', () => {
-    const current = {
-      name: 'F',
-      geometry: { type: 'Point', coordinates: [1, 1] },
-      properties: { depth_m: 20 },
-    };
-    const changes = {
-      Geom: { old: 'POINT (25 45)', new: 'POINT (26 46)' },
-      Properties: { old: '{"depth_m":12.5}', new: '{"depth_m":20}' },
-    };
+  it('serverRestorableProps keeps a summarised geometry the server may hold in full, and drops hidden rows', () => {
+    const summary = { omitted: true, geometryType: 'LineString', points: 9000, sha256: 'abc' };
+    const rows = changeRows(
+      { Name: { old: 'A', new: 'B' }, Geom: { old: summary, new: summary }, Added: { new: 'x' } },
+      ['Altitude'],
+    );
 
-    const restored = applyFeatureRestore(current, changes, ['Geom', 'Properties']);
+    expect(serverRestorableProps(rows)).toEqual(['Name', 'Geom']);
+    // The client-composed path still cannot write a summary back.
+    expect(restorableProps(rows)).toEqual(['Name']);
+  });
 
-    expect(restored.geometry).toEqual({ type: 'Point', coordinates: [25, 45] });
-    expect(restored.properties).toEqual({ depth_m: 12.5 }); // parsed from the audit JSON string
-    expect((restored as Record<string, unknown>).geom).toBeUndefined(); // no stray generic key
+  it('restoreRequest names the event, its own entity and the fields wanted', () => {
+    expect(restoreRequest({ id: 42, entityId: 'entrance-1' }, ['Name', 'Geom'])).toEqual({
+      entityType: 'feature',
+      entityId: 'entrance-1',
+      auditEntryId: 42,
+      fields: ['Name', 'Geom'],
+    });
+  });
+
+  it('groupByChangeSet puts one change set under one entry, where its newest event sits', () => {
+    const events = [
+      { id: 5, changeSetId: 'a' },
+      { id: 4, changeSetId: null },
+      { id: 3, changeSetId: 'a' },
+      { id: 2, changeSetId: 'b' },
+      { id: 1, changeSetId: 'a' },
+    ];
+
+    const groups = groupByChangeSet(events);
+
+    expect(groups.map((g) => g.key)).toEqual(['set-a', 'event-4', 'event-2']);
+    expect(groups[0].events.map((e) => e.id)).toEqual([5, 3, 1]);
+    // A set with one event in this timeline, and an event from before sets, stand alone.
+    expect(groups[1].changeSetId).toBeNull();
+    expect(groups[2].changeSetId).toBeNull();
+  });
+
+  it('entityLabelKey drops the feature qualifier a colon would make a namespace of', () => {
+    expect(entityLabelKey('Feature:CaveEntrance')).toBe('CaveEntrance');
+    expect(entityLabelKey('Feature:Generic')).toBe('SurfaceFeature');
+    expect(entityLabelKey('TripLog')).toBe('TripLog');
   });
 });

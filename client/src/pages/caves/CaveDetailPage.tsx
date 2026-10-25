@@ -39,11 +39,7 @@ import {
   useEntrances,
   useCan,
   useRockTypes,
-  useUpdateCave,
-  useUpdateEntrance,
-  type CaveWrite,
   type Entrance,
-  type EntranceWrite,
 } from '../../api/hooks.ts';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import OtherFormats from '../../components/coordinates/OtherFormats.tsx';
@@ -52,7 +48,6 @@ import { requestReveal3d } from '../../scene3d/pendingReveal3d.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
-import { applyRestore } from '../../components/history/historyModel.ts';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import CaveCrossSectionPanel from '../../components/statistics/CaveCrossSectionPanel.tsx';
@@ -96,8 +91,6 @@ export default function CaveDetailPage() {
   const setSelection = useWorkspaceStore((s) => s.setSelection);
   const deleteCave = useDeleteCave();
   const deleteEntrance = useDeleteEntrance(id ?? '');
-  const updateCave = useUpdateCave(id ?? '');
-  const updateEntrance = useUpdateEntrance(id ?? '');
   // Per-object capabilities from the summary once loaded; the coarse domain-level
   // capability only bridges the first render (the server enforces regardless).
   const domainFallback = useCan('features', 'write');
@@ -199,13 +192,6 @@ export default function CaveDetailPage() {
     requestReveal3d({ targetType: 'feature', targetId: cave.id, label: cave.name });
     navigate('/map3d');
   };
-
-  // The write DTO addresses containment by primary-parent id, which the read DTO carries
-  // as the parents breadcrumb — map it back so an update/restore keeps the cave where it is.
-  const caveAsWrite = (): CaveWrite => ({
-    ...(cave as unknown as CaveWrite),
-    parentId: cave.parents.find((p) => p.isPrimary)?.id ?? null,
-  });
 
   const parentCrumbs = [...cave.parents].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
 
@@ -557,30 +543,11 @@ export default function CaveDetailPage() {
           restore={
             canEdit
               ? ([
-                  {
-                    // Cave events carry the kind-qualified feature audit identity.
-                    entityType: 'Feature:Cave',
-                    onRestore: async (event, props) => {
-                      await updateCave.mutateAsync(applyRestore(caveAsWrite(), event.changes, props));
-                    },
-                  },
-                  {
-                    // Entrance events surface in the cave timeline (audit root = the cave feature);
-                    // restore composes a PUT on the entrance the row belongs to.
-                    entityType: 'Feature:CaveEntrance',
-                    onRestore: async (event, props) => {
-                      const entrance = entrances?.find((e) => e.id === event.entityId);
-                      if (!entrance) {
-                        // The row's entrance was deleted since; surface it as a failed restore
-                        // rather than a silent no-op (HistoryPanel shows the error toast).
-                        throw new Error('entrance no longer exists');
-                      }
-                      await updateEntrance.mutateAsync({
-                        id: event.entityId,
-                        body: applyRestore(entrance as unknown as EntranceWrite, event.changes, props),
-                      });
-                    },
-                  },
+                  // Cave events carry the kind-qualified feature audit identity. Entrance events
+                  // surface in the cave timeline (audit root = the cave feature) but are changes
+                  // to the entrance, which the server finds by the event's own entity id.
+                  { entityType: 'Feature:Cave' },
+                  { entityType: 'Feature:CaveEntrance' },
                 ] satisfies HistoryRestore[])
               : undefined
           }
