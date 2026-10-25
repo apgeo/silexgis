@@ -760,6 +760,66 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("album_shares", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.ApiAccessKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("prefix");
+
+                    b.Property<short>("Purpose")
+                        .HasColumnType("smallint")
+                        .HasColumnName("purpose");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<byte[]>("SecretHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("secret_hash");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_api_access_keys");
+
+                    b.HasIndex(new[] { "SecretHash" }, "ix_api_access_keys_secret_hash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_api_access_keys_secret_hash");
+
+                    b.HasIndex(new[] { "UserId" }, "ix_api_access_keys_user_id")
+                        .HasDatabaseName("ix_api_access_keys_user_id");
+
+                    b.ToTable("api_access_keys", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.AppSetting", b =>
                 {
                     b.Property<string>("Key")
@@ -1573,6 +1633,58 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasFilter("revoked_at IS NULL");
 
                     b.ToTable("cave_qr_publications", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.CaveSurvey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CaveFeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cave_feature_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("ExternalKey")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("external_key");
+
+                    b.Property<short>("Source")
+                        .HasColumnType("smallint")
+                        .HasColumnName("source");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cave_surveys");
+
+                    b.HasIndex(new[] { "CaveFeatureId" }, "ix_cave_surveys_cave_feature_id")
+                        .HasDatabaseName("ix_cave_surveys_cave_feature_id");
+
+                    b.HasIndex(new[] { "CaveFeatureId", "Source", "ExternalKey" }, "ux_cave_surveys_external_key")
+                        .IsUnique()
+                        .HasDatabaseName("ux_cave_surveys_external_key")
+                        .HasFilter("external_key IS NOT NULL");
+
+                    b.ToTable("cave_surveys", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.CaveType", b =>
@@ -5311,6 +5423,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("status");
 
+                    b.Property<Guid?>("SurveyModelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_model_id");
+
                     b.Property<Guid>("SurveySourceId")
                         .HasColumnType("uuid")
                         .HasColumnName("survey_source_id");
@@ -5340,6 +5456,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("SurveySourceId")
                         .IsUnique()
                         .HasDatabaseName("ix_survey_compilations_survey_source_id");
+
+                    b.HasIndex(new[] { "SurveyModelId" }, "ix_survey_compilations_survey_model_id")
+                        .HasDatabaseName("ix_survey_compilations_survey_model_id");
 
                     b.ToTable("survey_compilations", (string)null);
                 });
@@ -5487,6 +5606,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("cave_feature_id");
 
+                    b.Property<Guid?>("CaveSurveyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cave_survey_id");
+
                     b.Property<Guid?>("ConvertedFileId")
                         .HasColumnType("uuid")
                         .HasColumnName("converted_file_id");
@@ -5548,6 +5671,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("status");
 
+                    b.Property<Guid?>("SurveyUploadId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_upload_id");
+
                     b.Property<DateOnly?>("SurveyedAt")
                         .HasColumnType("date")
                         .HasColumnName("surveyed_at");
@@ -5572,6 +5699,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("FileId")
                         .HasDatabaseName("ix_survey_models_file_id");
 
+                    b.HasIndex(new[] { "CaveSurveyId" }, "ix_survey_models_cave_survey_id")
+                        .HasDatabaseName("ix_survey_models_cave_survey_id");
+
                     b.HasIndex(new[] { "CaveFeatureId" }, "ix_survey_models_current_line_plot")
                         .IsUnique()
                         .HasDatabaseName("ix_survey_models_current_line_plot")
@@ -5581,6 +5711,9 @@ namespace SilexGis.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_survey_models_current_wall_mesh")
                         .HasFilter("is_current AND format = 2");
+
+                    b.HasIndex(new[] { "SurveyUploadId" }, "ix_survey_models_survey_upload_id")
+                        .HasDatabaseName("ix_survey_models_survey_upload_id");
 
                     b.ToTable("survey_models", (string)null);
                 });
@@ -5657,6 +5790,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("cave_feature_id");
 
+                    b.Property<Guid?>("CaveSurveyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cave_survey_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -5686,6 +5823,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("original_file_name");
 
+                    b.Property<Guid?>("SurveyUploadId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_upload_id");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -5699,6 +5840,12 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("DocumentId")
                         .IsUnique()
                         .HasDatabaseName("ix_survey_sources_document_id");
+
+                    b.HasIndex(new[] { "CaveSurveyId" }, "ix_survey_sources_cave_survey_id")
+                        .HasDatabaseName("ix_survey_sources_cave_survey_id");
+
+                    b.HasIndex(new[] { "SurveyUploadId" }, "ix_survey_sources_survey_upload_id")
+                        .HasDatabaseName("ix_survey_sources_survey_upload_id");
 
                     b.ToTable("survey_sources", (string)null);
                 });
@@ -5888,6 +6035,351 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_survey_topology_cyclomatic_number");
 
                     b.ToTable("survey_topology", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyUpload", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CaveFeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cave_feature_id");
+
+                    b.Property<Guid>("CaveSurveyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cave_survey_id");
+
+                    b.Property<string>("ClientName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("client_name");
+
+                    b.Property<string>("ClientVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("client_version");
+
+                    b.Property<string>("CompilerVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("compiler_version");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("CreatedCave")
+                        .HasColumnType("boolean")
+                        .HasColumnName("created_cave");
+
+                    b.Property<double?>("Declination")
+                        .HasColumnType("double precision")
+                        .HasColumnName("declination");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("description");
+
+                    b.Property<short?>("DocumentsVisibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("documents_visibility");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("error_code");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("error_message");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<string>("LogTail")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)")
+                        .HasColumnName("log_tail");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Options")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("options")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<int>("Progress")
+                        .HasColumnType("integer")
+                        .HasColumnName("progress");
+
+                    b.Property<string>("PublicLinkRefusal")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("public_link_refusal");
+
+                    b.Property<Guid>("RequestedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by");
+
+                    b.Property<short>("Source")
+                        .HasColumnType("smallint")
+                        .HasColumnName("source");
+
+                    b.Property<short?>("Stage")
+                        .HasColumnType("smallint")
+                        .HasColumnName("stage");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint")
+                        .HasColumnName("status");
+
+                    b.Property<DateOnly?>("SurveyDate")
+                        .HasColumnType("date")
+                        .HasColumnName("survey_date");
+
+                    b.Property<string>("SurveyName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("survey_name");
+
+                    b.Property<string>("SurveyTitle")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("survey_title");
+
+                    b.Property<string>("Team")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("team");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UploadBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("upload_batch_id");
+
+                    b.Property<DateTimeOffset>("VersionAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("version_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_uploads");
+
+                    b.HasIndex(new[] { "CaveFeatureId" }, "ix_survey_uploads_cave_feature_id")
+                        .HasDatabaseName("ix_survey_uploads_cave_feature_id");
+
+                    b.HasIndex(new[] { "ExpiresAt" }, "ix_survey_uploads_receiving_expires_at")
+                        .HasDatabaseName("ix_survey_uploads_receiving_expires_at")
+                        .HasFilter("status = 0");
+
+                    b.HasIndex(new[] { "RequestedBy", "CreatedAt" }, "ix_survey_uploads_requested_by_created_at")
+                        .HasDatabaseName("ix_survey_uploads_requested_by_created_at");
+
+                    b.HasIndex(new[] { "UploadBatchId" }, "ix_survey_uploads_upload_batch_id")
+                        .HasDatabaseName("ix_survey_uploads_upload_batch_id");
+
+                    b.HasIndex(new[] { "CaveSurveyId", "VersionAt" }, "ux_survey_uploads_version")
+                        .IsUnique()
+                        .HasDatabaseName("ux_survey_uploads_version");
+
+                    b.ToTable("survey_uploads", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_uploads_progress_range", "progress >= 0 and progress <= 100");
+                        });
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyUploadFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<long>("DeclaredSize")
+                        .HasColumnType("bigint")
+                        .HasColumnName("declared_size");
+
+                    b.Property<Guid?>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Output")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("output");
+
+                    b.Property<long?>("ReceivedSize")
+                        .HasColumnType("bigint")
+                        .HasColumnName("received_size");
+
+                    b.Property<string>("RefusalCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("refusal_code");
+
+                    b.Property<short>("Role")
+                        .HasColumnType("smallint")
+                        .HasColumnName("role");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("SurveyModelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_model_id");
+
+                    b.Property<Guid?>("SurveySourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_source_id");
+
+                    b.Property<Guid>("SurveyUploadId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_upload_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_upload_files");
+
+                    b.HasIndex(new[] { "DocumentId" }, "ix_survey_upload_files_document_id")
+                        .HasDatabaseName("ix_survey_upload_files_document_id");
+
+                    b.HasIndex(new[] { "SurveyModelId" }, "ix_survey_upload_files_survey_model_id")
+                        .HasDatabaseName("ix_survey_upload_files_survey_model_id");
+
+                    b.HasIndex(new[] { "SurveySourceId" }, "ix_survey_upload_files_survey_source_id")
+                        .HasDatabaseName("ix_survey_upload_files_survey_source_id");
+
+                    b.HasIndex(new[] { "SurveyUploadId", "Name" }, "ux_survey_upload_files_name")
+                        .IsUnique()
+                        .HasDatabaseName("ux_survey_upload_files_name");
+
+                    b.ToTable("survey_upload_files", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyUploadPreference", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.PrimitiveCollection<string[]>("AlwaysOutputs")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("always_outputs")
+                        .HasDefaultValueSql("'{}'::text[]");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("PublicLinks")
+                        .HasColumnType("boolean")
+                        .HasColumnName("public_links");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("UserId")
+                        .HasName("pk_user_survey_upload_preferences");
+
+                    b.ToTable("user_survey_upload_preferences", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyUploadPublicLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<Guid>("SurveyUploadId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_upload_id");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<string>("TokenProtected")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("token_protected");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_upload_public_links");
+
+                    b.HasIndex(new[] { "CreatedBy" }, "ix_survey_upload_public_links_created_by")
+                        .HasDatabaseName("ix_survey_upload_public_links_created_by");
+
+                    b.HasIndex(new[] { "SurveyUploadId" }, "ux_survey_upload_public_links_live")
+                        .IsUnique()
+                        .HasDatabaseName("ux_survey_upload_public_links_live")
+                        .HasFilter("revoked_at IS NULL");
+
+                    b.HasIndex(new[] { "TokenHash" }, "ux_survey_upload_public_links_token_hash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_survey_upload_public_links_token_hash");
+
+                    b.ToTable("survey_upload_public_links", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SyncLinkRemoval", b =>
@@ -8378,6 +8870,16 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_album_shares_albums_album_id");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.ApiAccessKey", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_api_access_keys_users_user_id");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.Attachment", b =>
                 {
                     b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
@@ -8549,6 +9051,16 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_cave_qr_publications_users_published_by");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.CaveSurvey", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Cave", null)
+                        .WithMany()
+                        .HasForeignKey("CaveFeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_cave_surveys_caves_cave_feature_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Caver", b =>
@@ -9289,6 +9801,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_survey_compilations_caves_cave_feature_id");
 
+                    b.HasOne("SilexGis.Domain.Entities.SurveyModel", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyModelId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_survey_compilations_survey_models_survey_model_id");
+
                     b.HasOne("SilexGis.Domain.Entities.SurveySource", null)
                         .WithMany()
                         .HasForeignKey("SurveySourceId")
@@ -9334,6 +9852,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_survey_models_caves_cave_feature_id");
 
+                    b.HasOne("SilexGis.Domain.Entities.CaveSurvey", null)
+                        .WithMany()
+                        .HasForeignKey("CaveSurveyId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_survey_models_cave_surveys_cave_survey_id");
+
                     b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
                         .WithMany()
                         .HasForeignKey("ConvertedFileId")
@@ -9346,6 +9870,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_survey_models_files_file_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.SurveyUpload", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyUploadId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_survey_models_survey_uploads_survey_upload_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SurveyShot", b =>
@@ -9367,12 +9897,24 @@ namespace SilexGis.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_survey_sources_caves_cave_feature_id");
 
+                    b.HasOne("SilexGis.Domain.Entities.CaveSurvey", null)
+                        .WithMany()
+                        .HasForeignKey("CaveSurveyId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_survey_sources_cave_surveys_cave_survey_id");
+
                     b.HasOne("SilexGis.Domain.Entities.Document", null)
                         .WithMany()
                         .HasForeignKey("DocumentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_survey_sources_documents_document_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.SurveyUpload", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyUploadId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_survey_sources_survey_uploads_survey_upload_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SurveyStation", b =>
@@ -9395,6 +9937,92 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_survey_topology_survey_models_survey_model_id");
 
                     b.Navigation("SurveyModel");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyUpload", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Cave", null)
+                        .WithMany()
+                        .HasForeignKey("CaveFeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_uploads_caves_cave_feature_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.CaveSurvey", null)
+                        .WithMany()
+                        .HasForeignKey("CaveSurveyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_uploads_cave_surveys_cave_survey_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_uploads_users_requested_by");
+
+                    b.HasOne("SilexGis.Domain.Entities.UploadBatch", null)
+                        .WithMany()
+                        .HasForeignKey("UploadBatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_uploads_upload_batches_upload_batch_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyUploadFile", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Document", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_survey_upload_files_documents_document_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.SurveyModel", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyModelId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_survey_upload_files_survey_models_survey_model_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.SurveySource", null)
+                        .WithMany()
+                        .HasForeignKey("SurveySourceId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_survey_upload_files_survey_sources_survey_source_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.SurveyUpload", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyUploadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_upload_files_survey_uploads_survey_upload_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyUploadPreference", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_survey_upload_preferences_users_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyUploadPublicLink", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_upload_public_links_users_created_by");
+
+                    b.HasOne("SilexGis.Domain.Entities.SurveyUpload", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyUploadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_upload_public_links_survey_uploads_survey_upload_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SyncSet", b =>
