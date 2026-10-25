@@ -161,6 +161,68 @@ public sealed class UploadIngestService(
     }
 
     /// <summary>
+    /// A document holding these bytes that the caller may not read, when there is no copy the
+    /// caller may read: the case in which a new document is stored again without a word and the
+    /// pair is left on record for somebody who can see both. Null otherwise.
+    /// </summary>
+    /// <remarks>
+    /// For a route that creates documents itself rather than through <see cref="RecordAsync"/> —
+    /// a phone's document adopts the phone's identifier — and still owes the record. Asked before
+    /// the new document is created, so it is never its own duplicate.
+    /// </remarks>
+    public async Task<Guid?> HiddenDuplicateAsync(AccessContext ctx, string sha256, CancellationToken ct = default)
+    {
+        var (visible, hidden) = await DuplicatesAsync(ctx, sha256, ct);
+        return visible is null ? hidden : null;
+    }
+
+    /// <summary>
+    /// Leaves on record that <paramref name="newDocumentId"/> holds the same bytes as a document
+    /// its uploader could not be told of. Tracked, not saved: the caller saves it with, or after,
+    /// the document it names — a record naming a document never created would be worse than none.
+    /// </summary>
+    public void NoteHiddenDuplicate(StoredContent content, Guid newDocumentId, Guid existingDocumentId, Guid uploadedBy)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        db.DuplicateUploadRecords.Add(new DuplicateUploadRecord
+        {
+            Sha256 = content.Sha256,
+            NewDocumentId = newDocumentId,
+            ExistingDocumentId = existingDocumentId,
+            UploadedByUserId = uploadedBy,
+            SizeBytes = content.SizeBytes,
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
+    }
+
+    /// <summary>
+    /// The first copy of these bytes the caller may read, and failing that the first one it may
+    /// not. The hidden one is only looked for while no readable one has turned up.
+    /// </summary>
+    private async Task<(Guid? Visible, Guid? Hidden)> DuplicatesAsync(
+        AccessContext ctx, string sha256, CancellationToken ct)
+    {
+        Guid? hidden = null;
+        foreach (var candidate in await DuplicateCandidatesAsync(sha256, ct))
+        {
+            var subject = await DocumentQueries.FileSubjectAsync(db, candidate.FileId, ct);
+            if (subject is null)
+            {
+                continue;
+            }
+
+            if (await DocumentAccessRules.CanReadFileAsync(db, access, ctx, subject, ct))
+            {
+                return (candidate.DocumentId, hidden);
+            }
+
+            hidden ??= candidate.DocumentId;
+        }
+
+        return (null, hidden);
+    }
+
+    /// <summary>
     /// Records stored bytes as a document at the given destination. Saves.
     /// </summary>
     /// <param name="sourcePath">
@@ -188,25 +250,7 @@ public sealed class UploadIngestService(
         // Asked before anything is created, and it decides two quite different things: whether
         // to refuse this upload, and — when the answer is "there is a copy but you may not see
         // it" — whether to leave a record for somebody who can.
-        var candidates = await DuplicateCandidatesAsync(content.Sha256, ct);
-        Guid? visibleDuplicate = null;
-        Guid? hiddenDuplicate = null;
-        foreach (var candidate in candidates)
-        {
-            var subject = await DocumentQueries.FileSubjectAsync(db, candidate.FileId, ct);
-            if (subject is null)
-            {
-                continue;
-            }
-
-            if (await DocumentAccessRules.CanReadFileAsync(db, access, ctx, subject, ct))
-            {
-                visibleDuplicate = candidate.DocumentId;
-                break;
-            }
-
-            hiddenDuplicate ??= candidate.DocumentId;
-        }
+        var (visibleDuplicate, hiddenDuplicate) = await DuplicatesAsync(ctx, content.Sha256, ct);
 
         if (visibleDuplicate is { } existing && !allowDuplicate)
         {
@@ -273,15 +317,7 @@ public sealed class UploadIngestService(
         // document that was never created would be worse than no record at all.
         if (visibleDuplicate is null && hiddenDuplicate is { } concealed)
         {
-            db.DuplicateUploadRecords.Add(new DuplicateUploadRecord
-            {
-                Sha256 = content.Sha256,
-                NewDocumentId = document.Id,
-                ExistingDocumentId = concealed,
-                UploadedByUserId = ctx.UserId,
-                SizeBytes = content.SizeBytes,
-                CreatedAt = DateTimeOffset.UtcNow,
-            });
+            NoteHiddenDuplicate(content, document.Id, concealed, ctx.UserId);
             await db.SaveChangesAsync(ct);
         }
 

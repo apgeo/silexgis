@@ -210,13 +210,20 @@ internal static class SyncUploadSections
     /// <summary>The phone-user section.</summary>
     public const string People = "people";
 
+    /// <summary>The photos and documents a phone created, changed or removed.</summary>
+    public const string Documents = "documents";
+
+    /// <summary>Where a phone hung its photos and documents, and where it took them down.</summary>
+    public const string DocumentLinks = "documentLinks";
+
     /// <summary>
     /// How many items an upload carries, over every section together. The announced ceiling is a
     /// bound on one transaction's work, and that work is the same whichever array an item sits
     /// in — so a device cannot pass a large upload by spreading it over several of them.
     /// </summary>
     public static int ItemCount(SyncUploadRequest request) =>
-        (request.Rows?.Count ?? 0) + (request.People?.Count ?? 0);
+        (request.Rows?.Count ?? 0) + (request.People?.Count ?? 0) + (request.Documents?.Count ?? 0)
+        + (request.DocumentLinks?.Count ?? 0);
 }
 
 /// <summary>

@@ -76,6 +76,7 @@ public static class DependencyInjection
         services.AddSingleton<TimestampInterceptor>();
         services.AddSingleton<AuditInterceptor>();
         services.AddSingleton<FeatureAggregateInterceptor>();
+        services.AddSingleton<DocumentAggregateInterceptor>();
         services.AddSingleton<UserIdTransactionInterceptor>();
         services.AddSingleton<AccessAnchorCleanupInterceptor>();
 
@@ -88,6 +89,8 @@ public static class DependencyInjection
                 // The aggregate touch must run before the audit diff so the bumped
                 // feature row is part of the same audit merge.
                 sp.GetRequiredService<FeatureAggregateInterceptor>(),
+                // Likewise a document's: a new revision or a photo's details move its row.
+                sp.GetRequiredService<DocumentAggregateInterceptor>(),
                 // The rules naming a row deleted in this save join it before the audit diff
                 // is taken, so each one removed is in the trail beside the row that took it.
                 sp.GetRequiredService<AccessAnchorCleanupInterceptor>(),

@@ -12,7 +12,9 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Import;
 using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -72,6 +74,9 @@ public static class SyncUploadEndpoints
             IOptions<SyncOptions> options,
             IAppSettingsService settings,
             IChangeContext changes,
+            DocumentWriteService documents,
+            UploadIngestService ingest,
+            ContentIntake intake,
             CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -138,6 +143,8 @@ public static class SyncUploadEndpoints
         [
             new SyncRowsSection(writer, protection, access),
             new SyncPeopleSection(await settings.GetSyncAsync(ct)),
+            new SyncDocumentsSection(documents, ingest, intake, access),
+            new SyncDocumentLinksSection(protection, access),
         ];
 
         var batch = new ImportBatch
@@ -283,7 +290,9 @@ public static class SyncUploadEndpoints
             await DuplicatesAsync(db, proximity, ctx, rows, duplicateRadiusMeters, ct),
             // Absent rather than empty when the upload carried no phone users, so an upload of rows
             // alone is answered byte for byte as it was before the request had sections.
-            sections.TryGetValue(SyncUploadSections.People, out var people) && people.Count > 0 ? people : null);
+            sections.TryGetValue(SyncUploadSections.People, out var people) && people.Count > 0 ? people : null,
+            sections.TryGetValue(SyncUploadSections.Documents, out var sent) && sent.Count > 0 ? sent : null,
+            sections.TryGetValue(SyncUploadSections.DocumentLinks, out var hung) && hung.Count > 0 ? hung : null);
     }
 
     /// <summary>

@@ -396,6 +396,18 @@ internal static class SyncCodes
 
     /// <summary>The server draws no picture of this kind of file.</summary>
     public const string RenditionUnavailable = "sync.rendition_unavailable";
+
+    /// <summary>
+    /// The staged bytes a document row names are not the bytes it describes: their hash or their
+    /// size differs from what the row states.
+    /// </summary>
+    public const string FileHashMismatch = "sync.file_hash_mismatch";
+
+    /// <summary>
+    /// A document row brings new content but names no staged bytes this account still holds —
+    /// never sent, withdrawn, already adopted, or swept after the staging retention.
+    /// </summary>
+    public const string FileBytesMissing = "sync.file_bytes_missing";
 }
 
 public sealed class SyncFileLinksRequestValidator : AbstractValidator<SyncFileLinksRequest>

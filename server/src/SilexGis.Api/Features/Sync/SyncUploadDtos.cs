@@ -118,6 +118,16 @@ public sealed record SyncUploadRowDto(
 /// The phone's own users, as the phone describes them, each optionally linked to a caver the
 /// people directory listed. Applied after the feature rows.
 /// </param>
+/// <param name="Documents">
+/// The photos and documents the phone created, changed or removed, each naming the bytes it
+/// staged beforehand through the resumable transfer routes when it carries new ones. Applied
+/// after the phone users, and before anything that hangs a document on a feature.
+/// </param>
+/// <param name="DocumentLinks">
+/// Where the phone hung its photos and documents, and where it took them down: each link names a
+/// document and the object it hangs on, and is applied after the documents, so a link may name a
+/// document sent in the same upload.
+/// </param>
 /// <remarks>
 /// Each array is a section, applied in a fixed order whatever order the arrays sit in here —
 /// feature rows first — and answered in the array of the same name.
@@ -127,7 +137,9 @@ public sealed record SyncUploadRequest(
     int ContractVersion,
     IReadOnlyList<SyncUploadRowDto>? Rows = null,
     IReadOnlyList<string>? ClientFeatures = null,
-    IReadOnlyList<SyncUploadPersonDto>? People = null);
+    IReadOnlyList<SyncUploadPersonDto>? People = null,
+    IReadOnlyList<SyncUploadDocumentDto>? Documents = null,
+    IReadOnlyList<SyncUploadDocumentLinkDto>? DocumentLinks = null);
 
 /// <summary>One of the phone's own users, as the phone describes them.</summary>
 /// <param name="DeviceUserId">The phone's identifier for this user, adopted verbatim and never translated.</param>
@@ -144,6 +156,83 @@ public sealed record SyncUploadPersonDto(
     string? FirstName = null,
     string? LastName = null,
     Guid? CaverId = null);
+
+/// <summary>One photo or document the phone created, changed or removed.</summary>
+/// <param name="Id">
+/// The phone's identifier for the document, adopted verbatim when the document is created here,
+/// as a feature row's is.
+/// </param>
+/// <param name="BaseRevision">
+/// The document's revision as the phone last read it, from the catalogue or from the answer to
+/// the upload that wrote it. Absent for a document the phone created; a stale one is a conflict.
+/// </param>
+/// <param name="Deleted">Removes the document; it needs the right to remove it, not only to edit it.</param>
+/// <param name="Title">The document's name. Absent on a create, the file name stands in.</param>
+/// <param name="Description">A photo's caption. Ignored for a file that is not a picture.</param>
+/// <param name="FileName">The file's name on the phone; the staged transfer's own name otherwise.</param>
+/// <param name="Sha256">
+/// The lowercase hex SHA-256 of the content the document has on the phone. Required on every row
+/// that is not a removal, except an edit that names its <paramref name="BaseVersionId"/> and
+/// brings no bytes. Without a base version, the same hash as the current revision here says the
+/// bytes did not change and a different one says they did.
+/// </param>
+/// <param name="SizeBytes">The content's size, checked against the staged bytes when stated.</param>
+/// <param name="StagedUploadId">
+/// The staged transfer holding the bytes, when the row brings new ones — always on a create.
+/// </param>
+/// <param name="CapturedAt">
+/// When the content was made, as the phone recorded it. Kept only where the file's own metadata
+/// states nothing, because the file is the better witness.
+/// </param>
+/// <param name="CreatedByDeviceUserId">The phone user who added the file, when the phone records one. Not kept yet.</param>
+/// <param name="ClientUpdatedAt">When the phone last changed the row. Informational.</param>
+/// <param name="BaseVersionId">
+/// The revision of the bytes the phone holds, as the catalogue's <c>versionId</c> named it. A
+/// phone handed a copy without location data, or only a rendition, holds bytes whose hash is not
+/// the stored file's, so the hash alone cannot tell its caption edit from new content. With a base
+/// version stated, a row naming no staged bytes changes only what is said about the document, a
+/// row naming staged bytes of another hash than the stored file brings a new revision, and a base
+/// version that is no longer the current one is a conflict.
+/// </param>
+public sealed record SyncUploadDocumentDto(
+    Guid Id,
+    DateTimeOffset? BaseRevision = null,
+    bool Deleted = false,
+    string? Title = null,
+    string? Description = null,
+    string? FileName = null,
+    string? Sha256 = null,
+    long? SizeBytes = null,
+    Guid? StagedUploadId = null,
+    DateTimeOffset? CapturedAt = null,
+    Guid? CreatedByDeviceUserId = null,
+    DateTimeOffset? ClientUpdatedAt = null,
+    Guid? BaseVersionId = null);
+
+/// <summary>One document hung on an object, or taken down from it.</summary>
+/// <remarks>
+/// A link is named by its document and its target together: the phone keeps no identifier of its
+/// own for one, and a document hangs on an object once. Its answer is in the per-row shape, in the
+/// order the links were sent, and carries the link's identifier here — the identifier the
+/// documents catalogue names the link by, and its removals later.
+/// </remarks>
+/// <param name="DocumentId">The document, sent in this upload or earlier, or read from the catalogue.</param>
+/// <param name="Target">What the document hangs on.</param>
+/// <param name="Role">
+/// What the file is on that object. Absent on a new link, it follows from the file and the
+/// object — a picture of an entrance, of the inside of a cave, a document — and absent on an
+/// existing one, the role it has stands.
+/// </param>
+/// <param name="Caption">The link's own caption, what the file is called on that object. Absent leaves it as it is.</param>
+/// <param name="SortOrder">Where the file sits among the object's files. Absent leaves it as it is.</param>
+/// <param name="Deleted">Takes the document down from the object; the document itself stays.</param>
+public sealed record SyncUploadDocumentLinkDto(
+    Guid DocumentId,
+    SyncLinkTargetDto Target,
+    AttachmentRole? Role = null,
+    string? Caption = null,
+    int? SortOrder = null,
+    bool Deleted = false);
 
 /// <summary>What became of one uploaded row.</summary>
 /// <param name="Revision">
@@ -193,6 +282,15 @@ public sealed record SyncUploadRowResultDto(
 /// when the upload carried the section, so an upload of feature rows alone is answered exactly as
 /// it always was.
 /// </param>
+/// <param name="Documents">
+/// What became of each photo or document the upload sent, in the per-row answer shape, with the
+/// document's revision; present only when the upload carried the section.
+/// </param>
+/// <param name="DocumentLinks">
+/// What became of each link the upload sent, in the order sent, each answered under the link's
+/// identifier — or, for a link refused before it existed, under its document's; present only when
+/// the upload carried the section.
+/// </param>
 /// <param name="Duplicates">
 /// What was already here, near a row this batch created. A report and never a verdict: every row
 /// listed was written, and its entry in <c>Rows</c> says so. It is here because a device is
@@ -210,7 +308,11 @@ public sealed record SyncUploadResultDto(
     IReadOnlyList<SyncFeatureDto> Conflicts,
     IReadOnlyList<SyncDuplicateDto> Duplicates,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<SyncUploadRowResultDto>? People = null);
+    IReadOnlyList<SyncUploadRowResultDto>? People = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<SyncUploadRowResultDto>? Documents = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<SyncUploadRowResultDto>? DocumentLinks = null);
 
 /// <summary>One created row and what it landed next to.</summary>
 public sealed record SyncDuplicateDto(Guid Id, IReadOnlyList<SyncDuplicateCandidateDto> Nearby);
@@ -239,6 +341,9 @@ public sealed class SyncUploadRequestValidator : AbstractValidator<SyncUploadReq
 {
     private const int MaxClientFeatures = 16;
     private const int MaxClientFeatureLength = 64;
+
+    /// <summary>The width of the column a stored file's name is kept in.</summary>
+    public const int StoredFileNameMaxLength = 255;
 
     public SyncUploadRequestValidator()
     {
@@ -269,6 +374,47 @@ public sealed class SyncUploadRequestValidator : AbstractValidator<SyncUploadReq
         RuleFor(x => x.People)
             .Must(people => people is null || people.Select(p => p.DeviceUserId).Distinct().Count() == people.Count)
             .WithMessage("A phone user may appear only once in a batch.");
+
+        RuleFor(x => x.DocumentLinks)
+            .Must(links => links is null
+                || links.Select(l => (l.DocumentId, l.Target?.Kind, l.Target?.Id)).Distinct().Count() == links.Count)
+            .WithMessage("A document may be linked to one object only once in a batch.");
+
+        // The width of the column a link's caption is kept in, and the two halves of its key.
+        RuleForEach(x => x.DocumentLinks).ChildRules(link =>
+        {
+            link.RuleFor(l => l.DocumentId).NotEmpty();
+            link.RuleFor(l => l.Target).NotNull();
+            link.RuleFor(l => l.Target.Id).NotEmpty().When(l => l.Target is not null);
+            link.RuleFor(l => l.Target.Kind).IsInEnum().When(l => l.Target is not null);
+            link.RuleFor(l => l.Role).IsInEnum();
+            link.RuleFor(l => l.Caption).MaximumLength(500);
+        });
+
+        RuleFor(x => x.Documents)
+            .Must(documents => documents is null || documents.Select(d => d.Id).Distinct().Count() == documents.Count)
+            .WithMessage("A document may appear only once in a batch.");
+
+        // The widths of the columns each member is kept in: the document's title, a photo's
+        // caption and a file's name (the stored file's name, which is narrower than a transfer's).
+        RuleForEach(x => x.Documents).ChildRules(document =>
+        {
+            document.RuleFor(d => d.Id).NotEmpty();
+            document.RuleFor(d => d.Title).MaximumLength(300);
+            document.RuleFor(d => d.Description).MaximumLength(1000);
+            document.RuleFor(d => d.FileName).MaximumLength(StoredFileNameMaxLength);
+            document.RuleFor(d => d.Sha256)
+                .NotEmpty()
+                .When(d => !d.Deleted && (d.BaseVersionId is null || d.StagedUploadId is not null))
+                .WithMessage("A document that is not being removed states the hash of its content.");
+            document.RuleFor(d => d.BaseVersionId).NotEqual(Guid.Empty);
+            document.RuleFor(d => d.Sha256)
+                .Matches("^[0-9a-fA-F]{64}$")
+                .When(d => d.Sha256 is not null)
+                .WithMessage("The hash is a SHA-256 in hexadecimal.");
+            document.RuleFor(d => d.SizeBytes).GreaterThan(0).When(d => d.SizeBytes is not null);
+            document.RuleFor(d => d.StagedUploadId).NotEqual(Guid.Empty);
+        });
 
         // The widths of the columns the description is kept in.
         RuleForEach(x => x.People).ChildRules(person =>

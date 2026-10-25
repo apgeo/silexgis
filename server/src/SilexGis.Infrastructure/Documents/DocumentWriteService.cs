@@ -108,6 +108,9 @@ public sealed class DocumentWriteService(
     private const string CurrentVersionIndex = "ix_document_versions_current";
     private const string VersionNumberIndex = "ix_document_versions_document_id_version_number";
 
+    /// <summary>The savepoint a revision is stacked under when the caller already holds a transaction.</summary>
+    private const string AddVersionSavepoint = "document_add_version";
+
     /// <summary>
     /// Records new content as a brand-new document: one revision, current from the start,
     /// carrying one file. Tracked, not saved — the caller commits it.
@@ -117,18 +120,24 @@ public sealed class DocumentWriteService(
     /// uploader may bind to it is settled before this is reached — that guard needs the
     /// caller, which this service deliberately does not have.
     /// </param>
+    /// <param name="documentId">
+    /// The identifier the document is to have, when another system minted it — a phone that
+    /// created the document offline and keeps naming it by its own id. Minted here otherwise.
+    /// </param>
     public DocumentFile Create(
         StoredContent content,
         string? title,
         Guid ownerUserId,
         Guid? uploadedBy,
         DateOnly? documentDate = null,
-        Guid? cavingGroupId = null)
+        Guid? cavingGroupId = null,
+        Guid? documentId = null)
     {
         ArgumentNullException.ThrowIfNull(content);
 
         var document = new Document
         {
+            Id = documentId ?? Guid.CreateVersion7(),
             Title = TitleOf(title, content.OriginalName),
             OwnerUserId = ownerUserId,
             CavingGroupId = cavingGroupId,
@@ -558,8 +567,14 @@ public sealed class DocumentWriteService(
     /// <summary>
     /// Supersedes a document's current revision with a new one carrying
     /// <paramref name="content"/>, and moves everything that pointed at the old revision's
-    /// file onto the new one. Owns its transaction; returns the new file.
+    /// file onto the new one. Returns the new file.
     /// </summary>
+    /// <remarks>
+    /// Owns its transaction when the caller has none. Inside a caller's transaction — a phone
+    /// upload applies a whole batch in one — it works under a savepoint of its own instead, so
+    /// that a refusal leaves the caller's transaction usable and nothing of this call behind,
+    /// rather than aborting every item of the batch with it.
+    /// </remarks>
     /// <exception cref="DocumentWriteException">
     /// <c>file.not_head</c> when <paramref name="supersededVersionId"/> is not the current
     /// revision — including the case where a concurrent upload got there first.
@@ -569,8 +584,156 @@ public sealed class DocumentWriteService(
     {
         ArgumentNullException.ThrowIfNull(content);
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var ambient = db.Database.CurrentTransaction;
+        if (ambient is null)
+        {
+            await using var owned = await db.Database.BeginTransactionAsync(ct);
+            var made = await StackVersionAsync(supersededVersionId, content, uploadedBy, ct);
+            await owned.CommitAsync(ct);
+            return made;
+        }
 
+        await ambient.CreateSavepointAsync(AddVersionSavepoint, ct);
+        try
+        {
+            var made = await StackVersionAsync(supersededVersionId, content, uploadedBy, ct);
+            await ambient.ReleaseSavepointAsync(AddVersionSavepoint, ct);
+            return made;
+        }
+        catch (DocumentWriteException)
+        {
+            await ambient.RollbackToSavepointAsync(AddVersionSavepoint, ct);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Makes an earlier revision of a document current again in place of the revision that is
+    /// current now, and moves everything that points at the current revision's files back onto
+    /// the earlier one. The revision stepped back from stays in the version list. Saves.
+    /// </summary>
+    /// <remarks>
+    /// What taking back an upload that gave a document new bytes needs: the upload stacked
+    /// <paramref name="fromVersionId"/> onto <paramref name="toVersionId"/>, and its undo steps
+    /// back. Run inside the caller's transaction when there is one, because the demotion and the
+    /// promotion are two statements and a document between them has no current revision.
+    /// </remarks>
+    /// <exception cref="DocumentWriteException">
+    /// <c>file.not_head</c> when <paramref name="fromVersionId"/> is not the current revision any
+    /// more, and <c>file.not_found</c> when <paramref name="toVersionId"/> is not a revision of the
+    /// same document holding a file.
+    /// </exception>
+    public async Task RestoreVersionAsync(Guid fromVersionId, Guid toVersionId, CancellationToken ct = default)
+    {
+        var from = await db.DocumentVersions.AsNoTracking().FirstOrDefaultAsync(v => v.Id == fromVersionId, ct);
+        var to = await db.DocumentVersions.AsNoTracking().FirstOrDefaultAsync(v => v.Id == toVersionId, ct);
+        if (from is null || !from.IsCurrent)
+        {
+            throw new DocumentWriteException(NotHeadCode, NotHeadMessage);
+        }
+
+        var toFileId = to is null || to.DocumentId != from.DocumentId
+            ? (Guid?)null
+            : await db.StoredFiles.AsNoTracking()
+                .Where(f => f.DocumentVersionId == to.Id)
+                .OrderBy(f => f.CreatedAt).ThenBy(f => f.Id)
+                .Select(f => (Guid?)f.Id)
+                .FirstOrDefaultAsync(ct);
+        if (toFileId is null)
+        {
+            throw new DocumentWriteException("file.not_found", "That revision has no file to go back to.");
+        }
+
+        // Two statements, demotion first, for the reason stacking a revision takes two: the
+        // partial unique index on the current flag is checked per statement. Scoped to the
+        // revision the caller named, so a revision another upload made current meanwhile is
+        // never the one demoted.
+        var demoted = await db.DocumentVersions
+            .Where(v => v.Id == fromVersionId && v.IsCurrent)
+            .ExecuteUpdateAsync(u => u.SetProperty(v => v.IsCurrent, false), ct);
+        if (demoted == 0)
+        {
+            throw new DocumentWriteException(NotHeadCode, NotHeadMessage);
+        }
+
+        await db.DocumentVersions
+            .Where(v => v.Id == toVersionId)
+            .ExecuteUpdateAsync(u => u.SetProperty(v => v.IsCurrent, true), ct);
+
+        var fromFileIds = await db.StoredFiles.AsNoTracking()
+            .Where(f => f.DocumentVersionId == fromVersionId)
+            .Select(f => f.Id)
+            .ToListAsync(ct);
+        await RepointAsync(fromFileIds, toFileId.Value, ct);
+
+        // The revision flags moved in statements of their own, which the tracker never saw, so
+        // the document's own revision is moved here: it is what a phone arbitrates an edit on.
+        var document = await db.Documents.IgnoreQueryFilters().FirstAsync(d => d.Id == from.DocumentId, ct);
+        db.Entry(document).Property(d => d.UpdatedAt).IsModified = true;
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Moves everything that pointed at one revision's files onto one file of another revision.
+    /// Tracked, not saved.
+    /// </summary>
+    private async Task RepointAsync(IReadOnlyCollection<Guid> fromFileIds, Guid toFileId, CancellationToken ct)
+    {
+        // Repoint attachments from the superseded revision to the new one, tracked so the
+        // change is audited — entity timelines get a "document updated" event from the
+        // Attachment FileId diff. Selecting by FileId moves feature-targeted rows and
+        // polymorphic-pair rows alike; the target side of each row is untouched.
+        //
+        // A revision may hold several files (a scan and the rendition derived from it), and
+        // they all collapse onto the single file of the new revision. Two rows that attached
+        // two of those files to the same object would become the same attachment twice, so
+        // the later ones are dropped instead of duplicated — the earliest row, which carries
+        // the caption and sort order the object has been showing, is the one kept.
+        var attachments = await db.Attachments
+            .Where(a => fromFileIds.Contains(a.FileId))
+            .OrderBy(a => a.CreatedAt).ThenBy(a => a.Id)
+            .ToListAsync(ct);
+        var attachedTargets = new HashSet<(Guid?, AttachedEntityType?, Guid?)>();
+        foreach (var attachment in attachments)
+        {
+            if (attachedTargets.Add((attachment.FeatureId, attachment.EntityType, attachment.EntityId)))
+            {
+                attachment.FileId = toFileId;
+            }
+            else
+            {
+                db.Attachments.Remove(attachment);
+            }
+        }
+
+        // Tags belong to the document, not a revision of it. A file is only ever a
+        // polymorphic-pair target (never a feature), so the pair filter reaches every tagging.
+        // The same collapse applies, and here it is not merely untidy: one tag may sit on one
+        // target only once, and that is a unique index — reassigning the second row would
+        // violate it and fail the whole upload.
+        var taggings = await db.Taggings
+            .Where(t => t.EntityType == AttachedEntityType.StoredFile
+                && t.EntityId != null && fromFileIds.Contains(t.EntityId.Value))
+            .OrderBy(t => t.Id)
+            .ToListAsync(ct);
+        var movedTagIds = new HashSet<long>();
+        foreach (var tagging in taggings)
+        {
+            if (movedTagIds.Add(tagging.TagId))
+            {
+                tagging.EntityId = toFileId;
+            }
+            else
+            {
+                db.Taggings.Remove(tagging);
+            }
+        }
+    }
+
+    /// <summary>The body of <see cref="AddVersionAsync"/>, run inside whichever transaction it chose.</summary>
+    private async Task<DocumentFile> StackVersionAsync(
+        Guid supersededVersionId, StoredContent content, Guid? uploadedBy, CancellationToken ct)
+    {
         var superseded = await db.DocumentVersions.AsNoTracking()
             .FirstOrDefaultAsync(v => v.Id == supersededVersionId, ct);
         if (superseded is null
@@ -633,55 +796,7 @@ public sealed class DocumentWriteService(
         db.DocumentVersions.Add(version);
         var file = AddFile(version.Id, content);
 
-        // Repoint attachments from the superseded revision to the new one, tracked so the
-        // change is audited — entity timelines get a "document updated" event from the
-        // Attachment FileId diff. Selecting by FileId moves feature-targeted rows and
-        // polymorphic-pair rows alike; the target side of each row is untouched.
-        //
-        // A revision may hold several files (a scan and the rendition derived from it), and
-        // they all collapse onto the single file of the new revision. Two rows that attached
-        // two of those files to the same object would become the same attachment twice, so
-        // the later ones are dropped instead of duplicated — the earliest row, which carries
-        // the caption and sort order the object has been showing, is the one kept.
-        var attachments = await db.Attachments
-            .Where(a => supersededFileIds.Contains(a.FileId))
-            .OrderBy(a => a.CreatedAt).ThenBy(a => a.Id)
-            .ToListAsync(ct);
-        var attachedTargets = new HashSet<(Guid?, AttachedEntityType?, Guid?)>();
-        foreach (var attachment in attachments)
-        {
-            if (attachedTargets.Add((attachment.FeatureId, attachment.EntityType, attachment.EntityId)))
-            {
-                attachment.FileId = file.Id;
-            }
-            else
-            {
-                db.Attachments.Remove(attachment);
-            }
-        }
-
-        // Tags belong to the document, not a revision of it. A file is only ever a
-        // polymorphic-pair target (never a feature), so the pair filter reaches every tagging.
-        // The same collapse applies, and here it is not merely untidy: one tag may sit on one
-        // target only once, and that is a unique index — reassigning the second row would
-        // violate it and fail the whole upload.
-        var taggings = await db.Taggings
-            .Where(t => t.EntityType == AttachedEntityType.StoredFile
-                && t.EntityId != null && supersededFileIds.Contains(t.EntityId.Value))
-            .OrderBy(t => t.Id)
-            .ToListAsync(ct);
-        var movedTagIds = new HashSet<long>();
-        foreach (var tagging in taggings)
-        {
-            if (movedTagIds.Add(tagging.TagId))
-            {
-                tagging.EntityId = file.Id;
-            }
-            else
-            {
-                db.Taggings.Remove(tagging);
-            }
-        }
+        await RepointAsync(supersededFileIds, file.Id, ct);
 
         try
         {
@@ -698,7 +813,6 @@ public sealed class DocumentWriteService(
             throw new DocumentWriteException(NotHeadCode, NotHeadMessage);
         }
 
-        await transaction.CommitAsync(ct);
         return new DocumentFile(file, version);
     }
 

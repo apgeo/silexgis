@@ -25,10 +25,16 @@ public static class SyncFeatures
     public const string Documents = "documents";
 
     /// <summary>
+    /// Photos and documents from the phone: bytes staged through the resumable transfer routes, and
+    /// the upload's <c>documents</c> and <c>documentLinks</c> sections that name them.
+    /// </summary>
+    public const string DocumentUpload = "documentUpload";
+
+    /// <summary>
     /// The parts every installation running this build serves, whatever it has switched — the
     /// baseline the recorded exchanges are pinned to.
     /// </summary>
-    public static readonly IReadOnlyList<string> Unconditional = [Download, Upload, Documents];
+    public static readonly IReadOnlyList<string> Unconditional = [Download, Upload, Documents, DocumentUpload];
 
     /// <summary>
     /// The people directory and the phone-user links (<c>GET /sync/people</c> and the upload's
