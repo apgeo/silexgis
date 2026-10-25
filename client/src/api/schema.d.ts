@@ -7652,6 +7652,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Saves what the installation offers phones: the people directory and whom it lists, trip conversion, and how long waiting bytes are kept. */
+        put: operations["adminSettingsSaveSync"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/photo-libraries": {
         parameters: {
             query?: never;
@@ -7772,6 +7789,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The people a phone may attribute its users to, and the links its users have. */
+        get: operations["syncPeople"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sync/sets": {
         parameters: {
             query?: never;
@@ -7855,6 +7889,41 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/phone-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The phone users this installation has met, the unlinked first, with the caver each is. */
+        get: operations["syncPhoneUserList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/phone-users/{deviceUserId}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Says which caver a phone user is; a phone's later different choice does not replace it. */
+        put: operations["syncPhoneUserLink"];
+        post?: never;
+        /** Takes a phone user's link to a caver away, keeping the phone user. */
+        delete: operations["syncPhoneUserUnlink"];
         options?: never;
         head?: never;
         patch?: never;
@@ -7971,6 +8040,7 @@ export interface components {
             notifications: components["schemas"]["NotificationSettingsDto"];
             announcements: components["schemas"]["AnnouncementSettingsDto"];
             photoLibraries: components["schemas"]["PhotoLibrarySuspensionDto"];
+            sync: components["schemas"]["SyncSettingsDto"];
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
@@ -9419,6 +9489,8 @@ export interface components {
             cells: components["schemas"]["DensityCellDto"][];
             autocorrelation: components["schemas"]["DensityAutocorrelationDto"];
         };
+        /** @enum {unknown} */
+        DevicePersonLinkSource: "device" | "administrator" | "archiveImport";
         DipSummary: {
             /** Format: int32 */
             sampleCount: number;
@@ -10829,6 +10901,8 @@ export interface components {
             reason: null | string;
             applied: string[];
             skipped: components["schemas"]["ImportBatchUndoSkippedDto"][];
+            /** Format: uuid */
+            devicePersonId?: null | string;
         };
         ImportBatchUndoSkippedDto: {
             field: string;
@@ -11886,6 +11960,15 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfPhoneUserDto: {
+            items: components["schemas"]["PhoneUserDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfPublicPhotoDto: {
             items: components["schemas"]["PublicPhotoDto"][];
             /** Format: int32 */
@@ -12107,6 +12190,8 @@ export interface components {
             firedRuleCount: number;
             caveats: components["schemas"]["PatternCaveat"][];
         };
+        /** @enum {unknown} */
+        PeopleDirectoryScope: "myGroups" | "everyone";
         PermissionGroupDto: {
             /** Format: uuid */
             id: string;
@@ -12151,6 +12236,25 @@ export interface components {
             confirmed: boolean;
             pendingPhoneNumber: null | string;
             smsConfigured: boolean;
+        };
+        PhoneUserDto: {
+            /** Format: uuid */
+            deviceUserId: string;
+            username: null | string;
+            firstName: null | string;
+            lastName: null | string;
+            /** Format: uuid */
+            caverId: null | string;
+            caverName: null | string;
+            linkSource: null | components["schemas"]["DevicePersonLinkSource"];
+            /** Format: date-time */
+            firstSeenAt: string;
+            /** Format: date-time */
+            lastSeenAt: string;
+        };
+        PhoneUserLinkRequest: {
+            /** Format: uuid */
+            caverId: string;
         };
         PhotoBulkRequest: {
             documentIds: string[];
@@ -13559,6 +13663,9 @@ export interface components {
             selectablePointIds: string[];
             deviceUsers: string[];
             unmappedDeviceUsers: string[];
+            knownLinks: {
+                [key: string]: string;
+            };
             caversNotOnRoster: string[];
             modelUsable: boolean;
             /** Format: int32 */
@@ -14080,6 +14187,24 @@ export interface components {
             parentId: string;
             isPrimary: boolean;
         };
+        SyncPeopleDto: {
+            people: components["schemas"]["SyncPersonDto"][];
+            links: components["schemas"]["SyncPersonLinkDto"][];
+        };
+        SyncPersonDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            shortName: null | string;
+            hasAccount: boolean;
+            isMe: boolean;
+        };
+        SyncPersonLinkDto: {
+            /** Format: uuid */
+            deviceUserId: string;
+            /** Format: uuid */
+            caverId: null | string;
+        };
         /** @enum {unknown} */
         SyncRowStatus: "created" | "updated" | "deleted" | "unchanged" | "conflict" | "rejected";
         SyncSetDto: {
@@ -14098,6 +14223,15 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        SyncSettingsDto: {
+            peopleDirectoryEnabled: boolean;
+            peopleDirectoryScope: components["schemas"]["PeopleDirectoryScope"];
+            convertTripsWithProblems: boolean;
+            /** Format: int32 */
+            stagedUploadRetentionDays: number;
+            /** Format: int32 */
+            rejectedHeldBytesRetentionDays: number;
+        };
         SyncSetWriteRequest: {
             name: string;
             /** Format: uuid */
@@ -14114,12 +14248,23 @@ export interface components {
             /** Format: date-time */
             deletedAt: string;
         };
+        SyncUploadPersonDto: {
+            /** Format: uuid */
+            deviceUserId: string;
+            username: string;
+            firstName?: null | string;
+            lastName?: null | string;
+            /** Format: uuid */
+            caverId?: null | string;
+        };
         SyncUploadRequest: {
             /** Format: uuid */
             batchId: string;
             /** Format: int32 */
             contractVersion: number;
-            rows: components["schemas"]["SyncUploadRowDto"][];
+            rows?: null | components["schemas"]["SyncUploadRowDto"][];
+            clientFeatures?: null | string[];
+            people?: null | components["schemas"]["SyncUploadPersonDto"][];
         };
         SyncUploadResultDto: {
             /** Format: uuid */
@@ -14134,6 +14279,7 @@ export interface components {
             rows: components["schemas"]["SyncUploadRowResultDto"][];
             conflicts: components["schemas"]["SyncFeatureDto"][];
             duplicates: components["schemas"]["SyncDuplicateDto"][];
+            people?: null | components["schemas"]["SyncUploadRowResultDto"][];
         };
         SyncUploadRowDto: {
             /** Format: uuid */
@@ -36905,6 +37051,48 @@ export interface operations {
             };
         };
     };
+    adminSettingsSaveSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncSettingsDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSettingsDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     adminSettingsSavePhotoLibraries: {
         parameters: {
             query?: never;
@@ -37213,6 +37401,53 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncPeople: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncPeopleDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -37635,6 +37870,158 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncPhoneUserList: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagedResultOfPhoneUserDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncPhoneUserLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceUserId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneUserLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneUserDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncPhoneUserUnlink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceUserId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneUserDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

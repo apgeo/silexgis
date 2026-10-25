@@ -6765,6 +6765,7 @@
     "peopleNone": "Înregistrarea aleasă nu numește niciun cont de dispozitiv.",
     "deviceAccount": "Contul {{id}}",
     "chooseCaver": "Spune cine este",
+    "knownLink": "Asociat anterior",
     "unnamedCaver": "Cineva pe care pagina nu îl poate numi",
     "columns": {
       "take": "Ia",

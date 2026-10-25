@@ -167,10 +167,17 @@ public sealed record SpeleolocPointResolution(
 /// reviewer needs to see the whole list before they start: an account left unmapped costs every
 /// point it scanned.
 /// </summary>
+/// <param name="KnownLinks">
+/// The caver the installation already links each of these device accounts to, for those it links —
+/// what a device account the reviewer has made no choice for is taken to be. Said apart from the
+/// points so the reviewer's screen can show the link as the account's current choice instead of
+/// as a blank the import then quietly fills.
+/// </param>
 public sealed record SpeleolocImportResolutionSet(
     IReadOnlyList<SpeleolocPointResolution> Points,
     IReadOnlyList<string> DeviceUsers,
     IReadOnlyList<string> UnmappedDeviceUsers,
+    IReadOnlyDictionary<string, Guid> KnownLinks,
     bool ModelUsable);
 
 /// <summary>

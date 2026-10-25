@@ -354,6 +354,7 @@ public static class SpeleolocImportEndpoints
             selectable,
             resolution.DeviceUsers,
             resolution.UnmappedDeviceUsers,
+            resolution.KnownLinks,
             offRoster,
             resolution.ModelUsable,
             resolution.Points.Count(p => p.State == SpeleolocPointState.Proposed),

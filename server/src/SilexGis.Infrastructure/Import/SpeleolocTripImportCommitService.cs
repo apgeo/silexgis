@@ -340,6 +340,18 @@ public sealed class SpeleolocTripImportCommitService(
         batch.SkippedCount = skipped;
         db.ImportBatches.Add(batch);
         db.ImportBatchItems.AddRange(items);
+
+        // The reviewer's choices for this archive's phone users become the installation's links,
+        // so the next import, the phone itself and the trips it sends all resolve them the same
+        // way. Only the users this archive has, and never over a link somebody keeping the roster
+        // made: an import is a statement about one recording, the roster keeper's about the person.
+        var archiveUsers = resolution.DeviceUsers.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var chosenLinks = options.Cavers
+            .Where(kv => archiveUsers.Contains(kv.Key) && Guid.TryParse(kv.Key, out _))
+            .GroupBy(kv => Guid.Parse(kv.Key))
+            .ToDictionary(g => g.Key, g => g.First().Value);
+        await DevicePersonMapping.RecordAsync(db, chosenLinks, DevicePersonLinkSource.ArchiveImport, ctx.UserId, ct);
+
         await db.SaveChangesAsync(ct);
 
         // The review is spent: its decisions describe scans that are now positions, and leaving it

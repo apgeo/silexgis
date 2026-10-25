@@ -14,6 +14,12 @@ interface Props {
   /** The ones nothing has been said about yet. The server's own answer, not a count of blanks. */
   unmappedDeviceUsers: readonly string[];
   /**
+   * Device account to the caver this installation already links it to — chosen on the phone, by
+   * somebody keeping the roster, or in an earlier import. An account with no choice made here is
+   * imported as that caver, so it is shown as the account's choice rather than as a blank.
+   */
+  knownLinks: Readonly<Record<string, string>>;
+  /**
    * People this mapping names who are not on the chosen trip's roster. Empty when the confirmation
    * is to create the trip, because a created trip is created with exactly these people on it.
    */
@@ -30,8 +36,10 @@ function shortAccount(deviceUserId: string) {
  *
  * Nothing here proposes anybody, and that is the point rather than an omission. A device account
  * is a login on a phone: the archive carries its identifier and, on some builds, an address and a
- * label somebody typed once — none of which is evidence about which caver was underground. So the
- * choices open empty, a mapping is only ever what a person said, and an account left unmapped
+ * label somebody typed once — none of which is evidence about which caver was underground. So a
+ * choice opens empty unless a person has already said who the account is — the link this
+ * installation keeps for it, which the import uses whenever no choice is made here, and which is
+ * therefore shown as the choice rather than hidden behind a blank. An account nobody has mapped
  * costs every scan it made rather than being guessed at.
  *
  * Both warnings are stated here, above the work, rather than left to be counted off two hundred
@@ -43,6 +51,7 @@ export default function SpeleolocPeoplePanel({
   onChange,
   deviceUsers,
   unmappedDeviceUsers,
+  knownLinks,
   caversNotOnRoster,
 }: Props) {
   const { t } = useTranslation();
@@ -57,6 +66,9 @@ export default function SpeleolocPeoplePanel({
   const roster = useCavers();
 
   const mapping = options.cavers ?? {};
+  // What the import will use for each account: the choice made here, else the stored link.
+  const effective = (deviceUserId: string): string | undefined =>
+    mapping[deviceUserId] ?? knownLinks[deviceUserId];
 
   const nameOf = (caverId: string) =>
     [...(roster.data ?? []), ...(candidates.data ?? [])].find((caver) => caver.id === caverId)?.name
@@ -76,7 +88,7 @@ export default function SpeleolocPeoplePanel({
     ...(candidates.data ?? []).map((caver) => ({ value: caver.id, label: caver.name })),
     // Whoever a stored mapping already names, so a resumed review shows a name rather than an
     // identifier when the searched page does not happen to carry that person.
-    ...Object.values(mapping)
+    ...[...new Set([...Object.values(mapping), ...Object.values(knownLinks)])]
       .filter((caverId) => !(candidates.data ?? []).some((caver) => caver.id === caverId))
       .map((caverId) => ({ value: caverId, label: nameOf(caverId) })),
   ];
@@ -126,11 +138,13 @@ export default function SpeleolocPeoplePanel({
 
       {deviceUsers.map((deviceUserId) => (
         <Flex key={deviceUserId} gap={8} align="center" wrap style={{ marginBottom: 8 }}>
-          <Tag color={mapping[deviceUserId] ? 'green' : 'gold'}>
+          <Tag color={effective(deviceUserId) ? 'green' : 'gold'}>
             {t('speleolocImport.deviceAccount', { id: shortAccount(deviceUserId) })}
           </Tag>
           <Select
-            allowClear
+            // Clearing takes back a choice made here. A stored link is not cleared from this
+            // screen — the import would fall back to it all the same — so it offers no clear.
+            allowClear={mapping[deviceUserId] !== undefined}
             showSearch
             // Searched on the server, so the box is not narrowed twice against a page it has
             // already narrowed.
@@ -138,15 +152,23 @@ export default function SpeleolocPeoplePanel({
             size={controlSize}
             style={{ minWidth: 220, flex: '1 1 220px' }}
             loading={candidates.isFetching}
-            // Empty, always, until somebody says otherwise. A placeholder that named the most
-            // likely caver would be read as an answer by everybody who did not stop to check.
+            // Empty until somebody says otherwise. A placeholder that named the most likely
+            // caver would be read as an answer by everybody who did not stop to check.
             placeholder={t('speleolocImport.chooseCaver')}
-            value={mapping[deviceUserId] ?? undefined}
+            value={effective(deviceUserId)}
             onSearch={setSearch}
             onChange={(value?: string) => choose(deviceUserId, value)}
             data-testid={`speleoloc-import-map-${shortAccount(deviceUserId)}`}
             options={options_}
           />
+          {mapping[deviceUserId] === undefined && knownLinks[deviceUserId] !== undefined && (
+            <Typography.Text
+              type="secondary"
+              data-testid={`speleoloc-import-known-${shortAccount(deviceUserId)}`}
+            >
+              {t('speleolocImport.knownLink')}
+            </Typography.Text>
+          )}
         </Flex>
       ))}
     </Card>

@@ -480,6 +480,46 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
     }
 
     /// <summary>
+    /// The archive import and the phone share one record of who a phone user is: a choice made
+    /// while importing is written back as the installation's link, and the next review of an
+    /// archive from the same phone starts from it instead of asking again.
+    /// </summary>
+    [Fact]
+    public async Task A_reviewers_choice_becomes_the_phone_users_link_and_the_next_review_starts_from_it()
+    {
+        var cave = await CreateCaveAsync(editor, locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        await SeedPlacesAsync(cave);
+        var fileId = await UploadArchiveAsync();
+        var (trip, cavers) = await CreateTripAsync(editor, "Links", guests: 1);
+
+        // Nothing is known about the phone user yet: the review asks.
+        var unmapped = Options(model, trip, caver: null);
+        (await PreviewAsync(editor, fileId, unmapped)).GetProperty("unmappedDeviceUsers").GetArrayLength().ShouldBe(1);
+
+        var mapped = Options(model, trip, cavers[0]);
+        var preview = await PreviewAsync(editor, fileId, mapped);
+        var committed = await CommitAsync(editor, fileId, mapped, ProposedPointsOf(preview));
+        committed.StatusCode.ShouldBe(HttpStatusCode.OK, await committed.Content.ReadAsStringAsync());
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var person = await db.DevicePersons.AsNoTracking().SingleAsync(p => p.DeviceUserId == deviceUserId);
+            person.CaverId.ShouldBe(cavers[0]);
+            person.LinkSource.ShouldBe(DevicePersonLinkSource.ArchiveImport);
+            person.Username.ShouldBeNull();
+        }
+
+        // The same phone user, a review with no choice made: prefilled from the link.
+        var again = await PreviewAsync(editor, fileId, unmapped);
+        again.GetProperty("unmappedDeviceUsers").GetArrayLength().ShouldBe(0);
+        again.GetProperty("points").EnumerateArray()
+            .Where(p => p.GetProperty("state").GetString() == "proposed")
+            .ShouldAllBe(p => p.GetProperty("caverId").GetGuid() == cavers[0]);
+    }
+
+    /// <summary>
     /// A recording aimed at a deleted trip is refused exactly as one aimed at a trip that never
     /// existed, on the dry run and on the confirmation alike. A deleted trip is somewhere nothing
     /// can be written, and an upload that named it is not told that it is merely deleted.

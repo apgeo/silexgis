@@ -112,6 +112,7 @@ const BASE_PREVIEW: SpeleolocImportPreview = {
   selectablePointIds: [PROPOSED, TIED],
   deviceUsers: [DEVICE_MAPPED, DEVICE_UNMAPPED],
   unmappedDeviceUsers: [DEVICE_UNMAPPED],
+  knownLinks: {},
   caversNotOnRoster: [],
   modelUsable: true,
   proposedCount: 3,

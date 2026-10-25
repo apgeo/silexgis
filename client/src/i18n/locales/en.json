@@ -6752,6 +6752,7 @@
     "peopleNone": "The chosen recording names no device accounts.",
     "deviceAccount": "Account {{id}}",
     "chooseCaver": "Say who this is",
+    "knownLink": "Linked earlier",
     "unnamedCaver": "Somebody this page cannot name",
     "columns": {
       "take": "Take",
