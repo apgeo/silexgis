@@ -1,0 +1,61 @@
+{
+  "items": [
+    {
+      "id": "<next-upload>",
+      "caveId": "<cave>",
+      "caveName": "Pestera Inventata <marker>",
+      "caveSurvey": {
+        "id": "<survey>",
+        "title": "Pestera Inventata <marker>"
+      },
+      "version": "<timestamp>",
+      "source": "topodroid",
+      "surveyTitle": "Pestera Inventata <marker>",
+      "surveyName": "pestera_inventata",
+      "surveyDate": null,
+      "uploadedBy": {
+        "id": "<uploader>",
+        "displayName": "<uploader-label>"
+      },
+      "status": "failed",
+      "createdAt": "<timestamp>",
+      "archive": {
+        "name": "no_manifest.zip",
+        "sizeBytes": 201,
+        "contentUrl": "/api/v1/files/<uuid-1>/content?token=<token>"
+      },
+      "therionSources": [],
+      "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<next-upload>"
+    },
+    {
+      "id": "<upload>",
+      "caveId": "<cave>",
+      "caveName": "Pestera Inventata <marker>",
+      "caveSurvey": {
+        "id": "<survey>",
+        "title": "Pestera Inventata <marker>"
+      },
+      "version": "<timestamp>",
+      "source": "topodroid",
+      "surveyTitle": "Pestera Inventata <marker>",
+      "surveyName": "pestera_inventata",
+      "surveyDate": "2026-10-25",
+      "uploadedBy": {
+        "id": "<uploader>",
+        "displayName": "<uploader-label>"
+      },
+      "status": "succeeded",
+      "createdAt": "<timestamp>",
+      "archive": {
+        "name": "pestera_inventata.zip",
+        "sizeBytes": 2276,
+        "contentUrl": "/api/v1/files/<uuid-2>/content?token=<token>"
+      },
+      "therionSources": [],
+      "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<upload>"
+    }
+  ],
+  "total": 2,
+  "page": 1,
+  "pageSize": 50
+}

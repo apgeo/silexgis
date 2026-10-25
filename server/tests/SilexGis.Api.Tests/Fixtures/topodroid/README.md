@@ -10,3 +10,7 @@ Its entries, in order: `manifest`, `survey.sql`, the survey note, and two `.tdr`
 strict SQL reader fails on.
 
 Nothing here may be replaced with a real survey.
+
+`no_manifest.zip` is a hand-made archive of one stored entry, an invented `survey.sql` line and no
+`manifest`: the shape a survey tool's archive takes when it is not one, kept as a file so that its
+bytes — and the digest the recorded contract shows for it — never change with the compressor.

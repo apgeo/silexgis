@@ -326,7 +326,7 @@ export const groups = {
   surveyUploads: [
     'SurveyUploadRouteTests', 'SurveyUploadSchemaTests', 'SurveyUploadPreferenceTests',
     'AccessKeySurfaceTests', 'AccessKeyTests', 'OptionsDocumentationTests', 'SurveySourceTests',
-    'SurveyUploadPipelineTests', 'TopoDroidArchiveReaderTests',
+    'SurveyUploadPipelineTests', 'TopoDroidArchiveReaderTests', 'SurveyUploadContractTests',
   ],
   // The external cave register this installation reads from and imports out of.
   catalogue: ['SpeologieCatalogueTests'],

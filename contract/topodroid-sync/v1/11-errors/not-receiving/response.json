@@ -1,0 +1,8 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "Every file of this upload arrived; it is undone from the web, not abandoned.",
+  "code": "survey_upload.not_receiving",
+  "traceId": "<trace>"
+}

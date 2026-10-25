@@ -1,0 +1,22 @@
+{
+  "source": "topodroid",
+  "client": {
+    "name": "TopoDroid",
+    "version": "6.5.34"
+  },
+  "cave": null,
+  "caveSurvey": {
+    "id": "<unknown>"
+  },
+  "newCave": null,
+  "surveyTitle": "Refusals <marker>",
+  "surveyName": "pestera_inventata",
+  "files": [
+    {
+      "name": "pestera_inventata.zip",
+      "size": 2276,
+      "role": "archive"
+    }
+  ],
+  "pipeline": null
+}

@@ -1,0 +1,9 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "The body is not the 2276 bytes this file was declared with.",
+  "code": "survey_upload.size_mismatch",
+  "declaredSize": 2276,
+  "traceId": "<trace>"
+}

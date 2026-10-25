@@ -1,0 +1,9 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "This file is not what its name says: it was expected to be a ZIP archive.",
+  "code": "survey_upload.content_mismatch",
+  "file": "pestera_inventata.zip",
+  "traceId": "<trace>"
+}

@@ -1,0 +1,8 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "Name a caving group the account belongs to, or choose another visibility.",
+  "code": "survey_upload.visibility_invalid",
+  "traceId": "<trace>"
+}
