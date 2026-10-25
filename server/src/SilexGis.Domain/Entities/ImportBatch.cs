@@ -382,6 +382,14 @@ public class ImportBatchItem
     /// </summary>
     public Guid? TripPositionEventId { get; set; }
 
+    /// <summary>
+    /// The phone user this line described or linked, for a phone upload that sent one — keyed by
+    /// the phone's own identifier for them. Like the feature and trip pointers it goes null rather
+    /// than taking the line with it when the phone user is removed, so the upload still says it
+    /// sent somebody.
+    /// </summary>
+    public Guid? DevicePersonId { get; set; }
+
     /// <summary>The geofile row this came from. Kept even after a re-import replaces those rows.</summary>
     public long? SourceFeatureId { get; set; }
 

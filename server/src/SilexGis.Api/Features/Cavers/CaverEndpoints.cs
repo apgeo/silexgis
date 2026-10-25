@@ -826,6 +826,15 @@ public static class CaverEndpoints
             }
         }
 
+        // Phone users who were the duplicate are the survivor now, under the same source: the
+        // statement "this phone user is that person" was about the person, not about which of
+        // two rows the roster kept for them. Left alone, removing the duplicate would unlink them.
+        var phoneUsers = await db.DevicePersons.Where(p => p.CaverId == source.Id).ToListAsync(ct);
+        foreach (var phoneUser in phoneUsers)
+        {
+            phoneUser.CaverId = target.Id;
+        }
+
         target.UserId ??= source.UserId;
         target.Email ??= source.Email;
         target.Phone ??= source.Phone;

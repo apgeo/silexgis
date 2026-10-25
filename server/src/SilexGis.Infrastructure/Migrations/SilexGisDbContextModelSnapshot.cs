@@ -1987,6 +1987,69 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("checklist_items", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.DevicePerson", b =>
+                {
+                    b.Property<Guid>("DeviceUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("device_user_id");
+
+                    b.Property<Guid?>("CaverId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caver_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("first_name");
+
+                    b.Property<DateTimeOffset>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_seen_at");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("last_name");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<short>("LinkSource")
+                        .HasColumnType("smallint")
+                        .HasColumnName("link_source");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UploadedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("uploaded_by_user_id");
+
+                    b.Property<string>("Username")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("username");
+
+                    b.HasKey("DeviceUserId")
+                        .HasName("pk_device_persons");
+
+                    b.HasIndex("CaverId")
+                        .HasDatabaseName("ix_device_persons_caver_id")
+                        .HasFilter("caver_id is not null");
+
+                    b.HasIndex("UploadedByUserId")
+                        .HasDatabaseName("ix_device_persons_uploaded_by_user_id")
+                        .HasFilter("uploaded_by_user_id is not null");
+
+                    b.ToTable("device_persons", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.Document", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3885,6 +3948,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnName("attachment_ids")
                         .HasDefaultValueSql("'[]'::jsonb");
 
+                    b.Property<Guid?>("DevicePersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("device_person_id");
+
                     b.Property<Guid?>("FeatureId")
                         .HasColumnType("uuid")
                         .HasColumnName("feature_id");
@@ -3935,6 +4002,10 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("AttachedToFeatureId")
                         .HasDatabaseName("ix_import_batch_items_attached_to_feature_id");
+
+                    b.HasIndex("DevicePersonId")
+                        .HasDatabaseName("ix_import_batch_items_device_person_id")
+                        .HasFilter("device_person_id is not null");
 
                     b.HasIndex("FeatureId")
                         .HasDatabaseName("ix_import_batch_items_feature_id")
@@ -8639,6 +8710,21 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_checklist_items_checklists_checklist_id");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.DevicePerson", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Caver", null)
+                        .WithMany()
+                        .HasForeignKey("CaverId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_device_persons_cavers_caver_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_device_persons_users_uploaded_by_user_id");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.Document", b =>
                 {
                     b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
@@ -9074,6 +9160,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasForeignKey("AttachedToFeatureId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_import_batch_items_features_attached_to_feature_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.DevicePerson", null)
+                        .WithMany()
+                        .HasForeignKey("DevicePersonId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_import_batch_items_device_persons_device_person_id");
 
                     b.HasOne("SilexGis.Domain.Entities.Feature", null)
                         .WithMany()

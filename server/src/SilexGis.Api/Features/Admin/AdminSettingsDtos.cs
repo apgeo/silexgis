@@ -100,8 +100,21 @@ public sealed record AdminSettingsDto(
     NotificationSettingsDto Notifications,
     AnnouncementSettingsDto Announcements,
     PhotoLibrarySuspensionDto PhotoLibraries,
+    SyncSettingsDto Sync,
     bool MailConfigured,
     bool SmsConfigured);
+
+/// <summary>
+/// What the installation has decided about the mobile contract: whether phones get the people
+/// directory and whom it lists, whether a phone trip that does not match cleanly is still made a
+/// trip, and how long waiting file bytes are kept.
+/// </summary>
+public sealed record SyncSettingsDto(
+    bool PeopleDirectoryEnabled,
+    PeopleDirectoryScope PeopleDirectoryScope,
+    bool ConvertTripsWithProblems,
+    int StagedUploadRetentionDays,
+    int RejectedHeldBytesRetentionDays);
 
 /// <summary>
 /// Which neighbouring photo libraries this installation has stopped using for now.
@@ -323,6 +336,22 @@ public sealed class ImportSettingsDtoValidator : AbstractValidator<ImportSetting
             .InclusiveBetween(0, Domain.Import.PhotoImportOptions.MaxProximityRadiusMeters);
         RuleFor(x => x.PhotoClusterRadiusMeters)
             .InclusiveBetween(0, Domain.Import.PhotoImportOptions.MaxClusterRadiusMeters);
+    }
+}
+
+public sealed class SyncSettingsDtoValidator : AbstractValidator<SyncSettingsDto>
+{
+    /// <summary>
+    /// A year at most: these keep bytes nobody has decided about, and a window longer than that is
+    /// storage nobody is watching rather than a grace period.
+    /// </summary>
+    public const int MaxRetentionDays = 365;
+
+    public SyncSettingsDtoValidator()
+    {
+        RuleFor(x => x.PeopleDirectoryScope).IsInEnum();
+        RuleFor(x => x.StagedUploadRetentionDays).InclusiveBetween(1, MaxRetentionDays);
+        RuleFor(x => x.RejectedHeldBytesRetentionDays).InclusiveBetween(1, MaxRetentionDays);
     }
 }
 

@@ -19,6 +19,7 @@ namespace SilexGis.Infrastructure.Import;
 /// <param name="Reason">Why nothing was taken back (<see cref="SyncUndoReasons"/>), for <c>not_undone</c>.</param>
 /// <param name="Applied">The fields put back, for an edit.</param>
 /// <param name="Skipped">The fields of an edit left as they are, each with its reason.</param>
+/// <param name="DevicePersonId">The phone user the line is about, for a line that sent one; null otherwise.</param>
 public sealed record SyncUndoItemResult(
     long ItemId,
     Guid? FeatureId,
@@ -26,7 +27,8 @@ public sealed record SyncUndoItemResult(
     string Outcome,
     string? Reason,
     IReadOnlyList<string> Applied,
-    IReadOnlyList<HistoryRestoreSkip> Skipped);
+    IReadOnlyList<HistoryRestoreSkip> Skipped,
+    Guid? DevicePersonId = null);
 
 /// <summary>A request to undo an upload that cannot be answered line by line.</summary>
 public sealed class SyncUndoException(string code, string message) : InvalidOperationException(message)
@@ -90,6 +92,7 @@ public sealed class DeviceSyncUndoService(
     private const string DeviceEditTime = nameof(Feature.ClientUpdatedAt);
     private const string MainRole = nameof(CaveEntrance.IsMain);
     private static readonly string EntranceType = FeatureAudit.TypeName(FeatureKind.CaveEntrance);
+    private const string PersonType = nameof(DevicePerson);
 
     public async Task<IReadOnlyList<SyncUndoItemResult>> UndoAsync(
         ImportBatch batch,
@@ -123,11 +126,18 @@ public sealed class DeviceSyncUndoService(
             .Where(a => a.ImportBatchId == batch.Id && a.Source == ChangeSource.DeviceSync && a.EntityId != null)
             .OrderBy(a => a.Id)
             .ToListAsync(ct);
+        // A phone user's history rows are keyed by the phone's identifier for them, which the
+        // phone minted as it mints feature identifiers; kept apart so the two can never be read
+        // as each other's.
+        var byPerson = written.Where(a => a.EntityType == PersonType)
+            .GroupBy(a => a.EntityId!)
+            .ToDictionary(g => g.Key, g => g.ToList());
+        written = [.. written.Where(a => a.EntityType != PersonType)];
         var byRow = written.GroupBy(a => a.EntityId!).ToDictionary(g => g.Key, g => g.ToList());
 
         // The batch's own row is filed under it too, so an upload made since the history began
         // naming its batch always has at least one; an older upload has none at all.
-        var attributed = written.Count > 0;
+        var attributed = written.Count > 0 || byPerson.Count > 0;
 
         // Read before anything is taken back: which entrance held each cave's main role before the
         // upload, and whether the one holding it now holds it by the upload's doing.
@@ -152,7 +162,9 @@ public sealed class DeviceSyncUndoService(
             SyncUndoItemResult result;
             try
             {
-                result = await UndoLineAsync(item, byRow, attributed, ctx, force, ct);
+                result = item.DevicePersonId is { } personId
+                    ? await UndoPersonLineAsync(item, personId, byPerson.GetValueOrDefault(personId.ToString()) ?? [], force, ct)
+                    : await UndoLineAsync(item, byRow, attributed, ctx, force, ct);
                 await db.SaveChangesAsync(ct);
                 await transaction.ReleaseSavepointAsync(LineSavepoint, ct);
             }
@@ -643,6 +655,151 @@ public sealed class DeviceSyncUndoService(
     {
         public SyncUndoItemResult Result { get; } = result;
     }
+
+    /// <summary>
+    /// Takes back what an upload did to one phone user: the link to a caver it made is removed and
+    /// the names it changed go back to what they were.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A phone user the upload described for the first time is not removed. That the phone has
+    /// such a user is a fact about the phone, which the next upload states again; what the upload
+    /// decided is the link, and the link is what goes. Removing the row would also take away the
+    /// record later uploads and imports resolve the same phone user through.
+    /// </para>
+    /// <para>
+    /// The rule a later edit wins by is the features' rule. A value goes back only while it still
+    /// holds what the upload wrote; one somebody has changed since — a caver linked in the
+    /// browser, a name the phone sent again differently — is left and reported as superseded,
+    /// unless <c>force</c> asks for it anyway. The link and who made it go back together, as one
+    /// field: a caver id restored under the source of somebody else's link would claim an
+    /// authority nobody exercised.
+    /// </para>
+    /// </remarks>
+    private async Task<SyncUndoItemResult> UndoPersonLineAsync(
+        ImportBatchItem item, Guid personId, List<AuditEntry> history, bool force, CancellationToken ct)
+    {
+        var created = history.Exists(a => a.Action == AuditActions.Created);
+        var change = created ? SyncUndoChanges.Created : SyncUndoChanges.Updated;
+        if (item.UndoneAt is not null)
+        {
+            return PersonResult(item, personId, change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.AlreadyUndone, [], []);
+        }
+
+        var person = await db.DevicePersons.FirstOrDefaultAsync(p => p.DeviceUserId == personId, ct);
+        if (person is null)
+        {
+            return PersonResult(item, personId, change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.Purged, [], []);
+        }
+
+        // Each field's value before the upload's first change to it and after its last.
+        var fields = new Dictionary<string, (string? Old, string? New)>(StringComparer.Ordinal);
+        foreach (var entry in history.Where(a => a.Action is AuditActions.Created or AuditActions.Updated))
+        {
+            if (entry.Changes is null || JsonNode.Parse(entry.Changes) is not JsonObject changed)
+            {
+                continue;
+            }
+
+            foreach (var (name, pair) in changed)
+            {
+                var newValue = pair?["new"]?.ToString();
+                fields[name] = fields.TryGetValue(name, out var seen)
+                    ? (seen.Old, newValue)
+                    : (entry.Action == AuditActions.Created ? null : pair?["old"]?.ToString(), newValue);
+            }
+        }
+
+        if (fields.Count == 0)
+        {
+            // An upload that wrote no history for this phone user changed nothing in it.
+            return PersonResult(item, personId, change, SyncUndoOutcomes.Undone, null, [], []);
+        }
+
+        var applied = new List<string>();
+        var skipped = new List<HistoryRestoreSkip>();
+
+        if (fields.TryGetValue(nameof(DevicePerson.CaverId), out var link))
+        {
+            // The link holds while both halves are still what the upload left: the caver, and the
+            // source the upload linked under. That source is the one the history recorded when the
+            // upload changed it; when it did not — a phone moving its own link from one caver to
+            // another leaves the source as it was — it is a phone's, because only a phone uploads.
+            // Somebody who has since confirmed the same caver in the browser has made the link
+            // theirs, and putting the phone's earlier choice back under their authority would make
+            // it a link no later phone correction may replace.
+            var linkedUnder = fields.TryGetValue(nameof(DevicePerson.LinkSource), out var by)
+                ? by.New
+                : SourceName(DevicePersonLinkSource.Device);
+            var holds = string.Equals(person.CaverId?.ToString(), link.New, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(SourceName(person.LinkSource), linkedUnder, StringComparison.Ordinal);
+            if (holds || force)
+            {
+                person.CaverId = Guid.TryParse(link.Old, out var before) ? before : null;
+
+                // Who made the link goes back with it. When the upload changed it, to what it was;
+                // when it did not, to a phone's — the caver put back was a phone's choice, whatever
+                // source a forced undo finds on the row now.
+                person.LinkSource = fields.TryGetValue(nameof(DevicePerson.LinkSource), out var source)
+                    && Enum.TryParse<DevicePersonLinkSource>(source.Old, ignoreCase: true, out var sourceBefore)
+                        ? sourceBefore
+                        : DevicePersonLinkSource.Device;
+                applied.Add(nameof(DevicePerson.CaverId));
+            }
+            else
+            {
+                skipped.Add(new HistoryRestoreSkip(nameof(DevicePerson.CaverId), SyncUndoReasons.Superseded));
+            }
+        }
+
+        // A first description has no earlier names to go back to; only an edit's names do.
+        if (!created)
+        {
+            RestoreName(nameof(DevicePerson.Username), person.Username, v => person.Username = v ?? person.Username);
+            RestoreName(nameof(DevicePerson.FirstName), person.FirstName, v => person.FirstName = v);
+            RestoreName(nameof(DevicePerson.LastName), person.LastName, v => person.LastName = v);
+        }
+
+        if (applied.Count == 0 && skipped.Count > 0)
+        {
+            return PersonResult(item, personId, change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.Superseded, applied, skipped);
+        }
+
+        return PersonResult(
+            item, personId, change, skipped.Count > 0 ? SyncUndoOutcomes.Partly : SyncUndoOutcomes.Undone, null, applied, skipped);
+
+        void RestoreName(string name, string? current, Action<string?> set)
+        {
+            if (!fields.TryGetValue(name, out var value))
+            {
+                return;
+            }
+
+            if (string.Equals(current, value.New, StringComparison.Ordinal) || force)
+            {
+                set(value.Old);
+                applied.Add(name);
+            }
+            else
+            {
+                skipped.Add(new HistoryRestoreSkip(name, SyncUndoReasons.Superseded));
+            }
+        }
+    }
+
+    // As the history spells an enum value.
+    private static string SourceName(DevicePersonLinkSource source) =>
+        System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(source.ToString());
+
+    private static SyncUndoItemResult PersonResult(
+        ImportBatchItem item,
+        Guid personId,
+        string change,
+        string outcome,
+        string? reason,
+        IReadOnlyList<string> applied,
+        IReadOnlyList<HistoryRestoreSkip> skipped) =>
+        new(item.Id, null, change, outcome, reason, applied, skipped, personId);
 
     private static SyncUndoItemResult Done(ImportBatchItem item, Guid rowId, string change) =>
         new(item.Id, rowId, change, SyncUndoOutcomes.Undone, null, [], []);

@@ -256,7 +256,8 @@ public static class ImportBatchEndpoints
                     r.Outcome,
                     r.Reason,
                     [.. r.Applied],
-                    [.. r.Skipped.Select(s => new ImportBatchUndoSkippedDto(s.Field, s.Reason))]))];
+                    [.. r.Skipped.Select(s => new ImportBatchUndoSkippedDto(s.Field, s.Reason))],
+                    r.DevicePersonId))];
             }
             catch (SyncUndoException e)
             {
@@ -421,6 +422,7 @@ public sealed record ImportBatchUndoSkippedDto(string Field, string Reason);
 /// </param>
 /// <param name="Applied">The fields of an edited row put back.</param>
 /// <param name="Skipped">The fields of an edited row left as they are.</param>
+/// <param name="DevicePersonId">For a line about one of the phone's users rather than a row: that phone user.</param>
 public sealed record ImportBatchUndoItemDto(
     long ItemId,
     Guid? FeatureId,
@@ -428,7 +430,8 @@ public sealed record ImportBatchUndoItemDto(
     string Outcome,
     string? Reason,
     string[] Applied,
-    ImportBatchUndoSkippedDto[] Skipped);
+    ImportBatchUndoSkippedDto[] Skipped,
+    Guid? DevicePersonId = null);
 
 /// <summary>
 /// The answer to taking a confirmation back: the batch as it now stands, and for a phone upload

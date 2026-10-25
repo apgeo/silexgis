@@ -38,6 +38,8 @@ public interface IAppSettingsService
     /// </remarks>
     ValueTask<PhotoLibrarySuspensionSettings> GetPhotoLibrarySuspensionAsync(CancellationToken ct = default);
 
+    ValueTask<SyncSettings> GetSyncAsync(CancellationToken ct = default);
+
     /// <summary>Replaces a section and drops the cached copy across the process.</summary>
     Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class;
