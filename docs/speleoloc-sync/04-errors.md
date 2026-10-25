@@ -114,8 +114,8 @@ set the signed-in account does not own however that setting stands.
 | 400 | `sync.cursor_invalid` | The `cursor` was not issued by this server: truncated, re-encoded, hand-made, or from an older contract | `apply-and-resubmit` — drop the cursor and start the set again from the beginning, accepting that this is a full re-read. Never resend it as sent |
 | 409 | `sync.cursor_stale` | The `cursor` was issued by this server, but against an older revision of the sync set: the selection or its settings have been edited since | `apply-and-resubmit` — drop the cursor and read the set from the beginning. Retrying the same cursor will never succeed |
 
-The documents catalogue (`GET /sync/sets/{id}/documents`) answers exactly these three codes, on
-exactly these terms: it is read the way the feature download is read. Its cursor is its own — a
+The documents catalogue (`GET /sync/sets/{id}/documents`) and the trips stream
+(`GET /sync/sets/{id}/trips`) answer exactly these three codes, on exactly these terms: it is read the way the feature download is read. Its cursor is its own — a
 position the feature download issued is answered `sync.cursor_invalid` there, and the other way
 round — so a device keeps one cursor per stream and drops only the one refused.
 
@@ -211,7 +211,7 @@ being allowed to write again.
 | 400 | `sync.batch_too_large` | More items than `uploadRowsMax` from the capabilities answer, counted over every section of the upload together | `apply-and-resubmit` — split the batch. **Mint a new batch identifier for each part**; a batch identifier stands for one attempt |
 | 404 | `sync.set_not_found` | No sync set with that id belongs to this account | `surface-to-user` — as in section 3 |
 | 409 | `sync.batch_conflict` | The same batch identifier arrived twice at once, and the first copy is still being applied | `retry` — after a short wait. The winner's answer is what a later send returns |
-| 400 | `validation.failed` | The body failed validation — a row named twice, an upload with no item in any section, a property document that is not an object, more than 16 `clientFeatures` or one longer than 64 characters | `stop` — fix the client |
+| 400 | `validation.failed` | The body failed validation — a row, a recording or a scan named twice, a recording without `caveId` or `startedAt`, a scan without `recordingId` or `scannedAt`, an upload with no item in any section, a property document that is not an object, more than 16 `clientFeatures` or one longer than 64 characters | `stop` — fix the client |
 | 403 | `sync.caving_group_forbidden` | The set is bound to a caving group this account is no longer entitled to bind rows to. Nothing was written | `surface-to-user` — only an administrator can restore the membership |
 | 400 | *(a write-service code)* | The write service refused something the loop could not attribute to one row. Nothing is kept. The names are listed under section 6.3 | `stop` — the batch as sent cannot be applied |
 
@@ -286,6 +286,20 @@ went between the check and the write, or one of these:
 | `rejected` | `sync.location_forbidden` | The target is a feature whose location this account may not see, so the catalogue would never hand it a file hanging there. A feature the same upload created in its `rows` is exempt; a document sent under a feature's identifier is not | `stop` for this link — keep the file on the phone, or ask somebody who may see the location to hang it |
 | `rejected` | `sync.row_forbidden` | The account may read the target but not change what hangs on it (Write on the target) | `stop` for this link |
 | `rejected` | `sync.kind_unsupported` | The target's `kind` is not one a phone may hang files on in this contract version — only `feature` is | `stop` for this link, permanently in this contract version |
+
+An entry in `tripRecordings` or `tripPoints` (section 13.2 of the protocol document) is answered in
+the same shape, with the recording's or the scan's identifier as its `id`. Their `created`, `updated`,
+`deleted`, `unchanged` and `conflict` mean what they mean for rows — except that a `conflict` carries no
+echo: read the recording again from the trips stream — and they share `sync.row_not_found`,
+`sync.id_conflict`, `sync.row_deleted`, `sync.row_forbidden`, `sync.row_delete_forbidden` and
+`access.create_forbidden` with rows. These are their own:
+
+| `status` | `code` | Means | Action |
+|---|---|---|---|
+| `rejected` | `sync.cave_not_found` | On a recording: the named cave is not on this server, is not a cave, or is not readable by this account — answered alike | `surface-to-user` — the recording names a cave this account does not have; send the cave first if it is new |
+| `rejected` | `sync.caving_group_forbidden` | On a new recording: the set is bound to a caving group this account may not add trips to | `stop` for this item; choose another set |
+| `rejected` | `sync.recording_not_found` | On a scan: the recording it belongs to is not on this server, is not readable by this account, or was removed | `apply-and-resubmit` — send the recording in the same upload, before its scans; drop the scan if the recording was removed |
+| `rejected` | `sync.place_not_found` | On a scan: the named place is not on this server or is not readable by this account — answered alike | `apply-and-resubmit` — send the place in `rows` of the same upload, or send the scan without `placeId` |
 
 **A field the device sent that is silently not applied is not an error.** An account that may write
 a row but may not see its position exactly keeps its name and description edits and loses only the
@@ -385,7 +399,44 @@ boundary is stated so that a gap is not mistaken for an omission.
   answers a line of an upload made before the history named its batch — nothing of it was taken back,
   and it is closed all the same. A line whose upload moved the cave's main entrance may also carry a
   skipped `IsMain` (`superseded` or `forbidden`) when the role could not be given back to the entrance
-  that held it.
+  that held it. A line about a phone recording or a scan names it in `tripRecordingId` or
+  `tripRecordingPointId` instead of `featureId`; a recording or scan the upload created is deleted
+  (`undone`); one it deleted comes back, and one it changed gets its fields back while they still hold
+  what the upload wrote, exactly as a feature's do (`partly`, `fields_left` and `superseded` as above;
+  a cave or place the row named before goes back only for a caller who may read it, `redacted`
+  otherwise; `forbidden` when the caller may no longer change the recording, or delete it for a
+  deleted one; `container_deleted` for a scan whose recording is deleted). A recording line whose
+  recording had been made into a trip report names it in `tripLogId` (`null` when the caller may not
+  read that trip), with `tripOutcome` `undone` (the report was deleted with it) or `not_undone` and
+  `tripReason` `trip_changed` (somebody worked on the report since) or `converted_elsewhere` (an
+  archive import made it).
+- **The archive import's refusals of a recording the server already holds** — from
+  `POST /api/v1/speleoloc-imports/{fileId}/preview` and `/commit` (a recording read out of an archive)
+  and from `POST /api/v1/speleoloc-imports/recordings/{recordingId}/preview` and `/commit` (the same
+  review over a recording a phone sent), the web interface's archive import. A device does not call
+  these. `import.recording_already_converted` (409): the recording already has its trip report; the
+  answer's `tripLogId` names it, or is `null` when the caller may not read that trip. Action: open the
+  report instead of importing again; to import again, undo whatever made the report first.
+  `import.recording_not_writable` (409): the recording is kept here under an account whose recordings
+  the caller may not change — making it a report writes on it (and, for one deleted here, brings it
+  back, which takes the right to delete it). Nothing is written. Action: ask somebody who may change
+  the recording to import it, or import it onto nothing (the positions need the recording's report).
+  Status of both: live.
+- **The recording-sourced review** — `POST /api/v1/speleoloc-imports/recordings/{recordingId}/preview`
+  and `/commit` answer exactly as the archive's routes do (the create rights, `trip_log.not_found`, the
+  model and selection codes of the archive import, and the two refusals above), with one code of their
+  own: `trip_recording.not_found` (404) — the recording is not here, is deleted, or the caller may not
+  read it, alike. There is no saved review for a recording: the confirmation carries its decisions.
+  Status: live. Action: `surface-to-user`.
+- **Clearing a trip's attention flag** — `POST /api/v1/trip-logs/{id}/attention/clear`, the web
+  interface's sign-off on a trip made automatically from a phone recording. A device does not call it.
+  `401` without a session; `trip_log.not_found` (404) — no such trip, or one the caller may not read;
+  `acl.forbidden` (403) — the caller may read the trip but not change it;
+  `trip_attention.not_found` (404) — the trip has no flag; `trip_attention.changed` (409) — an upload
+  raised the flag again between the caller reading it and the clearance, so nothing was cleared;
+  `204` otherwise, including for a flag already cleared (the first clearance stands). Status: live.
+  Action: `surface-to-user`; on `trip_attention.changed`, show the flag again and let the person clear
+  it once they have seen the new reason.
 - **Restoring a value from the history** — `POST /api/v1/history/restore`, the web interface's route
   for putting fields of a feature back to what they held before one recorded change. A device does not
   call it. Its codes: `history.entity_not_found` (404 — no such feature, or one the caller may not

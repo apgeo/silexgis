@@ -651,7 +651,7 @@ generates code from it:
   call whose purpose is to obtain one. No sync route is on that allow-list.
 - **Every operation is named.** The sync names are `syncCapabilities`, `syncListSets`,
   `syncCreateSet`, `syncGetSet`, `syncReplaceSet`, `syncDeleteSet`, `syncDownload`,
-  `syncUpload`, `syncDocuments` and `syncFileLinks`; they are chosen deliberately, are pinned by the server's own tests, and are part of
+  `syncUpload`, `syncDocuments`, `syncFileLinks`, `syncPeople` and `syncTrips`; they are chosen deliberately, are pinned by the server's own tests, and are part of
   the contract. Every other operation on the server is named too, after the code that handles it,
   so a generated client no longer invents a name from a path — but only the sync names are
   promised not to move.
@@ -1136,4 +1136,196 @@ people are not arbitrated on a revision). An upload without the array is answere
   who made it is: a link the roster's keeper has confirmed is theirs, and stays. A link a forced undo
   puts back is put back as the phone's.
 
-`uploadRowsMax` counts the items of `rows` and `people` together.
+`uploadRowsMax` counts the items of every section together — `rows`, `people`, `tripRecordings` and
+`tripPoints` (section 13).
+
+## 13. Trips
+
+A phone records a trip as **a recording** (`cave_trips`): a cave, a start and an end, a title, a
+description and a running log, and **a scan** (`cave_trip_points`) at each marked place reached. The
+server keeps the recording as a recording — beside, not instead of, any trip report the club makes
+from it — under the phone's own identifiers, so the same recording sent again, by this phone or
+another, or arriving later inside an exported archive, is recognised as the one already here.
+
+A recording is governed by the installation's **trip rules** (the same rules a club writes over its
+trips), owned by the account that uploaded it, and bound to the caving group of the set it was
+uploaded into: **visible to that club**, or private to the uploader when the set names no club.
+
+*Announcement.* This part will be announced as `trips` in `features` once the server also makes trip
+reports from recordings; until then the routes below are served but not announced, and a client must
+not rely on them.
+
+### 13.1 Reading recordings
+
+```
+GET /api/v1/sync/sets/{id}/trips?cursor=…&pageSize=…
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "setRevision": 4,
+  "settings": { },
+  "recordings": [
+    {
+      "id": "…", "caveId": "…", "title": "…", "description": "…", "log": "…",
+      "startedAt": "2026-09-12T08:00:00+00:00", "endedAt": "2026-09-12T16:00:00+00:00",
+      "createdByDeviceUserId": "…", "revision": "…",
+      "points": [
+        { "id": "…", "placeId": "…", "scannedAt": "…", "notes": "…", "createdByDeviceUserId": "…", "revision": "…" }
+      ]
+    }
+  ],
+  "tombstones": [ { "id": "…", "deletedAt": "…" } ],
+  "nextCursor": "…",
+  "hasMore": false
+}
+```
+
+- Paged exactly as the feature stream is (section 3): an opaque cursor of its own — a cursor of
+  another stream is refused `400 sync.cursor_invalid` — `409 sync.cursor_stale` when the set moved,
+  `pageSize` clamped to `pageSizeMax`, tombstones riding the same cursor.
+- **Which recordings.** A recording is on a page when its cave is one the feature stream would hand
+  this account right now — inside the set, readable, and **not withheld** — and the recording itself is
+  readable under the trip rules. A recording in a withheld cave is **absent, not stubbed**, exactly as a
+  photograph on that cave is.
+- **Which scans.** `points` lists the recording's live scans in the order they were made, **leaving out
+  every scan of a place the feature stream would not hand this account**; the list is otherwise
+  complete, so replace the recording's scans wholesale. A scan carries no position of its own: where it
+  was is its place's position.
+- **When a recording comes again.** When it changes, when any of its scans is added, edited or removed,
+  or when its cave changes (so a cave that comes into the set brings its recordings). `revision` is the
+  recording's own revision, the value an upload sends back as `baseRevision`; each scan has its own.
+- **Tombstones** name recordings removed after the cursor, in caves the set hands this account, that the
+  account may read. A removed scan is not a tombstone: its recording comes again without it.
+- `deviceUuid` never travels; `createdByDeviceUserId` is the phone user's identifier (section 12).
+
+### 13.2 The `tripRecordings` and `tripPoints` sections of an upload
+
+An upload may carry `tripRecordings` and `tripPoints` arrays. They are applied **after** `rows` and
+`people`, recordings before scans — so a scan sent beside its new recording finds it, and a recording
+in a cave sent in `rows` of the same upload finds the cave — and each is answered in an array of the
+same name in the per-item shape of `rows` (`id`, `status`, `revision`, `code`, `detail`). An upload
+without the arrays is answered without them.
+
+```json
+"tripRecordings": [
+  { "id": "…", "baseRevision": null, "deleted": false, "caveId": "…", "title": "…",
+    "description": "…", "log": "…", "startedAt": "…", "endedAt": "…",
+    "createdByDeviceUserId": "…", "clientUpdatedAt": "…" }
+],
+"tripPoints": [
+  { "id": "…", "recordingId": "…", "baseRevision": null, "deleted": false, "placeId": "…",
+    "scannedAt": "…", "notes": "…", "createdByDeviceUserId": "…" }
+]
+```
+
+- **Identity, arbitration and resend** are the rows' (section 8): the identifier is adopted verbatim, a
+  create whose identifier is here answers `unchanged` with the current `revision`, an edit or a removal
+  is written only against the current `baseRevision` (`conflict` otherwise, with the server's revision
+  and no echo — read the recording again from the stream), and a removal of something never received
+  is `unchanged`. A recording or a scan appears at most once per upload.
+- A recording to be written needs `caveId` and `startedAt`; a scan needs `recordingId` and `scannedAt`.
+  A removal needs only `id`, `baseRevision` and `deleted: true` (and a scan its `recordingId`). Missing
+  either refuses the whole upload with `400`, before anything is written.
+- **The cave** must be one the account may read; one that is not here and one it may not read are both
+  `sync.cave_not_found`. A cave the account may read but not place exactly is accepted — a recording
+  carries no position. Adding a recording needs the right to add trips (bound to the set's club when the
+  set names one): `access.create_forbidden` or `sync.caving_group_forbidden` otherwise.
+- **A scan is part of its recording**: adding, editing or removing one needs the right to edit the
+  recording (`sync.row_forbidden`), and a recording that is not here, may not be read or was removed is
+  `sync.recording_not_found`. A scan belongs to one recording for good; its identifier sent under another
+  recording is `sync.id_conflict`. Its `placeId` must be a place the account may read
+  (`sync.place_not_found` otherwise, alike for absent and unreadable).
+- Editing a recording needs the right to edit it, removing it the right to remove it
+  (`sync.row_forbidden`, `sync.row_delete_forbidden`), as for rows. A removed recording answers
+  `sync.row_deleted` to an edit, as a removed row does.
+- `clientUpdatedAt` is kept as provenance and never compared.
+- Every recording and scan an upload wrote is a line of the upload's import batch.
+
+### 13.3 What the server makes of a recording
+
+Once an upload that wrote or changed recordings (or their scans) has been applied, the server makes
+**trip reports** from them in the background — nothing in the upload's answer waits for it, and the
+phone is not asked anything.
+
+- **A recording still open** (no `endedAt`) is left as it is. The upload that closes it makes the trip.
+- **A recording that settles** becomes a finished trip report owned by the uploader, in the recording's
+  club and audience, named after the recording (or its first day), linked to its cave, with the people
+  the recording's phone users are mapped to (section 12) on its roster, and **one position per scan** at
+  the survey station the scan's place stands for. A scan **settles** when its place is a marked place the
+  uploader may read, the place's depth (`speleolocDepthInCave`) points at **exactly one** nearest station
+  of the cave's current survey — a tie between two stations at the same distance, a place with no depth,
+  a cave with no survey or a survey the uploader may not see all leave the scan unsettled — and its
+  phone user (or, when the scan names none, the recording's) is mapped to a person.
+- **A recording that does not fully settle** is, by default, still made a trip report with the scans
+  that did settle, and the trip is **flagged as needing attention**, naming each reason and the scans it
+  covers (`place_unknown`, `unresolved_station`, `unmapped_person`, `recorded_in_future`). The people
+  who look after phone uploads and the uploader are notified. An administrator may switch this off
+  (*convert trips with problems*): the recording is then left as a recording, and the same people are
+  told it is waiting.
+- **A recording already made into a trip that changes afterwards** — edited, given a scan, a scan
+  changed or deleted, or the recording itself deleted by the phone — does not rewrite the trip: the trip
+  is flagged with `recording_changed_after_conversion` and the same people are told.
+- **A recording left waiting** — switched off as above, or not made because the uploader may no longer
+  make the trip — becomes a trip **by hand**, on the archive import's review screen reading the recording
+  instead of an archive: `POST /api/v1/speleoloc-imports/recordings/{recordingId}/preview` and `/commit`
+  take the archive import's own requests and answer with its own answers, through the same resolver, so a
+  scan is proposed the same stations whichever way the recording came. The person reviewing needs to be
+  able to read the recording and to change it (making it a report marks it), and the usual rights to
+  write onto the trip or create one. There is no saved review for a recording; the confirmation carries
+  the decisions. Undoing that import takes the mark off again.
+- A recording becomes **one** trip report, whichever way it is made; positions made this way are
+  withheld from exactly the readers a typed position on that cave is withheld from.
+
+### 13.4 The same recording by two paths, and taking an upload back
+
+**The recording's identifier is its identity on both paths.** A recording a phone sends and the same
+recording read out of an exported archive (`speleo_loc.sqlite` in a SpeleoLoc export, imported from the
+browser) are one row on the server. The archive import keeps the recording too — creating it when the
+server has never seen it, or marking the one a phone already sent — and marks it as made into the trip
+the import wrote onto. From then on:
+
+- an archive import of a recording that **already has its trip report** — made from a phone upload or by
+  an earlier import — is refused, on the dry run and on the confirmation alike, with `409`
+  `import.recording_already_converted`; the answer's `tripLogId` names the report when the person may
+  read it, and is `null` when they may not;
+- a phone upload of a recording an archive import already made into a report makes **no second
+  report**: the scans it adds flag that report with `recording_changed_after_conversion`, as any change
+  after conversion does;
+- a recording the server already holds from a phone is kept as the phone sent it; the import only marks
+  it, and only for a person who may change that recording (and, for one deleted here, delete it — the
+  import brings it back). Anybody else is refused with `409` `import.recording_not_writable`, and nothing
+  is written. Undoing the import takes the mark off, so the recording can become a report again; a
+  recording the import brought in (or back from deleted) is deleted again, which the trips stream tells
+  the phones;
+- a recording the archive import brings in is the importer's, with an audience never wider than the
+  report's: the report's club when the report is visible to the club (or wider) and the importer may add
+  trips to that club and bind them to it — so the club's phones receive it — and private to the importer
+  otherwise.
+
+One trip may hold several recordings — two phones of one party, each imported onto the trip the party
+planned. What is refused is one recording becoming two reports.
+
+**Undoing a phone upload** (the upload's undo, §8) takes back the recordings and scans the upload
+created — deleted, so the trips stream sends their tombstones — and, with a recording, the trip report
+a conversion of that recording's uploads made from it **when nobody has touched the report since**: any
+change to the trip, its people, its positions or its flag by anything other than that conversion means
+somebody worked on it, and it is left. (The conversion may be a later upload's — the one that closed a
+recording sent while the trip was under way; undoing either upload takes the untouched report back.)
+What an upload **changed or deleted** in a recording or a scan is put back out of the history, as a
+feature's change is: a deleted one comes back (its write time moved, so the trips stream re-sends it),
+and each changed field returns to its earlier value while it still holds what the upload wrote; a field
+somebody changed since is left (`superseded`). Undoing the change that closed a recording, when that
+upload's conversion made the report and nobody touched it, also deletes the report and takes the mark
+off the recording, which is open again. The undo's line for the recording names the report
+(`tripLogId`, `null` for a caller who may not read it) and says what became of it (`tripOutcome`:
+`undone` or `not_undone`; `tripReason`: `trip_changed`, or `converted_elsewhere` for a report an archive
+import made). The phone that sent the change still holds it, and a later upload of it is a change
+again.
+
+### 13.5 Announcement
+
+`features` in `GET /sync/capabilities` names **`trips`** on every installation running this build: the
+trips stream and the two upload sections are served. A device that does not see the name does not send
+the sections.

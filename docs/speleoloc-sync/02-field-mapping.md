@@ -270,3 +270,80 @@ links as `knownLinks`, and the review screen shows each as the phone user's choi
 reviewer's choice is written back as the phone user's link (never over one made by somebody keeping
 the roster, and never to a caver no longer on the roster).
 
+
+## 9. Trips: recordings and their scans
+
+A phone's trip recording is kept on the server **as a recording**, under the phone's identifier,
+beside any trip report the club makes from it. Its scans are kept as **scans on the recording**, each
+naming the place scanned. The protocol document's section on trips says how they are read and sent.
+
+| On the phone | In a `tripRecordings` item / a stream recording | On the server |
+|---|---|---|
+| `cave_trips.uuid` | `id` | The recording's identifier, adopted verbatim |
+| `cave_trips.cave_uuid` | `caveId` | The cave the recording was made in |
+| `cave_trips.title`, `description`, `log` | `title`, `description`, `log` | Kept as sent (`title` may be empty) |
+| `cave_trips.trip_started_at`, `trip_ended_at` | `startedAt`, `endedAt` | Kept as sent; `endedAt` absent while open |
+| `cave_trips.created_by_user_uuid` | `createdByDeviceUserId` | A phone user's identifier, resolved through the phone-user record (section 8), never stored as a caver |
+| `cave_trips.updated_at` | `clientUpdatedAt` | Provenance only, never compared |
+| — | `revision` | The server's revision of the recording |
+| The uploading account | — | The recording's owner |
+| The set's caving group | — | The recording's club; visible to that club, or private to the owner when the set names none |
+
+| On the phone | In a `tripPoints` item / a stream scan | On the server |
+|---|---|---|
+| `cave_trip_points.uuid` | `id` | The scan's identifier, adopted verbatim |
+| `cave_trip_points.cave_trip_uuid` | `recordingId` (upload only) | The recording it belongs to, for good |
+| `cave_trip_points.cave_place_uuid` | `placeId` | The place scanned — a feature, normally a `cave_place` inside the cave |
+| `cave_trip_points.scanned_at` | `scannedAt` | Kept as sent |
+| `cave_trip_points.notes` | `notes` | Kept as sent |
+| `cave_trip_points.created_by_user_uuid` | `createdByDeviceUserId` | A phone user's identifier |
+| — | `revision` | The server's revision of the scan |
+
+**Never in a recording or a scan: a position.** Where a scan was is its place's position, delivered (or
+withheld) by the feature stream; a scan of a place a reader is not handed is left out of the recording
+that reader receives. `cave_trips.device_uuid` and `cave_trip_points.device_uuid` never travel.
+
+### 9.1 From a recording to a trip report
+
+What the server writes when it makes a trip report from a recording (the protocol document's section
+on trips says when it does):
+
+| From the recording | On the trip report |
+|---|---|
+| `title` (or the start day, `yyyy-MM-dd`, when empty) | The trip's title |
+| `startedAt` | The trip's date (its UTC day) |
+| `endedAt` | The trip's last day, when it is a later day than the start |
+| `description`, `log` | The trip's description and its results |
+| `caveId` | The cave the trip is linked to, and the cave every position is anchored to |
+| The recording's owner, club and audience | The trip's owner, club and audience |
+| Each scan's phone user (else the recording's) | A person on the roster, through the phone-user mapping — never matched by name |
+| A scan that settles | One position: the station the scan's place stands for, at `scannedAt`, with the scan's notes (cut to the 2,000 characters a position carries) |
+| A scan that does not settle | No position; named, by its identifier, on the trip's attention flag |
+
+The trip is finished, has a closed tracking record against the survey used, and is never announced to
+the people on it. The recording keeps everything it said, including every scan the trip left out.
+
+### 9.2 From an archive recording to the same row
+
+An archive import (the browser's import of a SpeleoLoc export) keeps the recording it imports, on the
+same row a phone upload of it writes:
+
+| From the archive (`cave_trips`, `cave_trip_points`) | On the recording |
+|---|---|
+| `cave_trips.uuid` | The recording's identifier — the same one a phone sends |
+| — | The cave the import placed it in (the cave of the survey it was reviewed against) |
+| `title` (or the start day, when empty), `description`, `log`, `started_at`, `ended_at` | The same |
+| The trip's phone user | The phone user who started it |
+| The importing account | The owner |
+| The trip report's club | The club, with the club audience — when the report is seen by the club (or more widely) and the importer may add trips to that club and bind them to it; otherwise the owner alone, so the recording is never seen more widely than its report |
+| — | Marked as made into the trip report the import wrote onto |
+| Each scan's `uuid`, place, `scanned_at`, `notes`, phone user | A scan with the same identifier; a place this installation does not hold is left off the scan |
+
+A recording the installation already holds — a phone sent it — is not rewritten from the archive: the
+import only marks it as made into the report, and only for an importer who may change that recording.
+
+The same table, read the other way, is how the review reads a recording a phone sent when it is made
+into a trip by hand (`POST /speleoloc-imports/recordings/{recordingId}/preview` and `/commit`): the
+recording's title, description, log and dates stand in for the archive's, each scan for an archive scan
+(its place, moment, notes and phone user — the recording's phone user when the scan names none), and
+the document count is zero.

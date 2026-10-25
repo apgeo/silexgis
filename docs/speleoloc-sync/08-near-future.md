@@ -98,7 +98,8 @@ reach.
 
 ## 5. Phase two
 
-None of the following is in this contract, and each waits for its own reason.
+What this section lists waited for its own reason when the contract was first published; an entry
+marked *built* has since been added to the contract, additively, and says where it is described.
 
 **Photos and documents.** They are files rather than rows, so they need a transfer shape this contract
 does not have — content addressing, resumable transfer, and a decision about what a device does when
@@ -110,21 +111,25 @@ never become coordinates** — a pin is a position in an image, and unless the i
 there is nothing to turn it into. That makes them safe to carry, and it also makes them useless as a
 way to move a position, which is why they are not a protection concern.
 
-**Trips — archive import exists; live sync does not.** The server side has landed: a SpeleoLoc
-export archive can be imported, recording by recording, so that a trip's scanned points become a
-tracked trip's position history on the server (`/speleoloc-imports/{fileId}/…`). It reads
-`speleo_loc.sqlite` straight out of the zip — nothing else in the archive is opened — and it is a
-reviewed import rather than a sync: each point is offered with the survey stations its place's depth
-could mean and a person confirms which, because a place is a physical marker and a position here is a
-station reference, and because the device accounts on a recording are not identities and are mapped to
-cavers by hand.
+**Trips — built.** Phones now send their trip recordings through this protocol and receive the
+recordings of the caves they carry (`01-protocol.md` §13): `tripRecordings` and `tripPoints` upload
+sections, the `GET /sync/sets/{id}/trips` stream, and `trips` in `features`. The server makes a trip
+report from each recording automatically when everything in it settles, by the same rule the archive
+import's review uses, and flags the report for a person when something does not.
 
-What still waits is **live sync of trips through this protocol** — `cave_trips` and
-`cave_trip_points` as pullable and pushable rows, with a cursor and a batch contract of their own.
-Two of the three reasons that shape was still moving are now settled by the import (what a point
-becomes on the server, and who decides it), and the third is not: a sync would have to answer what
-happens when the same recording arrives twice, once through an archive and once through the wire,
-and that is a question about identity across two paths rather than about trips.
+The question this section used to leave open — what happens when the same recording arrives twice, once
+through an archive and once through the wire — is answered by identity: the recording's own identifier
+is the row on both paths, the archive import keeps the recording as well as the trip, and a recording
+that already has its report is refused by the other path (`import.recording_already_converted`) rather
+than recorded twice (`01-protocol.md` §13.4).
+
+A recording the server leaves waiting — the installation keeps recordings that do not settle as
+recordings, or the uploader may no longer make the trip — is made a trip by hand through the archive
+import's review reading the recording (`01-protocol.md` §13.3); the screen that opens it from a
+recording is the browser's to add.
+
+Still not built: photos on recordings and scans, and any tool for settling what a flagged report names —
+the flag is cleared by a person who may change the trip, and the fixing is theirs to do by hand.
 
 **Wider selection rules for a sync set.** A set names root features today, and everything contained
 in a named root is carried. Selecting by caving group, by area, or by a saved filter are all
