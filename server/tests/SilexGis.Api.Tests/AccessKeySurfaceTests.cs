@@ -28,6 +28,14 @@ public sealed class AccessKeySurfaceTests(PostgresFixture postgres) : IDisposabl
     [
         ("GET", "/api/v1/me/", "the device shows which account its key acts as, and tests the key with it"),
         ("GET", "/api/v1/caves/", "the device searches for the cave a survey belongs to; rows are visibility-filtered and positions protected as for any caller"),
+        ("GET", "/api/v1/survey-uploads/capabilities", "the device learns what the server accepts and whether it compiles before the caver starts"),
+        ("GET", "/api/v1/survey-uploads/", "the device lists surveys it may import; only caves whose survey the caller may see with the exact location"),
+        ("POST", "/api/v1/survey-uploads/", "the device opens an upload of one survey, naming or making its cave on the account's own rights"),
+        ("GET", "/api/v1/survey-uploads/{id:guid}", "the device follows the processing run it started"),
+        ("PUT", "/api/v1/survey-uploads/{id:guid}/files/{name}", "the device sends each declared file; Write on the cave"),
+        ("POST", "/api/v1/survey-uploads/{id:guid}/complete", "the device says every file arrived, which queues the run; Write on the cave"),
+        ("POST", "/api/v1/survey-uploads/{id:guid}/rerun", "the device runs a finished upload again with other outputs; Write on the cave"),
+        ("DELETE", "/api/v1/survey-uploads/{id:guid}", "the device gives up a session still receiving; what arrived stays archived"),
     ];
 
     [Fact]

@@ -106,6 +106,8 @@ public static class DependencyInjection
         services.AddScoped<Import.VisibleProximitySearch>();
         services.Configure<Import.ImportLimitOptions>(
             configuration.GetSection(Import.ImportLimitOptions.SectionName));
+        services.Configure<Surveys.SurveyUploadOptions>(
+            configuration.GetSection(Surveys.SurveyUploadOptions.SectionName));
         services.AddScoped<Import.ImportCandidateService>();
         services.AddScoped<Import.ImportCommitService>();
         services.AddScoped<Import.PhotoCandidateService>();
@@ -382,6 +384,9 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, DirectoryImportHandler>();
         services.AddScoped<IProcessingJobHandler, ImportCommitHandler>();
         services.AddScoped<IProcessingJobHandler, UploadSessionSweepHandler>();
+        services.AddScoped<IProcessingJobHandler, SurveyUploadPipelineHandler>();
+        services.AddScoped<IProcessingJobHandler, SurveyUploadSweepHandler>();
+        services.AddSingleton<Surveys.ISurveyCompiler, Surveys.NoSurveyCompiler>();
         services.AddScoped<IProcessingJobHandler, DocumentPurgeHandler>();
         services.AddScoped<IProcessingJobHandler, CavingGroupAnnouncementHandler>();
 
@@ -479,6 +484,7 @@ public static class DependencyInjection
         // for its whole duration.
         services.AddHostedService<TerrainProcessingJobWorker>();
         services.AddHostedService<UploadSessionScheduler>();
+        services.AddHostedService<SurveyUploadSweepScheduler>();
         services.AddHostedService<TerrainUploadSweepScheduler>();
 
         services.Configure<DocumentRetentionOptions>(
