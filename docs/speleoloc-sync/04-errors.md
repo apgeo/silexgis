@@ -153,6 +153,13 @@ the caver just asked their phone to carry would never arrive. This is the ordina
 editing a set from the settings page, not a fault: expect it after every edit, and answer it by
 starting the set again rather than by backing off and retrying.
 
+### 3.2 The people directory
+
+| Status | Code | Means | Action |
+|---|---|---|---|
+| 409 | `sync.feature_disabled` | The installation has the people directory switched off; `people` is then missing from `features` too | `stop` — do not offer choosing a caver; ask the capabilities again on the next sync |
+| 403 | `access.forbidden` | This account may not be told who people are | `stop` |
+
 ## 4. Editing a sync set
 
 | Status | Code | Means | Action |
@@ -201,10 +208,10 @@ being allowed to write again.
 | Status | Code | Means | Action |
 |---|---|---|---|
 | 409 | `sync.contract_unsupported` | The device sent a `contractVersion` this server does not speak. Asked before the rows are looked at, so nothing was written. The server's own version is in `detail` | `stop` — and tell the caver the application needs updating, or the installation does. Retrying cannot help |
-| 400 | `sync.batch_too_large` | More rows than `uploadRowsMax` from the capabilities answer | `apply-and-resubmit` — split the batch. **Mint a new batch identifier for each part**; a batch identifier stands for one attempt |
+| 400 | `sync.batch_too_large` | More items than `uploadRowsMax` from the capabilities answer, counted over every section of the upload together | `apply-and-resubmit` — split the batch. **Mint a new batch identifier for each part**; a batch identifier stands for one attempt |
 | 404 | `sync.set_not_found` | No sync set with that id belongs to this account | `surface-to-user` — as in section 3 |
 | 409 | `sync.batch_conflict` | The same batch identifier arrived twice at once, and the first copy is still being applied | `retry` — after a short wait. The winner's answer is what a later send returns |
-| 400 | `validation.failed` | The body failed validation — a row named twice, an empty batch, a property document that is not an object | `stop` — fix the client |
+| 400 | `validation.failed` | The body failed validation — a row named twice, an upload with no item in any section, a property document that is not an object, more than 16 `clientFeatures` or one longer than 64 characters | `stop` — fix the client |
 | 403 | `sync.caving_group_forbidden` | The set is bound to a caving group this account is no longer entitled to bind rows to. Nothing was written | `surface-to-user` — only an administrator can restore the membership |
 | 400 | *(a write-service code)* | The write service refused something the loop could not attribute to one row. Nothing is kept. The names are listed under section 6.3 | `stop` — the batch as sent cannot be applied |
 
@@ -235,6 +242,15 @@ Each entry in `rows` carries a `status`, and a `code` when there is a reason wor
 | `rejected` | `sync.type_unknown` | On **a new row**, `caveTypeCode`, `entranceTypeCode` or `featureTypeCode` names a kind this installation does not have. **Codes, never numeric identifiers**: the number standing for "cave" here stands for something else on the next server | `surface-to-user` — an administrator adds the kind, or the caver picks a different one |
 | `rejected` | `sync.kind_unsupported` | This `kind` is not carried by sync yet | `stop` for this row, permanently in this contract version |
 | `rejected` | *(a write-service code)* | The write service refused this row — a broken containment shape, a property document that fails its schema. The `detail` says which, and section 6.3 names them | `apply-and-resubmit` after fixing it, if the client can; otherwise `surface-to-user` |
+
+An entry in `people` (section 12.2 of the protocol document) is answered in the same shape, with the
+phone user's `deviceUserId` as its `id`. It is `created`, `updated` or `unchanged` — `updated` also when
+a link made in the browser was kept and only the names were taken — or one of these:
+
+| `status` | `code` | Means | Action |
+|---|---|---|---|
+| `rejected` | `sync.person_not_listed` | The `caverId` is not a caver the people directory lists for this account. Nothing about this phone user was written | `apply-and-resubmit` — read the directory again and choose from it, or send the phone user without `caverId` |
+| `rejected` | `sync.feature_disabled` | The installation has the people directory switched off, so it takes no links from phone users to cavers. Nothing about this phone user was written | `apply-and-resubmit` — send the phone user without `caverId`; stop offering the choice while `people` is missing from `features` |
 
 **A field the device sent that is silently not applied is not an error.** An account that may write
 a row but may not see its position exactly keeps its name and description edits and loses only the
@@ -328,6 +344,15 @@ boundary is stated so that a gap is not mistaken for an omission.
   `200` lists the fields put back in `applied` and each field left in `skipped` with its `reason`:
   `not_restorable`, `redacted` (the caller's history hides it), `no_pre_image` (a large shape whose
   full copy was never kept) or `forbidden` (a position, for a caller without exact view).
+- **The phone users screen** — `GET /api/v1/phone-users`, and `PUT` and `DELETE` on
+  `/api/v1/phone-users/{deviceUserId}/link`: the web interface's routes for somebody keeping the
+  roster to see which phone users the installation has met and to say, or take back, which caver each
+  is. A device does not call them; they answer whether or not the people directory is switched on.
+  Their codes: `access.forbidden` (403 — listing needs the right to be told who people are, linking
+  and unlinking the roster keeper's), `sync.phone_user_not_found` (404 — no phone user with that
+  identifier has been met), `sync.caver_not_found` (404 — the `caverId` names nobody on the roster)
+  and `validation.failed` (400). A link made there is recorded as the roster keeper's, and a phone's
+  later different choice does not replace it.
 
 ## 9. Where these codes appear in the served description
 
