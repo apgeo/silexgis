@@ -890,6 +890,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("at");
 
+                    b.Property<Guid?>("ChangeSetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("change_set_id");
+
                     b.Property<string>("Changes")
                         .HasColumnType("jsonb")
                         .HasColumnName("changes");
@@ -903,6 +907,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("entity_type");
+
+                    b.Property<Guid?>("ImportBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("import_batch_id");
 
                     b.Property<IPAddress>("Ip")
                         .HasColumnType("inet")
@@ -918,6 +926,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("root_entity_type");
 
+                    b.Property<short?>("Source")
+                        .HasColumnType("smallint")
+                        .HasColumnName("source");
+
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
@@ -928,6 +940,14 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("At")
                         .HasDatabaseName("ix_audit_log_at");
 
+                    b.HasIndex("ChangeSetId")
+                        .HasDatabaseName("ix_audit_log_change_set_id")
+                        .HasFilter("change_set_id IS NOT NULL");
+
+                    b.HasIndex("ImportBatchId")
+                        .HasDatabaseName("ix_audit_log_import_batch_id")
+                        .HasFilter("import_batch_id IS NOT NULL");
+
                     b.HasIndex("EntityType", "EntityId")
                         .HasDatabaseName("ix_audit_log_entity_type_entity_id");
 
@@ -937,6 +957,31 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasFilter("root_entity_type IS NOT NULL");
 
                     b.ToTable("audit_log", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.AuditGeometryValue", b =>
+                {
+                    b.Property<long>("AuditEntryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("audit_entry_id");
+
+                    b.Property<string>("Property")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("property");
+
+                    b.Property<byte[]>("NewWkb")
+                        .HasColumnType("bytea")
+                        .HasColumnName("new_wkb");
+
+                    b.Property<byte[]>("OldWkb")
+                        .HasColumnType("bytea")
+                        .HasColumnName("old_wkb");
+
+                    b.HasKey("AuditEntryId", "Property")
+                        .HasName("pk_audit_geometry_values");
+
+                    b.ToTable("audit_geometry_values", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Cabinet", b =>
@@ -3883,6 +3928,10 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<Guid?>("TripPositionEventId")
                         .HasColumnType("uuid")
                         .HasColumnName("trip_position_event_id");
+
+                    b.Property<DateTimeOffset?>("UndoneAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("undone_at");
 
                     b.HasKey("Id")
                         .HasName("pk_import_batch_items");
@@ -8352,6 +8401,18 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_attachments_stored_files_file_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.AuditGeometryValue", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.AuditEntry", "AuditEntry")
+                        .WithMany()
+                        .HasForeignKey("AuditEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_audit_geometry_values_audit_entries_audit_entry_id");
+
+                    b.Navigation("AuditEntry");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Cabinet", b =>
