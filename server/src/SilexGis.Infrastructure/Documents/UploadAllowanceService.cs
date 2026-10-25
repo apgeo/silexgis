@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SilexGis.Domain.Documents;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Persistence;
 
@@ -70,13 +71,33 @@ public sealed class UploadAllowanceService(SilexGisDbContext db, IOptions<FilesO
     /// transfers it should not still be paying for it. Every file under the document counts,
     /// including the copies the server itself derived, because those occupy the disk too.
     /// </remarks>
-    private Task<long> UsedByAsync(Guid userId, CancellationToken ct) =>
-        db.StoredFiles.AsNoTracking()
+    private async Task<long> UsedByAsync(Guid userId, CancellationToken ct) =>
+        await db.StoredFiles.AsNoTracking()
             .Where(f => db.DocumentVersions.Any(v =>
                 v.Id == f.DocumentVersionId
                 && db.Documents.Any(d => d.Id == v.DocumentId && d.OwnerUserId == userId)))
-            .SumAsync(f => f.SizeBytes, ct);
+            .SumAsync(f => f.SizeBytes, ct)
+        + await StagedBytesAsync(db.UploadSessions.Where(s => s.UserId == userId), ct);
 
-    private Task<long> UsedInTotalAsync(CancellationToken ct) =>
-        db.StoredFiles.AsNoTracking().SumAsync(f => f.SizeBytes, ct);
+    private async Task<long> UsedInTotalAsync(CancellationToken ct) =>
+        await db.StoredFiles.AsNoTracking().SumAsync(f => f.SizeBytes, ct)
+        + await StagedBytesAsync(db.UploadSessions, ct);
+
+    /// <summary>
+    /// The bytes phones have sent, or announced they are sending, ahead of the sync upload that
+    /// will name them.
+    /// </summary>
+    /// <remarks>
+    /// They are nobody's document yet, so the sums over stored files above cannot see them,
+    /// and without this a phone could park any amount of content in staging for as long as
+    /// the retention lasts. The declared size is counted from the moment the transfer opens —
+    /// the same reservation the open itself is judged against — so two transfers opened side
+    /// by side cannot each fit into the room only one of them has. A staged row counts until
+    /// it is adopted (its bytes then count through the document) or swept, expired or not,
+    /// because until the sweep runs its bytes are still on the disk. Ordinary browser
+    /// transfers are not counted while they arrive, as before: they last minutes and become
+    /// documents, and changing what a web upload is measured against is not what staging is for.
+    /// </remarks>
+    private static Task<long> StagedBytesAsync(IQueryable<UploadSession> sessions, CancellationToken ct) =>
+        sessions.AsNoTracking().Where(s => s.StagedForSync).SumAsync(s => s.DeclaredSizeBytes, ct);
 }

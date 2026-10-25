@@ -390,6 +390,21 @@ public class ImportBatchItem
     /// </summary>
     public Guid? DevicePersonId { get; set; }
 
+    /// <summary>
+    /// The document this line created, edited, gave new bytes or removed, for a phone upload that
+    /// sent one. Like the feature pointers it goes null rather than taking the line with it when
+    /// the document is destroyed for good, so the upload still says it touched a document.
+    /// </summary>
+    public Guid? DocumentId { get; set; }
+
+    /// <summary>
+    /// The revision this line made current — the first one of a document it created, or the new
+    /// one it stacked onto a document's earlier bytes. Absent for a line that changed only what
+    /// is said about a document or removed it. It is what an undo of new bytes reaches for: the
+    /// revision to step back from, which a later upload may since have superseded in its turn.
+    /// </summary>
+    public Guid? DocumentVersionId { get; set; }
+
     /// <summary>The geofile row this came from. Kept even after a re-import replaces those rows.</summary>
     public long? SourceFeatureId { get; set; }
 

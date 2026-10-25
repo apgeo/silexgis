@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Identity;
 
@@ -67,15 +68,29 @@ public sealed class UploadSessionConfiguration : IEntityTypeConfiguration<Upload
 {
     public void Configure(EntityTypeBuilder<UploadSession> builder)
     {
-        builder.ToTable("upload_sessions", t => t.HasCheckConstraint(
-            "ck_upload_sessions_received_within_declared",
-            "received_bytes >= 0 and received_bytes <= declared_size_bytes"));
+        builder.ToTable("upload_sessions", t =>
+        {
+            t.HasCheckConstraint(
+                "ck_upload_sessions_received_within_declared",
+                "received_bytes >= 0 and received_bytes <= declared_size_bytes");
+
+            // A staged upload is only ever a sync-staged transfer whose whole content arrived
+            // and was described: the adopting upload compares its hash and reads its type, and
+            // a staged row without them would be adopted as bytes nobody had checked.
+            t.HasCheckConstraint(
+                "ck_upload_sessions_staged_described",
+                "staged_at is null or (staged_for_sync and received_bytes = declared_size_bytes"
+                + " and sha256 is not null and mime_type is not null and kind is not null)");
+        });
         builder.Property(x => x.Id).ValueGeneratedNever();
 
         builder.Property(x => x.OriginalName).HasMaxLength(500);
         builder.Property(x => x.StoragePath).HasMaxLength(500);
         builder.Property(x => x.RelativePath).HasMaxLength(2000);
         builder.Property(x => x.AttachEntityType).HasConversion<short>();
+        builder.Property(x => x.Sha256).HasMaxLength(64);
+        builder.Property(x => x.MimeType).HasMaxLength(FileFormats.MaxMediaTypeLength);
+        builder.Property(x => x.Kind).HasConversion<short>();
 
         // An abandoned session's bytes go with the account that abandoned them.
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UserId)

@@ -83,6 +83,34 @@ public class UploadSession : ITimestamped
     /// </summary>
     public DateTimeOffset ExpiresAt { get; set; }
 
+    /// <summary>
+    /// Whether this transfer was opened by a phone sending a file ahead of the sync upload
+    /// that will name it. Such a session has no destination of its own: completing it makes
+    /// no document, and the bytes wait, described, until an upload adopts them or the
+    /// retention runs out.
+    /// </summary>
+    public bool StagedForSync { get; set; }
+
+    /// <summary>
+    /// When the bytes of a sync-staged transfer were completed and described. Absent while
+    /// the transfer is still arriving; once set, the session is a staged upload rather than a
+    /// transfer, and its expiry is the staging retention rather than the idle lifetime.
+    /// </summary>
+    public DateTimeOffset? StagedAt { get; set; }
+
+    /// <summary>
+    /// The lowercase hex SHA-256 of the completed bytes, computed by the server when they
+    /// were staged. The upload that adopts them states the hash it expects, and a mismatch
+    /// means the phone is naming different bytes from the ones it sent.
+    /// </summary>
+    public string? Sha256 { get; set; }
+
+    /// <summary>The media type sniffed from the staged bytes' content, never from their name.</summary>
+    public string? MimeType { get; set; }
+
+    /// <summary>What kind of file the staged bytes turned out to be.</summary>
+    public FileKind? Kind { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

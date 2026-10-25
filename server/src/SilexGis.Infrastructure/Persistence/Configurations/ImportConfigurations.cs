@@ -213,6 +213,12 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         // upload sent them, for the reason the trip pointer outlives its trip.
         builder.HasOne<DevicePerson>().WithMany().HasForeignKey(x => x.DevicePersonId)
             .OnDelete(DeleteBehavior.SetNull);
+        // A document is removed by stamping it, so these normally outlive nothing; a document or
+        // a revision destroyed for good afterwards leaves the line, for the trip pointer's reason.
+        builder.HasOne<Document>().WithMany().HasForeignKey(x => x.DocumentId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<DocumentVersion>().WithMany().HasForeignKey(x => x.DocumentVersionId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.ImportBatchId);
         // "Where did this cave come from?" is a lookup by feature, and it is the question the
@@ -231,5 +237,11 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         // made, and how removing a phone user finds the lines to clear.
         builder.HasIndex(x => x.DevicePersonId).HasFilter("device_person_id is not null")
             .HasDatabaseName("ix_import_batch_items_device_person_id");
+        // "Which uploads touched this document?" — and the set-null of the foreign keys above,
+        // which without an index would scan every line when a document is destroyed.
+        builder.HasIndex(x => x.DocumentId).HasFilter("document_id is not null")
+            .HasDatabaseName("ix_import_batch_items_document_id");
+        builder.HasIndex(x => x.DocumentVersionId).HasFilter("document_version_id is not null")
+            .HasDatabaseName("ix_import_batch_items_document_version_id");
     }
 }

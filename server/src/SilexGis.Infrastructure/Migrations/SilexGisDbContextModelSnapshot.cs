@@ -4064,6 +4064,14 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("device_person_id");
 
+                    b.Property<Guid?>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<Guid?>("DocumentVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_version_id");
+
                     b.Property<Guid?>("FeatureId")
                         .HasColumnType("uuid")
                         .HasColumnName("feature_id");
@@ -4118,6 +4126,14 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("DevicePersonId")
                         .HasDatabaseName("ix_import_batch_items_device_person_id")
                         .HasFilter("device_person_id is not null");
+
+                    b.HasIndex("DocumentId")
+                        .HasDatabaseName("ix_import_batch_items_document_id")
+                        .HasFilter("document_id is not null");
+
+                    b.HasIndex("DocumentVersionId")
+                        .HasDatabaseName("ix_import_batch_items_document_version_id")
+                        .HasFilter("document_version_id is not null");
 
                     b.HasIndex("FeatureId")
                         .HasDatabaseName("ix_import_batch_items_feature_id")
@@ -8350,6 +8366,15 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
+                    b.Property<short?>("Kind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("MimeType")
+                        .HasMaxLength(127)
+                        .HasColumnType("character varying(127)")
+                        .HasColumnName("mime_type");
+
                     b.Property<string>("OriginalName")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -8364,6 +8389,19 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("relative_path");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<DateTimeOffset?>("StagedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("staged_at");
+
+                    b.Property<bool>("StagedForSync")
+                        .HasColumnType("boolean")
+                        .HasColumnName("staged_for_sync");
 
                     b.Property<string>("StoragePath")
                         .IsRequired()
@@ -8401,6 +8439,8 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("upload_sessions", null, t =>
                         {
                             t.HasCheckConstraint("ck_upload_sessions_received_within_declared", "received_bytes >= 0 and received_bytes <= declared_size_bytes");
+
+                            t.HasCheckConstraint("ck_upload_sessions_staged_described", "staged_at is null or (staged_for_sync and received_bytes = declared_size_bytes and sha256 is not null and mime_type is not null and kind is not null)");
                         });
                 });
 
@@ -9678,6 +9718,18 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasForeignKey("DevicePersonId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_import_batch_items_device_persons_device_person_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.Document", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_import_batch_items_documents_document_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.DocumentVersion", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentVersionId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_import_batch_items_document_versions_document_version_id");
 
                     b.HasOne("SilexGis.Domain.Entities.Feature", null)
                         .WithMany()

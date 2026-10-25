@@ -111,4 +111,18 @@ public static class UploadSessionRules
 
     /// <summary>When a session touched at <paramref name="now"/> stops being resumable.</summary>
     public static DateTimeOffset ExpiryFrom(DateTimeOffset now) => now + IdleLifetime;
+
+    /// <summary>
+    /// When bytes a phone staged at <paramref name="stagedAt"/> are swept if no sync upload has
+    /// adopted them by then.
+    /// </summary>
+    /// <remarks>
+    /// Fixed when the bytes are staged, from the retention in force at that moment, rather
+    /// than recomputed by the sweep: a phone told "these wait until Friday" when it finished
+    /// sending is not then surprised by an administrator's later change. A retention below a
+    /// day is read as a day — the setting is validated to at least one, and staging that
+    /// expired on arrival would make every phone's upload fail with the bytes just sent.
+    /// </remarks>
+    public static DateTimeOffset StagedExpiryFrom(DateTimeOffset stagedAt, int retentionDays) =>
+        stagedAt + TimeSpan.FromDays(Math.Max(1, retentionDays));
 }

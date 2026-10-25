@@ -90,4 +90,17 @@ public class UploadSessionRulesTests
         ExpiryFrom(start).ShouldBe(start + IdleLifetime);
         ExpiryFrom(start + TimeSpan.FromHours(20)).ShouldBeGreaterThan(ExpiryFrom(start));
     }
+
+    [Fact]
+    public void Staged_bytes_wait_for_the_retention_from_the_moment_they_were_staged()
+    {
+        var staged = new DateTimeOffset(2026, 10, 25, 9, 30, 0, TimeSpan.Zero);
+
+        StagedExpiryFrom(staged, 7).ShouldBe(staged + TimeSpan.FromDays(7));
+        StagedExpiryFrom(staged, 1).ShouldBe(staged + TimeSpan.FromDays(1));
+
+        // Never shorter than a day, so bytes cannot be due for the sweep the moment they land.
+        StagedExpiryFrom(staged, 0).ShouldBe(staged + TimeSpan.FromDays(1));
+        StagedExpiryFrom(staged, -3).ShouldBe(staged + TimeSpan.FromDays(1));
+    }
 }
