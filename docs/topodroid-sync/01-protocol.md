@@ -74,7 +74,7 @@ sent**. Nothing is stored yet; the answer is `201` with the upload's status body
 | Member | Meaning |
 |---|---|
 | `caveSurvey: { id }` | an existing survey of a cave, by the id the server answered for it before. **Keep the `caveSurvey.id` of every answer per survey in the tool** and send it next time: the upload becomes the survey's next version (`07-open-next-version`). |
-| `cave: { id }` | an existing cave (from `GET /api/v1/caves?names=…`). The survey is matched among the cave's surveys by `surveyName`, else a new survey of the cave is made. |
+| `cave: { id }` | an existing cave (from `GET /api/v1/caves?search=…`). The survey is matched among the cave's surveys by `surveyName`, else a new survey of the cave is made. |
 | `newCave: { name?, visibility?, cavingGroupId?, caveTypeId?, locationProtected? }` | make a cave. `visibility` ∈ `private`, `cavingGroup`, `authenticated`, `public`; when empty, the account's caving group, else private. `locationProtected` (default `false`, as on the web's form) protects the cave's position from the moment it exists, so the entrance the survey's fixed station places is protected from its first second. |
 | *(none)* | the server makes a cave named after `surveyTitle` (else `surveyName`). If a cave **the account can see** already has that name, the new one is `<title> (2)`, `(3)`, … The answer's `caveCreated` is `true` (`02-open`). |
 
