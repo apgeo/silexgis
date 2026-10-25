@@ -235,7 +235,7 @@ public sealed class SyncUploadTests : IAsyncLifetime, IDisposable, IClassFixture
     }
 
     [Fact]
-    public async Task Undoing_a_sync_batch_removes_exactly_the_rows_it_created()
+    public async Task Undoing_a_sync_batch_takes_back_the_rows_it_created_and_puts_back_the_rows_it_edited()
     {
         var existing = await CreateCaveAsync($"Already here {marker}");
         var existingRevision = await RevisionAsync(existing);
@@ -255,11 +255,13 @@ public sealed class SyncUploadTests : IAsyncLifetime, IDisposable, IClassFixture
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var rows = await db.Features.AsNoTracking().IgnoreQueryFilters()
             .Where(f => f.Id == madeId || f.Id == existing)
-            .ToDictionaryAsync(f => f.Id, f => f.DeletedAt);
-        // What the batch made comes back out; what it merely edited stays, because undoing an
-        // import has never meant deleting somebody else's cave that the import happened to touch.
-        rows[madeId].ShouldNotBeNull();
-        rows[existing].ShouldBeNull();
+            .ToDictionaryAsync(f => f.Id);
+        // What the batch made comes back out. What it edited is not deleted — undoing an upload
+        // has never meant deleting somebody's cave the upload happened to touch — but the edit
+        // itself is taken back: the cave has the name it had before the phone renamed it.
+        rows[madeId].DeletedAt.ShouldNotBeNull();
+        rows[existing].DeletedAt.ShouldBeNull();
+        rows[existing].Name.ShouldBe($"Already here {marker}");
     }
 
     [Fact]

@@ -113,6 +113,7 @@ public static class DependencyInjection
             configuration.GetSection(Import.ImportLimitOptions.SectionName));
         services.AddScoped<Import.ImportCandidateService>();
         services.AddScoped<Import.ImportCommitService>();
+        services.AddScoped<Import.DeviceSyncUndoService>();
         services.AddScoped<Import.PhotoCandidateService>();
         services.AddScoped<Import.PhotoCommitService>();
         services.AddScoped<Import.TripCsvFileReader>();

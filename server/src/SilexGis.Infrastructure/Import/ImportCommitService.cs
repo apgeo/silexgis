@@ -73,7 +73,8 @@ public sealed class ImportCommitService(
     ImportCandidateService candidates,
     IAccessService access,
     Trips.TripLogWriteService tripWrites,
-    IOptions<ImportLimitOptions> limits)
+    IOptions<ImportLimitOptions> limits,
+    IChangeContext changes)
 {
     /// <summary>Entrance type a cave built around an imported waypoint gets when no rule said otherwise.</summary>
     private const string DefaultEntranceTypeCode = "natural";
@@ -134,6 +135,10 @@ public sealed class ImportCommitService(
             Options = ImportJson.Serialize(options),
             SkippedCount = scanned.Count - selection.Count,
         };
+
+        // Everything this confirmation writes is one change set of the batch, the batch's own row
+        // included, so the history can say where each object came from and an undo can find it.
+        changes.Begin(ChangeSource.FileImport, batch.Id);
 
         var failures = new List<ImportFailure>();
         var items = new List<ImportBatchItem>();
@@ -328,6 +333,10 @@ public sealed class ImportCommitService(
     /// </summary>
     public async Task RevertAsync(ImportBatch batch, Guid userId, CancellationToken ct = default)
     {
+        // Taking a batch back is a change set of its own, filed under the batch it takes back, so
+        // the batch's timeline ends with its undo.
+        changes.Begin(ChangeSource.Undo, batch.Id);
+
         // Read, never written — and read untracked deliberately. A line is deleted by statement
         // when the position it names goes, which the change tracker cannot see; a tracked copy of
         // such a line is then still sitting there when the trip is removed, and the relationship
@@ -381,6 +390,20 @@ public sealed class ImportCommitService(
         // could be put back onto the log after the import that wrote it had been undone.
         if (eventIds.Count > 0)
         {
+            // Recorded from the lines rather than read back: a line names the position and the
+            // trip it was recorded onto, which is all a removal row says, and a second read of the
+            // positions past the filter would be one more statement that sees deleted trips.
+            db.Set<AuditEntry>().AddRange(allItems
+                .Where(i => i.TripPositionEventId is { } e && eventIds.Contains(e))
+                .Select(i => new AuditEntry
+                {
+                    UserId = userId,
+                    Action = AuditActions.Deleted,
+                    EntityType = nameof(TripPositionEvent),
+                    EntityId = i.TripPositionEventId!.Value.ToString(),
+                    RootEntityType = i.TripLogId is null ? null : nameof(TripLog),
+                    RootEntityId = i.TripLogId?.ToString(),
+                }));
             await db.TripPositionEvents.IgnoreQueryFilters()
                 .Where(e => eventIds.Contains(e.Id))
                 .ExecuteDeleteAsync(ct);
@@ -413,6 +436,10 @@ public sealed class ImportCommitService(
         var attachmentIds = allItems.SelectMany(i => ImportBatchAttachments.Read(i.AttachmentIds)).ToList();
         if (attachmentIds.Count > 0)
         {
+            var going = await db.Attachments.AsNoTracking()
+                .Where(a => attachmentIds.Contains(a.Id))
+                .ToListAsync(ct);
+            RecordRemoval(going, userId);
             await db.Attachments.Where(a => attachmentIds.Contains(a.Id)).ExecuteDeleteAsync(ct);
         }
 
@@ -427,6 +454,26 @@ public sealed class ImportCommitService(
 
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+    }
+
+    /// <summary>
+    /// History rows for rows an undo removes by statement. A statement goes past the change tracker
+    /// and with it past the history, so without these the timeline of a trip or a cave would never
+    /// show that an undo took a position or a picture off it. Saved with the undo's next save, and
+    /// stamped with the undo's change set there like every other row.
+    /// </summary>
+    private void RecordRemoval<T>(IEnumerable<T> going, Guid userId)
+        where T : class, IAuditable
+    {
+        db.Set<AuditEntry>().AddRange(going.Select(row => new AuditEntry
+        {
+            UserId = userId,
+            Action = AuditActions.Deleted,
+            EntityType = typeof(T).Name,
+            EntityId = row.AuditId,
+            RootEntityType = (row as IAuditChild)?.RootEntityType,
+            RootEntityId = (row as IAuditChild)?.RootEntityId,
+        }));
     }
 
     // ---------- one candidate ----------

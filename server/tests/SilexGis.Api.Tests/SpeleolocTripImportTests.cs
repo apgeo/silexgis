@@ -586,6 +586,14 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             (await db.TripPositionEvents.CountAsync(e => e.TripLogId == existing)).ShouldBe(0);
+            // Removed by a statement, which goes past the history on its own — so the undo writes
+            // each removal itself, on the trip's own timeline, under the batch it took back.
+            var existingKey = existing.ToString();
+            (await db.AuditEntries.AsNoTracking().CountAsync(a =>
+                    a.EntityType == nameof(TripPositionEvent) && a.Action == AuditActions.Deleted
+                    && a.Source == ChangeSource.Undo && a.ImportBatchId == firstBatch
+                    && a.RootEntityType == nameof(TripLog) && a.RootEntityId == existingKey))
+                .ShouldBe(2);
             // The trip the import wrote onto is still there — undoing an import must not delete
             // somebody's trip because positions were once recorded onto it.
             (await db.TripLogs.CountAsync(t => t.Id == existing)).ShouldBe(1);

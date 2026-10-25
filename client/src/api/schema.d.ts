@@ -1265,6 +1265,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/history/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Put fields of a feature back to their value before one edit of its history; answers per field. */
+        post: operations["historyRestoreEndpointRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/search": {
         parameters: {
             query?: never;
@@ -3599,7 +3616,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Soft-deletes everything the confirmation created, as one unit. */
+        /** Takes the confirmation back: what it created is deleted; for a phone upload, what it edited and deleted returns too. */
         post: operations["importBatchRevert"];
         delete?: never;
         options?: never;
@@ -9019,6 +9036,8 @@ export interface components {
             surveyModelId: null | string;
             isDefault: boolean;
         };
+        /** @enum {unknown} */
+        ChangeSource: "web" | "fileImport" | "deviceSync" | "speleolocArchive" | "restore" | "undo" | "reviewDecision" | "job" | "tripConversion";
         ChecklistDto: {
             /** Format: uuid */
             id: string;
@@ -10628,6 +10647,27 @@ export interface components {
             entityId: string;
             changes: null | components["schemas"]["JsonElement"];
             redactedProperties: string[];
+            source: null | components["schemas"]["ChangeSource"];
+            /** Format: uuid */
+            changeSetId: null | string;
+            /** Format: uuid */
+            importBatchId: null | string;
+        };
+        HistoryRestoreRequest: {
+            entityType: string;
+            /** Format: uuid */
+            entityId: string;
+            /** Format: int64 */
+            auditEntryId: number;
+            fields: null | string[];
+        };
+        HistoryRestoreResultDto: {
+            applied: string[];
+            skipped: components["schemas"]["HistoryRestoreSkippedDto"][];
+        };
+        HistoryRestoreSkippedDto: {
+            field: string;
+            reason: string;
         };
         HttpValidationProblemDetails: {
             type?: null | string;
@@ -10714,9 +10754,34 @@ export interface components {
             tripLogId: null | string;
             tripTitle: null | string;
             tripDeleted: boolean;
+            /** Format: date-time */
+            undoneAt: null | string;
         };
         /** @enum {unknown} */
         ImportBatchMode: "reviewed" | "autoCreated";
+        ImportBatchRevertRequest: {
+            itemIds: null | number[];
+            force: null | boolean;
+        };
+        ImportBatchRevertResultDto: {
+            batch: components["schemas"]["ImportBatchDto"];
+            items: components["schemas"]["ImportBatchUndoItemDto"][];
+        };
+        ImportBatchUndoItemDto: {
+            /** Format: int64 */
+            itemId: number;
+            /** Format: uuid */
+            featureId: null | string;
+            change: null | string;
+            outcome: string;
+            reason: null | string;
+            applied: string[];
+            skipped: components["schemas"]["ImportBatchUndoSkippedDto"][];
+        };
+        ImportBatchUndoSkippedDto: {
+            field: string;
+            reason: string;
+        };
         ImportCandidateDto: {
             /** Format: int64 */
             sourceId: number;
@@ -18625,6 +18690,48 @@ export interface operations {
             };
         };
     };
+    historyRestoreEndpointRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistoryRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryRestoreResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     userSearch: {
         parameters: {
             query: {
@@ -24945,7 +25052,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["ImportBatchRevertRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -24953,7 +25064,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ImportBatchDto"];
+                    "application/json": components["schemas"]["ImportBatchRevertResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
                 };
             };
             /** @description Unauthorized */

@@ -16,6 +16,9 @@ let events: HistoryEvent[] = [
     entityId: 'c1',
     changes: { Description: { old: 'Old note', new: 'New note' } } as unknown as HistoryEvent['changes'],
     redactedProperties: [],
+    source: null,
+    changeSetId: null,
+    importBatchId: null,
   },
   {
     id: 1,
@@ -27,6 +30,9 @@ let events: HistoryEvent[] = [
     entityId: 'e1',
     changes: null,
     redactedProperties: ['Geom', 'Altitude'],
+    source: null,
+    changeSetId: null,
+    importBatchId: null,
   },
 ];
 
@@ -81,6 +87,9 @@ describe('HistoryPanel', () => {
           Rows: { new: 3 },
         } as unknown as HistoryEvent['changes'],
         redactedProperties: [],
+        source: null,
+        changeSetId: null,
+        importBatchId: null,
       },
     ];
     try {
@@ -127,6 +136,9 @@ describe('HistoryPanel', () => {
         entityId: 'l1',
         changes: { Geom: { old: summary('aa', 48211), new: summary('bb', 48230) } } as unknown as HistoryEvent['changes'],
         redactedProperties: [],
+        source: null,
+        changeSetId: null,
+        importBatchId: null,
       },
     ];
     try {

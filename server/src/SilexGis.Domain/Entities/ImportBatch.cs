@@ -408,4 +408,13 @@ public class ImportBatchItem
 
     /// <summary>The source row's own attributes (jsonb), exactly as the file wrote them.</summary>
     public string SourceProperties { get; set; } = "{}";
+
+    /// <summary>
+    /// When an undo took this line back, wholly or in part. A phone upload can be undone a few
+    /// lines at a time, so the batch alone cannot say which of its lines are still in force: the
+    /// batch counts as reverted only once every line carries this, and a second undo leaves a
+    /// line that already does alone instead of comparing its row against values it put back
+    /// itself. A line an undo could not take back stays empty, so a later undo can try it again.
+    /// </summary>
+    public DateTimeOffset? UndoneAt { get; set; }
 }

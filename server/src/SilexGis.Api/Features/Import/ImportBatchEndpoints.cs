@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json;
+using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
@@ -36,7 +37,8 @@ public static class ImportBatchEndpoints
         batches.MapGet("/{id:guid}", GetAsync)
             .WithSummary("One confirmation with the objects it created, filtered to what the caller may see.");
         batches.MapPost("/{id:guid}/revert", RevertAsync)
-            .WithSummary("Soft-deletes everything the confirmation created, as one unit.");
+            .WithValidation<ImportBatchRevertRequest>()
+            .WithSummary("Takes the confirmation back: what it created is deleted; for a phone upload, what it edited and deleted returns too.");
 
         api.MapGet("/features/{featureId:guid}/import-provenance", GetProvenanceAsync)
             .WithTags("Import")
@@ -173,7 +175,8 @@ public static class ImportBatchEndpoints
                         i.Action,
                         i.TripLogId,
                         trip?.Title ?? (recordsTripTitles ? RecordedTitle(i.SourceProperties) : null),
-                        trip?.DeletedAt is not null);
+                        trip?.DeletedAt is not null,
+                        i.UndoneAt);
                 })
             ]));
     }
@@ -204,10 +207,20 @@ public static class ImportBatchEndpoints
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
-    private static async Task<Results<Ok<ImportBatchDto>, UnauthorizedHttpResult, ProblemHttpResult>> RevertAsync(
+    /// <summary>
+    /// Takes a confirmation back. A file import's objects are deleted as one unit, as they always
+    /// were. A phone upload is undone truly: the rows it created are deleted, the rows it deleted
+    /// come back, and every field it changed returns to its value before the upload — unless
+    /// somebody has changed that field since, which leaves it and says so (<c>force</c> puts it back
+    /// anyway). A phone upload can also be taken back a few lines at a time (<c>itemIds</c>); it
+    /// counts as reverted once every line has been.
+    /// </summary>
+    private static async Task<Results<Ok<ImportBatchRevertResultDto>, UnauthorizedHttpResult, ProblemHttpResult>> RevertAsync(
         Guid id,
+        ImportBatchRevertRequest? request,
         SilexGisDbContext db,
         ImportCommitService commitService,
+        DeviceSyncUndoService syncUndo,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -230,11 +243,42 @@ public static class ImportBatchEndpoints
                 : ApiProblems.Forbidden("import_batch.revert_forbidden");
         }
 
-        await commitService.RevertAsync(batch, ctx.UserId, ct);
+        IReadOnlyList<ImportBatchUndoItemDto> lines = [];
+        if (batch.Source == ImportSource.DeviceSync)
+        {
+            try
+            {
+                var undone = await syncUndo.UndoAsync(batch, ctx, request?.ItemIds, request?.Force ?? false, ct);
+                lines = [.. undone.Select(r => new ImportBatchUndoItemDto(
+                    r.ItemId,
+                    r.FeatureId,
+                    r.Change,
+                    r.Outcome,
+                    r.Reason,
+                    [.. r.Applied],
+                    [.. r.Skipped.Select(s => new ImportBatchUndoSkippedDto(s.Field, s.Reason))]))];
+            }
+            catch (SyncUndoException e)
+            {
+                return ApiProblems.BadRequest(e.Code, e.Message);
+            }
+        }
+        else if (request?.ItemIds is { Length: > 0 })
+        {
+            return ApiProblems.BadRequest(
+                "import_batch.partial_undo_unsupported",
+                "Only an upload from a phone can be taken back a few lines at a time; a file import is undone whole.");
+        }
+        else
+        {
+            await commitService.RevertAsync(batch, ctx.UserId, ct);
+        }
 
         var names = await GeofileNamesAsync(db, [batch], ct);
-        return TypedResults.Ok(StagedImportEndpoints.ToDto(
-            batch, batch.GeofileId is { } gid ? names.GetValueOrDefault(gid) : null, canRevert: false));
+        return TypedResults.Ok(new ImportBatchRevertResultDto(
+            StagedImportEndpoints.ToDto(
+                batch, batch.GeofileId is { } gid ? names.GetValueOrDefault(gid) : null, CanRevert(ctx, batch)),
+            lines));
     }
 
     private static async Task<Results<Ok<ImportProvenanceDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetProvenanceAsync(
@@ -291,7 +335,8 @@ public static class ImportBatchEndpoints
                 // feature's line and carries no trip.
                 null,
                 null,
-                false),
+                false,
+                item.UndoneAt),
             ParseProperties(item.SourceProperties)));
     }
 
@@ -337,3 +382,57 @@ public static class ImportBatchEndpoints
 
 /// <summary>One confirmation with the lines it produced.</summary>
 public sealed record ImportBatchDetailDto(ImportBatchDto Batch, IReadOnlyList<ImportBatchItemDto> Items);
+
+/// <summary>What to take back of a confirmation. Every field is optional; an empty body takes back all of it.</summary>
+/// <param name="ItemIds">
+/// Phone uploads only: the lines to take back, leaving the rest in force. All of them when omitted.
+/// </param>
+/// <param name="Force">
+/// Phone uploads only: put a field back even when somebody has changed it since the upload, and
+/// bring a row back even when somebody deleted it again since. Never past the protection rules: a
+/// position still goes back only for a caller who may see it exactly.
+/// </param>
+public sealed record ImportBatchRevertRequest(long[]? ItemIds, bool? Force);
+
+public sealed class ImportBatchRevertRequestValidator : AbstractValidator<ImportBatchRevertRequest>
+{
+    public ImportBatchRevertRequestValidator()
+    {
+        RuleFor(x => x.ItemIds)
+            .Must(ids => ids is null || ids.Length <= 10_000)
+            .WithMessage("At most 10000 lines at a time.");
+        RuleForEach(x => x.ItemIds).GreaterThan(0);
+    }
+}
+
+/// <summary>A field of an edited row an undo left as it is.</summary>
+/// <param name="Field">The field, as the history names it.</param>
+/// <param name="Reason">superseded | forbidden | redacted | no_pre_image | not_restorable.</param>
+public sealed record ImportBatchUndoSkippedDto(string Field, string Reason);
+
+/// <summary>What an undo did with one line of a phone upload.</summary>
+/// <param name="ItemId">The line.</param>
+/// <param name="FeatureId">The row; null when it has since been removed for good.</param>
+/// <param name="Change">What the upload did to the row: created | updated | deleted; null when nothing says any more.</param>
+/// <param name="Outcome">undone | partly | not_undone.</param>
+/// <param name="Reason">
+/// For not_undone: already_undone | purged | container_deleted | superseded | fields_left |
+/// no_history | forbidden, or the write's own code when putting the values back was refused.
+/// </param>
+/// <param name="Applied">The fields of an edited row put back.</param>
+/// <param name="Skipped">The fields of an edited row left as they are.</param>
+public sealed record ImportBatchUndoItemDto(
+    long ItemId,
+    Guid? FeatureId,
+    string? Change,
+    string Outcome,
+    string? Reason,
+    string[] Applied,
+    ImportBatchUndoSkippedDto[] Skipped);
+
+/// <summary>
+/// The answer to taking a confirmation back: the batch as it now stands, and for a phone upload
+/// what happened to each line asked for (empty for any other kind of confirmation, which is
+/// undone whole).
+/// </summary>
+public sealed record ImportBatchRevertResultDto(ImportBatchDto Batch, IReadOnlyList<ImportBatchUndoItemDto> Items);

@@ -145,6 +145,19 @@ public sealed class PhotoImportTests : IAsyncLifetime, IDisposable, IClassFixtur
         (await FeatureNamesAsync()).ShouldNotContain($"Aven {tag}");
         (await AttachmentsOfAsync(entranceId)).ShouldNotContain(second);
 
+        // Taken down by a statement, which goes past the history on its own — so the undo writes
+        // the removal itself, and the entrance's timeline shows the picture coming off it.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var entranceKey = entranceId.ToString();
+            (await db.AuditEntries.AsNoTracking().CountAsync(a =>
+                    a.EntityType == nameof(Attachment) && a.Action == AuditActions.Deleted
+                    && a.Source == ChangeSource.Undo && a.ImportBatchId == batchId
+                    && a.RootEntityType == nameof(Feature) && a.RootEntityId == entranceKey))
+                .ShouldBe(1);
+        }
+
         // The photographs themselves are untouched: they were uploaded, not created here.
         (await editor.GetAsync($"/api/v1/files/{second}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         _ = existingCave;
