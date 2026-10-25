@@ -6,6 +6,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
 using SilexGis.Domain.Import;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
 
@@ -20,6 +21,7 @@ namespace SilexGis.Infrastructure.Import;
 /// <param name="Applied">The fields put back, for an edit.</param>
 /// <param name="Skipped">The fields of an edit left as they are, each with its reason.</param>
 /// <param name="DevicePersonId">The phone user the line is about, for a line that sent one; null otherwise.</param>
+/// <param name="DocumentId">The photo or document the line is about, for a line that sent one or hung one; null otherwise.</param>
 public sealed record SyncUndoItemResult(
     long ItemId,
     Guid? FeatureId,
@@ -28,7 +30,8 @@ public sealed record SyncUndoItemResult(
     string? Reason,
     IReadOnlyList<string> Applied,
     IReadOnlyList<HistoryRestoreSkip> Skipped,
-    Guid? DevicePersonId = null);
+    Guid? DevicePersonId = null,
+    Guid? DocumentId = null);
 
 /// <summary>A request to undo an upload that cannot be answered line by line.</summary>
 public sealed class SyncUndoException(string code, string message) : InvalidOperationException(message)
@@ -79,12 +82,13 @@ public sealed class SyncUndoException(string code, string message) : InvalidOper
 /// returns to that entrance, so the cave plots where it plotted before the upload.
 /// </para>
 /// </remarks>
-public sealed class DeviceSyncUndoService(
+public sealed partial class DeviceSyncUndoService(
     SilexGisDbContext db,
     FeatureWriteService writer,
     HistoryRestoreService history,
     IAccessService access,
-    IChangeContext changes)
+    IChangeContext changes,
+    DocumentWriteService documents)
 {
     public const string ItemsUnknownCode = "import_batch.items_unknown";
 
@@ -133,7 +137,15 @@ public sealed class DeviceSyncUndoService(
             .GroupBy(a => a.EntityId!)
             .ToDictionary(g => g.Key, g => g.ToList());
         written = [.. written.Where(a => a.EntityType != PersonType)];
-        var byRow = written.GroupBy(a => a.EntityId!).ToDictionary(g => g.Key, g => g.ToList());
+
+        // Likewise a document's: the phone mints its documents' identifiers too, and a document
+        // under the same identifier as a feature must never have its rows read as the feature's.
+        var byDocument = written.Where(a => IsDocumentWorld(a.EntityType))
+            .GroupBy(a => a.EntityId!)
+            .ToDictionary(g => g.Key, g => g.ToList());
+        var byRow = written.Where(a => !IsDocumentWorld(a.EntityType))
+            .GroupBy(a => a.EntityId!)
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         // The batch's own row is filed under it too, so an upload made since the history began
         // naming its batch always has at least one; an older upload has none at all.
@@ -164,7 +176,11 @@ public sealed class DeviceSyncUndoService(
             {
                 result = item.DevicePersonId is { } personId
                     ? await UndoPersonLineAsync(item, personId, byPerson.GetValueOrDefault(personId.ToString()) ?? [], force, ct)
-                    : await UndoLineAsync(item, byRow, attributed, ctx, force, ct);
+                    : IsLinkLine(item)
+                        ? await UndoLinkLineAsync(item, byDocument, ctx, force, ct)
+                        : item.DocumentId is { } documentId
+                            ? await UndoDocumentLineAsync(item, documentId, byDocument, ctx, force, ct)
+                            : await UndoLineAsync(item, byRow, attributed, ctx, force, ct);
                 await db.SaveChangesAsync(ct);
                 await transaction.ReleaseSavepointAsync(LineSavepoint, ct);
             }
@@ -174,6 +190,16 @@ public sealed class DeviceSyncUndoService(
                 await transaction.RollbackToSavepointAsync(LineSavepoint, ct);
                 db.ChangeTracker.Clear();
                 result = NotUndone(item, item.FeatureId ?? item.AttachedToFeatureId, null, e.Code);
+            }
+            catch (DocumentWriteException)
+            {
+                // The revision the upload made is no longer the current one: another revision
+                // landed between the undo's look and its write.
+                await transaction.RollbackToSavepointAsync(LineSavepoint, ct);
+                db.ChangeTracker.Clear();
+                result = new SyncUndoItemResult(
+                    item.Id, null, SyncUndoChanges.Updated, SyncUndoOutcomes.NotUndone, SyncUndoReasons.Superseded,
+                    [], [], null, item.DocumentId);
             }
             catch (LineWithdrawnException withdrawn)
             {
