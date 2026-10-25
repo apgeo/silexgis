@@ -4067,6 +4067,7 @@
         "permissionGranted": "Cineva îmi dă acces la ceva",
         "tripParticipation": "Sunt adăugat la o tură",
         "tripPublished": "O tură la care particip a fost publicată ca pagină pe care o poate citi oricine are linkul",
+        "tripNeedsAttention": "O tură înregistrată pe un telefon are nevoie să fie verificată de cineva, sau nu a putut fi transformată în raport de tură",
         "tripPlanning": "Sunt invitat la o tură, se schimbă o tură la care particip, o tură are nevoie de un acces pe care îl pot acorda sau se apropie o tură ori un eveniment de club la care am răspuns",
         "commentReply": "Cineva răspunde la un comentariu scris de mine",
         "commentOnMine": "Cineva comentează la ceva ce îmi aparține",
@@ -4659,6 +4660,8 @@
       "name_notify_permission_granted": "Acces primit la o înregistrare",
       "name_notify_trip_participation": "Trecut într-un raport de tură",
       "name_notify_trip_published": "O tură a fost publicată ca pagină publică",
+      "name_notify_trip_needs_attention": "O tură creată dintr-o înregistrare de pe telefon are nevoie de atenție",
+      "name_notify_trip_recording_waiting": "O înregistrare de pe telefon nu a devenit tură",
       "name_notify_trip_plan_invitation": "Invitat la o tură planificată",
       "name_notify_trip_plan_changed": "O tură planificată s-a schimbat",
       "name_notify_trip_plan_cancelled": "O tură planificată a fost anulată",
@@ -5386,7 +5389,9 @@
         "superseded": "a fost șters din nou după încărcare",
         "fields_left": "alte modificări ale lui au rămas",
         "no_history": "această încărcare e mai veche decât istoricul care spune ce a schimbat",
-        "forbidden": "nu ai voie să schimbi acest rând"
+        "forbidden": "nu ai voie să schimbi acest rând",
+        "trip_changed": "cineva a lucrat la raportul de tură făcut din ea, așa că raportul rămâne",
+        "converted_elsewhere": "raportul ei de tură a fost făcut de un import de arhivă, așa că raportul rămâne"
       }
     },
     "revert": "Anulează",
@@ -7115,6 +7120,8 @@
       "archiveTooLarge": "Arhiva este mai mare decât citește această instalare dintr-o dată.",
       "recordingTooLarge": "Acea înregistrare are mai multe scanări decât cuprinde o recenzie. Nimic nu este scurtat, pentru că o listă scurtată arată exact ca una completă.",
       "recordingNotFound": "Acea înregistrare nu mai este în arhivă.",
+      "recordingAlreadyConverted": "Această înregistrare a fost deja transformată într-un raport de tură, deci pozițiile ei sunt deja înregistrate.",
+      "recordingNotWritable": "Această înregistrare este deja păstrată aici sub un cont ale cărui înregistrări nu le poți schimba.",
       "tripMissing": "Spune unde ajung pozițiile: pe o tură care există sau într-una creată de acest import.",
       "tripAmbiguous": "O înregistrare merge pe o tură sau într-una nouă, nu în amândouă.",
       "modelMissing": "O poziție este o stație a unui model topografic, iar niciunul nu este ales.",

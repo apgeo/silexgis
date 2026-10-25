@@ -268,6 +268,10 @@ export default function SpeleolocImportPage() {
         return t('speleolocImport.errors.recordingTooLarge');
       case 'speleoloc_import.recording_not_found':
         return t('speleolocImport.errors.recordingNotFound');
+      case 'import.recording_already_converted':
+        return t('speleolocImport.errors.recordingAlreadyConverted');
+      case 'import.recording_not_writable':
+        return t('speleolocImport.errors.recordingNotWritable');
       case 'speleoloc_import.trip_missing':
         return t('speleolocImport.errors.tripMissing');
       case 'speleoloc_import.trip_ambiguous':

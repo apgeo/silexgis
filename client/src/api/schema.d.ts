@@ -3917,6 +3917,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/speleoloc-imports/recordings/{recordingId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reads a recording a phone sent and answers each scan with the stations it could be. */
+        post: operations["previewTripRecordingImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/speleoloc-imports/recordings/{recordingId}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Makes a recording a phone sent into tracking positions on a trip, as one batch that reverts as a unit. */
+        post: operations["commitTripRecordingImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/photo-libraries/status": {
         parameters: {
             query?: never;
@@ -6063,6 +6097,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{id}/attention/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Says that a trip made from a phone recording no longer needs looking at (Write permission on the trip). The reasons stay on the record; clearing an already cleared flag changes nothing. A trip with no flag answers trip_attention.not_found; a flag raised again while it was being cleared answers trip_attention.changed. */
+        post: operations["clearTripAttention"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/checklists": {
         parameters: {
             query?: never;
@@ -7956,6 +8007,23 @@ export interface paths {
         };
         /** One page of the document links on a sync set's features, and the links that have gone. */
         get: operations["syncDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/sets/{id}/trips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One page of the trip recordings made in a sync set's caves, and the recordings that have gone. */
+        get: operations["syncTrips"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11137,6 +11205,14 @@ export interface components {
             devicePersonId?: null | string;
             /** Format: uuid */
             documentId?: null | string;
+            /** Format: uuid */
+            tripRecordingId?: null | string;
+            /** Format: uuid */
+            tripRecordingPointId?: null | string;
+            /** Format: uuid */
+            tripLogId?: null | string;
+            tripOutcome?: null | string;
+            tripReason?: null | string;
         };
         ImportBatchUndoSkippedDto: {
             field: string;
@@ -11839,7 +11915,7 @@ export interface components {
             isProtected: boolean;
         };
         /** @enum {unknown} */
-        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | "tripPublished";
+        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | "tripPublished" | "tripNeedsAttention";
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
             reachesNobody: boolean;
@@ -14786,6 +14862,46 @@ export interface components {
             /** Format: date-time */
             deletedAt: string;
         };
+        SyncTripPointDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            placeId: null | string;
+            /** Format: date-time */
+            scannedAt: string;
+            notes: null | string;
+            /** Format: uuid */
+            createdByDeviceUserId: null | string;
+            /** Format: date-time */
+            revision: string;
+        };
+        SyncTripRecordingDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            caveId: string;
+            title: string;
+            description: null | string;
+            log: null | string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            endedAt: null | string;
+            /** Format: uuid */
+            createdByDeviceUserId: null | string;
+            /** Format: date-time */
+            revision: string;
+            points: components["schemas"]["SyncTripPointDto"][];
+        };
+        SyncTripsPageDto: {
+            /** Format: int64 */
+            setRevision: number;
+            settings: components["schemas"]["JsonElement"];
+            recordings: components["schemas"]["SyncTripRecordingDto"][];
+            tombstones: components["schemas"]["SyncTombstoneDto"][];
+            nextCursor: null | string;
+            hasMore: boolean;
+        };
         SyncUploadDocumentDto: {
             /** Format: uuid */
             id: string;
@@ -14840,6 +14956,8 @@ export interface components {
             people?: null | components["schemas"]["SyncUploadPersonDto"][];
             documents?: null | components["schemas"]["SyncUploadDocumentDto"][];
             documentLinks?: null | components["schemas"]["SyncUploadDocumentLinkDto"][];
+            tripRecordings?: null | components["schemas"]["SyncUploadTripRecordingDto"][];
+            tripPoints?: null | components["schemas"]["SyncUploadTripPointDto"][];
         };
         SyncUploadResultDto: {
             /** Format: uuid */
@@ -14857,6 +14975,8 @@ export interface components {
             people?: null | components["schemas"]["SyncUploadRowResultDto"][];
             documents?: null | components["schemas"]["SyncUploadRowResultDto"][];
             documentLinks?: null | components["schemas"]["SyncUploadRowResultDto"][];
+            tripRecordings?: null | components["schemas"]["SyncUploadRowResultDto"][];
+            tripPoints?: null | components["schemas"]["SyncUploadRowResultDto"][];
         };
         SyncUploadRowDto: {
             /** Format: uuid */
@@ -14889,6 +15009,44 @@ export interface components {
             revision: null | string;
             code: null | string;
             detail: null | string;
+        };
+        SyncUploadTripPointDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            recordingId: string;
+            /** Format: date-time */
+            baseRevision?: null | string;
+            /** @default false */
+            deleted: boolean;
+            /** Format: uuid */
+            placeId?: null | string;
+            /** Format: date-time */
+            scannedAt?: null | string;
+            notes?: null | string;
+            /** Format: uuid */
+            createdByDeviceUserId?: null | string;
+        };
+        SyncUploadTripRecordingDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            baseRevision?: null | string;
+            /** @default false */
+            deleted: boolean;
+            /** Format: uuid */
+            caveId?: null | string;
+            title?: null | string;
+            description?: null | string;
+            log?: null | string;
+            /** Format: date-time */
+            startedAt?: null | string;
+            /** Format: date-time */
+            endedAt?: null | string;
+            /** Format: uuid */
+            createdByDeviceUserId?: null | string;
+            /** Format: date-time */
+            clientUpdatedAt?: null | string;
         };
         TagDto: {
             /** Format: int64 */
@@ -26760,6 +26918,94 @@ export interface operations {
             };
         };
     };
+    previewTripRecordingImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recordingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpeleolocImportPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpeleolocImportPreviewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commitTripRecordingImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recordingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpeleolocImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpeleolocImportCommitResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     photoLibraryStatus: {
         parameters: {
             query?: never;
@@ -32530,6 +32776,62 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    clearTripAttention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -38678,6 +38980,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncDocumentsPageDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncTrips: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncTripsPageDto"];
                 };
             };
             /** @description Bad Request */

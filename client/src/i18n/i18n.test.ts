@@ -163,6 +163,7 @@ const notificationCategories: Record<NotificationCategoryName, true> = {
   permissionGranted: true,
   tripParticipation: true,
   tripPublished: true,
+  tripNeedsAttention: true,
   jobCompleted: true,
   securityAlerts: true,
   tripPlanning: true,

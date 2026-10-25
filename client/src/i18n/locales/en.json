@@ -4054,6 +4054,7 @@
         "permissionGranted": "Someone shares something with me",
         "tripParticipation": "I am added to a trip",
         "tripPublished": "A trip I am on was published as a page anybody with the link can read",
+        "tripNeedsAttention": "A trip recorded on a phone needs somebody to look at it, or could not be made into a trip report",
         "tripPlanning": "I am invited to a trip, a trip I am on changes, a trip needs access I can grant, or a trip or club event I answered about is coming up",
         "commentReply": "Someone replies to a comment I wrote",
         "commentOnMine": "Someone comments on something of mine",
@@ -4646,6 +4647,8 @@
       "name_notify_permission_granted": "Given access to a record",
       "name_notify_trip_participation": "Listed on a trip report",
       "name_notify_trip_published": "A trip was published as a public page",
+      "name_notify_trip_needs_attention": "A trip made from a phone recording needs attention",
+      "name_notify_trip_recording_waiting": "A phone recording was not made into a trip",
       "name_notify_trip_plan_invitation": "Invited to a planned trip",
       "name_notify_trip_plan_changed": "A planned trip changed",
       "name_notify_trip_plan_cancelled": "A planned trip was called off",
@@ -5373,7 +5376,9 @@
         "superseded": "it was deleted again after the upload",
         "fields_left": "other changes to it are left",
         "no_history": "this upload is older than the history that says what it changed",
-        "forbidden": "you may not change this row"
+        "forbidden": "you may not change this row",
+        "trip_changed": "somebody has worked on the trip report made from it, so the report is kept",
+        "converted_elsewhere": "its trip report was made by an archive import, so the report is kept"
       }
     },
     "revert": "Undo",
@@ -7102,6 +7107,8 @@
       "archiveTooLarge": "The archive is larger than this installation reads in one go.",
       "recordingTooLarge": "That recording holds more scans than one review reads. Nothing is shortened, because a shortened list reads exactly like a complete one.",
       "recordingNotFound": "That recording is not in the archive any more.",
+      "recordingAlreadyConverted": "This recording has already been made into a trip report, so its positions are already recorded.",
+      "recordingNotWritable": "This recording is already kept here under an account whose recordings you may not change.",
       "tripMissing": "Say where the positions go: a trip that exists, or one this import creates.",
       "tripAmbiguous": "A recording goes onto a trip or into a new one, not both.",
       "modelMissing": "A position is a station of a survey model, and none is chosen.",
