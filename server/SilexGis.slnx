@@ -3,6 +3,7 @@
     <Project Path="src/SilexGis.Api/SilexGis.Api.csproj" />
     <Project Path="src/SilexGis.Domain/SilexGis.Domain.csproj" />
     <Project Path="src/SilexGis.Infrastructure/SilexGis.Infrastructure.csproj" />
+    <Project Path="src/SilexGis.TherionService/SilexGis.TherionService.csproj" />
   </Folder>
   <Folder Name="/external/">
     <!-- Named here as well as referenced, because a Release build of the solution emits Debug
@@ -12,6 +13,9 @@
     <Project Path="external/ThIDE/src/Therion.Build/Therion.Build.csproj" />
     <Project Path="external/ThIDE/src/Therion.Core/Therion.Core.csproj" />
     <Project Path="external/ThIDE/src/Therion.Processing.Abstractions/Therion.Processing.Abstractions.csproj" />
+    <Project Path="external/ThIDE/src/Therion.Semantics/Therion.Semantics.csproj" />
+    <Project Path="external/ThIDE/src/Therion.Syntax/Therion.Syntax.csproj" />
+    <Project Path="external/ThIDE/src/Therion.Workspace/Therion.Workspace.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SilexGis.Api.Tests/SilexGis.Api.Tests.csproj" />

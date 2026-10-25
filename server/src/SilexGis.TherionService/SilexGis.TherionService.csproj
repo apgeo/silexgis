@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The survey compiler service: a small web service, run in a container of its own, that
+       compiles a project the application hands it with the same sandboxed runner the
+       application's local mode uses. It references the infrastructure layer for that runner
+       alone, so the rules about how the compiler is started have one home. -->
+  <ItemGroup>
+    <ProjectReference Include="..\SilexGis.Infrastructure\SilexGis.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

@@ -144,6 +144,12 @@ public class DependencyRuleTests
         // a different kind of program than this one. Reading the parsers does not require it, so
         // assert the rest stays unreachable rather than trusting that nobody calls it.
         //
+        // One process is let through, deliberately and by name: the Therion compiler, which turns a
+        // survey uploaded from a field device into its models and drawings. It is started only
+        // inside a sandbox, and the rule after this one confines the types that start it to the
+        // single class that applies the sandbox — the allow-list says which types, that rule says
+        // from where.
+        //
         // This reads compiled IL, so it catches use rather than reference — the project
         // reference itself is reviewed by eye. Never write this as an exclusion of the library
         // from the two rules above: an exclusion would hide exactly the violation worth catching.
@@ -171,6 +177,9 @@ public class DependencyRuleTests
                      typeof(Visibility).Assembly,
                      typeof(InfrastructureMarker).Assembly,
                      typeof(Program).Assembly,
+                     // The compiler service compiles through the same runner, and is held to the
+                     // same rules as the application: it names no Therion type of its own.
+                     typeof(SilexGis.TherionService.TherionServiceHost).Assembly,
                  })
         {
             var reached = TherionTypesReferencedBy(assembly);
@@ -191,11 +200,12 @@ public class DependencyRuleTests
     /// back, and the parser for what a compilation printed.
     /// </summary>
     /// <remarks>
-    /// Nothing here starts anything. They are file readers, immutable records describing a cave,
-    /// the centreline graph types derived from them, and a log parser that reads text. The list is
-    /// expected to grow when the application reads more of the survey format, and each addition is
-    /// somebody deciding that the type is a reader — which is exactly the review this rule exists
-    /// to force.
+    /// Nothing here starts anything but the two compiler types in the last group, which the rule
+    /// after this list confines to one class. The rest are file readers, immutable records
+    /// describing a cave, the centreline graph types derived from them, and a log parser that reads
+    /// text. The list is expected to grow when the application reads more of the survey format,
+    /// and each addition is somebody deciding that the type is a reader — which is exactly the
+    /// review this rule exists to force.
     /// </remarks>
     private static readonly HashSet<string> AllowedTherionTypes = new(StringComparer.Ordinal)
     {
@@ -247,7 +257,107 @@ public class DependencyRuleTests
         "Therion.Build.TherionLogOutcome",
         "Therion.Build.TherionLogParser",
         "Therion.Build.TherionLogSummary",
+
+        // The one type here that starts a process — the Therion compiler, run over a project
+        // built around an uploaded survey — and the options record whose last-say hook over the
+        // process start is where the sandbox is applied. Listed so that the assembly may name
+        // them at all; where in the assembly is the next rule's business.
+        "Therion.Build.TherionCompileOptions",
+        "Therion.Build.TherionCompiler",
+
+        // What naming that compiler at all names with it, because its constructor and its compile
+        // method are written in these types: the record it returns, the line it reports while it
+        // runs, the interface through which the caller says where the Therion binary is and the
+        // record it says it with, and the two interfaces for the compiler's own output parser and
+        // artefact collector, whose defaults it builds itself. Three records and three interfaces;
+        // none of them starts or locates anything. The library's own implementation of the locator
+        // interface does both — it searches the host for executables and runs them to read their
+        // versions — and stays off this list: the caller answers with the one path it was
+        // configured with.
+        "Therion.Build.IOutputArtifactCollector",
+        "Therion.Build.ITherionOutputParser",
+        "Therion.Processing.Abstractions.CompileResult",
+        "Therion.Processing.Abstractions.CompilerOutputLine",
+        "Therion.Processing.Abstractions.IExternalToolLocator",
+        "Therion.Processing.Abstractions.ToolInfo",
+
+        // Judging a compile by its log: the record of one file the log says was written, and the
+        // comparison of those with the files the configuration asked for. Text in, lists out.
+        "Therion.Build.OutputReconciler",
+        "Therion.Build.OutputReconciliation",
+        "Therion.Build.TherionLogOutputFile",
+
+        // The project scaffold for a survey a field device uploaded: the reader of the survey
+        // file's header, the options and plan records, the planner that turns them into the text
+        // of a configuration and a wrapper survey, and the named catalogue of outputs. The planner
+        // writes no file and starts nothing — the caller writes what it planned.
+        "Therion.Workspace.Import.ExportItem",
+        "Therion.Workspace.Import.ScaffoldExpectedOutput",
+        "Therion.Workspace.Import.ScaffoldExportPresets",
+        "Therion.Workspace.Import.ScaffoldFile",
+        "Therion.Workspace.Import.ScaffoldOptions",
+        "Therion.Workspace.Import.ScaffoldPlan",
+        "Therion.Workspace.Import.ScaffoldSourceCopy",
+        "Therion.Workspace.Import.TopodroidProjectScaffold",
+        "Therion.Workspace.Import.TopodroidSurveyHeader",
+        "Therion.Workspace.Import.TopodroidSurveyHeaderReader",
     };
+
+    /// <summary>
+    /// The survey library types that start the Therion compiler, or that hand the caller the
+    /// process just before it starts.
+    /// </summary>
+    private static readonly string[] CompilerStartingTherionTypes =
+    [
+        "Therion.Build.TherionCompileOptions",
+        "Therion.Build.TherionCompiler",
+    ];
+
+    /// <summary>The namespace of the one class allowed to name <see cref="CompilerStartingTherionTypes"/>.</summary>
+    private const string SandboxedRunnerNamespace = "SilexGis.Infrastructure.Surveys";
+
+    /// <summary>The name of the one class allowed to name <see cref="CompilerStartingTherionTypes"/>.</summary>
+    private const string SandboxedRunnerName = "SandboxedTherionRunner";
+
+    [Fact]
+    public void Only_the_sandboxed_runner_names_the_survey_library_code_that_starts_the_compiler()
+    {
+        // The compiler runs over files a field device uploaded, so starting it is starting a
+        // program on the server with somebody else's input. What makes that acceptable is the
+        // wrapper the start goes through — no network, a filesystem limited to the run's own
+        // directory, limits on time, memory and processes — and a wrapper is only a guarantee if
+        // nothing can start the compiler without it. So exactly one class may name the types that
+        // start it: the one that applies the wrapper. A second caller anywhere, however
+        // well-meant, would be a path to the compiler that the sandbox does not stand on.
+        //
+        // The class is matched by name and namespace together, so a namesake elsewhere is no way
+        // round it. Its compiler-generated members (the state machine of an async method, the
+        // closure of a lambda) are checked as part of it by the rule library, which is what lets
+        // a name match cover them.
+        foreach (var assembly in new[]
+                 {
+                     typeof(Visibility).Assembly,
+                     typeof(InfrastructureMarker).Assembly,
+                     typeof(Program).Assembly,
+                     // The compiler service compiles through the same runner, and is held to the
+                     // same rules as the application: it names no Therion type of its own.
+                     typeof(SilexGis.TherionService.TherionServiceHost).Assembly,
+                 })
+        {
+            var result = Types.InAssembly(assembly)
+                .That()
+                .DoNotHaveName(SandboxedRunnerName)
+                .Or()
+                .DoNotResideInNamespace(SandboxedRunnerNamespace)
+                .ShouldNot()
+                .HaveDependencyOnAny(CompilerStartingTherionTypes)
+                .GetResult();
+
+            result.IsSuccessful.ShouldBeTrue(
+                $"{assembly.GetName().Name}: only {SandboxedRunnerNamespace}.{SandboxedRunnerName} "
+                + "may start the survey compiler. " + FailureMessage(result));
+        }
+    }
 
     /// <summary>
     /// The Therion types an assembly names, read out of its type-reference table.
