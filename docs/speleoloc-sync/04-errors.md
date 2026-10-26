@@ -535,16 +535,19 @@ Two further practical consequences:
   must talk to one.
 - Every operation on this server is named in the description, but the sync names are the ones
   chosen deliberately and pinned (`syncCapabilities`, `syncListSets`, `syncCreateSet`, `syncGetSet`,
-  `syncReplaceSet`, `syncDeleteSet`, `syncDownload`, `syncUpload`). Error handling written against
+  `syncReplaceSet`, `syncDeleteSet`, `syncDownload`, `syncUpload`, and for the second phase's routes
+  `syncDocuments`, `syncFileLinks`, `syncPeople`, `syncTrips`, `syncReviews`, `syncRasters`). Error handling written against
   those names will not move; a name elsewhere follows the code that handles the route.
 
-## 10. Three refusals recorded as bytes
+## 10. Refusals recorded as bytes
 
-Prose about a payload drifts from the payload silently, so three of the failures above are also
+Prose about a payload drifts from the payload silently, so six of the failures above are also
 committed as recorded exchanges under `contract/speleoloc-sync/v1/16-errors/` — the invalid resume
-position, the stale one, and a batch pinned to a contract version this server does not speak. Each
-carries a `status.txt` with the status line beside the problem body, because the status is what a
-client branches on before it has read a field.
+position, the stale one, a batch pinned to a contract version this server does not speak, an
+account under review uploading from a build that cannot be told so, the people directory asked for
+while it is switched off, and a document row naming bytes that were never staged. Each refusal of
+the exchange carries a `status.txt` with the status line beside the problem body, because the status
+is what a client branches on before it has read a field.
 
 They are the three worth having as bytes rather than as description. The two cursor refusals arrive
 as different statuses with different codes for what is nonetheless one decision on the device, which
@@ -556,3 +559,9 @@ meet.
 The correlation identifier a problem document carries is replaced in those recordings. It is a fresh
 value on every request, it is for reading a server log with, and nothing on a device should branch
 on it.
+
+The three added with the second set of parts are `client-update-required` (`409`, refused whole,
+no `rows`, like the version refusal), `feature-disabled` (`409` from `GET /api/v1/sync/people` while
+the directory is off) and `file-bytes-missing`. The last is not a problem document at all: it is a
+row of a `200` with status `rejected` (§6.2), so its recording has no `status.txt`, and a client
+must not look for one.

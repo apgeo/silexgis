@@ -16,7 +16,7 @@ before it ships.
 
 ---
 
-## 1. The twelve invariants
+## 1. The thirteen invariants
 
 ### 1. The local database stays the sole source of truth for the running app
 
@@ -141,6 +141,21 @@ rows in between are never downloaded — silently, with no error anywhere and no
 same shape applies to a base revision travelling between devices: the second device then loses every
 upload to a conflict it cannot explain.
 
+### 13. A file the server hands down never replaces the device's own copy of it
+
+The server may hand a reader a photo **without its location** (`reach: "locationFree"`): a rewritten
+copy, under the same name and type as the stored file, whose bytes and fingerprint differ from the
+original. A device that already holds that file — because its caver took the picture, or because an
+archive brought it — keeps what it holds. The copy is for a device that has nothing better, and it is
+stored as that: never written over an existing file, and never offered back upward as if it were the
+original. The same holds for anything the device does to a file before sending it: a compressed or
+resized version is a new file, made beside the caver's own, never in its place.
+
+*If this breaks:* a caver's own photographs lose their GPS position on the caver's own phone the first
+time a sync runs, and the loss travels on through every archive that device makes — or, on a desktop
+build, the user's original picture is overwritten by the compressed copy made to send it. Neither has
+a version to go back to (rule 9).
+
 ---
 
 ## 2. What the server guarantees in return
@@ -259,7 +274,7 @@ Nothing here installs itself anywhere. If the app-side effort keeps a rules file
 these are the lines worth copying into it, because they are the ones a fresh session cannot infer
 from the SpeleoLoc codebase:
 
-- The twelve invariants above, by name — especially 3 (suspended change logging), 10 (never a new
+- The thirteen invariants above, by name — especially 3 (suspended change logging), 10 (never a new
   FTP protocol enum value), 11 (no coordinates in the property document) and 12 (the revisions and
   the cursor are local-only).
 - **The sync contract is versioned and the version is pinned by builds in the field.** Additive

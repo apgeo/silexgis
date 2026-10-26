@@ -5,9 +5,11 @@ finds out what a server can do, how it names the caves it wants to carry, and ho
 page at a time so that a lost connection costs one page rather than the whole sync.
 
 It is written as the server is built, so a section that is not here yet is a part that does not
-exist yet. Both directions now exist: §§3–7 are the read, and §8 is the write. The server says which
-it serves — `features` in the capabilities answer names `download` and `upload` — and a device is
-expected to read that rather than to discover a gap at the first request.
+exist yet. Both directions exist: §§3–7 are the read, and §8 is the write. §§11–15 are what a phone
+carries beyond caves and places — photos and documents, the people directory, trip recordings, the
+review hold and raster maps — each with its own stream and its own upload sections. The server says
+which parts it serves — `features` in the capabilities answer — and a device is expected to read that
+rather than to discover a gap at the first request.
 
 Signing in is a separate document; everything here assumes a bearer token obtained the way that one
 describes. **No route in this slice is reachable without one.** There is no anonymous read of a sync
@@ -28,7 +30,7 @@ Authorization: Bearer <token>
   "contractVersion": 1,
   "pageSizeMax": 500,
   "uploadRowsMax": 500,
-  "features": ["download", "upload", "documents", "documentUpload"]
+  "features": ["download", "upload", "documents", "documentUpload", "trips", "reviews", "rasters", "people"]
 }
 ```
 
@@ -45,6 +47,8 @@ Authorization: Bearer <token>
 staged bytes through the transfer routes, and the upload's `documents` and `documentLinks` sections;
 `trips` means the trips stream and the upload's `tripRecordings` and `tripPoints` sections of section 13;
 `rasters` means the rasters stream and the upload's `rasterMaps` and `rasterPins` sections of section 15;
+`reviews` means the reviews stream of section 14 is served, and that an account under review is
+answered `held` to a device that opts in with `clientFeatures: ["held"]`;
 `people` means the people directory and the upload's `people` section of
   section 12 are, which an installation can switch off and which is named only to an account that
   may be told who people are. The list is worked out for each request, not fixed for the build: a part an
@@ -640,6 +644,34 @@ status is 200 by construction.
 fixture showing a `centerline` row, none showing a duplicate report, and none showing a row-level
 refusal that is not a conflict. All of them are asserted by the test suite and described above; they
 are simply not among the bodies committed as bytes.
+
+Three more refusals sit under `16-errors/`, and one of them is not a refusal of the exchange:
+
+| Directory | What it shows |
+|---|---|
+| `16-errors/client-update-required` | `409`, `sync.client_update_required`. An account under review uploading from a build that does not declare `clientFeatures: ["held"]`. Refused whole, with no `rows`, like the version refusal |
+| `16-errors/feature-disabled` | `409`, `sync.feature_disabled`. The people directory asked for while this installation has it off |
+| `16-errors/file-bytes-missing` | A `200`, **with no `status.txt`**: the batch is accepted and its one document row comes back `rejected` with `sync.file_bytes_missing` (§11). A client reads the row's status, not the exchange's |
+
+The second set of parts (§§11–15) is recorded from `17-` upward:
+
+| Directory | What it shows |
+|---|---|
+| `17-documents-first-page` | The documents stream for a reader who may not place everything a photo hangs on: `reach: "locationFree"`, and `sizeBytes`/`sha256` `null` because the bytes it will be given are not the stored file (§11) |
+| `18-files-links` | The address route, one call for the whole file and one picture; each item answered on its own (§11) |
+| `19-upload-document-and-link` | An upload carrying a staged photo and the link hanging it on a cave (§11) |
+| `20-upload-held` | An upload from an account under review: both rows `held`, no revision, a `reviewId` each, nothing written (§14) |
+| `21-reviews-first-page` | A held edit turned down, with the server's row as `current` for a caller who may place it (§14) |
+| `22-reviews-current-withheld` | The same decision for a caller who may not: `current` is absent, not blurred (§14) |
+| `23-people` | The people directory: clubmates and the caller, names only, and the caller's links (§12) |
+| `24-trips-first-page` | A club recording as another member is handed it, the scan at a place it may not see left out without a word (§13) |
+| `25-rasters-first-page` | A raster map with the one pin a member may see; the pin on a protected place is absent (§15) |
+
+The pictures these exchanges upload are generated, so their hash is replaced by `<sha256>` in the
+recordings, and an optional `sizeBytes` is left out of what goes up: both are the imaging library's,
+and pinning them would rewrite the recordings on an upgrade of that library rather than on a change
+to this protocol. The `CHANGELOG.md` entry of 2026-10-26 announces these recordings; fixtures
+`07`–`16` were not changed by it.
 
 Two files in that directory are about the recordings rather than part of them. `manifest.json`
 carries a digest for every file and one roll-up over all of them, which is how a copy of the

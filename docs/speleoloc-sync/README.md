@@ -5,14 +5,21 @@ caves, cave places and the codes printed on their labels. SilexGIS is a web GIS 
 installs on its own server, holding the same kinds of records for the whole club, with its own
 permissions and its own protection rules for sensitive entrance positions. This package is the
 contract between the two: how a device signs in, names the caves it wants to carry, reads them a page
-at a time, writes its own edits back, and resolves a code somebody scanned off a cave label. It is
-written for whoever builds the device side — there is no client here, only the server and the
-description of what it will do. **The server side exists and is finished for this phase; the client
-side does not exist yet, and building it is a separate piece of work.**
+at a time, writes its own edits back, and resolves a code somebody scanned off a cave label. A second
+phase added what a phone carries beyond caves and places: photos and documents in both directions,
+the club's people directory, trip recordings, raster maps with pins, and uploads that wait for a
+reviewer. It is written for whoever builds the device side — there is no client here, only the server
+and the description of what it will do. **The server side of both phases exists; the client side is
+a separate piece of work, done in the application's own repository.**
 
 **Contract version in force: 1.** A device pins this number and sends it on every upload. What moves
-it, and what does not, is in `01-protocol.md`; what has changed between versions is in
-`../../contract/speleoloc-sync/v1/CHANGELOG.md`.
+it, and what does not, is in `01-protocol.md`; what has changed is in
+`../../contract/speleoloc-sync/v1/CHANGELOG.md`. Everything the second phase added is additive and
+is announced in the capabilities answer's `features` — `documents`, `documentUpload`, `trips`,
+`reviews`, `rasters` and, while the installation has its people directory on, `people` — so a build
+pinned to version 1 that reads only `download` and `upload` keeps working unchanged. The one new
+behaviour a client must understand is opted into rather than imposed: an upload naming
+`clientFeatures: ["held"]` may get rows back `held` for a reviewer (`01-protocol.md` §14).
 
 ---
 
@@ -53,7 +60,10 @@ developer's.
 this work exists for: every demo object belongs to the bootstrap administrator, who sees everything
 exactly, so location protection never engages and there is no caving group at all. The extra seeding
 adds a group, a second non-administrator account that owns nothing, and the missing group binding —
-which is what makes withholding and group targeting observable from a client at all.
+which is what makes withholding and group targeting observable from a client at all — and, for the
+second phase, two generated photos (one the member is handed as stored, one without its location), a
+trip recording, a raster map with one of its two pins withheld from the member, the people directory,
+and a third account whose uploads wait for a reviewer.
 
 ## Where these documents live
 
@@ -61,23 +71,24 @@ They are maintained in the SilexGIS repository, under `docs/speleoloc-sync/`, al
 traffic in `contract/speleoloc-sync/v1/`. **That is the copy that is current**, and the manifest
 beside the recorded traffic is how any other copy tells whether it is stale.
 
-A copy has been placed in the application's repository, under `docs/integrations/silexgis/` and
-`test_data/silexgis_contract/v1/`. **It is in a working tree and is not committed**, so a fresh clone
-of that repository does not get it: until somebody on the application side commits it, read the
-server repository. Whoever commits it should also decide how it is refreshed, because a copy nobody
-refreshes is worse than no copy — the manifest is what makes that decidable rather than a guess.
+A copy is committed in the application's repository, under `docs/integrations/silexgis/` and
+`test_data/silexgis_contract/v1/`, with a note of its own (`00-this-copy.md`) naming the upstream
+commit it was taken at and how it is refreshed. **Refreshing it is the application side's job**, not
+this repository's; compare the `digest` in the two `manifest.json` files to tell whether it is
+current. A copy taken before the second phase lists only `download` and `upload` among the features
+and holds none of the recordings from `17-` on, nor the three newer ones under `16-errors/`.
 
 ## The eight other documents
 
 | Document | The question it answers |
 |---|---|
-| `01-protocol.md` | The wire. Capabilities and versioning, sync sets, the paged download and its cursor, tombstones, the feature row, the settings document, and writing rows back with per-row arbitration. **Start here.** |
-| `02-field-mapping.md` | Which SpeleoLoc record becomes which SilexGIS record, which fields carry across, and what may never be sent. |
+| `01-protocol.md` | The wire. Capabilities and versioning, sync sets, the paged download and its cursor, tombstones, the feature row, the settings document, and writing rows back with per-row arbitration (§1–§10); then the second phase's streams and upload sections — photos and documents (§11), people (§12), trip recordings (§13), the review hold (§14) and raster maps (§15). **Start here.** |
+| `02-field-mapping.md` | Which SpeleoLoc record becomes which SilexGIS record, which fields carry across, and what may never be sent — files, people, trips and raster maps included. |
 | `03-auth.md` | Signing in, with real recorded exchanges: the cookie, the authorization request, the token exchange, two-factor, refresh lifetimes, and the five things a client author gets wrong. |
-| `04-errors.md` | Every failure this surface can answer with, what each means, and — the point of the document — the one action from a closed set that the client is supposed to take. |
+| `04-errors.md` | Every failure this surface can answer with — whole-request refusals and the per-row codes inside a 200 — what each means, and the point of the document: the one action from a closed set that the client is supposed to take. |
 | `05-qr-landing.md` | What happens when somebody scans a code printed on a cave label, what an anonymous visitor is told, and the three conditions on the printed URL that only the client can enforce. |
-| `06-standalone-rules.md` | The twelve invariants that keep the application working with no server at all, each with the failure it prevents — and what the server guarantees in return. |
-| `07-dev-server.md` | How to get a running server with usable data, in one command, and how to reset it. |
+| `06-standalone-rules.md` | The thirteen invariants that keep the application working with no server at all, each with the failure it prevents — and what the server guarantees in return. |
+| `07-dev-server.md` | How to get a running server with usable data — accounts, protected and open caves, photos, a raster map, a recording, the people directory, an account under review — in one command, and how to reset it. |
 | `08-near-future.md` | What was deliberately written down rather than built, and why. |
 
 ## What the client effort decides for itself
@@ -86,7 +97,7 @@ None of these is a question for the server side, and none of them is waiting on 
 
 1. **The whole client architecture** — service shape, state management, wiring, error surfaces, retry
    and backoff policy, and how a sync run is presented to the caver. The only constraints are the
-   twelve rules in `06-standalone-rules.md`, and they are constraints on effects, not on design.
+   thirteen rules in `06-standalone-rules.md`, and they are constraints on effects, not on design.
 2. **When a sync runs** — manual, on connectivity, on a schedule, on app foreground. The server has no
    opinion and no session state to lose.
 3. **How a conflict is presented.** The server hands back the current row; whether the application

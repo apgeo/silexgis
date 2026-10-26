@@ -25,19 +25,28 @@ What it does, in order:
    types, rock types, map layers, permission groups and the bootstrap administrator.
 3. Loads the **demonstration dataset** — six caves, entrances, an area, documents.
 4. Adds the **sync development data** — a caving group, a second account that is a plain member of
-   it, and the group binding the demonstration dataset leaves off. §3 says why that step is not
-   optional.
+   it, and the group binding the demonstration dataset leaves off; then what a phone reads beyond
+   caves and places: two generated photos with an invented GPS tag, a trip recording, a raster map
+   with two pins, the people directory, and a third account whose uploads wait for a reviewer. §3
+   says why that step is not optional and what each piece is for.
 5. Serves the API on `http://127.0.0.1:5205`.
 6. **Signs in as the member account, completes the whole authorization-code exchange, and reads
    `/api/v1/sync/capabilities`** before saying a word about success.
+7. **Proves, as the member, that the phone-side data is there and protected**: it creates a sync set
+   rooted at `DEMO-0001`, reads its documents stream, its download and its rasters stream, and
+   requires one photo announced `original`, the other `locationFree`, and the raster map with one of
+   its two pins — the one whose `placeId` is `Demo marker A`'s, as the member's own download names
+   it. A single pin on the protected place would be the leak, so the pin is matched by place rather
+   than counted, and a download that does not hand over `Demo marker A` is refused rather than
+   accepted. The set is deleted again afterwards.
 
-That last step is the point of the script and not a flourish. Both seeding commands exit *zero* when
+Steps 6 and 7 are the point of the script and not a flourish. Both seeding commands exit *zero* when
 they refuse to do anything — they log a reason and return — so a script that trusted an exit code
 would happily announce a working server with no accounts in it. Signing in for real is the only
 check that fails when the thing it is checking is broken.
 
-Then it prints the base URL, both accounts, the group, the client id and the whole sign-in dance as
-`curl` commands, and stays in the foreground serving. **Ctrl-C** stops the API and leaves the
+Then it prints the base URL, the accounts, the group, the seeded phone-side data, the client id and
+the whole sign-in dance as `curl` commands, and stays in the foreground serving. **Ctrl-C** stops the API and leaves the
 database running.
 
 Options: `--db-port N` and `--api-port N`, if either default collides with something you are already
@@ -48,20 +57,21 @@ running.
 | | |
 |---|---|
 | Base URL | `http://127.0.0.1:5205` |
-| Sync capabilities | `GET /api/v1/sync/capabilities` — contract version 1, `download` and `upload` |
+| Sync capabilities | `GET /api/v1/sync/capabilities` — contract version 1; `features` lists `download`, `upload`, `documents`, `documentUpload`, `trips`, `reviews`, `rasters` and — because this installation has the people directory on and the member may read it — `people` |
 | OpenAPI document | `http://127.0.0.1:5205/openapi/v1.json` (no database needed to render it) |
 | Database | `127.0.0.1:5434`, database `silexgis`, user `silexgis`, password `silexgis` |
 | Client id | `silexgis-speleoloc` — public, **no secret**, PKCE `S256` required |
 | Redirect URIs | `http://127.0.0.1:54321/callback` (any loopback port; the registered entry carries none and the port is excluded from matching) and `speleoloc://auth` |
 
-Two accounts:
+Three accounts:
 
 | Account | Password | What it is |
 |---|---|---|
 | `member@dev.local` | `dev-member-pass-1` | **Sign in as this one.** A plain member of the caving group who owns nothing, so what it can see is decided by the permission and protection rules rather than by ownership. |
+| `review@dev.local` | `dev-member-pass-1` | The member's twin — a Viewer in the same group, owning nothing — except that **its uploads wait for a reviewer**. An upload from it without `clientFeatures: ["held"]` is refused whole with `409 sync.client_update_required`; with it, every row comes back `held` (`01-protocol.md` §14). It signs in with the member's password. |
 | `admin@dev.local` | `dev-admin-pass-1` | The bootstrap administrator. A full administrator: it sees every coordinate exactly and owns every demonstration object, so it demonstrates none of the behaviour a client has to handle. |
 
-Caving group: **Demo Caving Club** (`demo-caving-club`). Both accounts are members; the
+Caving group: **Demo Caving Club** (`demo-caving-club`). All three accounts are members; the
 administrator owns it.
 
 ## 3. The data, and what the member account sees
@@ -73,7 +83,7 @@ rules observable from outside.
 
 | Code | Cave | Visibility | What `member@dev.local` gets |
 |---|---|---|---|
-| `DEMO-0001` | Peștera Demo Mare | Public | Everything, exact. Two entrances. |
+| `DEMO-0001` | Peștera Demo Mare | Public | Everything, exact. Two entrances, and the seeded place `Demo marker A`. Its other seeded place, `Demo marker B (protected)`, is a protection root of its own and is **absent** — the per-row case of the rule below. |
 | `DEMO-0002` | Avenul Demo Protejat | Authenticated | **Its exact position is protected.** The cave and its entrance are **absent from the sync download entirely** — not delivered blurred. See below. |
 | `DEMO-0003` | Peștera Demo Mică | Public | Everything, exact. |
 | `DEMO-0004` | Peștera Demo Ursului | Public | Everything, exact. |
@@ -83,9 +93,10 @@ rules observable from outside.
 `DEMO-0002` is the row worth writing tests against. Create a sync set whose roots are all six caves
 and download it:
 
-- as `member@dev.local` the page carries **11 rows**, and `Avenul Demo Protejat` and its `Shaft`
-  entrance are simply not among them — no row, no geometry, no placeholder;
-- as `admin@dev.local` the same selection carries **13 rows**, those two included, with exact
+- as `member@dev.local` the page carries **13 rows** — five caves, six entrances, one centreline and
+  `Demo marker A` — and `Avenul Demo Protejat`, its `Shaft` entrance and `Demo marker B (protected)`
+  are simply not among them: no row, no geometry, no placeholder;
+- as `admin@dev.local` the same selection carries **16 rows**, those three included, with exact
   coordinates.
 
 That difference, against the same selection on the same server, is the protection rule working, and
@@ -109,6 +120,30 @@ tighter bound — the server does not promise one, and an installation may set t
 keeps what it downloads, in cleartext, and re-shares it over offline archives, so an approximate
 position delivered there would be permanent. Do not read the sync behaviour as a statement about
 what the account may see anywhere else.
+
+### What a phone reads beyond caves and places
+
+All of it is owned by the administrator, because owning a row is one of the ways the exact-location
+rule is short-circuited, and an account that owned what it is meant to be refused would demonstrate
+nothing. Every picture is drawn by the seeder; the GPS position stamped into the photos is invented
+and lies near the invented demo caves.
+
+| What | Where | What `member@dev.local` gets |
+|---|---|---|
+| Photo `Demo photo — open cave` | on `DEMO-0001` alone | In the documents stream with `reach: "original"`: the file as stored, GPS tag included. |
+| Photo `Demo photo — open and protected caves` | on `DEMO-0001` **and** `DEMO-0002` | `reach: "locationFree"`: a copy without the position, because the protected cave is part of where the camera may have been. The administrator is handed the same photo as `original`. (`01-protocol.md` §11.) |
+| Raster map `Demo plan` | `DEMO-0001`, two pins | In the rasters stream with **one** pin, on `Demo marker A`; the pin on `Demo marker B (protected)` is withheld with the place it hangs on. The administrator gets both. (`01-protocol.md` §15.) |
+| Trip recording `Demo trip recording` | `DEMO-0001`, one scan of `Demo marker A` | In the trips stream; it is visible to the caving group, which the member is in. (`01-protocol.md` §13.) |
+| People directory | on | `GET /api/v1/sync/people` lists `Demo Caver`, a club member with no account, and links the phone user `democaver` — reported by the member's phone — to that person. (`01-protocol.md` §12.) |
+
+To see the two photo reaches and the withheld pin side by side, create one sync set rooted at
+`DEMO-0001` as each account and read `GET /api/v1/sync/sets/{id}/documents` and
+`…/rasters`; `up` does exactly that as the member before it reports success.
+
+`review@dev.local` (§2) is there for the review hold: sign in as it and send any upload to see the
+`sync.client_update_required` refusal, then send `clientFeatures: ["held"]` to see rows come back
+`held` and the reviews stream (`GET /api/v1/sync/sets/{id}/reviews`) report what a reviewer did with
+them. A reviewer decides in the browser, signed in as the administrator.
 
 ## 4. Signing in
 
@@ -159,12 +194,21 @@ and read the capabilities — rather than trusting that the containers came up.
 
 ```
 node deploy/speleoloc-dev.mjs down     # stops the database; the volume and its data survive
-node deploy/speleoloc-dev.mjs reset    # removes the container AND its volume
+node deploy/speleoloc-dev.mjs reset    # removes the container AND its volume, and the stored files
 ```
+
+The stored files — the seeded photos and raster image, and anything a client uploads — and the
+API's signing keys live in `.speleoloc-dev/` at the root of the checkout (git ignores it), because
+both settings otherwise default to a folder relative to where the server is started. `reset` removes
+it together with the volume, so the database never names a file that is not there.
 
 After `reset`, the next `up` starts from an empty database and reseeds everything, which is how you
 get back to the table in §3 after an afternoon of writing rows into it. Both seeders are idempotent,
-so running `up` again over an existing database tops up what is missing and changes nothing else.
+so running `up` again over an existing database tops up what is missing and changes nothing else —
+with one exception: a database last migrated by a build from before 2026-10-21, when the server's
+migrations were folded into one baseline, cannot be carried forward. The API then exits at start with
+`migrations.before_baseline` in its log and `up` reports that it exited before answering; `reset`, then
+`up`, is the remedy, and costs nothing but the rows you wrote.
 
 ## 7. Two things it deliberately does not do
 
