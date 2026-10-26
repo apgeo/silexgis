@@ -36,11 +36,16 @@ namespace SilexGis.Api.Auth;
 /// the browser session that could authorize a fresh one is refused by the rotated security stamp.
 /// </para>
 /// <para>
-/// Personal access keys are revoked here too, and have no such window: a key is looked up on every
-/// request, so the stamp written here refuses it on the device's very next call. A key lives on a
-/// device, which is exactly the thing that was lost, so leaving keys out would leave out the
-/// credential this action most needs to take back. Each key is stamped through a tracked save so
-/// that its revocation is in the change history like one made by hand.
+/// Personal access keys are revoked here when the caller asks for it, and then have no such window:
+/// a key is looked up on every request, so the stamp written here refuses it on the device's very
+/// next call. Whether they go is the account holder's choice on a password change or reset, and
+/// off unless chosen: a caver changes a password for many reasons besides a lost phone, and a
+/// key quietly withdrawn from a phone that was never lost stops its uploads in the field with
+/// nothing on the phone to say why. Someone who has lost a device ticks the box, or withdraws
+/// that one key from the keys page. An administrator's reset of an account's second factor keeps
+/// revoking them unconditionally — it is the recovery path for an account somebody else may hold.
+/// Each key is stamped through a tracked save so that its revocation is in the change history
+/// like one made by hand.
 /// </para>
 /// </remarks>
 internal static class SessionRevocation
@@ -51,12 +56,17 @@ internal static class SessionRevocation
         SilexGisDbContext db,
         DateTimeOffset now,
         Guid accountId,
+        bool revokeAccessKeys,
         CancellationToken ct)
     {
         var subject = accountId.ToString();
 
         await tokens.RevokeBySubjectAsync(subject, ct);
         await authorizations.RevokeBySubjectAsync(subject, ct);
+        if (!revokeAccessKeys)
+        {
+            return;
+        }
 
         var keys = await db.ApiAccessKeys
             .Where(k => k.UserId == accountId && k.RevokedAt == null)

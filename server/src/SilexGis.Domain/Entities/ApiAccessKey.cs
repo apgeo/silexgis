@@ -16,8 +16,9 @@ namespace SilexGis.Domain.Entities;
 /// that never existed.
 /// </para>
 /// <para>
-/// Unlike a sign-in token it is looked up on every request, so revoking it, locking the account
-/// or changing the password takes effect on the very next call, with no window.
+/// Unlike a sign-in token it is looked up on every request, so revoking it, locking the account,
+/// or changing or resetting the password with key revocation asked for takes effect on the very
+/// next call, with no window. A password change or reset without that request leaves keys working.
 /// </para>
 /// <para>
 /// When a key was last used is written by a direct update at most once a minute, not through a

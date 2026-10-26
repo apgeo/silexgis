@@ -16,7 +16,9 @@ namespace SilexGis.Api.Features.Me;
 
 public sealed record UsernameChangeRequest(string Username);
 
-public sealed record PasswordChangeRequest(string CurrentPassword, string NewPassword);
+/// <param name="RevokeAccessKeys">Also revoke every personal access key of the account. Off unless
+/// asked for: sessions end either way, and a key lives on a device the holder may still have.</param>
+public sealed record PasswordChangeRequest(string CurrentPassword, string NewPassword, bool RevokeAccessKeys = false);
 
 public sealed class UsernameChangeRequestValidator : AbstractValidator<UsernameChangeRequest>
 {
@@ -155,7 +157,7 @@ public static class MeCredentialEndpoints
         // it has to end the sessions that credential opened — on every client and every device,
         // not merely on the one asking. Nothing else reaches them: an issued token carries no
         // security stamp, and the exchange that renews one never asks when the password changed.
-        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, db, clock.GetUtcNow(), user.Id, ct);
+        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, db, clock.GetUtcNow(), user.Id, request.RevokeAccessKeys, ct);
 
         await signInManager.RefreshSignInAsync(user);
         return TypedResults.NoContent();

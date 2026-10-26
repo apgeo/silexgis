@@ -216,7 +216,7 @@ public static class AuthEndpoints
         // This is the path taken by somebody who has lost the device the sessions live on, so it is
         // the path where ending them matters most: whoever completes a reset is not going to be
         // able to sign the lost device out afterwards, and cannot list what it holds.
-        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, db, clock.GetUtcNow(), user.Id, ct);
+        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, db, clock.GetUtcNow(), user.Id, request.RevokeAccessKeys, ct);
 
         return TypedResults.NoContent();
     }
@@ -293,7 +293,9 @@ public sealed record RegisterRequest(string Email, string Password, string? Disp
 
 public sealed record ForgotPasswordRequest(string Email);
 
-public sealed record ResetPasswordRequest(string Email, string Token, string NewPassword);
+/// <param name="RevokeAccessKeys">Also revoke every personal access key of the account. Off unless
+/// asked for: sessions end either way, and a key lives on a device the holder may still have.</param>
+public sealed record ResetPasswordRequest(string Email, string Token, string NewPassword, bool RevokeAccessKeys = false);
 
 public sealed record ConfirmEmailRequest(Guid UserId, string Token);
 
