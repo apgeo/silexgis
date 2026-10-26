@@ -150,7 +150,13 @@ export default function ImportWorkspacePage() {
           withoutReview,
         },
       });
-      setQueuedCommit(outcome);
+      // An account under review has nothing created by its confirmation: it waits for a
+      // reviewer, so there is no work to follow.
+      if (outcome.held || outcome.jobId == null) {
+        message.info(t('importReview.held'));
+      } else {
+        setQueuedCommit({ jobId: outcome.jobId, batchId: outcome.batchId, queued: outcome.queued });
+      }
       setSelected(new Set());
       setDecisions({});
       loaded.current = false;

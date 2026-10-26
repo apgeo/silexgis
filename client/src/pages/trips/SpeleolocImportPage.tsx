@@ -377,7 +377,12 @@ export default function SpeleolocImportPage() {
         fileId,
         body: { options, pointIds: takenIds, decisions },
       });
-      setResult(outcome);
+      // An account under review records nothing yet: the confirmation waits for a reviewer.
+      if (outcome.held) {
+        message.info(t('importReview.held'));
+      } else {
+        setResult(outcome);
+      }
       // The scans that became positions are set aside, and only they. Clearing the decisions
       // instead would leave the whole selection standing: the button recomputes itself from the
       // preview still in hand and would offer to record the same scans a second time, which is

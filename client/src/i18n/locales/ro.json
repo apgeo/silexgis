@@ -5255,6 +5255,9 @@
       "relationInUse": "Există deja legături înregistrate cu această relație, așa că nu poate fi modificată astfel și nici ștearsă."
     }
   },
+  "importReview": {
+    "held": "Importurile contului tău așteaptă un recenzent. Nu s-a creat nimic încă; se va crea după ce un recenzent le acceptă."
+  },
   "vectorImport": {
     "title": "Verifică și importă",
     "reviewAndImport": "Verifică și importă în registru",

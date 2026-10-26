@@ -5242,6 +5242,9 @@
       "relationInUse": "Links already record this relation, so it cannot be changed that way or deleted."
     }
   },
+  "importReview": {
+    "held": "Your account's imports wait for a reviewer. Nothing has been created yet; it will be once a reviewer accepts it."
+  },
   "vectorImport": {
     "title": "Review and import",
     "reviewAndImport": "Review and import into the registry",

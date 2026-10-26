@@ -451,4 +451,24 @@ describe('TripImportPage', () => {
     fireEvent.click(screen.getByTestId('trip-import-commit'));
     expect(commitMutate).toHaveBeenCalledTimes(1);
   });
+
+  it('says a confirmation waits for a reviewer instead of reporting trips that were not created', async () => {
+    show();
+
+    commitMutate.mockResolvedValue({
+      batchId: 'b1',
+      createdTripCount: 0,
+      createdFeatureCount: 0,
+      skippedCount: 0,
+      failures: [],
+      held: true,
+    });
+    fireEvent.click(screen.getByTestId('trip-import-commit'));
+
+    expect(await screen.findByText(/wait for a reviewer/)).toBeTruthy();
+    // The rows are set aside as after any confirmation, so pressing again cannot hold them twice.
+    await waitFor(() =>
+      expect(screen.getByTestId('trip-import-commit')).toHaveProperty('disabled', true),
+    );
+  });
 });

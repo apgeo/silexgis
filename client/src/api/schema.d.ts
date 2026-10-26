@@ -3566,7 +3566,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Queues the selected candidates to be created as one revertible batch, and answers with the job to watch and the batch they will appear in. Everything that can refuse the confirmation is decided before it is queued. */
+        /** Queues the selected candidates to be created as one revertible batch, and answers with the job to watch and the batch they will appear in. Everything that can refuse the confirmation is decided before it is queued. For an account under review nothing is queued: the confirmation waits for a reviewer and the answer says so (held, no job). */
         post: operations["stagedImportCommit"];
         delete?: never;
         options?: never;
@@ -3618,7 +3618,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Creates or files the selected places as one revertible batch. */
+        /** Creates or files the selected places as one revertible batch. For an account under review nothing is written: the confirmation waits for a reviewer and the answer says so (held). */
         post: operations["photoImportCommit"];
         delete?: never;
         options?: never;
@@ -3890,7 +3890,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Imports the selected caves from the speologie.org catalogue as one revertible batch, creating new caves and refreshing ones imported before. */
+        /** Imports the selected caves from the speologie.org catalogue as one revertible batch, creating new caves and refreshing ones imported before. For an account under review nothing is imported: the selection waits for a reviewer and the answer says so (held). */
         post: operations["catalogueImport"];
         delete?: never;
         options?: never;
@@ -3959,7 +3959,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Records the chosen rows as trips, as one batch that reverts as a unit. */
+        /** Records the chosen rows as trips, as one batch that reverts as a unit. For an account under review nothing is written: the confirmation waits for a reviewer and the answer says so (held). */
         post: operations["tripImportCommit"];
         delete?: never;
         options?: never;
@@ -4028,7 +4028,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Records the chosen scans as tracking positions, as one batch that reverts as a unit. */
+        /** Records the chosen scans as tracking positions, as one batch that reverts as a unit. For an account under review nothing is written: the confirmation waits for a reviewer and the answer says so (held). */
         post: operations["speleolocImportCommit"];
         delete?: never;
         options?: never;
@@ -4062,7 +4062,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Makes a recording a phone sent into tracking positions on a trip, as one batch that reverts as a unit. */
+        /** Makes a recording a phone sent into tracking positions on a trip, as one batch that reverts as a unit. For an account under review nothing is written: the confirmation waits for a reviewer and the answer says so (held). */
         post: operations["commitTripRecordingImport"];
         delete?: never;
         options?: never;
@@ -7639,7 +7639,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Marks an account's phone uploads as waiting for a reviewer, and refuses its file imports while marked, or clears the mark (Write on the Users domain). */
+        /** Marks an account so that its phone uploads and its file imports wait for a reviewer before anything is written, or clears the mark (Write on the Users domain). */
         put: operations["userAdminSetUploadReview"];
         post?: never;
         delete?: never;
@@ -11472,11 +11472,13 @@ export interface components {
         };
         ImportCommitAcceptedDto: {
             /** Format: int64 */
-            jobId: number;
+            jobId: null | number;
             /** Format: uuid */
             batchId: string;
             /** Format: int32 */
             queued: number;
+            /** @default false */
+            held: boolean;
         };
         ImportCommitRequest: {
             options: components["schemas"]["ImportOptions"];
@@ -14230,13 +14232,15 @@ export interface components {
             /** Format: uuid */
             batchId: string;
             /** Format: uuid */
-            tripLogId: string;
+            tripLogId: null | string;
             createdTrip: boolean;
             /** Format: int32 */
             createdEventCount: number;
             /** Format: int32 */
             skippedCount: number;
             failures: components["schemas"]["SpeleolocImportFailureDto"][];
+            /** @default false */
+            held: boolean;
         };
         SpeleolocImportFailureDto: {
             pointId: string;
@@ -14451,6 +14455,8 @@ export interface components {
             /** Format: int32 */
             skippedCount: number;
             failures: components["schemas"]["SpeologieFailureDto"][];
+            /** @default false */
+            held: boolean;
         };
         SpeologieSearchDto: {
             items: components["schemas"]["SpeologieCaveDto"][];
@@ -16264,6 +16270,8 @@ export interface components {
             /** Format: int32 */
             skippedCount: number;
             failures: components["schemas"]["TripImportFailureDto"][];
+            /** @default false */
+            held: boolean;
         };
         TripImportDecision: {
             action?: null | components["schemas"]["TripImportRowAction"];
@@ -26914,6 +26922,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     uploadReviewRejectBatch: {
@@ -26978,6 +26995,15 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -27056,6 +27082,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     uploadReviewRejectItem: {
@@ -27120,6 +27155,15 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
