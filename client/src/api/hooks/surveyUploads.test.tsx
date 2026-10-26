@@ -130,8 +130,9 @@ function listItem(
     archive: null,
     therionSources: [],
     statusPageUrl: `/caves/cave-1/surveys/${surveyId}/uploads/${over.id}`,
+    publicLink: null,
     ...rest,
-  };
+  } as SurveyUploadListItem;
 }
 
 describe('groupCaveSurveys', () => {

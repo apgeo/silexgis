@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { KeyOutlined } from '@ant-design/icons';
-import { Alert, App, Card, Form, Input, Typography } from 'antd';
+import { Alert, App, Card, Form, Input, Switch, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
@@ -11,6 +11,7 @@ interface PasswordValues {
   currentPassword: string;
   newPassword: string;
   confirmPassword: string;
+  revokeAccessKeys?: boolean;
 }
 
 /**
@@ -26,6 +27,10 @@ const MIN_LENGTH = 10;
  * of the account, this browser's included, so the reader is signed out here and sent to sign in
  * with the password they just chose. They are told so before they press the button, because a
  * form that logs you out on success is otherwise indistinguishable from one that failed.
+ *
+ * The account's personal access keys — the ones a field device uploads with — are a different
+ * matter: they keep working through a password change unless the reader switches them off here
+ * too, because a device in a cave cannot be given a new key from there. The switch starts off.
  *
  * The server's refusals land on the field they are about: a wrong current password on the first
  * box, a new password it will not take on the second.
@@ -43,7 +48,11 @@ export default function PasswordChangeCard({
 
   const onFinish = async (values: PasswordValues) => {
     try {
-      await change.mutateAsync({ currentPassword: values.currentPassword, newPassword: values.newPassword });
+      await change.mutateAsync({
+        currentPassword: values.currentPassword,
+        newPassword: values.newPassword,
+        revokeAccessKeys: values.revokeAccessKeys ?? false,
+      });
     } catch (error) {
       if (!(error instanceof ApiError)) {
         message.error(t('common.saveFailed'));
@@ -124,6 +133,15 @@ export default function PasswordChangeCard({
           ]}
         >
           <Input.Password autoComplete="new-password" />
+        </Form.Item>
+        <Form.Item
+          name="revokeAccessKeys"
+          label={t('security.password.revokeKeys')}
+          valuePropName="checked"
+          initialValue={false}
+          extra={t('security.password.revokeKeysHint')}
+        >
+          <Switch data-testid="password-revoke-access-keys" />
         </Form.Item>
         <Alert type="info" showIcon title={t('security.password.signsOut')} style={{ marginBottom: 16 }} />
         <Button type="primary" htmlType="submit" loading={change.isPending}>

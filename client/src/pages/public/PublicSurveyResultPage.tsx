@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Alert, Card, Flex, Skeleton, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import Button from '../../components/Button.tsx';
 import SurveyUploadProgressPanel from '../../components/surveyUploads/SurveyUploadProgress.tsx';
-import { isUnknownPublicLink, usePublicSurveyUpload } from '../../api/hooks.ts';
+import { isSignInRequiredPublicLink, isUnknownPublicLink, usePublicSurveyUpload } from '../../api/hooks.ts';
+import { useAuth } from '../../auth/auth.tsx';
 
 /**
  * The page behind a survey upload's public link: how far the run has got and what it produced,
@@ -16,16 +17,46 @@ import { isUnknownPublicLink, usePublicSurveyUpload } from '../../api/hooks.ts';
  * and any position are not in it, so there is nothing here to hide. A link that is wrong, withdrawn
  * or no longer allowed (the cave has since been protected) is answered exactly like one that never
  * existed, and the page says the same thing for all three.
+ *
+ * A link made for the organization opens for any signed-in account of the installation. Read
+ * without signing in, the server says so (and only for a link that would otherwise open), and the
+ * page offers to sign in and come back here. A signed-in reader's requests already carry the
+ * account, so after signing in the same request simply succeeds.
  */
 export default function PublicSurveyResultPage() {
   const { t, i18n } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const { data: view, isPending, error, refetch } = usePublicSurveyUpload(token);
+  const { signIn } = useAuth();
+  const location = useLocation();
 
   if (isPending && !error) {
     return (
       <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
         <Skeleton active paragraph={{ rows: 6 }} />
+      </div>
+    );
+  }
+
+  if (isSignInRequiredPublicLink(error)) {
+    return (
+      <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
+        <Alert
+          type="info"
+          showIcon
+          data-testid="public-survey-sign-in"
+          title={t('publicSurvey.signInRequired')}
+          description={t('publicSurvey.signInRequiredHint')}
+          action={
+            <Button
+              type="primary"
+              data-testid="public-survey-sign-in-button"
+              onClick={() => void signIn(location.pathname + location.search + location.hash)}
+            >
+              {t('publicSurvey.signIn')}
+            </Button>
+          }
+        />
       </div>
     );
   }

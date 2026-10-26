@@ -50,8 +50,16 @@ interface UploadAnswer {
  *
  * Seeding through the API, not the screens, because the web has no way to start an upload: the
  * pages under test only show one.
+ *
+ * `publicLink` is what the device may ask of this upload's link (the open request's member of the
+ * same name): none, a link for signed-in accounts only, and so on. Left out, the account's
+ * preferences decide, as they do for a device that does not ask.
  */
-export async function seedUpload(page: Page, title: string): Promise<SeededUpload> {
+export async function seedUpload(
+  page: Page,
+  title: string,
+  options: { publicLink?: { wanted?: boolean; audience?: 'public' | 'organization'; allowProtected?: boolean } } = {},
+): Promise<SeededUpload> {
   const bytes = fs.readFileSync(archivePath);
   const opened = await asPerson<UploadAnswer>(page, 'POST', '/api/v1/survey-uploads', {
     source: 'topodroid',
@@ -60,6 +68,7 @@ export async function seedUpload(page: Page, title: string): Promise<SeededUploa
     surveyName: 'pestera_inventata',
     files: [{ name: archiveName, size: bytes.length, role: 'archive' }],
     pipeline: { compile: true },
+    ...(options.publicLink ? { publicLink: options.publicLink } : {}),
   });
   await asPerson(page, 'PUT', `/api/v1/survey-uploads/${opened.id}/files/${encodeURIComponent(archiveName)}`, bytes, {
     'Content-Type': 'application/octet-stream',

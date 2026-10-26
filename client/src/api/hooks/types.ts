@@ -97,6 +97,7 @@ export type MailSettingsWrite = components['schemas']['MailSettingsWriteRequest'
 export type SmsSettingsWrite = components['schemas']['SmsSettingsWriteRequest'];
 export type SecuritySettings = components['schemas']['SecuritySettingsDto'];
 export type ProtectionSettings = components['schemas']['ProtectionSettingsDto'];
+export type SurveyUploadSettings = components['schemas']['SurveyUploadSettingsDto'];
 export type ImportSettings = components['schemas']['ImportSettingsDto'];
 export type NotificationSettings = components['schemas']['NotificationSettingsDto'];
 export type AnnouncementSettings = components['schemas']['AnnouncementSettingsDto'];

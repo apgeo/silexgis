@@ -65,9 +65,28 @@ describe('PasswordChangeCard', () => {
       expect(changeMutate).toHaveBeenCalledWith({
         currentPassword: 'the-old-password',
         newPassword: 'a-long-new-password',
+        revokeAccessKeys: false,
       }),
     );
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+  });
+
+  it('revokes the access keys too only when the reader switches it on', async () => {
+    changeMutate.mockResolvedValue(undefined);
+    show();
+
+    const keys = screen.getByRole('switch', { name: 'Also revoke my access keys' });
+    expect(keys).not.toBeChecked();
+    fireEvent.click(keys);
+    fill('the-old-password', 'a-long-new-password', 'a-long-new-password');
+
+    await waitFor(() =>
+      expect(changeMutate).toHaveBeenCalledWith({
+        currentPassword: 'the-old-password',
+        newPassword: 'a-long-new-password',
+        revokeAccessKeys: true,
+      }),
+    );
   });
 
   it('puts a wrong current password on its own field and stays signed in', async () => {

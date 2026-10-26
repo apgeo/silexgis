@@ -41,6 +41,24 @@ test.describe('survey uploads', () => {
     await expect(page.getByRole('button', { name: /Delete this upload/ })).toHaveCount(0);
   });
 
+  test('a link is made from the status page for the audience chosen, and is marked with it', async ({ page }) => {
+    await login(page);
+    const upload = await seedUpload(page, `E2E Make Link ${Date.now()}`, { publicLink: { wanted: false } });
+    expect(upload.publicLinkUrl, 'the upload asked for no link').toBeNull();
+
+    await gotoRoute(page, upload.statusPageUrl);
+    await expect(page.getByTestId('survey-upload-no-link')).toBeVisible();
+    await page.getByTestId('survey-upload-link-make').click();
+    await expect(page.getByTestId('survey-upload-link-dialog')).toBeVisible();
+    // The cave this upload made is not protected, so nothing has to be acknowledged.
+    await expect(page.getByTestId('survey-upload-link-acknowledge')).toHaveCount(0);
+    await page.getByRole('radio', { name: /Signed-in accounts only/ }).check();
+    await page.getByTestId('survey-upload-link-dialog-ok').click();
+
+    await expect(page.getByTestId('survey-upload-link')).toContainText('/p/survey/');
+    await expect(page.getByTestId('survey-upload-link-audience-tag')).toHaveText('Signed-in accounts only');
+  });
+
   test('an address that names no upload says so', async ({ page, consoleErrors }) => {
     consoleErrors.allow(
       /Failed to load resource: .*404/,

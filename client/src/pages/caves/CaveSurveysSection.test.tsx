@@ -20,6 +20,14 @@ vi.mock('../../api/hooks.ts', async () => {
       data: {
         id,
         artefacts: [{ kind: 'lox', name: `model-${id}.lox`, sizeBytes: 4096, contentUrl: '/f', viewUrl: null }],
+        // Only the first survey's newest version is past the warning size.
+        olderVersions: {
+          count: 1,
+          sizeBytes: 600 * 1024 * 1024,
+          warn: id === 'u2',
+          warnBytes: 500 * 1024 * 1024,
+          keepVersions: 0,
+        },
       },
     }),
   };
@@ -68,6 +76,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the cave surveys section', () => {
+  it('warns about the survey whose older versions take more than the installation warns at, naming the setting', () => {
+    show();
+    const warning = screen.getByTestId('cave-survey-size-warning-s1');
+    expect(warning.textContent).toContain('First survey');
+    expect(warning.textContent).toContain('600');
+    expect(warning.textContent).toContain('SILEXGIS__SurveyUploads__KeepArtefactVersions');
+    expect(screen.queryByTestId('cave-survey-size-warning-s2')).toBeNull();
+  });
+
   it('draws nothing for a cave with no uploads', () => {
     items = [];
     const { container } = show();

@@ -4,6 +4,7 @@ import {
   AppstoreOutlined,
   BellOutlined,
   CameraOutlined,
+  CloudUploadOutlined,
   EnvironmentOutlined,
   FileImageOutlined,
   GlobalOutlined,
@@ -30,6 +31,7 @@ import Button from '../../components/Button.tsx';
 import { useQueryClient } from '@tanstack/react-query';
 import MapBackgroundsForm from './MapBackgroundsForm.tsx';
 import WorkspaceDefaultForm from './WorkspaceDefaultForm.tsx';
+import SurveyUploadsSettingsForm from './SurveyUploadsSettingsForm.tsx';
 import SelfHostedBasemapPanel from './SelfHostedBasemapPanel.tsx';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
@@ -164,6 +166,15 @@ export default function MessagingSettingsPage() {
                 </span>
               ),
               children: <PhotoLibrariesForm settings={settings} onSaved={onSaved} />,
+            },
+            {
+              key: 'survey-uploads',
+              label: (
+                <span>
+                  <CloudUploadOutlined /> {t('admin.messaging.surveyUploadsTab')}
+                </span>
+              ),
+              children: <SurveyUploadsSettingsForm settings={settings} onSaved={onSaved} />,
             },
             {
               key: 'workspace',

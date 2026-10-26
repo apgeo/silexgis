@@ -21,6 +21,14 @@ import {
 
 export type PublicSurveyUpload = components['schemas']['PublicSurveyUploadDto'];
 export type SurveyUploadPublicLink = components['schemas']['SurveyUploadPublicLinkDto'];
+export type SurveyUploadLinkAudience = components['schemas']['SurveyUploadLinkAudience'];
+export type SurveyUploadPublicLinkMintRequest = components['schemas']['SurveyUploadPublicLinkMintRequest'];
+
+/** Who a link opens for, in the order the forms offer them. */
+export const SURVEY_UPLOAD_LINK_AUDIENCES: readonly SurveyUploadLinkAudience[] = ['public', 'organization'];
+
+/** The server's code for a link made for the organization, opened without signing in. */
+export const PUBLIC_LINK_SIGN_IN_REQUIRED = 'survey_upload.public_link_sign_in_required';
 
 /**
  * An artefact as the shared list draws it. Both answers satisfy it: the public one always has a
@@ -37,11 +45,18 @@ export interface SurveyUploadArtefactView {
 }
 
 /** Why an upload has no public link — the codes the server writes in `publicLinkRefusal`. */
-export type PublicLinkRefusal = 'installation-off' | 'account-off' | 'no-share-right' | 'protected-cave' | 'revoked';
+export type PublicLinkRefusal =
+  | 'installation-off'
+  | 'account-off'
+  | 'not-wanted'
+  | 'no-share-right'
+  | 'protected-cave'
+  | 'revoked';
 
-const KNOWN_REFUSALS: readonly PublicLinkRefusal[] = [
+export const KNOWN_REFUSALS: readonly PublicLinkRefusal[] = [
   'installation-off',
   'account-off',
+  'not-wanted',
   'no-share-right',
   'protected-cave',
   'revoked',
@@ -114,6 +129,15 @@ export function isUnknownPublicLink(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404;
 }
 
+/**
+ * Whether a failed call means the link works but was made for the installation's signed-in
+ * accounts, and this reader has not signed in. The server says so only once everything else about
+ * the link has said it opens, so it is a settled answer: signing in is the way on, not a retry.
+ */
+export function isSignInRequiredPublicLink(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401 && error.code === PUBLIC_LINK_SIGN_IN_REQUIRED;
+}
+
 function refreshUpload(queryClient: ReturnType<typeof useQueryClient>, id: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.surveyUpload(id) });
 }
@@ -121,12 +145,23 @@ function refreshUpload(queryClient: ReturnType<typeof useQueryClient>, id: strin
 /**
  * Makes the upload's public link, or a new one when it already has one (the old address stops
  * working). The upload's status is asked again so `publicLink` on the page is the server's word.
+ *
+ * `audience` empty leaves the choice to the server (the replaced link's, the upload's, the
+ * account's default). `allowProtected` is the person's explicit acknowledgement that the cave's
+ * position is protected and the results show where its passages are; without it the server
+ * refuses a protected cave.
  */
 export function useMintSurveyUploadPublicLink() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => unwrap(api.POST('/api/v1/survey-uploads/{id}/public-link', { params: { path: { id } } })),
-    onSuccess: (_link, id) => refreshUpload(queryClient, id),
+    mutationFn: ({ id, audience = null, allowProtected = null }: { id: string } & Partial<SurveyUploadPublicLinkMintRequest>) =>
+      unwrap(
+        api.POST('/api/v1/survey-uploads/{id}/public-link', {
+          params: { path: { id } },
+          body: { audience, allowProtected },
+        }),
+      ),
+    onSuccess: (_link, { id }) => refreshUpload(queryClient, id),
   });
 }
 
