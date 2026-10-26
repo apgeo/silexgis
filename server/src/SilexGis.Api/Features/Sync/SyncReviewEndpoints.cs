@@ -267,6 +267,42 @@ public static class SyncReviewEndpoints
             }
         }
 
+        // A raster map is read through its cave, and a pin through its map's cave and its place,
+        // as the rasters stream reads them.
+        var mapIds = IdsOf(SyncUploadSections.RasterMaps);
+        var pinIds = IdsOf(SyncUploadSections.RasterPins);
+        if (mapIds.Count > 0 || pinIds.Count > 0)
+        {
+            var pins = pinIds.Count == 0
+                ? []
+                : await db.RasterPins.AsNoTracking()
+                    .Where(p => pinIds.Contains(p.Id))
+                    .Select(p => new { p.Id, p.RasterMapId, p.PlaceFeatureId, p.UpdatedAt })
+                    .ToListAsync(ct);
+            var wanted = mapIds.Concat(pins.Select(p => p.RasterMapId)).Distinct().ToList();
+            var maps = await db.RasterMaps.AsNoTracking()
+                .Where(m => wanted.Contains(m.Id))
+                .Select(m => new { m.Id, m.CaveFeatureId, m.UpdatedAt })
+                .ToListAsync(ct);
+            var asked = maps.Select(m => m.CaveFeatureId).Concat(pins.Select(p => p.PlaceFeatureId)).Distinct().ToList();
+            var visible = (await db.Features.AsNoTracking()
+                    .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+                    .Where(f => asked.Contains(f.Id))
+                    .Select(f => f.Id)
+                    .ToListAsync(ct))
+                .ToHashSet();
+            var readableMaps = maps.Where(m => visible.Contains(m.CaveFeatureId)).ToDictionary(m => m.Id);
+            foreach (var m in readableMaps.Values.Where(m => mapIds.Contains(m.Id)))
+            {
+                found[(SyncUploadSections.RasterMaps, m.Id)] = m.UpdatedAt;
+            }
+
+            foreach (var p in pins.Where(p => readableMaps.ContainsKey(p.RasterMapId) && visible.Contains(p.PlaceFeatureId)))
+            {
+                found[(SyncUploadSections.RasterPins, p.Id)] = p.UpdatedAt;
+            }
+        }
+
         return found;
     }
 }

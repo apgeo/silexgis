@@ -1407,8 +1407,8 @@ quality and main-entrance flag together). Accepting writes exactly what the same
 written unheld, with **the uploading account's rights as they are at that moment**: a review never
 lands what the account could not write itself, so a row the account has since lost the right to write
 is decided `failed`. Accepting a row accepts the held rows it depends on (a place under a held cave, a
-scan of a held recording, both the held photo and the held place a link joins), even when an earlier
-upload left them waiting; turning one down turns down every held row that depends on it.
+scan of a held recording, both the held photo and the held place a link joins, a map of a held cave,
+both the held map and the held place a pin joins), even when an earlier upload left them waiting; turning one down turns down every held row that depends on it.
 
 A reviewer may change their mind about a row they turned down, while the installation still keeps a
 turned-down photo's bytes (`SILEXGIS__Sync__RejectedHeldBytesRetentionDays`, 30 days by default) and as
@@ -1450,7 +1450,7 @@ an empty stream.
 | Member | Meaning |
 |---|---|
 | `reviewId` | The id the upload answered the row with. |
-| `entity` | The upload section the row came in: `rows`, `people`, `documents`, `documentLinks`, `tripRecordings` or `tripPoints`. |
+| `entity` | The upload section the row came in: `rows`, `people`, `documents`, `documentLinks`, `tripRecordings`, `tripPoints`, `rasterMaps` or `rasterPins`. |
 | `rowId` | The row's id as the upload answered it; for a document link, the document's id. |
 | `outcome` | `accepted` — written, whole or in part; `rejected` — turned down, nothing written; `superseded` — the device sent the same row again with other content, which waits in its place under a new `reviewId` (decided when that upload arrived, with no reviewer); `failed` — accepted, but refused when it was written. |
 | `decidedAt` | When. The stream's order. |
@@ -1566,6 +1566,11 @@ the `map2d` link, which the documents stream tells as a removed link — puts ba
 with its picture), and returns each changed field to its earlier value while it still holds what the
 upload wrote. A new picture steps back to the revision before it, which stays in the document's list.
 The undo's line names `rasterMapId` or `rasterPinId`.
+
+**From an account under review** (section 14) maps and pins are held like every other row: answered
+`held` with a `reviewId`, written only when a reviewer accepts them, a new map's staged picture kept while
+it waits. A reviewer who may not be given a pinned place's position is shown the held pin without its
+`x` and `y`.
 
 ### 15.3 Announcement
 

@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
@@ -17,7 +18,7 @@ namespace SilexGis.Api.Tests;
 
 /// <summary>
 /// A held phone upload across every part an upload carries — rows, people, photos, the links that
-/// hang them on places, trip recordings and their scans — and the decisions that reach more than one
+/// hang them on places, trip recordings and their scans, raster maps and their pins — and the decisions that reach more than one
 /// line: a line that needs two held rows, a dependency kept by an earlier upload, a rejection the
 /// reviewer takes back, and two decisions racing for the same lines.
 /// </summary>
@@ -302,6 +303,183 @@ public sealed class UploadReviewSectionsTests : IAsyncLifetime, IClassFixture<Po
         }
     }
 
+    [Fact]
+    public async Task A_raster_map_and_its_pin_are_held_and_accepting_the_pin_writes_what_it_needs_which_an_undo_takes_back()
+    {
+        var caveId = Guid.CreateVersion7();
+        var entranceId = Guid.CreateVersion7();
+        var mapId = Guid.CreateVersion7();
+        var pinId = Guid.CreateVersion7();
+        var picture = Corpus.Jpeg();
+        var answer = await UploadAsync(new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            clientFeatures = new[] { "held" },
+            rows = new[] { Cave(caveId, "Mapped cave"), Entrance(entranceId, caveId) },
+            rasterMaps = new[] { RasterMap(mapId, caveId, picture, await StageAsync("plan.jpg", picture)) },
+            rasterPins = new[] { new { id = pinId, rasterMapId = mapId, placeId = entranceId, x = 321, y = 654 } },
+        });
+        var batchId = answer.GetProperty("importBatchId").GetGuid();
+        foreach (var section in new[] { "rasterMaps", "rasterPins" })
+        {
+            answer.GetProperty(section).EnumerateArray().ShouldAllBe(r => r.GetProperty("status").GetString() == "held", section);
+        }
+
+        var mapReview = ReviewIdOf(answer, "rasterMaps");
+        var pinReview = ReviewIdOf(answer, "rasterPins");
+        var entranceReview = answer.GetProperty("rows").EnumerateArray()
+            .Single(r => r.GetProperty("id").GetGuid() == entranceId).GetProperty("reviewId").GetGuid();
+        (await RasterCountsAsync(mapId, pinId)).ShouldBe((0, 0));
+
+        // The pin waits on its held map and its held place; the map on its held cave.
+        var detail = await reviewer.GetFromJsonAsync<JsonElement>($"/api/v1/review/batches/{batchId}");
+        detail.GetProperty("lines").EnumerateArray()
+            .Single(l => l.GetProperty("reviewId").GetGuid() == pinReview)
+            .GetProperty("dependsOnReviewIds").EnumerateArray().Select(x => x.GetGuid())
+            .ShouldBe([mapReview, entranceReview], ignoreOrder: true);
+
+        var accepted = await reviewer.PostAsJsonAsync($"/api/v1/review/items/{pinReview}/accept", new { });
+        accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await accepted.Content.ReadAsStringAsync());
+        var decided = (await accepted.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("decided").EnumerateArray().ToList();
+        decided.Count.ShouldBe(4);
+        decided.ShouldAllBe(l => l.GetProperty("decision").GetString() == "accepted");
+        (await RasterCountsAsync(mapId, pinId)).ShouldBe((1, 1));
+
+        // The accepted lines name what they wrote, as the lines of an upload nobody held do.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.ImportBatchItems.AsNoTracking().SingleAsync(i => i.ReviewId == mapReview)).RasterMapId.ShouldBe(mapId);
+            (await db.ImportBatchItems.AsNoTracking().SingleAsync(i => i.ReviewId == pinReview)).RasterPinId.ShouldBe(pinId);
+        }
+
+        // The uploader's phone reads the decision with the revision the pin now has.
+        var told = await uploader.GetFromJsonAsync<JsonElement>($"/api/v1/sync/sets/{set}/reviews");
+        var pinTold = told.GetProperty("reviews").EnumerateArray().Single(r => r.GetProperty("reviewId").GetGuid() == pinReview);
+        pinTold.GetProperty("entity").GetString().ShouldBe("rasterPins");
+        pinTold.GetProperty("outcome").GetString().ShouldBe("accepted");
+        pinTold.GetProperty("revision").ValueKind.ShouldBe(JsonValueKind.String);
+
+        var undone = await uploader.PostAsJsonAsync($"/api/v1/import-batches/{batchId}/revert", new { });
+        var undoAnswer = await undone.Content.ReadAsStringAsync();
+        undone.StatusCode.ShouldBe(HttpStatusCode.OK, undoAnswer);
+        var items = JsonDocument.Parse(undoAnswer).RootElement.GetProperty("items").EnumerateArray().ToList();
+        items.ShouldAllBe(i => i.GetProperty("outcome").GetString() == "undone");
+        items.Count(i => i.TryGetProperty("rasterMapId", out var id) && id.ValueKind == JsonValueKind.String).ShouldBe(1);
+        items.Count(i => i.TryGetProperty("rasterPinId", out var id) && id.ValueKind == JsonValueKind.String).ShouldBe(1);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.RasterMaps.AsNoTracking().IgnoreQueryFilters().SingleAsync(m => m.Id == mapId)).DeletedAt.ShouldNotBeNull();
+            (await db.RasterPins.AsNoTracking().IgnoreQueryFilters().SingleAsync(p => p.Id == pinId)).DeletedAt.ShouldNotBeNull();
+        }
+    }
+
+    [Fact]
+    public async Task A_held_pin_on_a_place_the_viewer_may_not_place_is_shown_without_its_pixel()
+    {
+        // A protected cave and entrance the uploader made before being placed under review; then,
+        // held, a map of the cave with a pin on the entrance. A reader of the queue who may read
+        // the entrance but not place it is not shown where on the map the entrance lies.
+        var caveId = Guid.CreateVersion7();
+        var entranceId = Guid.CreateVersion7();
+        await MarkAsync(false);
+        await UploadRowsAsync(Cave(caveId, "Guarded mapped cave"), Entrance(entranceId, caveId));
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.Features.Where(f => f.Id == caveId || f.Id == entranceId)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(f => f.LocationProtected, true)
+                    .SetProperty(f => f.IsProtectedEffective, true));
+        }
+
+        await MarkAsync(true);
+        var mapId = Guid.CreateVersion7();
+        var pinId = Guid.CreateVersion7();
+        var picture = Corpus.Jpeg();
+        var answer = await UploadAsync(new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            clientFeatures = new[] { "held" },
+            rasterMaps = new[] { RasterMap(mapId, caveId, picture, await StageAsync("guarded.jpg", picture)) },
+            rasterPins = new[] { new { id = pinId, rasterMapId = mapId, placeId = entranceId, x = 777123, y = 888456 } },
+        });
+        var batchId = answer.GetProperty("importBatchId").GetGuid();
+
+        var readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"urs-pin-{marker}@t.local");
+        using var reader = await AuthHelper.BearerClientAsync(factory, $"urs-pin-{marker}@t.local");
+        await GrantAsync(readerId, AccessDomain.UploadReview);
+        await GrantAsync(readerId, AccessDomain.Features);
+
+        var exact = await reviewer.GetStringAsync($"/api/v1/review/batches/{batchId}");
+        exact.ShouldContain("777123");
+        var blind = await reader.GetStringAsync($"/api/v1/review/batches/{batchId}");
+        blind.ShouldNotContain("777123");
+        blind.ShouldNotContain("888456");
+        var pin = JsonDocument.Parse(blind).RootElement.GetProperty("lines").EnumerateArray()
+            .Single(l => l.GetProperty("rowId").GetGuid() == pinId).GetProperty("proposal").GetProperty("pin");
+        pin.GetProperty("placeId").GetGuid().ShouldBe(entranceId);
+        pin.TryGetProperty("x", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_held_photo_link_on_a_recording_the_viewer_may_not_read_shows_nothing_of_it()
+    {
+        // A recording the uploader sent before being placed under review, kept private; then, held,
+        // a photo hung on it. Whether the link may be shown is the recording's to decide.
+        var caveId = Guid.CreateVersion7();
+        var recordingId = Guid.CreateVersion7();
+        await MarkAsync(false);
+        await UploadRowsAsync(Cave(caveId, "Recorded cave"));
+
+        // A link to a recording is taken only when the recording's cave is in the set's selection.
+        var created = await uploader.PostAsJsonAsync("/api/v1/sync/sets/", new
+        {
+            name = $"Recorded {marker}",
+            uploadVisibility = "private",
+            rootFeatureIds = new[] { caveId },
+            settings = new { },
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var recordedSet = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var recorded = await UploadAsync(into: recordedSet, body: new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            tripRecordings = new[] { Recording(recordingId, caveId) },
+        });
+        recorded.GetProperty("tripRecordings")[0].GetProperty("status").GetString().ShouldBe("created");
+
+        await MarkAsync(true);
+        var documentId = Guid.CreateVersion7();
+        var bytes = Corpus.GeotaggedJpeg(45.24, 25.31);
+        var answer = await UploadAsync(into: recordedSet, body: new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            clientFeatures = new[] { "held" },
+            documents = new[] { Photo(documentId, bytes, await StageAsync("IMG_0910.jpg", bytes)) },
+            documentLinks = new[] { new { documentId, target = new { kind = "tripRecording", id = recordingId }, deleted = false } },
+        });
+        var batchId = answer.GetProperty("importBatchId").GetGuid();
+        var linkReview = ReviewIdOf(answer, "documentLinks");
+
+        // May read features and the queue, but no trip log.
+        var readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"urs-rec-{marker}@t.local");
+        using var reader = await AuthHelper.BearerClientAsync(factory, $"urs-rec-{marker}@t.local");
+        await GrantAsync(readerId, AccessDomain.UploadReview);
+
+        var exact = await reviewer.GetFromJsonAsync<JsonElement>($"/api/v1/review/batches/{batchId}");
+        exact.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("reviewId").GetGuid() == linkReview)
+            .GetProperty("proposal").ValueKind.ShouldBe(JsonValueKind.Object);
+        var blind = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/review/batches/{batchId}");
+        blind.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("reviewId").GetGuid() == linkReview)
+            .GetProperty("proposal").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
     private sealed record Written(int Features, int People, int Documents, int Links, int Recordings, int Points);
 
     private async Task<Written> CountWrittenAsync(
@@ -322,6 +500,49 @@ public sealed class UploadReviewSectionsTests : IAsyncLifetime, IClassFixture<Po
             await db.TripRecordings.IgnoreQueryFilters().CountAsync(r => r.Id == recordingId),
             await db.TripRecordingPoints.IgnoreQueryFilters().CountAsync(p => p.Id == pointId));
     }
+
+    private async Task<(int Maps, int Pins)> RasterCountsAsync(Guid mapId, Guid pinId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return (await db.RasterMaps.IgnoreQueryFilters().CountAsync(m => m.Id == mapId),
+            await db.RasterPins.IgnoreQueryFilters().CountAsync(p => p.Id == pinId));
+    }
+
+    private async Task MarkAsync(bool needsReview)
+    {
+        var response = await reviewer.PutAsJsonAsync(
+            $"/api/v1/users/{uploaderId}/upload-review", new { uploadsNeedReview = needsReview });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    private async Task GrantAsync(Guid userId, AccessDomain domain)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = userId,
+            Effect = AccessEffect.Allow,
+            Domain = domain,
+            Actions = AccessAction.Read,
+            ScopeKind = AccessScopeKind.All,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private static object RasterMap(Guid id, Guid caveId, byte[] picture, Guid staged) => new
+    {
+        id,
+        caveId,
+        title = "Held plan",
+        mapType = "planView",
+        fileName = "plan.jpg",
+        sha256 = Convert.ToHexStringLower(SHA256.HashData(picture)),
+        sizeBytes = picture.Length,
+        stagedUploadId = staged,
+    };
 
     private async Task<ImportReviewDecision?> DecisionOfAsync(Guid reviewId)
     {
@@ -358,9 +579,9 @@ public sealed class UploadReviewSectionsTests : IAsyncLifetime, IClassFixture<Po
         rows,
     });
 
-    private async Task<JsonElement> UploadAsync(object body)
+    private async Task<JsonElement> UploadAsync(object body, Guid? into = null)
     {
-        var response = await uploader.PostAsJsonAsync($"/api/v1/sync/sets/{set}/upload", body);
+        var response = await uploader.PostAsJsonAsync($"/api/v1/sync/sets/{into ?? set}/upload", body);
         var raw = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.OK, raw);
         return JsonDocument.Parse(raw).RootElement.Clone();

@@ -106,9 +106,20 @@ internal sealed class SyncDocumentLinksSection(
         null,
         [
             new SyncHeldTarget(SyncHeldTargetKind.Document, proposal.Row.DocumentId),
-            new SyncHeldTarget(SyncHeldTargetKind.Feature, proposal.Row.Target.Id),
+            new SyncHeldTarget(HeldKindOf(proposal.Row.Target.Kind), proposal.Row.Target.Id),
         ],
         false);
+
+    /// <summary>
+    /// What a link hangs on, in the words a held proposal names rows by — so whether a reviewer may
+    /// be shown a link is decided by the recording or scan it hangs on, not by a feature of that id.
+    /// </summary>
+    private static SyncHeldTargetKind HeldKindOf(SyncLinkTargetKind kind) => kind switch
+    {
+        SyncLinkTargetKind.TripRecording => SyncHeldTargetKind.Recording,
+        SyncLinkTargetKind.TripPoint => SyncHeldTargetKind.Point,
+        _ => SyncHeldTargetKind.Feature,
+    };
 
     protected override IEnumerable<Guid> Refers(SyncLinkProposal proposal) =>
         new[] { proposal.Row.DocumentId, proposal.Row.Target.Id }.Distinct();

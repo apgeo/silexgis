@@ -277,7 +277,15 @@ internal sealed class SyncHeldBatchHandler(
     /// </summary>
     private const int MaxChainDepth = 16;
 
-    private static readonly string[] PositionMembers = ["geometry", "altitude", "positionQuality", "isMain"];
+    /// <summary>
+    /// Where a held proposal keeps the item the phone sent, and the members of it that say where
+    /// something is: a feature row's point and what moves with it, a pin's pixel on its map.
+    /// </summary>
+    private static readonly (string Item, string[] Members)[] PositionMembers =
+    [
+        ("row", ["geometry", "altitude", "positionQuality", "isMain"]),
+        ("pin", ["x", "y"]),
+    ];
 
     private sealed class Reach
     {
@@ -375,13 +383,30 @@ internal sealed class SyncHeldBatchHandler(
                 .Select(r => (new SyncHeldTarget(SyncHeldTargetKind.Point, r.Id), r.UpdatedAt)));
         }
 
+        var maps = IdsOf(targets, SyncHeldTargetKind.RasterMap);
+        if (maps.Count > 0)
+        {
+            found.AddRange((await db.RasterMaps.AsNoTracking().IgnoreQueryFilters()
+                    .Where(m => maps.Contains(m.Id)).Select(m => new { m.Id, m.UpdatedAt }).ToListAsync(ct))
+                .Select(r => (new SyncHeldTarget(SyncHeldTargetKind.RasterMap, r.Id), r.UpdatedAt)));
+        }
+
+        var pins = IdsOf(targets, SyncHeldTargetKind.RasterPin);
+        if (pins.Count > 0)
+        {
+            found.AddRange((await db.RasterPins.AsNoTracking().IgnoreQueryFilters()
+                    .Where(p => pins.Contains(p.Id)).Select(p => new { p.Id, p.UpdatedAt }).ToListAsync(ct))
+                .Select(r => (new SyncHeldTarget(SyncHeldTargetKind.RasterPin, r.Id), r.UpdatedAt)));
+        }
+
         return found;
     }
 
     /// <summary>
     /// Of existing rows, the ones the viewer may read, each by the rule its own listing reads it
     /// by: features by their visibility, documents by theirs and by what they hang on, recordings
-    /// as trip logs, and a scan through its recording.
+    /// as trip logs, a scan through its recording, a raster map through its cave, and a pin through
+    /// its map's cave and its own place.
     /// </summary>
     private async Task<HashSet<SyncHeldTarget>> ReadableAsync(
         IReadOnlyCollection<SyncHeldTarget> targets, AccessContext viewer, CancellationToken ct)
@@ -424,6 +449,30 @@ internal sealed class SyncHeldBatchHandler(
                 .Select(p => new SyncHeldTarget(SyncHeldTargetKind.Point, p.Id)));
         }
 
+        var pinIds = IdsOf(targets, SyncHeldTargetKind.RasterPin);
+        var pins = pinIds.Count == 0
+            ? []
+            : await db.RasterPins.AsNoTracking().IgnoreQueryFilters()
+                .Where(p => pinIds.Contains(p.Id)).Select(p => new { p.Id, p.RasterMapId, p.PlaceFeatureId })
+                .ToListAsync(ct);
+        var mapIds = IdsOf(targets, SyncHeldTargetKind.RasterMap)
+            .Concat(pins.Select(p => p.RasterMapId)).Distinct().ToList();
+        if (mapIds.Count > 0)
+        {
+            var maps = await db.RasterMaps.AsNoTracking().IgnoreQueryFilters()
+                .Where(m => mapIds.Contains(m.Id)).Select(m => new { m.Id, m.CaveFeatureId }).ToListAsync(ct);
+            var asked = maps.Select(m => m.CaveFeatureId).Concat(pins.Select(p => p.PlaceFeatureId)).Distinct().ToList();
+            var visible = (await db.Features.AsNoTracking()
+                    .Where(f => asked.Contains(f.Id))
+                    .VisibleTo(viewer, db.Features, db.FeatureSetMembers)
+                    .Select(f => f.Id).ToListAsync(ct))
+                .ToHashSet();
+            var readableMaps = maps.Where(m => visible.Contains(m.CaveFeatureId)).Select(m => m.Id).ToHashSet();
+            readable.UnionWith(readableMaps.Select(id => new SyncHeldTarget(SyncHeldTargetKind.RasterMap, id)));
+            readable.UnionWith(pins.Where(p => readableMaps.Contains(p.RasterMapId) && visible.Contains(p.PlaceFeatureId))
+                .Select(p => new SyncHeldTarget(SyncHeldTargetKind.RasterPin, p.Id)));
+        }
+
         return readable;
     }
 
@@ -432,14 +481,20 @@ internal sealed class SyncHeldBatchHandler(
 
     private static string WithoutPosition(string proposal)
     {
-        if (JsonNode.Parse(proposal) is not JsonObject root || root["row"] is not JsonObject row)
+        if (JsonNode.Parse(proposal) is not JsonObject root)
         {
             return proposal;
         }
 
-        foreach (var member in PositionMembers)
+        foreach (var (name, members) in PositionMembers)
         {
-            row.Remove(member);
+            if (root[name] is JsonObject item)
+            {
+                foreach (var member in members)
+                {
+                    item.Remove(member);
+                }
+            }
         }
 
         return root.ToJsonString();

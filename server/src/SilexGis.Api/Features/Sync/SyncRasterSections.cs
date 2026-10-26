@@ -119,6 +119,26 @@ internal sealed class SyncRasterMapsSection(
     protected override IReadOnlyList<SyncUploadRasterMapDto>? ItemsOf(SyncUploadRequest request) =>
         request.RasterMaps;
 
+    protected override IEnumerable<Guid> Refers(SyncRasterMapProposal proposal) =>
+        new[] { proposal.Map.CaveId, proposal.Map.CaveAreaId }.OfType<Guid>().Distinct();
+
+    protected override DateTimeOffset? StandingRevision(SyncRasterMapProposal proposal) => proposal.BaseRevision;
+
+    protected override SyncHeldFacts Facts(SyncRasterMapProposal proposal) => new(
+        proposal.Act == SyncRasterAct.Create ? null : new SyncHeldTarget(SyncHeldTargetKind.RasterMap, proposal.Map.Id),
+        proposal.Act == SyncRasterAct.Create ? null : proposal.BaseRevision,
+        [.. Refers(proposal).Select(id => new SyncHeldTarget(SyncHeldTargetKind.Feature, id))],
+        false);
+
+    /// <summary>A held new map, or a held new picture, keeps its staged bytes while it waits.</summary>
+    protected override Guid? HeldUpload(SyncRasterMapProposal proposal) =>
+        proposal.Act == SyncRasterAct.Delete ? null : proposal.Map.StagedUploadId;
+
+    protected override SyncUploadRasterMapDto ItemOf(SyncRasterMapProposal proposal) => proposal.Map;
+
+    protected override SyncUploadRasterMapDto? Rebased(SyncUploadRasterMapDto item, DateTimeOffset revision) =>
+        item.BaseRevision is null ? null : item with { BaseRevision = revision };
+
     public override async Task<SyncResolution<SyncRasterMapProposal>> ResolveAsync(
         SyncUploadRun run, SyncUploadRasterMapDto item, CancellationToken ct)
     {
@@ -511,6 +531,29 @@ internal sealed class SyncRasterPinsSection(IAccessService access)
 
     protected override IReadOnlyList<SyncUploadRasterPinDto>? ItemsOf(SyncUploadRequest request) =>
         request.RasterPins;
+
+    protected override IEnumerable<Guid> Refers(SyncRasterPinProposal proposal) =>
+        new[] { (Guid?)proposal.Pin.RasterMapId, proposal.Pin.PlaceId }.OfType<Guid>().Distinct();
+
+    protected override DateTimeOffset? StandingRevision(SyncRasterPinProposal proposal) => proposal.BaseRevision;
+
+    /// <summary>
+    /// A pin's pixel is where its place lies on the picture, so it is held back from a reviewer
+    /// who may not be given the place's position, as a feature's point is.
+    /// </summary>
+    protected override SyncHeldFacts Facts(SyncRasterPinProposal proposal) => new(
+        proposal.Act == SyncRasterAct.Create ? null : new SyncHeldTarget(SyncHeldTargetKind.RasterPin, proposal.Pin.Id),
+        proposal.Act == SyncRasterAct.Create ? null : proposal.BaseRevision,
+        [
+            new SyncHeldTarget(SyncHeldTargetKind.RasterMap, proposal.Pin.RasterMapId),
+            .. proposal.Pin.PlaceId is { } place ? [new SyncHeldTarget(SyncHeldTargetKind.Feature, place)] : Array.Empty<SyncHeldTarget>(),
+        ],
+        CarriesPosition: proposal.Act != SyncRasterAct.Delete);
+
+    protected override SyncUploadRasterPinDto ItemOf(SyncRasterPinProposal proposal) => proposal.Pin;
+
+    protected override SyncUploadRasterPinDto? Rebased(SyncUploadRasterPinDto item, DateTimeOffset revision) =>
+        item.BaseRevision is null ? null : item with { BaseRevision = revision };
 
     public override async Task<SyncResolution<SyncRasterPinProposal>> ResolveAsync(
         SyncUploadRun run, SyncUploadRasterPinDto item, CancellationToken ct)

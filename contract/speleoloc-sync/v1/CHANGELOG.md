@@ -302,7 +302,8 @@ arrays is answered as before; `07`–`16` are byte-for-byte unchanged.
   as bytes staged beforehand) and the places pinned on it by pixel. Maps are applied after `documents`,
   pins last of all, so a pin sent beside its map and its place finds both. Answered in `rasterMaps` and
   `rasterPins` arrays of the per-row shape, present only when the request carried them. Arbitration and
-  replay are the rows'.
+  replay are the rows'. From an account under review both are held as every other section is (the entry
+  above), and a decision on them reaches the reviews stream with `entity` `rasterMaps` or `rasterPins`.
 - **`GET /api/v1/sync/sets/{id}/rasters`** — the raster maps of the caves in the set that this account is
   handed, a page at a time with a cursor of its own, each with its pins embedded; a pin of a place the
   account is not handed is left out of the map, a map of a withheld cave is absent, and removals arrive as

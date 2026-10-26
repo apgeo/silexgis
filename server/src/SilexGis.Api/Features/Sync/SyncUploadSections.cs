@@ -108,6 +108,8 @@ internal enum SyncHeldTargetKind
     Document,
     Recording,
     Point,
+    RasterMap,
+    RasterPin,
 }
 
 /// <summary>One row a held proposal changes or names.</summary>
