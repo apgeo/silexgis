@@ -16,6 +16,7 @@ using SilexGis.Api.Features.Admin;
 using SilexGis.Api.Features.Attachments;
 using SilexGis.Api.Features.AccessHistory;
 using SilexGis.Api.Features.Audit;
+using SilexGis.Api.Features.Review;
 using SilexGis.Api.Features.Diagnostics;
 using SilexGis.Api.Features.Cabinets;
 using SilexGis.Api.Features.Checklists;
@@ -302,6 +303,7 @@ try
     builder.Services.AddScoped<AdminTestSendThrottle>();
 builder.Services.AddScoped<GroupAnnouncementThrottle>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
+    builder.Services.AddScoped<SilexGis.Infrastructure.Import.IHeldBatchHandler, SilexGis.Api.Features.Sync.SyncHeldBatchHandler>();
     builder.Services.AddScoped<SilexGis.Infrastructure.Trips.ITripRosterAnnouncer, SilexGis.Api.Features.TripLogs.TripRosterAnnouncer>();
     // Told when a follow link is minted, so the people a published page names are not the last
     // to know. Registered concretely: it is called from one place and substituted by nothing, so an
@@ -580,6 +582,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapStagedImportEndpoints();
     api.MapPhotoImportEndpoints();
     api.MapImportBatchEndpoints();
+    api.MapUploadReviewEndpoints();
     api.MapCatalogueEndpoints();
     api.MapTripImportEndpoints();
     api.MapSpeleolocImportEndpoints();

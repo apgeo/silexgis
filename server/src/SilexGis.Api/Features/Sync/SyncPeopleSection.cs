@@ -39,6 +39,8 @@ internal sealed class SyncPeopleSection(SyncSettings settings) : SyncUploadSecti
 {
     private HashSet<Guid> listed = [];
 
+    protected override SyncUploadPersonDto ItemOf(SyncPersonProposal proposal) => proposal.Person;
+
     public override string Name => SyncUploadSections.People;
 
     protected override IReadOnlyList<SyncUploadPersonDto>? ItemsOf(SyncUploadRequest request) => request.People;

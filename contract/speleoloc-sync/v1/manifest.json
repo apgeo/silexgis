@@ -6,7 +6,8 @@
     "upload",
     "documents",
     "documentUpload",
-    "trips"
+    "trips",
+    "reviews"
   ],
   "reserved": [
     "01-login",
@@ -20,7 +21,7 @@
     "manifest.json"
   ],
   "fileCount": 35,
-  "digest": "10deb94aad63dd175a13f870ad2b3a2f071b4c17cff481e15929d9e1add5e4a5",
+  "digest": "d9f5879a5310d7e3d3808d5f4d6bdccb1ecc0e2eb5c6ff68511f44d05094123b",
   "files": {
     "07-download-first-page/request.txt": {
       "bytes": 37,
@@ -155,8 +156,8 @@
       "sha256": "b5250d764721aa67681630221c6398cdaecb4cc961bf39d4b84764036242a3d8"
     },
     "CHANGELOG.md": {
-      "bytes": 17192,
-      "sha256": "e1fe8f980468fbb7ab8dc9504adb5c446fbd3fa38105553726513c403a9a8b3a"
+      "bytes": 18929,
+      "sha256": "f9997af90e6e7064c5afda7bc686f4e6ffe9fb43d07cc78daa4b2965b2dcb798"
     },
     "README.md": {
       "bytes": 8990,

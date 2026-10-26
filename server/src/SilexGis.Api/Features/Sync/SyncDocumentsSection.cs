@@ -61,6 +61,19 @@ internal sealed class SyncDocumentsSection(
 {
     public override string Name => SyncUploadSections.Documents;
 
+    protected override DateTimeOffset? StandingRevision(SyncDocumentProposal proposal) => proposal.BaseRevision;
+
+    protected override SyncHeldFacts Facts(SyncDocumentProposal proposal) => proposal.Act == SyncDocumentAct.Create
+        ? SyncHeldFacts.None
+        : new(new SyncHeldTarget(SyncHeldTargetKind.Document, proposal.Row.Id), proposal.BaseRevision, [], false);
+
+    protected override Guid? HeldUpload(SyncDocumentProposal proposal) => proposal.Row.StagedUploadId;
+
+    protected override SyncUploadDocumentDto ItemOf(SyncDocumentProposal proposal) => proposal.Row;
+
+    protected override SyncUploadDocumentDto? Rebased(SyncUploadDocumentDto item, DateTimeOffset revision) =>
+        item.BaseRevision is null ? null : item with { BaseRevision = revision };
+
     protected override IReadOnlyList<SyncUploadDocumentDto>? ItemsOf(SyncUploadRequest request) => request.Documents;
 
     /// <summary>Checks one row. Reads only, and untracked.</summary>

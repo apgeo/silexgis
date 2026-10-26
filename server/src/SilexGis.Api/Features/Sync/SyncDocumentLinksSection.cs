@@ -71,6 +71,43 @@ internal sealed class SyncDocumentLinksSection(
 
     public override string Name => SyncUploadSections.DocumentLinks;
 
+    /// <summary>
+    /// The identity a link is kept under while it waits for a reviewer. A link has no id the phone
+    /// chose — it is the document and the object it hangs on — and the attachment a write would
+    /// make gets its id only when it is written, so a held link is known by a value made from the
+    /// pair, the same every time the phone sends it.
+    /// </summary>
+    public static Guid RowIdOf(SyncUploadDocumentLinkDto row)
+    {
+        Span<byte> key = stackalloc byte[33];
+        row.DocumentId.TryWriteBytes(key[..16]);
+        row.Target.Id.TryWriteBytes(key[16..32]);
+        key[32] = (byte)row.Target.Kind;
+        Span<byte> digest = stackalloc byte[32];
+        System.Security.Cryptography.SHA256.HashData(key, digest);
+        return new Guid(digest[..16]);
+    }
+
+    protected override SyncUploadDocumentLinkDto ItemOf(SyncLinkProposal proposal) => proposal.Row;
+
+    protected override SyncHeldFacts Facts(SyncLinkProposal proposal) => new(
+        null,
+        null,
+        [
+            new SyncHeldTarget(SyncHeldTargetKind.Document, proposal.Row.DocumentId),
+            new SyncHeldTarget(SyncHeldTargetKind.Feature, proposal.Row.Target.Id),
+        ],
+        false);
+
+    protected override IEnumerable<Guid> Refers(SyncLinkProposal proposal) =>
+        new[] { proposal.Row.DocumentId, proposal.Row.Target.Id }.Distinct();
+
+    /// <summary>Answered under the document's id, as every other answer about a link is when
+    /// nothing was written.</summary>
+    protected override (Guid RowId, Guid AnswerId) HeldIdentity(
+        SyncLinkProposal proposal, SyncUploadRowResultDto written) =>
+        (RowIdOf(proposal.Row), proposal.Row.DocumentId);
+
     protected override IReadOnlyList<SyncUploadDocumentLinkDto>? ItemsOf(SyncUploadRequest request) => request.DocumentLinks;
 
     /// <summary>
@@ -94,14 +131,14 @@ internal sealed class SyncDocumentLinksSection(
             .ToListAsync(ct);
 
         // The feature rows ran first and saved as they went, and every row they wrote is filed in
-        // the history under this upload's batch — which is how a link learns that its feature is
-        // one the caller created a moment ago. Only a feature's own history rows count: a phone
+        // the history under this upload's batch — by the upload, or by the reviewer who accepted
+        // it — which is how a link learns that its feature is one the caller created. Only a feature's own history rows count: a phone
         // chooses its documents' identifiers too, and a document created under a guarded cave's
         // identifier must not pass for the cave having been created here.
         var keys = featureIds.Select(id => id.ToString()).ToList();
         var created = (await db.AuditEntries.AsNoTracking()
                 .Where(a => a.ImportBatchId == run.Batch.Id
-                    && a.Source == ChangeSource.DeviceSync
+                    && (a.Source == ChangeSource.DeviceSync || a.Source == ChangeSource.ReviewDecision)
                     && a.Action == AuditActions.Created
                     && a.EntityId != null
                     && a.EntityType != null

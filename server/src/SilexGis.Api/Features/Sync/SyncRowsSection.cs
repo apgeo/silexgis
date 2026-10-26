@@ -94,6 +94,42 @@ internal sealed class SyncRowsSection(
 
     public override string Name => SyncUploadSections.Rows;
 
+    protected override IEnumerable<Guid> Refers(SyncRowProposal proposal) =>
+        new[] { proposal.ContainerId, proposal.Row.ParentId }.OfType<Guid>().Distinct();
+
+    protected override DateTimeOffset? StandingRevision(SyncRowProposal proposal) => proposal.BaseRevision;
+
+    protected override SyncHeldFacts Facts(SyncRowProposal proposal) => new(
+        proposal.Act == SyncRowAct.Create ? null : new SyncHeldTarget(SyncHeldTargetKind.Feature, proposal.Row.Id),
+        proposal.Act == SyncRowAct.Create ? null : proposal.BaseRevision,
+        [.. Refers(proposal).Select(id => new SyncHeldTarget(SyncHeldTargetKind.Feature, id))],
+        CarriesPosition: true);
+
+    protected override SyncUploadRowDto ItemOf(SyncRowProposal proposal) => proposal.Row;
+
+    protected override SyncUploadRowDto? Rebased(SyncUploadRowDto item, DateTimeOffset revision) =>
+        item.BaseRevision is null ? null : item with { BaseRevision = revision };
+
+    /// <summary>
+    /// An edit cut down to the fields a reviewer accepted. An upload is a partial write — a field
+    /// left empty is a field left alone — so a field not accepted is emptied, and the position
+    /// (point, altitude, position quality and the main-entrance flag together, which move as one)
+    /// is dropped the same way the withhold rule drops it.
+    /// </summary>
+    protected override SyncRowProposal Narrowed(SyncRowProposal proposal, IReadOnlyList<string> fields) =>
+        proposal.Act != SyncRowAct.Update
+            ? proposal
+            : proposal with
+            {
+                Row = proposal.Row with
+                {
+                    Name = fields.Contains(SyncHeldFields.Name) ? proposal.Row.Name : null,
+                    Description = fields.Contains(SyncHeldFields.Description) ? proposal.Row.Description : null,
+                    Properties = fields.Contains(SyncHeldFields.Properties) ? proposal.Row.Properties : null,
+                },
+                WritesPosition = proposal.WritesPosition && fields.Contains(SyncHeldFields.Position),
+            };
+
     protected override IReadOnlyList<SyncUploadRowDto>? ItemsOf(SyncUploadRequest request) => request.Rows;
 
     protected override async Task PrepareAsync(

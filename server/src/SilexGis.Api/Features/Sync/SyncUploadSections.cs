@@ -3,6 +3,12 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Import;
+using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Files;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Sync;
@@ -20,6 +26,13 @@ internal sealed class SyncUploadRun
     public required SyncSet Set { get; init; }
 
     public required ImportBatch Batch { get; init; }
+
+    /// <summary>
+    /// Set while the upload of an account under review is checked: every item that would be
+    /// written is kept here as a proposal instead, and what was written to find that out is rolled
+    /// back once the check is over. Null for an upload nobody reviews.
+    /// </summary>
+    public SyncHoldRecorder? Hold { get; init; }
 }
 
 /// <summary>
@@ -61,7 +74,62 @@ internal interface ISyncUploadSection
     string Name { get; }
 
     Task<SyncSectionOutcome> RunAsync(SyncUploadRun run, SyncUploadRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// Writes a proposal this section kept earlier, from its stored form — the second step alone,
+    /// by the same code an upload nobody holds runs.
+    /// </summary>
+    Task<SyncApplied> ApplyHeldAsync(SyncUploadRun run, string proposal, CancellationToken ct);
+
+    /// <summary>
+    /// Writes a held proposal a reviewer accepted: both steps again, on the item as the phone sent
+    /// it, so every check is made once more against the registry as it stands now and with the
+    /// rights the run carries — the uploader's.
+    /// </summary>
+    /// <param name="fields">For an update, the fields the reviewer accepted; null for all of them.</param>
+    /// <param name="overCurrent">
+    /// Whether a row that changed since the phone read it is written over its current state. When
+    /// false, such a row writes nothing and is answered as changed since.
+    /// </param>
+    Task<SyncHeldAcceptance> AcceptHeldAsync(
+        SyncUploadRun run, string proposal, IReadOnlyList<string>? fields, bool overCurrent, CancellationToken ct);
+
+    /// <summary>
+    /// What showing a kept proposal to somebody depends on: the existing row it changes, the
+    /// revision it was checked against, the other rows it names, and whether it carries a position.
+    /// </summary>
+    SyncHeldFacts FactsOf(string proposal);
 }
+
+/// <summary>The kinds of row a held proposal can change or name.</summary>
+internal enum SyncHeldTargetKind
+{
+    Feature,
+    Document,
+    Recording,
+    Point,
+}
+
+/// <summary>One row a held proposal changes or names.</summary>
+internal readonly record struct SyncHeldTarget(SyncHeldTargetKind Kind, Guid Id);
+
+/// <summary>What a held proposal says about the rows around it, for whoever is shown it.</summary>
+/// <param name="Edited">The existing row an update or removal changes; null for a create.</param>
+/// <param name="BaseRevision">The revision of <paramref name="Edited"/> the proposal was checked against.</param>
+/// <param name="Mentions">The other rows it cannot be written without: its container, document, recording, place.</param>
+/// <param name="CarriesPosition">Whether the proposal holds a point, altitude and the like.</param>
+internal sealed record SyncHeldFacts(
+    SyncHeldTarget? Edited, DateTimeOffset? BaseRevision, IReadOnlyList<SyncHeldTarget> Mentions, bool CarriesPosition)
+{
+    public static readonly SyncHeldFacts None = new(null, null, [], false);
+}
+
+/// <summary>What accepting one held proposal did.</summary>
+/// <param name="ChangedSince">
+/// The row changed on the server after the phone read it, and the reviewer did not say to write
+/// over it: nothing was written.
+/// </param>
+internal readonly record struct SyncHeldAcceptance(SyncApplied Applied, bool ChangedSince);
 
 /// <summary>
 /// A section in its two steps. <see cref="ResolveAsync"/> does everything that decides — the
@@ -113,6 +181,91 @@ internal abstract class SyncUploadSection<TItem, TProposal> : ISyncUploadSection
 
     public abstract Task<SyncApplied> ApplyAsync(SyncUploadRun run, TProposal proposal, CancellationToken ct);
 
+    /// <summary>
+    /// The ids of other rows a proposal cannot be written without — its container, its document,
+    /// its recording. A held proposal naming a row that is itself a held create depends on it.
+    /// </summary>
+    protected virtual IEnumerable<Guid> Refers(TProposal proposal) => [];
+
+    /// <summary>
+    /// The revision the proposal's row has now, before anything is written: what a held row is
+    /// answered with, so the device keeps arbitrating against the row as it stands. Null for a
+    /// create.
+    /// </summary>
+    protected virtual DateTimeOffset? StandingRevision(TProposal proposal) => null;
+
+    /// <summary>
+    /// How a held proposal is known: the id a resend of the same row is matched by and a later
+    /// row refers to it by, and the id the device is answered with. Both are the written row's id
+    /// unless the section's rows have no identity of their own the device chose.
+    /// </summary>
+    protected virtual (Guid RowId, Guid AnswerId) HeldIdentity(TProposal proposal, SyncUploadRowResultDto written) =>
+        (written.Id, written.Id);
+
+    /// <summary>
+    /// The staged upload whose bytes the proposal would adopt when it is written, if any — kept
+    /// while the proposal waits rather than left to its own, shorter expiry.
+    /// </summary>
+    protected virtual Guid? HeldUpload(TProposal proposal) => null;
+
+    public Task<SyncApplied> ApplyHeldAsync(SyncUploadRun run, string proposal, CancellationToken ct) =>
+        ApplyAsync(run, ReadHeld(proposal), ct);
+
+    public SyncHeldFacts FactsOf(string proposal) => Facts(ReadHeld(proposal));
+
+    /// <summary>What a proposal of this section changes and names; nothing by default.</summary>
+    protected virtual SyncHeldFacts Facts(TProposal proposal) => SyncHeldFacts.None;
+
+    /// <summary>The item as the phone sent it, which a held proposal carries whole.</summary>
+    protected abstract TItem ItemOf(TProposal proposal);
+
+    /// <summary>
+    /// The item arbitrated against <paramref name="revision"/> instead of the revision the phone
+    /// read — what writing a held change over the row's current state means. Null for a section
+    /// whose rows carry no revision.
+    /// </summary>
+    protected virtual TItem? Rebased(TItem item, DateTimeOffset revision) => default;
+
+    /// <summary>
+    /// The proposal cut down to the fields a reviewer accepted. A section that cannot accept part
+    /// of a change takes no field list; the review routes refuse one before it gets here.
+    /// </summary>
+    protected virtual TProposal Narrowed(TProposal proposal, IReadOnlyList<string> fields) => proposal;
+
+    public async Task<SyncHeldAcceptance> AcceptHeldAsync(
+        SyncUploadRun run, string proposal, IReadOnlyList<string>? fields, bool overCurrent, CancellationToken ct)
+    {
+        // Resolved again rather than applied from the kept proposal: rights, the withhold gate,
+        // the container and the vocabularies are all asked again, now, with the uploader's access
+        // as it is today. Whatever the first check found is no evidence about the registry a
+        // week later, and a review must never land what the account could not write itself.
+        var item = ItemOf(ReadHeld(proposal));
+        await PrepareAsync(run, [item], ct);
+        var resolution = await ResolveAsync(run, item, ct);
+        if (resolution.Settled is { Status: SyncRowStatus.Conflict, Revision: { } current }
+            && Rebased(item, current) is { } rebased)
+        {
+            if (!overCurrent)
+            {
+                return new SyncHeldAcceptance(new SyncApplied(resolution.Settled, null), ChangedSince: true);
+            }
+
+            resolution = await ResolveAsync(run, rebased, ct);
+        }
+
+        if (resolution.Proposal is not { } fresh)
+        {
+            return new SyncHeldAcceptance(new SyncApplied(resolution.Settled!, null), ChangedSince: false);
+        }
+
+        return new SyncHeldAcceptance(
+            await ApplyAsync(run, fields is null ? fresh : Narrowed(fresh, fields), ct), ChangedSince: false);
+    }
+
+    private TProposal ReadHeld(string proposal) =>
+        JsonSerializer.Deserialize<TProposal>(proposal, SyncUploadJson.Options)
+            ?? throw new InvalidOperationException($"A held {Name} proposal could not be read back.");
+
     public async Task<SyncSectionOutcome> RunAsync(SyncUploadRun run, SyncUploadRequest request, CancellationToken ct)
     {
         var items = ItemsOf(request);
@@ -132,13 +285,24 @@ internal abstract class SyncUploadSection<TItem, TProposal> : ISyncUploadSection
                 ? await ApplyAsync(run, proposal, ct)
                 : new SyncApplied(resolution.Settled!, null);
 
-            results.Add(applied.Result);
-            if (applied.Item is not null)
+            // Held: the item was written only so the items after it are checked against it, and is
+            // answered as a proposal kept for review. The write itself is rolled back with the
+            // rest of the check, so its provenance line would point at nothing.
+            var result = applied.Result;
+            if (run.Hold is { } hold && resolution.Proposal is { } kept && SyncUploadTally.IsWritten(result.Status))
+            {
+                result = await hold.KeepAsync(
+                    run, Name, HeldIdentity(kept, result), JsonSerializer.Serialize(kept, SyncUploadJson.Options),
+                    [.. Refers(kept)], StandingRevision(kept),
+                    applied.Item?.Action ?? ImportDecisionAction.Create, HeldUpload(kept), ct);
+            }
+            else if (applied.Item is not null)
             {
                 lines.Add(applied.Item);
             }
 
-            SyncUploadTally.Count(run.Batch, applied.Result.Status);
+            results.Add(result);
+            SyncUploadTally.Count(run.Batch, result.Status);
 
             // Item by item, inside the batch's own transaction. Items arrive in the order they
             // depend on each other — a cave before its entrances, an area before the places
@@ -202,6 +366,10 @@ internal static class SyncUploadTally
             case SyncRowStatus.Deleted:
                 batch.AttachedCount++;
                 break;
+            case SyncRowStatus.Held:
+                // Nothing was written, and nothing was skipped either: the lines waiting for a
+                // reviewer are the batch's count of what it holds.
+                break;
             default:
                 batch.SkippedCount++;
                 break;
@@ -236,6 +404,30 @@ internal static class SyncUploadSections
     public const string TripPoints = "tripPoints";
 
     /// <summary>
+    /// Every section, in the fixed order an upload is applied in. A later section may refer to
+    /// what an earlier one created — a document link to a document sent beside it, a trip point
+    /// to its recording — so the order is the dependency order and never the order the arrays
+    /// happen to sit in the request. The upload and the acceptance of a held upload both build
+    /// their sections here, so the two cannot apply in different orders.
+    /// </summary>
+    public static ISyncUploadSection[] InApplyOrder(
+        FeatureWriteService writer,
+        FeatureProtection protection,
+        IAccessService access,
+        SyncSettings settings,
+        DocumentWriteService documents,
+        UploadIngestService ingest,
+        ContentIntake intake) =>
+    [
+        new SyncRowsSection(writer, protection, access),
+        new SyncPeopleSection(settings),
+        new SyncDocumentsSection(documents, ingest, intake, access),
+        new SyncTripRecordingsSection(access),
+        new SyncTripPointsSection(access),
+        new SyncDocumentLinksSection(protection, access),
+    ];
+
+    /// <summary>
     /// How many items an upload carries, over every section together. The announced ceiling is a
     /// bound on one transaction's work, and that work is the same whichever array an item sits
     /// in — so a device cannot pass a large upload by spreading it over several of them.
@@ -247,6 +439,19 @@ internal static class SyncUploadSections
         + (request.DocumentLinks?.Count ?? 0)
         + (request.TripRecordings?.Count ?? 0)
         + (request.TripPoints?.Count ?? 0);
+
+    /// <summary>
+    /// The ids of the rows an upload carries, every section together, in the identity each section
+    /// answers them by.
+    /// </summary>
+    public static IReadOnlySet<Guid> RowIds(SyncUploadRequest request) =>
+        new HashSet<Guid>(
+            (request.Rows ?? []).Select(r => r.Id)
+                .Concat((request.People ?? []).Select(p => p.DeviceUserId))
+                .Concat((request.Documents ?? []).Select(d => d.Id))
+                .Concat((request.DocumentLinks ?? []).Select(SyncDocumentLinksSection.RowIdOf))
+                .Concat((request.TripRecordings ?? []).Select(r => r.Id))
+                .Concat((request.TripPoints ?? []).Select(p => p.Id)));
 }
 
 /// <summary>

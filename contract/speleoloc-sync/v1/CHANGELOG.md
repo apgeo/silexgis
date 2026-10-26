@@ -265,3 +265,29 @@ Recorded exchanges written or re-written in this entry: none.
 Codes: new, per item — `sync.cave_not_found` (`tripRecordings`), `sync.recording_not_found` and
 `sync.place_not_found` (`tripPoints`). Not sent to phones: `import.recording_already_converted`
 answers the browser's archive import.
+
+## 2026-10-26 — an account's uploads can wait for a reviewer
+
+**Contract version: 1, unchanged. A build pinned to it keeps working** for every account that is not
+placed under review; `07`–`16` are byte-for-byte unchanged, and no answer to such an account carries
+`reviewId`.
+
+- **`clientFeatures: ["held"]`** — a device that lists it understands the row status **`held`**: the
+  account's uploads wait for a reviewer, nothing was written, and the row is kept as a proposal under
+  `reviewId` (with the revision the row already had). The same content sent again is answered with
+  the same `reviewId`; different content replaces the proposal under a new one. An account under
+  review whose upload does not list `held` is refused whole with `409 sync.client_update_required`.
+- **`GET /api/v1/sync/sets/{id}/reviews`** — the decisions on this account's held rows, a page at a
+  time on the set's cursor rules, oldest decision first: `accepted` (with the row's new revision),
+  `rejected`, `superseded` or `failed` (with its `code`), the reviewer's note, and for a turned-down
+  edit or removal of a feature the server's row as `current` — absent when this account may not be
+  given that row's position.
+- **`features` names `reviews`** on every installation running this build.
+
+Described in `docs/speleoloc-sync/01-protocol.md` §8 and §14, `04-errors.md` §3, §6.1, §6.2 and §8.
+
+Recorded exchanges written or re-written in this entry: none (the held upload and the reviews stream
+are recorded with the next fixtures).
+
+Codes: new — `sync.client_update_required` (409, the whole upload); on the reviews stream, a `failed`
+entry's `code` is an upload code or `review.dependency_failed` / `review.proposal_unreadable`.

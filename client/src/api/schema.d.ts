@@ -3694,6 +3694,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/review/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The held batches waiting for a reviewer, oldest first. */
+        get: operations["uploadReviewQueue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own held batches, waiting and decided, newest first. */
+        get: operations["uploadReviewMine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review/batches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One held batch with its lines, as the caller may be shown them. */
+        get: operations["uploadReviewDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review/batches/{id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accepts every waiting line of a held batch, with what they depend on. */
+        post: operations["uploadReviewAcceptBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review/batches/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rejects every waiting line of a held batch, and what depends on them. */
+        post: operations["uploadReviewRejectBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review/items/{reviewId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accepts one held line, or the named fields of one held edit, with what it depends on. */
+        post: operations["uploadReviewAcceptItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review/items/{reviewId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rejects one held line, and the waiting lines that depend on it. */
+        post: operations["uploadReviewRejectItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalogue/speologie/status": {
         parameters: {
             query?: never;
@@ -7512,6 +7631,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/{id}/upload-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Marks an account's phone uploads as waiting for a reviewer, and refuses its file imports while marked, or clears the mark (Write on the Users domain). */
+        put: operations["userAdminSetUploadReview"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{id}/two-factor/reset": {
         parameters: {
             query?: never;
@@ -8032,6 +8168,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/sets/{id}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One page of the decisions reviewers made about rows the caller's phones sent while the account was under review. */
+        get: operations["syncReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/phone-users": {
         parameters: {
             query?: never;
@@ -8221,7 +8374,7 @@ export interface components {
             actions: components["schemas"]["AccessAction"][];
         };
         /** @enum {unknown} */
-        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions" | "checklists" | "events" | "terrain";
+        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions" | "checklists" | "events" | "terrain" | "uploadReview";
         /** @enum {unknown} */
         AccessEffect: "allow" | "deny";
         AccessEntryDto: {
@@ -8373,6 +8526,7 @@ export interface components {
             caverId: null | string;
             /** Format: date-time */
             createdAt: string;
+            uploadsNeedReview: boolean;
             permissionGroups: components["schemas"]["AdminUserPermissionGroupDto"][];
         };
         AdminUserDto: {
@@ -8391,6 +8545,7 @@ export interface components {
             caverId: null | string;
             /** Format: date-time */
             createdAt: string;
+            uploadsNeedReview: boolean;
         };
         AdminUserPermissionGroupDto: {
             /** Format: uuid */
@@ -8401,6 +8556,9 @@ export interface components {
         };
         AdminUserUpdateRequest: {
             locked: boolean;
+        };
+        AdminUserUploadReviewRequest: {
+            uploadsNeedReview: boolean;
         };
         AlbumDto: {
             /** Format: uuid */
@@ -11056,6 +11214,55 @@ export interface components {
             configured: boolean;
             candidates: components["schemas"]["GrottocenterCandidateDto"][];
         };
+        HeldBatchDetailDto: {
+            batch: components["schemas"]["HeldBatchDto"];
+            lines: components["schemas"]["HeldLineDto"][];
+        };
+        HeldBatchDto: {
+            /** Format: uuid */
+            id: string;
+            source: components["schemas"]["ImportSource"];
+            /** Format: uuid */
+            uploaderId: string;
+            reviewState: components["schemas"]["ImportReviewState"];
+            /** Format: date-time */
+            heldAt: null | string;
+            /** Format: date-time */
+            decidedAt: null | string;
+            /** Format: uuid */
+            decidedByUserId: null | string;
+            reviewNote: null | string;
+            /** Format: int32 */
+            pendingCount: number;
+            /** Format: int32 */
+            lineCount: number;
+            /** Format: int64 */
+            heldBytes: number;
+            sections: {
+                [key: string]: number;
+            };
+        };
+        HeldLineDto: {
+            /** Format: uuid */
+            reviewId: string;
+            section: null | string;
+            /** Format: uuid */
+            rowId: null | string;
+            action: components["schemas"]["ImportDecisionAction"];
+            decision: components["schemas"]["ImportReviewDecision"];
+            dependsOnReviewIds: string[];
+            acceptedFields: null | string[];
+            acceptableFields: string[];
+            note: null | string;
+            /** Format: date-time */
+            decidedAt: null | string;
+            /** Format: uuid */
+            decidedByUserId: null | string;
+            failureCode: null | string;
+            failureDetail: null | string;
+            changedSince: boolean;
+            proposal: null | components["schemas"]["JsonElement"];
+        };
         HistoryEventDto: {
             /** Format: int64 */
             id: number;
@@ -11155,6 +11362,9 @@ export interface components {
             /** Format: uuid */
             revertedByUserId: null | string;
             canRevert: boolean;
+            reviewState: components["schemas"]["ImportReviewState"];
+            /** Format: date-time */
+            heldAt: null | string;
             failures: components["schemas"]["ImportFailureDto"][];
         };
         ImportBatchItemDto: {
@@ -11358,6 +11568,10 @@ export interface components {
             item: components["schemas"]["ImportBatchItemDto"];
             sourceProperties: components["schemas"]["JsonElement"];
         };
+        /** @enum {unknown} */
+        ImportReviewDecision: "pending" | "accepted" | "rejected" | "superseded" | "failed";
+        /** @enum {unknown} */
+        ImportReviewState: "notHeld" | "pending" | "accepted" | "partlyAccepted" | "rejected";
         ImportSessionDto: {
             /** Format: uuid */
             geofileId: string;
@@ -11915,7 +12129,7 @@ export interface components {
             isProtected: boolean;
         };
         /** @enum {unknown} */
-        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | "tripPublished" | "tripNeedsAttention";
+        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | "tripPublished" | "tripNeedsAttention" | "uploadAwaitingReview" | "uploadReviewed";
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
             reachesNobody: boolean;
@@ -12218,6 +12432,15 @@ export interface components {
         };
         PagedResultOfGeoreferencedMapDto: {
             items: components["schemas"]["GeoreferencedMapDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfHeldBatchDto: {
+            items: components["schemas"]["HeldBatchDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -13634,6 +13857,19 @@ export interface components {
             /** Format: uuid */
             mainMemberId: null | string;
         };
+        ReviewBatchDecisionRequest: {
+            note?: null | string;
+            overCurrent?: null | boolean;
+        };
+        ReviewDecisionResultDto: {
+            decided: components["schemas"]["HeldLineDto"][];
+            batches: components["schemas"]["HeldBatchDto"][];
+        };
+        ReviewItemDecisionRequest: {
+            fields?: null | string[];
+            note?: null | string;
+            overCurrent?: null | boolean;
+        };
         RevokeEverythingRequest: {
             confirm: null | string;
         };
@@ -14819,8 +15055,33 @@ export interface components {
             /** Format: uuid */
             caverId: null | string;
         };
+        SyncReviewDto: {
+            /** Format: uuid */
+            reviewId: string;
+            entity: string;
+            /** Format: uuid */
+            rowId: string;
+            outcome: components["schemas"]["SyncReviewOutcome"];
+            /** Format: date-time */
+            decidedAt: string;
+            note: null | string;
+            /** Format: date-time */
+            revision: null | string;
+            code: null | string;
+            current: null | components["schemas"]["SyncFeatureDto"];
+        };
         /** @enum {unknown} */
-        SyncRowStatus: "created" | "updated" | "deleted" | "unchanged" | "conflict" | "rejected";
+        SyncReviewOutcome: "accepted" | "rejected" | "superseded" | "failed";
+        SyncReviewsPageDto: {
+            /** Format: int64 */
+            setRevision: number;
+            settings: components["schemas"]["JsonElement"];
+            reviews: components["schemas"]["SyncReviewDto"][];
+            nextCursor: null | string;
+            hasMore: boolean;
+        };
+        /** @enum {unknown} */
+        SyncRowStatus: "created" | "updated" | "deleted" | "unchanged" | "conflict" | "rejected" | "held";
         SyncSetDto: {
             /** Format: uuid */
             id: string;
@@ -15009,6 +15270,8 @@ export interface components {
             revision: null | string;
             code: null | string;
             detail: null | string;
+            /** Format: uuid */
+            reviewId?: null | string;
         };
         SyncUploadTripPointDto: {
             /** Format: uuid */
@@ -26364,6 +26627,403 @@ export interface operations {
             };
         };
     };
+    uploadReviewQueue: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagedResultOfHeldBatchDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    uploadReviewMine: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagedResultOfHeldBatchDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    uploadReviewDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeldBatchDetailDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    uploadReviewAcceptBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewBatchDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDecisionResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    uploadReviewRejectBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewBatchDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDecisionResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    uploadReviewAcceptItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reviewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewItemDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDecisionResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    uploadReviewRejectItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reviewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewItemDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDecisionResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     catalogueStatus: {
         parameters: {
             query?: never;
@@ -37390,6 +38050,50 @@ export interface operations {
             };
         };
     };
+    userAdminSetUploadReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserUploadReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     userAdminResetTwoFactor: {
         parameters: {
             query?: never;
@@ -39041,6 +39745,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncTripsPageDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncReviews: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncReviewsPageDto"];
                 };
             };
             /** @description Bad Request */

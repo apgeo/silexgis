@@ -37,7 +37,8 @@ public sealed record AdminUserDto(
     bool HasPassword,
     bool TwoFactorEnabled,
     Guid? CaverId,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    bool UploadsNeedReview);
 
 /// <summary>A caving group through which an account reaches a permission group.</summary>
 public sealed record AdminUserCavingGroupRefDto(Guid Id, string Name);
@@ -72,6 +73,7 @@ public sealed record AdminUserDetailDto(
     bool TwoFactorEnabled,
     Guid? CaverId,
     DateTimeOffset CreatedAt,
+    bool UploadsNeedReview,
     IReadOnlyList<AdminUserPermissionGroupDto> PermissionGroups);
 
 /// <summary>What an administrator may change about an account.</summary>
@@ -82,6 +84,14 @@ public sealed record AdminUserDetailDto(
 /// it is left to be taken deliberately rather than arrived at by adding fields.
 /// </remarks>
 public sealed record AdminUserUpdateRequest(bool Locked);
+
+/// <summary>Whether what an account uploads waits for a reviewer.</summary>
+/// <remarks>
+/// Its own write rather than a field of the lock above, which is deliberately the one thing an
+/// operator changes about an account: this is a second, separate decision about how the
+/// installation treats what the account sends, and neither should be changed by sending the other.
+/// </remarks>
+public sealed record AdminUserUploadReviewRequest(bool UploadsNeedReview);
 
 /// <summary>An account an administrator opens for somebody: who it is for, and their address.</summary>
 /// <remarks>
@@ -154,6 +164,9 @@ public static class UserAdminEndpoints
         users.MapPut("/{id:guid}", UpdateAsync)
             .WithValidation<AdminUserUpdateRequest>()
             .WithSummary("Locks or unlocks an account (Write on the Users domain).");
+        users.MapPut("/{id:guid}/upload-review", SetUploadReviewAsync)
+            .WithValidation<AdminUserUploadReviewRequest>()
+            .WithSummary("Marks an account's phone uploads as waiting for a reviewer, and refuses its file imports while marked, or clears the mark (Write on the Users domain).");
         users.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes an account (Delete on the Users domain).");
         users.MapPost("/{id:guid}/two-factor/reset", ResetTwoFactorAsync)
@@ -394,6 +407,7 @@ public static class UserAdminEndpoints
             dto.TwoFactorEnabled,
             dto.CaverId,
             dto.CreatedAt,
+            dto.UploadsNeedReview,
             await PermissionGroupsOfAsync(db, id, ct)));
     }
 
@@ -513,6 +527,78 @@ public static class UserAdminEndpoints
         // Re-read through the manager so the security stamp the sign-in path checks is the one
         // this change produced.
         await userManager.UpdateSecurityStampAsync(user);
+
+        var administrators = await FullAdministratorIdsAsync(db, ct);
+        var caverIds = await CaverIdsByUserAsync(db, ct);
+        return TypedResults.Ok(ToDto(user, administrators, caverIds));
+    }
+
+    /// <summary>
+    /// Puts an account's uploads under review, or takes them out of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The mark decides what happens to the batches the account commits from now on: each phone
+    /// upload is kept as a proposal until a reviewer decides it, and each file import is refused,
+    /// because holding one is not built and landing it unreviewed would defeat the mark. Clearing the mark
+    /// does not decide what is already waiting — those batches stay in the queue until somebody
+    /// accepts or rejects them, because landing them unread is exactly what the mark was for.
+    /// </para>
+    /// <para>
+    /// An account row is not recorded field by field, so the change is written to the audit trail
+    /// by hand, naming the switch and nothing else. A full administrator's account is refused to a
+    /// caller who is not one, as every other change an account administrator makes is.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<AdminUserDto>, UnauthorizedHttpResult, ProblemHttpResult>> SetUploadReviewAsync(
+        Guid id,
+        AdminUserUploadReviewRequest request,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Users, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null)
+        {
+            return ApiProblems.NotFound("user.not_found");
+        }
+
+        if (await IsAboveTheCallerAsync(db, ctx, user.Id, ct))
+        {
+            return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
+        }
+
+        if (user.UploadsNeedReview != request.UploadsNeedReview)
+        {
+            db.AuditEntries.Add(new AuditEntry
+            {
+                UserId = ctx.UserId,
+                Action = AuditActions.UploadReviewMarked,
+                EntityType = nameof(SilexGisUser),
+                EntityId = user.Id.ToString(),
+                Changes = JsonSerializer.Serialize(new Dictionary<string, Dictionary<string, object?>>
+                {
+                    [nameof(SilexGisUser.UploadsNeedReview)] = new()
+                    {
+                        ["old"] = user.UploadsNeedReview,
+                        ["new"] = request.UploadsNeedReview,
+                    },
+                }),
+            });
+            user.UploadsNeedReview = request.UploadsNeedReview;
+            await db.SaveChangesAsync(ct);
+        }
 
         var administrators = await FullAdministratorIdsAsync(db, ct);
         var caverIds = await CaverIdsByUserAsync(db, ct);
@@ -727,5 +813,6 @@ public static class UserAdminEndpoints
             user.PasswordHash is not null,
             TwoFactorPolicy.AnyEnabled(user.ToTwoFactorState()),
             caverIds.TryGetValue(user.Id, out var caverId) ? caverId : null,
-            user.CreatedAt);
+            user.CreatedAt,
+            user.UploadsNeedReview);
 }

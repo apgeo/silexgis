@@ -16,6 +16,7 @@ using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Import;
+using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -48,6 +49,11 @@ public static class SyncUploadEndpoints
     /// re-entered a cave the club already holds needs the nearest few, not a census of the massif.
     /// </summary>
     private const int DuplicatesPerRow = 5;
+
+    /// <summary>An account under review sent an upload without saying it understands held rows.</summary>
+    public const string ClientUpdateRequiredCode = "sync.client_update_required";
+
+    private const string HeldCheckSavepoint = "held_upload_check";
 
     public static void MapSyncUploadEndpoints(this RouteGroupBuilder sets)
     {
@@ -121,6 +127,20 @@ public static class SyncUploadEndpoints
             return TypedResults.Ok(replayed);
         }
 
+        // An account under review has what it uploads kept as proposals for a reviewer, and the
+        // device is answered that each such row is held. A build that never learnt that answer would
+        // read a held row as lost or as written, so it is refused whole, before anything is looked
+        // at, and the caver is told to update the app. After the resend check, for the reason the
+        // club check below gives: a replay writes nothing.
+        var underReview = await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct);
+        if (underReview
+            && !(request.ClientFeatures?.Contains(UploadReviewHold.ClientFeature, StringComparer.Ordinal) ?? false))
+        {
+            return ApiProblems.Conflict(
+                ClientUpdateRequiredCode,
+                "This account's uploads wait for a reviewer, and this app cannot be told so. Update the app before sending.");
+        }
+
         // Asked here and not only when the set was written. Every row this batch creates is bound
         // to the set's club, and binding content to a club hands that club's members whatever
         // their rulesets grant over its content — so the question is asked at the moment the
@@ -135,19 +155,9 @@ public static class SyncUploadEndpoints
                 "sync.caving_group_forbidden", "You are not entitled to add rows to that caving group.");
         }
 
-        // The fixed order every upload is applied in. A later section may refer to what an
-        // earlier one created — a document link to a document sent beside it, a trip point to
-        // its recording — so the order is the dependency order and never the order the arrays
-        // happen to sit in the request.
-        ISyncUploadSection[] sections =
-        [
-            new SyncRowsSection(writer, protection, access),
-            new SyncPeopleSection(await settings.GetSyncAsync(ct)),
-            new SyncDocumentsSection(documents, ingest, intake, access),
-            new SyncTripRecordingsSection(access),
-            new SyncTripPointsSection(access),
-            new SyncDocumentLinksSection(protection, access),
-        ];
+        // The fixed order every upload is applied in, which is the order its parts depend on.
+        var sections = SyncUploadSections.InApplyOrder(
+            writer, protection, access, await settings.GetSyncAsync(ct), documents, ingest, intake);
 
         var batch = new ImportBatch
         {
@@ -158,6 +168,8 @@ public static class SyncUploadEndpoints
             // inferred, because it is the first thing worth knowing about a batch that went wrong.
             Mode = ImportBatchMode.AutoCreated,
             Options = BatchOptions(set, request),
+            ReviewState = underReview ? ImportReviewState.Pending : ImportReviewState.NotHeld,
+            HeldAt = underReview ? DateTimeOffset.UtcNow : null,
         };
 
         // Everything this upload writes — the batch's own row, every row it creates, edits or
@@ -184,12 +196,38 @@ public static class SyncUploadEndpoints
             db.ImportBatches.Add(batch);
             await db.SaveChangesAsync(ct);
 
-            var run = new SyncUploadRun { Db = db, Access = ctx, Set = set, Batch = batch };
+            // Under review, the upload is checked by running it inside a savepoint and rolling the
+            // savepoint back: each item is checked against what the items before it would have
+            // written, which is the only way an entrance sent beside its new cave can be checked at
+            // all, and what is kept of each is the proposal accepting will write later. The batch's
+            // own row was claimed before the savepoint, so it survives the roll-back.
+            var hold = underReview ? new SyncHoldRecorder(ctx.UserId) : null;
+            var run = new SyncUploadRun { Db = db, Access = ctx, Set = set, Batch = batch, Hold = hold };
+            if (hold is not null)
+            {
+                await transaction.CreateSavepointAsync(HeldCheckSavepoint, ct);
+                await hold.ReplayWaitingCreatesAsync(run, sections, request, ct);
+            }
+
             foreach (var section in sections)
             {
                 var outcome = await section.RunAsync(run, request, ct);
                 outcomes.Add((section.Name, outcome.Results));
                 items.AddRange(outcome.Items);
+            }
+
+            if (hold is not null)
+            {
+                await transaction.RollbackToSavepointAsync(HeldCheckSavepoint, ct);
+                db.ChangeTracker.Clear();
+
+                // A held upload in which nothing would have been written — every row a repeat of
+                // one already waiting, unchanged or refused — holds nothing, and waits for nobody.
+                if (hold.NewLineCount == 0)
+                {
+                    batch.ReviewState = ImportReviewState.NotHeld;
+                    batch.HeldAt = null;
+                }
             }
 
             var answer = await AnswerAsync(
@@ -213,8 +251,10 @@ public static class SyncUploadEndpoints
 
             // Recordings this upload wrote or changed are made into trips by a job, queued in this
             // same save: it exists exactly when the upload does, and the worker can only ever see
-            // it beside what the upload committed. Once per upload, never per recording.
-            if (items.Any(i => i.TripRecordingId is not null || i.TripRecordingPointId is not null))
+            // it beside what the upload committed. Once per upload, never per recording. A held
+            // upload wrote no recording, so it queues nothing; accepting one is what does.
+            if (hold is null
+                && items.Any(i => i.TripRecordingId is not null || i.TripRecordingPointId is not null))
             {
                 db.ProcessingJobs.Add(new ProcessingJob
                 {
@@ -228,6 +268,21 @@ public static class SyncUploadEndpoints
             }
 
             await db.SaveChangesAsync(ct);
+            if (hold is not null)
+            {
+                var sync = await settings.GetSyncAsync(ct);
+                await hold.PersistAsync(db, batch, DateTimeOffset.UtcNow, sync.RejectedHeldBytesRetentionDays, ct);
+
+                // Told in the transaction that holds the batch, so a reviewer is never told of a
+                // batch that is not there; and only when something waits, since a batch of repeats
+                // holds nothing new.
+                if (batch.ReviewState == ImportReviewState.Pending && hold.NewLineCount > 0)
+                {
+                    await UploadReviewNotices.AwaitingAsync(db, batch, hold.NewLineCount, ct);
+                    await db.SaveChangesAsync(ct);
+                }
+            }
+
             await transaction.CommitAsync(ct);
 
             return TypedResults.Ok(answer);
@@ -380,13 +435,7 @@ public static class SyncUploadEndpoints
             return [];
         }
 
-        var visible = db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers);
-        var candidates = await visible.Where(f => lost.Contains(f.Id)).ToListAsync(ct);
-        var withheld = await SyncWithhold.WithheldIdsAsync(
-            protection, ctx, [.. candidates.Select(f => f.Id)], ct);
-
-        return await SyncFeatureShaping.ToDtosAsync(
-            db, visible, [.. candidates.Where(f => !withheld.Contains(f.Id))], ct);
+        return await SyncFeatureShaping.CurrentAsync(db, protection, ctx, lost, ct);
     }
 
     /// <summary>

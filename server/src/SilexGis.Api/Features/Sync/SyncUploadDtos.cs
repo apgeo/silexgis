@@ -39,6 +39,14 @@ public enum SyncRowStatus
 
     /// <summary>The row could not be written at all. <c>Code</c> says why.</summary>
     Rejected = 5,
+
+    /// <summary>
+    /// The account's uploads wait for a reviewer: nothing was written, and the row is kept as a
+    /// proposal under <c>reviewId</c> until somebody decides it. The revision is the one the row
+    /// already had. Only ever answered to a device that listed <c>held</c> in its
+    /// <c>clientFeatures</c>.
+    /// </summary>
+    Held = 6,
 }
 
 /// <summary>
@@ -249,12 +257,17 @@ public sealed record SyncUploadDocumentLinkDto(
 /// revision next time. Null when nothing was written.
 /// </param>
 /// <param name="Code">The stable reason a row was refused or lost a conflict; null otherwise.</param>
+/// <param name="ReviewId">
+/// For a held row, the identity its decision will be reported under; absent otherwise, so an
+/// answer to an account nobody reviews is exactly what it always was.
+/// </param>
 public sealed record SyncUploadRowResultDto(
     Guid Id,
     SyncRowStatus Status,
     DateTimeOffset? Revision,
     string? Code,
-    string? Detail);
+    string? Detail,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? ReviewId = null);
 
 /// <summary>
 /// The answer to one upload, and the record of it: sending the same batch identifier again

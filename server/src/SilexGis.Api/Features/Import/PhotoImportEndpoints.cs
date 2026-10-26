@@ -361,6 +361,14 @@ public static class PhotoImportEndpoints
             return TypedResults.Unauthorized();
         }
 
+        // An account under review has nothing it commits land unreviewed, and a file import
+        // cannot be held for a reviewer yet: refused before anything is read or written.
+        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
+        {
+            return ApiProblems.Conflict(
+                UploadReviewHold.FileImportUnavailableCode, UploadReviewHold.FileImportUnavailableDetail);
+        }
+
         // Creating is decided once, here, before anything is read: a drop binds everything it
         // creates to the same club, so one answer covers the batch. Filing pictures on an object
         // that already exists is a different question and is asked per object, against that

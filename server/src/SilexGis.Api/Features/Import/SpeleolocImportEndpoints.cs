@@ -469,6 +469,14 @@ public static class SpeleolocImportEndpoints
             return refusal;
         }
 
+        // An account under review has nothing it commits land unreviewed, and a file import
+        // cannot be held for a reviewer yet: refused before anything is read or written.
+        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
+        {
+            return ApiProblems.Conflict(
+                UploadReviewHold.FileImportUnavailableCode, UploadReviewHold.FileImportUnavailableDetail);
+        }
+
         var (file, problem) = await LoadReadableAsync(fileId, db, access, ctx, ct);
         if (problem is not null)
         {
@@ -526,6 +534,14 @@ public static class SpeleolocImportEndpoints
         if (RefuseCreate(ctx, options) is { } refusal)
         {
             return refusal;
+        }
+
+        // An account under review has nothing it commits land unreviewed, and a file import
+        // cannot be held for a reviewer yet: refused before anything is read or written.
+        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
+        {
+            return ApiProblems.Conflict(
+                UploadReviewHold.FileImportUnavailableCode, UploadReviewHold.FileImportUnavailableDetail);
         }
 
         var (recording, points, problem) = await LoadKeptRecordingAsync(recordingId, db, access, ctx, ct);

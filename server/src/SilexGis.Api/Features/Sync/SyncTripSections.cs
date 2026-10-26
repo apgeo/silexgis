@@ -85,6 +85,22 @@ internal sealed class SyncTripRecordingsSection(IAccessService access)
 {
     public override string Name => SyncUploadSections.TripRecordings;
 
+    protected override IEnumerable<Guid> Refers(SyncTripRecordingProposal proposal) =>
+        proposal.Recording.CaveId is { } caveId ? [caveId] : [];
+
+    protected override DateTimeOffset? StandingRevision(SyncTripRecordingProposal proposal) => proposal.BaseRevision;
+
+    protected override SyncHeldFacts Facts(SyncTripRecordingProposal proposal) => new(
+        proposal.Act == SyncTripAct.Create ? null : new SyncHeldTarget(SyncHeldTargetKind.Recording, proposal.Recording.Id),
+        proposal.Act == SyncTripAct.Create ? null : proposal.BaseRevision,
+        [.. Refers(proposal).Select(id => new SyncHeldTarget(SyncHeldTargetKind.Feature, id))],
+        false);
+
+    protected override SyncUploadTripRecordingDto ItemOf(SyncTripRecordingProposal proposal) => proposal.Recording;
+
+    protected override SyncUploadTripRecordingDto? Rebased(SyncUploadTripRecordingDto item, DateTimeOffset revision) =>
+        item.BaseRevision is null ? null : item with { BaseRevision = revision };
+
     protected override IReadOnlyList<SyncUploadTripRecordingDto>? ItemsOf(SyncUploadRequest request) =>
         request.TripRecordings;
 
@@ -283,6 +299,25 @@ internal sealed class SyncTripPointsSection(IAccessService access)
     : SyncUploadSection<SyncUploadTripPointDto, SyncTripPointProposal>
 {
     public override string Name => SyncUploadSections.TripPoints;
+
+    protected override IEnumerable<Guid> Refers(SyncTripPointProposal proposal) =>
+        new[] { (Guid?)proposal.Point.RecordingId, proposal.Point.PlaceId }.OfType<Guid>().Distinct();
+
+    protected override DateTimeOffset? StandingRevision(SyncTripPointProposal proposal) => proposal.BaseRevision;
+
+    protected override SyncHeldFacts Facts(SyncTripPointProposal proposal) => new(
+        proposal.Act == SyncTripAct.Create ? null : new SyncHeldTarget(SyncHeldTargetKind.Point, proposal.Point.Id),
+        proposal.Act == SyncTripAct.Create ? null : proposal.BaseRevision,
+        [
+            new SyncHeldTarget(SyncHeldTargetKind.Recording, proposal.Point.RecordingId),
+            .. proposal.Point.PlaceId is { } place ? [new SyncHeldTarget(SyncHeldTargetKind.Feature, place)] : Array.Empty<SyncHeldTarget>(),
+        ],
+        false);
+
+    protected override SyncUploadTripPointDto ItemOf(SyncTripPointProposal proposal) => proposal.Point;
+
+    protected override SyncUploadTripPointDto? Rebased(SyncUploadTripPointDto item, DateTimeOffset revision) =>
+        item.BaseRevision is null ? null : item with { BaseRevision = revision };
 
     protected override IReadOnlyList<SyncUploadTripPointDto>? ItemsOf(SyncUploadRequest request) =>
         request.TripPoints;

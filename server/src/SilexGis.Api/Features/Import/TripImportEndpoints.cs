@@ -380,6 +380,14 @@ public static class TripImportEndpoints
             return TypedResults.Unauthorized();
         }
 
+        // An account under review has nothing it commits land unreviewed, and a file import
+        // cannot be held for a reviewer yet: refused before anything is read or written.
+        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
+        {
+            return ApiProblems.Conflict(
+                UploadReviewHold.FileImportUnavailableCode, UploadReviewHold.FileImportUnavailableDetail);
+        }
+
         // Creating is decided here, once, before the sheet is fetched: an import binds every
         // trip it records to the same group, so one answer covers the batch. The commit service
         // asks again, which is what catches a group the caller may read but not bind to.

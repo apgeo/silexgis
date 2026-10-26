@@ -37,10 +37,18 @@ public static class SyncFeatures
     public const string Trips = "trips";
 
     /// <summary>
+    /// Review of an account's uploads: <c>GET /sync/sets/{id}/reviews</c>, and the upload's
+    /// <c>held</c> row answer to a device that says it understands one. Served everywhere, because
+    /// whether an account is under review is decided per account and can change at any time; an
+    /// account that is not simply reads an empty stream.
+    /// </summary>
+    public const string Reviews = "reviews";
+
+    /// <summary>
     /// The parts every installation running this build serves, whatever it has switched — the
     /// baseline the recorded exchanges are pinned to.
     /// </summary>
-    public static readonly IReadOnlyList<string> Unconditional = [Download, Upload, Documents, DocumentUpload, Trips];
+    public static readonly IReadOnlyList<string> Unconditional = [Download, Upload, Documents, DocumentUpload, Trips, Reviews];
 
     /// <summary>
     /// The people directory and the phone-user links (<c>GET /sync/people</c> and the upload's

@@ -109,8 +109,11 @@ public static class ImportBatchEndpoints
             return ApiProblems.NotFound("import_batch.not_found");
         }
 
+        // A held line is a proposal, not something the batch made: it is listed by the review
+        // routes until a reviewer accepts it, and only then becomes a line of what was imported.
         var items = await db.ImportBatchItems.AsNoTracking()
-            .Where(i => i.ImportBatchId == batch.Id)
+            .Where(i => i.ImportBatchId == batch.Id
+                && (i.ReviewDecision == null || i.ReviewDecision == ImportReviewDecision.Accepted))
             .OrderBy(i => i.Id)
             .ToListAsync(ct);
 
@@ -237,6 +240,16 @@ public static class ImportBatchEndpoints
         if (batch is null || !CanRead(ctx, batch))
         {
             return ApiProblems.NotFound("import_batch.not_found");
+        }
+
+        // A batch held for review wrote nothing of what it proposes until a reviewer accepted it,
+        // so there is nothing to take back while any of it waits or when all of it was turned
+        // down; what it holds is decided through review, not undone. Once decided with something
+        // accepted, what was accepted is undone like any upload.
+        if (!IsUndoable(batch))
+        {
+            return ApiProblems.Conflict(
+                HeldCode, "This import is held for review; it is decided by a reviewer, not undone.");
         }
 
         if (!CanRevert(ctx, batch))
@@ -373,7 +386,13 @@ public static class ImportBatchEndpoints
     /// it created must not be able to delete the rest of it in one press.
     /// </summary>
     private static bool CanRevert(AccessContext ctx, ImportBatch batch) =>
-        !batch.IsReverted && (ctx.IsFullAdmin || batch.ConfirmedByUserId == ctx.UserId);
+        !batch.IsReverted && IsUndoable(batch) && (ctx.IsFullAdmin || batch.ConfirmedByUserId == ctx.UserId);
+
+    private static bool IsUndoable(ImportBatch batch) =>
+        batch.ReviewState is ImportReviewState.NotHeld or ImportReviewState.Accepted or ImportReviewState.PartlyAccepted;
+
+    /// <summary>An undo was asked of a batch held for review.</summary>
+    public const string HeldCode = "import_batch.held";
 
     private static async Task<Dictionary<Guid, string>> GeofileNamesAsync(
         SilexGisDbContext db, IReadOnlyList<ImportBatch> batches, CancellationToken ct)

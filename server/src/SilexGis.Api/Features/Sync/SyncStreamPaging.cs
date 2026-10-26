@@ -24,6 +24,9 @@ public enum SyncStream
 
     /// <summary>The trips phones recorded in the set's caves, each with its scans embedded.</summary>
     Trips,
+
+    /// <summary>What reviewers decided about the caller's own held uploads.</summary>
+    Reviews,
 }
 
 /// <summary>

@@ -150,6 +150,13 @@ public sealed record ImportBatchDto(
     Guid? RevertedByUserId,
     bool CanRevert,
     /// <summary>
+    /// Whether the batch waits for a reviewer (<c>pending</c>), was decided by one, or was never
+    /// held (<c>notHeld</c>). A batch that waits has written nothing yet and cannot be undone.
+    /// </summary>
+    ImportReviewState ReviewState,
+    /// <summary>When the batch was held for review; null for a batch that was not.</summary>
+    DateTimeOffset? HeldAt,
+    /// <summary>
     /// The rows that could not be created. Carried on the batch because the confirmation runs on
     /// the queue: by the time a row is refused there is no request left to tell, and the reviewer
     /// still has to be able to find out which of their rows did not land, and why.

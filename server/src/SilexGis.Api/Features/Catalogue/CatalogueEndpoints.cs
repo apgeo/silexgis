@@ -8,6 +8,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Catalogue;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Catalogue;
+using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Catalogue;
@@ -253,6 +254,7 @@ public static class CatalogueEndpoints
         ImportAsync(
             SpeologieImportRequest request,
             SpeologieImportService importer,
+            SilexGisDbContext db,
             IAccessContextAccessor accessAccessor,
             CancellationToken ct)
     {
@@ -260,6 +262,14 @@ public static class CatalogueEndpoints
         if (ctx is null)
         {
             return TypedResults.Unauthorized();
+        }
+
+        // An account under review has nothing it commits land unreviewed, and a file import
+        // cannot be held for a reviewer yet: refused before anything is read or written.
+        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
+        {
+            return ApiProblems.Conflict(
+                UploadReviewHold.FileImportUnavailableCode, UploadReviewHold.FileImportUnavailableDetail);
         }
 
         // Whether the caller may bind what they create to the group they named. Checked before
