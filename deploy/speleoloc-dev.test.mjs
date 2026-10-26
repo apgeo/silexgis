@@ -32,7 +32,10 @@ import {
   DEFAULT_DB_PORT,
   MEMBER_EMAIL,
   MEMBER_PASSWORD,
+  OPEN_PHOTO_TITLE,
+  RASTER_TITLE,
   REDIRECT_URI,
+  SHARED_PHOTO_TITLE,
   apiExitProblem,
   authorizeUrl,
   baseUrlFor,
@@ -43,10 +46,17 @@ import {
   dotnetRun,
   foreignContainerProblem,
   parseArgs,
+  photoReachProblem,
   pkcePair,
+  proveSyncContent,
+  readCapabilities,
+  signIn,
   signInAndReadCapabilities,
   stopApiTree,
   tokenDanceCurl,
+  withheldPinProblem,
+  openPlaceIdIn,
+  OPEN_PLACE_NAME,
 } from './speleoloc-dev.mjs';
 
 const deployDir = dirname(fileURLToPath(import.meta.url));
@@ -302,6 +312,69 @@ describe('the capabilities answer is judged, not merely received', () => {
   });
 });
 
+describe('the seeded phone-side data is judged as the protection rules decide it', () => {
+  const photo = (title, reach) => ({ document: { title, reach } });
+  const documents = (links) => ({ links });
+  // The open-cave photo can be linked from more than one place; each link carries the same reach.
+  const good = documents([
+    photo(OPEN_PHOTO_TITLE, 'original'),
+    photo(OPEN_PHOTO_TITLE, 'original'),
+    photo(SHARED_PHOTO_TITLE, 'locationFree'),
+  ]);
+
+  it('accepts the photo on the open cave as stored and the shared one without its location', () => {
+    assert.equal(photoReachProblem(good), null);
+  });
+
+  it('refuses the shared photo handed over as stored, which is the leak this proves absent', () => {
+    assert.match(photoReachProblem(documents([
+      photo(OPEN_PHOTO_TITLE, 'original'),
+      photo(SHARED_PHOTO_TITLE, 'original'),
+    ])), /expected "locationFree"/);
+  });
+
+  it('refuses an answer that lacks either photo, so a seeder that wrote one cannot pass', () => {
+    assert.match(photoReachProblem(documents([photo(SHARED_PHOTO_TITLE, 'locationFree')])), /was not in/);
+    assert.match(photoReachProblem(documents([photo(OPEN_PHOTO_TITLE, 'original')])), /was not in/);
+    assert.match(photoReachProblem({}), /no links/);
+  });
+
+  const openId = '00000000-0000-4000-8000-00000000000a';
+  const protectedId = '00000000-0000-4000-8000-00000000000b';
+  const map = (...placeIds) => ({ maps: [{ title: RASTER_TITLE, pins: placeIds.map((placeId) => ({ placeId })) }] });
+
+  it('accepts the map with the one pin on the open place', () => {
+    assert.equal(withheldPinProblem(map(openId), openId), null);
+  });
+
+  it('refuses both pins, which would mean the protected place leaked, and none', () => {
+    assert.match(withheldPinProblem(map(openId, protectedId), openId), /arrived with 2 pins/);
+    assert.match(withheldPinProblem(map(), openId), /arrived with 0 pins/);
+  });
+
+  it('refuses a single pin on the protected place, which a count of pins would have accepted', () => {
+    assert.match(withheldPinProblem(map(protectedId), openId), /other than "Demo marker A"/);
+  });
+
+  it('refuses rather than accepts when the open place could not be named', () => {
+    assert.match(withheldPinProblem(map(openId), null), /cannot be named/);
+    assert.match(withheldPinProblem(map(openId), undefined), /cannot be named/);
+  });
+
+  it('refuses an answer without the seeded map', () => {
+    assert.match(withheldPinProblem({ maps: [] }, openId), /was not in/);
+    assert.match(withheldPinProblem(null, openId), /no maps/);
+  });
+
+  it('reads the open place out of the download only when it is there exactly once', () => {
+    const feature = (id, name) => ({ id, name });
+    assert.equal(openPlaceIdIn({ features: [feature(openId, OPEN_PLACE_NAME), feature(protectedId, 'Other')] }), openId);
+    assert.equal(openPlaceIdIn({ features: [feature(protectedId, 'Other')] }), null);
+    assert.equal(openPlaceIdIn({ features: [feature(openId, OPEN_PLACE_NAME), feature(protectedId, OPEN_PLACE_NAME)] }), null);
+    assert.equal(openPlaceIdIn(null), null);
+  });
+});
+
 describe('what the script prints', () => {
   it('names the port it actually served on, everywhere in the transcript', () => {
     const printed = tokenDanceCurl(baseUrlFor(6543));
@@ -377,6 +450,8 @@ describe('a container of this name that is somebody else\'s', () => {
 
   it('accepts an inspect that could not be answered, rather than blocking on it', () => {
     assert.equal(foreignContainerProblem('Error: No such object: silexgis-speleoloc-db'), null);
+    // Docker 29's spelling of the same answer; read as a foreign project, it blocked every `up`.
+    assert.equal(foreignContainerProblem('error: no such object: silexgis-speleoloc-db'), null);
   });
 
   it('refuses a container another compose project owns', () => {
@@ -401,7 +476,12 @@ describe('a container of this name that is somebody else\'s', () => {
 // developer's own session — it is used as it stands and left running afterwards.
 const LIVE = process.env.SILEXGIS_SPELEOLOC_DEV_LIVE === '1';
 const SCRIPT = join(deployDir, 'speleoloc-dev.mjs');
-const BASE_URL = baseUrlFor(DEFAULT_API_PORT);
+// Overridable so a machine where the default ports are taken can still run it; both are passed
+// to `up` and `down` as well, so the stack and this file agree on where it listens.
+const LIVE_API_PORT = Number(process.env.SILEXGIS_SPELEOLOC_DEV_API_PORT ?? DEFAULT_API_PORT);
+const LIVE_DB_PORT = Number(process.env.SILEXGIS_SPELEOLOC_DEV_DB_PORT ?? DEFAULT_DB_PORT);
+const PORT_ARGS = ['--api-port', String(LIVE_API_PORT), '--db-port', String(LIVE_DB_PORT)];
+const BASE_URL = baseUrlFor(LIVE_API_PORT);
 
 /** The status the sync route answers, or null when nothing is listening yet. */
 async function capabilitiesStatus() {
@@ -444,7 +524,7 @@ describe('the server this script starts', () => {
     // into it corrupts that channel — the file is then reported as failed with a deserialisation
     // error while every test in it passed. So the log is kept here and shown only when something
     // goes wrong, which is the only time anybody wants to read it.
-    child = spawn(process.execPath, [SCRIPT, 'up'], {
+    child = spawn(process.execPath, [SCRIPT, 'up', ...PORT_ARGS], {
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: detachApi(),
     });
@@ -486,7 +566,7 @@ describe('the server this script starts', () => {
     stopApiTree(child);
 
     await Promise.race([once(child, 'exit'), new Promise((done) => setTimeout(done, 30_000))]);
-    spawnSync(process.execPath, [SCRIPT, 'down'], { stdio: ['ignore', 'ignore', 'inherit'] });
+    spawnSync(process.execPath, [SCRIPT, 'down', ...PORT_ARGS], { stdio: ['ignore', 'ignore', 'inherit'] });
   }, { timeout: 120_000 });
 
   it('refuses the sync capabilities to a caller with no token', { skip, timeout: 60_000 }, async () => {
@@ -499,6 +579,18 @@ describe('the server this script starts', () => {
       const body = await signInAndReadCapabilities(BASE_URL, MEMBER_EMAIL, MEMBER_PASSWORD);
       assert.equal(capabilitiesProblem(body), null);
       assert.equal(body.contractVersion, 1);
-      assert.deepEqual([...body.features].sort(), ['download', 'upload']);
+      // Everything this build serves, and `people` because the development installation has the
+      // directory on and the member may read it.
+      assert.deepEqual([...body.features].sort(), [
+        'documentUpload', 'documents', 'download', 'people', 'rasters', 'reviews', 'trips', 'upload',
+      ]);
+    });
+
+  it('hands the member one photo without its location and one raster pin fewer than were seeded',
+    { skip, timeout: 120_000 },
+    async () => {
+      const tokens = await signIn(BASE_URL, MEMBER_EMAIL, MEMBER_PASSWORD);
+      assert.equal(capabilitiesProblem(await readCapabilities(BASE_URL, tokens.access_token)), null);
+      await proveSyncContent(BASE_URL, tokens.access_token);
     });
 });

@@ -200,6 +200,148 @@ public sealed class SpeleoLocDevSeedTests : IAsyncLifetime, IClassFixture<Postgr
     }
 
     /// <summary>
+    /// What a phone reads beyond features, as the plain account and as the administrator, side by
+    /// side. The photo hung on the open cave alone reaches both as stored; the one hung on the open
+    /// cave and the protected one reaches the plain account without its location and the
+    /// administrator as stored. The raster map reaches both, with two pins for the administrator
+    /// and one for the plain account — the other is on a place that is its own protection root.
+    /// Each negative sits beside its positive, so an account that could read nothing, or a seeder
+    /// that wrote nothing, fails here rather than passing.
+    /// </summary>
+    [Fact]
+    public async Task The_plain_account_is_handed_the_seeded_photos_and_map_as_protection_decides()
+    {
+        using (var scope = factory.Services.CreateScope())
+        {
+            (await SpeleoLocDevSeeder.SeedAsync(scope.ServiceProvider))
+                .ShouldBe(SpeleoLocDevSeedOutcome.Seeded);
+        }
+
+        Guid openCaveId;
+        Guid openPlaceId;
+        Guid protectedPlaceId;
+        await using (var db = CreateContext())
+        {
+            openCaveId = await db.Caves
+                .Where(c => c.IdentificationCode == SpeleoLocDevSeeder.OpenCaveCode).Select(c => c.Id).SingleAsync();
+            openPlaceId = await db.Features
+                .Where(f => f.Name == SpeleoLocDevSeeder.OpenPlaceName).Select(f => f.Id).SingleAsync();
+            protectedPlaceId = await db.Features
+                .Where(f => f.Name == SpeleoLocDevSeeder.ProtectedPlaceName).Select(f => f.Id).SingleAsync();
+        }
+
+        using var member = await AuthHelper.BearerClientAsync(
+            factory, SpeleoLocDevSeeder.MemberEmail, MemberPassword);
+        using var admin = await AuthHelper.BearerClientAsync(factory, AdminEmail, AdminPassword);
+        var membersSet = await CreateSetAsync(member, openCaveId);
+        var adminsSet = await CreateSetAsync(admin, openCaveId);
+
+        var membersReach = await PhotoReachAsync(member, membersSet);
+        var adminsReach = await PhotoReachAsync(admin, adminsSet);
+        membersReach[SpeleoLocDevSeeder.OpenPhotoTitle].ShouldBe("original");
+        membersReach[SpeleoLocDevSeeder.SharedPhotoTitle].ShouldBe("locationFree");
+        adminsReach[SpeleoLocDevSeeder.OpenPhotoTitle].ShouldBe("original");
+        adminsReach[SpeleoLocDevSeeder.SharedPhotoTitle].ShouldBe("original");
+
+        // Named, not counted: a filter keyed on the wrong place would hand the plain account the
+        // protected pin instead of the open one and still hand it exactly one.
+        (await PinPlacesAsync(member, membersSet)).ShouldBe([openPlaceId]);
+        (await PinPlacesAsync(admin, adminsSet)).ShouldBe([openPlaceId, protectedPlaceId], ignoreOrder: true);
+
+        // The recording rides the club's visibility, which the plain account is in.
+        var trips = await GetJsonAsync(member, $"/api/v1/sync/sets/{membersSet}/trips");
+        trips.GetProperty("recordings").EnumerateArray()
+            .Select(r => r.GetProperty("title").GetString())
+            .ShouldContain(SpeleoLocDevSeeder.RecordingTitle);
+
+        // The directory lists the person without an account, and hands the plain account back the
+        // phone user its phone reported, linked to that person.
+        var people = await GetJsonAsync(member, "/api/v1/sync/people");
+        var listed = people.GetProperty("people").EnumerateArray()
+            .Single(p => p.GetProperty("fullName").GetString() == SpeleoLocDevSeeder.RosterOnlyCaverName);
+        listed.GetProperty("hasAccount").GetBoolean().ShouldBeFalse();
+        var link = people.GetProperty("links").EnumerateArray().ShouldHaveSingleItem();
+        link.GetProperty("deviceUserId").GetGuid().ShouldBe(SpeleoLocDevSeeder.PhoneUserId);
+        link.GetProperty("caverId").GetGuid().ShouldBe(listed.GetProperty("id").GetGuid());
+
+        // The second account differs from the plain one by its mark and by nothing else: a Viewer,
+        // in the club, owning nothing.
+        await using var check = CreateContext();
+        var reviewed = await check.Users.SingleAsync(u => u.Email == SpeleoLocDevSeeder.ReviewEmail);
+        var plain = await check.Users.SingleAsync(u => u.Email == SpeleoLocDevSeeder.MemberEmail);
+        reviewed.UploadsNeedReview.ShouldBeTrue();
+        plain.UploadsNeedReview.ShouldBeFalse();
+        (await check.Features.AnyAsync(f => f.OwnerUserId == reviewed.Id)).ShouldBeFalse();
+        using var underReview = await AuthHelper.BearerClientAsync(
+            factory, SpeleoLocDevSeeder.ReviewEmail, MemberPassword);
+        var reviewSet = await CreateSetAsync(underReview, openCaveId);
+        var refused = await underReview.PostAsJsonAsync($"/api/v1/sync/sets/{reviewSet}/upload", new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            rows = new object[]
+            {
+                new
+                {
+                    id = Guid.CreateVersion7(),
+                    kind = "cave",
+                    baseRevision = (DateTimeOffset?)null,
+                    deleted = false,
+                    name = "Not written",
+                    caveTypeCode = "cave",
+                    isMain = false,
+                },
+            },
+        });
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict, await refused.Content.ReadAsStringAsync());
+        (await refused.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+            .ShouldBe("sync.client_update_required");
+        (await check.Features.AnyAsync(f => f.Name == "Not written")).ShouldBeFalse();
+    }
+
+    private static async Task<Guid> CreateSetAsync(HttpClient client, Guid rootId)
+    {
+        var response = await client.PostAsJsonAsync("/api/v1/sync/sets/", new
+        {
+            name = $"Seeded {Guid.NewGuid():N}"[..20],
+            uploadVisibility = "private",
+            rootFeatureIds = new[] { rootId },
+            settings = new { },
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
+    }
+
+    private static async Task<System.Text.Json.JsonElement> GetJsonAsync(HttpClient client, string url)
+    {
+        var response = await client.GetAsync(url);
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return System.Text.Json.JsonDocument.Parse(payload).RootElement.Clone();
+    }
+
+    /// <summary>The reach each seeded photo is announced with, by title.</summary>
+    private static async Task<Dictionary<string, string>> PhotoReachAsync(HttpClient client, Guid set)
+    {
+        var page = await GetJsonAsync(client, $"/api/v1/sync/sets/{set}/documents");
+        return page.GetProperty("links").EnumerateArray()
+            .Select(l => l.GetProperty("document"))
+            .Where(d => d.GetProperty("title").GetString() is SpeleoLocDevSeeder.OpenPhotoTitle
+                or SpeleoLocDevSeeder.SharedPhotoTitle)
+            .GroupBy(d => d.GetProperty("title").GetString()!)
+            .ToDictionary(g => g.Key, g => g.Select(d => d.GetProperty("reach").GetString()!).Distinct().Single());
+    }
+
+    private static async Task<List<Guid>> PinPlacesAsync(HttpClient client, Guid set)
+    {
+        var page = await GetJsonAsync(client, $"/api/v1/sync/sets/{set}/rasters");
+        return [.. page.GetProperty("maps").EnumerateArray()
+            .Single(m => m.GetProperty("title").GetString() == SpeleoLocDevSeeder.RasterTitle)
+            .GetProperty("pins").EnumerateArray()
+            .Select(p => p.GetProperty("placeId").GetGuid())];
+    }
+
+    /// <summary>
     /// The dataset creates an account somebody can sign in with, and its password is printed in
     /// the installation guide. So on a host that is not a development one, and where nobody said
     /// this installation wants it, the seeder writes nothing at all — the refusal is the guard,

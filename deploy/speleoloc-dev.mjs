@@ -8,7 +8,9 @@
 //       Starts a dedicated PostGIS container on a loopback port with its own named volume,
 //       runs the schema migration and the always-on seeding, loads the demonstration dataset,
 //       adds the sync-specific development data, serves the API from source on a loopback
-//       port, proves it answers by signing in and reading the sync capabilities, then prints
+//       port, proves it answers by signing in and reading the sync capabilities, proves the
+//       phone-side data is there and protected (one photo handed over without its location,
+//       one raster pin withheld), then prints
 //       the base URL, both accounts, the caving group, the client id and a paste-ready
 //       sequence of curl calls for the whole sign-in dance. Stays in the foreground; Ctrl-C
 //       stops the API and leaves the database running.
@@ -20,7 +22,8 @@
 //       refuses to report success against one, rather than mistaking it for its own.
 //
 //   node deploy/speleoloc-dev.mjs reset
-//       Removes the container and its volume, so the next `up` starts from an empty database.
+//       Removes the container and its volume, and the stored files and signing keys beside
+//       them, so the next `up` starts from an empty installation.
 //
 // WHY THIS DOES NOT USE THE SHARED DEVELOPMENT DATABASE
 // docker-compose.dev.yml is the database the web application's developers use, published on
@@ -37,6 +40,7 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
+import { rmSync } from 'node:fs';
 import { connect } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -45,6 +49,15 @@ const deployDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(deployDir, '..');
 const serverDir = join(repoRoot, 'server');
 const apiProject = join(serverDir, 'src', 'SilexGis.Api');
+
+/**
+ * Where the API keeps the files it stores (the seeded photos and the raster map) and its signing
+ * keys. Named explicitly because both default to a path relative to the working directory, which
+ * for this script is the server folder of the checkout — stored bytes would land among the
+ * sources as untracked files. Ignored by git; `reset` removes it with the database volume, so
+ * the two never disagree about which files exist.
+ */
+export const STATE_DIR = join(repoRoot, '.speleoloc-dev');
 
 /** The compose file that describes this stack. Standalone, not an overlay of the shipped one. */
 const COMPOSE_FILE = 'docker-compose.speleoloc-dev.yml';
@@ -83,6 +96,37 @@ export const GROUP_VISIBLE_CAVE_CODE = 'DEMO-0006';
 
 /** The demo cave whose exact position is protected; a non-administrator is refused it. */
 export const PROTECTED_CAVE_CODE = 'DEMO-0002';
+
+/**
+ * The open demo cave the seeded photos, trip recording and raster map hang on. The titles below
+ * are the seeder's, and are what `up` looks for when it proves the data reached the member.
+ */
+export const OPEN_CAVE_CODE = 'DEMO-0001';
+/** Hung on the open cave alone: the member is handed the file as stored (`original`). */
+export const OPEN_PHOTO_TITLE = 'Demo photo — open cave';
+/**
+ * Hung on the open cave and on the protected one: the member is handed a copy without the GPS
+ * position (`locationFree`), because the protected cave is part of where the camera may have been.
+ */
+export const SHARED_PHOTO_TITLE = 'Demo photo — open and protected caves';
+/** A raster map of the open cave with two pins, one of them on a place that is protected itself. */
+export const RASTER_TITLE = 'Demo plan';
+/**
+ * The two places the map's pins stand on, inside the open cave. The first is ordinary and reaches
+ * the member; the second is its own protection root and does not, so neither does its pin.
+ */
+export const OPEN_PLACE_NAME = 'Demo marker A';
+export const PROTECTED_PLACE_NAME = 'Demo marker B (protected)';
+export const RECORDING_TITLE = 'Demo trip recording';
+/** A person on the club roster with no account, listed by the people directory. */
+export const ROSTER_ONLY_CAVER = 'Demo Caver';
+
+/**
+ * A second plain member whose uploads wait for a reviewer. It signs in with the member's
+ * password; an upload from it without `clientFeatures: ["held"]` is refused with
+ * `sync.client_update_required`, and with it every row comes back `held`.
+ */
+export const REVIEW_EMAIL = 'review@dev.local';
 
 /** The registered public client. No secret; PKCE is required. */
 export const CLIENT_ID = 'silexgis-speleoloc';
@@ -388,6 +432,17 @@ async function waitForApi(baseUrl, { timeoutMs = 180_000, api = null } = {}) {
  * Exported for its own test; `up` is what a developer runs.
  */
 export async function signInAndReadCapabilities(baseUrl, email, password) {
+  const tokens = await signIn(baseUrl, email, password);
+  return readCapabilities(baseUrl, tokens.access_token);
+}
+
+/**
+ * The sign-in dance alone: password login for the session cookie, the authorization request with
+ * PKCE, and the code exchange. Returns the token answer (`access_token`, `refresh_token`, …).
+ *
+ * Exported for its own test; `up` is what a developer runs.
+ */
+export async function signIn(baseUrl, email, password) {
   const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -442,9 +497,13 @@ export async function signInAndReadCapabilities(baseUrl, email, password) {
     throw new Error('The code exchange returned no refresh token. offline_access must be in '
       + 'the requested scope, or a device re-enters a password every fifteen minutes.');
   }
+  return tokens;
+}
 
+/** Reads and judges the capabilities answer with a token `signIn` returned. */
+export async function readCapabilities(baseUrl, accessToken) {
   const capabilities = await fetch(`${baseUrl}/api/v1/sync/capabilities`, {
-    headers: { Authorization: `Bearer ${tokens.access_token}` },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (capabilities.status !== 200) {
     throw new Error(`The sync capabilities route answered ${capabilities.status} to a signed-in caller.`);
@@ -458,20 +517,164 @@ export async function signInAndReadCapabilities(baseUrl, email, password) {
 }
 
 /**
+ * Null when the documents stream hands the member both seeded photos the way the protection rule
+ * says it must: the one on the open cave alone as stored, the one that also hangs on the protected
+ * cave without its location. A photo missing altogether is a problem too — a check that only
+ * looked for `locationFree` would pass against a seeder that wrote one photo and not the other.
+ *
+ * Exported for its own test; `up` is what a developer runs.
+ */
+export function photoReachProblem(documentsPage) {
+  if (documentsPage === null || typeof documentsPage !== 'object' || !Array.isArray(documentsPage.links)) {
+    return 'the documents stream answer carried no links list';
+  }
+  const reachOf = (title) => [...new Set(documentsPage.links
+    .map((link) => link?.document)
+    .filter((document) => document?.title === title)
+    .map((document) => document.reach))];
+  const expected = [[OPEN_PHOTO_TITLE, 'original'], [SHARED_PHOTO_TITLE, 'locationFree']];
+  for (const [title, reach] of expected) {
+    const seen = reachOf(title);
+    if (seen.length === 0) {
+      return `the photo "${title}" was not in the documents stream; the seeding did not write it`;
+    }
+    if (seen.length !== 1 || seen[0] !== reach) {
+      return `the photo "${title}" was announced with reach ${JSON.stringify(seen)}, expected "${reach}"`;
+    }
+  }
+  return null;
+}
+
+/**
+ * The identifier of the open place as the member's download hands it, or null when the download
+ * does not hand it — which is itself a problem, because the pin check below then has nothing to
+ * name the pin it expects with.
+ *
+ * Exported for its own test; `up` is what a developer runs.
+ */
+export function openPlaceIdIn(downloadPage) {
+  const features = Array.isArray(downloadPage?.features) ? downloadPage.features : [];
+  const matches = features.filter((feature) => feature?.name === OPEN_PLACE_NAME);
+  return matches.length === 1 && typeof matches[0].id === 'string' ? matches[0].id : null;
+}
+
+/**
+ * Null when the rasters stream hands the member the seeded map with exactly one of its two pins,
+ * and that one is the pin on the open place. The other is on a place that is its own protection
+ * root, so it is withheld from a reader who may not see that place exactly.
+ *
+ * The pin is named, not counted: a filter keyed on the wrong place would hand the member the
+ * protected pin instead of the open one, and a count of one would read as a working refusal. So
+ * without the open place's identifier there is nothing to compare against, and that is refused
+ * rather than accepted.
+ *
+ * Exported for its own test; `up` is what a developer runs.
+ */
+export function withheldPinProblem(rastersPage, openPlaceId) {
+  if (typeof openPlaceId !== 'string' || openPlaceId === '') {
+    return `the member's download did not hand over the place "${OPEN_PLACE_NAME}", `
+      + 'so the pin the member should be given cannot be named';
+  }
+  if (rastersPage === null || typeof rastersPage !== 'object' || !Array.isArray(rastersPage.maps)) {
+    return 'the rasters stream answer carried no maps list';
+  }
+  const map = rastersPage.maps.find((candidate) => candidate?.title === RASTER_TITLE);
+  if (!map) {
+    return `the raster map "${RASTER_TITLE}" was not in the rasters stream; the seeding did not write it`;
+  }
+  const pins = Array.isArray(map.pins) ? map.pins : [];
+  if (pins.length !== 1) {
+    return `the raster map "${RASTER_TITLE}" arrived with ${pins.length} pins, expected 1 `
+      + '(two are seeded; the one on the protected place must be withheld from this account)';
+  }
+  if (pins[0]?.placeId !== openPlaceId) {
+    return `the raster map "${RASTER_TITLE}" handed the member a pin on a place other than `
+      + `"${OPEN_PLACE_NAME}" — the pin on the protected place reached it and the open one did not`;
+  }
+  return null;
+}
+
+/**
+ * Proves, as the member, that the phone-side data is there and protected: a sync set rooted at
+ * the open cave, its documents stream judged by `photoReachProblem`, its rasters stream by
+ * `withheldPinProblem` against the open place's identifier read from its own download. The set is deleted afterwards, so running `up` again leaves no pile of
+ * sets behind in the member's list. Throws with the reason, like the sign-in does.
+ *
+ * Exported for its own test; `up` is what a developer runs.
+ */
+export async function proveSyncContent(baseUrl, accessToken) {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const getJson = async (path) => {
+    const response = await fetch(`${baseUrl}${path}`, { headers });
+    if (response.status !== 200) {
+      throw new Error(`GET ${path} answered ${response.status} to the member.`);
+    }
+    return response.json();
+  };
+
+  const caves = await getJson('/api/v1/caves?pageSize=200');
+  const openCave = (caves.items ?? []).find((cave) => cave.identificationCode === OPEN_CAVE_CODE);
+  if (!openCave) {
+    throw new Error(`The member could not find the demo cave ${OPEN_CAVE_CODE}; seed-demo did not run.`);
+  }
+
+  const created = await fetch(`${baseUrl}/api/v1/sync/sets`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: `speleoloc-dev check ${randomBytes(3).toString('hex')}`,
+      uploadVisibility: 'private',
+      rootFeatureIds: [openCave.id],
+      settings: {},
+    }),
+  });
+  const set = await created.json().catch(() => null);
+  if (created.status !== 201 || !set?.id) {
+    throw new Error(`Creating a sync set as the member answered ${created.status}: ${JSON.stringify(set)}`);
+  }
+  try {
+    const photoProblem = photoReachProblem(await getJson(`/api/v1/sync/sets/${set.id}/documents`));
+    if (photoProblem) {
+      throw new Error(`The seeded photos are not protected as expected: ${photoProblem}`);
+    }
+    // The whole download, page by page: the open place may sit on any page of it.
+    const features = [];
+    let cursor = null;
+    for (let page = 0; page < 100; page += 1) {
+      const query = cursor === null ? '' : `?cursor=${encodeURIComponent(cursor)}`;
+      const body = await getJson(`/api/v1/sync/sets/${set.id}/download${query}`);
+      features.push(...(Array.isArray(body.features) ? body.features : []));
+      cursor = body.nextCursor ?? null;
+      if (!body.hasMore || cursor === null) {
+        break;
+      }
+    }
+    const openPlaceId = openPlaceIdIn({ features });
+    const pinProblem = withheldPinProblem(await getJson(`/api/v1/sync/sets/${set.id}/rasters`), openPlaceId);
+    if (pinProblem) {
+      throw new Error(`The seeded raster map is not protected as expected: ${pinProblem}`);
+    }
+  } finally {
+    await fetch(`${baseUrl}/api/v1/sync/sets/${set.id}`, { method: 'DELETE', headers }).catch(() => {});
+  }
+}
+
+/**
  * True when a container of this stack's name is one this stack may use.
  *
  * The judgement, not the docker call, because the judgement is the part that was wrong: it is
  * stated as an allow-list rather than as a list of the shapes to refuse. `docker inspect` prints
  * the empty string when no such container exists, the project name when compose made it,
- * `<no value>` when a plain `docker run` made it, and an `Error…` line when the daemon could not
- * be asked. Only the first three of those are known-good; every other label is somebody else's
+ * `<no value>` when a plain `docker run` made it, and an `Error…` (or, from Docker 29, `error…`)
+ * line when there is no such container or the daemon could not be asked. Only the first three of those are known-good; every other label is somebody else's
  * project and is exactly the case this guard exists for, so it must fall on the refusing side.
  *
  * Exported for its own test; `up` is what a developer runs.
  */
 export function foreignContainerProblem(label) {
   const value = label.trim();
-  if (value === '' || value === COMPOSE_PROJECT || value.startsWith('Error')) {
+  // Docker before 29 wrote `Error: No such object: …`; Docker 29 writes `error: no such object: …`.
+  if (value === '' || value === COMPOSE_PROJECT || /^error\b/i.test(value)) {
     return null;
   }
   return value === '<no value>'
@@ -543,6 +746,8 @@ function apiEnvironment(dbPort, apiPort) {
     SILEXGIS__Admin__Email: ADMIN_EMAIL,
     SILEXGIS__Admin__Password: ADMIN_PASSWORD,
     SILEXGIS__SpeleoLocDev__MemberPassword: MEMBER_PASSWORD,
+    SILEXGIS__Files__Root: join(STATE_DIR, 'files'),
+    SILEXGIS__Keys__Path: join(STATE_DIR, 'keys'),
   };
 }
 
@@ -564,6 +769,17 @@ function printSummary(baseUrl, capabilities) {
   console.log(`Group-only cave   ${GROUP_VISIBLE_CAVE_CODE}  — visible only through that group`);
   console.log(`Protected cave    ${PROTECTED_CAVE_CODE}  — its exact position is withheld from`);
   console.log('                  the member account on the sync channel');
+  console.log(`Review account    ${REVIEW_EMAIL} / ${MEMBER_PASSWORD}`);
+  console.log('                  A second plain member whose uploads wait for a reviewer: send');
+  console.log('                  clientFeatures ["held"] or the upload is refused whole.');
+  console.log('');
+  console.log(`On ${OPEN_CAVE_CODE}         two photos with an invented GPS tag — "${OPEN_PHOTO_TITLE}"`);
+  console.log('                  reaches the member as stored, the one that also hangs on');
+  console.log(`                  ${PROTECTED_CAVE_CODE} without its location; a raster map "${RASTER_TITLE}" with`);
+  console.log('                  two pins, one withheld from the member; a trip recording');
+  console.log(`                  "${RECORDING_TITLE}"`);
+  console.log(`People directory  on — lists "${ROSTER_ONLY_CAVER}" (no account) and links one phone`);
+  console.log('                  user the member\'s phone reported to that person');
   console.log('');
   console.log(`Client id         ${CLIENT_ID}   (public, no secret, PKCE S256 required)`);
   console.log(`Redirect URI      ${REDIRECT_URI}   (or speleoloc://auth)`);
@@ -619,11 +835,16 @@ async function upCommand(options) {
   process.on('exit', stop);
 
   await waitForApi(baseUrl, { api });
-  const capabilities = await signInAndReadCapabilities(baseUrl, MEMBER_EMAIL, MEMBER_PASSWORD)
-    .catch((error) => fail(error.message,
-      'Both seeding commands exit zero when they refuse, so the reason is a line in the output '
-      + 'above rather than a failed command.'));
+  const seedingHint = 'Both seeding commands exit zero when they refuse, so the reason is a line '
+    + 'in the output above rather than a failed command.';
+  const tokens = await signIn(baseUrl, MEMBER_EMAIL, MEMBER_PASSWORD)
+    .catch((error) => fail(error.message, seedingHint));
+  const capabilities = await readCapabilities(baseUrl, tokens.access_token)
+    .catch((error) => fail(error.message, seedingHint));
   console.log(`\n✅ Signed in as ${MEMBER_EMAIL} and read the sync capabilities.`);
+  await proveSyncContent(baseUrl, tokens.access_token)
+    .catch((error) => fail(error.message, seedingHint));
+  console.log(`✅ As ${MEMBER_EMAIL}: one photo handed over without its location, one raster pin withheld.`);
   printSummary(baseUrl, capabilities);
 
   await new Promise((done) => api.on('exit', done));
@@ -644,7 +865,9 @@ function downCommand(options) {
 
 function resetCommand(options) {
   compose(portsFrom(options), 'down', '-v');
-  console.log('\nContainer and volume removed. The next `up` starts from an empty database.');
+  rmSync(STATE_DIR, { recursive: true, force: true });
+  console.log('\nContainer, volume, stored files and keys removed. The next `up` starts from an '
+    + 'empty installation.');
 }
 
 // Only when run, not when imported, so the test file can exercise the helpers above.

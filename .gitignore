@@ -185,3 +185,6 @@ TestResults/
 # Python bytecode from local scripts
 __pycache__/
 *.pyc
+
+# Stored files and signing keys of the throwaway SpeleoLoc development server (deploy/speleoloc-dev.mjs)
+/.speleoloc-dev/

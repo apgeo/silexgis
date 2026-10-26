@@ -53,7 +53,7 @@ public enum SpeleoLocDevSeedOutcome
 /// on a database seeded by an older build tops up what that build did not write.
 /// </para>
 /// </remarks>
-public static class SpeleoLocDevSeeder
+public static partial class SpeleoLocDevSeeder
 {
     /// <summary>The caving group the demo administrator and the plain account share.</summary>
     public const string GroupName = "Demo Caving Club";
@@ -135,6 +135,11 @@ public static class SpeleoLocDevSeeder
         await BindGroupVisibleCaveAsync(db, group.Id, ct);
 
         await db.SaveChangesAsync(ct);
+
+        // What a phone can be sent beyond features: photos both ways round the protection rule, a
+        // trip recording, a raster map with pins, the people directory and an account whose
+        // uploads wait for a reviewer. After the group and the accounts, which it hangs on.
+        await SeedSyncContentAsync(services, db, userManager, admin.Id, memberUserId, group.Id, password, ct);
         return SpeleoLocDevSeedOutcome.Seeded;
     }
 
