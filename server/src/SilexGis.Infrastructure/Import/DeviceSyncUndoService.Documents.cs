@@ -344,6 +344,13 @@ public sealed partial class DeviceSyncUndoService
             return SyncUndoReasons.ContainerDeleted;
         }
 
+        if (featureId is null
+            && entityType is AttachedEntityType.TripRecording or AttachedEntityType.TripRecordingPoint
+            && !await RecordingTargetIsLiveAsync(entityType!.Value, targetId, ct))
+        {
+            return SyncUndoReasons.ContainerDeleted;
+        }
+
         if (!await MayChangeLinksOnAsync(featureId is null ? entityType : null, targetId, ctx, ct))
         {
             return SyncUndoReasons.Forbidden;
@@ -404,8 +411,39 @@ public sealed partial class DeviceSyncUndoService
     }
 
     /// <summary>Whether the caller may hang files on the object, or take them down: Write on it.</summary>
-    private Task<bool> MayChangeLinksOnAsync(AttachedEntityType? entityType, Guid targetId, AccessContext ctx, CancellationToken ct) =>
-        FileAccessRules.CanWriteTargetAsync(db, access, ctx, new AttachmentTarget(entityType, targetId), ct);
+    /// <remarks>
+    /// For a recording or a scan the right is Write on the recording, asked of the recording
+    /// whether or not it has been removed: recording lines are taken back before link lines, so a
+    /// photo the upload hung on a recording the upload created is taken down after that recording
+    /// is already gone, and the question then is whether the caller may change what hangs on it,
+    /// not whether it is still there.
+    /// </remarks>
+    private async Task<bool> MayChangeLinksOnAsync(AttachedEntityType? entityType, Guid targetId, AccessContext ctx, CancellationToken ct)
+    {
+        if (entityType is not (AttachedEntityType.TripRecording or AttachedEntityType.TripRecordingPoint))
+        {
+            return await FileAccessRules.CanWriteTargetAsync(db, access, ctx, new AttachmentTarget(entityType, targetId), ct);
+        }
+
+        var recordingId = entityType == AttachedEntityType.TripRecording
+            ? targetId
+            : await db.TripRecordingPoints.AsNoTracking().IgnoreQueryFilters()
+                .Where(p => p.Id == targetId)
+                .Select(p => p.RecordingId)
+                .FirstOrDefaultAsync(ct);
+        var recording = await db.TripRecordings.AsNoTracking().IgnoreQueryFilters()
+            .FirstOrDefaultAsync(r => r.Id == recordingId, ct);
+        return recording is not null && (await access.DecideAsync(ctx, AccessAction.Write, recording, ct)).Allowed;
+    }
+
+    /// <summary>
+    /// Whether the recording or scan a link hung on is still there: a link is not hung again on
+    /// one that has been removed, because nothing would hand it to a phone.
+    /// </summary>
+    private async Task<bool> RecordingTargetIsLiveAsync(AttachedEntityType entityType, Guid targetId, CancellationToken ct) =>
+        entityType == AttachedEntityType.TripRecording
+            ? await db.TripRecordings.AsNoTracking().AnyAsync(r => r.Id == targetId, ct)
+            : await db.TripRecordingPoints.AsNoTracking().AnyAsync(p => p.Id == targetId && p.DeletedAt == null, ct);
 
     /// <summary>
     /// A field's value before the first of these history rows changed it and after the last; null

@@ -28,13 +28,13 @@ internal enum SyncLinkAct
 /// One checked link row, as plain values only — no tracked entity — so that a proposal can be kept
 /// and applied later, after whatever happened in between.
 /// </summary>
-/// <param name="FeatureId">The feature the document hangs on.</param>
+/// <param name="TargetId">The feature, recording or scan the document hangs on; the row's target kind says which.</param>
 /// <param name="AttachmentIds">The links that already hang the document there; one for an update, every one for a removal.</param>
 /// <param name="Role">The role a new link takes — the row's, or the one that follows from the file and the object.</param>
 internal sealed record SyncLinkProposal(
     SyncLinkAct Act,
     SyncUploadDocumentLinkDto Row,
-    Guid FeatureId,
+    Guid TargetId,
     IReadOnlyList<Guid> AttachmentIds,
     AttachmentRole Role);
 
@@ -54,8 +54,12 @@ internal sealed record SyncLinkProposal(
 /// is the exception to both, as it is for the feature rows: the caller placed it a moment ago.
 /// </para>
 /// <para>
-/// The object is chosen by an explicit switch over the target kinds. Only features carry links on
-/// this channel today; a kind the switch does not name is refused rather than read as a feature.
+/// The object is chosen by an explicit switch over the target kinds: a feature, a trip recording,
+/// or one scan within a recording. A kind the switch does not name is refused rather than read as
+/// a feature. A recording is gated by its cave and a scan by its cave and the place it names, each
+/// asked of the same answer a feature is — a photo on a scan of a withheld place is as much a row
+/// the documents stream would never have handed this caller as a photo on the place itself. A
+/// recording and a scan are written under the right to write the recording.
 /// </para>
 /// </remarks>
 internal sealed class SyncDocumentLinksSection(
@@ -65,6 +69,13 @@ internal sealed class SyncDocumentLinksSection(
     private IReadOnlySet<Guid> handed = new HashSet<Guid>();
     private IReadOnlySet<Guid> withheld = new HashSet<Guid>();
     private IReadOnlySet<Guid> createdHere = new HashSet<Guid>();
+
+    /// <summary>The cave of each live recording the links name, directly or through a scan.</summary>
+    private IReadOnlyDictionary<Guid, Guid> recordingCaves = new Dictionary<Guid, Guid>();
+
+    /// <summary>Each live scan the links name: its recording, and the place it names if any.</summary>
+    private IReadOnlyDictionary<Guid, (Guid RecordingId, Guid? PlaceId)> scans =
+        new Dictionary<Guid, (Guid, Guid?)>();
 
     /// <summary>The history names a feature's rows by its kind; nothing else the upload wrote is a feature.</summary>
     private static readonly string[] FeatureTypeNames = [.. Enum.GetValues<FeatureKind>().Select(FeatureAudit.TypeName)];
@@ -120,8 +131,34 @@ internal sealed class SyncDocumentLinksSection(
     {
         var db = run.Db;
         var ctx = run.Access;
+        var recordingIds = items.Where(l => l.Target.Kind == SyncLinkTargetKind.TripRecording)
+            .Select(l => l.Target.Id).Distinct().ToList();
+        var scanIds = items.Where(l => l.Target.Kind == SyncLinkTargetKind.TripPoint)
+            .Select(l => l.Target.Id).Distinct().ToList();
+
+        // The recordings and scans the rows name, as they stand now: the trip sections ran first
+        // and saved as they went. A removed one is not here, which answers a link on it as a link
+        // on a row that is not on the server.
+        var scanRows = scanIds.Count == 0
+            ? []
+            : await db.TripRecordingPoints.AsNoTracking()
+                .Where(p => scanIds.Contains(p.Id) && p.DeletedAt == null)
+                .Select(p => new { p.Id, p.RecordingId, p.PlaceFeatureId })
+                .ToListAsync(ct);
+        scans = scanRows.ToDictionary(p => p.Id, p => (p.RecordingId, p.PlaceFeatureId));
+        var allRecordingIds = recordingIds.Concat(scanRows.Select(p => p.RecordingId)).Distinct().ToList();
+        recordingCaves = allRecordingIds.Count == 0
+            ? new Dictionary<Guid, Guid>()
+            : await db.TripRecordings.AsNoTracking()
+                .Where(r => allRecordingIds.Contains(r.Id))
+                .ToDictionaryAsync(r => r.Id, r => r.CaveFeatureId, ct);
+
+        // Every feature a gate has to be asked about: the features the rows name, the caves of
+        // the recordings and the places of the scans.
         var featureIds = items.Where(l => l.Target.Kind == SyncLinkTargetKind.Feature)
             .Select(l => l.Target.Id)
+            .Concat(recordingCaves.Values)
+            .Concat(scanRows.Where(p => p.PlaceFeatureId != null).Select(p => p.PlaceFeatureId!.Value))
             .Distinct()
             .ToList();
 
@@ -172,17 +209,41 @@ internal sealed class SyncDocumentLinksSection(
         SyncUploadRun run, SyncUploadDocumentLinkDto row, CancellationToken ct) =>
         row.Target.Kind switch
         {
-            SyncLinkTargetKind.Feature => ResolveOnFeatureAsync(run, row, ct),
+            SyncLinkTargetKind.Feature or SyncLinkTargetKind.TripRecording or SyncLinkTargetKind.TripPoint
+                => ResolveOnTargetAsync(run, row, ct),
             _ => Task.FromResult(Answer(Refuse(row.DocumentId, KindUnsupportedCode,
                 "Files cannot be hung on that kind of object from a phone."))),
         };
 
-    private async Task<SyncResolution<SyncLinkProposal>> ResolveOnFeatureAsync(
+    /// <summary>The features a link's target is gated by, or null when the target is not here.</summary>
+    private IReadOnlyList<Guid>? GatesOf(SyncUploadDocumentLinkDto row)
+    {
+        var id = row.Target.Id;
+        switch (row.Target.Kind)
+        {
+            case SyncLinkTargetKind.Feature:
+                return [id];
+            case SyncLinkTargetKind.TripRecording:
+                return recordingCaves.TryGetValue(id, out var cave) ? [cave] : null;
+            case SyncLinkTargetKind.TripPoint:
+                if (!scans.TryGetValue(id, out var scan) || !recordingCaves.TryGetValue(scan.RecordingId, out var scanCave))
+                {
+                    return null;
+                }
+
+                return scan.PlaceId is { } place ? [scanCave, place] : [scanCave];
+            default:
+                return null;
+        }
+    }
+
+    private async Task<SyncResolution<SyncLinkProposal>> ResolveOnTargetAsync(
         SyncUploadRun run, SyncUploadDocumentLinkDto row, CancellationToken ct)
     {
         var db = run.Db;
         var ctx = run.Access;
-        var featureId = row.Target.Id;
+        var kind = row.Target.Kind;
+        var targetId = row.Target.Id;
 
         var document = await db.Documents.AsNoTracking().FirstOrDefaultAsync(d => d.Id == row.DocumentId, ct);
         var current = document is null ? null : await DocumentQueries.CurrentFileAsync(db, document.Id, ct);
@@ -197,17 +258,35 @@ internal sealed class SyncDocumentLinksSection(
                     "This document is not here, or not yours to read. Send the document first."));
         }
 
-        var target = new AttachmentTarget(null, featureId);
-        if (withheld.Contains(featureId) && !createdHere.Contains(featureId))
-        {
-            return Answer(Refuse(row.DocumentId, "sync.location_forbidden",
-                "You may not hang files on this row from a phone."));
-        }
+        var target = new AttachmentTarget(EntityTypeOf(kind), targetId);
+        var gates = GatesOf(row);
 
-        if (!createdHere.Contains(featureId) && !handed.Contains(featureId))
+        // A recording or a scan the caller may not read is answered as one that is not here, so
+        // a link cannot be used to learn that somebody else's recording exists. A feature needs
+        // no such question: being handed is being readable.
+        if (gates is null || (kind != SyncLinkTargetKind.Feature
+            && !await FileAccessRules.CanReadTargetAsync(db, access, ctx, target, ct)))
         {
             return Answer(Refuse(row.DocumentId, TargetNotFoundCode,
                 "This row is not on the server, or not in this set."));
+        }
+
+        foreach (var gate in gates)
+        {
+            if (withheld.Contains(gate) && !createdHere.Contains(gate))
+            {
+                return Answer(Refuse(row.DocumentId, "sync.location_forbidden",
+                    "You may not hang files on this row from a phone."));
+            }
+        }
+
+        foreach (var gate in gates)
+        {
+            if (!createdHere.Contains(gate) && !handed.Contains(gate))
+            {
+                return Answer(Refuse(row.DocumentId, TargetNotFoundCode,
+                    "This row is not on the server, or not in this set."));
+            }
         }
 
         if (!await FileAccessRules.CanWriteTargetAsync(db, access, ctx, target, ct))
@@ -215,23 +294,23 @@ internal sealed class SyncDocumentLinksSection(
             return Answer(Refuse(row.DocumentId, "sync.row_forbidden", "You may not change what hangs on this row."));
         }
 
-        var existing = await LinksAsync(db, row.DocumentId, featureId).AsNoTracking().ToListAsync(ct);
+        var existing = await LinksAsync(db, row.DocumentId, kind, targetId).AsNoTracking().ToListAsync(ct);
         if (row.Deleted)
         {
             return existing.Count == 0
                 ? Answer(Ok(row.DocumentId, SyncRowStatus.Unchanged))
-                : Write(new SyncLinkProposal(SyncLinkAct.Delete, row, featureId, [.. existing.Select(a => a.Id)], default));
+                : Write(new SyncLinkProposal(SyncLinkAct.Delete, row, targetId, [.. existing.Select(a => a.Id)], default));
         }
 
         if (existing.Count == 0)
         {
-            var role = row.Role ?? await DefaultRoleAsync(db, current.File.Kind, featureId, ct);
-            return Write(new SyncLinkProposal(SyncLinkAct.Create, row, featureId, [], role));
+            var role = row.Role ?? await DefaultRoleAsync(db, current.File.Kind, kind, targetId, ct);
+            return Write(new SyncLinkProposal(SyncLinkAct.Create, row, targetId, [], role));
         }
 
         var link = existing[0];
         return Changes(row, link)
-            ? Write(new SyncLinkProposal(SyncLinkAct.Update, row, featureId, [link.Id], link.Role))
+            ? Write(new SyncLinkProposal(SyncLinkAct.Update, row, targetId, [link.Id], link.Role))
             : Answer(Ok(link.Id, SyncRowStatus.Unchanged, link.UpdatedAt));
     }
 
@@ -256,16 +335,20 @@ internal sealed class SyncDocumentLinksSection(
                 }
 
                 // Hung meanwhile by another upload: that link is this one.
-                var already = await LinksAsync(db, row.DocumentId, proposal.FeatureId).AsNoTracking().FirstOrDefaultAsync(ct);
+                var already = await LinksAsync(db, row.DocumentId, row.Target.Kind, proposal.TargetId)
+                    .AsNoTracking().FirstOrDefaultAsync(ct);
                 if (already is not null)
                 {
                     return new SyncApplied(Ok(already.Id, SyncRowStatus.Unchanged, already.UpdatedAt), null);
                 }
 
+                var entityType = EntityTypeOf(row.Target.Kind);
                 var attachment = new Attachment
                 {
                     FileId = current.File.Id,
-                    FeatureId = proposal.FeatureId,
+                    FeatureId = entityType is null ? proposal.TargetId : null,
+                    EntityType = entityType,
+                    EntityId = entityType is null ? null : proposal.TargetId,
                     Role = proposal.Role,
                     Caption = NullIfBlank(row.Caption),
                     SortOrder = row.SortOrder ?? 0,
@@ -326,22 +409,42 @@ internal sealed class SyncDocumentLinksSection(
         return [.. results.Select(r => stamps.TryGetValue(r.Id, out var stamp) ? r with { Revision = stamp } : r)];
     }
 
+    /// <summary>The polymorphic discriminator a target kind is stored under; null for a feature, which has a column of its own.</summary>
+    private static AttachedEntityType? EntityTypeOf(SyncLinkTargetKind kind) => kind switch
+    {
+        SyncLinkTargetKind.TripRecording => AttachedEntityType.TripRecording,
+        SyncLinkTargetKind.TripPoint => AttachedEntityType.TripRecordingPoint,
+        _ => null,
+    };
+
     /// <summary>
-    /// The links that hang a document on a feature, oldest first. A link points at one of the
+    /// The links that hang a document on a feature, a recording or a scan, oldest first. A link points at one of the
     /// document's files, never at the document, and moves to the new file when the document gets
     /// new bytes; any file of the document counts, so a link still on an earlier file is found too.
     /// </summary>
-    private static IQueryable<Attachment> LinksAsync(SilexGisDbContext db, Guid documentId, Guid featureId) =>
-        from link in db.Attachments
-        join file in db.StoredFiles on link.FileId equals file.Id
-        join version in db.DocumentVersions on file.DocumentVersionId equals version.Id
-        where link.FeatureId == featureId && version.DocumentId == documentId
-        orderby link.CreatedAt, link.Id
-        select link;
+    private static IQueryable<Attachment> LinksAsync(
+        SilexGisDbContext db, Guid documentId, SyncLinkTargetKind kind, Guid targetId)
+    {
+        var entityType = EntityTypeOf(kind);
+        var onTarget = entityType is null
+            ? db.Attachments.Where(a => a.FeatureId == targetId)
+            : db.Attachments.Where(a => a.EntityType == entityType && a.EntityId == targetId);
+        return from link in onTarget
+               join file in db.StoredFiles on link.FileId equals file.Id
+               join version in db.DocumentVersions on file.DocumentVersionId equals version.Id
+               where version.DocumentId == documentId
+               orderby link.CreatedAt, link.Id
+               select link;
+    }
 
     private static async Task<AttachmentRole> DefaultRoleAsync(
-        SilexGisDbContext db, FileKind fileKind, Guid featureId, CancellationToken ct)
+        SilexGisDbContext db, FileKind fileKind, SyncLinkTargetKind kind, Guid featureId, CancellationToken ct)
     {
+        if (kind != SyncLinkTargetKind.Feature)
+        {
+            return LinkRoleDefaults.For(fileKind, LinkTargetNature.Recording);
+        }
+
         var feature = await (from f in db.Features.AsNoTracking()
                              where f.Id == featureId
                              join t in db.FeatureTypes.AsNoTracking() on f.FeatureTypeId equals (long?)t.Id into types

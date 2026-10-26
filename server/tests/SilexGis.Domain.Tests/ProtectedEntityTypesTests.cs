@@ -58,6 +58,24 @@ public class ProtectedEntityTypesTests
         AttachedEntityTypes.ClrName(AttachedEntityType.Expedition).ShouldBe(nameof(Expedition));
     }
 
+    [Fact]
+    public void The_stored_values_of_the_phone_recording_targets_are_the_appended_ones()
+    {
+        // Appended after the checklist and pinned as literals, for the same reason as the camp:
+        // a renumbering would repoint every photo already hung on a recording or a scan.
+        ((short)AttachedEntityType.TripRecording).ShouldBe((short)18);
+        ((short)AttachedEntityType.TripRecordingPoint).ShouldBe((short)19);
+    }
+
+    [Fact]
+    public void The_audit_root_names_of_a_recording_and_a_scan_are_their_type_names()
+    {
+        // A photo hung on a recording is filed in the history under the recording, by the CLR
+        // type name the timeline matches as a string.
+        AttachedEntityTypes.ClrName(AttachedEntityType.TripRecording).ShouldBe(nameof(TripRecording));
+        AttachedEntityTypes.ClrName(AttachedEntityType.TripRecordingPoint).ShouldBe(nameof(TripRecordingPoint));
+    }
+
     private sealed class UntypedRow : IProtectedEntity
     {
         public Guid Id { get; set; } = Guid.CreateVersion7();

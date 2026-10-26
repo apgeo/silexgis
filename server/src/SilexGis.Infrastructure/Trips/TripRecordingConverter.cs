@@ -252,6 +252,8 @@ public sealed class TripRecordingConverter(
             positions++;
         }
 
+        await TripRecordingPhotos.CopyToTripAsync(db, recording, points, trip, cave, ct);
+
         if (reasons.Count > 0)
         {
             db.TripAttentions.Add(new TripAttention

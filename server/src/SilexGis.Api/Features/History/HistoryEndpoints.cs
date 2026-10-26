@@ -304,7 +304,11 @@ public static class HistoryEndpoints
                     && a.RootEntityId != null && keys.Contains(a.RootEntityId)));
         }
 
+        // A phone's recording and its scans have no timeline here: their rows name the recording's
+        // cave and each scan's place, which a reader of the recording (its club) may not be
+        // allowed to learn, and no history rule redacts them.
         if (!RouteEnums.TryParse<AttachedEntityType>(entityType, out var type)
+            || type is AttachedEntityType.TripRecording or AttachedEntityType.TripRecordingPoint
             || !await FileAccessRules.CanReadEntityAsync(db, access, ctx, type, entityId, ct))
         {
             return null;

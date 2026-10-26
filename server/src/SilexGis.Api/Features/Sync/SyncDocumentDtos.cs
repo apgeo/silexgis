@@ -4,10 +4,12 @@ using SilexGis.Domain.Entities;
 
 namespace SilexGis.Api.Features.Sync;
 
-/// <summary>What a document link hangs on. Only features carry links on this stream today.</summary>
+/// <summary>What a document link hangs on: a feature, a trip recording, or one scan within a recording.</summary>
 public enum SyncLinkTargetKind
 {
     Feature = 0,
+    TripRecording = 1,
+    TripPoint = 2,
 }
 
 /// <summary>The kind of file a document serves, in the few words a phone shows it as.</summary>

@@ -361,6 +361,8 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
         await CheckAsync(AttachedEntityType.Cabinet, db.Cabinets.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.Album, db.Albums.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.Expedition, db.Expeditions.Select(x => x.Id));
+        await CheckAsync(AttachedEntityType.TripRecording, db.TripRecordings.IgnoreQueryFilters().Select(x => x.Id));
+        await CheckAsync(AttachedEntityType.TripRecordingPoint, db.TripRecordingPoints.IgnoreQueryFilters().Select(x => x.Id));
 
         // Every entity-type value with a table of its own is listed above; the one that is
         // not is the comment type, which is reserved for an entity that does not exist yet.

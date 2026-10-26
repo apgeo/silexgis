@@ -480,6 +480,31 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
         }
     }
 
+    /// <summary>A generated picture hung on a recording or a scan; returns its file.</summary>
+    private async Task<Guid> HangPictureAsync(AttachedEntityType target, Guid targetId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var document = new Document { Title = $"Picture {marker}", OwnerUserId = uploaderId, Visibility = Visibility.Authenticated };
+        db.Documents.Add(document);
+        var version = new DocumentVersion { DocumentId = document.Id, VersionNumber = 1, IsCurrent = true, UploadedBy = uploaderId };
+        db.DocumentVersions.Add(version);
+        var file = new StoredFile
+        {
+            DocumentVersionId = version.Id,
+            StoragePath = Guid.NewGuid().ToString("N"),
+            OriginalName = "picture.jpg",
+            MimeType = "image/jpeg",
+            SizeBytes = 1,
+            Sha256 = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
+            Kind = FileKind.Image,
+        };
+        db.StoredFiles.Add(file);
+        db.Attachments.Add(new Attachment { FileId = file.Id, EntityType = target, EntityId = targetId });
+        await db.SaveChangesAsync();
+        return file.Id;
+    }
+
     /// <summary>
     /// A recording the conversion left waiting becomes a trip by hand: the archive import's review,
     /// reading the recording instead of an archive, with the same answers and the same refusals —
@@ -540,6 +565,13 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
         read.GetProperty("selectablePointIds").EnumerateArray().Select(e => e.GetString()).ShouldBe([scan.ToString()]);
         read.GetProperty("points")[0].GetProperty("candidates")[0].GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
 
+        // A picture on the recording and one on its scan, hung before the review.
+        var pictures = new[]
+        {
+            await HangPictureAsync(AttachedEntityType.TripRecording, waiting),
+            await HangPictureAsync(AttachedEntityType.TripRecordingPoint, scan),
+        };
+
         var made = await uploader.PostAsJsonAsync(commit, new { options, pointIds = new[] { scan.ToString() } });
         var madeBody = await made.Content.ReadAsStringAsync();
         made.StatusCode.ShouldBe(HttpStatusCode.OK, madeBody);
@@ -548,6 +580,17 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
         result.GetProperty("createdEventCount").GetInt32().ShouldBe(1);
         var tripId = result.GetProperty("tripLogId").GetGuid();
         (await TripOfAsync(waiting)).ShouldBe(tripId);
+
+        // The report made by hand carries the photographs the automatic conversion would give it.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Attachments.AsNoTracking()
+                    .Where(a => a.EntityType == AttachedEntityType.TripLog && a.EntityId == tripId)
+                    .Select(a => a.FileId).ToListAsync())
+                .ShouldBe(pictures, ignoreOrder: true);
+        }
+
         (await EventCountAsync(tripId)).ShouldBe(1);
 
         // Made once: the review refuses it, naming the trip, and a later upload's change flags it.

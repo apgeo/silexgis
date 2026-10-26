@@ -641,6 +641,16 @@ public sealed class SpeleolocTripImportCommitService(
                 .FirstOrDefaultAsync(ct));
         }
 
+        // The photographs hung on the recording and on its scans are the report's too, as they are
+        // when the automatic conversion makes the trip.
+        var heldRecording = await db.TripRecordings.IgnoreQueryFilters().AsNoTracking()
+            .FirstAsync(r => r.Id == recording.Id, ct);
+        var heldPoints = await db.TripRecordingPoints.IgnoreQueryFilters().AsNoTracking()
+            .Where(p => p.RecordingId == recording.Id && p.DeletedAt == null)
+            .ToListAsync(ct);
+        await TripRecordingPhotos.CopyToTripAsync(db, heldRecording, heldPoints, trip, cave, ct);
+        await db.SaveChangesAsync(ct);
+
         return RecordingLine(recording.Id, ImportDecisionAction.Attach, held.Deleted);
     }
 

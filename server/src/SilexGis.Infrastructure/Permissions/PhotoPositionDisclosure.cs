@@ -132,6 +132,32 @@ public sealed class PhotoPositionDisclosure(
             .Concat(campTrips.Select(x => x.TripLogId))
             .Distinct().ToList();
 
+        // A recording is made in one cave, and a scan names a place in it: a photo on either is
+        // placed by those features, so they join its chain. A removed recording or scan counts
+        // too, for the reason a removed member trip does — the camera was where it was, and a
+        // deletion somebody can take back must not hand over the position meanwhile. Fail-closed:
+        // a scan that names no place is still placed by its recording's cave.
+        var recordingIds = links.Where(l => l.EntityType == AttachedEntityType.TripRecording)
+            .Select(l => l.EntityId!.Value).Distinct().ToList();
+        var scanIds = links.Where(l => l.EntityType == AttachedEntityType.TripRecordingPoint)
+            .Select(l => l.EntityId!.Value).Distinct().ToList();
+        var scans = scanIds.Count == 0
+            ? []
+            : await db.TripRecordingPoints.AsNoTracking().IgnoreQueryFilters()
+                .Where(p => scanIds.Contains(p.Id))
+                .Select(p => new { p.Id, p.RecordingId, p.PlaceFeatureId })
+                .ToListAsync(ct);
+        var allRecordingIds = recordingIds.Concat(scans.Select(p => p.RecordingId)).Distinct().ToList();
+        var recordingCaves = allRecordingIds.Count == 0
+            ? []
+            : await db.TripRecordings.AsNoTracking().IgnoreQueryFilters()
+                .Where(r => allRecordingIds.Contains(r.Id))
+                .ToDictionaryAsync(r => r.Id, r => r.CaveFeatureId, ct);
+        var scanFeatures = scans.ToDictionary(
+            p => p.Id,
+            p => new[] { recordingCaves.GetValueOrDefault(p.RecordingId), p.PlaceFeatureId ?? Guid.Empty }
+                .Where(id => id != Guid.Empty).ToList());
+
         // A link whose kind places its endpoints discloses the other end's position by
         // proximity, in either direction, so both ends join the chain — fail-closed.
         var locatingLinks = attachedFeatureIds.Count == 0
@@ -173,6 +199,16 @@ public sealed class PhotoPositionDisclosure(
                 && tripToCaves.TryGetValue(link.EntityId!.Value, out var caveIds))
             {
                 Chain(link.FileId).AddRange(caveIds);
+            }
+            else if (link.EntityType == AttachedEntityType.TripRecording
+                && recordingCaves.TryGetValue(link.EntityId!.Value, out var recordingCave))
+            {
+                Chain(link.FileId).Add(recordingCave);
+            }
+            else if (link.EntityType == AttachedEntityType.TripRecordingPoint
+                && scanFeatures.TryGetValue(link.EntityId!.Value, out var scanChain))
+            {
+                Chain(link.FileId).AddRange(scanChain);
             }
             else if (link.EntityType == AttachedEntityType.Expedition
                 && campToTrips.TryGetValue(link.EntityId!.Value, out var memberTripIds))

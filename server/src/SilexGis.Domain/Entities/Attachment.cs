@@ -57,6 +57,20 @@ public enum AttachedEntityType : short
     /// by this discriminator. No attachment, tagging or resource-link surface offers this value.
     /// </summary>
     Checklist = 17,
+
+    /// <summary>
+    /// A trip recorded on a phone, before it is turned into a trip report. Photos hang on it
+    /// from the sync channel only: no attachment, tagging or resource-link surface offers this
+    /// value, and its access is the recording's own.
+    /// </summary>
+    TripRecording = 18,
+
+    /// <summary>
+    /// One scan of a place within a trip recording. A photo hangs on it from the sync channel
+    /// only, and is read under the recording's access; whether the scan's place is handed to a
+    /// phone is the sync stream's concern.
+    /// </summary>
+    TripRecordingPoint = 19,
 }
 
 /// <summary>Maps non-feature protected entity instances to their polymorphic discriminator.</summary>

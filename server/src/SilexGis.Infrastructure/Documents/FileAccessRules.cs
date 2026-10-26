@@ -163,6 +163,20 @@ public static class FileAccessRules
             EntityIdsOf(links, AttachedEntityType.Expedition),
             ct);
 
+        // A recording reads under the trip domain, and a scan reads as the recording it belongs
+        // to: a scan that has been removed, or whose recording has, hangs nothing readable.
+        var visibleRecordings = db.TripRecordings.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs);
+        var readableRecordingIds = await ReadableIdsAsync(
+            visibleRecordings.Select(r => r.Id),
+            EntityIdsOf(links, AttachedEntityType.TripRecording),
+            ct);
+        var readableScanIds = await ReadableIdsAsync(
+            db.TripRecordingPoints.AsNoTracking()
+                .Where(p => p.DeletedAt == null && visibleRecordings.Any(r => r.Id == p.RecordingId))
+                .Select(p => p.Id),
+            EntityIdsOf(links, AttachedEntityType.TripRecordingPoint),
+            ct);
+
         // Repeated until nothing new turns up, because one file becoming readable can be the
         // reason another one is, and the two can appear in either order. The set only grows
         // and every file can enter it once, so this ends — and it ends on the same answer the
@@ -189,6 +203,8 @@ public static class FileAccessRules
                         AttachedEntityType.GeoreferencedMap => readableMapIds.Contains(l.EntityId!.Value),
                         AttachedEntityType.MapView => readableViewIds.Contains(l.EntityId!.Value),
                         AttachedEntityType.Expedition => readableExpeditionIds.Contains(l.EntityId!.Value),
+                        AttachedEntityType.TripRecording => readableRecordingIds.Contains(l.EntityId!.Value),
+                        AttachedEntityType.TripRecordingPoint => readableScanIds.Contains(l.EntityId!.Value),
                         AttachedEntityType.StoredFile => readable.Contains(l.EntityId!.Value),
                         _ => false,
                     });
@@ -319,6 +335,12 @@ public static class FileAccessRules
             case AttachedEntityType.Event:
                 return await CanEntityAsync(db, access, ctx, db.Events, entityId, AccessAction.Read, ct);
 
+            case AttachedEntityType.TripRecording:
+                return await CanEntityAsync(db, access, ctx, db.TripRecordings, entityId, AccessAction.Read, ct);
+
+            case AttachedEntityType.TripRecordingPoint:
+                return await CanRecordingOfScanAsync(db, access, ctx, entityId, AccessAction.Read, ct);
+
             case AttachedEntityType.StoredFile:
                 // A file (as a tag target) inherits the access of the objects it is
                 // attached to — the same rule the file endpoints use.
@@ -361,6 +383,12 @@ public static class FileAccessRules
             // a date, and a reader who may not change the event may not change what it carries.
             case AttachedEntityType.Event:
                 return await CanEntityAsync(db, access, ctx, db.Events, entityId, AccessAction.Write, ct);
+
+            case AttachedEntityType.TripRecording:
+                return await CanEntityAsync(db, access, ctx, db.TripRecordings, entityId, AccessAction.Write, ct);
+
+            case AttachedEntityType.TripRecordingPoint:
+                return await CanRecordingOfScanAsync(db, access, ctx, entityId, AccessAction.Write, ct);
 
             case AttachedEntityType.StoredFile:
                 // Writing a file's tags is governed by the file-write rule, evaluated against
@@ -406,6 +434,22 @@ public static class FileAccessRules
         return decision.Allowed
             && (decision.Source == AccessDecisionSource.FullAdministrators
                 || decision.Level == AccessLevel.Object);
+    }
+
+    /// <summary>
+    /// A scan inside a recording has no access decision of its own: what may be done to it is what
+    /// may be done to the recording it belongs to. A scan that has been removed answers no.
+    /// </summary>
+    private static async Task<bool> CanRecordingOfScanAsync(
+        SilexGisDbContext db, IAccessService access, AccessContext ctx, Guid scanId,
+        AccessAction action, CancellationToken ct)
+    {
+        var recordingId = await db.TripRecordingPoints.AsNoTracking()
+            .Where(p => p.Id == scanId && p.DeletedAt == null)
+            .Select(p => (Guid?)p.RecordingId)
+            .FirstOrDefaultAsync(ct);
+        return recordingId is { } id
+            && await CanEntityAsync(db, access, ctx, db.TripRecordings, id, action, ct);
     }
 
     /// <summary>Load-and-check for walk-governed non-feature entities.</summary>
