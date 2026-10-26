@@ -304,6 +304,11 @@ try
 builder.Services.AddScoped<GroupAnnouncementThrottle>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
     builder.Services.AddScoped<SilexGis.Infrastructure.Import.IHeldBatchHandler, SilexGis.Api.Features.Sync.SyncHeldBatchHandler>();
+    builder.Services.AddScoped<SilexGis.Infrastructure.Import.IHeldBatchHandler, SilexGis.Api.Features.Import.VectorHeldImportHandler>();
+    builder.Services.AddScoped<SilexGis.Infrastructure.Import.IHeldBatchHandler, SilexGis.Api.Features.Import.PhotoHeldImportHandler>();
+    builder.Services.AddScoped<SilexGis.Infrastructure.Import.IHeldBatchHandler, SilexGis.Api.Features.Catalogue.CatalogueHeldImportHandler>();
+    builder.Services.AddScoped<SilexGis.Infrastructure.Import.IHeldBatchHandler, SilexGis.Api.Features.Import.TripHeldImportHandler>();
+    builder.Services.AddScoped<SilexGis.Infrastructure.Import.IHeldBatchHandler, SilexGis.Api.Features.Import.SpeleolocHeldImportHandler>();
     builder.Services.AddScoped<SilexGis.Infrastructure.Trips.ITripRosterAnnouncer, SilexGis.Api.Features.TripLogs.TripRosterAnnouncer>();
     // Told when a follow link is minted, so the people a published page names are not the last
     // to know. Registered concretely: it is called from one place and substituted by nothing, so an

@@ -59,6 +59,7 @@ public static class UploadReviewEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .WithSummary("Accepts every waiting line of a held batch, with what they depend on.");
         review.MapPost("/batches/{id:guid}/reject", RejectBatchAsync)
             .WithValidation<ReviewBatchDecisionRequest>()
@@ -66,6 +67,7 @@ public static class UploadReviewEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .WithSummary("Rejects every waiting line of a held batch, and what depends on them.");
         review.MapPost("/items/{reviewId:guid}/accept", AcceptItemAsync)
             .WithValidation<ReviewItemDecisionRequest>()
@@ -73,6 +75,7 @@ public static class UploadReviewEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .WithSummary("Accepts one held line, or the named fields of one held edit, with what it depends on.");
         review.MapPost("/items/{reviewId:guid}/reject", RejectItemAsync)
             .WithValidation<ReviewItemDecisionRequest>()
@@ -80,6 +83,7 @@ public static class UploadReviewEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .WithSummary("Rejects one held line, and the waiting lines that depend on it.");
     }
 
@@ -371,6 +375,11 @@ public static class UploadReviewEndpoints
             return (null, ApiProblems.Conflict(
                 NotPendingCode,
                 "What this decision reaches was decided already, by this or another decision, or can no longer be changed."));
+        }
+        catch (HeldWriteUnavailableException e)
+        {
+            db.ChangeTracker.Clear();
+            return (null, ApiProblems.ServiceUnavailable(e.Code, e.Message));
         }
         catch (HeldChangedSinceException e)
         {

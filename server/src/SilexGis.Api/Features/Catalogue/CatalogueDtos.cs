@@ -183,12 +183,17 @@ public sealed record SpeologieFailureDto(int SpeologieId, string? Title, string 
 /// <param name="UpdatedCount">Caves already here that were refreshed from the catalogue.</param>
 /// <param name="SkippedCount">Caves passed over.</param>
 /// <param name="Failures">Caves that could not be dealt with, listed rather than counted.</param>
+/// <param name="Held">
+/// The account's imports wait for a reviewer: nothing was imported yet, the batch waits with one
+/// line per cave it would import, and a reviewer's acceptance imports them.
+/// </param>
 public sealed record SpeologieImportResultDto(
     Guid BatchId,
     int CreatedCount,
     int UpdatedCount,
     int SkippedCount,
-    IReadOnlyList<SpeologieFailureDto> Failures);
+    IReadOnlyList<SpeologieFailureDto> Failures,
+    bool Held = false);
 
 /// <summary>
 /// A search has to name something. Asking the catalogue for everything, one page at a time, is

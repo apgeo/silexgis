@@ -59,6 +59,15 @@ public interface IHeldBatchHandler
     IReadOnlyList<string> FieldsOf(ImportBatchItem line);
 
     /// <summary>
+    /// Whether the accepted lines of one batch are handed over together rather than one at a
+    /// time. A file import is written by its source's one commit, run once over every candidate
+    /// accepted with the others turned into skips; running it line by line would repeat the
+    /// commit's whole-batch work — reading the file, the derived state of the hierarchy — for
+    /// every candidate.
+    /// </summary>
+    bool WritesWhole => false;
+
+    /// <summary>
     /// Writes <paramref name="lines"/> of <paramref name="batch"/>, in the order given (every line
     /// after what it depends on), with the uploader's access decisions. Each line is checked again
     /// just before it is written; one that would now be refused is answered as not accepted, with
@@ -202,6 +211,41 @@ public sealed class UploadReviewService(
             var batch = await db.ImportBatches.AsNoTracking().FirstAsync(b => b.Id == batchId, ct);
             changes.Begin(ChangeSource.ReviewDecision, batch.Id);
 
+            if (applier.WritesWhole)
+            {
+                // Candidates of a file import depend only on lines of their own batch, so the run
+                // is written by one commit of its source — after the lines whose dependency an
+                // earlier decision left unwritten are decided failed with that reason. A scan
+                // whose trip failed to be created would otherwise make its own trip, which no
+                // line of the batch records and its undo never finds.
+                var run = new List<ImportBatchItem>();
+                for (var i = start; i < end; i++)
+                {
+                    var line = ordered[i];
+                    if (line.DependsOnItemIds?.Any(failed.Contains) == true)
+                    {
+                        failed.Add(line.Id);
+                        outcomes[line.Id] = new HeldLineOutcome(
+                            line.Id, false, null, DependencyFailedCode,
+                            "A row this one cannot be written without was not written.");
+                        continue;
+                    }
+
+                    run.Add(line);
+                }
+
+                if (run.Count > 0)
+                {
+                    foreach (var outcome in await applier.ApplyAsync(batch, run, uploader, overCurrent, ct))
+                    {
+                        outcomes[outcome.ItemId] = outcome;
+                    }
+                }
+
+                start = end;
+                continue;
+            }
+
             // A line whose dependency is now unwritable cannot be written either; it is decided
             // with the reason rather than handed to the applier to fail in a less telling way.
             // Lines are handed over one at a time, so a line's dependency in the same run has
@@ -280,6 +324,16 @@ public sealed class UploadReviewService(
                     line.RasterPinId = written.RasterPinId;
                     line.AttachmentIds = written.AttachmentIds;
                     line.SourceProperties = written.SourceProperties;
+
+                    // What only a file import's line records: the trip it wrote, and the row of
+                    // the file and the rule that made the candidate. A phone upload's held line
+                    // already carries whatever of these it has, so an empty answer keeps it.
+                    line.TripLogId = written.TripLogId ?? line.TripLogId;
+                    line.TripPositionEventId = written.TripPositionEventId ?? line.TripPositionEventId;
+                    line.SourceFeatureId = written.SourceFeatureId ?? line.SourceFeatureId;
+                    line.SourceFileId = written.SourceFileId ?? line.SourceFileId;
+                    line.RuleId = written.RuleId ?? line.RuleId;
+                    line.RuleName = written.RuleName ?? line.RuleName;
                 }
             }
         }
@@ -408,9 +462,10 @@ public sealed class UploadReviewService(
                    select item;
         return (await mine
                 .Where(i => i.ReviewDecision == ImportReviewDecision.Rejected && i.DecidedAt >= since
-                    && !mine.Any(later => later.Id > i.Id
+                    // A file import's candidate names no row a later upload could send again.
+                    && (i.ProposalRowId == null || !mine.Any(later => later.Id > i.Id
                         && later.ProposalSection == i.ProposalSection
-                        && later.ProposalRowId == i.ProposalRowId))
+                        && later.ProposalRowId == i.ProposalRowId)))
                 .Select(i => i.Id)
                 .ToListAsync(ct))
             .ToHashSet();
@@ -424,3 +479,13 @@ public sealed class UploadReviewService(
 /// </summary>
 public sealed class HeldNotPendingException()
     : Exception("Nothing this decision reaches is waiting for it any more.");
+
+/// <summary>
+/// Something a held batch's writing needs is out of reach for now — the third party a catalogue
+/// import is read from does not answer. Nothing was decided, and the lines still wait, because a
+/// line decided failed for a passing outage could not be accepted again.
+/// </summary>
+public sealed class HeldWriteUnavailableException(string code, string message) : Exception(message)
+{
+    public string Code { get; } = code;
+}

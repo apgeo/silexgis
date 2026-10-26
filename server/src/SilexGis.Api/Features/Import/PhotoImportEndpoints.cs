@@ -48,7 +48,8 @@ public static class PhotoImportEndpoints
         photos.MapPost("/preview", PreviewAsync).WithValidation<PhotoPreviewRequest>()
             .WithSummary("Groups the drop into places and says what is near each, with nothing committed.");
         photos.MapPost("/commit", CommitAsync).WithValidation<PhotoCommitRequest>()
-            .WithSummary("Creates or files the selected places as one revertible batch.");
+            .WithSummary("Creates or files the selected places as one revertible batch."
+                + " For an account under review nothing is written: the confirmation waits for a reviewer and the answer says so (held).");
         photos.MapGet("/tracks", TracksAsync)
             .WithSummary("Uploaded tracks a picture with no fix of its own can be placed against.");
 
@@ -361,14 +362,6 @@ public static class PhotoImportEndpoints
             return TypedResults.Unauthorized();
         }
 
-        // An account under review has nothing it commits land unreviewed, and a file import
-        // cannot be held for a reviewer yet: refused before anything is read or written.
-        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
-        {
-            return ApiProblems.Conflict(
-                UploadReviewHold.FileImportUnavailableCode, UploadReviewHold.FileImportUnavailableDetail);
-        }
-
         // Creating is decided once, here, before anything is read: a drop binds everything it
         // creates to the same club, so one answer covers the batch. Filing pictures on an object
         // that already exists is a different question and is asked per object, against that
@@ -407,6 +400,43 @@ public static class PhotoImportEndpoints
                 "photo_import.no_files", "None of the chosen pictures could be read.");
         }
 
+        // An account under review has nothing it commits land unreviewed: the confirmation is kept
+        // exactly as sent, with a waiting line per group of pictures it would file, and a
+        // reviewer's acceptance files them. The saved review and the pictures stay as they are.
+        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
+        {
+            // What the commit refuses of the selection itself is refused now, as it would be for
+            // anybody else: a confirmation held only to fail at every acceptance helps nobody.
+            if (request.Selection.Count > PhotoCommitService.MaxCommitItems)
+            {
+                return ApiProblems.BadRequest(
+                    "photo_import.selection_too_large",
+                    $"A single confirmation creates at most {PhotoCommitService.MaxCommitItems} places; "
+                    + $"{request.Selection.Count} were selected. Confirm them in smaller batches — each one reverts on its own.");
+            }
+
+            var candidates = PhotoHeldImportHandler.CandidatesOf(
+                request.Selection, ReadDecisions(request.Decisions), request.Options.LocationProtected);
+            if (candidates.Count == 0)
+            {
+                return ApiProblems.BadRequest(
+                    "photo_import.nothing_created", "Every chosen group was set aside, so nothing would be created.");
+            }
+
+            var held = new ImportBatch
+            {
+                Source = ImportSource.Photos,
+                TripLogId = request.Options.TripLogId,
+                ConfirmedByUserId = ctx.UserId,
+                Mode = ImportBatchMode.Reviewed,
+                Options = ImportJson.Serialize(request.Options),
+            };
+            await HeldFileImport.HoldAsync(
+                db, held, ImportJson.Serialize(request), PhotoHeldImportHandler.Section, candidates, ct);
+            return TypedResults.Ok(new ImportCommitResultDto(
+                StagedImportEndpoints.ToDto(held, geofileName: null, canRevert: false), []));
+        }
+
         try
         {
             var result = await commitService.CommitAsync(
@@ -434,7 +464,7 @@ public static class PhotoImportEndpoints
     /// drop sits half-reviewed in another tab, spends nothing. Clearing unconditionally would
     /// throw that afternoon away without saying so.
     /// </remarks>
-    private static async Task ClearSpentReviewAsync(
+    internal static async Task ClearSpentReviewAsync(
         SilexGisDbContext db, Guid userId, IReadOnlyList<Guid> committed, CancellationToken ct)
     {
         var session = await db.PhotoImportSessions.AsNoTracking()

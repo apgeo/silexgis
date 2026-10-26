@@ -86,7 +86,8 @@ public sealed class SpeleolocTripImportCommitService(
         IReadOnlyCollection<string> selection,
         IReadOnlyDictionary<string, SpeleolocPointDecision> decisions,
         AccessContext ctx,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        HeldCommit? into = null)
     {
         ArgumentNullException.ThrowIfNull(file);
         CheckRequest(options, model, cave, selection, decisions, ctx);
@@ -96,7 +97,7 @@ public sealed class SpeleolocTripImportCommitService(
         // under those choices is the only thing that turns them back into scans.
         var read = await ReadRecordingAsync(file, options, ct);
         return await CommitReadAsync(
-            read.Trip, read.Points, file, options, model, cave, trip, tracking, selection, decisions, ctx, ct);
+            read.Trip, read.Points, file, options, model, cave, trip, tracking, selection, decisions, ctx, into, ct);
     }
 
     /// <summary>
@@ -115,7 +116,8 @@ public sealed class SpeleolocTripImportCommitService(
         IReadOnlyCollection<string> selection,
         IReadOnlyDictionary<string, SpeleolocPointDecision> decisions,
         AccessContext ctx,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        HeldCommit? into = null)
     {
         ArgumentNullException.ThrowIfNull(recording);
         ArgumentNullException.ThrowIfNull(points);
@@ -123,7 +125,7 @@ public sealed class SpeleolocTripImportCommitService(
         return await CommitReadAsync(
             ArchiveTripOf(recording, points.Count),
             [.. points.Select(p => SpeleolocTripImportResolver.ScanOf(recording, p))],
-            null, options, model, cave, trip, tracking, selection, decisions, ctx, ct);
+            null, options, model, cave, trip, tracking, selection, decisions, ctx, into, ct);
     }
 
     /// <summary>A kept recording in the shape an archive's recording has, so both are confirmed by one body.</summary>
@@ -213,6 +215,7 @@ public sealed class SpeleolocTripImportCommitService(
         IReadOnlyCollection<string> selection,
         IReadOnlyDictionary<string, SpeleolocPointDecision> decisions,
         AccessContext ctx,
+        HeldCommit? into,
         CancellationToken ct)
     {
         var read = (Trip: recording, Points: scans);
@@ -237,11 +240,15 @@ public sealed class SpeleolocTripImportCommitService(
         // One that already has its report, or that this account may not change, is refused before
         // anything is written; the claim below asks again, and that is the answer that counts when
         // two paths race.
-        var held = await HeldAsync(read.Trip.Id, ctx, ct);
+        //
+        // A held confirmation accepted a part at a time goes on with the report its first part
+        // made: the recording is then already that report's, which is no reason to refuse it.
+        var held = await HeldAsync(read.Trip.Id, ctx, ct, continuing: into?.ContinuesTripLogId);
 
         var now = DateTimeOffset.UtcNow;
         var batch = new ImportBatch
         {
+            Id = into?.BatchId ?? Guid.CreateVersion7(),
             Source = ImportSource.SpeleolocArchive,
             ConfirmedByUserId = ctx.UserId,
             Mode = ImportBatchMode.Reviewed,
@@ -249,13 +256,18 @@ public sealed class SpeleolocTripImportCommitService(
         };
 
         // Everything this confirmation writes is one change set of the batch, so the history can
-        // say which recording each position came from and an undo can find it.
-        changes.Begin(ChangeSource.SpeleolocArchive, batch.Id);
+        // say which recording each position came from and an undo can find it. A held
+        // confirmation a reviewer accepted is filed under the decision's change set, inside the
+        // decision's transaction.
+        if (into is null)
+        {
+            changes.Begin(ChangeSource.SpeleolocArchive, batch.Id);
+        }
 
         var failures = new List<SpeleolocImportFailure>();
         var items = new List<ImportBatchItem>();
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await using var transaction = into is null ? await db.Database.BeginTransactionAsync(ct) : null;
 
         // Who each chosen scan is about, settled before anything is written: a trip this
         // confirmation creates is created with exactly these people on it, and a trip that already
@@ -288,9 +300,14 @@ public sealed class SpeleolocTripImportCommitService(
                     documentCount = read.Trip.DocumentCount,
                 }),
             });
+            into?.Written.TryAdd(TripKey, items[^1]);
         }
 
-        items.Add(await AdoptRecordingAsync(read.Trip, read.Points, held, trip, cave, ctx, ct));
+        if (held is not { Continues: true })
+        {
+            items.Add(await AdoptRecordingAsync(read.Trip, read.Points, held, trip, cave, ctx, ct));
+            into?.Extra.Add(items[^1]);
+        }
 
         var participants = await db.TripLogParticipants.AsNoTracking()
             .Where(p => p.TripLogId == trip.Id)
@@ -398,7 +415,7 @@ public sealed class SpeleolocTripImportCommitService(
                 RecordedByUserId = ctx.UserId,
             };
             events.Add(row);
-            items.Add(new ImportBatchItem
+            var line = new ImportBatchItem
             {
                 TripPositionEventId = row.Id,
                 TripLogId = trip.Id,
@@ -414,7 +431,17 @@ public sealed class SpeleolocTripImportCommitService(
                     scannedAt = point.ScannedAt,
                     deviceUserId = point.DeviceUserId?.ToString(),
                 }),
-            });
+            };
+            items.Add(line);
+            into?.Written.TryAdd(KeyOf(pointId), line);
+        }
+
+        if (into is not null)
+        {
+            foreach (var failure in failures)
+            {
+                into.Failed.TryAdd(KeyOf(failure.PointId), new HeldCommitFailure(failure.Code, failure.Reason));
+            }
         }
 
         if (events.Count == 0)
@@ -422,7 +449,11 @@ public sealed class SpeleolocTripImportCommitService(
             // Nothing landed. A batch recording only failures is a row nobody can act on, and a
             // trip created to hold a history that turned out to be empty is worse — it would leave
             // a trip nobody asked for behind a confirmation that recorded nothing.
-            await transaction.RollbackAsync(ct);
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(ct);
+            }
+
             throw new SpeleolocImportCommitException(
                 SpeleolocImportCodes.NothingCreated,
                 failures.Count > 0
@@ -439,8 +470,21 @@ public sealed class SpeleolocTripImportCommitService(
         batch.TripLogId = trip.Id;
         batch.CreatedCount = items.Count;
         batch.SkippedCount = skipped;
-        db.ImportBatches.Add(batch);
-        db.ImportBatchItems.AddRange(items);
+
+        // A held batch and its lines exist already; what was written is handed back instead. The
+        // batch names the trip the positions went onto all the same, because its undo takes the
+        // recording's report mark off only where it names that report.
+        if (into is null)
+        {
+            db.ImportBatches.Add(batch);
+            db.ImportBatchItems.AddRange(items);
+        }
+        else
+        {
+            var reportId = trip.Id;
+            await db.ImportBatches.Where(b => b.Id == into.BatchId)
+                .ExecuteUpdateAsync(set => set.SetProperty(b => b.TripLogId, reportId), ct);
+        }
 
         // The reviewer's choices for this archive's phone users become the installation's links,
         // so the next import, the phone itself and the trips it sends all resolve them the same
@@ -464,7 +508,11 @@ public sealed class SpeleolocTripImportCommitService(
                 .ExecuteDeleteAsync(ct);
         }
 
-        await transaction.CommitAsync(ct);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(ct);
+        }
+
         return new SpeleolocImportCommitResult(batch, trip.Id, createdTrip, events.Count, failures);
     }
 
@@ -487,8 +535,19 @@ public sealed class SpeleolocTripImportCommitService(
     private static SpeleolocImportFailure Failure(SpeleolocArchivePoint point, string code, string reason) =>
         new(point.Id.ToString(), point.ScannedAt, code, reason);
 
+    /// <summary>The key a held confirmation's line for the trip it creates goes by.</summary>
+    public const string TripKey = "trip";
+
+    /// <summary>A scan's key in a held confirmation: its identifier, in one spelling.</summary>
+    public static string KeyOf(string pointId) =>
+        Guid.TryParse(pointId, out var id) ? id.ToString() : pointId;
+
     /// <summary>What this installation already holds of the recording, read before anything is written.</summary>
-    private sealed record HeldRecording(Guid? ConvertedTripLogId, bool Deleted);
+    /// <param name="Continues">
+    /// The recording is already the report this confirmation goes on writing — a held
+    /// confirmation accepted a part at a time — so it is neither claimed nor refused again.
+    /// </param>
+    private sealed record HeldRecording(Guid? ConvertedTripLogId, bool Deleted, bool Continues = false);
 
     /// <summary>
     /// The recording as held here, or null when it is new to this installation; refused when it
@@ -501,13 +560,19 @@ public sealed class SpeleolocTripImportCommitService(
     /// caller already has the recording's identifier and contents in hand, and learns only that this
     /// installation keeps it under an account whose recording they may not change.
     /// </remarks>
-    private async Task<HeldRecording?> HeldAsync(Guid recordingId, AccessContext ctx, CancellationToken ct)
+    private async Task<HeldRecording?> HeldAsync(
+        Guid recordingId, AccessContext ctx, CancellationToken ct, Guid? continuing = null)
     {
         var held = await db.TripRecordings.IgnoreQueryFilters().AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == recordingId, ct);
         if (held is null)
         {
             return null;
+        }
+
+        if (continuing is not null && held.ConvertedTripLogId == continuing)
+        {
+            return new HeldRecording(held.ConvertedTripLogId, held.DeletedAt is not null, Continues: true);
         }
 
         if (held.ConvertedTripLogId is { } convertedInto)

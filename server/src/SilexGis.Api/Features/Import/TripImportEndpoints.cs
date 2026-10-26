@@ -48,7 +48,8 @@ public static class TripImportEndpoints
         import.MapPost("/preview", PreviewAsync).WithValidation<TripImportPreviewRequest>()
             .WithSummary("Reads the sheet under the current choices and answers a page of it.");
         import.MapPost("/commit", CommitAsync).WithValidation<TripImportCommitRequest>()
-            .WithSummary("Records the chosen rows as trips, as one batch that reverts as a unit.");
+            .WithSummary("Records the chosen rows as trips, as one batch that reverts as a unit."
+                + " For an account under review nothing is written: the confirmation waits for a reviewer and the answer says so (held).");
 
         return api;
     }
@@ -372,20 +373,14 @@ public static class TripImportEndpoints
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         TripImportCommitService commits,
+        TripCsvFileReader reader,
+        IOptions<ImportLimitOptions> limits,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null)
         {
             return TypedResults.Unauthorized();
-        }
-
-        // An account under review has nothing it commits land unreviewed, and a file import
-        // cannot be held for a reviewer yet: refused before anything is read or written.
-        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
-        {
-            return ApiProblems.Conflict(
-                UploadReviewHold.FileImportUnavailableCode, UploadReviewHold.FileImportUnavailableDetail);
         }
 
         // Creating is decided here, once, before the sheet is fetched: an import binds every
@@ -406,6 +401,58 @@ public static class TripImportEndpoints
         var decisions = request.Decisions is null
             ? stored
             : Merged(stored, ReadDecisions(ImportJson.Serialize(request.Decisions)));
+
+        // An account under review has nothing it commits land unreviewed: the confirmation is kept
+        // with the decisions it was made under, with a waiting line per row it would record, and a
+        // reviewer's acceptance records them. The saved review and the sheet stay as they are.
+        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
+        {
+            if (request.Lines.Distinct().Count() > limits.Value.MaxCommitItems)
+            {
+                return ApiProblems.BadRequest(
+                    TripImportCommitException.SelectionTooLargeCode,
+                    $"A single confirmation records at most {limits.Value.MaxCommitItems} trips.");
+            }
+
+            Dictionary<int, string?> titles;
+            try
+            {
+                // Read as the commit reads it, so a confirmation that waits is one the commit
+                // would have taken, and its lines carry the rows' titles for the reviewer.
+                titles = (await reader.ParseAsync(file, request.Options, ct)).Rows
+                    .GroupBy(r => r.Line).ToDictionary(g => g.Key, g => g.First().Title);
+            }
+            catch (TripCsvReadException e)
+            {
+                return ApiProblems.BadRequest(e.Code, e.Message);
+            }
+
+            // Every chosen row set aside is refused as the commit refuses it: held, it would leave
+            // a reviewer nothing to decide and wait for good.
+            var candidates = TripHeldImportHandler.CandidatesOf(request.Lines, decisions, titles);
+            if (candidates.Count == 0)
+            {
+                return ApiProblems.BadRequest(
+                    TripImportCommitException.NothingCreatedCode,
+                    "Every chosen row was set aside, so nothing would be recorded.");
+            }
+
+            var held = new ImportBatch
+            {
+                Source = ImportSource.TripCsv,
+                ConfirmedByUserId = ctx.UserId,
+                Mode = ImportBatchMode.Reviewed,
+                Options = ImportJson.Serialize(request.Options),
+            };
+            await HeldFileImport.HoldAsync(
+                db, held,
+                ImportJson.Serialize(new HeldTripImportRequest(
+                    file.Id, request.Options, request.Lines, TripHeldImportHandler.WireOf(decisions))),
+                TripHeldImportHandler.Section,
+                candidates,
+                ct);
+            return TypedResults.Ok(new TripImportCommitResultDto(held.Id, 0, 0, 0, [], Held: true));
+        }
 
         try
         {

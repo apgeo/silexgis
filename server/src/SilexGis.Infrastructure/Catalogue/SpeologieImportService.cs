@@ -98,7 +98,8 @@ public sealed class SpeologieImportService(
         IReadOnlyDictionary<int, SpeologieDecision> decisions,
         SpeologieImportOptions importOptions,
         AccessContext ctx,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        HeldCommit? into = null)
     {
         ArgumentNullException.ThrowIfNull(selection);
         ArgumentNullException.ThrowIfNull(decisions);
@@ -138,6 +139,7 @@ public sealed class SpeologieImportService(
 
         var batch = new ImportBatch
         {
+            Id = into?.BatchId ?? Guid.CreateVersion7(),
             Source = ImportSource.ExternalCatalogue,
             ConfirmedByUserId = ctx.UserId,
             Mode = ImportBatchMode.Reviewed,
@@ -145,14 +147,19 @@ public sealed class SpeologieImportService(
         };
 
         // A catalogue selection is confirmed like a file import and undone like one, so it is
-        // filed as one; the batch it names says which register the caves came from.
-        changes.Begin(ChangeSource.FileImport, batch.Id);
+        // filed as one; the batch it names says which register the caves came from. A held
+        // confirmation a reviewer accepted is filed under the decision's change set, inside the
+        // decision's transaction.
+        if (into is null)
+        {
+            changes.Begin(ChangeSource.FileImport, batch.Id);
+        }
 
         var failures = new List<SpeologieFailure>();
         var items = new List<ImportBatchItem>();
         var placed = new HashSet<Guid>();
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await using var transaction = into is null ? await db.Database.BeginTransactionAsync(ct) : null;
 
         foreach (var id in wanted)
         {
@@ -163,6 +170,7 @@ public sealed class SpeologieImportService(
                 failures.Add(new SpeologieFailure(
                     id, null, "speologie.record_missing",
                     "The catalogue no longer publishes this cave."));
+                into?.Failed.TryAdd(KeyOf(id), new HeldCommitFailure(failures[^1].Code, failures[^1].Reason));
                 continue;
             }
 
@@ -189,6 +197,7 @@ public sealed class SpeologieImportService(
 
                 item.ImportBatchId = batch.Id;
                 items.Add(item);
+                into?.Written.TryAdd(KeyOf(id), item);
 
                 if (item.Action == ImportDecisionAction.Attach)
                 {
@@ -202,23 +211,35 @@ public sealed class SpeologieImportService(
             catch (FeatureWriteException e)
             {
                 failures.Add(new SpeologieFailure(id, record.Title, e.Code, string.Join("; ", e.Errors)));
+                into?.Failed.TryAdd(KeyOf(id), new HeldCommitFailure(e.Code, failures[^1].Reason));
             }
             catch (SpeologieImportException e)
             {
                 failures.Add(new SpeologieFailure(id, record.Title, e.Code, e.Message));
+                into?.Failed.TryAdd(KeyOf(id), new HeldCommitFailure(e.Code, e.Message));
             }
         }
 
         if (items.Count == 0 && failures.Count > 0)
         {
-            await transaction.RollbackAsync(ct);
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(ct);
+            }
+
             throw new SpeologieImportException(
                 "speologie.nothing_created",
                 $"None of the {failures.Count} selected caves could be imported. {failures[0].Reason}");
         }
 
-        db.ImportBatches.Add(batch);
-        db.ImportBatchItems.AddRange(items);
+        // A held batch and its lines exist already; what was written is handed back on the held
+        // lines instead.
+        if (into is null)
+        {
+            db.ImportBatches.Add(batch);
+            db.ImportBatchItems.AddRange(items);
+        }
+
         await db.SaveChangesAsync(ct);
 
         // Caves that gained an entrance need the point that stands for them refreshed, and that
@@ -229,10 +250,16 @@ public sealed class SpeologieImportService(
         }
 
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(ct);
+        }
 
         return new SpeologieImportResult(batch, failures);
     }
+
+    /// <summary>A candidate's key in a held confirmation: its catalogue id.</summary>
+    public static string KeyOf(int speologieId) => speologieId.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The caves this installation already holds for the given catalogue ids, found through the

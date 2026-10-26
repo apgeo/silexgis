@@ -7,6 +7,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Catalogue;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Import;
 using SilexGis.Infrastructure.Catalogue;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Persistence;
@@ -93,7 +94,8 @@ public static class CatalogueEndpoints
             .WithValidation<SpeologieImportRequest>()
             .WithSummary(
                 "Imports the selected caves from the speologie.org catalogue as one revertible "
-                + "batch, creating new caves and refreshing ones imported before.");
+                + "batch, creating new caves and refreshing ones imported before. For an account under "
+                + "review nothing is imported: the selection waits for a reviewer and the answer says so (held).");
 
         return api;
     }
@@ -254,6 +256,7 @@ public static class CatalogueEndpoints
         ImportAsync(
             SpeologieImportRequest request,
             SpeologieImportService importer,
+            SpeologieClient client,
             SilexGisDbContext db,
             IAccessContextAccessor accessAccessor,
             CancellationToken ct)
@@ -264,14 +267,6 @@ public static class CatalogueEndpoints
             return TypedResults.Unauthorized();
         }
 
-        // An account under review has nothing it commits land unreviewed, and a file import
-        // cannot be held for a reviewer yet: refused before anything is read or written.
-        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
-        {
-            return ApiProblems.Conflict(
-                UploadReviewHold.FileImportUnavailableCode, UploadReviewHold.FileImportUnavailableDetail);
-        }
-
         // Whether the caller may bind what they create to the group they named. Checked before
         // anything is asked of the catalogue, so a request that was never going to be allowed
         // does not cost somebody else's service a call.
@@ -280,24 +275,57 @@ public static class CatalogueEndpoints
             return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
-        var decisions = (request.Decisions ?? new Dictionary<string, SpeologieDecisionDto>())
-            .Select(pair => (Parsed: int.TryParse(pair.Key, out var id), Id: id, pair.Value))
-            // A key that is not a catalogue id is dropped rather than refused: a stale screen
-            // must not be able to make the button unusable.
-            .Where(x => x.Parsed && x.Value is not null)
-            .ToDictionary(
-                x => x.Id,
-                x => new SpeologieDecision(x.Value.Action, x.Value.CaveTypeCode, x.Value.Longitude, x.Value.Latitude));
+        var decisions = ReadDecisions(request);
+
+        // An account under review has nothing it commits land unreviewed: the selection is kept
+        // exactly as sent, with a waiting line per cave it would import, and a reviewer's
+        // acceptance imports them. Nothing is asked of the catalogue until then.
+        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
+        {
+            // What the import refuses without asking the catalogue anything is refused now, as it
+            // would be for anybody else — an installation that cannot reach the catalogue at all
+            // included: a selection held there could only fail at every acceptance.
+            var wanted = request.Selection.Distinct().Count();
+            if (wanted == 0)
+            {
+                return ApiProblems.BadRequest("speologie.selection_empty", "Nothing was selected.");
+            }
+
+            if (wanted > client.MaxSelection)
+            {
+                return ApiProblems.BadRequest(
+                    "speologie.selection_too_large",
+                    $"One confirmation takes at most {client.MaxSelection} caves; {wanted} were selected. "
+                    + "Confirm them in smaller batches — each one reverts on its own.");
+            }
+
+            if (!client.IsConfigured)
+            {
+                return Unreachable(new SpeologieException(SpeologieException.NotConfiguredCode));
+            }
+
+            var candidates = CatalogueHeldImportHandler.CandidatesOf(request, decisions);
+            if (candidates.Count == 0)
+            {
+                return ApiProblems.BadRequest(
+                    "speologie.nothing_created", "Every chosen cave was set aside, so nothing would be imported.");
+            }
+
+            var held = new ImportBatch
+            {
+                Source = ImportSource.ExternalCatalogue,
+                ConfirmedByUserId = ctx.UserId,
+                Mode = ImportBatchMode.Reviewed,
+                Options = System.Text.Json.JsonSerializer.Serialize(OptionsOf(request)),
+            };
+            await HeldFileImport.HoldAsync(
+                db, held, ImportJson.Serialize(request), CatalogueHeldImportHandler.Section, candidates, ct);
+            return TypedResults.Ok(new SpeologieImportResultDto(held.Id, 0, 0, 0, [], Held: true));
+        }
 
         try
         {
-            var result = await importer.CommitAsync(
-                request.Selection,
-                decisions,
-                new SpeologieImportOptions(
-                    request.Visibility, request.CavingGroupId, request.LocationProtected, request.ParentId),
-                ctx,
-                ct);
+            var result = await importer.CommitAsync(request.Selection, decisions, OptionsOf(request), ctx, ct);
 
             return TypedResults.Ok(new SpeologieImportResultDto(
                 result.Batch.Id,
@@ -319,6 +347,20 @@ public static class CatalogueEndpoints
             return ApiProblems.BadRequest(e.Code, e.Message);
         }
     }
+
+    /// <summary>The per-cave decisions of a confirmation, keyed by catalogue id.</summary>
+    internal static Dictionary<int, SpeologieDecision> ReadDecisions(SpeologieImportRequest request) =>
+        (request.Decisions ?? new Dictionary<string, SpeologieDecisionDto>())
+            .Select(pair => (Parsed: int.TryParse(pair.Key, out var id), Id: id, pair.Value))
+            // A key that is not a catalogue id is dropped rather than refused: a stale screen
+            // must not be able to make the button unusable.
+            .Where(x => x.Parsed && x.Value is not null)
+            .ToDictionary(
+                x => x.Id,
+                x => new SpeologieDecision(x.Value.Action, x.Value.CaveTypeCode, x.Value.Longitude, x.Value.Latitude));
+
+    internal static SpeologieImportOptions OptionsOf(SpeologieImportRequest request) =>
+        new(request.Visibility, request.CavingGroupId, request.LocationProtected, request.ParentId);
 
     /// <summary>
     /// Adds to each catalogue row the one thing the catalogue cannot say: whether this

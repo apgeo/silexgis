@@ -147,9 +147,8 @@ public enum AccessDomain : short
     Terrain = 23,
 
     /// <summary>
-    /// Reviewing what an account placed under review uploaded from its phone, which waits as
-    /// proposals until somebody decides it (the account's file imports are refused while it is
-    /// under review, since holding them is not built). Read sees the queue and what
+    /// Reviewing what an account placed under review uploaded from its phone or confirmed as a
+    /// file import, which waits as proposals until somebody decides it. Read sees the queue and what
     /// each held batch proposes; Write decides — accepts or rejects a batch, a line of it, or the
     /// fields of a line.
     /// <para>
