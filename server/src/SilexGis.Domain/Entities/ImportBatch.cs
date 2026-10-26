@@ -237,6 +237,10 @@ public enum ImportBatchMode : short
 /// is never edited after it lands — the only change it takes is being reverted, which
 /// soft-deletes every object it created and stamps who did it.
 /// </para>
+/// <para>
+/// The one exception is a batch held for review: it is recorded when it is committed, with what
+/// it proposes and nothing written, and it changes as a reviewer decides it.
+/// </para>
 /// </summary>
 public class ImportBatch : ITimestamped, IAuditable
 {
@@ -322,6 +326,31 @@ public class ImportBatch : ITimestamped, IAuditable
 
     public Guid? RevertedByUserId { get; set; }
 
+    /// <summary>
+    /// Whether this batch waits for a reviewer, and how it was decided. Every batch of an account
+    /// that is not under review is <see cref="ImportReviewState.NotHeld"/> and lands as it always
+    /// did; a held batch has written nothing of what it proposes until it is accepted.
+    /// </summary>
+    public ImportReviewState ReviewState { get; set; } = ImportReviewState.NotHeld;
+
+    /// <summary>When the batch was held for review; null for a batch that never was.</summary>
+    public DateTimeOffset? HeldAt { get; set; }
+
+    /// <summary>When a reviewer last decided the batch as a whole or the last of its lines.</summary>
+    public DateTimeOffset? DecidedAt { get; set; }
+
+    public Guid? DecidedByUserId { get; set; }
+
+    /// <summary>What the reviewer said about the batch as a whole, for the uploader to read.</summary>
+    public string? ReviewNote { get; set; }
+
+    /// <summary>
+    /// For a held file import: the commit request exactly as the account submitted it (jsonb), so
+    /// that accepting runs the source's own commit with it, the rejected candidates turned into
+    /// skips. A held phone upload keeps its proposals on its lines instead, and leaves this empty.
+    /// </summary>
+    public string? HeldRequest { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
@@ -329,6 +358,58 @@ public class ImportBatch : ITimestamped, IAuditable
     public string AuditId => Id.ToString();
 
     public bool IsReverted => RevertedAt is not null;
+
+    public bool IsHeld => ReviewState != ImportReviewState.NotHeld;
+}
+
+/// <summary>
+/// Where a batch stands with review. Stored as smallint; values are part of the schema contract
+/// and are never renumbered.
+/// </summary>
+public enum ImportReviewState : short
+{
+    /// <summary>The account was not under review; the batch landed when it was committed.</summary>
+    NotHeld = 0,
+
+    /// <summary>Waiting for a reviewer, wholly or in part.</summary>
+    Pending = 1,
+
+    /// <summary>Every line a reviewer decided was accepted.</summary>
+    Accepted = 2,
+
+    /// <summary>Decided, some lines accepted and some rejected.</summary>
+    PartlyAccepted = 3,
+
+    /// <summary>Decided, nothing accepted.</summary>
+    Rejected = 4,
+}
+
+/// <summary>
+/// What became of one held line. Null on the lines of a batch that was never held. Stored as
+/// smallint; values are part of the schema contract and are never renumbered.
+/// </summary>
+public enum ImportReviewDecision : short
+{
+    /// <summary>Waiting for a reviewer.</summary>
+    Pending = 0,
+
+    /// <summary>A reviewer accepted it and it was written.</summary>
+    Accepted = 1,
+
+    /// <summary>A reviewer rejected it; nothing was written.</summary>
+    Rejected = 2,
+
+    /// <summary>
+    /// The uploader sent the same row again with different content before anybody decided this
+    /// one, and the newer proposal waits in its place.
+    /// </summary>
+    Superseded = 3,
+
+    /// <summary>
+    /// A reviewer accepted it but it could not be written — the row changed underneath it, or the
+    /// uploader no longer had the right to write it.
+    /// </summary>
+    Failed = 4,
 }
 
 /// <summary>
@@ -453,4 +534,76 @@ public class ImportBatchItem
     /// itself. A line an undo could not take back stays empty, so a later undo can try it again.
     /// </summary>
     public DateTimeOffset? UndoneAt { get; set; }
+
+    /// <summary>
+    /// What became of this line in review; null on a batch that was never held. A held line
+    /// records what would be written and points at nothing written, so every reader that treats
+    /// a line as "this changed something" must leave a line that is not accepted alone.
+    /// </summary>
+    public ImportReviewDecision? ReviewDecision { get; set; }
+
+    /// <summary>
+    /// The identity a held line is known by outside the server — the <c>reviewId</c> a phone is
+    /// answered with and later finds its decision under. Opaque and stable, unlike the line's own
+    /// number, which is an internal sequence.
+    /// </summary>
+    public Guid? ReviewId { get; set; }
+
+    /// <summary>
+    /// What the line would write, as plain values (jsonb): for a phone upload, the proposal its
+    /// section's first step produced; for a file import, the candidate's decision.
+    /// </summary>
+    public string? Proposal { get; set; }
+
+    /// <summary>
+    /// Which part of an upload the proposal belongs to (the section's array name) — what reads
+    /// the proposal back and what applies it.
+    /// </summary>
+    public string? ProposalSection { get; set; }
+
+    /// <summary>
+    /// The id of the row the proposal is about, in its section's own identity: what a resend of
+    /// the same row is matched by, and what a later row that refers to it depends on.
+    /// </summary>
+    public Guid? ProposalRowId { get; set; }
+
+    /// <summary>For an accepted update: the fields the reviewer accepted, when not all of them.</summary>
+    public List<string>? AcceptedFields { get; set; }
+
+    /// <summary>
+    /// The held lines this one cannot be written without — a place under a cave that is itself
+    /// waiting, a link to a held document and to the held place it hangs on, a scan on a held
+    /// recording at a held place. Accepting this line accepts those with it; rejecting any of them
+    /// rejects this one. Null when it depends on nothing held.
+    /// </summary>
+    public List<long>? DependsOnItemIds { get; set; }
+
+    /// <summary>What the reviewer said about this line.</summary>
+    public string? DecisionNote { get; set; }
+
+    /// <summary>When the line was decided, superseded included — the order a phone is told in.</summary>
+    public DateTimeOffset? DecidedAt { get; set; }
+
+    public Guid? DecidedByUserId { get; set; }
+
+    /// <summary>When an accepted line was written.</summary>
+    public DateTimeOffset? AppliedAt { get; set; }
+
+    /// <summary>
+    /// For a line accepted that could not be written: the stable reason, the same code the upload
+    /// or the import would have answered had it been written at once.
+    /// </summary>
+    public string? ReviewFailureCode { get; set; }
+
+    /// <summary>The words that go with <see cref="ReviewFailureCode"/>.</summary>
+    public string? ReviewFailureDetail { get; set; }
+
+    /// <summary>
+    /// The staged upload whose bytes a held line would adopt — a phone's photo sent ahead of the
+    /// row naming it. Kept so that the bytes are kept for as long as the line waits and released
+    /// to the staged-upload sweep once it is decided, without reading every proposal to find them.
+    /// Not a foreign key: the staged upload goes when its bytes are adopted or swept, and the line
+    /// outlives it.
+    /// </summary>
+    public Guid? HeldUploadSessionId { get; set; }
 }

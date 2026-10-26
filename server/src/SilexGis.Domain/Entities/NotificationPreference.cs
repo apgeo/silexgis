@@ -104,6 +104,24 @@ public enum NotificationCategory : short
     /// the trip until somebody clears it, not a party nobody went to find.
     /// </remarks>
     TripNeedsAttention = 11,
+
+    /// <summary>
+    /// An account whose uploads are reviewed sent something, and it waits for a reviewer: nothing
+    /// of it is written until somebody who may decide about uploads has.
+    /// </summary>
+    /// <remarks>
+    /// Sent to the people who may decide about uploads, once per held batch. Mutable: a reviewer
+    /// who would rather watch the queue than their mailbox loses nothing, since a held batch waits
+    /// for as long as it takes.
+    /// </remarks>
+    UploadAwaitingReview = 12,
+
+    /// <summary>
+    /// A reviewer decided about something this account uploaded while under review — accepted
+    /// it, turned it down, or accepted what could then not be written.
+    /// </summary>
+    /// <remarks>Sent to the account that uploaded, once per decision on a batch.</remarks>
+    UploadReviewed = 13,
 }
 
 /// <summary>
@@ -253,6 +271,8 @@ public static class NotificationCategories
         // application accepts for spending an operator's money per recipient.
         NotificationCategory.TripPublished => InboxAndMail,
         NotificationCategory.TripNeedsAttention => InboxAndMail,
+        NotificationCategory.UploadAwaitingReview => InboxAndMail,
+        NotificationCategory.UploadReviewed => InboxAndMail,
         NotificationCategory.JobCompleted => InboxAndMail,
         NotificationCategory.SecurityAlerts => InboxAndMail,
         NotificationCategory.TripPlanning => InboxAndMail,

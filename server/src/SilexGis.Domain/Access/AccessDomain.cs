@@ -145,4 +145,21 @@ public enum AccessDomain : short
     /// </para>
     /// </summary>
     Terrain = 23,
+
+    /// <summary>
+    /// Reviewing what an account placed under review uploaded from its phone, which waits as
+    /// proposals until somebody decides it (the account's file imports are refused while it is
+    /// under review, since holding them is not built). Read sees the queue and what
+    /// each held batch proposes; Write decides — accepts or rejects a batch, a line of it, or the
+    /// fields of a line.
+    /// <para>
+    /// An installation-level domain like <see cref="Terrain"/>: a held batch belongs to its
+    /// uploader, but the right to judge it is not a right over the uploader's content — the
+    /// content does not exist yet — so entries are only valid at the whole-installation scope and
+    /// the question is asked of the domain, never of a row. Accepting still writes with the
+    /// uploader's own rights, so holding this domain never lets a reviewer place anything the
+    /// uploader could not have placed.
+    /// </para>
+    /// </summary>
+    UploadReview = 24,
 }

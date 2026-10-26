@@ -62,6 +62,15 @@ public class SilexGisUser : IdentityUser<Guid>, ITimestamped, IUserProfile
     public long? StorageQuotaBytes { get; set; }
 
     /// <summary>
+    /// Whether what this account uploads waits for a reviewer before it lands: every phone upload
+    /// it commits is held as a proposal, written only when somebody holding the upload-review
+    /// right accepts it. A file import cannot be held yet, so the account's file imports are
+    /// refused while the mark is on rather than landing unreviewed. Edits made in the browser are
+    /// not held. Off for every account unless an administrator of accounts turns it on.
+    /// </summary>
+    public bool UploadsNeedReview { get; set; }
+
+    /// <summary>
     /// Address requested by a change that has not been confirmed yet. The live
     /// <see cref="IdentityUser{TKey}.Email"/> is untouched until the emailed token comes back.
     /// </summary>

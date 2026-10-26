@@ -234,6 +234,32 @@ public class AccessEntryRulesTests
     }
 
     /// <summary>
+    /// The right to review held uploads is a right over a queue, not over anybody's content: an
+    /// entry naming one account's own rows, one club's or one object would say something nothing
+    /// enforces, so only the whole-installation scope is accepted.
+    /// </summary>
+    [Fact]
+    public void Upload_review_entries_exist_only_at_the_whole_installation_scope()
+    {
+        foreach (var action in new[] { AccessAction.Read, AccessAction.Write })
+        {
+            AccessEntryRules.Validate(Entry(AccessDomain.UploadReview, action, AccessScopeKind.All))
+                .ShouldBeNull();
+        }
+
+        AccessEntryRules.IsTrioDomain(AccessDomain.UploadReview).ShouldBeFalse();
+        AccessEntryRules.AllowsObjectScope(AccessDomain.UploadReview).ShouldBeFalse();
+        AccessEntryRules.Validate(Entry(AccessDomain.UploadReview, AccessAction.Write, AccessScopeKind.Own))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.UploadReview, AccessAction.Write, AccessScopeKind.CavingGroup, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.UploadReview, AccessAction.Write, AccessScopeKind.Object, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+    }
+
+    /// <summary>
     /// The terrain surface is an installation asset with no owner, no caving group and no
     /// audience, so the whole installation is the only thing an entry on it can mean. The
     /// refusals are not written anywhere as a list — they fall out of the domain being

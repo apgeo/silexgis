@@ -70,5 +70,6 @@ public class AccessActionTests
         ((short)AccessDomain.Checklists).ShouldBe((short)21);
         ((short)AccessDomain.Events).ShouldBe((short)22);
         ((short)AccessDomain.Terrain).ShouldBe((short)23);
+        ((short)AccessDomain.UploadReview).ShouldBe((short)24);
     }
 }

@@ -65,6 +65,14 @@ public static class NotificationTargetPolicy
                 "Temporary. Its producer belongs to work in progress elsewhere; the target is a trip.",
             [MessageTemplateCatalog.NotifyTripPlanCancelled] =
                 "Temporary. Its producer belongs to work in progress elsewhere; the target is a trip.",
+            [MessageTemplateCatalog.NotifyUploadAwaitingReview] =
+                "Temporary. About a held import batch, and there is no target kind for one yet: its "
+                + "read rule (the uploader, or the right to read the review queue) has no home among "
+                + "the protected rows a target is decided against. The message names nothing the "
+                + "batch holds, and the page it links to asks the reader's rights itself.",
+            [MessageTemplateCatalog.NotifyUploadReviewed] =
+                "Temporary. About the recipient's own held import batch, which has no target kind yet; "
+                + "the message names nothing the batch holds.",
         };
 
     /// <summary>Whether a message must name what it is about.</summary>

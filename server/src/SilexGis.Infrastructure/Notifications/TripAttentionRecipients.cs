@@ -13,8 +13,8 @@ namespace SilexGis.Infrastructure.Notifications;
 /// <remarks>
 /// <para>
 /// The people who look after what phones send, and the account whose upload brought the recording.
-/// Today the first are the installation's full administrators; when a permission for reviewing
-/// uploads exists, its holders join them here and nowhere else.
+/// The first are the accounts that may decide about uploads (the upload-review right's Write), full
+/// administrators among them: the people a club has put in charge of what phones bring in.
 /// </para>
 /// <para>
 /// Whoever is added must still be weighed against the thing the message is about: every caller
@@ -28,8 +28,8 @@ public static class TripAttentionRecipients
     public static async Task<IReadOnlyList<Guid>> CandidatesAsync(
         SilexGisDbContext db, Guid uploaderUserId, CancellationToken ct = default)
     {
-        var administrators = await FullAdministrators.LiveMemberIdsAsync(db, ct);
-        return [.. administrators.Append(uploaderUserId).Distinct()];
+        var reviewers = await UploadReviewers.WriteHolderIdsAsync(db, ct);
+        return [.. reviewers.Append(uploaderUserId).Distinct()];
     }
 
     /// <summary>The candidates who may read <paramref name="subject"/>, the trip or cave the message names.</summary>

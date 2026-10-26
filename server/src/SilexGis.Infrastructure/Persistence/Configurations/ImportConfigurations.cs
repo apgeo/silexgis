@@ -172,6 +172,19 @@ public sealed class ImportBatchConfiguration : IEntityTypeConfiguration<ImportBa
             .IsUnique()
             .HasFilter("sync_batch_id is not null")
             .HasDatabaseName("ux_import_batches_user_sync_batch");
+
+        builder.Property(x => x.ReviewState).HasConversion<short>();
+        builder.Property(x => x.ReviewNote).HasMaxLength(2000);
+        builder.Property(x => x.HeldRequest).HasColumnType("jsonb");
+        // A reviewer's account removed later leaves the record of the decision, unattributed,
+        // rather than the decision itself going or blocking the removal.
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.DecidedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+        // The review queue: the batches still waiting, oldest first. Almost every batch was never
+        // held, so the index covers only those that were.
+        builder.HasIndex(x => new { x.ReviewState, x.HeldAt })
+            .HasFilter("review_state <> 0")
+            .HasDatabaseName("ix_import_batches_review_state_held_at");
     }
 }
 
@@ -255,5 +268,34 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
             .HasDatabaseName("ix_import_batch_items_trip_recording_id");
         builder.HasIndex(x => x.TripRecordingPointId).HasFilter("trip_recording_point_id is not null")
             .HasDatabaseName("ix_import_batch_items_trip_recording_point_id");
+
+        builder.Property(x => x.ReviewDecision).HasConversion<short?>();
+        builder.Property(x => x.Proposal).HasColumnType("jsonb");
+        builder.Property(x => x.ProposalSection).HasMaxLength(32);
+        builder.Property(x => x.AcceptedFields).HasColumnType("text[]");
+        builder.Property(x => x.DecisionNote).HasMaxLength(2000);
+        builder.Property(x => x.ReviewFailureCode).HasMaxLength(64);
+        builder.Property(x => x.ReviewFailureDetail).HasMaxLength(2000);
+        // A line can depend on several held lines, so the dependencies are a list rather than a
+        // key. A line another depends on is never deleted on its own (lines go with their batch),
+        // and a dependency on a line that is gone reads as one that cannot be written.
+        builder.Property(x => x.DependsOnItemIds).HasColumnType("bigint[]");
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.DecidedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+        // The identity a phone is answered with: one line per review id, anywhere.
+        builder.HasIndex(x => x.ReviewId).IsUnique().HasFilter("review_id is not null")
+            .HasDatabaseName("ux_import_batch_items_review_id");
+        // "Is this row already waiting?" — how a resend of a held row is matched to the proposal
+        // it repeats or replaces, and how a later row finds the held row it depends on. Only the
+        // lines still waiting are ever asked about.
+        builder.HasIndex(x => new { x.ProposalRowId, x.ProposalSection })
+            .HasFilter("review_decision = 0")
+            .HasDatabaseName("ix_import_batch_items_pending_row");
+        // "Which waiting lines hang on these?" — asked when a resend replaces a held line.
+        builder.HasIndex(x => x.DependsOnItemIds).HasMethod("gin").HasFilter("depends_on_item_ids is not null")
+            .HasDatabaseName("ix_import_batch_items_depends_on_item_ids");
+        // "Does a waiting line still need these bytes?" — asked before staged bytes are released.
+        builder.HasIndex(x => x.HeldUploadSessionId).HasFilter("held_upload_session_id is not null")
+            .HasDatabaseName("ix_import_batch_items_held_upload_session_id");
     }
 }

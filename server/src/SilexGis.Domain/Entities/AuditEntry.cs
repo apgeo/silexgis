@@ -78,6 +78,14 @@ public static class AuditActions
     public const string TwoFactorReset = "two_factor_reset";
 
     /// <summary>
+    /// An administrator of accounts put an account's uploads under review, or took them out of it.
+    /// Its own name for the reason <see cref="TwoFactorReset"/> has one: account rows are not
+    /// recorded field by field, and who decided that somebody's uploads land unread, or no longer
+    /// do, is worth being able to answer later.
+    /// </summary>
+    public const string UploadReviewMarked = "upload_review_marked";
+
+    /// <summary>
     /// Data left the installation as a file. Its own name because it is not a change to
     /// anything: nothing in the database is different afterwards, and yet it is the act most
     /// worth being able to reconstruct later — a file outlives every permission check that

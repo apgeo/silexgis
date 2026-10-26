@@ -119,6 +119,22 @@ public static class MessageTemplateCatalog
     /// </summary>
     public const string NotifyTripRecordingWaiting = "notify.trip-recording-waiting";
 
+    /// <summary>
+    /// An account whose uploads are reviewed sent something, and it waits for a reviewer.
+    /// </summary>
+    /// <remarks>
+    /// It says how many changes wait and nothing of what they are: a held change can name a cave,
+    /// a place or a position nobody has decided may be written, and a message is read wherever its
+    /// recipient's mail is. The upload's own page, which asks who may see what, is the link.
+    /// </remarks>
+    public const string NotifyUploadAwaitingReview = "notify.upload-awaiting-review";
+
+    /// <summary>
+    /// A reviewer decided about something the recipient uploaded: how many changes were accepted,
+    /// turned down, or could not be written. Like the message above, it names none of them.
+    /// </summary>
+    public const string NotifyUploadReviewed = "notify.upload-reviewed";
+
     // A trip being planned. All four name the trip and its date and nothing else: the places a
     // trip is about are readable by fewer people than its roster, and a message is as much an
     // outbound copy of that as anything the API returns.
@@ -766,6 +782,81 @@ public static class MessageTemplateCatalog
                     Înregistrarea este păstrată și așteaptă să fie transformată în tură de mână.
 
                     Peștera în care a fost înregistrată:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyUploadAwaitingReview,
+            MessageChannel.Email,
+            "An account whose uploads are reviewed sent something that waits for a reviewer.",
+            [AppName, DisplayName, "lineCount", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "An upload waits for review",
+                    """
+                    Hello {displayName},
+
+                    An account whose uploads are reviewed on {appName} sent {lineCount} changes.
+                    Nothing of them is written until a reviewer decides.
+
+                    Open the upload to review it:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "O încărcare așteaptă verificarea",
+                    """
+                    Bună ziua {displayName},
+
+                    Un cont ale cărui încărcări sunt verificate pe {appName} a trimis {lineCount}
+                    modificări. Nimic din ele nu este scris până când nu decide un verificator.
+
+                    Deschide încărcarea pentru a o verifica:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyUploadReviewed,
+            MessageChannel.Email,
+            "A reviewer decided about changes the recipient uploaded while under review.",
+            [AppName, DisplayName, "acceptedCount", "rejectedCount", "failedCount", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "Your upload was reviewed",
+                    """
+                    Hello {displayName},
+
+                    A reviewer on {appName} decided about changes you uploaded: {acceptedCount} accepted,
+                    {rejectedCount} turned down, {failedCount} accepted but could not be written.
+
+                    See what was decided, and any note the reviewer left:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Încărcarea ta a fost verificată",
+                    """
+                    Bună ziua {displayName},
+
+                    Un verificator de pe {appName} a decis asupra modificărilor încărcate de tine:
+                    {acceptedCount} acceptate, {rejectedCount} respinse, {failedCount} acceptate, dar
+                    care nu au putut fi scrise.
+
+                    Vezi ce s-a decis și nota lăsată de verificator, dacă există:
 
                     {url}
 

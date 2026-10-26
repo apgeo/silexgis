@@ -121,6 +121,7 @@ public static class DependencyInjection
         services.AddScoped<Import.ImportCandidateService>();
         services.AddScoped<Import.ImportCommitService>();
         services.AddScoped<Import.DeviceSyncUndoService>();
+        services.AddScoped<Import.UploadReviewService>();
         services.AddScoped<Import.PhotoCandidateService>();
         services.AddScoped<Import.PhotoCommitService>();
         services.AddScoped<Import.TripCsvFileReader>();

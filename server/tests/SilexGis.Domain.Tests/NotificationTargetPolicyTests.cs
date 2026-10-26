@@ -91,7 +91,7 @@ public class NotificationTargetPolicyTests
     public void The_messages_that_still_name_nothing_are_exactly_these()
     {
         // The list is meant to shrink, so it is pinned: filling a target in on a producer is a
-        // deliberate deletion from here, and nothing drifts onto it unnoticed. Of the ten,
+        // deliberate deletion from here, and nothing drifts onto it unnoticed. Of the twelve,
         // three are permanent — a warning about the account itself has nothing to open — and the
         // rest are named as temporary in the policy's own reasons.
         NotificationTargetPolicy.Exemptions.Keys.ShouldBe(
@@ -106,6 +106,8 @@ public class NotificationTargetPolicyTests
                 MessageTemplateCatalog.NotifyTripPlanInvitation,
                 MessageTemplateCatalog.NotifyTripPlanChanged,
                 MessageTemplateCatalog.NotifyTripPlanCancelled,
+                MessageTemplateCatalog.NotifyUploadAwaitingReview,
+                MessageTemplateCatalog.NotifyUploadReviewed,
             ],
             ignoreOrder: true);
     }

@@ -117,8 +117,11 @@ public sealed partial class DeviceSyncUndoService(
         bool force,
         CancellationToken ct = default)
     {
+        // A line of a held upload that was not accepted wrote nothing and points at nothing; only
+        // the lines a reviewer accepted, and every line of an upload nobody held, are lines to undo.
         var allItems = await db.ImportBatchItems.AsNoTracking()
-            .Where(i => i.ImportBatchId == batch.Id)
+            .Where(i => i.ImportBatchId == batch.Id
+                && (i.ReviewDecision == null || i.ReviewDecision == ImportReviewDecision.Accepted))
             .ToListAsync(ct);
         var wanted = itemIds is { Count: > 0 } ? itemIds.ToHashSet() : null;
         if (wanted is not null && wanted.Except(allItems.Select(i => i.Id)).Any())
@@ -141,10 +144,12 @@ public sealed partial class DeviceSyncUndoService(
             .ThenByDescending(i => i.Id)
             .ToList();
 
-        // What the upload itself wrote — not what an earlier undo of it wrote, which carries the
-        // same batch under its own source.
+        // What the upload itself wrote — at once, or when a reviewer accepted it — not what an
+        // earlier undo of it wrote, which carries the same batch under its own source.
         var written = await db.AuditEntries.AsNoTracking()
-            .Where(a => a.ImportBatchId == batch.Id && a.Source == ChangeSource.DeviceSync && a.EntityId != null)
+            .Where(a => a.ImportBatchId == batch.Id
+                && (a.Source == ChangeSource.DeviceSync || a.Source == ChangeSource.ReviewDecision)
+                && a.EntityId != null)
             .OrderBy(a => a.Id)
             .ToListAsync(ct);
         // A phone user's history rows are keyed by the phone's identifier for them, which the
@@ -262,7 +267,9 @@ public sealed partial class DeviceSyncUndoService(
                 .ExecuteUpdateAsync(s => s.SetProperty(i => i.UndoneAt, now), ct);
         }
 
-        if (!await db.ImportBatchItems.AnyAsync(i => i.ImportBatchId == batch.Id && i.UndoneAt == null, ct))
+        if (!await db.ImportBatchItems.AnyAsync(
+                i => i.ImportBatchId == batch.Id && i.UndoneAt == null
+                    && (i.ReviewDecision == null || i.ReviewDecision == ImportReviewDecision.Accepted), ct))
         {
             var stamped = await db.ImportBatches.FirstAsync(b => b.Id == batch.Id, ct);
             stamped.RevertedAt = now;
