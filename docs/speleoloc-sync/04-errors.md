@@ -426,7 +426,9 @@ boundary is stated so that a gap is not mistaken for an omission.
   confirmation of it was accepted first, or a phone's conversion made it one),
   `trip_recording.not_found` (a kept recording gone since) and `speleoloc_import.nothing_created` (only
   the trip line of a SpeleoLoc confirmation was accepted, and a trip with no scans is not created; a scan
-  of it accepted later is then decided `review.dependency_failed`). A
+  of it accepted later is then decided `review.dependency_failed`), and `review.write_refused` if a
+  refusal of the replayed SpeleoLoc commit named no code of its own (every refusal this server makes
+  names one, so it is a safety net, not an answer to expect). A
   catalogue that does not answer leaves the lines waiting and the decision is answered `503` with the
   catalogue's code.
 

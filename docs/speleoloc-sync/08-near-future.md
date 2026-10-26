@@ -123,8 +123,9 @@ users. An installation can switch it off, and `people` is in `features` only whi
 **Review of uploads — built.** `01-protocol.md` §14: an account can be marked so that what it uploads
 waits for a reviewer. A device opts in with `clientFeatures: ["held"]` and gets such rows back `held`;
 one that does not is refused with `sync.client_update_required` rather than surprised. The decisions
-come down on `GET /sync/sets/{id}/reviews`; `reviews` in `features`. Holding a *file* import (an
-archive or a spreadsheet uploaded in the browser) for a reviewer is not built.
+come down on `GET /sync/sets/{id}/reviews`; `reviews` in `features`. A *file* import by such an
+account (an archive, a spreadsheet, a vector file or photographs confirmed in the browser) waits for a
+reviewer too, but its decisions are not in the phone's reviews stream: they are seen in the browser.
 
 **Trips — built.** Phones now send their trip recordings through this protocol and receive the
 recordings of the caves they carry (`01-protocol.md` §13): `tripRecordings` and `tripPoints` upload
