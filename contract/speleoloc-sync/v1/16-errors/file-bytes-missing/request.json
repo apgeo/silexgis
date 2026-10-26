@@ -1,0 +1,12 @@
+{
+  "batchId": "<batch>",
+  "contractVersion": 1,
+  "documents": [
+    {
+      "id": "<document>",
+      "title": "Never staged",
+      "fileName": "IMG_0102.jpg",
+      "sha256": "<sha256>"
+    }
+  ]
+}

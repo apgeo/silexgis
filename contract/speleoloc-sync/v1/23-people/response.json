@@ -1,0 +1,26 @@
+{
+  "people": [
+    {
+      "id": "<clubmate>",
+      "fullName": "Mate <marker>",
+      "shortName": "Mate",
+      "hasAccount": false,
+      "isMe": false
+    },
+    {
+      "id": "<second-clubmate>",
+      "fullName": "Second mate <marker>",
+      "shortName": null,
+      "hasAccount": false,
+      "isMe": false
+    },
+    {
+      "id": "<me>",
+      "fullName": "<my-label>",
+      "shortName": null,
+      "hasAccount": true,
+      "isMe": true
+    }
+  ],
+  "links": []
+}

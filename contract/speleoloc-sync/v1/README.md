@@ -27,6 +27,9 @@ comparison meaningless, so they are replaced before anything is written or compa
 | `<cursor>` | an opaque resume token | It encodes a position that moves with the data. It is opaque by contract — store it, send it back, never parse it — so recording its bytes would publish an internal shape as though it were promised |
 | `<marker>` | eight hex characters | The suite suffixes every name it creates so several runs can share one database |
 | `<trace>` | a correlation identifier | The framework attaches a fresh one to every problem document. It is for reading a server log with, not for a client to act on |
+| `<token>` | the token of a signed delivery address | Minted afresh every time an address is handed out. The address around it is kept, because its shape is what a client follows; the token itself is only ever sent back as it came |
+| `<sha256>` | the hash of a generated picture | The pictures the suite uploads are generated, and their bytes are the imaging library's. Pinning the hash would rewrite these files on an upgrade of that library rather than on a change to this protocol. A `null` hash in an answer is the server saying it will not quote one, and stays `null` |
+| `<my-label>` | the caller's account name | The suite invents a name for every account it creates |
 
 Two consequences worth stating, because they are easy to misread:
 
@@ -56,6 +59,18 @@ Two consequences worth stating, because they are easy to misread:
 | `16-errors/cursor-invalid` | A resume position this server never issued. The device is told to throw the position away rather than to try again, and the status says so before a single field is read |
 | `16-errors/cursor-stale` | A resume position that was good until the selection moved. A different status and a different code from the one above, for what is nonetheless the same decision on the device: drop the position and read the set from the beginning |
 | `16-errors/contract-unsupported` | A build pinned to a contract version this server does not speak. The batch is refused whole and the answer names the version that would have worked — note that there are no per-row results at all, so a client that reads `rows` without checking the status crashes here |
+| `16-errors/client-update-required` | An account whose uploads wait for a reviewer, sending from a build that does not declare `clientFeatures: ["held"]`. `409`, refused whole like the version refusal and with no `rows` either: nothing is written, and the device tells its user to update rather than retrying |
+| `16-errors/feature-disabled` | The people directory asked for while this installation has it switched off. `409`, not an empty list — a phone stops offering the choice instead of reading "nobody" |
+| `16-errors/file-bytes-missing` | A document row naming bytes that were never staged. **Not a refusal of the exchange** and so **no `status.txt`**: the batch is a `200`, and the row inside it comes back `rejected` with the code. It is filed here because it is the refusal a phone meets when an upload of the bytes was lost; the device uploads them and sends the row again |
+| `17-documents-first-page` | The documents stream for a reader who may read the cave but not place everything the photo hangs on. The photo is announced with `reach: "locationFree"`, and its `sizeBytes` and `sha256` are `null`: the bytes this reader will be given are a copy without the position, not the stored file, so the stored file's figures would be wrong |
+| `18-files-links` | The address route, asked for the whole file and one picture of it in one call. Each item is answered on its own; the addresses are short-lived and carry a token |
+| `19-upload-document-and-link` | One upload carrying a photo, from bytes the device staged first, and the link hanging it on a cave. The document keeps the device's identifier; the link is given one by the server |
+| `20-upload-held` | An upload from an account under review, declaring `held`. Both rows come back `held`, with no revision, each with the `reviewId` the reviews stream will answer about later. Nothing is written |
+| `21-reviews-first-page` | The decision on a held edit, turned down, with the server's own row riding along as `current` for a caller who may place it — at the position the server holds, not the one the phone proposed |
+| `22-reviews-current-withheld` | The same decision for a caller who may no longer place the row. The decision and its revision are told; `current` is **absent**, not blurred |
+| `23-people` | The people directory: the caller's clubmates and the caller, names only, and the links the caller's phones have sent (none yet) |
+| `24-trips-first-page` | A trip recording as another member of the club is handed it: two of its three scans. The third is on a place this member may not see exactly, and there is no word of it — a phone cannot tell a scan withheld from a scan never made |
+| `25-rasters-first-page` | A raster map as a member is handed it, with the one pin on a place it may see. The map's other pin is on a protected place and is absent; the picture itself is a document, reached through `17`'s stream and `18`'s route |
 
 A refusal is recorded with a `status.txt` beside its body, holding the status line. A successful
 exchange has no such file: its status is 200 by construction, and a file saying so on every case

@@ -110,7 +110,10 @@ public sealed class SyncRasterTests : IAsyncLifetime, IDisposable, IClassFixture
 
         // The member is given the map of the open cave with the pin of the open place, and neither
         // the map of the guarded cave nor the pin of the guarded place, nor a word that names them.
-        var members = await GetPageAsync(member, $"/api/v1/sync/sets/{memberSet}/rasters");
+        var members = await new ContractFixture()
+            .Literal(marker, "marker").Name(memberSet, "set").Name(open, "cave").Name(openPlace, "place")
+            .Name(mapInOpen, "map").Name(pinAtOpen, "pin")
+            .RecordGetAsync("25-rasters-first-page", member, $"/api/v1/sync/sets/{memberSet}/rasters");
         MapIds(members).ShouldBe([mapInOpen]);
         PinIds(Map(members, mapInOpen)).ShouldBe([pinAtOpen]);
         var pin = Map(members, mapInOpen).GetProperty("pins")[0];

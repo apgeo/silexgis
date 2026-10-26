@@ -40,6 +40,42 @@ So: read the version to know whether you still work, and read `features` to know
 
 ---
 
+## 2026-10-26 — documents, review, people, trips and raster maps recorded
+
+**Contract version: still 1. A build pinned to version 1 keeps working.** Nothing here changes a
+field, a status or a rule a version-1 build relies on; everything in it is reached only by a build
+that asks for it, and is announced in `features`.
+
+What a build can now ask for, each named in `features` while this installation serves it:
+`documents` (the documents stream and the address route), `documentUpload` (the `documents` and
+`documentLinks` sections of an upload), `reviews` (the decisions on held rows), `people` (the people
+directory and the upload's `people` section), `trips` (the trips stream and the `tripRecordings` /
+`tripPoints` sections) and `rasters` (the rasters stream and the `rasterMaps` / `rasterPins`
+sections). A device declares what it understands in `clientFeatures` on an upload; the one value
+that changes an answer is `held`.
+
+The one change a version-1 build can meet without asking: **an account an administrator has marked
+for review** is refused on upload with `409` and `sync.client_update_required` unless its device
+declares `clientFeatures: ["held"]`. The batch is refused whole, exactly like the version refusal,
+and nothing is written. A build that cannot be told a row is waiting for a reviewer is not allowed to
+believe it was written. Accounts that are not marked are answered as before, with no new member.
+
+Recorded exchanges written in this entry: `17-documents-first-page`, `18-files-links`,
+`19-upload-document-and-link`, `20-upload-held`, `21-reviews-first-page`,
+`22-reviews-current-withheld`, `23-people`, `24-trips-first-page`, `25-rasters-first-page`, and
+three under `16-errors/`: `client-update-required`, `feature-disabled` and `file-bytes-missing`. The
+last is a `200` whose row is `rejected`, and has no `status.txt`. Fixtures `07`–`16` are unchanged,
+byte for byte. Replay the new ones when your build starts using the parts they show; until then they
+are description, not a requirement.
+
+Two placeholders are new in the recordings: `<sha256>` (the hash of a generated picture the suite
+uploaded) and `<my-label>` (the name the suite gave the caller's account). `<token>`, already
+applied, now appears in a recording for the first time.
+
+Codes: `sync.client_update_required`, `sync.feature_disabled` and `sync.file_bytes_missing` are
+recorded as bytes for the first time; with the rest of the second set of parts' codes they are in
+`docs/speleoloc-sync/04-errors.md`, each with its status and what a client should do.
+
 ## 2026-08-29 — contract version 1
 
 **Contract version: 1. Nothing is pinned to an earlier version, because there is no earlier

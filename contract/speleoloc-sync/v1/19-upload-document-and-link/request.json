@@ -1,0 +1,23 @@
+{
+  "batchId": "<batch>",
+  "contractVersion": 1,
+  "documents": [
+    {
+      "id": "<document>",
+      "title": "Shaft entrance",
+      "fileName": "photo.jpg",
+      "sha256": "<sha256>",
+      "stagedUploadId": "<staged-upload>"
+    }
+  ],
+  "documentLinks": [
+    {
+      "documentId": "<document>",
+      "target": {
+        "kind": "feature",
+        "id": "<cave>"
+      },
+      "deleted": false
+    }
+  ]
+}

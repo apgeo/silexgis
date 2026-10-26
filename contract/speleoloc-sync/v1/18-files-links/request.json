@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "documentId": "<document>",
+      "rendition": "original"
+    },
+    {
+      "documentId": "<document>",
+      "rendition": 480
+    }
+  ]
+}

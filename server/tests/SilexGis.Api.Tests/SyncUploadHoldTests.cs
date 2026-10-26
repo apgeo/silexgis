@@ -140,6 +140,18 @@ public sealed class SyncUploadHoldTests : IAsyncLifetime, IDisposable, IClassFix
 
         var caveId = Guid.CreateVersion7();
         var batchId = Guid.CreateVersion7();
+
+        // Recorded: a device that declares nothing is the one every build written before review
+        // existed is, and this answer is what it has to show its user rather than retry.
+        var recorded = await new ContractFixture()
+            .Literal(marker, "marker").Name(set, "set").Name(batchId, "batch").Name(caveId, "cave")
+            .RecordRefusedPostAsync(
+                Path.Combine("16-errors", "client-update-required"),
+                uploader,
+                $"/api/v1/sync/sets/{set}/upload",
+                new { batchId, contractVersion = 1, rows = new[] { Cave(caveId, "refused") } });
+        recorded.GetProperty("code").GetString().ShouldBe("sync.client_update_required");
+
         foreach (var features in new[] { null, new[] { "somethingElse" } })
         {
             var response = await uploader.PostAsJsonAsync($"/api/v1/sync/sets/{set}/upload", new
@@ -179,7 +191,10 @@ public sealed class SyncUploadHoldTests : IAsyncLifetime, IDisposable, IClassFix
             clientFeatures = new[] { "held" },
             rows = new[] { Cave(caveId, "held cave"), Entrance(entranceId, caveId) },
         };
-        var answer = await UploadAsync(request);
+        var answer = await new ContractFixture()
+            .Literal(marker, "marker").Name(set, "set").Name(batchId, "batch")
+            .Name(caveId, "cave").Name(entranceId, "entrance")
+            .RecordPostAsync("20-upload-held", uploader, $"/api/v1/sync/sets/{set}/upload", request);
 
         answer.GetProperty("written").GetInt32().ShouldBe(0);
         answer.GetProperty("refused").GetInt32().ShouldBe(0);

@@ -157,7 +157,13 @@ public sealed class SyncTripRecordingTests : IAsyncLifetime, IDisposable, IClass
         membersFeatures.ShouldNotContain(guardedPlace);
         FeatureIds(await GetPageAsync(uploader, $"/api/v1/sync/sets/{uploadSet}/download")).ShouldContain(guardedPlace);
 
-        var membersRecording = Single(await GetPageAsync(member, $"/api/v1/sync/sets/{membersSet}/trips"), recording);
+        // Recorded as the member is handed it: the recording with two of its three scans, and no
+        // word of the third — a phone cannot tell a scan withheld from a scan never made.
+        var membersPage = await new ContractFixture()
+            .Literal(marker, "marker").Name(membersSet, "set").Name(cave, "cave").Name(openPlace, "place")
+            .Name(recording, "recording").Name(atOpen, "scan-at-place").Name(atNoPlace, "scan-at-no-place")
+            .RecordGetAsync("24-trips-first-page", member, $"/api/v1/sync/sets/{membersSet}/trips");
+        var membersRecording = Single(membersPage, recording);
         PointIds(membersRecording).ShouldBe([atOpen, atNoPlace]);
         membersRecording.GetRawText().ShouldNotContain(guardedPlace.ToString());
 

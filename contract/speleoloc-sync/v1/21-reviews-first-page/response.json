@@ -1,0 +1,47 @@
+{
+  "setRevision": 1,
+  "settings": {},
+  "reviews": [
+    {
+      "reviewId": "<review>",
+      "entity": "rows",
+      "rowId": "<entrance>",
+      "outcome": "rejected",
+      "decidedAt": "<timestamp>",
+      "note": "Wrong shaft",
+      "revision": "<timestamp>",
+      "current": {
+        "id": "<entrance>",
+        "kind": "caveEntrance",
+        "featureTypeCode": null,
+        "category": "surface",
+        "name": "Intrare",
+        "description": null,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            22.51,
+            45.61,
+            640
+          ]
+        },
+        "properties": {},
+        "propertiesSchemaVersion": null,
+        "locationProtected": false,
+        "protectedEffective": false,
+        "visibility": "private",
+        "parents": [
+          {
+            "parentId": "<cave>",
+            "isPrimary": true
+          }
+        ],
+        "createdAt": "<timestamp>",
+        "updatedAt": "<timestamp>",
+        "clientUpdatedAt": null
+      }
+    }
+  ],
+  "nextCursor": "<cursor>",
+  "hasMore": false
+}

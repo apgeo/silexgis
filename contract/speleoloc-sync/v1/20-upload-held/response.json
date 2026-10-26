@@ -1,0 +1,27 @@
+{
+  "batchId": "<batch>",
+  "importBatchId": "<uuid-1>",
+  "replayed": false,
+  "written": 0,
+  "refused": 0,
+  "rows": [
+    {
+      "id": "<cave>",
+      "status": "held",
+      "revision": null,
+      "code": null,
+      "detail": null,
+      "reviewId": "<uuid-2>"
+    },
+    {
+      "id": "<entrance>",
+      "status": "held",
+      "revision": null,
+      "code": null,
+      "detail": null,
+      "reviewId": "<uuid-3>"
+    }
+  ],
+  "conflicts": [],
+  "duplicates": []
+}

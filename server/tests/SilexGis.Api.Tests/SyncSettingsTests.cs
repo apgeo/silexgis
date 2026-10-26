@@ -73,7 +73,12 @@ public sealed class SyncSettingsTests : IAsyncLifetime, IDisposable, IClassFixtu
         sync.GetProperty("stagedUploadRetentionDays").GetInt32().ShouldBe(7);
         sync.GetProperty("rejectedHeldBytesRetentionDays").GetInt32().ShouldBe(30);
 
-        await ShouldBeRefusedAsync(await editor.GetAsync("/api/v1/sync/people"), HttpStatusCode.Conflict, "sync.feature_disabled");
+        // Recorded: the one refusal that says a part of the protocol is switched off rather than
+        // that the caller did something wrong, so a phone stops offering it instead of retrying.
+        var disabled = await new ContractFixture()
+            .Literal(marker, "marker")
+            .RecordRefusedGetAsync(Path.Combine("16-errors", "feature-disabled"), editor, "/api/v1/sync/people");
+        disabled.GetProperty("code").GetString().ShouldBe("sync.feature_disabled");
         (await FeaturesAsync(editor)).ShouldNotContain("people");
 
         // A phone user is still recorded; a link is not taken while nobody is listed.

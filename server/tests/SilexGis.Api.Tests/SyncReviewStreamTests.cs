@@ -84,7 +84,10 @@ public sealed class SyncReviewStreamTests : IAsyncLifetime, IClassFixture<Postgr
 
         // The caller may place the entrance: the decision comes with the server's row, at the
         // point the server holds, not the one the phone proposed.
-        var told = await ReviewsAsync(uploader);
+        var recorder = new ContractFixture()
+            .Literal(marker, "marker").Name(set, "set").Name(caveId, "cave")
+            .Name(entranceId, "entrance").Name(reviewId, "review");
+        var told = await recorder.RecordGetAsync("21-reviews-first-page", uploader, $"/api/v1/sync/sets/{set}/reviews");
         var review = told.GetProperty("reviews").EnumerateArray().Single();
         review.GetProperty("reviewId").GetGuid().ShouldBe(reviewId);
         review.GetProperty("entity").GetString().ShouldBe("rows");
@@ -112,7 +115,8 @@ public sealed class SyncReviewStreamTests : IAsyncLifetime, IClassFixture<Postgr
         }
 
         await GrantAsync(uploaderId, AccessEffect.Deny, AccessDomain.Features, AccessAction.ViewExactLocation);
-        var withheld = await ReviewsAsync(uploader);
+        var withheld = await recorder.RecordGetAsync(
+            "22-reviews-current-withheld", uploader, $"/api/v1/sync/sets/{set}/reviews");
         var blind = withheld.GetProperty("reviews").EnumerateArray().Single();
         blind.GetProperty("reviewId").GetGuid().ShouldBe(reviewId);
         blind.GetProperty("outcome").GetString().ShouldBe("rejected");

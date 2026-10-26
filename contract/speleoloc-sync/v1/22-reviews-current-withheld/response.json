@@ -1,0 +1,17 @@
+{
+  "setRevision": 1,
+  "settings": {},
+  "reviews": [
+    {
+      "reviewId": "<review>",
+      "entity": "rows",
+      "rowId": "<entrance>",
+      "outcome": "rejected",
+      "decidedAt": "<timestamp>",
+      "note": "Wrong shaft",
+      "revision": "<timestamp>"
+    }
+  ],
+  "nextCursor": "<cursor>",
+  "hasMore": false
+}

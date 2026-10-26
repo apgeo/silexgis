@@ -1,0 +1,37 @@
+{
+  "batchId": "<batch>",
+  "contractVersion": 1,
+  "clientFeatures": [
+    "held"
+  ],
+  "rows": [
+    {
+      "id": "<cave>",
+      "kind": "cave",
+      "baseRevision": null,
+      "deleted": false,
+      "name": "held cave",
+      "caveTypeCode": "cave",
+      "isMain": false
+    },
+    {
+      "id": "<entrance>",
+      "kind": "caveEntrance",
+      "parentId": "<cave>",
+      "baseRevision": null,
+      "deleted": false,
+      "name": "Intrare",
+      "entranceTypeCode": "natural",
+      "isMain": true,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          22.51,
+          45.61
+        ]
+      },
+      "altitude": 640,
+      "positionQuality": "Unknown"
+    }
+  ]
+}

@@ -159,9 +159,15 @@ public sealed class SyncDocumentStreamTests : IAsyncLifetime, IDisposable, IClas
         var ownersSet = await CreateSetAsync(owner, [open]);
 
         // The catalogue: the reader is told the photo comes without its location and is quoted no
-        // size or hash, because those of the stored file are not what it would receive.
-        var readers = Link(await GetPageAsync(reader, $"/api/v1/sync/sets/{readersSet}/documents"), link)
-            .GetProperty("document");
+        // size or hash, because those of the stored file are not what it would receive. Recorded,
+        // because this is the answer a phone is most likely to misread: a null hash here is not a
+        // missing value but the statement that the bytes it will be given are not the stored ones.
+        var recorder = new ContractFixture()
+            .Literal(marker, "marker").Name(readersSet, "set").Name(open, "cave")
+            .Name(link, "link").Name(documentId, "document").Name(photo, "file");
+        var readersPage = await recorder.RecordGetAsync(
+            "17-documents-first-page", reader, $"/api/v1/sync/sets/{readersSet}/documents");
+        var readers = Link(readersPage, link).GetProperty("document");
         readers.GetProperty("reach").GetString().ShouldBe("locationFree");
         readers.GetProperty("sizeBytes").ValueKind.ShouldBe(JsonValueKind.Null);
         readers.GetProperty("sha256").ValueKind.ShouldBe(JsonValueKind.Null);
@@ -184,6 +190,23 @@ public sealed class SyncDocumentStreamTests : IAsyncLifetime, IDisposable, IClas
 
         var ownersLink = Single(await LinksAsync(owner, (documentId, "original")));
         Sha(await FetchAsync(owner, ownersLink)).ShouldBe(Sha(uploaded), StringCompareShould.IgnoreCase);
+
+        // The address route asked for the whole file and one picture of it in one call, recorded:
+        // each item is answered on its own, and the reader's original is the location-free copy.
+        var recordedLinks = await recorder.RecordPostAsync(
+            "18-files-links",
+            reader,
+            "/api/v1/sync/files/links",
+            new
+            {
+                items = new object[]
+                {
+                    new { documentId, rendition = "original" },
+                    new { documentId, rendition = 480 },
+                },
+            });
+        recordedLinks.GetProperty("links").GetArrayLength().ShouldBe(2);
+        recordedLinks.GetProperty("refused").GetArrayLength().ShouldBe(0);
 
         // An original's address lives for a sitting, a picture's for one fetch; a picture opens.
         var now = DateTimeOffset.UtcNow;

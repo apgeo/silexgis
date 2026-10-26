@@ -1,0 +1,8 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "This account's uploads wait for a reviewer, and this app cannot be told so. Update the app before sending.",
+  "code": "sync.client_update_required",
+  "traceId": "<trace>"
+}
