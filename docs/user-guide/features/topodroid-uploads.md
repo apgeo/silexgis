@@ -12,7 +12,7 @@
 **TopoDroid** is the Android application many cavers survey with. It can send a survey straight
 to SilexGIS from its export window, so the files reach the cave's page without a laptop in
 between. This page is your side of that: the key the phone holds, where you watch what happens to
-an upload, and the link you can hand to somebody who has no account.
+an upload, and the link you can hand to somebody else.
 
 The phone-side steps (where the *SilexGIS* entry sits in TopoDroid's export window and its
 settings) are described in the TopoDroid documentation for that feature; nothing here depends on
@@ -54,6 +54,20 @@ used, when it expires and its **state**: *Active*, *Expired* or *Revoked*.
 **Revoke** next to a key, then confirm. The phone holding it is refused at its next upload.
 A revoked key stays in the list so you can see what was withdrawn and when.
 
+**Changing your password does not revoke your keys unless you ask it to.** The password change
+form (**Settings → Security**) and the *reset your password* page each have a switch, **Also
+revoke my access keys**, off by default. Your signed-in sessions end either way; with the switch
+on, every key of yours is revoked too and each phone needs a new one. Turn it on when you change
+the password because you think somebody else may have had it, or a phone was lost.
+
+An administrator who resets your two-factor sign-in revokes all your keys, always.
+
+### Keys are personal
+
+A key belongs to your account and acts as you. There is no club or caving-group list of keys, and
+an administrator neither sees nor manages your keys on this page: each person makes and revokes
+their own.
+
 ---
 
 ## What the phone is allowed to do with your uploads
@@ -63,9 +77,10 @@ A revoked key stays in the list so you can see what was withdrawn and when.
 | Setting | What it does |
 |---|---|
 | **Always produce** | Results you want made from every survey you upload, in addition to what the phone asks for. The choices are the results this installation can produce. With nothing ticked and nothing asked for by the phone, the installation makes its own default set, which the page names |
-| **Public links for my uploads** | Whether each of your uploads may get a link that shows its results without signing in (see below). On by default |
+| **Public links for my uploads** | Whether each of your uploads gets a link to its results (see below). On by default. The phone can still ask for a link, or for none, for a single upload |
+| **Default link audience** | Who a new link opens for: **Anyone with the link** (the default) or **Signed-in accounts only** — any account of this installation, asked to sign in first. The phone can choose differently for a single upload |
 
-Both are yours alone and apply to uploads from now on.
+All three are yours alone and apply to uploads from now on.
 
 ---
 
@@ -74,6 +89,18 @@ Both are yours alone and apply to uploads from now on.
 A survey sent from TopoDroid is stored against a **cave**. If the phone names a cave, the survey
 goes there (you need to be allowed to write to it). If it names none, the server makes a cave
 from the survey's title.
+
+**A cave made from the phone starts with its position unprotected**, unless the phone asks for
+protection when it sends, and it is open to the audience the phone chose — which may be
+*public*. If the cave's position should be protected, choose that on the phone before sending,
+or protect it on the cave's page as soon as it appears.
+
+**A cave the upload made takes its first survey as its shape.** When the upload itself created the
+cave, and the cave has no other model, the first upload's Therion model becomes the cave's current
+model and its centreline the line the cave is drawn with. Later versions, and uploads to a cave that
+already existed, never take that place on their own: which survey draws the cave stays somebody's
+choice on the cave's page. The administrator can switch this off (**Administration → Messaging →
+Survey uploads**).
 
 A cave can hold **many surveys**, and none is "the" survey. Each time the same survey is sent
 again, it becomes a new **version** of it, stamped with the moment it was sent; older versions
@@ -91,6 +118,12 @@ On the **cave's page**, a **Surveys** card lists the surveys that arrived from a
 Open a survey to see its versions, newest first, each with its state and who sent it. Open a
 version to see the files it was sent (the TopoDroid archive and any Therion files, each with a
 download) and what was made from them. **Status page** opens the page described next.
+
+When the older versions of a survey hold a lot of results — more than the installation's warning
+size, 500 MB unless the administrator changed it — the card shows a warning with their size and the
+setting that decides how many versions keep their results (`KeepArtefactVersions`: 0 keeps every
+version's, 1 only the newest's). Only the administrator can change it; nothing is removed because of
+the warning.
 
 The card appears only on caves that have had an upload, and **only for people who may see the
 cave's position exactly**: for everyone else the section is simply not there, like a cave with
@@ -110,14 +143,20 @@ notification you get when the run ends, or from the link the phone shows.
   needed*, and a run that stopped early leaves the later stages plainly unvisited.
 - **What the server last said**, and, if the run failed, **the error** with its code. The code is
   worth quoting when you ask for help.
-- **The log** — shown only to people who may edit the cave.
+- **The log** — shown only to people who may edit the cave and see its position exactly.
 - **The files sent**, each with a download.
 - **What was produced**, with a download for each and, where SilexGIS has a page for it, a way to
   open it.
-- **The public link**, with *Copy*, *Make a new link* and *Withdraw*.
+- **The public link**, with who it opens for, *Copy*, *Make a new link* and *Withdraw*. Everyone
+  who may see the upload sees the address.
+- **A size warning**, as on the cave's card, when the survey's older versions hold a lot.
 - **Run again**, for people who may edit the cave, once the run has ended.
 
 The page asks again every few seconds while the run is going and stops when it ends.
+
+**If you lose the right to see the cave's exact position** after sending, you still see how your
+own upload went — its progress, stages, message and error — but not what would place the cave:
+the downloads, the log, the files you sent and the public link's address are left out.
 
 **An installation without a compiler** still receives and reads the files: the run finishes at
 100 % and says, in a sentence, that nothing was compiled. That is a note on a success, not a
@@ -134,8 +173,14 @@ the cave the moment they arrive, and removing them is done where they are listed
 ## The public link
 
 When the switch under **Settings → Survey uploads** is on and the installation allows it, a
-finished upload can have a link of the form `…/p/survey/…`. Anyone who has it can open it **without
-an account** and see:
+finished upload gets a link of the form `…/p/survey/…`. The phone may also ask for a link, or for
+none, for a single upload. Each link has an **audience**:
+
+- **Anyone with the link** — opens **without an account**.
+- **Signed-in accounts only** — whoever opens it is asked to sign in with an account of this
+  installation, then sees the page. No right on the cave is needed beyond holding the address.
+
+Whoever opens it sees:
 
 - the survey's title, the **name** of the cave, and when the upload was sent;
 - the same progress bar and stages;
@@ -152,13 +197,21 @@ an account** and see:
 - **It is a secret address.** Treat it as you would a password-less share: whoever holds it can
   see the results. **Withdraw** it on the status page and it stops working at once; **Make a new
   link** replaces it and the old address stops working too.
-- **A cave whose location is protected gets no link at all**, and one that becomes protected
-  after a link was made stops answering at once. When there is no link the status page says why where the server
-  gives a reason — your switch, the installation's setting, no right to share the cave, or the
-  cave's protection — and offers no *Make a link* button when the cave's protection is the reason.
-  **Open** next to the link shows what a visitor without an account sees.
+- **A cave whose location is protected gets a link only when you ask for it explicitly.** The
+  results — the 3D model and the drawings — show where the cave's passages are. On the phone you
+  ask for it for that one upload; on the status page, **Make a link** shows the same warning and a
+  box to tick, *I understand, and I want a link to this protected cave's results*. No setting does
+  this for you. A link made that way is marked *Protected cave — linked knowingly*, records who
+  asked and when, and keeps working while the cave stays protected. An ordinary link stops
+  answering at once if the cave becomes protected after it was made.
+- When there is no link the status page says why where the server gives a reason — your switch,
+  the upload asked for none, the installation's setting, no right to share the cave, or the cave's
+  protection. **Make a link** lets you choose the audience, and the phone's result screen offers
+  *Make a new link* and *Withdraw link* too.
+  **Open** next to the link shows what a visitor sees.
 - A wrong, withdrawn or no-longer-permitted link says only "This link does not work". Nobody can
-  tell from the answer which of the three it was.
+  tell from the answer which of the three it was. A link for signed-in accounts, opened without
+  signing in, asks the visitor to sign in instead.
 
 ---
 

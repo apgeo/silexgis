@@ -65,7 +65,7 @@ protecție.
 | **Paginile QR** | Nicio peșteră, niciun loc, nicio poziție — pentru nimeni, cu sau fără cont |
 | **Sincronizarea cu telefonul** | O poziție pe care nu ai voie s-o ai este **pur și simplu absentă** |
 | **Legături** | O legătură arată fiecărui cititor doar capetele pe care le poate vedea |
-| **Ture publicate** | O peșteră protejată **nu poate fi publicată deloc**, iar protejarea ei ulterioară închide linkurile deja date. O limită: un fișier de ridicare înregistrat la o peșteră neprotejată poate desena și o vecină protejată, iar asta nu se poate vedea în interiorul fișierului — aplicația doar [avertizează după poziție](../features/live-tracking.md#peșteră-protejată-în-apropiere) |
+| **Ture publicate** | O peșteră protejată **nu poate fi publicată deloc**, iar protejarea ei ulterioară închide linkurile deja date. O limită: un fișier de topografie înregistrat la o peșteră neprotejată poate desena și o vecină protejată, iar asta nu se poate vedea în interiorul fișierului — aplicația doar [avertizează după poziție](../features/live-tracking.md#peșteră-protejată-în-apropiere) |
 
 **Nimic din toate acestea nu este făcut de client.** Reținerea se face pe server. Un browser
 modificat, un apel direct la interfața de programare și o pagină extrasă automat primesc toate
@@ -78,7 +78,7 @@ peșteri pentru oricine poate citi tura. Protejarea peșterii nu retrage copia a
 o înlătura este să ștergi copia clasată.**
 
 O tură poate fi [urmărită de la suprafață](../features/live-tracking.md), iar modelul de raport al
-unui club poate tipări jurnalul urmăririi, sau lista stațiilor ridicării, în raportul turei. O
+unui club poate tipări jurnalul urmăririi, sau lista stațiilor topografiei, în raportul turei. O
 copie **clasată pe tură** este un fișier: a tipărit stațiile care puteau fi comunicate oricărui
 cont în ziua în care a fost făcută și continuă să le spună și după aceea. Orice suprafață vie —
 harta, fila de urmărire, un export, un raport făcut din nou — întreabă iar la fiecare citire și

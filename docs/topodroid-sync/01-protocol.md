@@ -44,7 +44,9 @@ GET  /survey-uploads/{id}                    poll every pollIntervalSeconds unti
 
 Then, later: open the **next version** of the same survey by the id the server answered
 (`07-open-next-version`), list what may be imported (`09-list`), run an upload again (`10-rerun`),
-or give up an upload still receiving files (`DELETE /survey-uploads/{id}`, `204`).
+or give up an upload still receiving files (`DELETE /survey-uploads/{id}`, `204`). A completed
+upload cannot be taken back yet, neither through the exchange nor on the web: there is no delete
+for it, and its archived files stay among the cave's survey sources.
 
 ## 3. Capabilities — `GET /survey-uploads/capabilities`
 
@@ -80,7 +82,9 @@ sent**. Nothing is stored yet; the answer is `201` with the upload's status body
 
 A new cave has no position until the survey's fixed point is read into an entrance; it is
 created on the account's own rights, and the installation may switch automatic creation off
-(`caveCreation.allowed`).
+(`caveCreation.allowed`). **A cave made from a device starts unprotected** unless the request sends
+`locationProtected: true`, and with a `public` visibility it is public from its first second — a
+tool that makes caves should let the caver choose both before sending, as the web's form does.
 
 **The survey and the files:**
 
@@ -94,6 +98,7 @@ created on the account's own rights, and the installation may switch automatic c
 | `files[]` | `{ name, size, role }` for every file. **Exactly one** `archive` (the TopoDroid ZIP); `therionSource` (`.th`), `therionSketch` (`.th2`) and `other` (an export: `.svx`, `.pdf`, `.kml`, …) as wanted. Names are unique ignoring case, have no path, and keep the extension the role needs. `size` is the exact byte count the body will have. |
 | `pipeline` | optional: `compile` (true when empty), `outputs` (catalogue names; the defaults when empty), `mapScale` (500 when empty) |
 | `documentsVisibility` | optional: who the documents this upload makes are open to; the cave's own audience when empty |
+| `publicLink` | optional: `{ wanted?, audience?, allowProtected? }` — this upload's own choice about its public link (see "The public link"). `wanted: false` asks for no link even when the account's settings make one; `wanted: true` asks for one even when they do not; absent, the account's settings decide. `audience` is `public` (anybody holding the address) or `organization` (only an account signed in to this installation); absent, the account's *Default link audience*. `allowProtected: true` is the caver's explicit acknowledgement, given after a warning that the results (the 3D model, the maps) show where the cave's passages are, that a link may be made although the cave's position is protected; without it a protected cave gets no link. Never send it as a standing default |
 
 The account must be able to **write** to the cave (or create one); that is checked here, once.
 
@@ -141,10 +146,11 @@ application/octet-stream`), `{name}` URL-escaped. The answer is `200` (`03-put-f
 | `artefacts[]` | what the run produced: `{ kind, name, sizeBytes, contentUrl, surveyModelId?, documentId?, sourceId?, viewUrl?, modelStatus?, error? }` — `kind` is the output's catalogue name (`lox`, `3d`, `plan-pdf`, …) or `log`; `name` carries the version stamp; `modelStatus` (`pending`, `processing`, `ready`, `failed`) is how far a model's reading has got; `error` (`{ code, message }`, else `null`) says what is wrong with that one output — **an entry whose `error.code` is `survey_pipeline.output_missing` was asked for and not produced, and has no file (`sizeBytes` and `contentUrl` are `null`)**; `survey_pipeline.crs_unknown` on a `lox` entry means it was stored but not read (see below). Empty on a server that does not compile (`06b-status-compiled` records a compiled run) |
 | `compiler` | `{ version }` once a compiler ran |
 | `outputs`, `compile` | what the run was asked for, after the server combined the request with the account's and the installation's standing choices |
-| `logTail` | the compiler's last lines; only for an account that may write to the cave |
+| `logTail` | the compiler's last lines; only for an account that may write to the cave and see its exact position |
 | `statusPageUrl` | the signed-in web page the run is watched on, relative to the installation — offer *Open in browser* |
-| `publicLink` | `{ url, createdAt }` — the public page of the results (`url` is `/p/survey/<token>`, relative to the installation), shown to an account that may write to the cave; `null` when there is none, or for an account that may only read. Offer *Copy* and *Open* (see "The public link" below) |
-| `publicLinkRefusal` | why there is no public link, as a code: `installation-off`, `account-off`, `no-share-right`, `protected-cave`, `revoked` (`03-errors.md`); `null` while there is a link, or before the upload is complete |
+| `publicLink` | `{ url, createdAt, audience, protectedAcknowledged }` — the public page of the results (`url` is `/p/survey/<token>`, relative to the installation; `audience` is `public` or `organization`; `protectedAcknowledged` is `true` for a link made knowingly for a protected cave), shown to every account that may read the upload; `null` when there is none. Offer *Copy* and *Open*, and *Withdraw* / *Make a new link* (see "The public link" below) |
+| `publicLinkRefusal` | why there is no public link, as a code: `installation-off`, `account-off`, `not-wanted`, `no-share-right`, `protected-cave`, `revoked` (`03-errors.md`); `null` while there is a link, or before the upload is complete |
+| `olderVersions` | `{ count, sizeBytes, warn, warnBytes, keepVersions }` — what the survey's versions older than its newest still hold of their runs' outputs (`count` versions, `sizeBytes` in all, counting each stored output's and log's current revision). `warn` is `true` when that is past the installation's warning size `warnBytes` (`SILEXGIS__SurveyUploads__OlderVersionsWarnMegabytes`, 500 MB by default; `null` when it never warns); `keepVersions` is `SILEXGIS__SurveyUploads__KeepArtefactVersions` (`0` keeps every version's outputs, `1` only the newest's). The same on every version of one survey. A tool that shows it says the size and that the installation's administrator decides how many versions keep their outputs |
 | `createdAt`, `expiresAt`, `startedAt`, `finishedAt` | the upload's times |
 
 **`contentUrl` is a signed, short-lived download address** (`/api/v1/files/{id}/content?token=…`):
@@ -179,8 +185,12 @@ A model somebody deleted on the web drops off `artefacts[]` (and off the public 
 read.
 
 The run reports `succeeded` without waiting for the model's reading; poll on while `modelStatus` is
-`pending` or `processing` if the tool shows it. **None of it becomes the cave's current model** —
-which model draws the cave is chosen on the web. Every upload is a version: a second upload of the
+`pending` or `processing` if the tool shows it. **Which model draws the cave is chosen on the web,
+with one exception:** when the upload itself created the cave and the cave has no other model and
+no centreline, the run's Therion model becomes the cave's current model and the centreline read from
+it the cave's shape — unless the installation's administrator switched that off (*Survey uploads*
+in the administrator settings; `SILEXGIS__SurveyUploads__FirstModelOfCreatedCave` is the default).
+A later version of the survey never takes the mark from it. Every upload is a version: a second upload of the
 same survey stores its own files under its own stamp beside the first's, and running an upload again
 (`rerun`) replaces that upload's own outputs as new revisions of the same files. An installation may
 keep the outputs of the newest versions only (`SILEXGIS__SurveyUploads__KeepArtefactVersions`); an
@@ -214,21 +224,48 @@ Every route answers on the **cave's survey terms**: the account must be able to 
 **and see its exact position**, because a survey archive carries fixed stations and a run's messages
 can quote them. An upload of a cave that fails either half does not exist for that account — it is
 answered `404` like an upload that never existed, and it is absent from the list and from its
-`total`. This holds for the uploader too, if their access to the cave's position is later taken
-away. Changing an upload — sending a file, completing, abandoning, running again — needs write
+`total`. One exception: **the uploader keeps the status of their own upload**
+(`GET /survey-uploads/{id}`) after their access to the cave's position is taken away, as long as they
+may still read the cave — `status`, `stage`, `progress`, `message`, `error` and the rest of the
+run's state, with everything that would place the survey withheld: every `contentUrl` (artefacts and
+files) and `publicLink` are `null`, and so is `logTail`. Every other route — the list, sending,
+completing, running again, abandoning, the public-link routes — still answers them `404`. Changing an upload — sending a file, completing, abandoning, running again — needs write
 access to the cave as well.
 
 ## 10. The public link
 
-When the installation makes public links (on by default) and the uploader's SilexGIS settings have
-not turned them off, completing an upload makes **a public page of its results** — if the account
-completing it may share the cave, and the cave's position is not protected. The status answer
-carries it as `publicLink.url` from the `complete` answer on (`04-complete`); running the upload
-again keeps the same link. Without one, `publicLinkRefusal` says why. On the web, the upload's page
-can withdraw the link or make a new one in its place; the old address then stops working.
+When the installation makes public links (on by default) and the upload wants one — it says so
+with `publicLink.wanted` when it is opened, else the uploader's SilexGIS settings decide (on by
+default) — completing an upload makes **a page of its results** for people outside the cave's
+audience, if the account completing it may share the cave. The status answer carries it as
+`publicLink` from the `complete` answer on (`04-complete`); running the upload again keeps the same
+link. Without one, `publicLinkRefusal` says why. The address is shown to everybody who may read the
+upload — on the web's status page, in the list and to the device.
+
+**Who the link opens for** is its `audience`: `public` — anybody holding the address, without an
+account — or `organization` — any account signed in to this installation, and nobody else; no right
+on the cave is needed beyond holding the address. The upload chooses it (`publicLink.audience`),
+else the account's *Default link audience* (`public` unless the caver changed it).
+
+**A cave whose position is protected gets a link only when somebody asked for it knowingly** —
+`allowProtected: true` on the open request, or on the request that makes the link — after the tool
+warned that the results show where the passages are. No setting stands in for that. The link then
+records who acknowledged it and when, and keeps opening while the cave stays protected. Without the
+acknowledgement the refusal is `protected-cave`, and an ordinary link closes the moment its cave
+becomes protected.
+
+**Making a new link and withdrawing it** — `POST /survey-uploads/{id}/public-link` and
+`DELETE /survey-uploads/{id}/public-link` — are open to the web's status page and to the device with
+its access key (`13-make-public-link`). Both need write access to the cave, and making one also the
+right to share it. The `POST` body is optional: `{ audience?, allowProtected? }`; without an
+audience the new link keeps the audience of the one it replaces, else the upload's, else the
+account's default. The answer is `201` with the new `publicLink`; the old address stops working at
+once. `DELETE` answers `204`, and `publicLinkRefusal` then reads `revoked`.
 
 The page is `GET /api/v1/public/survey-uploads/{token}` — the token is the last part of
-`publicLink.url` — read **without any account or key** (`12-public-link`). Its answer is its own,
+`publicLink.url` — read **without any account or key** for a `public` link (`12-public-link`), and
+with the reader's signed-in account for an `organization` one (an access key does not count as
+signed in there). Its answer is its own,
 smaller shape:
 
 | Member | Meaning |
@@ -244,6 +281,10 @@ smaller shape:
 
 It never carries the archive, the Therion sources, the log, the party, a station name, the cave's
 id or any coordinate. **Every refusal is the same `404 survey_upload.public_link_not_found`**, an
-invented token's: a withdrawn link, a cave protected since, an installation that turned links off.
+invented token's: a withdrawn link, a cave protected since an ordinary link was made, an
+installation that turned links off. The one other answer is
+`401 survey_upload.public_link_sign_in_required`, for an `organization` link read without signing in
+— given only for a link that would otherwise open (`11-errors/public-link-sign-in-required`); a tool
+opens the address in the browser, where the page asks the reader to sign in.
 `contentUrl`s are short-lived; read the page again for fresh ones. Public pages are rate-limited per
 address (`429` with `Retry-After`).

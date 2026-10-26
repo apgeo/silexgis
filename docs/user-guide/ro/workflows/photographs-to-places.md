@@ -141,7 +141,7 @@ stație: o echipă care s-a împărțit este în două locuri. Nimic de aici nu 
 fotografie — corectează ulterior un raport și fotografia se mută odată cu el. Și nimic de aici
 nu îți spune o stație pe care nu o puteai vedea deja: acolo unde poziția peșterii îți este
 ascunsă, rândul spune asta. Rândurile sunt explicate unul câte unul la
-[Echipa pe ridicare](../features/live-tracking.md#echipa-pe-ridicare).
+[Echipa pe topografie](../features/live-tracking.md#echipa-pe-topografie).
 
 **Sau dă-i o stație pentru totdeauna.** Când știi unde în subteran a fost făcută o fotografie,
 iar ea ține de peșteră, nu de o singură tură, leag-o de acea stație: deschide topografia

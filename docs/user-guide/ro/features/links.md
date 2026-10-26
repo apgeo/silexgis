@@ -68,10 +68,10 @@ Un capăt de legătură poate fi o **ancoră** într-o parte a unui lucru:
 | **Un fragment de text** | Selectat în document |
 | **O regiune dintr-o imagine** | Desenată chiar pe imagine — un dreptunghi, un cerc, un contur sau un punct. Când citești una, toate regiunile deja desenate pe imagine sunt pictate, cea pe care ai urmat-o mai apăsat decât restul. Atât desenarea, cât și alegerea merg și [de la tastatură](#regiunile-unei-imagini-de-la-tastatură) |
 | **Un moment din înregistrare** / **un interval din înregistrare** | În secunde |
-| **O stație topografică** / **un șir de stații topografice** / **o ridicare topografică** / **un șir de ridicări topografice** | Dintr-un model 3D |
+| **O stație topografică** / **un șir de stații topografice** / **o topografie** / **un șir de topografii** | Dintr-un model 3D |
 | **Un punct din model** | |
 | **Un punct de traseu** / **un șir de puncte** | Dintr-un fișier de geodate |
-| **Un moment al turei** | Al unei ture [urmărite de la suprafață](live-tracking.md#echipa-pe-ridicare) — felul în care o fotografie este pusă pe un moment al reluării ei. O legătură care spune că o fotografie *documentează* un moment al turei cere dreptul de a **edita** acea tură, pentru că hotărăște ce arată reluarea turei |
+| **Un moment al turei** | Al unei ture [urmărite de la suprafață](live-tracking.md#echipa-pe-topografie) — felul în care o fotografie este pusă pe un moment al reluării ei. O legătură care spune că o fotografie *documentează* un moment al turei cere dreptul de a **edita** acea tură, pentru că hotărăște ce arată reluarea turei |
 
 Unele dintre acestea au nevoie de un vizualizator care le poate selecta, iar fereastra o spune
 limpede: *„Indicarea acestui tip de fragment vine odată cu vizualizatorul care îl poate selecta."*

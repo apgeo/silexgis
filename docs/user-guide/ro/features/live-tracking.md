@@ -10,7 +10,7 @@
 
 Cât timp o echipă este în peșteră, cineva de la suprafață preia de obicei apelurile: *„Ana și
 Radu sunt la capul puțului"*, *„au ieșit toți"*. Fila **Urmărire** a unei ture este locul pentru
-asta. Fiecare apel se înregistrează ca **raport**, iar fiecare om este desenat pe ridicarea
+asta. Fiecare apel se înregistrează ca **raport**, iar fiecare om este desenat pe topografia
 peșterii acolo unde a fost raportat ultima dată. O tură poate fi apoi **publicată**, astfel încât
 și cei fără cont — familiile care așteaptă, site-ul clubului — să poată urmări echipa.
 
@@ -27,19 +27,19 @@ Pe pagina turei, deschide **Urmărire** și completează **Configurarea urmărir
 
 | Câmp | Ce decide |
 |---|---|
-| **Ridicare** | Ridicarea în care sunt plasate pozițiile echipei — una dintre ridicările încărcate ale peșterii care conține stații |
-| **Adâncimea se măsoară de la** | Stația de la care coboară o adâncime raportată. Lăsat gol, se folosește cea mai înaltă stație de intrare a ridicării |
-| **Unde a spus echipa că merge** | Părțile peșterii în care echipa și-a propus să meargă — începutul unui nume de stație sau de ridicare, oricâte este nevoie. O adâncime raportată este căutată doar acolo, iar o stație raportată în altă parte este marcată *În afara părților declarate*. Lăsat gol, se caută în toată ridicarea și nu se marchează nimic |
+| **Topografie** | Topografia în care sunt plasate pozițiile echipei — una dintre topografiile încărcate ale peșterii care conține stații |
+| **Adâncimea se măsoară de la** | Stația de la care coboară o adâncime raportată. Lăsat gol, se folosește cea mai înaltă stație de intrare a topografiei |
+| **Unde a spus echipa că merge** | Părțile peșterii în care echipa și-a propus să meargă — începutul unui nume de stație sau de topografie, oricâte este nevoie. O adâncime raportată este căutată doar acolo, iar o stație raportată în altă parte este marcată *În afara părților declarate*. Lăsat gol, se caută în toată topografia și nu se marchează nimic |
 
 Apoi **Pornește urmărirea**. Tura arată acum *În urmărire* și se pot înregistra rapoarte.
 
-- **Alegerea ridicării sau a stației de referință cere dreptul de a vedea locația exactă a
+- **Alegerea topografiei sau a stației de referință cere dreptul de a vedea locația exactă a
   peșterii**, pentru că un nume de stație este o poziție. Încheierea, repornirea și modificarea
   filtrului nu îl cer.
-- **O urmărire pornită se poate muta pe altă ridicare a aceleiași peșteri** — de exemplu o
-  ridicare corectată care sosește în timpul turei — și niciodată pe a altei peșteri: *„Încheie
-  mai întâi urmărirea"*. Schimbarea ridicării șterge reperul de adâncime și filtrul, pentru că
-  numele de stații nu înseamnă nimic, sau înseamnă altceva, în altă ridicare; pagina avertizează
+- **O urmărire pornită se poate muta pe altă topografie a aceleiași peșteri** — de exemplu o
+  topografie corectată care sosește în timpul turei — și niciodată pe a altei peșteri: *„Încheie
+  mai întâi urmărirea"*. Schimbarea topografiei șterge reperul de adâncime și filtrul, pentru că
+  numele de stații nu înseamnă nimic, sau înseamnă altceva, în altă topografie; pagina avertizează
   înainte de salvare.
 - **Încheie urmărirea** când au ieșit toți. Confirmarea spune ce urmează: grupul nu mai este
   urmărit, și nici o pagină publicată nu îl mai urmărește — imediat sau, pe o instalare care
@@ -50,7 +50,7 @@ Apoi **Pornește urmărirea**. Tura arată acum *În urmărire* și se pot înre
   momente pe cardul de configurare — **Începută prima dată** și **Începută din nou** — așa că
   ora de la care echipa a fost urmărită prima dată nu se pierde la repornire.
 - **O tură a cărei urmărire nu a fost pornită niciodată nu primește rapoarte** — un raport
-  numește un loc pe o ridicare, iar încă nu există niciuna. Fila o spune și trimite la
+  numește un loc pe o topografie, iar încă nu există niciuna. Fila o spune și trimite la
   **Pornește urmărirea**.
 
 **Echipele** sunt grupuri opționale cu nume („Echipa de topografie", „Echipare"). Un raport poate
@@ -69,7 +69,7 @@ Cardul **Înregistrează un raport**:
    | Tip | Ce poartă |
    |---|---|
    | **A intrat** | Niciun loc |
-   | **La o stație** | O stație a ridicării, scrisă așa cum o scrie ridicarea |
+   | **La o stație** | O stație a topografiei, scrisă așa cum o scrie topografia |
    | **La o adâncime** | O adâncime față de reper — sau un **Loc** declarat de peșteră (mai jos) |
    | **Notă** | Doar cuvinte |
    | **A ieșit** | Niciun loc |
@@ -91,28 +91,28 @@ răspunde la **Ce stație înseamnă?** — întâi stația pe care peștera a d
 adâncime, dacă a declarat una, apoi stațiile cele mai apropiate. Dacă adâncimea este departe de
 stația pe care va ajunge, cardul avertizează înainte de înregistrare și spune care dintre două
 lucruri s-a întâmplat: adâncimea este pur și simplu atât de departe de cea mai apropiată stație,
-sau **peștera declară acea adâncime ca fiind acea stație**, iar ridicarea o pune la câțiva metri
+sau **peștera declară acea adâncime ca fiind acea stație**, iar topografia o pune la câțiva metri
 distanță — caz în care verifică numărul sau declarația peșterii.
 
-**Din desen.** **Arată modelul** deschide ridicarea cu toți pe ea; apasă o stație și alege
+**Din desen.** **Arată modelul** deschide topografia cu toți pe ea; apasă o stație și alege
 **Înregistrează aici** ca să raportezi exact la acea stație.
 
-O stație căreia fișierul ridicării nu îi dă nume poate fi și ea apăsată, pe o ridicare Therion:
+O stație căreia fișierul topografiei nu îi dă nume poate fi și ea apăsată, pe o topografie Therion:
 desenul o etichetează cu numărul la care a scris-o fișierul, între paranteze drepte (`[42]`), iar
-raportul este înregistrat sub acea etichetă. Dacă cardul răspunde că ridicarea trebuie citită din
-nou, ridicarea a fost citită înainte ca astfel de stații să poată fi raportate — apasă
+raportul este înregistrat sub acea etichetă. Dacă cardul răspunde că topografia trebuie citită din
+nou, topografia a fost citită înainte ca astfel de stații să poată fi raportate — apasă
 **Citește din nou** pe rândul ei, la **Modele topo 3D** pe pagina peșterii, așteaptă să se
-încheie și raportează din nou. Stațiile fără nume ale unei ridicări Survex nu sunt deloc pe desen,
+încheie și raportează din nou. Stațiile fără nume ale unei topografii Survex nu sunt deloc pe desen,
 iar o adâncime raportată nu ajunge niciodată pe una dintre ele.
 
 **Între două stații.** Vestea din peșteră este adesea „am trecut de puț, nu am ajuns încă la
 sifon", iar oricare dintre stații, luată singură, ar nota un loc pe care nu l-a raportat nimeni.
 La un raport **La o stație**, completează și **A doua stație, dacă sunt între două**; raportul se
-citește atunci *Între A și B*. Amândouă sunt stații ale aceleiași ridicări, oferite din numele ei
+citește atunci *Între A și B*. Amândouă sunt stații ale aceleiași topografii, oferite din numele ei
 pe măsură ce scrii, și trebuie să fie două stații diferite. Jurnalul și tabelul echipei le
 arată pe amândouă. Pe model, marcajul omului stă la prima stație, iar o linie întreruptă urmează
-ridicarea până la a doua; reluarea desenează același lucru. Dacă desenul nu are nicio stație cu
-al doilea nume sau vizele ridicării nu le leagă pe cele două, linia nu poate fi desenată, iar
+topografia până la a doua; reluarea desenează același lucru. Dacă desenul nu are nicio stație cu
+al doilea nume sau vizele topografiei nu le leagă pe cele două, linia nu poate fi desenată, iar
 cardul de peste model o spune. O corectare se deschide cu amândouă stațiile — golește-o pe a doua
 ca să devină un raport la o singură stație. O foaie scoasă din jurnal poartă amândouă
 stațiile — pe a doua într-o coloană a ei, care apare doar când jurnalul are un asemenea raport —
@@ -195,7 +195,7 @@ stație raportată în altă parte poartă o etichetă portocalie — *În afara
 lângă loc, pe rândul omului și pe raportul din jurnal. Stația este comparată cu numele declarate
 exact așa cum este potrivită o adâncime raportată, deci `upper` cuprinde deopotrivă `upper.2` și
 `upper2.1`. Nu se marchează nimic când nu s-a declarat nimic, pentru un loc raportat pe o
-ridicare pe care urmărirea nu o mai folosește sau pentru un loc care nu îți este arătat: eticheta
+topografie pe care urmărirea nu o mai folosește sau pentru un loc care nu îți este arătat: eticheta
 stă doar lângă o stație aflată pe ecranul tău. O adâncime aleasă dintre locurile
 declarate ale peșterii ajunge la stația declarată de peșteră, care poate fi ea însăși în afara
 părților numite de această tură — și este atunci marcată ca oricare alta.
@@ -307,7 +307,7 @@ păstrate niciodată — fără răspuns eșuează ca până acum, iar în jurna
 refuz pe care serverul îl dă cât încă te uiți la card (o stație pe care nu o cunoaște, de
 pildă) este arătat ca întotdeauna și nu este păstrat nici el: cardul păstrează ce ai scris.
 
-## Echipa pe ridicare
+## Echipa pe topografie
 
 Panoul modelului marchează fiecare om acolo unde a fost raportat ultima dată, cu **În peșteră**,
 **Ieșit** sau **Fără nicio veste** — trei stări, niciodată două: o echipă de la care nu a venit
@@ -315,19 +315,19 @@ Panoul modelului marchează fiecare om acolo unde a fost raportat ultima dată, 
 
 || Poți vedea || Înseamnă |
 |---|---|
-| **Pe altă ridicare** | Locul a fost raportat față de altă ridicare decât cea folosită acum de urmărire |
-| **Nu e pe desen** | Desenul ridicării nu are nicio stație cu acel nume |
+| **Pe altă topografie** | Locul a fost raportat față de altă topografie decât cea folosită acum de urmărire |
+| **Nu e pe desen** | Desenul topografiei nu are nicio stație cu acel nume |
 | **Nu îți este arătată** | Poziția există și nu îți poate fi comunicată: locația exactă a peșterii îți este ascunsă |
 
 **Arată doar părțile declarate** — oferit deasupra modelului când configurarea spune unde a spus
-echipa că merge — scoate din desen fiecare ridicare în care nu se află nimic declarat și spune
+echipa că merge — scoate din desen fiecare topografie în care nu se află nimic declarat și spune
 câte a ascuns. Toți își păstrează marcajul: cine este raportat în afara părților declarate este
 atunci desenat fără galeria din jur, adică exact ce spune eticheta portocalie din tabel.
-Comutatorul rămâne oprit, și spune de ce, când desenul nu are nicio ridicare cu un nume
-declarat sau când toate ridicările lui sunt declarate. Oprirea lui aduce înapoi exact ce a
+Comutatorul rămâne oprit, și spune de ce, când desenul nu are nicio topografie cu un nume
+declarat sau când toate topografiile lui sunt declarate. Oprirea lui aduce înapoi exact ce a
 ascuns.
 
-**Reia tura** redă tot jurnalul pe ridicare, cu notele spuse pe parcurs; **Înapoi la direct** te
+**Reia tura** redă tot jurnalul pe topografie, cu notele spuse pe parcurs; **Înapoi la direct** te
 întoarce. Fotografiile pot fi puse pe **un moment** al turei (*Fotografii de la acest moment*),
 nu pe un raport, așa că o corectură sau o ștergere de raport nu le pierde niciodată.
 
@@ -341,38 +341,38 @@ jurnalului și se schimbă odată cu lucrurile de care depinde:
 |---|---|---|
 | **Desenată la stația …** | Persoana despre care este fusese raportată la acea stație până în acel moment | — |
 | **Până atunci nu fusese raportată nicio stație pentru această persoană** | Nimic nu o plasase încă, sau doar o adâncime pentru care nimeni nu a numit o stație | De obicei ceasul aparatului: corectează **Ceasul aparatului era înainte cu** și fiecare rând se calculează din nou. Sau fotografia este despre altcineva |
-| **Atunci era plasat(ă) pe altă ridicare** | Locul din acel moment a fost raportat pe o ridicare pe care urmărirea a părăsit-o între timp | Nimic aici; fotografia se desenează când este privită acea ridicare |
+| **Atunci era plasat(ă) pe altă topografie** | Locul din acel moment a fost raportat pe o topografie pe care urmărirea a părăsit-o între timp | Nimic aici; fotografia se desenează când este privită acea topografie |
 | **Locul din acel moment nu îți este arătat** | Locul acelui raport îți este ascuns, așa că nu ți se spune nicio stație | Nimic aici — cine are voie să vadă peștera o vede desenată |
-| **Tura nu are o ridicare pe care să o poți vedea desenată** | Poziția peșterii îți este ascunsă și nu ți se spune pe ce ridicare merge urmărirea — sau acea ridicare a fost ștearsă | Nimic aici |
+| **Tura nu are o topografie pe care să o poți vedea desenată** | Poziția peșterii îți este ascunsă și nu ți se spune pe ce topografie merge urmărirea — sau acea topografie a fost ștearsă | Nimic aici |
 | **Doar pe cronologie — numește pe cineva ca să fie plasată** | Nu este despre nimeni anume | Alege o persoană pe rândul ei |
 
 **Despre**, în partea de sus a dialogului, numește o persoană pentru toate fotografiile alese;
 selectorul de pe rândul unei fotografii o face pe aceea despre altcineva — un card de memorie
 are poze cu mai mulți oameni — iar o nouă alegere sus se aplică din nou tuturor. O fotografie
 care nu se desenează nicăieri este atașată oricum și rămâne pe cronologie la momentul ei.
-Rândurile se citesc față de ridicarea pe care merge urmărirea, din tot jurnalul; cât timp
+Rândurile se citesc față de topografia pe care merge urmărirea, din tot jurnalul; cât timp
 jurnalul se citește, sau dacă nu poate fi citit, rândul spune asta în loc să ghicească, iar
 atașarea funcționează în continuare.
 
 **Vezi rapoartele pe** — un selector deasupra modelului, oferit doar la o tură ale cărei rapoarte
-nu au fost înregistrate toate pe aceeași ridicare: urmărirea a fost mutată, de pildă, pe o
-ridicare corectată în timpul turei, iar rapoartele de dinainte numesc stații ale celei părăsite.
-Selectorul arată ridicarea urmăririi și fiecare altă ridicare pe care s-a înregistrat un raport
-al acestei ture, dacă mai este pe server și o poți deschide; două ridicări cu același nume se
+nu au fost înregistrate toate pe aceeași topografie: urmărirea a fost mutată, de pildă, pe o
+topografie corectată în timpul turei, iar rapoartele de dinainte numesc stații ale celei părăsite.
+Selectorul arată topografia urmăririi și fiecare altă topografie pe care s-a înregistrat un raport
+al acestei ture, dacă mai este pe server și o poți deschide; două topografii cu același nume se
 deosebesc prin ziua în care a fost adăugată fiecare. Alege alta și marcajele, reluarea,
 fotografiile de la stații și hărțile sunt cele ale rapoartelor înregistrate pe *ea* — cine are
-ultimul loc pe ridicarea urmăririi apare atunci cu *Pe altă ridicare*.
+ultimul loc pe topografia urmăririi apare atunci cu *Pe altă topografie*.
 
-**Cât timp pe ecran este altă ridicare, panoul nu înregistrează nimic, și o spune**: apăsarea
+**Cât timp pe ecran este altă topografie, panoul nu înregistrează nimic, și o spune**: apăsarea
 unei stații nu oferă niciun raport și nicio fotografie nu poate fi pusă pe un moment. Un raport
-este măsurat întotdeauna față de ridicarea folosită de urmărire, așa că o stație apăsată pe o
-ridicare mai veche ar fi căutată, după nume, în cea greșită. Alege din nou ridicarea urmăririi
-— sau ascunde modelul, care se redeschide mereu pe ea — ca să înregistrezi. O ridicare ștearsă
+este măsurat întotdeauna față de topografia folosită de urmărire, așa că o stație apăsată pe o
+topografie mai veche ar fi căutată, după nume, în cea greșită. Alege din nou topografia urmăririi
+— sau ascunde modelul, care se redeschide mereu pe ea — ca să înregistrezi. O topografie ștearsă
 între timp, sau una a unei peșteri a cărei locație îți este ascunsă, nu apare în listă; rapoartele
 făcute pe ea rămân marcate în tabel, în cuvinte.
 
 **Fă un film**, pe același panou, salvează reluarea ca fișier — un GIF sau un video cu echipa
-mișcându-se prin ridicare, al acestei ture sau al mai multora. Vezi
+mișcându-se prin topografie, al acestei ture sau al mai multora. Vezi
 [Un film al unei ture urmărite](tracking-movie.md).
 
 ### Mai multe echipe deodată: numărătoarea unei tabere
@@ -384,7 +384,7 @@ trebuie pornit nimic — pornirea urmăririi pe tură este ce o pune acolo.
 
 Fila aceea este numărătoarea și nimic altceva:
 
-- **Nu arată niciun loc.** Nicio stație, adâncime, ridicare sau peșteră nu se află pe ea, pentru
+- **Nu arată niciun loc.** Nicio stație, adâncime, topografie sau peșteră nu se află pe ea, pentru
   nimeni — așa că poate spune cuiva că un om este în peșteră într-o peșteră a cărei locație îi
   este ascunsă, exact cum face aici *Nu îți este arătată*. Unde sunt oamenii rămâne aici, pe
   tură.
@@ -418,7 +418,7 @@ Fiecare rând din **Rapoarte** oferă două comenzi, și ele înseamnă lucruri 
   avertisment, nu o piedică, iar corectura se salvează așa cum a fost scrisă — verifică întâi
   ziua și ora.
 - **Șterge acest raport** — doar pentru un raport care nu ar trebui să existe deloc. Iese din
-  jurnal și din tot ce se desenează din jurnal: tabelul echipei, ridicarea, o reluare, o pagină
+  jurnal și din tot ce se desenează din jurnal: tabelul echipei, topografia, o reluare, o pagină
   publicată. **Nu este distrus** — vezi mai jos *Punerea înapoi a unui raport șters*.
 
 Amândouă funcționează atât pe o urmărire **încheiată**, cât și pe una pornită.
@@ -430,7 +430,7 @@ este desenat cât timp nu există niciunul). Deschide-l și fiecare raport scos 
 momentul, persoana, locul lui și momentul în care a fost scos, lângă două butoane:
 
 - **Pune înapoi** — raportul revine în jurnal exact cum era: același moment, același loc pe
-  aceeași ridicare, aceeași notă. Nu este marcat **Corectat**, pentru că nu l-a corectat nimeni.
+  aceeași topografie, aceeași notă. Nu este marcat **Corectat**, pentru că nu l-a corectat nimeni.
 - **Șterge definitiv** — distruge raportul. Confirmarea o spune: **acțiunea nu poate fi
   anulată**, iar nimic din aplicație nu mai aduce raportul înapoi. Doar un raport deja scos din
   jurnal poate fi șters definitiv, așa că pierderea unuia pe această cale cere întotdeauna două
@@ -469,11 +469,11 @@ corectură care nu a schimbat nimic nu lasă niciun semn. Cuvântul spune *că* 
 modificat — nu când și nu de către cine — și este arătat doar în acest jurnal: nimic de pe o
 pagină publicată nu îl poartă.
 
-**Pe altă ridicare.** În **Rapoarte**, un loc poartă această etichetă gri când a fost înregistrat
-pe o ridicare pe care urmărirea nu o mai folosește — urmărirea a fost mutată pe altă ridicare
-după acel raport, sau ridicarea în care a fost măsurat a fost ștearsă. Raportul nu are nimic
+**Pe altă topografie.** În **Rapoarte**, un loc poartă această etichetă gri când a fost înregistrat
+pe o topografie pe care urmărirea nu o mai folosește — urmărirea a fost mutată pe altă topografie
+după acel raport, sau topografia în care a fost măsurat a fost ștearsă. Raportul nu are nimic
 greșit: este ce s-a spus atunci. Eticheta există pentru că același nume de stație poate fi alt
-loc pe ridicarea în vigoare. Este perechea discretă a etichetei portocalii din tabelul
+loc pe topografia în vigoare. Este perechea discretă a etichetei portocalii din tabelul
 oamenilor, care spune același lucru despre unde se află cineva *acum*. Ca să vezi un astfel de
 raport acolo unde a fost făcut, deschide modelul și folosește **Vezi rapoartele pe** (mai sus).
 
@@ -500,12 +500,12 @@ nu poate spune pe care o au în minte oamenii prin „96 de metri". Clubul poate
 | Câmp | |
 |---|---|
 | **Adâncime** | Adâncimea declarată. Se păstrează cu o zecimală; semnul este ignorat. Las-o goală pentru a numi un loc fără adâncime (mai jos) |
-| **Stație** | Ce stație este acea adâncime — sau acel loc. Pe măsură ce scrii, sub casetă sunt oferite stațiile ridicării curente a peșterii ale căror nume încep așa — majusculele și diacriticele nu contează — iar alegerea uneia completează scrierea ridicării. Orice nume este primit în continuare: lista este un ajutor, nu o regulă |
+| **Stație** | Ce stație este acea adâncime — sau acel loc. Pe măsură ce scrii, sub casetă sunt oferite stațiile topografiei curente a peșterii ale căror nume încep așa — majusculele și diacriticele nu contează — iar alegerea uneia completează scrierea topografiei. Orice nume este primit în continuare: lista este un ajutor, nu o regulă |
 | **Numele locului** | Numele folosit de oameni („Meandrul"). Opțional unde există o adâncime, obligatoriu unde nu există |
 | **Notă** | Opțional — câteva cuvinte arătate lângă nume acolo unde o singură adâncime nu spune destul, de exemplu un interval de adâncimi scris ca text („601/0 - 619"). Cel mult 200 de caractere; arătată cum a fost scrisă, niciodată citită ca număr |
-| **Numit pe desen** | Bifează-o pentru un loc pe care clubul îl numește pe desenul ridicării, nu doar în lista sa de locuri. Tabelul îl marchează **Pe desen** |
+| **Numit pe desen** | Bifează-o pentru un loc pe care clubul îl numește pe desenul topografiei, nu doar în lista sa de locuri. Tabelul îl marchează **Pe desen** |
 
-Lista de sub **Stație** nu oferă nimic acolo unde peștera nu are încă nicio ridicare citită sau
+Lista de sub **Stație** nu oferă nimic acolo unde peștera nu are încă nicio topografie citită sau
 unde locația exactă a peșterii îți este ascunsă; caseta este atunci una simplă de text. Când sunt
 mai multe nume decât arată, ultimul rând spune câte — scrie mai mult din nume.
 
@@ -522,8 +522,8 @@ mai multe nume decât arată, ultimul rând spune câte — scrie mai mult din n
   astfel de loc la altă stație, sau darea unei adâncimi, o scrie pe cea nouă și apoi o retrage pe
   cea veche — și invers când o adâncime este scoasă.
 - **Fiecare raport la acea adâncime ajunge pe stația declarată** — introdus, corectat sau
-  importat — cât timp ridicarea urmăririi mai are acea stație. O declarație care numește o stație
-  pe care ridicarea nu o mai are (o ridicare reîncărcată între timp) este sărită, adâncimea este
+  importat — cât timp topografia urmăririi mai are acea stație. O declarație care numește o stație
+  pe care topografia nu o mai are (o topografie reîncărcată între timp) este sărită, adâncimea este
   plasată prin măsurare, iar fila spune care dintre cele două s-a întâmplat.
 - **Un nume de loc devine ceva prin care se poate raporta.** Cardul de raport oferă locurile
   declarate pe nume, de la cel mai puțin adânc; alegerea unuia raportează adâncimea lui, care
@@ -531,23 +531,23 @@ mai multe nume decât arată, ultimul rând spune câte — scrie mai mult din n
   peșteră nu a declarat niciun loc, așa că un loc se raportează ca stație sau ca adâncime* — cu
   o legătură, **Declară-le pe pagina peșterii**, care deschide acest card. Dialogul de corectare
   spune același lucru.
-- **Nu este în ridicarea curentă.** Un loc declarat poartă această etichetă portocalie când
-  ridicarea marcată drept cea **curentă** a peșterii nu are nicio stație cu acel nume — un nume
-  scris greșit, sau o ridicare exportată din nou cu stațiile redenumite și apoi **făcută cea
+- **Nu este în topografia curentă.** Un loc declarat poartă această etichetă portocalie când
+  topografia marcată drept cea **curentă** a peșterii nu are nicio stație cu acel nume — un nume
+  scris greșit, sau o topografie exportată din nou cu stațiile redenumite și apoi **făcută cea
   curentă**. Declarația nu este urmată acolo: un raport la acea adâncime ajunge pe stația cea mai
-  apropiată. Corectează numele stației (lista le oferă pe cele ale ridicării curente) sau
-  verifică care ridicare este cea curentă a peșterii. **O ridicare doar încărcată nu este
-  judecată aici**: încărcarea nu ia marcajul de la ridicarea care îl are, așa că un fișier
+  apropiată. Corectează numele stației (lista le oferă pe cele ale topografiei curente) sau
+  verifică care topografie este cea curentă a peșterii. **O topografie doar încărcată nu este
+  judecată aici**: încărcarea nu ia marcajul de la topografia care îl are, așa că un fișier
   corectat nu arată nicio etichetă până nu este făcut curent — iar lipsa etichetelor până atunci
-  nu arată că declarațiile i se potrivesc. O urmărire îndreptată spre altă ridicare o spune ea
-  însăși: cardul de raport judecă fiecare loc față de ridicarea folosită de urmărire, în lista
-  lui de locuri — *Meandrul — stația nu este în această ridicare*. Lipsa etichetei nu este o
-  promisiune, nici într-un sens, nici în celălalt: unde ridicarea curentă nu a fost citită (chiar
+  nu arată că declarațiile i se potrivesc. O urmărire îndreptată spre altă topografie o spune ea
+  însăși: cardul de raport judecă fiecare loc față de topografia folosită de urmărire, în lista
+  lui de locuri — *Meandrul — stația nu este în această topografie*. Lipsa etichetei nu este o
+  promisiune, nici într-un sens, nici în celălalt: unde topografia curentă nu a fost citită (chiar
   dacă o altă încărcare a fost), sau locația peșterii îți este ascunsă, nu se spune nimic.
 - **Retrage** scoate o declarație. Rapoartele deja înregistrate păstrează stația primită.
   Retragerea unui loc numit fără adâncime doar îl scoate din lista locurilor peșterii.
-- **O stație căreia fișierul ridicării nu îi dă nume nu poate fi declarată.** Este cunoscută doar
-  prin numărul la care a scris-o fișierul, iar următorul export al ridicării dă acel număr altei
+- **O stație căreia fișierul topografiei nu îi dă nume nu poate fi declarată.** Este cunoscută doar
+  prin numărul la care a scris-o fișierul, iar următorul export al topografiei dă acel număr altei
   stații — așa că declarația ar ajunge să însemne alt loc fără ca cineva să o fi schimbat.
   Declară adâncimea la o stație care are nume.
 
@@ -615,7 +615,7 @@ Alegerea se face pentru toată foaia, la fiecare citire; nimic din ea nu se păs
 | **Activitatea echipei este suprascrisă doar de o foaie care are acea coloană** | Ca echipa și nota: o foaie de ore și adâncimi lasă cuvântul pe care raportul îl are deja. Un jurnal scos ca foaie scrie cuvântul înapoi, deci recitirea acelei foi nu schimbă nimic |
 | **Un raport este identificat prin persoană și moment** | O foaie corectată, importată din nou, schimbă rândurile corectate în loc să le dubleze |
 | **Suprascrierea schimbă doar ce are coloană în foaie** | Acolo unde jurnalul are deja raportul, locul în care era persoana este scris atunci când rândul spune altceva decât raportul; echipa doar dacă foaia are coloană de echipă, iar nota doar dacă are coloană de notă sau de detalii — o celulă goală sub o asemenea coloană o șterge. Excepție face o celulă de echipă care este numele mai multor echipe ale turei: nu se poate decide care echipă este, așa că raportul își păstrează echipa, iar rândul spune acest lucru (dă celor două echipe nume diferite și citește foaia din nou). O foaie cu ore și adâncimi lasă neatinsă o notă introdusă de mână. Rapoartele care spun deja ce spune foaia nu sunt scrise din nou și sunt numărate separat, ca *deja așa cum spune foaia* |
-| **Importul face ce arăta tabelul, sau nimic** | Foaia este citită din nou când apeși **Importă**. Dacă tura s-a schimbat între timp — cineva a introdus un raport la unul dintre momentele foii sau a corectat unul pe care foaia l-ar înlocui, o echipă sau un participant s-a schimbat, un loc a fost declarat în peșteră, urmărirea a fost mutată pe altă ridicare — nu se scrie nimic, foaia este citită din nou și dialogul o spune: verifică rândurile, bifează din nou suprascrierea dacă încă o vrei și apasă **Importă** |
+| **Importul face ce arăta tabelul, sau nimic** | Foaia este citită din nou când apeși **Importă**. Dacă tura s-a schimbat între timp — cineva a introdus un raport la unul dintre momentele foii sau a corectat unul pe care foaia l-ar înlocui, o echipă sau un participant s-a schimbat, un loc a fost declarat în peșteră, urmărirea a fost mutată pe altă topografie — nu se scrie nimic, foaia este citită din nou și dialogul o spune: verifică rândurile, bifează din nou suprascrierea dacă încă o vrei și apasă **Importă** |
 | **Aceeași foaie importată a doua oară nu scrie nimic** | Fiecare rând al ei se găsește deja în jurnal. Fără bifa de suprascriere, toate sunt *omise*; cu ea, fiecare este comparat cu raportul din jurnal și, spunând același lucru, este numărat ca *deja așa cum spune foaia* — niciun raport nu este adăugat, niciunul nu este rescris și niciunul nu devine **Corectat**. Așa că o foaie la care încă adaugi rânduri poate fi importată din nou ori de câte ori vrei: sunt scrise doar rândurile ei noi și cele schimbate |
 | **O oră scrisă fără fus orar este citită ca UTC, exact cum a fost scrisă — dacă nu numești fusul orar al foii** | 14:30 din foaie devine 14:30 UTC, arătat în fusul tău. Alege **Fusul orar al foii** la **Setări fișier** — fusul tău este oferit pe nume, iar oricare altul poate fi căutat — și 14:30 este citit după ceasul acelui fus, cu ora de vară și de iarnă cu tot; previzualizarea spune ce fus s-a folosit și arată fiecare rând după ceasul lui. O celulă care își scrie singură decalajul (`2026-09-12T14:30+03:00`) este citită cum spune, oricare ar fi alegerea |
 | **O foaie deja importată nu se corectează importând-o din nou în alt fus orar** | Un raport este identificat prin persoană și moment, iar fusul schimbă fiecare moment — așa că al doilea import adaugă rânduri lângă primele în loc să le înlocuiască. Șterge întâi rândurile de dinainte |
@@ -624,7 +624,7 @@ Alegerea se face pentru toată foaia, la fiecare citire; nimic din ea nu se păs
 | **O dată fără oră este refuzată** | Puse la miezul nopții, rapoartele unei zile întregi s-ar suprapune într-un singur moment |
 | **Data și ora pot sta în două coloane separate** | Sunt unite și citite ca un singur moment, după aceleași reguli ca o singură coloană. Un rând care lasă data goală este refuzat — data nu se preia de pe rândul de deasupra |
 | **Numele sunt potrivite doar cu lista acestei ture** | Numele întreg, apoi prenumele și inițiala („Ion P."), apoi prenumele. Un nume care nu corespunde nimănui, sau corespunde la doi oameni, este refuzat, nu ghicit. Cineva al cărui cont poartă alt nume decât are lista pentru el este găsit după oricare dintre ele |
-| **Un rând care repetă stația sau adâncimea pe care raportul o are deja lasă raportul unde este** | Un nume de stație sau o adâncime se citește pe ridicarea pe care este urmărirea *acum*, cu stația de referință, filtrul și locurile declarate de *acum*. Un raport făcut mai devreme — pe o ridicare pe care urmărirea a părăsit-o între timp sau înainte ca un loc declarat să fie schimbat — nu este deci citit din nou când rândul spune doar ce spune deja raportul: își păstrează stația și ridicarea pe care a fost făcut. Scrie altă stație sau altă adâncime în rând și acel rând este așezat din nou, pe ridicarea în vigoare. Ca o adâncime să fie citită din nou după declarații schimbate, corectează raportul însuși |
+| **Un rând care repetă stația sau adâncimea pe care raportul o are deja lasă raportul unde este** | Un nume de stație sau o adâncime se citește pe topografia pe care este urmărirea *acum*, cu stația de referință, filtrul și locurile declarate de *acum*. Un raport făcut mai devreme — pe o topografie pe care urmărirea a părăsit-o între timp sau înainte ca un loc declarat să fie schimbat — nu este deci citit din nou când rândul spune doar ce spune deja raportul: își păstrează stația și topografia pe care a fost făcut. Scrie altă stație sau altă adâncime în rând și acel rând este așezat din nou, pe topografia în vigoare. Ca o adâncime să fie citită din nou după declarații schimbate, corectează raportul însuși |
 | **O notă este comparată așa cum se citește o celulă** | Rândurile noi și spațiile duble dintr-o notă introdusă de mână contează ca un singur spațiu, iar o notă care este doar `-`, `?` sau `n/a` contează ca goală. O notă care se citește la fel rămâne exact cum a fost introdusă |
 | **Locul unui rând: stația, apoi locul declarat, apoi adâncimea** | Intrarea și ieșirea nu revendică nicio stație |
 | **Un rând cu o notă și fără loc este o notă — dacă celulele de loc sunt goale** | Un apel care a spus „crește apa” și niciun loc este tot un raport. O adâncime care nu este un număr (*96 cm*) sau un cuvânt de stare pe care nu îl știe niciuna dintre liste nu este o celulă goală: rândul este refuzat, cu celula numită, în loc să fie trecut ca notă — corectează celula sau adaugă cuvântul la **Setări coloane** |
@@ -633,7 +633,7 @@ Alegerea se face pentru toată foaia, la fiecare citire; nimic din ea nu se păs
 | **Un moment pe care jurnalul îl are deja de două ori pentru acea persoană este refuzat** | Nu este treaba importului să ghicească pe care dintre cele două îl corectează rândul |
 
 O foaie poate fi importată și pe o urmărire **încheiată** — de obicei atunci este scrisă. O tură
-fără nicio urmărire nu are pe ce să importe: alege întâi o ridicare și salvează configurarea.
+fără nicio urmărire nu are pe ce să importe: alege întâi o topografie și salvează configurarea.
 
 ### Scoaterea jurnalului ca foaie
 
@@ -643,7 +643,7 @@ are un raport între două, un raport pe rând, cel mai vechi primul. Oricine
 poate citi tura îl poate lua. Corectează-l într-o foaie de calcul și importă-l din nou cu
 **Suprascrie ce are deja jurnalul la aceste momente** bifat: rândurile schimbate sunt corectate,
 restul sunt numărate ca *deja așa cum spune foaia* — și acolo unde urmărirea a fost mutată între
-timp pe altă ridicare: un raport al cărui rând l-ai lăsat neatins rămâne pe ridicarea pe care a
+timp pe altă topografie: un raport al cărui rând l-ai lăsat neatins rămâne pe topografia pe care a
 fost făcut.
 
 | Ce face foaia | De ce |
@@ -655,7 +655,7 @@ fost făcut.
 | **Un loc care nu îți poate fi comunicat nu este în fișier** | Raportul rămâne, cu ora, persoana și nota lui, și cu `retinut` în coloana de stare. Importat din nou, rândul este refuzat: un loc lăsat afară din copia ta nu este scris niciodată peste locul din jurnal |
 | **Textul pe care o foaie de calcul l-ar rula ca formulă rămâne text** | O notă sau un nume care începe cu `=`, `+`, `-` sau `@` este scris cu un tabulator în față, pe care importul îl înlătură |
 | **Oamenii sunt numiți așa cum ți-i arată aplicația** | Acolo unde contul cuiva poartă alt nume decât are lista pentru el, foaia îl poartă pe al contului. Importul găsește persoana după oricare dintre ele |
-| **O stație sau o adâncime este scrisă așa cum o are raportul, fără ridicarea ei** | Foaia nu spune pe ce ridicare a fost făcut un raport și nici nu are nevoie: importat din nou, un rând a cărui stație sau adâncime ai lăsat-o neatinsă lasă raportul pe ridicarea lui. Schimbă stația sau adâncimea și rândul este citit pe ridicarea pe care este urmărirea acum — unde același nume de stație poate fi alt loc, iar o stație pe care acea ridicare nu o are este refuzată |
+| **O stație sau o adâncime este scrisă așa cum o are raportul, fără topografia ei** | Foaia nu spune pe ce topografie a fost făcut un raport și nici nu are nevoie: importat din nou, un rând a cărui stație sau adâncime ai lăsat-o neatinsă lasă raportul pe topografia lui. Schimbă stația sau adâncimea și rândul este citit pe topografia pe care este urmărirea acum — unde același nume de stație poate fi alt loc, iar o stație pe care acea topografie nu o are este refuzată |
 | **Două rapoarte despre aceeași persoană la același moment sunt scrise amândouă și refuzate amândouă la întoarcere** | Importul nu poate ști pe care dintre cele două l-ar corecta un rând |
 | **Fișierul este numit după numărul turei și zi** | Niciodată după titlul turei sau după peșteră |
 
@@ -723,7 +723,7 @@ apoi oprită, fiind socotită mai multă complicație decât merita, iar hotăr�
 cuvântul](trips.md).
 
 Alături de jurnal, un model poate cere, cu un rând care conține doar cuvântul `survey`, **stațiile
-ridicării în care a fost urmărită tura**, fiecare cu adâncimea la care se află sub stația de la
+topografiei în care a fost urmărită tura**, fiecare cu adâncimea la care se află sub stația de la
 care urmărirea măsoară adâncimile — foaia în care se caută o stație raportată. O listă întreagă de
 stații este tot vocabularul de stații al unei peșteri, așa că este tipărită doar pentru un cititor
 căruia i se poate spune unde este peștera; oricine altcineva citește un singur rând care spune că
@@ -740,16 +740,16 @@ pornită.
 - **Copiază-l acum — este singurul moment în care este arătat.** Se păstrează doar o amprentă a
   linkului, așa că nu mai poate fi arătat; un link pierdut se înlocuiește (mai jos).
 - Același panou dă **Pentru un site**: un bloc de lipit în site-ul clubului (mai jos).
-- **Publicarea cere dreptul de a partaja peștera**, pentru că pagina predă ridicarea topografică
+- **Publicarea cere dreptul de a partaja peștera**, pentru că pagina predă topografia
   a peșterii.
 - **O peșteră cu coordonate protejate nu poate fi publicată deloc.** Nu estompată, nu parțial —
   refuzată, și decis din nou la fiecare citire a paginii, așa că protejarea ulterioară a peșterii
   închide linkurile deja date.
 - **Toți participanții la tură care au cont sunt anunțați** că a fost publicată.
 - **Lângă linkul nou poate apărea un avertisment**: *„O peșteră protejată, sau una dintre
-  intrările ei, se află în zona acoperită de ridicarea topografică a acestei ture."* Nimic nu a
+  intrările ei, se află în zona acoperită de topografia acestei ture."* Nimic nu a
   fost refuzat, iar linkul funcționează. Este o verificare după poziție, care nu poate vedea în
-  interiorul fișierului ridicării — ce înseamnă și ce îi poate scăpa se află la
+  interiorul fișierului topografiei — ce înseamnă și ce îi poate scăpa se află la
   [Tot ce este publicat](#tot-ce-este-publicat-pentru-administratorii-deplini).
 
 **Pe cine numește pagina.** Implicit, această instalare publică **numele reale**; un operator
@@ -792,9 +792,9 @@ nu este protejată), dar **nu** și o urmărire pornită, așa că linkul unei t
 
 Linkul deschide o pagină **fără niciun link pe ea** și fără nimic altceva din instalare: numele
 turei, fiecare om cu locul unde a fost raportat ultima dată și când s-a auzit ultima dată de el,
-și ridicarea cu toți desenați pe ea. Se împrospătează singură în fiecare minut cât timp echipa
+și topografia cu toți desenați pe ea. Se împrospătează singură în fiecare minut cât timp echipa
 este în peșteră, spune *„Această tură s-a încheiat"* după încheierea urmăririi și primește câte o
-filă pentru fiecare hartă scanată, acolo unde ridicarea are.
+filă pentru fiecare hartă scanată, acolo unde topografia are.
 
 Pagina spune ce arată, pentru un cititor care nu a mai urmărit niciodată o tură:
 
@@ -827,10 +827,10 @@ Pagina spune ce arată, pentru un cititor care nu a mai urmărit niciodată o tu
   (`SILEXGIS__TripTracking__PublishDepthPlaces`, vezi ghidul de instalare). Unde este pornită,
   cineva raportat la o stație cu nume apare cu numele și cu stația dedesubt — *Sala Mare* peste
   `p.g.7` — la o tură urmărită și la reluarea unei ture trecute. Sunt publicate doar declarațiile
-  care au un nume și doar pentru stațiile ridicării pe care o desenează pagina — inclusiv locurile
+  care au un nume și doar pentru stațiile topografiei pe care o desenează pagina — inclusiv locurile
   numite fără adâncime, fiecare cu nota sa și cu faptul dacă este numit pe desen, în ordinea
   peșterii (întâi adâncimile, de la cea mai mică, apoi celelalte în ordinea declarării), așa că o
-  pagină din afara aplicației poate desena întreaga listă de locuri a peșterii lângă ridicare. Unde
+  pagină din afara aplicației poate desena întreaga listă de locuri a peșterii lângă topografie. Unde
   este oprită, și pentru orice stație căreia peștera nu i-a dat un nume, pagina arată doar stația.
 - **Cluburile fiecăruia — doar unde instalarea le publică.** O instalare poate lăsa o pagină
   publicată să spună din ce grupuri speologice face parte fiecare persoană numită; este
@@ -882,8 +882,8 @@ care nu deschide niciuna nu află despre nimeni altcineva, iar pagina nu cere se
   - **Numai ce avea deja lista.** Oricine deține linkul primește echipele urmărite ale peșterii
     când deschide lista; **Vezi echipa** desenează una dintre ele și nu mai cere nimic
     serverului. Nu deschide alt link și nu are nevoie de vreunul.
-  - **Pe ridicarea acestui link, și pe niciuna alta.** Un loc raportat de cealaltă echipă pe
-    altă ridicare a peșterii este trecut în listă ca atare și nu este desenat, exact ca pentru
+  - **Pe topografia acestui link, și pe niciuna alta.** Un loc raportat de cealaltă echipă pe
+    altă topografie a peșterii este trecut în listă ca atare și nu este desenat, exact ca pentru
     echipa linkului. Fotografiile și planșele din jurul desenului rămân tot ale linkului.
   - **Fila browserului și adresa rămân ale turei linkului.** O adresă copiată în timp ce privești
     altă echipă deschide tura pentru care a fost publicat linkul: nu există un link „către
@@ -910,7 +910,7 @@ care nu deschide niciuna nu află despre nimeni altcineva, iar pagina nu cere se
   peșteră*; o echipă urmărită și bannerul unei reluări spun tabăra într-un rând al lor. Unde
   nicio tură a peșterii nu ține de o tabără, lista este o singură listă simplă. Tabăra este doar
   numită — nu poate fi deschisă de aici, iar listele nu pot fi restrânse la o singură tabără.
-- **Turele încheiate și publicate ale peșterii** — **Redă** reia una pe ridicarea în care au fost
+- **Turele încheiate și publicate ale peșterii** — **Redă** reia una pe topografia în care au fost
   măsurate rapoartele ei, sub un banner care spune limpede *„Aceasta este o tură trecută"*.
   Vederea poate ține pasul cu o echipă sau cu o persoană; cât timp o face, cele două săgeți care
   trec de la un raport la următorul trec prin rapoartele acelei echipe sau persoane și sar peste
@@ -1047,7 +1047,7 @@ cât timp trecutul este pe ecran.
 
 | Atribut | Mută vederea la |
 |---|---|
-| `data-silexgis-station="<stație>"` | O stație a ridicării |
+| `data-silexgis-station="<stație>"` | O stație a topografiei |
 | `data-silexgis-survey="<topografie>"` | O ramură întreagă, încadrată |
 | `data-silexgis-caver="<loc>"` | Unde se află acel membru al echipei (1, 2, 3…) |
 | `data-silexgis-trip="<id tură>"` | O tură trecută a aceleiași peșteri, redată |
@@ -1104,7 +1104,7 @@ document.addEventListener('silexgis:ready', function (event) {
     // member.ordinal        locul în echipă (1, 2, 3...) - ce primește data-silexgis-caver
     // member.name           numele sub care îl desenează vizualizarea
     // member.station        stația la care este desenat, sau null
-    // member.onOtherSurvey  true: raportat, dar pe altă ridicare a peșterii decât aceasta
+    // member.onOtherSurvey  true: raportat, dar pe altă topografie a peșterii decât aceasta
     // member.notOnDrawing   true: raportat la o stație pe care acest desen nu o conține
   });
 });
@@ -1164,7 +1164,7 @@ Pe ce te poți baza:
   sus — scrie a cui este echipa sau nu scrie nimic — înainte de a te baza pe lista de
   echipe din cadru.
 - **`station: null` are trei înțelesuri**, iar două dintre ele nu sunt „nu știe nimeni". Nimeni
-  nu a raportat unde este acea persoană; sau cineva a raportat, pe altă ridicare a peșterii
+  nu a raportat unde este acea persoană; sau cineva a raportat, pe altă topografie a peșterii
   (`onOtherSurvey`); sau la o stație pe care desenul din cadru nu o conține (`notOnDrawing`).
   Formulează-le diferit. În ultimele două cazuri numele stației nu este predat, intenționat —
   îl spune lista de oameni a cadrului.
@@ -1252,7 +1252,7 @@ refuzate pagina spune ce spune despre orice link care nu mai răspunde.
 
 **Ce predă o tură trecută.** În listă: numele ei, datele ei, tabăra din care a făcut parte, câți
 au fost în ea și când i-a fost încheiată urmărirea. În reluare: echipa, rapoartele cu orele lor
-și ridicarea pe care au fost măsurate. **La publicarea unei ture nu se copiază nimic** —
+și topografia pe care au fost măsurate. **La publicarea unei ture nu se copiază nimic** —
 reluarea este citită de fiecare dată din jurnalul de urmărire al turei. Așadar oamenii sunt
 numiți după regula în vigoare *astăzi* (o etichetă adăugată acum ține numele acelei persoane în
 afara reluării unei ture de anul trecut, iar oprirea numelor pentru toată instalarea face
@@ -1386,28 +1386,28 @@ trecute să nu mai fie arătate, fără a renunța la linkuri, aceea este o seta
 [ghidul de instalare](../../../INSTALL.md#configuration-reference)) și apare pe această pagină
 ca un rând deasupra tabelului.
 
-Retragerea linkurilor nu șterge nimic din instalare: turele, rapoartele și ridicările lor rămân
+Retragerea linkurilor nu șterge nimic din instalare: turele, rapoartele și topografiile lor rămân
 cum erau, iar fiecare link retras sau înlocuit este consemnat la tura lui în
 [istoricul modificărilor](history-and-audit.md), împreună cu cine a făcut-o.
 
 ### „Peșteră protejată în apropiere?"
 
-Publicarea unei ture predă fișierul ridicării topografice a peșterii ei, iar dacă asta este
-permis se întreabă despre **acea** peșteră. Un fișier de ridicare nu este însă legat de o
+Publicarea unei ture predă fișierul topografiei a peșterii ei, iar dacă asta este
+permis se întreabă despre **acea** peșteră. Un fișier de topografie nu este însă legat de o
 singură peșteră: exportul unui sistem întreg este înregistrat la o peșteră și le desenează și pe
 cele vecine. Așa că, atunci când poziția unei peșteri **protejate**, alta decât cea a turei —
-sau a uneia dintre intrările ei — cade în dreptunghiul acoperit de stațiile ridicării, rândul
+sau a uneia dintre intrările ei — cade în dreptunghiul acoperit de stațiile topografiei, rândul
 poartă o etichetă portocalie **Peșteră protejată în apropiere?**, iar același avertisment apare
 lângă un link atunci când este creat sau înlocuit.
 
 Citește-l drept ceea ce este:
 
-- **Nu refuză nimic.** Linkul există și funcționează. Deschide ridicarea, uită-te și
+- **Nu refuză nimic.** Linkul există și funcționează. Deschide topografia, uită-te și
   retrage linkul dacă arată ce nu ar trebui publicat.
 - **Este o verificare după poziție și nu poate vedea în interiorul fișierului.** O peșteră se
-  poate afla în dreptunghiul unei ridicări care nu intră deloc în ea. Iar o ridicare care
+  poate afla în dreptunghiul unei topografii care nu intră deloc în ea. Iar o topografie care
   *desenează* o vecină protejată trece nemarcată atunci când punctul înregistrat al acelei
-  peșteri cade în afara dreptunghiului sau când ridicarea nu are stații stocate din care să
+  peșteri cade în afara dreptunghiului sau când topografia nu are stații stocate din care să
   rezulte unul (un model de pereți, un fișier încă necitit).
   **Lipsa etichetei nu este o confirmare că totul e în regulă.**
 - **Nu numește nicio peșteră și nu dă nicio poziție.** Pe această pagină, citită de oameni care
@@ -1449,7 +1449,7 @@ instalare](../../../INSTALL.md#when-a-published-page-or-the-article-showing-it-s
 || Vezi | De ce ||
 |---|---|
 | *„Urmărirea nu a fost pornită niciodată pentru această tură, așa că jurnalul ei nu poate fi modificat."* || Pornește întâi urmărirea; o urmărire încheiată este în regulă |
-| *„Acea ridicare aparține altei peșteri…"* | O urmărire pornită rămâne în peștera ei — încheie-o întâi |
+| *„Acea topografie aparține altei peșteri…"* | O urmărire pornită rămâne în peștera ei — încheie-o întâi |
 | *„Nicio stație nu corespunde acelei adâncimi sub filtrul acestei ture…"* || Lărgește **Unde a spus echipa că merge** sau raportează o stație |
 | *„Un raport nu poate fi despre viitor."* || Verifică ora de pe el |
 | *„Serverul nu a răspuns — raportul nu a fost încă trimis. Este păstrat în acest browser…"* | Nu este un refuz: serverul nu a putut fi contactat, iar raportul este păstrat ca să fie trimis când revine conexiunea — vezi *Raportarea fără semnal* |
@@ -1458,9 +1458,9 @@ instalare](../../../INSTALL.md#when-a-published-page-or-the-article-showing-it-s
 | *„Refuzat:"* pe un raport în așteptare | Serverul a răspuns nu când raportul în așteptare a fost în sfârșit trimis. Rămâne păstrat până când apeși **Trimite din nou** sau **Aruncă** |
 | *„Acel raport este din nou în jurnal — l-a pus cineva înapoi. Scoate-l mai întâi, apoi șterge-l definitiv."* | Altcineva a apăsat **Pune înapoi** pe el cât timp lista ta de rapoarte scoase era deschisă. Nu s-a distrus nimic; dacă tot trebuie să dispară, șterge-l din nou din jurnal |
 | *„Spune când s-a spus. Urmărirea este încheiată, așa că raportul nu poate fi marcat cu ora de acum."* | Un raport adăugat pe o urmărire încheiată este completat ulterior: treci la **Când s-a spus** momentul în care a fost făcut, în timpul turei |
-| *„Această tură nu are nicio urmărire pe care să fie importate rapoarte."* || Alege o ridicare și salvează întâi configurarea urmăririi |
+| *„Această tură nu are nicio urmărire pe care să fie importate rapoarte."* || Alege o topografie și salvează întâi configurarea urmăririi |
 | *„Nu s-a importat nimic. Tura sau jurnalul ei s-au schimbat după ce foaia a fost citită…"* (cu titlul *Tura s-a schimbat cât timp era verificată foaia*) | Între citirea foii și apăsarea pe **Importă** s-a schimbat ceva de care depinde importul — cineva a înregistrat un raport la unul dintre momentele foii, o echipă sau un participant a fost modificat, un loc a fost declarat în peșteră — așa că foaia nu mai corespunde cu ce ți s-a arătat. Nu s-a scris nimic, iar foaia a fost citită din nou: verifică rândurile, bifează din nou suprascrierea dacă încă o vrei și apasă **Importă** |
-| *„Publicarea acestei ture predă ridicarea topografică a peșterii, iar asta cere dreptul de a partaja peștera."* || Întreabă-l pe cel care se ocupă de peșteră |
+| *„Publicarea acestei ture predă topografia peșterii, iar asta cere dreptul de a partaja peștera."* || Întreabă-l pe cel care se ocupă de peșteră |
 | *„Peștera acestei ture are coordonate protejate, așa că tura nu poate fi publicată deloc."* | Intenționat — desenul este poziția peșterii |
 | *„Acel link a fost deja retras, așa că nu mai este nimic de înlocuit. Publică tura din nou."* | L-a retras altcineva mai întâi — poate chiar acum o clipă, de pe alt ecran |
 | *„Nimic de arătat pentru acest link"* (pe pagina publică) | Retras, înlocuit, încheiat, sau peștera a fost protejată între timp |

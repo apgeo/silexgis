@@ -220,7 +220,7 @@ ca PDF; copia clasată pe tură este întotdeauna un document Word.
 Un club poate scrie **propriul model**: descarcă-l pe cel standard (un fișier text scurt care
 se explică singur), editează-l, încarcă-l la Configurare → Modele de raport și alege-l — sau
 dă-l unui singur scop de tură, ca fiecare tură cu acel scop să fie redactată în el. Un model
-propriu poate tipări și jurnalul de urmărire al turei și lista de stații a ridicării, pentru o
+propriu poate tipări și jurnalul de urmărire al turei și lista de stații a topografiei, pentru o
 tură [urmărită de la suprafață](../features/live-tracking.md). Un model poate cere doar lucruri
 care i-au fost deja date cititorului, iar un rând al cărui conținut se dovedește gol pur și simplu
 dispare. Detalii: [Redactarea](../features/trips.md#redactarea).

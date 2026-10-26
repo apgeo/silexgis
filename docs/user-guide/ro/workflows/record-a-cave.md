@@ -71,7 +71,7 @@ Din pagina peșterii: **Adaugă intrare**. Fiecare intrare poartă:
 - un **tip de intrare**,
 - o **calitate a poziției** — necunoscută, GPS, de pe hartă, estimată — despre care merită să
   fii sincer, pentru că este diferența dintre „mergi aici" și „caută pe versantul ăsta",
-- data **ridicării**,
+- data **topografiei**,
 - un indicator **principală**; intrarea principală este cea pe care se bazează implicit alte
   câteva lucruri.
 

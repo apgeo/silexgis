@@ -14,7 +14,7 @@ Trimiterea mesajelor** arată dacă ceva din toate acestea chiar funcționează.
 > Acestea pot fi stabilite și din mediul de instalare, iar pagina o spune. Stabilirea lor aici
 > este calea care nu are nevoie de repornire.
 
-Pagina are nouă file:
+Pagina are unsprezece file:
 
 | Fila | Ce hotărăște | Mai jos |
 |---|---|---|
@@ -25,6 +25,7 @@ Pagina are nouă file:
 | **Import vectorial** | Dacă un import poate sări peste verificare și cum se caută duplicatele | [Import vectorial](#import-vectorial) |
 | **Notificări** | Cât se păstrează notificările și cât poate costa un anunț | [Păstrare](#păstrare) · [Garda de cheltuială](#garda-de-cheltuială) |
 | **Fototeci** | Oprirea și repornirea folosirii unei fototeci pe care instalarea o are deja | [Fototeci](#fototeci) |
+| **Încărcări de topografii** | Dacă o peșteră făcută de o încărcare de topografie ia primul model al acelei încărcări drept formă | [Încărcări de topografii](#încărcări-de-topografii) |
 | **Spațiul de lucru** | Cu ce aranjare a spațiului de lucru al hărții pornește un cont nou | [Spațiul de lucru](#spațiul-de-lucru) |
 | **Hărți în documente** | Ce fundaluri de hartă pot fi copiate într-un document | [Hărți în documente](#hărți-în-documente) |
 | **Hartă de bază proprie** | Harta de bază vectorială a instalării: ce se servește și descărcarea unei regiuni | [Hartă de bază proprie](#hartă-de-bază-proprie) |
@@ -127,6 +128,26 @@ nimic din ce conține fototeca însăși sau cine se poate autentifica direct î
 
 Comutatorul nu poate *conecta* o fototecă: ce fototeci are o instalare se hotărăște la
 implementare, iar pagina o spune — sau spune că nu este nimic de oprit.
+
+## Încărcări de topografii
+
+Fila **Încărcări de topografii** ține alegerile despre topografiile trimise de pe un dispozitiv de
+teren, cum este TopoDroid (vezi [Încărcarea topografiilor din TopoDroid](../features/topodroid-uploads.md)).
+
+**O peșteră creată de o încărcare primește primul ei model** — pornit dacă nu e oprit. Când o
+încărcare însăși a creat peștera, iar peștera nu are încă alt model și nicio drumuire, modelul
+Therion produs de încărcare devine modelul curent al peșterii, iar drumuirea lui linia cu care este
+desenată peștera, ca o peșteră făcută de pe telefon să nu rămână fără formă până alege cineva.
+Versiunile următoare ale topografiei și încărcările la o peșteră care exista deja nu iau niciodată
+singure acest loc. Oprit, un model dintr-o încărcare nu devine niciodată curent de la sine; cineva
+îl alege pe pagina peșterii.
+
+Două alegeri înrudite nu sunt pe această filă: câte versiuni ale unei topografii își păstrează
+rezultatele rulărilor (`SILEXGIS__SurveyUploads__KeepArtefactVersions` — 0 le păstrează pe ale
+fiecărei versiuni, 1 doar pe ale celei mai noi) și dimensiunea de la care cardul *Topografii* al
+peșterii și pagina de stare avertizează că versiunile mai vechi țin mult
+(`SILEXGIS__SurveyUploads__OlderVersionsWarnMegabytes`, implicit 500 MB). Amândouă se stabilesc în
+mediul instalării; fila le numește.
 
 ## Spațiul de lucru
 

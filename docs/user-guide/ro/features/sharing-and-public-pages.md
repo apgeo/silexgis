@@ -18,7 +18,7 @@ lista completă.
 | **Galeria publică** | Fotografiile îngrijite ale instalării |
 | **Un cod QR tipărit** | Confirmarea că acel cod este înregistrat. Nimic altceva |
 | **Pagina de dezabonare** | Deschisă dintr-un client de poștă |
-| **O tură publicată** | O echipă urmărită în peșteră, desenată pe ridicarea peșterii — și celelalte echipe ale acelei peșteri urmărite acum, și turele ei încheiate și publicate. Vezi [Urmărirea în direct și turele publicate](live-tracking.md) |
+| **O tură publicată** | O echipă urmărită în peșteră, desenată pe topografia peșterii — și celelalte echipe ale acelei peșteri urmărite acum, și turele ei încheiate și publicate. Vezi [Urmărirea în direct și turele publicate](live-tracking.md) |
 
 O instalare care nu publică nimic îi arată unui vizitator **pagina de autentificare** și nimic
 altceva.

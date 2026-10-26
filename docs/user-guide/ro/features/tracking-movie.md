@@ -9,7 +9,7 @@
 ---
 
 O tură urmărită lasă în urmă un jurnal: cine a fost raportat unde și când. **Fă un film**
-transformă acel jurnal într-un film scurt — ridicarea peșterii rotindu-se încet, fiecare om un
+transformă acel jurnal într-un film scurt — topografia peșterii rotindu-se încet, fiecare om un
 marcaj care se mută din stație în stație așa cum a fost raportat — salvat ca fișier GIF, WebM
 sau MP4 pe calculatorul tău.
 
@@ -29,14 +29,14 @@ publice ale unei ture publicate nu au un asemenea buton.
 
 | De unde | Ce se deschide |
 |---|---|
-| Fila **Urmărire** a unei ture, butonul **Fă un film** de pe panoul ridicării | Dialogul pentru ridicarea pe care este urmărită tura, cu acea tură deja bifată |
-| Pagina unei peșteri, butonul cu cameră de pe rândul unei ridicări, sub **Modele topo 3D** | Dialogul pentru acea ridicare, fără nicio tură bifată încă |
+| Fila **Urmărire** a unei ture, butonul **Fă un film** de pe panoul topografiei | Dialogul pentru topografia pe care este urmărită tura, cu acea tură deja bifată |
+| Pagina unei peșteri, butonul cu cameră de pe rândul unei topografii, sub **Modele topo 3D** | Dialogul pentru acea topografie, fără nicio tură bifată încă |
 
 Dialogul are **previzualizarea** într-o parte și setările în cealaltă. Previzualizarea este
-desenată de un vizualizator propriu, așa că panoul ridicării de dedesubt — marcajele lui, camera
+desenată de un vizualizator propriu, așa că panoul topografiei de dedesubt — marcajele lui, camera
 lui, o reluare în curs — este exact cum l-ai lăsat când dialogul se închide.
 
-Un film se face pe **o singură ridicare**. Turele urmărite pe altă ridicare a aceleiași peșteri
+Un film se face pe **o singură topografie**. Turele urmărite pe altă topografie a aceleiași peșteri
 nu sunt oferite în același film.
 
 **Butonul răspunde întotdeauna.** Realizarea filmului se aduce doar când o cere cineva, așa că pe o
@@ -46,7 +46,7 @@ sau, când aplicația a fost actualizată după ce pagina a fost deschisă, că 
 reîncărcată ca să folosească versiunea nouă. Pagina turei din spate rămâne cum era, iar o nouă
 apăsare pe buton încearcă din nou.
 
-**Previzualizarea spune cât a sosit din model.** Citește același fișier de ridicare ca
+**Previzualizarea spune cât a sosit din model.** Citește același fișier de topografie ca
 vizualizatorul aflat deja pe pagină — o singură descărcare, nu două — și îl numără pe măsură ce
 sosește: *Se încarcă modelul pentru previzualizare… 12.4 MB din 31.0 MB*. Dacă timp de 45 de
 secunde nu mai sosește nimic, descărcarea este abandonată, cu un mesaj care spune asta și un buton
@@ -56,7 +56,7 @@ secunde nu mai sosește nimic, descărcarea este abandonată, cu un mesaj care s
 
 ## Alegerea turelor
 
-**Ture** listează turele urmărite pe această ridicare pe care ai voie să le citești, fiecare cu
+**Ture** listează turele urmărite pe această topografie pe care ai voie să le citești, fiecare cu
 datele ei și *Rapoarte: N*. Bifează-le pe cele pe care le arată filmul.
 
 - **Fiecare tură își păstrează culoarea în ordinea în care le bifezi**, deci debifează și bifează
@@ -195,7 +195,7 @@ presetare, cât și după o revenire la valorile implicite.
 | | **Culoarea marcajelor** | Automat (după echipă pentru o tură, după tură pentru mai multe), după tură, după echipă sau o singură culoare |
 | | **Arată speologii care au ieșit** | Dacă cineva raportat ca ieșit rămâne în imagine |
 | | **Traseul parcurs** | O linie în urma fiecărui marcaj |
-| **Vedere** | Straturile ridicării, **Relieful de deasupra peșterii**, **Colorare**, **Cameră**, **Grosimea liniilor**, **Scara verticală** | Ce se desenează din ridicare și cum. Un strat pe care ridicarea nu îl are este gri; colorările după adâncime au nevoie de o ridicare care stă pe relief real |
+| **Vedere** | Straturile topografiei, **Relieful de deasupra peșterii**, **Colorare**, **Cameră**, **Grosimea liniilor**, **Scara verticală** | Ce se desenează din topografie și cum. Un strat pe care topografia nu îl are este gri; colorările după adâncime au nevoie de o topografie care stă pe relief real |
 | **Texte** | **Titlu**, **Ceas**, **Factor de accelerare**, **Legendă**, **Bară de progres**, **Ultima notă**, **Mărimea textelor** | Ce se scrie peste imagine |
 | **Fotografii** | **Fotografiile de pe momentele turelor** | *Nu apar*, *Într-un colț* sau *Pe tot cadrul*. Fotografiile sunt cele prinse de un moment al unei ture bifate, din jurnalul ei de urmărire; fiecare apare când filmul ajunge la momentul ei. Sub alegere, dialogul spune câte sunt, câte încă se încarcă și câte nu au putut fi încărcate și vor lipsi |
 | | **Secunde pentru fiecare** | Secunde din film, nu din tură — echipa continuă să se miște dedesubt. Fotografiile care s-ar suprapune apar una după alta, în ordinea în care au fost făcute; cea pe care ar tăia-o sfârșitul filmului este scurtată |
@@ -222,15 +222,15 @@ după tură — sau cu mai mult de unsprezece echipe colorate după echipă — 
 ordine, iar legenda poartă atunci o linie care o spune: *„Culorile turelor se repetă"* sau
 *„Culorile echipelor se repetă"*.
 
-**Relieful de deasupra peșterii.** Unele fișiere de ridicare conțin, pe lângă galerii, și
+**Relieful de deasupra peșterii.** Unele fișiere de topografie conțin, pe lângă galerii, și
 suprafața de deasupra peșterii. **Relieful de deasupra peșterii**, sub *Vedere*, desenează acea
 suprafață în film. **Este oprit la început și rămâne oprit până îl pornești**: galeriile desenate
 singure sunt o formă, dar o peșteră desenată sub dealurile ei poate fi așezată pe hartă de oricine
 primește fișierul — același motiv pentru care busola și afișajul de altitudine pornesc oprite.
-Comutatorul este oferit numai pentru o ridicare al cărei fișier își conține propriul relief;
+Comutatorul este oferit numai pentru o topografie al cărei fișier își conține propriul relief;
 pentru oricare alta este gri și spune *„Fișierul acestui model nu conține relief propriu, deci
 nu este nimic de desenat."* Planul neted pe care vizualizatorul 3D îl poate așeza sub o
-ridicare nu este relief și nu este desenat niciodată într-un film. Ca restul vederii, alegerea
+topografie nu este relief și nu este desenat niciodată într-un film. Ca restul vederii, alegerea
 este ținută minte în acest browser, iar o presetare nu o atinge.
 
 ---
@@ -272,7 +272,7 @@ Chromium, sau trimite GIF-ul.
 
 **Mărimea este o estimare.** Sub setări dialogul spune *„Cadre: 300 · aproximativ 2,7 MB"*.
 Pentru un video cifra este ținta codorului și este de obicei apropiată. Pentru un GIF este o
-presupunere până când ai făcut unul: un GIF al unui model care se rotește, pe o ridicare
+presupunere până când ai făcut unul: un GIF al unui model care se rotește, pe o topografie
 densă, poate ajunge la aproape dublul primei estimări. După ce un GIF a fost făcut în acest
 browser, estimarea urmează cât au ieșit în realitate propriile tale GIF-uri și spune
 *„…, după ultimul GIF făcut aici"*. Peste aproximativ 10 MB dialogul avertizează că GIF-ul este
@@ -289,7 +289,7 @@ Merită deci să știi ce se află în el.
 
 | În fișier | La început | Ca să lipsească |
 |---|---|---|
-| Desenul ridicării și locul unde a fost raportat fiecare om | Întotdeauna | — acesta este filmul |
+| Desenul topografiei și locul unde a fost raportat fiecare om | Întotdeauna | — acesta este filmul |
 | **Numele oamenilor**, pe marcaje | Prenume. Două persoane care s-ar citi la fel primesc o inițială | **Etichetele speologilor**: *Inițiale* sau *Fără etichete* |
 | **Când a fost raportat ultima dată fiecare om**, lângă numele lui | Oprit. Pornit, fiecare etichetă poartă ora și minutul, iar pentru un raport care nu este de azi și data | **Ora ultimului raport în etichetă** oprită |
 | **Titlul**, scris peste imagine | Pornit. O tură: titlul turei. Mai multe: numele peșterii și zilele pe care se întind. Sau cuvintele pe care le scrii în **Textul titlului** | **Titlu** oprit |
@@ -300,12 +300,12 @@ Merită deci să știi ce se află în el.
 | **Ultima notă** — text liber scris de cineva odată cu un raport | Oprită, fiindcă *„Notele sunt text liber și pot conține detalii de siguranță"* | — |
 | **Fotografiile** prinse de momentele turelor, cu legendele lor | Oprite. Pornite, fiecare fotografie de pe un moment al unei ture bifate este desenată în cadre, mai puțin cele despre cineva pe care l-ai lăsat în afara filmului | **Fotografiile de pe momentele turelor**: *Nu apar* |
 | **Busola și afișajul de altitudine** | Oprite. Pornite, ele *„scriu altitudini și un azimut în fiecare cadru"* | — |
-| **Suprafața de deasupra peșterii** — dealuri, văi și locul intrărilor printre ele, acolo unde fișierul ridicării își conține relieful | Oprită. Pornită, peștera este desenată sub propriul ei peisaj, pe care cineva care cunoaște zona îl poate recunoaște | — lasă **Relieful de deasupra peșterii** oprit. Alegerea este ținută minte, deci privește previzualizarea înainte de a trimite un film făcut după unul care îl avea pornit |
+| **Suprafața de deasupra peșterii** — dealuri, văi și locul intrărilor printre ele, acolo unde fișierul topografiei își conține relieful | Oprită. Pornită, peștera este desenată sub propriul ei peisaj, pe care cineva care cunoaște zona îl poate recunoaște | — lasă **Relieful de deasupra peșterii** oprit. Alegerea este ținută minte, deci privește previzualizarea înainte de a trimite un film făcut după unul care îl avea pornit |
 | **Numele fișierului** | Urmează titlul — vezi mai jos | **Titlu** oprit |
 | **O persoană** — marcajul ei, traseul ei, o notă spusă de ea | Toți participanții fiecărei ture bifate | Debifeaz-o sub [Cine apare](#cine-apare) |
 
 O poziție care îți este ascunsă nu desenează niciun marcaj în film, din același motiv pentru care
-nu desenează niciunul pe panoul ridicării din tură.
+nu desenează niciunul pe panoul topografiei din tură.
 
 ### Numele fișierului
 
@@ -317,7 +317,7 @@ silexgis-…"* — pentru că un nume ajunge mai departe decât imaginea: se ved
 |---|---|
 | Pornit, cu propriul **Textul titlului** | `silexgis-<cuvintele tale>-<data>` |
 | Pornit, o tură, fără text propriu | `silexgis-<titlul turei>-<data>` |
-| Pornit, mai multe ture, fără text propriu | `silexgis-<numele peșterii>-<data>` (numele ridicării când cel al peșterii nu este cunoscut) |
+| Pornit, mai multe ture, fără text propriu | `silexgis-<numele peșterii>-<data>` (numele topografiei când cel al peșterii nu este cunoscut) |
 | **Oprit** | `silexgis-movie-<data>` — nimic despre care tură sau care peșteră |
 
 Cuvintele sunt scrise cu litere mici, fără diacritice, cu cratime în locul a tot ce nu este
@@ -335,7 +335,7 @@ Oprește **Titlu**, pune **Etichetele speologilor** pe *Inițiale* sau *Fără e
 **Ceas**, debifează **Numele intrărilor** și lasă **Relieful de deasupra peșterii** oprit. Sub
 [Cine apare](#cine-apare), debifează pe oricine nu trebuie să apară deloc.
 Fișierul se numește atunci `silexgis-movie-<data>` și arată marcaje care se mișcă printr-o
-ridicare fără nume. Forma ridicării rămâne — un film nu poate ascunde peștera al cărei film este.
+topografie fără nume. Forma topografiei rămâne — un film nu poate ascunde peștera al cărei film este.
 O imagine salvată dintr-o astfel de previzualizare spune la fel de puțin și se numește la fel.
 
 ---
@@ -347,10 +347,10 @@ dialogul spune cât a ajuns: mai întâi *„Se aleg culorile"* pentru un GIF, a
 220"*, apoi *„Se scrie fișierul…"*, cu timpul scurs și *„încă aproximativ …"*.
 
 **Fiecare cadru este desenat din nou, unul câte unul**, și apoi codat. Pe un calculator fără
-placă grafică browserul desenează ridicarea prin software, ceea ce este mai lent, iar un export
+placă grafică browserul desenează topografia prin software, ceea ce este mai lent, iar un export
 durează pe cât de multe și de mari îi sunt cadrele:
 
-| Măsurat pe un calculator cu multe nuclee și fără placă grafică, douăzeci de ture pe o ridicare | A durat |
+| Măsurat pe un calculator cu multe nuclee și fără placă grafică, douăzeci de ture pe o topografie | A durat |
 |---|---|
 | GIF, 640 × 360, 300 de cadre (30 de secunde la 10 pe secundă) | aproximativ o jumătate de minut |
 | WebM, 1280 × 720, 800 de cadre (32 de secunde la 25 pe secundă) | aproximativ un minut și jumătate |
@@ -393,7 +393,7 @@ Părăsirea paginii sau închiderea filei încheie și ea un export; nu se salve
 
 | Vezi | De ce |
 |---|---|
-| *„Nicio tură nu a fost urmărită încă pe acest model."* | Nicio tură pe care ai voie să o citești nu a fost urmărită pe această ridicare |
+| *„Nicio tură nu a fost urmărită încă pe acest model."* | Nicio tură pe care ai voie să o citești nu a fost urmărită pe această topografie |
 | *„Nu este nimic de reluat"* pe rândul unei ture | Urmărirea ei nu acoperă niciun interval de timp |
 | *„Jurnalul nu a putut fi citit"* | Jurnalul unei ture alese s-a întors incomplet; filmul refuză un jurnal parțial, la fel ca reluarea din tură. Debifează tura, sau închide și încearcă din nou |
 | Un format gri | Browserul tău nu îl poate scrie la această dimensiune și la acest ritm — vezi [Ce format](#ce-format) |

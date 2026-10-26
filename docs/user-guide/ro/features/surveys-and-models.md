@@ -185,7 +185,7 @@ deschis-o.
   le privești pe fiecare separat.
 
 **Arătarea și ascunderea părților.** Sub modele este, pentru fiecare topografie, o listă a
-ridicărilor denumite din care este alcătuită, cu câte o bifă și cu **Arată tot**. Cu
+topografiilor denumite din care este alcătuită, cu câte o bifă și cu **Arată tot**. Cu
 **Sincronizare** pornită, bifarea sau debifarea unei părți face același lucru cu partea cu același
 nume din cealaltă topografie; o parte pe care o are doar una dintre ele este arătată sau ascunsă
 singură. Cu ea oprită, fiecare listă lucrează doar asupra topografiei ei. Merge la fel suprapuse
@@ -298,7 +298,7 @@ schițe și fără dimensiuni pur și simplu nu are pereți: nu este o eroare, i
 **Gata**.
 
 Lista de modele arată numărul de triunghiuri și mărimea pe rândul modelului de drumuire, cu nota *„Pereți
-construiți din schițele și dimensiunile de galerie ale acestei ridicări"*. Un sistem foarte mare
+construiți din schițele și dimensiunile de galerie ale acestei topografii"*. Un sistem foarte mare
 este desenat cu inele cu patru laturi în loc de opt; unul prea mare chiar și pentru atât — peste
 două milioane de triunghiuri — nu primește pereți construiți, iar atunci un `.stl` exportat este
 calea de a-l arăta.
@@ -402,4 +402,4 @@ Toate acestea sunt pe pagina
 
 Înrudite: [Vizualizarea 3D](3d-view.md) · [Peșteri și intrări](caves-and-entrances.md) ·
 [Măsurători și statistici](measurements-and-statistics.md) ·
-[Un film al unei ture urmărite](tracking-movie.md) — butonul cu cameră de pe rândul unei ridicări
+[Un film al unei ture urmărite](tracking-movie.md) — butonul cu cameră de pe rândul unei topografii
