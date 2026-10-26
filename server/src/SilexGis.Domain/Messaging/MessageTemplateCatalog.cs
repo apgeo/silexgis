@@ -1287,11 +1287,11 @@ public static class MessageTemplateCatalog
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Ridicarea ta {surveyTitle} a fost procesată",
+                    "Topografia ta {surveyTitle} a fost procesată",
                     """
                     Bună ziua {displayName},
 
-                    Ridicarea {surveyTitle} pe care ai trimis-o pe {appName} pentru peștera
+                    Topografia {surveyTitle} pe care ai trimis-o pe {appName} pentru peștera
                     {caveName} a fost procesată. Ce a rezultat este pe pagina ei:
 
                     {url}
@@ -1321,11 +1321,11 @@ public static class MessageTemplateCatalog
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Ridicarea ta {surveyTitle} nu a putut fi procesată",
+                    "Topografia ta {surveyTitle} nu a putut fi procesată",
                     """
                     Bună ziua {displayName},
 
-                    Ridicarea {surveyTitle} pe care ai trimis-o pe {appName} pentru peștera
+                    Topografia {surveyTitle} pe care ai trimis-o pe {appName} pentru peștera
                     {caveName} nu a putut fi procesată. Fișierele ei sunt păstrate; pagina ei spune
                     ce nu a mers și de acolo poate fi rulată din nou:
 

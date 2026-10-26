@@ -129,7 +129,7 @@ public sealed class TripReportStationListTests
         TripStationListWording.For(null).ShouldBeSameAs(TripStationListWording.English);
 
         var blocks = Printed(Told(), TripStationListWording.Romanian);
-        blocks[0].Text.ShouldContain("Stațiile ridicării");
+        blocks[0].Text.ShouldContain("Stațiile topografiei");
         blocks[1].Label.ShouldBe("Adâncimi măsurate sub");
         blocks.Last().Text.ShouldBe("cave.deep.3 · 120 m");
 
