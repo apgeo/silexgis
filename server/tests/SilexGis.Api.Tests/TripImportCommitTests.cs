@@ -103,6 +103,211 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
         await db.SaveChangesAsync();
     }
 
+    // ---------- an account under review ----------
+
+    /// <summary>
+    /// A confirmation by an account under review waits instead of landing, and a reviewer's
+    /// acceptance records exactly what the same confirmation records unheld: the trip, and the
+    /// areas and cave the row names, under the uploader, in the review's change set.
+    /// </summary>
+    [Fact]
+    public async Task A_held_sheet_records_nothing_and_its_acceptance_records_what_the_sheet_records_unheld()
+    {
+        var plain = await UploadAsync("plain.csv", Sheet);
+        var unheld = await CommitAsync(plain, [2], createEverything: true);
+        var unheldBatch = unheld.GetProperty("batchId").GetGuid();
+
+        var (reviewer, reviewerId) = await ReviewerAsync();
+        using var reviewerClient = reviewer;
+        await MarkAsync(reviewer, true);
+        var heldFile = await UploadAsync("held.csv", Sheet);
+        var answer = await editor.PostAsync(
+            $"/api/v1/trip-imports/{heldFile}/commit",
+            Body(new { options = Options(createEverything: true), lines = new[] { 3 } }));
+        var answerBody = await BodyAsync(answer);
+        answer.StatusCode.ShouldBe(HttpStatusCode.OK, answerBody);
+        var held = JsonDocument.Parse(answerBody).RootElement;
+        held.GetProperty("held").GetBoolean().ShouldBeTrue();
+        held.GetProperty("createdTripCount").GetInt32().ShouldBe(0);
+        var batchId = held.GetProperty("batchId").GetGuid();
+
+        // Nothing written; the batch waits with a line per row and is shown to nobody who
+        // reviews nothing.
+        (await TripsTitledAsync("A doua tura")).ShouldBe(0);
+        (await viewer.GetAsync($"/api/v1/review/batches/{batchId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var detail = JsonDocument.Parse(await reviewer.GetStringAsync($"/api/v1/review/batches/{batchId}")).RootElement;
+        var line = detail.GetProperty("lines")[0];
+        line.GetProperty("section").GetString().ShouldBe("tripSheet");
+        line.GetProperty("proposal").GetProperty("name").GetString().ShouldBe("A doua tura");
+
+        var accepted = await reviewer.PostAsync($"/api/v1/review/batches/{batchId}/accept", Body(new { }));
+        accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await BodyAsync(accepted));
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var first = await db.TripLogs.AsNoTracking().SingleAsync(t => t.Title == "Prima tura" && t.OwnerUserId == editorId);
+        var made = await db.TripLogs.AsNoTracking().SingleAsync(t => t.Title == "A doua tura" && t.OwnerUserId == editorId);
+        (made.State, made.Visibility, made.CavingGroupId).ShouldBe((first.State, first.Visibility, first.CavingGroupId));
+
+        // The same lines as the batch that landed at once: the trip on the held line, the places
+        // it created as lines of their own, all counted.
+        var unheldLines = await db.ImportBatchItems.AsNoTracking().Where(i => i.ImportBatchId == unheldBatch).ToListAsync();
+        var heldLines = await db.ImportBatchItems.AsNoTracking().Where(i => i.ImportBatchId == batchId).ToListAsync();
+        heldLines.Count.ShouldBe(unheldLines.Count);
+        heldLines.Count(l => l.FeatureId != null).ShouldBe(unheldLines.Count(l => l.FeatureId != null));
+        heldLines.Single(l => l.ReviewDecision == ImportReviewDecision.Accepted).TripLogId.ShouldBe(made.Id);
+        var settled = await db.ImportBatches.AsNoTracking().SingleAsync(b => b.Id == batchId);
+        settled.CreatedCount.ShouldBe(unheldLines.Count);
+        settled.ReviewState.ShouldBe(ImportReviewState.Accepted);
+
+        var history = await db.AuditEntries.AsNoTracking()
+            .SingleAsync(a => a.EntityId == made.Id.ToString() && a.Action == AuditActions.Created);
+        history.Source.ShouldBe(ChangeSource.ReviewDecision);
+        history.ImportBatchId.ShouldBe(batchId);
+        history.UserId.ShouldBe(reviewerId);
+    }
+
+    /// <summary>
+    /// Accepting one row of a held sheet records that row alone; rejecting records nothing and
+    /// leaves the account's saved review, so the sheet can be confirmed again; and an uploader who
+    /// lost the right to record trips since is answered failed.
+    /// </summary>
+    [Fact]
+    public async Task A_held_sheet_is_recorded_only_as_far_as_it_is_accepted_and_never_beyond_the_uploaders_rights()
+    {
+        var (reviewer, _) = await ReviewerAsync();
+        using var reviewerClient = reviewer;
+        await MarkAsync(reviewer, true);
+
+        var fileId = await UploadAsync("part.csv", Sheet);
+        var saved = await editor.PutAsync(
+            $"/api/v1/trip-imports/{fileId}/session",
+            Body(new { options = Options(), decisions = new Dictionary<string, object>() }));
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await BodyAsync(saved));
+        var batchId = await HeldTripBatchAsync(fileId, [2, 3]);
+        var reviewIds = await ReviewIdsByKeyAsync(batchId);
+        reviewIds.Keys.ShouldBe(["2", "3"], ignoreOrder: true);
+
+        var rejected = await reviewer.PostAsync($"/api/v1/review/items/{reviewIds["3"]}/reject", Body(new { }));
+        rejected.StatusCode.ShouldBe(HttpStatusCode.OK, await BodyAsync(rejected));
+        var accepted = await reviewer.PostAsync($"/api/v1/review/items/{reviewIds["2"]}/accept", Body(new { }));
+        accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await BodyAsync(accepted));
+        (await TripsTitledAsync("Prima tura")).ShouldBe(1);
+        (await TripsTitledAsync("A doua tura")).ShouldBe(0);
+
+        // A rejected sheet records nothing and spends nothing.
+        var other = await UploadAsync("turned.csv", Sheet);
+        var savedOther = await editor.PutAsync(
+            $"/api/v1/trip-imports/{other}/session",
+            Body(new { options = Options(), decisions = new Dictionary<string, object>() }));
+        savedOther.StatusCode.ShouldBe(HttpStatusCode.OK, await BodyAsync(savedOther));
+        var turned = await HeldTripBatchAsync(other, [3]);
+        var refused = await reviewer.PostAsync($"/api/v1/review/batches/{turned}/reject", Body(new { note = "no" }));
+        refused.StatusCode.ShouldBe(HttpStatusCode.OK, await BodyAsync(refused));
+        (await TripsTitledAsync("A doua tura")).ShouldBe(0);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripImportSessions.AsNoTracking().CountAsync(s => s.StoredFileId == other && s.UserId == editorId)).ShouldBe(1);
+        }
+
+        // Held again, and this time the account may no longer record trips.
+        var again = await HeldTripBatchAsync(other, [3]);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.AccessEntries.Add(new AccessEntry
+            {
+                SubjectKind = AccessSubjectKind.User,
+                SubjectId = editorId,
+                Effect = AccessEffect.Deny,
+                Domain = AccessDomain.TripLogs,
+                Actions = AccessAction.Create,
+                ScopeKind = AccessScopeKind.All,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var lost = await reviewer.PostAsync($"/api/v1/review/batches/{again}/accept", Body(new { }));
+        var lostBody = await BodyAsync(lost);
+        lost.StatusCode.ShouldBe(HttpStatusCode.OK, lostBody);
+        var decided = JsonDocument.Parse(lostBody).RootElement.GetProperty("decided")[0];
+        decided.GetProperty("decision").GetString().ShouldBe("failed");
+        decided.GetProperty("failureCode").GetString().ShouldBe(CreateRules.ForbiddenCode);
+        (await TripsTitledAsync("A doua tura")).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A held confirmation in which every chosen row was set aside is refused as it is unheld:
+    /// held, it would leave a reviewer nothing to decide and wait for good.
+    /// </summary>
+    [Fact]
+    public async Task A_held_sheet_in_which_every_row_was_set_aside_is_refused_and_not_held()
+    {
+        var (reviewer, _) = await ReviewerAsync();
+        using var reviewerClient = reviewer;
+        await MarkAsync(reviewer, true);
+        var fileId = await UploadAsync("aside.csv", Sheet);
+
+        var response = await editor.PostAsync(
+            $"/api/v1/trip-imports/{fileId}/commit",
+            Body(new
+            {
+                options = Options(),
+                lines = new[] { 2, 3 },
+                decisions = new Dictionary<string, object> { ["2"] = new { action = "skip" }, ["3"] = new { action = "skip" } },
+            }));
+        var body = await BodyAsync(response);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        CodeOf(body).ShouldBe("trip_import.nothing_created");
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.ImportBatches.AsNoTracking().CountAsync(b => b.ConfirmedByUserId == editorId)).ShouldBe(0);
+    }
+
+    private async Task<(HttpClient Client, Guid Id)> ReviewerAsync()
+    {
+        var id = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"tic-adm-{tag}@t.local");
+        return (await AuthHelper.BearerClientAsync(factory, $"tic-adm-{tag}@t.local"), id);
+    }
+
+    private async Task MarkAsync(HttpClient reviewer, bool needsReview)
+    {
+        var response = await reviewer.PutAsync(
+            $"/api/v1/users/{editorId}/upload-review", Body(new { uploadsNeedReview = needsReview }));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await BodyAsync(response));
+    }
+
+    private async Task<Guid> HeldTripBatchAsync(Guid fileId, int[] lines)
+    {
+        var response = await editor.PostAsync(
+            $"/api/v1/trip-imports/{fileId}/commit", Body(new { options = Options(), lines }));
+        var body = await BodyAsync(response);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        var answer = JsonDocument.Parse(body).RootElement;
+        answer.GetProperty("held").GetBoolean().ShouldBeTrue();
+        return answer.GetProperty("batchId").GetGuid();
+    }
+
+    private async Task<Dictionary<string, Guid>> ReviewIdsByKeyAsync(Guid batchId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var lines = await db.ImportBatchItems.AsNoTracking()
+            .Where(i => i.ImportBatchId == batchId && i.ReviewId != null).ToListAsync();
+        return lines.ToDictionary(
+            l => JsonDocument.Parse(l.Proposal!).RootElement.GetProperty("key").GetString()!,
+            l => l.ReviewId!.Value);
+    }
+
+    private async Task<int> TripsTitledAsync(string title)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.TripLogs.AsNoTracking().CountAsync(t => t.Title == title && t.OwnerUserId == editorId);
+    }
+
     // ---------- the protection matrix, at the moment it would be written ----------
 
     /// <summary>
