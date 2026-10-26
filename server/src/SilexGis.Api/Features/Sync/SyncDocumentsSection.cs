@@ -399,7 +399,7 @@ internal sealed class SyncDocumentsSection(
     /// described, and not past its retention. Anything else — another account's, one still
     /// arriving, one expired but not yet swept — is no staged upload at all.
     /// </summary>
-    private static Task<UploadSession?> StagedAsync(
+    internal static Task<UploadSession?> StagedAsync(
         SilexGisDbContext db, AccessContext ctx, Guid? stagedUploadId, bool tracked, CancellationToken ct)
     {
         if (stagedUploadId is not { } id)

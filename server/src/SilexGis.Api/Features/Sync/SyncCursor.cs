@@ -114,6 +114,7 @@ public readonly record struct SyncCursor(long SetRevision, DateTimeOffset Change
         SyncStream.Documents => "documents",
         SyncStream.Trips => "trips",
         SyncStream.Reviews => "reviews",
+        SyncStream.Rasters => "rasters",
         _ => throw new ArgumentOutOfRangeException(nameof(stream), stream, "A stream with no cursor name."),
     };
 }

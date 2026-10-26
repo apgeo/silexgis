@@ -368,7 +368,9 @@ public static class SyncUploadEndpoints
             Present(sections, SyncUploadSections.Documents),
             Present(sections, SyncUploadSections.DocumentLinks),
             Present(sections, SyncUploadSections.TripRecordings),
-            Present(sections, SyncUploadSections.TripPoints));
+            Present(sections, SyncUploadSections.TripPoints),
+            Present(sections, SyncUploadSections.RasterMaps),
+            Present(sections, SyncUploadSections.RasterPins));
     }
 
     /// <summary>A section's answers, or null when the upload carried none of its items.</summary>

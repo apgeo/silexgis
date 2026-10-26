@@ -45,10 +45,16 @@ public static class SyncFeatures
     public const string Reviews = "reviews";
 
     /// <summary>
+    /// Raster maps and their pins both ways: <c>GET /sync/sets/{id}/rasters</c> and the upload's
+    /// <c>rasterMaps</c> and <c>rasterPins</c> sections.
+    /// </summary>
+    public const string Rasters = "rasters";
+
+    /// <summary>
     /// The parts every installation running this build serves, whatever it has switched — the
     /// baseline the recorded exchanges are pinned to.
     /// </summary>
-    public static readonly IReadOnlyList<string> Unconditional = [Download, Upload, Documents, DocumentUpload, Trips, Reviews];
+    public static readonly IReadOnlyList<string> Unconditional = [Download, Upload, Documents, DocumentUpload, Trips, Reviews, Rasters];
 
     /// <summary>
     /// The people directory and the phone-user links (<c>GET /sync/people</c> and the upload's

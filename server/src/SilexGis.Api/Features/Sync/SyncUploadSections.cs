@@ -403,6 +403,12 @@ internal static class SyncUploadSections
     /// <summary>The scans on the phone's trip recordings, applied after the recordings.</summary>
     public const string TripPoints = "tripPoints";
 
+    /// <summary>The raster maps of the phone, each with its picture.</summary>
+    public const string RasterMaps = "rasterMaps";
+
+    /// <summary>The places the phone pinned on those maps, applied last of all.</summary>
+    public const string RasterPins = "rasterPins";
+
     /// <summary>
     /// Every section, in the fixed order an upload is applied in. A later section may refer to
     /// what an earlier one created — a document link to a document sent beside it, a trip point
@@ -422,9 +428,11 @@ internal static class SyncUploadSections
         new SyncRowsSection(writer, protection, access),
         new SyncPeopleSection(settings),
         new SyncDocumentsSection(documents, ingest, intake, access),
+        new SyncRasterMapsSection(documents, intake, access),
         new SyncTripRecordingsSection(access),
         new SyncTripPointsSection(access),
         new SyncDocumentLinksSection(protection, access),
+        new SyncRasterPinsSection(access),
     ];
 
     /// <summary>
@@ -438,7 +446,9 @@ internal static class SyncUploadSections
         + (request.Documents?.Count ?? 0)
         + (request.DocumentLinks?.Count ?? 0)
         + (request.TripRecordings?.Count ?? 0)
-        + (request.TripPoints?.Count ?? 0);
+        + (request.TripPoints?.Count ?? 0)
+        + (request.RasterMaps?.Count ?? 0)
+        + (request.RasterPins?.Count ?? 0);
 
     /// <summary>
     /// The ids of the rows an upload carries, every section together, in the identity each section
@@ -451,7 +461,9 @@ internal static class SyncUploadSections
                 .Concat((request.Documents ?? []).Select(d => d.Id))
                 .Concat((request.DocumentLinks ?? []).Select(SyncDocumentLinksSection.RowIdOf))
                 .Concat((request.TripRecordings ?? []).Select(r => r.Id))
-                .Concat((request.TripPoints ?? []).Select(p => p.Id)));
+                .Concat((request.TripPoints ?? []).Select(p => p.Id))
+                .Concat((request.RasterMaps ?? []).Select(m => m.Id))
+                .Concat((request.RasterPins ?? []).Select(p => p.Id)));
 }
 
 /// <summary>

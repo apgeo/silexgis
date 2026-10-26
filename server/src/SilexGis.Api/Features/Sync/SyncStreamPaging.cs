@@ -27,6 +27,9 @@ public enum SyncStream
 
     /// <summary>What reviewers decided about the caller's own held uploads.</summary>
     Reviews,
+
+    /// <summary>The raster maps of the set's caves, each with its pins embedded.</summary>
+    Rasters,
 }
 
 /// <summary>

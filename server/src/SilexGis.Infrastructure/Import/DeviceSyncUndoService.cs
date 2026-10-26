@@ -28,6 +28,8 @@ namespace SilexGis.Infrastructure.Import;
 /// <param name="TripLogId">For a recording taken back: the trip report that had been made from it.</param>
 /// <param name="TripOutcome">What became of that report: <c>undone</c> (deleted with it) or <c>not_undone</c>.</param>
 /// <param name="TripReason">Why the report was left (<see cref="SyncUndoReasons.TripChanged"/>, <see cref="SyncUndoReasons.ConvertedElsewhere"/>).</param>
+/// <param name="RasterMapId">The raster map the line is about, for a map line.</param>
+/// <param name="RasterPinId">The pin on a raster map the line is about, for a pin line.</param>
 public sealed record SyncUndoItemResult(
     long ItemId,
     Guid? FeatureId,
@@ -42,7 +44,9 @@ public sealed record SyncUndoItemResult(
     Guid? TripRecordingPointId = null,
     Guid? TripLogId = null,
     string? TripOutcome = null,
-    string? TripReason = null);
+    string? TripReason = null,
+    Guid? RasterMapId = null,
+    Guid? RasterPinId = null);
 
 /// <summary>A request to undo an upload that cannot be answered line by line.</summary>
 public sealed class SyncUndoException(string code, string message) : InvalidOperationException(message)
@@ -135,12 +139,13 @@ public sealed partial class DeviceSyncUndoService(
         // a row it also created goes before its container, and a container it deleted comes back
         // before the rows inside it are looked at.
         //
-        // A phone recording is the one exception: its lines go before its scans' lines whatever
-        // their order, because a scan the upload deleted comes back only inside a recording that is
-        // there, and an upload that deleted a recording sent its scans' deletions after it.
+        // A phone recording or raster map is the one exception: its lines go before its scans' and
+        // pins' lines whatever their order, because a scan or pin the upload deleted comes back only
+        // inside a recording or map that is there, and an upload that deleted a recording or map sent
+        // its scans' and pins' deletions after it.
         var items = allItems
             .Where(i => wanted is null || wanted.Contains(i.Id))
-            .OrderBy(i => i.TripRecordingId is not null ? 0 : 1)
+            .OrderBy(i => i.TripRecordingId is not null || i.RasterMapId is not null ? 0 : 1)
             .ThenByDescending(i => i.Id)
             .ToList();
 
@@ -198,6 +203,8 @@ public sealed partial class DeviceSyncUndoService(
             {
                 result = item.DevicePersonId is { } personId
                     ? await UndoPersonLineAsync(item, personId, byPerson.GetValueOrDefault(personId.ToString()) ?? [], force, ct)
+                    : item.RasterMapId is not null || item.RasterPinId is not null
+                      ? await UndoRasterLineAsync(item, written, ctx, force, ct)
                     : IsLinkLine(item)
                         ? await UndoLinkLineAsync(item, byDocument, ctx, force, ct)
                         : item.DocumentId is { } documentId
@@ -1296,6 +1303,19 @@ public sealed partial class DeviceSyncUndoService(
         if (target == typeof(DateTimeOffset))
         {
             return value.TryGetValue<DateTimeOffset>(out var at) ? at : null;
+        }
+
+        if (target == typeof(int))
+        {
+            return value.TryGetValue<int>(out var number) ? number : null;
+        }
+
+        // The history keeps an enum as its camel-cased name.
+        if (target.IsEnum)
+        {
+            return value.TryGetValue<string>(out var name) && Enum.TryParse(target, name, ignoreCase: true, out var member)
+                ? member
+                : null;
         }
 
         return null;

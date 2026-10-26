@@ -143,6 +143,13 @@ public sealed record SyncUploadRowDto(
 /// The scans on those recordings, applied after the recordings so a scan sent beside its new
 /// recording finds it.
 /// </param>
+/// <param name="RasterMaps">
+/// The phone's raster maps, each with its picture staged beforehand. Applied after the documents.
+/// </param>
+/// <param name="RasterPins">
+/// The places pinned on those maps, applied last so a pin sent beside its new map and a place sent
+/// beside it finds both.
+/// </param>
 /// <remarks>
 /// Each array is a section, applied in a fixed order whatever order the arrays sit in here —
 /// feature rows first — and answered in the array of the same name.
@@ -156,7 +163,9 @@ public sealed record SyncUploadRequest(
     IReadOnlyList<SyncUploadDocumentDto>? Documents = null,
     IReadOnlyList<SyncUploadDocumentLinkDto>? DocumentLinks = null,
     IReadOnlyList<SyncUploadTripRecordingDto>? TripRecordings = null,
-    IReadOnlyList<SyncUploadTripPointDto>? TripPoints = null);
+    IReadOnlyList<SyncUploadTripPointDto>? TripPoints = null,
+    IReadOnlyList<SyncUploadRasterMapDto>? RasterMaps = null,
+    IReadOnlyList<SyncUploadRasterPinDto>? RasterPins = null);
 
 /// <summary>One of the phone's own users, as the phone describes them.</summary>
 /// <param name="DeviceUserId">The phone's identifier for this user, adopted verbatim and never translated.</param>
@@ -319,6 +328,12 @@ public sealed record SyncUploadRowResultDto(
 /// <param name="TripPoints">
 /// What became of each scan the upload carried; present only when it carried the section.
 /// </param>
+/// <param name="RasterMaps">
+/// What became of each raster map the upload carried; present only when it carried the section.
+/// </param>
+/// <param name="RasterPins">
+/// What became of each pin the upload carried; present only when it carried the section.
+/// </param>
 /// <param name="Duplicates">
 /// What was already here, near a row this batch created. A report and never a verdict: every row
 /// listed was written, and its entry in <c>Rows</c> says so. It is here because a device is
@@ -344,7 +359,11 @@ public sealed record SyncUploadResultDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<SyncUploadRowResultDto>? TripRecordings = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<SyncUploadRowResultDto>? TripPoints = null);
+    IReadOnlyList<SyncUploadRowResultDto>? TripPoints = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<SyncUploadRowResultDto>? RasterMaps = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<SyncUploadRowResultDto>? RasterPins = null);
 
 /// <summary>One created row and what it landed next to.</summary>
 public sealed record SyncDuplicateDto(Guid Id, IReadOnlyList<SyncDuplicateCandidateDto> Nearby);
@@ -382,6 +401,9 @@ public sealed class SyncUploadRequestValidator : AbstractValidator<SyncUploadReq
 
     /// <summary>The longest note on one scan.</summary>
     private const int TripNoteMax = 4_000;
+
+    /// <summary>The largest pixel coordinate a pin may carry: far beyond any picture, short of overflow.</summary>
+    private const int PinPixelMax = 1_000_000;
 
     public SyncUploadRequestValidator()
     {
@@ -482,6 +504,48 @@ public sealed class SyncUploadRequestValidator : AbstractValidator<SyncUploadReq
             recording.RuleFor(r => r.Description).MaximumLength(TripTextMax);
             recording.RuleFor(r => r.Log).MaximumLength(TripTextMax);
             recording.RuleFor(r => r.CreatedByDeviceUserId).NotEqual(Guid.Empty);
+        });
+
+        RuleFor(x => x.RasterMaps)
+            .Must(items => items is null || items.Select(m => m.Id).Distinct().Count() == items.Count)
+            .WithMessage("A raster map may appear only once in a batch.");
+        RuleFor(x => x.RasterPins)
+            .Must(items => items is null || items.Select(p => p.Id).Distinct().Count() == items.Count)
+            .WithMessage("A pin may appear only once in a batch.");
+
+        // A removal names the map and nothing else; anything written needs its cave, title and
+        // kind, and a new map its picture. The widths are the columns' own.
+        RuleForEach(x => x.RasterMaps).ChildRules(map =>
+        {
+            map.RuleFor(m => m.Id).NotEmpty();
+            map.RuleFor(m => m.CaveId).NotNull().NotEqual(Guid.Empty).When(m => !m.Deleted);
+            map.RuleFor(m => m.CaveAreaId).NotEqual(Guid.Empty);
+            map.RuleFor(m => m.Title).NotEmpty().When(m => !m.Deleted && m.BaseRevision is null);
+            map.RuleFor(m => m.Title).MaximumLength(255);
+            map.RuleFor(m => m.MapType).NotNull().When(m => !m.Deleted);
+            map.RuleFor(m => m.MapType).IsInEnum().When(m => m.MapType is not null);
+            map.RuleFor(m => m.FileName).MaximumLength(StoredFileNameMaxLength);
+            map.RuleFor(m => m.Sha256)
+                .NotEmpty()
+                .When(m => !m.Deleted && m.BaseRevision is null)
+                .WithMessage("A new raster map states the hash of its picture.");
+            map.RuleFor(m => m.Sha256)
+                .Matches("^[0-9a-fA-F]{64}$")
+                .When(m => m.Sha256 is not null)
+                .WithMessage("The hash is a SHA-256 in hexadecimal.");
+            map.RuleFor(m => m.SizeBytes).GreaterThan(0).When(m => m.SizeBytes is not null);
+            map.RuleFor(m => m.StagedUploadId).NotEqual(Guid.Empty);
+        });
+
+        // A pixel is a position on the picture: not negative, and small enough that the sum of
+        // two stays an integer.
+        RuleForEach(x => x.RasterPins).ChildRules(pin =>
+        {
+            pin.RuleFor(p => p.Id).NotEmpty();
+            pin.RuleFor(p => p.RasterMapId).NotEmpty();
+            pin.RuleFor(p => p.PlaceId).NotNull().NotEqual(Guid.Empty).When(p => !p.Deleted);
+            pin.RuleFor(p => p.X).NotNull().InclusiveBetween(0, PinPixelMax).When(p => !p.Deleted);
+            pin.RuleFor(p => p.Y).NotNull().InclusiveBetween(0, PinPixelMax).When(p => !p.Deleted);
         });
 
         RuleForEach(x => x.TripPoints).ChildRules(point =>
