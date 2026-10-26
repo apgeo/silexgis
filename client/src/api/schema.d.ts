@@ -8185,6 +8185,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/sets/{id}/rasters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One page of the raster maps of a sync set's caves, and the maps that have gone. */
+        get: operations["syncRasters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/phone-users": {
         parameters: {
             query?: never;
@@ -11423,6 +11440,10 @@ export interface components {
             tripLogId?: null | string;
             tripOutcome?: null | string;
             tripReason?: null | string;
+            /** Format: uuid */
+            rasterMapId?: null | string;
+            /** Format: uuid */
+            rasterPinId?: null | string;
         };
         ImportBatchUndoSkippedDto: {
             field: string;
@@ -13535,6 +13556,8 @@ export interface components {
             trips: number;
         };
         /** @enum {unknown} */
+        RasterMapType: "planView" | "projectedProfile" | "extendedProfile" | "other";
+        /** @enum {unknown} */
         RasterStatus: "uploaded" | "processing" | "ready" | "failed";
         ReanchorReportDto: {
             /** Format: int32 */
@@ -15029,7 +15052,7 @@ export interface components {
             id: string;
         };
         /** @enum {unknown} */
-        SyncLinkTargetKind: "feature";
+        SyncLinkTargetKind: "feature" | "tripRecording" | "tripPoint";
         /** @enum {unknown} */
         SyncOriginalReach: "original" | "locationFree" | "renditions" | "none";
         SyncParentDto: {
@@ -15054,6 +15077,44 @@ export interface components {
             deviceUserId: string;
             /** Format: uuid */
             caverId: null | string;
+        };
+        SyncRasterMapDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            caveId: string;
+            /** Format: uuid */
+            caveAreaId: null | string;
+            title: string;
+            mapType: components["schemas"]["RasterMapType"];
+            /** Format: int32 */
+            sortOrder: number;
+            /** Format: uuid */
+            documentId: string;
+            /** Format: date-time */
+            revision: string;
+            pins: components["schemas"]["SyncRasterPinDto"][];
+        };
+        SyncRasterPinDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            placeId: string;
+            /** Format: int32 */
+            x: number;
+            /** Format: int32 */
+            y: number;
+            /** Format: date-time */
+            revision: string;
+        };
+        SyncRastersPageDto: {
+            /** Format: int64 */
+            setRevision: number;
+            settings: components["schemas"]["JsonElement"];
+            maps: components["schemas"]["SyncRasterMapDto"][];
+            tombstones: components["schemas"]["SyncTombstoneDto"][];
+            nextCursor: null | string;
+            hasMore: boolean;
         };
         SyncReviewDto: {
             /** Format: uuid */
@@ -15207,6 +15268,46 @@ export interface components {
             /** Format: uuid */
             caverId?: null | string;
         };
+        SyncUploadRasterMapDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            baseRevision?: null | string;
+            /** @default false */
+            deleted: boolean;
+            /** Format: uuid */
+            caveId?: null | string;
+            /** Format: uuid */
+            caveAreaId?: null | string;
+            title?: null | string;
+            mapType?: null | components["schemas"]["RasterMapType"];
+            /** Format: int32 */
+            sortOrder?: null | number;
+            fileName?: null | string;
+            sha256?: null | string;
+            /** Format: int64 */
+            sizeBytes?: null | number;
+            /** Format: uuid */
+            stagedUploadId?: null | string;
+            /** Format: date-time */
+            clientUpdatedAt?: null | string;
+        };
+        SyncUploadRasterPinDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            rasterMapId: string;
+            /** Format: date-time */
+            baseRevision?: null | string;
+            /** @default false */
+            deleted: boolean;
+            /** Format: uuid */
+            placeId?: null | string;
+            /** Format: int32 */
+            x?: null | number;
+            /** Format: int32 */
+            y?: null | number;
+        };
         SyncUploadRequest: {
             /** Format: uuid */
             batchId: string;
@@ -15219,6 +15320,8 @@ export interface components {
             documentLinks?: null | components["schemas"]["SyncUploadDocumentLinkDto"][];
             tripRecordings?: null | components["schemas"]["SyncUploadTripRecordingDto"][];
             tripPoints?: null | components["schemas"]["SyncUploadTripPointDto"][];
+            rasterMaps?: null | components["schemas"]["SyncUploadRasterMapDto"][];
+            rasterPins?: null | components["schemas"]["SyncUploadRasterPinDto"][];
         };
         SyncUploadResultDto: {
             /** Format: uuid */
@@ -15238,6 +15341,8 @@ export interface components {
             documentLinks?: null | components["schemas"]["SyncUploadRowResultDto"][];
             tripRecordings?: null | components["schemas"]["SyncUploadRowResultDto"][];
             tripPoints?: null | components["schemas"]["SyncUploadRowResultDto"][];
+            rasterMaps?: null | components["schemas"]["SyncUploadRowResultDto"][];
+            rasterPins?: null | components["schemas"]["SyncUploadRowResultDto"][];
         };
         SyncUploadRowDto: {
             /** Format: uuid */
@@ -39806,6 +39911,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncReviewsPageDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncRasters: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRastersPageDto"];
                 };
             };
             /** @description Bad Request */
