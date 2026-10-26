@@ -43,6 +43,8 @@ Authorization: Bearer <token>
   there. `documents` means the photo and document catalogue of section 11 and the address route
   beside it are served; `documentUpload` means a phone may send photos and documents back (§11.3):
 staged bytes through the transfer routes, and the upload's `documents` and `documentLinks` sections;
+`trips` means the trips stream and the upload's `tripRecordings` and `tripPoints` sections of section 13;
+`rasters` means the rasters stream and the upload's `rasterMaps` and `rasterPins` sections of section 15;
 `people` means the people directory and the upload's `people` section of
   section 12 are, which an installation can switch off and which is named only to an account that
   may be told who people are. The list is worked out for each request, not fixed for the build: a part an
@@ -1051,8 +1053,50 @@ handed it, because a file hanging there says where to look. Both are answered by
 decides what the catalogue hands the account, so a link is accepted exactly where the catalogue would
 list it. A feature the same upload created in its `rows` is exempt from both, as it is for the
 feature rows; a document sent under the same identifier as a feature is not a feature, and exempts
-nothing. Only `feature` targets are accepted; any other kind
-is `rejected sync.kind_unsupported`.
+nothing. Three target kinds are accepted — `feature`, `tripRecording` and `tripPoint`
+(next section); any other kind is `rejected sync.kind_unsupported`.
+
+#### Photos on a recording and on a scan
+
+A phone's photos taken on a trip hang on the **recording** (`target.kind` `tripRecording`, `id` the
+recording's identifier) or on one **scan** within it (`tripPoint`, `id` the scan's
+identifier). They are sent exactly as any link is — in `documentLinks`, after `documents`,
+`tripRecordings` and `tripPoints`, so a link may name a recording, a scan and a document sent in the
+same upload:
+
+```json
+{ "documentId": "0199…", "target": { "kind": "tripPoint", "id": "0199…" },
+  "role": null, "caption": null, "sortOrder": null, "deleted": false }
+```
+
+- **Role.** Without a `role`, a photo on a recording or a scan is `other` (where it hangs on a trip
+  says nothing about what it shows), and a file that is not a photo is `document`.
+- **What is checked.** The recording or scan must exist and be readable by the account, otherwise
+  `rejected sync.target_not_found` — answered alike for one that is absent, removed, or somebody else's,
+  so a link cannot be used to ask what exists. The recording's **cave** must be in the selection and not
+  withheld from the account, and for a scan so must its **place** (`rejected sync.location_forbidden`
+  for a withheld one): a photo on a scan of a place the catalogue would never hand the account is a row
+  it may not create. A cave or place the same upload created in its `rows` is exempt, as for a feature
+  link. Then Write on the recording (`rejected sync.row_forbidden`): a scan is changed under the right
+  to change its recording.
+- **What the catalogue hands out.** The documents stream (§11.1) lists these links in the same pages as
+  the links on features, with `target.kind` `tripRecording` or `tripPoint` and the target's
+  identifier. A link on a recording is listed when the recording is readable by the caller and its cave
+  is handed to them; a link on a scan, when its place is handed as well — a scan that names no place
+  carries only the recording's conditions. A photo on a scan of a withheld place is **absent**, not
+  stubbed, exactly as the trips stream leaves that scan out. When the recording or scan is removed, or
+  the link is taken down, the link arrives as a tombstone under its own identifier.
+- **Position in the picture.** A photo on a recording is placed by the recording's cave, and a photo on
+  a scan by its cave and its place: the original file is handed only to a reader who may be told where
+  those are (the reach rule of §11.1), and everyone else is given the picture with its location data
+  taken out.
+- **Conversion.** When the server makes a trip report from a recording (§13.3) every photo hanging on the
+  recording or on one of its scans is hung on the report too, once each, the recording's own first. The
+  files are not copied. A photo added to a recording after its report was made does not reach the report:
+  the report is not rewritten.
+- **Undo.** The upload's undo (below) takes a link it hung off a recording or scan, including one on a
+  recording the same undo removes, and hangs a link it took down again — unless the recording or scan is
+  gone, which is `not_undone` / `container_deleted`.
 
 #### Undoing an upload that sent files
 
@@ -1072,7 +1116,8 @@ only while it still holds what the upload left (`force` overrides that), and eac
 - a document it **removed** comes back, for an account that may remove it;
 - a **link it hung** is taken down, and a **link it took down** is hung again as it was — role,
   caption, place and the phones' default-download mark — on the document's current file, under a
-  new identifier (the old one has already been reported removed). Both need Write on the target, and
+  new identifier (the old one has already been reported removed). Both need Write on the target (for a
+  recording or a scan, on the recording, whether or not it has since been removed), and
   hanging a link again needs a document the account undoing may still read (`forbidden` otherwise),
   because a link hands the document to every reader of the target.
 
@@ -1168,9 +1213,7 @@ A recording is governed by the installation's **trip rules** (the same rules a c
 trips), owned by the account that uploaded it, and bound to the caving group of the set it was
 uploaded into: **visible to that club**, or private to the uploader when the set names no club.
 
-*Announcement.* This part will be announced as `trips` in `features` once the server also makes trip
-reports from recordings; until then the routes below are served but not announced, and a client must
-not rely on them.
+*Announcement.* This part is announced as `trips` in `features` (section 13.5).
 
 ### 13.1 Reading recordings
 
@@ -1435,3 +1478,97 @@ that lists `held` in `clientFeatures`. Whether a given account is under review i
 can change at any time; a device learns it from its first `held` answer, or from
 `409 sync.client_update_required` if it did not list `held`.
 
+## 15. Raster maps
+
+A phone keeps **raster maps** of a cave — a scanned plan, a drawn profile — and the places **pinned**
+on them by pixel. The server keeps a map as a map, under the phone's own identifier, and its picture as
+a document; a pin is a place, a pixel across and a pixel down. Neither carries a position, and there is
+no georeference.
+
+A map is as visible as its cave: it is on a phone's page exactly when the feature stream hands that
+phone the cave. Who may write a map is whoever may change the cave.
+
+### 15.1 Reading maps
+
+```
+GET /api/v1/sync/sets/{id}/rasters?cursor=…&pageSize=…
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "setRevision": 4,
+  "settings": { },
+  "maps": [
+    {
+      "id": "…", "caveId": "…", "caveAreaId": "…", "title": "…", "mapType": "planView",
+      "sortOrder": 0, "documentId": "…", "revision": "…",
+      "pins": [ { "id": "…", "placeId": "…", "x": 120, "y": 80, "revision": "…" } ]
+    }
+  ],
+  "tombstones": [ { "id": "…", "deletedAt": "…" } ],
+  "nextCursor": "…",
+  "hasMore": false
+}
+```
+
+- Paged exactly as the feature stream is (section 3): an opaque cursor of its own — a cursor of
+  another stream is refused `400 sync.cursor_invalid` — `409 sync.cursor_stale` when the set moved,
+  `pageSize` clamped to `pageSizeMax`, tombstones riding the same cursor.
+- **Which maps.** A map is on a page when its cave is one the feature stream would hand this account
+  right now — inside the set, readable, and **not withheld**. A map of a withheld cave is **absent, not
+  stubbed**, exactly as a photograph on that cave is.
+- **Which pins.** `pins` lists the map's live pins, **leaving out every pin of a place the feature
+  stream would not hand this account**; the list is otherwise complete, so replace the map's pins
+  wholesale. On a picture that may one day be laid on the ground a pixel is a position, so no route
+  shows a pin of a place its reader may not be given.
+- **When a map comes again.** When it changes, when any of its pins is added, moved or removed, or when
+  its cave changes. `revision` is the map's own revision, the value an upload sends back as
+  `baseRevision`; each pin has its own. A pin added or removed does not move the map's own `revision`.
+- **`mapType`** is `planView`, `projectedProfile`, `extendedProfile` or `other` (field mapping, section 10).
+- **The picture** is `documentId`, a document of the documents stream: it is listed there as a link of
+  the document to the cave with the role `map2d`, and its bytes are fetched like any photograph's — a
+  reader who may not be shown where the picture was taken is handed it whole without its location data.
+- **Tombstones** name maps removed after the cursor, in caves the set hands this account. A removed
+  pin is not a tombstone: its map comes again without it.
+
+### 15.2 The `rasterMaps` and `rasterPins` sections of an upload
+
+An upload may carry `rasterMaps` and `rasterPins` arrays, each answered in an array of the same name in
+the per-item shape of `rows`. They are applied in the fixed order of the upload — `rows`, `people`,
+`documents`, **`rasterMaps`**, `tripRecordings`, `tripPoints`, `documentLinks`, **`rasterPins`** — so a map
+sent beside its cave finds it, and a pin sent beside its map and its place finds both.
+
+**A map** — `{ id, baseRevision, deleted, caveId, caveAreaId?, title, mapType, sortOrder?, fileName?,
+sha256, sizeBytes?, stagedUploadId, clientUpdatedAt? }`:
+
+- A **new** map (no `baseRevision`) brings its picture as bytes staged beforehand (section 11.3,
+  `stageForSync`), named by `stagedUploadId` and stated by `sha256`. The picture has to be an image. It
+  becomes a document owned by the uploader and bound to the set's club, and is hung on the cave with the
+  role `map2d` under the map's title, which is how the browser lists it among the cave's maps.
+- An **edit** is arbitrated on `baseRevision` as a feature is. It replaces `title`, `mapType`,
+  `sortOrder` and `caveAreaId` as sent (an absent `caveAreaId` clears it). Staged bytes of another hash
+  than the current picture's give the picture a **new revision**; the earlier one is kept.
+- **`caveId` cannot change.** A map stays with the cave it was made for; send a removal and a new map.
+- **`deleted: true`** removes the map and, with it, its picture's document; its pins go with it.
+- Writing needs the right to change the cave, asked before anything is said about the bytes.
+
+**A pin** — `{ id, rasterMapId, baseRevision, deleted, placeId, x, y }`:
+
+- `placeId` is a place or other feature **inside the map's cave** that this account may read; one that
+  does not exist, one it may not read and one in another cave are answered alike.
+- `x` and `y` are whole pixels, 0 to 1 000 000.
+- A map carries **one live pin per place**: a second pin of the same place on the map is refused.
+- A pin belongs to its map for good: the same identifier under another map is refused as taken.
+
+**Taking an upload back** removes the maps and pins it created — with a map, its picture's document and
+the `map2d` link, which the documents stream tells as a removed link — puts back what it deleted (a map
+with its picture), and returns each changed field to its earlier value while it still holds what the
+upload wrote. A new picture steps back to the revision before it, which stays in the document's list.
+The undo's line names `rasterMapId` or `rasterPinId`.
+
+### 15.3 Announcement
+
+`features` in `GET /sync/capabilities` names **`rasters`** on every installation running this build: the
+rasters stream and the two upload sections are served. A device that does not see the name does not
+send the sections.

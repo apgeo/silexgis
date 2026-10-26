@@ -115,8 +115,9 @@ set the signed-in account does not own however that setting stands.
 | 409 | `sync.cursor_stale` | The `cursor` was issued by this server, but against an older revision of the sync set: the selection or its settings have been edited since | `apply-and-resubmit` — drop the cursor and read the set from the beginning. Retrying the same cursor will never succeed |
 
 The documents catalogue (`GET /sync/sets/{id}/documents`), the trips stream
-(`GET /sync/sets/{id}/trips`) and the reviews stream (`GET /sync/sets/{id}/reviews`) answer exactly
-these three codes, on exactly these terms: each is read the way the feature download is read. Its cursor is its own — a
+(`GET /sync/sets/{id}/trips`), the reviews stream (`GET /sync/sets/{id}/reviews`) and the rasters
+stream (`GET /sync/sets/{id}/rasters`) answer exactly these three codes, on exactly these terms: each
+is read the way the feature download is read. Its cursor is its own — a
 position the feature download issued is answered `sync.cursor_invalid` there, and the other way
 round — so a device keeps one cursor per stream and drops only the one refused.
 
@@ -286,10 +287,10 @@ went between the check and the write, or one of these:
 | `status` | `code` | Means | Action |
 |---|---|---|---|
 | `rejected` | `sync.document_unavailable` | The document is not on this server, has been removed, or is not one this account may read. A link hands the document to everyone who can read the target, so the account must be able to read it itself | `apply-and-resubmit` — send the document first (in the same upload, before the link, is enough); otherwise `stop` for this link |
-| `rejected` | `sync.target_not_found` | The target is not on this server, is not readable by this account, or is not in this selection — answered alike, so the field cannot be used to ask what exists | `stop` for this link; re-read the selection |
-| `rejected` | `sync.location_forbidden` | The target is a feature whose location this account may not see, so the catalogue would never hand it a file hanging there. A feature the same upload created in its `rows` is exempt; a document sent under a feature's identifier is not | `stop` for this link — keep the file on the phone, or ask somebody who may see the location to hang it |
-| `rejected` | `sync.row_forbidden` | The account may read the target but not change what hangs on it (Write on the target) | `stop` for this link |
-| `rejected` | `sync.kind_unsupported` | The target's `kind` is not one a phone may hang files on in this contract version — only `feature` is | `stop` for this link, permanently in this contract version |
+| `rejected` | `sync.target_not_found` | The target is not on this server, is not readable by this account, or is not in this selection — answered alike, so the field cannot be used to ask what exists. For a recording or a scan: it is absent, removed or not readable, or its cave (or a scan's place) is not in the selection | `stop` for this link; re-read the selection |
+| `rejected` | `sync.location_forbidden` | The target is a feature whose location this account may not see — or a recording whose cave, or a scan whose cave or place, is one — so the catalogue would never hand it a file hanging there. A feature the same upload created in its `rows` is exempt; a document sent under a feature's identifier is not | `stop` for this link — keep the file on the phone, or ask somebody who may see the location to hang it |
+| `rejected` | `sync.row_forbidden` | The account may read the target but not change what hangs on it (Write on the target; on a recording or a scan, Write on the recording) | `stop` for this link |
+| `rejected` | `sync.kind_unsupported` | The target's `kind` is not one a phone may hang files on — `feature`, `tripRecording` and `tripPoint` are | `stop` for this link, permanently in this contract version |
 
 An entry in `tripRecordings` or `tripPoints` (section 13.2 of the protocol document) is answered in
 the same shape, with the recording's or the scan's identifier as its `id`. Their `created`, `updated`,
@@ -322,6 +323,26 @@ this contract version carries**; do not build a re-parenting gesture on top of i
 server to follow. So a device that meets `sync.location_forbidden` is always looking at a create, and a
 device whose entrance edit comes back `updated` with the coordinate unchanged on the next download
 is looking at the write-right rule working, not at a lost message.
+
+### 6.2a One raster map or pin inside a 200
+
+An entry in `rasterMaps` or `rasterPins` (section 15.2 of the protocol document) is answered in the
+same shape, with the map's or the pin's identifier as its `id`. Their `created`, `updated`, `deleted`,
+`unchanged` and `conflict` mean what they mean for rows — a `conflict` carries no echo: read the map
+again from the rasters stream — and they share `sync.row_not_found`, `sync.id_conflict`,
+`sync.row_deleted`, `sync.row_forbidden`, `sync.row_delete_forbidden`, `sync.caving_group_forbidden`,
+`access.create_forbidden`, `sync.file_bytes_missing` and `sync.file_hash_mismatch` with rows and
+documents. These are their own:
+
+| `status` | `code` | Means | Action |
+|---|---|---|---|
+| `rejected` | `sync.cave_not_found` | On a map: the named cave is not on this server, is not a cave, or is not readable by this account — answered alike | `surface-to-user` — send the cave first if it is new |
+| `rejected` | `sync.area_not_found` | On a map: the named area is not on this server, is not readable, or is not inside the map's cave — answered alike | `apply-and-resubmit` — send the area in `rows` of the same upload, or send the map without `caveAreaId` |
+| `rejected` | `sync.map_cave_fixed` | On an edit: the map was sent with another `caveId` than the one it has | `stop` for this item — remove the map and send a new one |
+| `rejected` | `sync.raster_not_an_image` | On a map: the staged bytes are not an image; nothing is stored | `surface-to-user` |
+| `rejected` | `sync.raster_map_not_found` | On a pin: the map it is on is not on this server, or its cave is not readable by this account | `apply-and-resubmit` — send the map in the same upload; drop the pin if the map was removed |
+| `rejected` | `sync.place_not_found` | On a pin: the named place is not on this server, is not readable by this account, or is not inside the map's cave — answered alike | `apply-and-resubmit` — send the place in `rows` of the same upload |
+| `rejected` | `sync.pin_exists` | On a pin: another live pin already marks that place on the map | `apply-and-resubmit` — read the map from the rasters stream and edit that pin |
 
 ### 6.3 The write-service codes, named
 

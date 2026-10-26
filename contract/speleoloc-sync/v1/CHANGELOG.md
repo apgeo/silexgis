@@ -291,3 +291,57 @@ are recorded with the next fixtures).
 
 Codes: new — `sync.client_update_required` (409, the whole upload); on the reviews stream, a `failed`
 entry's `code` is an upload code or `review.dependency_failed` / `review.proposal_unreadable`.
+
+## 2026-10-26 — phones send and receive raster maps and their pins
+
+**Contract version: 1, unchanged. A build pinned to it keeps working.** An upload without the new
+arrays is answered as before; `07`–`16` are byte-for-byte unchanged.
+
+- **`rasterMaps` and `rasterPins`** — two new optional upload arrays: a phone's raster map of a cave
+  (the phone's own identifier, cave, optional area, title, one of four map types, order, and its picture
+  as bytes staged beforehand) and the places pinned on it by pixel. Maps are applied after `documents`,
+  pins last of all, so a pin sent beside its map and its place finds both. Answered in `rasterMaps` and
+  `rasterPins` arrays of the per-row shape, present only when the request carried them. Arbitration and
+  replay are the rows'.
+- **`GET /api/v1/sync/sets/{id}/rasters`** — the raster maps of the caves in the set that this account is
+  handed, a page at a time with a cursor of its own, each with its pins embedded; a pin of a place the
+  account is not handed is left out of the map, a map of a withheld cave is absent, and removals arrive as
+  tombstones. The picture is the map's `documentId`, listed by the documents stream as a link to the cave
+  with the role `map2d`.
+- **`features` names `rasters`** on every installation running this build.
+
+Described in `docs/speleoloc-sync/01-protocol.md` §15 (Raster maps), `02-field-mapping.md` §10,
+`04-errors.md` §6.2a.
+
+Recorded exchanges written or re-written in this entry: none.
+
+Codes: new, per item — `sync.area_not_found`, `sync.map_cave_fixed` and `sync.raster_not_an_image`
+(`rasterMaps`), `sync.raster_map_not_found` and `sync.pin_exists` (`rasterPins`); `sync.cave_not_found`
+and `sync.place_not_found` are also met on these sections.
+
+## 2026-10-26 — photos hang on a phone's trip recordings and on their scans
+
+**Contract version: 1, unchanged. A build pinned to it keeps working.** An upload that names only
+`feature` targets is answered as before, and a documents page that carries no such link reads as
+before; `07`–`16` are byte-for-byte unchanged.
+
+- **`target.kind` gains `tripRecording` and `tripPoint`** in the upload's `documentLinks` and in
+  the links of the documents stream. A photo or document hangs on a recording, or on one scan of it,
+  the way it hangs on a feature, under Write on the recording. The recording's cave — and for a scan its
+  place — must be in the selection and not withheld from the account (`sync.location_forbidden`
+  otherwise); a recording or scan the account cannot read is `sync.target_not_found`.
+- **The documents stream lists these links** when the recording is readable and its cave handed, and for
+  a scan when its place is handed too. A photo on a scan of a withheld place is absent. A link on a
+  recording or scan that is removed, or taken down, arrives as a tombstone.
+- **Conversion** hangs every photo of a recording and its scans on the trip report made from it.
+
+A reader of the documents stream that treats `target.kind` as a closed set of one value must now
+tolerate the two new names; one that only ever sends `feature` is unaffected.
+
+Described in `docs/speleoloc-sync/01-protocol.md` §11 ("Photos on a recording and on a scan"),
+`02-field-mapping.md` §7.2, `04-errors.md` §6.2.
+
+Recorded exchanges written or re-written in this entry: none.
+
+Codes: no new ones — `sync.target_not_found`, `sync.location_forbidden`, `sync.row_forbidden` and
+`sync.kind_unsupported` are met on recording and scan targets.

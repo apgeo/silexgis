@@ -234,7 +234,7 @@ What a row in an upload's `documentLinks` array becomes:
 | In the row | On the server | Notes |
 |---|---|---|
 | `documentId` + `target` | The link, found by the pair | A document hangs on a feature once; the link's own identifier comes back in the answer |
-| `target.kind` | — | `feature` only, in this contract version |
+| `target.kind` | Which kind of object the link hangs on | `feature`, `tripRecording` or `tripPoint`; the identifier is a feature's, a recording's or a scan's accordingly. A photo on a recording or scan with no `role` is filed as `other` |
 | `role` | The link's role | When absent on a new link: a photo on an entrance `photoEntrance`, on a `cave_place` or `cave_area` `photoInterior`, on anything else `other`; any file that is not a photo `document`. Absent on an existing link, the role stands |
 | `caption` | The link's caption | The file's name on that feature — not the photo's description. Absent leaves it; empty clears it |
 | `sortOrder` | The link's order | Absent leaves it; `0` on a new link |
@@ -347,3 +347,40 @@ into a trip by hand (`POST /speleoloc-imports/recordings/{recordingId}/preview` 
 recording's title, description, log and dates stand in for the archive's, each scan for an archive scan
 (its place, moment, notes and phone user — the recording's phone user when the scan names none), and
 the document count is zero.
+
+## 10. Raster maps and their pins
+
+A phone's raster map is kept on the server **as a map**, under the phone's identifier, with its picture
+as a document hung on the cave as a map. Its pins are kept as **pins on the map**, one per place. The
+protocol document's section on raster maps says how they are read and sent.
+
+| On the phone | In a `rasterMaps` item / a stream map | On the server |
+|---|---|---|
+| `raster_maps.uuid` | `id` | The map's identifier, adopted verbatim |
+| `raster_maps.cave_uuid` | `caveId` | The cave the map is of; cannot change |
+| `raster_maps.cave_area_uuid` | `caveAreaId` | A feature inside that cave the map covers; absent for the whole cave |
+| `raster_maps.title` | `title` | Kept as sent, trimmed |
+| `raster_maps.map_type` | `mapType` | See the table below |
+| `raster_maps.sort_order` | `sortOrder` | Kept as sent |
+| The map's image file | `stagedUploadId`, `sha256`, `sizeBytes`, `fileName` | A document made from the staged bytes, hung on the cave with the map role; `documentId` on the stream |
+| `raster_maps.updated_at` | `clientUpdatedAt` | Provenance only, never compared |
+| — | `revision` | The server's revision of the map |
+| The uploading account | — | The map's owner |
+
+| On the phone (`map type`) | `mapType` | Means |
+|---|---|---|
+| plane view | `planView` | The cave seen from above |
+| projected profile | `projectedProfile` | A profile projected onto a vertical plane |
+| extended profile | `extendedProfile` | A profile unrolled along the passages |
+| other | `other` | Anything else — a sketch, a detail |
+
+| On the phone | In a `rasterPins` item / a stream pin | On the server |
+|---|---|---|
+| `cave_place_to_raster_map_definitions` row id | `id` | The pin's identifier, adopted verbatim |
+| The map's `uuid` | `rasterMapId` (upload only) | The map it is on, for good |
+| `cave_place_uuid` | `placeId` | The place pinned, inside the map's cave |
+| `x`, `y` | `x`, `y` | Whole pixels from the left and top edge of the picture |
+| — | `revision` | The server's revision of the pin |
+
+The app's raster images are always named `.jpg` whatever their format; the server types the file by its
+content, and refuses a picture that is not an image (`sync.raster_not_an_image`).

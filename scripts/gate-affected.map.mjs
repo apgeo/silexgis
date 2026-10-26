@@ -343,6 +343,10 @@ export const groups = {
     // Where a phone hangs its photos, and the undo of everything the photo sections write.
     'SyncDocumentLinkTests',
     'SyncTripRecordingTests', 'TripRecordingConversionTests',
+    // Photos on a phone's recordings and scans: the link targets, the stream, the reach, the copy.
+    'SyncRecordingPhotoTests',
+    // A phone's raster maps and pins, and the rasters stream.
+    'SyncRasterTests',
     // An upload names its batch on every history row it writes.
     'ChangeAttributionTests',
     // An upload is taken back out of that history: created, edited and deleted rows alike.
