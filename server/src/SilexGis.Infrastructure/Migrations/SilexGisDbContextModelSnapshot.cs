@@ -4155,6 +4155,14 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("proposal_section");
 
+                    b.Property<Guid?>("RasterMapId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("raster_map_id");
+
+                    b.Property<Guid?>("RasterPinId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("raster_pin_id");
+
                     b.Property<short?>("ReviewDecision")
                         .HasColumnType("smallint")
                         .HasColumnName("review_decision");
@@ -4255,6 +4263,14 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("ImportBatchId")
                         .HasDatabaseName("ix_import_batch_items_import_batch_id");
+
+                    b.HasIndex("RasterMapId")
+                        .HasDatabaseName("ix_import_batch_items_raster_map_id")
+                        .HasFilter("raster_map_id is not null");
+
+                    b.HasIndex("RasterPinId")
+                        .HasDatabaseName("ix_import_batch_items_raster_pin_id")
+                        .HasFilter("raster_pin_id is not null");
 
                     b.HasIndex("ReviewId")
                         .IsUnique()
@@ -4980,6 +4996,132 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_processing_jobs_status_id");
 
                     b.ToTable("processing_jobs", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.RasterMap", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CaveAreaFeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cave_area_feature_id");
+
+                    b.Property<Guid>("CaveFeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cave_feature_id");
+
+                    b.Property<DateTimeOffset?>("ClientUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("client_updated_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<short>("MapType")
+                        .HasColumnType("smallint")
+                        .HasColumnName("map_type");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_raster_maps");
+
+                    b.HasIndex("CaveAreaFeatureId")
+                        .HasDatabaseName("ix_raster_maps_cave_area_feature_id")
+                        .HasFilter("cave_area_feature_id is not null");
+
+                    b.HasIndex("CaveFeatureId")
+                        .HasDatabaseName("ix_raster_maps_cave_feature_id");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_raster_maps_deleted_at")
+                        .HasFilter("deleted_at is not null");
+
+                    b.HasIndex("DocumentId")
+                        .HasDatabaseName("ix_raster_maps_document_id");
+
+                    b.HasIndex("OwnerUserId")
+                        .HasDatabaseName("ix_raster_maps_owner_user_id");
+
+                    b.ToTable("raster_maps", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.RasterPin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid>("PlaceFeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("place_feature_id");
+
+                    b.Property<Guid>("RasterMapId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("raster_map_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("X")
+                        .HasColumnType("integer")
+                        .HasColumnName("x");
+
+                    b.Property<int>("Y")
+                        .HasColumnType("integer")
+                        .HasColumnName("y");
+
+                    b.HasKey("Id")
+                        .HasName("pk_raster_pins");
+
+                    b.HasIndex("PlaceFeatureId")
+                        .HasDatabaseName("ix_raster_pins_place_feature_id");
+
+                    b.HasIndex("RasterMapId", "PlaceFeatureId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_raster_pins_map_place_live")
+                        .HasFilter("deleted_at is null");
+
+                    b.HasIndex("RasterMapId", "UpdatedAt")
+                        .HasDatabaseName("ix_raster_pins_map_updated");
+
+                    b.ToTable("raster_pins", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.ReportTemplate", b =>
@@ -10077,6 +10219,18 @@ namespace SilexGis.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_import_batch_items_import_batches_import_batch_id");
 
+                    b.HasOne("SilexGis.Domain.Entities.RasterMap", null)
+                        .WithMany()
+                        .HasForeignKey("RasterMapId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_import_batch_items_raster_maps_raster_map_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.RasterPin", null)
+                        .WithMany()
+                        .HasForeignKey("RasterPinId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_import_batch_items_raster_pins_raster_pin_id");
+
                     b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
                         .WithMany()
                         .HasForeignKey("SourceFileId")
@@ -10178,6 +10332,55 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_photo_import_sessions_users_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.RasterMap", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
+                        .WithMany()
+                        .HasForeignKey("CaveAreaFeatureId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_raster_maps_features_cave_area_feature_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
+                        .WithMany()
+                        .HasForeignKey("CaveFeatureId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_raster_maps_features_cave_feature_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.Document", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_raster_maps_documents_document_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_raster_maps_users_owner_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.RasterPin", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
+                        .WithMany()
+                        .HasForeignKey("PlaceFeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_raster_pins_features_place_feature_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.RasterMap", "RasterMap")
+                        .WithMany("Pins")
+                        .HasForeignKey("RasterMapId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_raster_pins_raster_maps_raster_map_id");
+
+                    b.Navigation("RasterMap");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.ReportTemplate", b =>
@@ -11080,6 +11283,11 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Navigation("Centerline");
 
                     b.Navigation("Entrance");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.RasterMap", b =>
+                {
+                    b.Navigation("Pins");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SurveyCompilation", b =>

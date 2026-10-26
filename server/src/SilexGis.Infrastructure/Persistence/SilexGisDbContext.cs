@@ -265,6 +265,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
     public DbSet<TripRecording> TripRecordings => Set<TripRecording>();
 
     public DbSet<TripRecordingPoint> TripRecordingPoints => Set<TripRecordingPoint>();
+    public DbSet<RasterMap> RasterMaps => Set<RasterMap>();
+    public DbSet<RasterPin> RasterPins => Set<RasterPin>();
 
     public DbSet<TripAttention> TripAttentions => Set<TripAttention>();
 

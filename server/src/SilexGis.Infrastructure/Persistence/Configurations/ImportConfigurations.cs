@@ -237,6 +237,11 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
             .OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<TripRecordingPoint>().WithMany().HasForeignKey(x => x.TripRecordingPointId)
             .OnDelete(DeleteBehavior.SetNull);
+        // A raster map or a pin removed for good leaves the line that says the upload sent it.
+        builder.HasOne<RasterMap>().WithMany().HasForeignKey(x => x.RasterMapId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<RasterPin>().WithMany().HasForeignKey(x => x.RasterPinId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.ImportBatchId);
         // "Where did this cave come from?" is a lookup by feature, and it is the question the
@@ -268,6 +273,11 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
             .HasDatabaseName("ix_import_batch_items_trip_recording_id");
         builder.HasIndex(x => x.TripRecordingPointId).HasFilter("trip_recording_point_id is not null")
             .HasDatabaseName("ix_import_batch_items_trip_recording_point_id");
+        // The same question for raster maps and pins, and the set-null of the keys above.
+        builder.HasIndex(x => x.RasterMapId).HasFilter("raster_map_id is not null")
+            .HasDatabaseName("ix_import_batch_items_raster_map_id");
+        builder.HasIndex(x => x.RasterPinId).HasFilter("raster_pin_id is not null")
+            .HasDatabaseName("ix_import_batch_items_raster_pin_id");
 
         builder.Property(x => x.ReviewDecision).HasConversion<short?>();
         builder.Property(x => x.Proposal).HasColumnType("jsonb");

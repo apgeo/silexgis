@@ -499,6 +499,16 @@ public class ImportBatchItem
     /// </summary>
     public Guid? TripRecordingPointId { get; set; }
 
+    /// <summary>
+    /// The raster map this line created, edited or removed, for a phone upload that sent one. A line
+    /// names a map or one of its pins, never both: each is arbitrated, answered and taken back on its
+    /// own. Goes null when the map is removed for good, like the recording pointer.
+    /// </summary>
+    public Guid? RasterMapId { get; set; }
+
+    /// <summary>The pin on a raster map this line created, edited or removed.</summary>
+    public Guid? RasterPinId { get; set; }
+
     /// <summary>The geofile row this came from. Kept even after a re-import replaces those rows.</summary>
     public long? SourceFeatureId { get; set; }
 
