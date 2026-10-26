@@ -73,6 +73,7 @@ public sealed class SurveyUploadConfiguration : IEntityTypeConfiguration<SurveyU
         builder.Property(x => x.LogTail).HasMaxLength(LogTailLength);
         builder.Property(x => x.CompilerVersion).HasMaxLength(100);
         builder.Property(x => x.PublicLinkRefusal).HasMaxLength(40);
+        builder.Property(x => x.PublicLinkAudience).HasConversion<short>();
 
         builder.HasOne<Cave>().WithMany().HasForeignKey(x => x.CaveFeatureId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<CaveSurvey>().WithMany().HasForeignKey(x => x.CaveSurveyId).OnDelete(DeleteBehavior.Cascade);
@@ -149,8 +150,15 @@ public sealed class SurveyUploadPublicLinkConfiguration : IEntityTypeConfigurati
 {
     public void Configure(EntityTypeBuilder<SurveyUploadPublicLink> builder)
     {
-        builder.ToTable("survey_upload_public_links");
+        // An acknowledgement is a person and a moment, or nothing: never one without the other.
+        builder.ToTable("survey_upload_public_links", t => t.HasCheckConstraint(
+            "ck_survey_upload_public_links_acknowledgement",
+            "(protected_acknowledged_by IS NULL) = (protected_acknowledged_at IS NULL)"));
         builder.Property(x => x.Id).ValueGeneratedNever();
+
+        // Links made before audiences existed opened for anybody holding the address, and keep doing so.
+        builder.Property(x => x.Audience).HasConversion<short>().HasDefaultValue(SurveyUploadLinkAudience.Public);
+        builder.Ignore(x => x.ProtectedAcknowledged);
 
         builder.Property(x => x.TokenHash).HasMaxLength(64);
         builder.Property(x => x.TokenProtected).HasMaxLength(1000);
@@ -172,6 +180,11 @@ public sealed class SurveyUploadPublicLinkConfiguration : IEntityTypeConfigurati
             .HasFilter("revoked_at IS NULL");
         builder.HasIndex(x => x.CreatedBy, "ix_survey_upload_public_links_created_by")
             .HasDatabaseName("ix_survey_upload_public_links_created_by");
+
+        // Who acknowledged a protected cave's link is kept for as long as the link is.
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.ProtectedAcknowledgedBy).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.ProtectedAcknowledgedBy, "ix_survey_upload_public_links_protected_acknowledged_by")
+            .HasDatabaseName("ix_survey_upload_public_links_protected_acknowledged_by");
     }
 }
 
@@ -187,6 +200,9 @@ public sealed class SurveyUploadPreferenceConfiguration : IEntityTypeConfigurati
 
         // No database default for the link switch: the entity starts it at true, and a database
         // default of true would make an explicit false indistinguishable from "not set" on insert.
+        // Existing rows read public. Unlike the switch above, the database default here equals the
+        // value the entity starts at, so it cannot turn an explicit choice into a different one.
+        builder.Property(x => x.DefaultLinkAudience).HasConversion<short>().HasDefaultValue(SurveyUploadLinkAudience.Public);
 
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
     }

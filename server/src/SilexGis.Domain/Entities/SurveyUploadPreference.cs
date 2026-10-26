@@ -28,6 +28,12 @@ public class SurveyUploadPreference : ITimestamped
     /// </summary>
     public bool PublicLinks { get; set; } = true;
 
+    /// <summary>
+    /// Who this account's uploads' links open for when an upload does not say: anybody holding the
+    /// address, unless the account chose its organization's signed-in accounts only.
+    /// </summary>
+    public SurveyUploadLinkAudience DefaultLinkAudience { get; set; } = SurveyUploadLinkAudience.Public;
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

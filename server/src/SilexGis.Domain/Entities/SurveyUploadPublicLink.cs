@@ -2,8 +2,9 @@
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
-/// A public link to one survey upload's results: an address anybody holding it may open without
-/// an account, showing the run's progress and the files it produced — never the uploaded files,
+/// A public link to one survey upload's results: an address anybody holding it may open — without
+/// an account, or, for a link made for the organization, with any account of this installation —
+/// showing the run's progress and the files it produced — never the uploaded files,
 /// the compiler's log, the party, a station name, the cave's identity beyond its name, or a
 /// position.
 /// </summary>
@@ -39,7 +40,36 @@ public class SurveyUploadPublicLink : ITimestamped
 
     public DateTimeOffset? RevokedAt { get; set; }
 
+    /// <summary>Who may open the link: anybody holding the address, or only a signed-in account of this installation.</summary>
+    public SurveyUploadLinkAudience Audience { get; set; } = SurveyUploadLinkAudience.Public;
+
+    /// <summary>
+    /// The account that asked, after being warned, for a link although the cave's position is
+    /// protected; null for an ordinary link. A link that carries this keeps answering while the
+    /// cave stays protected; an ordinary link closes the moment the cave becomes protected.
+    /// </summary>
+    public Guid? ProtectedAcknowledgedBy { get; set; }
+
+    /// <summary>When that acknowledgement was given; set together with <see cref="ProtectedAcknowledgedBy"/>.</summary>
+    public DateTimeOffset? ProtectedAcknowledgedAt { get; set; }
+
+    /// <summary>Whether the link was made with the explicit acknowledgement that the cave is protected.</summary>
+    public bool ProtectedAcknowledged => ProtectedAcknowledgedBy is not null;
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Who a survey upload's link opens for. Stored as smallint; values are part of the schema
+/// contract — append, never renumber.
+/// </summary>
+public enum SurveyUploadLinkAudience
+{
+    /// <summary>Anybody holding the address, without an account.</summary>
+    Public = 0,
+
+    /// <summary>Anybody holding the address who is signed in to an account of this installation; no right on the cave is needed.</summary>
+    Organization = 1,
 }
