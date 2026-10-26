@@ -114,8 +114,9 @@ set the signed-in account does not own however that setting stands.
 | 400 | `sync.cursor_invalid` | The `cursor` was not issued by this server: truncated, re-encoded, hand-made, or from an older contract | `apply-and-resubmit` — drop the cursor and start the set again from the beginning, accepting that this is a full re-read. Never resend it as sent |
 | 409 | `sync.cursor_stale` | The `cursor` was issued by this server, but against an older revision of the sync set: the selection or its settings have been edited since | `apply-and-resubmit` — drop the cursor and read the set from the beginning. Retrying the same cursor will never succeed |
 
-The documents catalogue (`GET /sync/sets/{id}/documents`) and the trips stream
-(`GET /sync/sets/{id}/trips`) answer exactly these three codes, on exactly these terms: it is read the way the feature download is read. Its cursor is its own — a
+The documents catalogue (`GET /sync/sets/{id}/documents`), the trips stream
+(`GET /sync/sets/{id}/trips`) and the reviews stream (`GET /sync/sets/{id}/reviews`) answer exactly
+these three codes, on exactly these terms: each is read the way the feature download is read. Its cursor is its own — a
 position the feature download issued is answered `sync.cursor_invalid` there, and the other way
 round — so a device keeps one cursor per stream and drops only the one refused.
 
@@ -198,8 +199,9 @@ away with it. So a row's verdict rides a `200` inside the answer, one entry per 
 
 The batch-level checks happen in a fixed order, and knowing it saves guessing: the contract version
 first, then the row count, then the set's ownership, then **the replay check** — a batch identifier
-already applied returns its stored answer here, before anything else is asked — then the caving-group
-binding, and only then the rows. A replayed batch is therefore answered even by an account whose
+already applied returns its stored answer here, before anything else is asked — then whether the
+account's uploads wait for a reviewer and the device can be told so, then the caving-group binding, and
+only then the rows. A replayed batch is therefore answered even by an account whose
 group membership has since been withdrawn, deliberately: it is being told what already happened, not
 being allowed to write again.
 
@@ -211,6 +213,7 @@ being allowed to write again.
 | 400 | `sync.batch_too_large` | More items than `uploadRowsMax` from the capabilities answer, counted over every section of the upload together | `apply-and-resubmit` — split the batch. **Mint a new batch identifier for each part**; a batch identifier stands for one attempt |
 | 404 | `sync.set_not_found` | No sync set with that id belongs to this account | `surface-to-user` — as in section 3 |
 | 409 | `sync.batch_conflict` | The same batch identifier arrived twice at once, and the first copy is still being applied | `retry` — after a short wait. The winner's answer is what a later send returns |
+| 409 | `sync.client_update_required` | The account's uploads wait for a reviewer, and the request did not list `held` in `clientFeatures` — so the device could not be told that a row was kept for review rather than written. Refused whole; nothing was written or kept | `stop` — and tell the caver the application needs updating. A build that sends `held` gets the row status `held` instead |
 | 400 | `validation.failed` | The body failed validation — a row, a recording or a scan named twice, a recording without `caveId` or `startedAt`, a scan without `recordingId` or `scannedAt`, an upload with no item in any section, a property document that is not an object, more than 16 `clientFeatures` or one longer than 64 characters | `stop` — fix the client |
 | 403 | `sync.caving_group_forbidden` | The set is bound to a caving group this account is no longer entitled to bind rows to. Nothing was written | `surface-to-user` — only an administrator can restore the membership |
 | 400 | *(a write-service code)* | The write service refused something the loop could not attribute to one row. Nothing is kept. The names are listed under section 6.3 | `stop` — the batch as sent cannot be applied |
@@ -226,6 +229,7 @@ Each entry in `rows` carries a `status`, and a `code` when there is a reason wor
 | `updated` | — | The row was here, the device held the current version, its edit was written | — store the `revision` |
 | `deleted` | — | The row was removed | — drop it locally |
 | `unchanged` | — | Nothing was written and nothing was wrong: the row already said what was asked. A resent create whose identifier is already here lands here, and so does a delete of a row that was never received | — store the `revision` if one came back |
+| `held` | — | The account's uploads wait for a reviewer. Nothing was written; the row is kept as a proposal under `reviewId`, and `revision` is the one the row already had (null for a new row). Sending the same content again is answered with the same `reviewId` and keeps nothing new; different content replaces the earlier proposal under a new `reviewId`. Only ever answered to a request that listed `held` in `clientFeatures` | `ignore` — keep the row as it is on the device and send it again as usual; it is not an error. The decision arrives later, under `reviewId` |
 | `conflict` | `sync.conflict` | Somebody wrote the row after the device last read it. The device's version was **not** applied | `apply-and-resubmit` — take the server's row from `conflicts`, merge, and send again with the revision that row carries. **A row that lost and is missing from `conflicts` is a row whose position this account may not have** — the same answer a download gives, absence rather than a blurred stand-in. Re-read it instead |
 | `rejected` | `sync.row_not_found` | A `baseRevision` was sent for a row that is not on this server | `apply-and-resubmit` — send it as a new row, with `baseRevision` null |
 | `rejected` | `sync.id_conflict` | The identifier is in use here by a row this account may not read | `surface-to-user` — do not re-key the row silently. Mint a new identifier only if a human establishes that the row is genuinely a different one |
@@ -372,6 +376,29 @@ it belongs in one catalogue with the rest because the same application calls bot
 
 The families below are documented elsewhere, or are a web route's rather than a device's, and the
 boundary is stated so that a gap is not mistaken for an omission.
+
+- **The review routes** — `/api/v1/review/…`, the web interface's routes for deciding about the
+  uploads of an account under review (the protocol's section 14). A device does not call them; it
+  reads the outcome on the reviews stream. Their codes, for whoever builds those screens:
+  `review.batch_not_found` and `review.item_not_found` (404 — no such held batch or line, or the caller
+  may neither read the review queue nor is the uploader), `acl.forbidden` (403 — may read the queue
+  but not decide), `review.own_batch` (403 — nobody decides about their own uploads),
+  `review.not_pending` (409 — nothing in it waits any more, or another decision reached one of its
+  lines first; a turned-down line can still be accepted on its own while its bytes are kept and no later
+  upload replaced it, and is answered this once that is no longer so), `review.source_unsupported` (409 —
+  this server cannot decide that kind of held batch; its lines still wait), `review.changed_since` (409 — a held edit's
+  row was written by somebody else since the phone read it; the problem lists the `reviewIds`, and
+  nothing was decided — send `overCurrent: true` to write the accepted fields onto the current row),
+  `review.fields_unsupported` (400 — a field list for a line that can only be decided whole, or a field
+  it does not have) and `validation.failed` (400 — a note longer than 2,000 characters).
+  **On the reviews stream**, a `failed` decision's `code` is the code the upload itself would have
+  answered for that row (section 6.2), `review.dependency_failed` — a held row it depends on was
+  not written, so it could not be either — or `review.proposal_unreadable` (a kept proposal this build
+  can no longer read, after an upgrade that changed its shape). Undoing an accepted upload is the ordinary undo below; a
+  held or turned-down batch is refused it with `import_batch.held` (409 — nothing of it was written).
+  **A file import by an account under review** — a vector file, photographs, a trip spreadsheet, a
+  SpeleoLoc archive or kept recording, a catalogue import — is refused with `import.review_unavailable`
+  (409 — holding a file import for a reviewer is not built yet, and nothing was written).
 
 - **The `auth.*` family and the OAuth `error` values** are in the sign-in document, with the calls
   that answer them. They are not repeated here.

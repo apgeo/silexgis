@@ -362,8 +362,25 @@ answered exactly as before.
 **`clientFeatures`** (optional, a list of names, at most 16) says which protocol behaviours beyond
 the first contract this device understands. A server only answers in a way a device opted into here,
 so a build that predates a behaviour is never handed an answer it would misread. The list is kept with
-the upload's batch as sent; names this server does not recognise are kept and otherwise ignored. No
-name changes anything yet; each one is defined in the section that introduces it.
+the upload's batch as sent; names this server does not recognise are kept and otherwise ignored. Each
+name is defined in the section that introduces it. The one defined so far is **`held`**: the device
+understands the row status `held` (below).
+
+**When an account's uploads wait for a reviewer.** An installation can mark an account so that what
+it uploads is reviewed before it lands. For such an account an upload writes nothing: each row that
+would have been written is kept as a proposal and answered `held`, with a `reviewId` and the revision
+the row already had (null for a new row). A request from such an account that does not list `held` in
+`clientFeatures` is refused whole with `409 sync.client_update_required` and nothing is kept, because a
+build that cannot be told a row is held would read the answer as lost or as written. An account that is
+not marked is answered exactly as before, and no answer to it carries `reviewId`.
+
+The proposals are checked the way an upload is applied — each row after the rows before it, so an
+entrance sent beside its new cave is checked against that cave — and the account's proposals still
+waiting count too: a place sent today under a cave still waiting from an earlier upload is checked
+against that cave and waits on it. Nothing a held row proposes is visible to anyone through any route
+until it is accepted. Send held rows again as usual: the same content is answered with the same
+`reviewId` and keeps nothing new; different content replaces the waiting proposal under a new
+`reviewId`. The decisions are reported on their own route — section 14.
 
 ### 8.1 The batch identifier, which is what makes a retry safe
 
@@ -1329,3 +1346,92 @@ again.
 `features` in `GET /sync/capabilities` names **`trips`** on every installation running this build: the
 trips stream and the two upload sections are served. A device that does not see the name does not send
 the sections.
+
+## 14. When an account's uploads are reviewed
+
+An installation can place an account under review: everything it uploads waits for a person who
+may decide about uploads, and nothing of it is written until they have. Section 8 says what such an
+upload is answered (`held`, with a `reviewId`) and what a device must send for it (`held` in
+`clientFeatures`). This section is what happens afterwards. Edits made in the browser are never held;
+only phone uploads are. A file import by such an account (a vector file, photographs, a trip
+spreadsheet, a SpeleoLoc archive or kept recording, a catalogue import) cannot be held yet and is
+refused with `409 import.review_unavailable` before anything is written, so nothing the account
+commits lands unreviewed.
+
+A reviewer accepts or turns down a held upload whole, row by row, or — for an edit of a feature — by
+field (`name`, `description`, `properties`, and `position`, which is the point, altitude, position
+quality and main-entrance flag together). Accepting writes exactly what the same upload would have
+written unheld, with **the uploading account's rights as they are at that moment**: a review never
+lands what the account could not write itself, so a row the account has since lost the right to write
+is decided `failed`. Accepting a row accepts the held rows it depends on (a place under a held cave, a
+scan of a held recording, both the held photo and the held place a link joins), even when an earlier
+upload left them waiting; turning one down turns down every held row that depends on it.
+
+A reviewer may change their mind about a row they turned down, while the installation still keeps a
+turned-down photo's bytes (`SILEXGIS__Sync__RejectedHeldBytesRetentionDays`, 30 days by default) and as
+long as no later upload sent the same row again. The row is then accepted after all, and **the same
+`reviewId` appears a second time on the reviews stream**, with the later decision: a device keeps the
+last outcome it read for a `reviewId`, not the first.
+
+### 14.1 Reading the decisions
+
+**`GET /api/v1/sync/sets/{id}/reviews?cursor=&pageSize=`** — the decisions on rows this account's
+phones sent while it was under review, oldest decision first, a page at a time, on the same cursor
+rules as every other stream (section 3): the cursor is this stream's own, a set edit makes it stale,
+and a caught-up page echoes the position it was asked from. The stream is the **account's**: it
+carries decisions on rows sent through any of the account's sets, because an upload's identity
+belongs to the account, not to the set it went through. An account that was never under review reads
+an empty stream.
+
+```json
+{
+  "setRevision": 4,
+  "settings": { },
+  "reviews": [
+    {
+      "reviewId": "0199f0c2-…",
+      "entity": "rows",
+      "rowId": "0199f0a1-…",
+      "outcome": "rejected",
+      "decidedAt": "2026-10-26T09:12:44.512Z",
+      "note": "That is the old shaft",
+      "revision": "2026-10-20T17:03:10.118Z",
+      "current": { "id": "0199f0a1-…", "kind": "caveEntrance", "…": "…" }
+    }
+  ],
+  "nextCursor": "…",
+  "hasMore": false
+}
+```
+
+| Member | Meaning |
+|---|---|
+| `reviewId` | The id the upload answered the row with. |
+| `entity` | The upload section the row came in: `rows`, `people`, `documents`, `documentLinks`, `tripRecordings` or `tripPoints`. |
+| `rowId` | The row's id as the upload answered it; for a document link, the document's id. |
+| `outcome` | `accepted` — written, whole or in part; `rejected` — turned down, nothing written; `superseded` — the device sent the same row again with other content, which waits in its place under a new `reviewId` (decided when that upload arrived, with no reviewer); `failed` — accepted, but refused when it was written. |
+| `decidedAt` | When. The stream's order. |
+| `note` | What the reviewer wrote to the uploader; absent when nothing. |
+| `revision` | The revision the server holds the row at now, when it holds one this account may read. After `accepted` it is the row as written — store it as the row's base revision. Absent for a new row that was not written. |
+| `code` | For `failed` only: why the row could not be written — the code the upload itself would have answered (section 6.2 of the errors document), `review.dependency_failed` when a row it depends on was not written, or `review.proposal_unreadable` when the kept proposal could no longer be read. |
+| `current` | For a `rejected` or `failed` **edit or removal of a feature**: the server's row, shaped exactly as the feature stream delivers it, so the device can put back what it still shows. **Absent when this account may not be given that row's position** — the conflict echo's rule (section 8.6), absence and never a blurred stand-in; the device re-reads the set instead. |
+
+What a device does with each outcome:
+
+- **`accepted`** — nothing to undo. The written row also reaches the device through its own stream as
+  any written row does; `revision` saves waiting for it.
+- **`rejected`** — the device's version will not be written unless a reviewer later accepts it after
+  all (which arrives as a later `accepted` for the same `reviewId`). A new row is dropped locally (or kept
+  as a local draft, the app's choice); an edit or removal is replaced by `current`, or, when `current`
+  is absent, by whatever the next read of the set brings.
+- **`superseded`** — ignore; the later `reviewId` will be decided in its turn.
+- **`failed`** — as `rejected`, and worth telling the caver: the account may have lost a right.
+
+### 14.2 Announcement
+
+`features` in `GET /sync/capabilities` names **`reviews`** on every installation running this build:
+the reviews stream is served, and an upload from an account under review is answered `held` to a device
+that lists `held` in `clientFeatures`. Whether a given account is under review is not announced — it
+can change at any time; a device learns it from its first `held` answer, or from
+`409 sync.client_update_required` if it did not list `held`.
+
