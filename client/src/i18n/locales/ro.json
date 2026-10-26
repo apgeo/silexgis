@@ -3039,7 +3039,8 @@
       "jobs": "Sarcini",
       "terrain": "Relief",
       "checklists": "Liste de verificare",
-      "events": "Evenimente din calendar"
+      "events": "Evenimente din calendar",
+      "uploadReview": "Revizuirea încărcărilor"
     },
     "sources": {
       "fullAdministrators": "Administrare deplină: apartenența decide înainte de orice regulă.",
@@ -4068,6 +4069,8 @@
         "tripParticipation": "Sunt adăugat la o tură",
         "tripPublished": "O tură la care particip a fost publicată ca pagină pe care o poate citi oricine are linkul",
         "tripNeedsAttention": "O tură înregistrată pe un telefon are nevoie să fie verificată de cineva, sau nu a putut fi transformată în raport de tură",
+        "uploadAwaitingReview": "Un cont ale cărui încărcări sunt verificate a trimis ceva ce așteaptă un verificator",
+        "uploadReviewed": "Un verificator a decis asupra a ceva ce am încărcat",
         "tripPlanning": "Sunt invitat la o tură, se schimbă o tură la care particip, o tură are nevoie de un acces pe care îl pot acorda sau se apropie o tură ori un eveniment de club la care am răspuns",
         "commentReply": "Cineva răspunde la un comentariu scris de mine",
         "commentOnMine": "Cineva comentează la ceva ce îmi aparține",
@@ -4662,6 +4665,8 @@
       "name_notify_trip_published": "O tură a fost publicată ca pagină publică",
       "name_notify_trip_needs_attention": "O tură creată dintr-o înregistrare de pe telefon are nevoie de atenție",
       "name_notify_trip_recording_waiting": "O înregistrare de pe telefon nu a devenit tură",
+      "name_notify_upload_awaiting_review": "O încărcare așteaptă un verificator",
+      "name_notify_upload_reviewed": "Un verificator a decis asupra unei încărcări",
       "name_notify_trip_plan_invitation": "Invitat la o tură planificată",
       "name_notify_trip_plan_changed": "O tură planificată s-a schimbat",
       "name_notify_trip_plan_cancelled": "O tură planificată a fost anulată",
@@ -5397,6 +5402,10 @@
     "revert": "Anulează",
     "reverted": "Importul a fost anulat.",
     "revertedTag": "Anulat",
+    "reviewPendingTag": "Așteaptă verificarea",
+    "reviewRejectedTag": "Respins la verificare",
+    "reviewPartlyTag": "Acceptat în parte la verificare",
+    "reviewPendingExplain": "Un verificator nu a decis încă acest import. Nimic din el nu a fost scris; ce se acceptă se scrie atunci și poate fi anulat după aceea.",
     "revertConfirm": "Ștergi toate cele {{count}} obiecte create de acest import?",
     "revertTripsRestorableFor": "Fiecare tură creată de el poate fi restaurată din Ture șterse timp de {{period}}.",
     "revertTripsRestorable": "Fiecare tură creată de el poate fi restaurată din Ture șterse.",

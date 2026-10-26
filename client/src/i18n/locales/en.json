@@ -3039,7 +3039,8 @@
       "jobs": "Jobs",
       "terrain": "Terrain",
       "checklists": "Checklists",
-      "events": "Calendar events"
+      "events": "Calendar events",
+      "uploadReview": "Upload review"
     },
     "sources": {
       "fullAdministrators": "Full administration: membership decides before any rule is consulted.",
@@ -4055,6 +4056,8 @@
         "tripParticipation": "I am added to a trip",
         "tripPublished": "A trip I am on was published as a page anybody with the link can read",
         "tripNeedsAttention": "A trip recorded on a phone needs somebody to look at it, or could not be made into a trip report",
+        "uploadAwaitingReview": "An account whose uploads are reviewed sent something that waits for a reviewer",
+        "uploadReviewed": "A reviewer decided about something I uploaded",
         "tripPlanning": "I am invited to a trip, a trip I am on changes, a trip needs access I can grant, or a trip or club event I answered about is coming up",
         "commentReply": "Someone replies to a comment I wrote",
         "commentOnMine": "Someone comments on something of mine",
@@ -4649,6 +4652,8 @@
       "name_notify_trip_published": "A trip was published as a public page",
       "name_notify_trip_needs_attention": "A trip made from a phone recording needs attention",
       "name_notify_trip_recording_waiting": "A phone recording was not made into a trip",
+      "name_notify_upload_awaiting_review": "An upload waits for a reviewer",
+      "name_notify_upload_reviewed": "A reviewer decided about an upload",
       "name_notify_trip_plan_invitation": "Invited to a planned trip",
       "name_notify_trip_plan_changed": "A planned trip changed",
       "name_notify_trip_plan_cancelled": "A planned trip was called off",
@@ -5384,6 +5389,10 @@
     "revert": "Undo",
     "reverted": "The import was undone.",
     "revertedTag": "Undone",
+    "reviewPendingTag": "Waiting for review",
+    "reviewRejectedTag": "Turned down in review",
+    "reviewPartlyTag": "Partly accepted in review",
+    "reviewPendingExplain": "A reviewer has not decided this import yet. Nothing of it has been written; what is accepted is written then, and can be undone afterwards.",
     "revertConfirm": "Delete all {{count}} objects this import created?",
     "revertTripsRestorableFor": "Each trip it created can be restored from Deleted trips for {{period}}.",
     "revertTripsRestorable": "Each trip it created can be restored from Deleted trips.",

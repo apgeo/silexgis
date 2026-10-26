@@ -30,6 +30,7 @@ function account(overrides: Partial<AdminUser>): AdminUser {
     twoFactorEnabled: false,
     caverId: null,
     createdAt: '2026-09-01T10:00:00Z',
+    uploadsNeedReview: false,
     ...overrides,
   };
 }

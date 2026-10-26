@@ -73,6 +73,23 @@ export default function ImportBatchesTab() {
    * What the confirmation says an undo leaves recoverable. The caves and features first, since
    * every source can create those; the trips after, for the sources that create any.
    */
+  /**
+   * A batch held for review says where its review stands: waiting, turned down, or partly
+   * accepted. Nothing for a batch nobody held or one accepted whole — it reads like any other.
+   */
+  const reviewTag = (state: ImportBatch['reviewState']) => {
+    switch (state) {
+      case 'pending':
+        return <Tag color="gold">{t('vectorImport.reviewPendingTag')}</Tag>;
+      case 'rejected':
+        return <Tag color="red">{t('vectorImport.reviewRejectedTag')}</Tag>;
+      case 'partlyAccepted':
+        return <Tag color="blue">{t('vectorImport.reviewPartlyTag')}</Tag>;
+      default:
+        return null;
+    }
+  };
+
   const restorable = (source: ImportBatch['source']): string =>
     [t('vectorImport.revertFeaturesRestorable'), tripsRestorable(source)]
       .filter((sentence) => sentence !== undefined)
@@ -201,6 +218,8 @@ export default function ImportBatchesTab() {
             render: (_: unknown, row) =>
               row.revertedAt ? (
                 <Tag>{t('vectorImport.revertedTag')}</Tag>
+              ) : row.reviewState === 'pending' || row.reviewState === 'rejected' ? (
+                reviewTag(row.reviewState)
               ) : (
                 row.canRevert && (
                   <Popconfirm
@@ -234,6 +253,16 @@ export default function ImportBatchesTab() {
         }}
         destroyOnHidden
       >
+        {detail.data?.batch && reviewTag(detail.data.batch.reviewState) && (
+          <Flex vertical gap={8} style={{ marginBottom: 16 }} data-testid="import-batch-review">
+            <div>{reviewTag(detail.data.batch.reviewState)}</div>
+            {detail.data.batch.reviewState === 'pending' && (
+              <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
+                {t('vectorImport.reviewPendingExplain')}
+              </Typography.Paragraph>
+            )}
+          </Flex>
+        )}
         {phone && detail.data?.batch && (
           <Flex vertical gap={12} style={{ marginBottom: 16 }}>
             <Typography.Paragraph type="secondary" style={{ margin: 0 }}>

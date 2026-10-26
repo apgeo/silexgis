@@ -42,6 +42,8 @@ function batch(overrides: Partial<ImportBatch> = {}): ImportBatch {
     revertedAt: null,
     revertedByUserId: null,
     canRevert: true,
+    reviewState: 'notHeld',
+    heldAt: null,
     failures: [],
     ...overrides,
   } as unknown as ImportBatch;
@@ -77,6 +79,30 @@ beforeEach(() => {
 });
 
 describe('the imports this account made', () => {
+  /**
+   * A phone upload held for a reviewer wrote nothing yet, so its line says it waits rather than
+   * reading like a batch that created nothing, and offers no undo.
+   */
+  it('shows a held batch as waiting for review, with nothing to undo', () => {
+    show([batch({ source: 'deviceSync', createdCount: 0, canRevert: false, reviewState: 'pending', heldAt: '2026-10-01T10:00:00Z' })]);
+
+    const list = screen.getByTestId('import-batches');
+    expect(within(list).getByText('Waiting for review')).toBeTruthy();
+    expect(within(list).queryByRole('button', { name: /Undo/ })).toBeNull();
+  });
+
+  it('marks a batch only partly accepted, and leaves one nobody held unmarked', () => {
+    show([
+      batch({ id: 'aaaaaaaa-0000-0000-0000-000000000002', source: 'deviceSync', reviewState: 'partlyAccepted' }),
+      batch({ id: 'aaaaaaaa-0000-0000-0000-000000000003', source: 'vectorFile', geofileName: 'plain.gpx' }),
+    ]);
+
+    const list = screen.getByTestId('import-batches');
+    expect(within(list).queryByText('Waiting for review')).toBeNull();
+    expect(within(list).queryByText('Partly accepted in review')).toBeNull();
+    expect(within(list).getAllByRole('button', { name: /Undo/ })).toHaveLength(2);
+  });
+
   /**
    * Undoing a batch of trips deletes them the way a person would, so each can be put back — and
    * the confirmation is where somebody about to undo five hundred of them needs to read that.

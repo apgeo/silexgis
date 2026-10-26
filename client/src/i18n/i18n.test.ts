@@ -143,6 +143,7 @@ const accessDomains: Record<AccessDomainName, true> = {
   audit: true,
   jobs: true,
   terrain: true,
+  uploadReview: true,
 };
 
 /**
@@ -164,6 +165,8 @@ const notificationCategories: Record<NotificationCategoryName, true> = {
   tripParticipation: true,
   tripPublished: true,
   tripNeedsAttention: true,
+  uploadAwaitingReview: true,
+  uploadReviewed: true,
   jobCompleted: true,
   securityAlerts: true,
   tripPlanning: true,

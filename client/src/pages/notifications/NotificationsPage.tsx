@@ -24,6 +24,8 @@ const everyCategory: Record<NotificationCategoryName, true> = {
   tripParticipation: true,
   tripPublished: true,
   tripNeedsAttention: true,
+  uploadAwaitingReview: true,
+  uploadReviewed: true,
   tripPlanning: true,
   tripCallout: true,
   jobCompleted: true,
