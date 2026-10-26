@@ -24,7 +24,7 @@ the source is a Git submodule at server/external/ThIDE, pinned to the commit
 below, and the built assemblies are redistributed inside the server image.
 
   Source:    https://github.com/apgeo/ThIDE
-  Commit:    0a7196cfe85dce359ea57bdc9ddfb0092d5e6432
+  Commit:    798482bde2b479dd237be8261a96da327f7cb0bd
   License:   MPL-2.0 — see the LICENSE file beside each module under
              server/external/ThIDE/src/
 
