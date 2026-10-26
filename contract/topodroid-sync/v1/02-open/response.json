@@ -49,6 +49,13 @@
   "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<upload>",
   "publicLink": null,
   "publicLinkRefusal": null,
+  "olderVersions": {
+    "count": 0,
+    "sizeBytes": 0,
+    "warn": false,
+    "warnBytes": 524288000,
+    "keepVersions": 0
+  },
   "createdAt": "<timestamp>",
   "expiresAt": "<timestamp>",
   "startedAt": null,

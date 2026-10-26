@@ -74,6 +74,30 @@ public sealed record SurveyUploadFileDeclaration(string Name, long Size, SurveyU
 /// <param name="MapScale">The map scale as 1:<c>MapScale</c>; 500 when empty.</param>
 public sealed record SurveyUploadPipelineRequest(bool? Compile, IReadOnlyList<string>? Outputs, int? MapScale);
 
+/// <summary>What one upload asks of its public link, overriding the account's preferences for it alone.</summary>
+/// <param name="Wanted">
+/// True asks for a link even when the account's preference makes none; false asks for none even when
+/// it would. Empty leaves it to the preference.
+/// </param>
+/// <param name="Audience">Who the link opens for; the account's default audience when empty.</param>
+/// <param name="AllowProtected">
+/// The uploader's explicit acknowledgement, after being warned that the results show where the
+/// cave's passages are, that a link may be made although the cave's position is protected. Without
+/// it a protected cave gets no link. Off when not sent; no preference or switch stands in for it.
+/// </param>
+public sealed record SurveyUploadPublicLinkRequest(bool? Wanted, SurveyUploadLinkAudience? Audience, bool? AllowProtected);
+
+/// <summary>Makes a new link by hand, from the web's status page or the device's result screen.</summary>
+/// <param name="Audience">
+/// Who the link opens for; when empty, the audience of the link it replaces, else the one the upload
+/// asked for, else the caller's default audience.
+/// </param>
+/// <param name="AllowProtected">
+/// The caller's explicit acknowledgement that the cave's position is protected and the results show
+/// where its passages are. Without it a protected cave is refused a link.
+/// </param>
+public sealed record SurveyUploadPublicLinkMintRequest(SurveyUploadLinkAudience? Audience, bool? AllowProtected);
+
 /// <summary>Opens an upload: says what is coming and where it goes.</summary>
 /// <param name="Source">The survey tool, as named in the capabilities' <c>sources</c>.</param>
 /// <param name="Client">The sending application, for the record.</param>
@@ -86,6 +110,7 @@ public sealed record SurveyUploadPipelineRequest(bool? Compile, IReadOnlyList<st
 /// <param name="Files">Every file that will be sent, the survey archive among them.</param>
 /// <param name="Pipeline">What the processing run is asked to do.</param>
 /// <param name="DocumentsVisibility">Who the documents this upload makes are open to; the cave's own visibility when empty.</param>
+/// <param name="PublicLink">What this upload asks of its public link; the account's preferences decide when empty.</param>
 public sealed record SurveyUploadOpenRequest(
     string Source,
     SurveyUploadClientInfo? Client,
@@ -97,7 +122,8 @@ public sealed record SurveyUploadOpenRequest(
     string? Description,
     IReadOnlyList<SurveyUploadFileDeclaration> Files,
     SurveyUploadPipelineRequest? Pipeline,
-    Visibility? DocumentsVisibility);
+    Visibility? DocumentsVisibility,
+    SurveyUploadPublicLinkRequest? PublicLink = null);
 
 /// <summary>Runs an upload's processing again, with the options it ran with or with new ones.</summary>
 public sealed record SurveyUploadRerunRequest(SurveyUploadPipelineRequest? Pipeline);
@@ -177,7 +203,15 @@ public sealed record SurveyUploadArtefactDto(
     SurveyUploadErrorDto? Error);
 
 /// <summary>A public link to an upload's results.</summary>
-public sealed record SurveyUploadPublicLinkDto(string Url, DateTimeOffset CreatedAt);
+/// <param name="Url">The page's address, relative to the installation's public address.</param>
+/// <param name="CreatedAt">When the link was made.</param>
+/// <param name="Audience">Who it opens for: anybody holding it, or a signed-in account of this installation.</param>
+/// <param name="ProtectedAcknowledged">
+/// Whether it was made with the explicit acknowledgement that the cave's position is protected — the
+/// only way a protected cave's results are linked, and the reason such a link keeps opening.
+/// </param>
+public sealed record SurveyUploadPublicLinkDto(
+    string Url, DateTimeOffset CreatedAt, SurveyUploadLinkAudience Audience, bool ProtectedAcknowledged);
 
 /// <summary>An upload, and how its processing is getting on.</summary>
 /// <param name="Id">The upload.</param>
@@ -199,14 +233,15 @@ public sealed record SurveyUploadPublicLinkDto(string Url, DateTimeOffset Create
 /// <param name="LogTail">The last lines of the compiler's output — only for callers who may write to the cave.</param>
 /// <param name="StatusPageUrl">The signed-in page the run is watched on, relative to the installation's public address.</param>
 /// <param name="PublicLink">
-/// The public link to the results, when there is one and the caller may write to the cave — those
-/// who may also withdraw it.
+/// The public link to the results, when there is one that opens now. Shown to every caller who may
+/// read the upload; only those who may write to the cave may withdraw it or make a new one.
 /// </param>
 /// <param name="PublicLinkRefusal">
 /// Why the upload has no public link, when it was given none or its link no longer opens:
-/// <c>installation-off</c>, <c>account-off</c>, <c>no-share-right</c>, <c>protected-cave</c> or
-/// <c>revoked</c>; null otherwise.
+/// <c>installation-off</c>, <c>account-off</c>, <c>not-wanted</c>, <c>no-share-right</c>,
+/// <c>protected-cave</c> or <c>revoked</c>; null otherwise.
 /// </param>
+/// <param name="OlderVersions">What the survey's older versions hold of their runs' outputs, and whether that warrants a warning.</param>
 /// <param name="CreatedAt">When the upload was opened.</param>
 /// <param name="ExpiresAt">When an upload still receiving files is abandoned.</param>
 /// <param name="StartedAt">When the first run started.</param>
@@ -232,10 +267,23 @@ public sealed record SurveyUploadDto(
     string StatusPageUrl,
     SurveyUploadPublicLinkDto? PublicLink,
     string? PublicLinkRefusal,
+    SurveyUploadOlderVersionsDto OlderVersions,
     DateTimeOffset CreatedAt,
     DateTimeOffset ExpiresAt,
     DateTimeOffset? StartedAt,
     DateTimeOffset? FinishedAt);
+
+/// <summary>
+/// What the survey's versions older than its newest one still hold of what their runs produced —
+/// the models, drawings and logs — and whether that is past the size the installation warns at.
+/// The same answer on the status of every version of one survey.
+/// </summary>
+/// <param name="Count">Older versions that still hold something their run produced.</param>
+/// <param name="SizeBytes">What those hold, in bytes: the current revision of each stored output and log.</param>
+/// <param name="Warn">Whether <paramref name="SizeBytes"/> is past the installation's warning size.</param>
+/// <param name="WarnBytes">The installation's warning size in bytes; null when it never warns.</param>
+/// <param name="KeepVersions">How many newest versions of a survey keep what their runs produced; 0 keeps every version's.</param>
+public sealed record SurveyUploadOlderVersionsDto(int Count, long SizeBytes, bool Warn, long? WarnBytes, int KeepVersions);
 
 /// <summary>A file was received and archived — or had been already, for a repeated request.</summary>
 /// <param name="Name">The file name.</param>
@@ -262,6 +310,7 @@ public sealed record SurveyUploadUploaderDto(Guid Id, string DisplayName);
 /// <param name="CaveName">The cave's name, as the caller sees it.</param>
 /// <param name="Archive">The survey archive, when it was archived and is still there.</param>
 /// <param name="TherionSources">The Therion sources sent with it, importable on their own.</param>
+/// <param name="PublicLink">The upload's public link, when it has one that opens now.</param>
 public sealed record SurveyUploadListItemDto(
     Guid Id,
     Guid CaveId,
@@ -277,7 +326,8 @@ public sealed record SurveyUploadListItemDto(
     DateTimeOffset CreatedAt,
     SurveyUploadListFileDto? Archive,
     IReadOnlyList<SurveyUploadListFileDto> TherionSources,
-    string StatusPageUrl);
+    string StatusPageUrl,
+    SurveyUploadPublicLinkDto? PublicLink);
 
 /// <summary>A page of uploads, newest first.</summary>
 /// <param name="Total">How many uploads the caller may see under these filters — nothing beyond them.</param>
@@ -306,7 +356,14 @@ public sealed class SurveyUploadOpenRequestValidator : AbstractValidator<SurveyU
         RuleFor(x => x.Files).NotNull();
         RuleForEach(x => x.Files).NotNull().WithMessage("A file declaration may not be empty.");
         RuleFor(x => x.Pipeline!).SetValidator(new SurveyUploadPipelineRequestValidator()).When(x => x.Pipeline is not null);
+        RuleFor(x => x.PublicLink!.Audience).IsInEnum().When(x => x.PublicLink?.Audience is not null);
     }
+}
+
+public sealed class SurveyUploadPublicLinkMintRequestValidator : AbstractValidator<SurveyUploadPublicLinkMintRequest>
+{
+    public SurveyUploadPublicLinkMintRequestValidator() =>
+        RuleFor(x => x.Audience).IsInEnum().When(x => x.Audience is not null);
 }
 
 public sealed class SurveyUploadRerunRequestValidator : AbstractValidator<SurveyUploadRerunRequest>

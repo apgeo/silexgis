@@ -314,11 +314,13 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
             ],
             ignoreOrder: true);
 
-        // The Therion model: the survey's and the upload's, never the cave's current one, placed
-        // in the coordinate system the compiler wrote it in, and queued to be read.
+        // The Therion model: the survey's and the upload's, and — the upload having made the cave,
+        // which has no other model — the cave's current one, placed in the coordinate system the
+        // compiler wrote it in, and queued to be read.
         var models = await db.SurveyModels.AsNoTracking().Where(m => m.SurveyUploadId == id).ToListAsync();
         var lox = models.Where(m => m.Format == SurveyModelFormat.Lox).ShouldHaveSingleItem();
-        lox.IsCurrent.ShouldBeFalse();
+        lox.IsCurrent.ShouldBe(upload.CreatedCave);
+        upload.CreatedCave.ShouldBeTrue();
         lox.Status.ShouldBe(SurveyModelStatus.Pending);
         lox.SourceEpsg.ShouldBe(32635);
         lox.CaveSurveyId.ShouldBe(upload.CaveSurveyId);
@@ -326,7 +328,8 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
         lox.SurveyedAt.ShouldBe(upload.SurveyDate);
         artefacts.Single(a => a.GetProperty("kind").GetString() == "lox").GetProperty("modelStatus").GetString().ShouldBe("pending");
 
-        // The Survex model is kept for download and the viewer, and not read.
+        // The Survex model is kept for download and the viewer, and not read; the line plot of
+        // record is the Therion one, so the mark is not its.
         var survex = models.Where(m => m.Format == SurveyModelFormat.Survex3d).ShouldHaveSingleItem();
         survex.IsCurrent.ShouldBeFalse();
         survex.Status.ShouldBe(SurveyModelStatus.Ready);
@@ -463,10 +466,40 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
         secondNames.Count.ShouldBe(5);
         secondNames.Intersect(firstNames).ShouldBeEmpty();
 
+        // Both versions' status answers the same for what the older one holds: its five outputs,
+        // under the size the installation warns at, every version kept.
+        var held = rerun.GetProperty("artefacts").EnumerateArray().Sum(a => a.GetProperty("sizeBytes").GetInt64());
+        foreach (var version in new[] { secondStatus, await client.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{first}") })
+        {
+            var older = version.GetProperty("olderVersions");
+            older.GetProperty("count").GetInt32().ShouldBe(1);
+            older.GetProperty("sizeBytes").GetInt64().ShouldBe(held);
+            older.GetProperty("warn").GetBoolean().ShouldBeFalse();
+            older.GetProperty("warnBytes").GetInt64().ShouldBe(500L * 1024 * 1024);
+            older.GetProperty("keepVersions").GetInt32().ShouldBe(0);
+        }
+
+        // Past the warning size, it warns. The figure is the stored size of the current revision.
+        var planFile = await (
+            from f in db.SurveyUploadFiles.AsNoTracking()
+            join v in db.DocumentVersions.AsNoTracking() on f.DocumentId equals v.DocumentId
+            join stored in db.StoredFiles.AsNoTracking() on v.Id equals stored.DocumentVersionId
+            where f.SurveyUploadId == first && f.Output == "plan-pdf" && v.IsCurrent && stored.ConvertedFromFileId == null
+            select stored.Id).SingleAsync();
+        var planSize = rerun.GetProperty("artefacts").EnumerateArray().Single(a => a.GetProperty("kind").GetString() == "plan-pdf").GetProperty("sizeBytes").GetInt64();
+        await db.StoredFiles.Where(f => f.Id == planFile).ExecuteUpdateAsync(u => u.SetProperty(f => f.SizeBytes, 600L * 1024 * 1024));
+        var warned = (await client.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{second}")).GetProperty("olderVersions");
+        warned.GetProperty("warn").GetBoolean().ShouldBeTrue();
+        warned.GetProperty("sizeBytes").GetInt64().ShouldBe(held - planSize + 600L * 1024 * 1024);
+        await db.StoredFiles.Where(f => f.Id == planFile).ExecuteUpdateAsync(u => u.SetProperty(f => f.SizeBytes, planSize));
+
         var listed = await client.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads?caveSurveyId={surveyId}");
         listed.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()).ShouldBe([second, first]);
         (await db.SurveyModels.AsNoTracking().CountAsync(m => m.CaveSurveyId == surveyId)).ShouldBe(4);
-        (await db.SurveyModels.AsNoTracking().AnyAsync(m => m.CaveFeatureId == caveId && m.IsCurrent)).ShouldBeFalse();
+        // The first version's model is the shape of the cave that version made; a later version of
+        // the same survey does not take the mark from it — that is somebody's choice on the web.
+        (await db.SurveyModels.AsNoTracking().Where(m => m.CaveFeatureId == caveId && m.IsCurrent).Select(m => m.Id).ToListAsync())
+            .ShouldBe([lox.Id]);
         (await db.CaveEntrances.AsNoTracking().CountAsync(e => e.CaveFeatureId == caveId)).ShouldBe(1);
 
         // The default keeps every version's outputs: a sweep prunes nothing.
@@ -474,19 +507,20 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
         Names(await client.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{first}")).Count.ShouldBe(5);
 
         // An installation keeping the newest version's outputs only prunes the first version's,
-        // and keeps what it was compiled from, so it can be compiled again.
+        // and keeps what it was compiled from, so it can be compiled again — and the model that is
+        // the cave's current one, which pruning never takes from a cave.
         using var keeping = new SilexGisApiFactory(
             postgres.ConnectionString,
             new Dictionary<string, string?>(Settings(filesRoot)) { ["SurveyUploads:KeepArtefactVersions"] = "1" },
             JobWorkers.RemoveFrom);
         await SweepAsync(keeping);
         var pruned = await client.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{first}");
-        pruned.GetProperty("artefacts").GetArrayLength().ShouldBe(0);
+        pruned.GetProperty("artefacts").EnumerateArray().Select(a => a.GetProperty("kind").GetString()).ShouldBe(["lox"]);
         var kept = pruned.GetProperty("files").EnumerateArray().Select(f => f.GetProperty("name").GetString()!).ToList();
         kept.Count.ShouldBe(5);
         kept.ShouldContain("pestera_inventata.zip");
         kept.ShouldContain(n => n.EndsWith(".thconfig", StringComparison.Ordinal));
-        (await db.SurveyModels.AsNoTracking().CountAsync(m => m.SurveyUploadId == first)).ShouldBe(0);
+        (await db.SurveyModels.AsNoTracking().Where(m => m.SurveyUploadId == first).Select(m => m.Id).ToListAsync()).ShouldBe([lox.Id]);
         (await db.SurveySources.AsNoTracking().CountAsync(s => s.SurveyUploadId == first && s.Kind == SurveySourceKind.TherionLog)).ShouldBe(0);
         (await db.SurveySources.AsNoTracking().CountAsync(s => s.SurveyUploadId == first && s.Kind == SurveySourceKind.TherionConfig)).ShouldBe(1);
         Names(await client.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{second}")).ShouldBe(secondNames, ignoreOrder: true);
@@ -577,12 +611,12 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
             bytes.LongLength.ShouldBe(artefact.GetProperty("sizeBytes").GetInt64(), output);
         }
 
-        // Two models, eleven documents — every one attached to the cave and tagged — and none of
-        // the models the cave's current one.
+        // Two models, eleven documents — every one attached to the cave and tagged — and the
+        // Therion model the current one of the cave the upload made.
         await using var scope = host.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        (await db.SurveyModels.AsNoTracking().Where(m => m.SurveyUploadId == id).Select(m => m.IsCurrent).ToListAsync())
-            .ShouldBe([false, false]);
+        (await db.SurveyModels.AsNoTracking().Where(m => m.SurveyUploadId == id && m.IsCurrent).Select(m => m.Format).ToListAsync())
+            .ShouldBe([SurveyModelFormat.Lox]);
         var tag = await db.Tags.AsNoTracking().SingleAsync(t => t.Slug == SurveyUploadArtefactStore.OutputTagName);
         var documentIds = artefacts.Where(a => a.GetProperty("documentId").ValueKind == JsonValueKind.String)
             .Select(a => a.GetProperty("documentId").GetGuid()).ToList();
@@ -781,6 +815,59 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
         await sweep.ExecuteAsync(new ProcessingJob { Kind = ProcessingJobKinds.SurveyUploadSweep }, CancellationToken.None);
         (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{waiting}"))
             .GetProperty("status").GetString().ShouldBe("receiving");
+    }
+
+    [Fact]
+    public async Task A_cave_an_upload_made_takes_its_first_model_only_while_the_administrator_leaves_that_on()
+    {
+        using var host = WithCompiler(new FakeSurveyCompiler());
+        await AuthHelper.CreateUserAsync(host, GlobalRoles.Admin, $"supipe-adm-{suffix}@t.local");
+        await AuthHelper.CreateUserAsync(host, GlobalRoles.Editor, $"supipe-fm-{suffix}@t.local");
+        using var admin = await AuthHelper.BearerClientAsync(host, $"supipe-adm-{suffix}@t.local");
+        using var client = await AuthHelper.BearerClientAsync(host, $"supipe-fm-{suffix}@t.local");
+        (await admin.GetFromJsonAsync<JsonElement>("/api/v1/admin/settings"))
+            .GetProperty("surveyUploads").GetProperty("firstModelOfCreatedCave").GetBoolean().ShouldBeTrue();
+
+        // Only somebody who may change the installation's settings switches it.
+        (await client.PutAsJsonAsync("/api/v1/admin/settings/survey-uploads", new { firstModelOfCreatedCave = false }))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using (var anonymous = host.CreateClient())
+        {
+            (await anonymous.PutAsJsonAsync("/api/v1/admin/settings/survey-uploads", new { firstModelOfCreatedCave = false }))
+                .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        }
+
+        var off = await admin.PutAsJsonAsync("/api/v1/admin/settings/survey-uploads", new { firstModelOfCreatedCave = false });
+        off.StatusCode.ShouldBe(HttpStatusCode.OK, await off.Content.ReadAsStringAsync());
+        (await off.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("surveyUploads").GetProperty("firstModelOfCreatedCave").GetBoolean().ShouldBeFalse();
+        var unchosen = await SendCompiledAsync(host, client, $"Nealeasa {suffix}");
+
+        (await admin.PutAsJsonAsync("/api/v1/admin/settings/survey-uploads", new { firstModelOfCreatedCave = true }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var chosen = await SendCompiledAsync(host, client, $"Aleasa {suffix}");
+
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        foreach (var (id, current) in new[] { (unchosen, Array.Empty<SurveyModelFormat>()), (chosen, [SurveyModelFormat.Lox]) })
+        {
+            var upload = await db.SurveyUploads.AsNoTracking().SingleAsync(u => u.Id == id);
+            upload.CreatedCave.ShouldBeTrue();
+            (await db.SurveyModels.AsNoTracking().CountAsync(m => m.SurveyUploadId == id)).ShouldBe(2);
+            (await db.SurveyModels.AsNoTracking().Where(m => m.CaveFeatureId == upload.CaveFeatureId && m.IsCurrent).Select(m => m.Format).ToListAsync())
+                .ShouldBe(current);
+        }
+    }
+
+    /// <summary>Sends the invented survey to a cave the upload makes, with every default output, and runs it.</summary>
+    private static async Task<Guid> SendCompiledAsync(SilexGisApiFactory host, HttpClient client, string title)
+    {
+        var id = await SendAsync(
+            client, title, "pestera_inventata",
+            ("pestera_inventata.zip", InventedArchive()), ("pestera_inventata.th", Fixture("pestera_inventata.th")),
+            ("pestera_inventata-1p.th2", Fixture("pestera_inventata-1p.th2")), ("pestera_inventata-1s.th2", Fixture("pestera_inventata-1s.th2")));
+        await RunPipelineAsync(host, id);
+        (await client.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}")).GetProperty("status").GetString().ShouldBe("succeeded");
+        return id;
     }
 
     // ---- helpers ----

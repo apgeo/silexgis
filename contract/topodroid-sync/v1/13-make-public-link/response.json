@@ -1,0 +1,6 @@
+{
+  "url": "/p/survey/<made-public-token>",
+  "createdAt": "<timestamp>",
+  "audience": "organization",
+  "protectedAcknowledged": false
+}

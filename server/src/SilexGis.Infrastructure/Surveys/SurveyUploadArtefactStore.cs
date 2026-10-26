@@ -8,6 +8,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Settings;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
@@ -83,6 +84,7 @@ public sealed class SurveyUploadArtefactStore(
     IFileStore fileStore,
     DocumentWriteService documents,
     FeatureWriteService features,
+    IAppSettingsService settings,
     ILogger<SurveyUploadArtefactStore> logger)
 {
     /// <summary>The tag every document a compiled upload produced carries.</summary>
@@ -443,16 +445,44 @@ public sealed class SurveyUploadArtefactStore(
             SurveyedAt = upload.SurveyDate,
             CaveSurveyId = upload.CaveSurveyId,
             SurveyUploadId = upload.Id,
-            // Never the cave's current model by this route, not even its first.
             IsCurrent = false,
         };
         db.SurveyModels.Add(model);
+        if (await IsShapeOfItsOwnCaveAsync(upload, cave, ct))
+        {
+            // The Therion model is the line plot of record and takes the mark from the Survex one
+            // of the same run whichever was stored first; the Survex one takes it only when nothing
+            // holds it, so it is the cave's model only when the run produced no Therion model.
+            if (format == SurveyModelFormat.Lox)
+            {
+                await SurveyModelCurrency.MakeCurrentAsync(db, model, ct);
+            }
+            else
+            {
+                await SurveyModelCurrency.TakeIfUnclaimedAsync(db, model, ct);
+            }
+        }
+
         await ReadAsync(model, format, sourceEpsg, coordinateSystemUnknown, againIfReading: false, ct);
         Track(row, upload.Id, name, kind.Output, SurveyUploadFileRole.Output, content, stored.Version.DocumentId, null, model.Id)
             .RefusalCode = note;
         await db.SaveChangesAsync(ct);
         return model;
     }
+
+    /// <summary>
+    /// Whether a model this upload stores becomes its cave's current one. Otherwise an upload's
+    /// model never does: which survey a cave is drawn and measured from is somebody's choice on the
+    /// web. The one exception, which the installation may switch off, is a cave the upload itself
+    /// made — nobody has chosen anything for it yet, and a cave with a survey but no shape is drawn
+    /// as a bare point until someone thinks to choose. Only while the cave has no model and no
+    /// centreline from anywhere else: the mark is never taken from something a person put there.
+    /// </summary>
+    private async Task<bool> IsShapeOfItsOwnCaveAsync(SurveyUpload upload, Feature cave, CancellationToken ct) =>
+        upload.CreatedCave
+        && (await settings.GetSurveyUploadsAsync(ct)).FirstModelOfCreatedCave
+        && !await db.SurveyModels.AnyAsync(m => m.CaveFeatureId == cave.Id && m.SurveyUploadId != upload.Id, ct)
+        && !await db.Centerlines.AnyAsync(c => c.CaveFeatureId == cave.Id, ct);
 
     /// <summary>
     /// What happens to a stored model next. The Therion model is read into stations and legs when

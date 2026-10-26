@@ -49,9 +49,18 @@
   "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<upload>",
   "publicLink": {
     "url": "/p/survey/<public-token>",
-    "createdAt": "<timestamp>"
+    "createdAt": "<timestamp>",
+    "audience": "public",
+    "protectedAcknowledged": false
   },
   "publicLinkRefusal": null,
+  "olderVersions": {
+    "count": 0,
+    "sizeBytes": 0,
+    "warn": false,
+    "warnBytes": 524288000,
+    "keepVersions": 0
+  },
   "createdAt": "<timestamp>",
   "expiresAt": "<timestamp>",
   "startedAt": "<timestamp>",

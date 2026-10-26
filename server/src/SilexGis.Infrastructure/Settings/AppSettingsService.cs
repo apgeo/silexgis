@@ -69,6 +69,11 @@ public sealed class AppSettingsService(
     public ValueTask<SyncSettings> GetSyncAsync(CancellationToken ct = default) =>
         GetAsync<SyncSettings>(AppSettingSections.Sync, "Sync", ct);
 
+    // The same configuration section as the deployment limits of a survey upload; the two records
+    // share no member name, so neither reads the other's keys.
+    public ValueTask<SurveyUploadSettings> GetSurveyUploadsAsync(CancellationToken ct = default) =>
+        GetAsync<SurveyUploadSettings>(AppSettingSections.SurveyUploads, "SurveyUploads", ct);
+
     /// <summary>
     /// The brakes on the neighbouring photo libraries.
     /// </summary>

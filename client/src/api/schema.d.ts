@@ -1565,7 +1565,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The public page of an upload's results: its survey title, the cave's name, the run's progress and the files it produced. */
+        /** The public page of an upload's results: its survey title, the cave's name, the run's progress and the files it produced. 401 survey_upload.public_link_sign_in_required for a link made for the organization, read without signing in. */
         get: operations["publicSurveyUpload"];
         put?: never;
         post?: never;
@@ -2239,7 +2239,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's survey-upload choices: outputs always produced, and whether results get a public link. */
+        /** The caller's survey-upload choices: outputs always produced, whether results get a public link, and who it opens for. */
         get: operations["meSurveyUploadPreferenceGet"];
         /** Replaces the caller's survey-upload choices. 400 survey_upload_preferences.output_unknown names an output the catalogue does not have. */
         put: operations["meSurveyUploadPreferencePut"];
@@ -7926,6 +7926,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/survey-uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Saves what the installation decides about surveys sent from a field device: whether a cave an upload created takes that upload's first model as its shape. */
+        put: operations["adminSettingsSaveSurveyUploads"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/photo-libraries": {
         parameters: {
             query?: never;
@@ -8350,7 +8367,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Makes a new public link to the upload's results, withdrawing the one it had (Write and Share on the cave; never for a protected cave). */
+        /** Makes a new public link to the upload's results, withdrawing the one it had (Write and Share on the cave; a protected cave only with allowProtected). */
         post: operations["mintSurveyUploadPublicLink"];
         /** Withdraws the upload's public link; it then answers as an address that never existed (Write on the cave). */
         delete: operations["revokeSurveyUploadPublicLink"];
@@ -8508,6 +8525,7 @@ export interface components {
             announcements: components["schemas"]["AnnouncementSettingsDto"];
             photoLibraries: components["schemas"]["PhotoLibrarySuspensionDto"];
             sync: components["schemas"]["SyncSettingsDto"];
+            surveyUploads: components["schemas"]["SurveyUploadSettingsDto"];
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
@@ -12695,6 +12713,8 @@ export interface components {
         PasswordChangeRequest: {
             currentPassword: string;
             newPassword: string;
+            /** @default false */
+            revokeAccessKeys: boolean;
         };
         PathSinuosity: {
             /** Format: int32 */
@@ -13748,6 +13768,8 @@ export interface components {
             email: string;
             token: string;
             newPassword: string;
+            /** @default false */
+            revokeAccessKeys: boolean;
         };
         /** @enum {unknown} */
         ResLinkAnchorState: "exact" | "reanchored" | "degraded" | "unresolvable";
@@ -14761,6 +14783,7 @@ export interface components {
             statusPageUrl: string;
             publicLink: null | components["schemas"]["SurveyUploadPublicLinkDto"];
             publicLinkRefusal: null | string;
+            olderVersions: components["schemas"]["SurveyUploadOlderVersionsDto"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -14811,6 +14834,8 @@ export interface components {
         SurveyUploadFileRole: "archive" | "therionSource" | "therionSketch" | "other" | "generatedConfig" | "output" | "log";
         /** @enum {unknown} */
         SurveyUploadFileStatus: "declared" | "received" | "stored" | "refused";
+        /** @enum {unknown} */
+        SurveyUploadLinkAudience: "public" | "organization";
         SurveyUploadListFileDto: {
             name: string;
             /** Format: int64 */
@@ -14838,6 +14863,7 @@ export interface components {
             archive: null | components["schemas"]["SurveyUploadListFileDto"];
             therionSources: components["schemas"]["SurveyUploadListFileDto"][];
             statusPageUrl: string;
+            publicLink: null | components["schemas"]["SurveyUploadPublicLinkDto"];
         };
         SurveyUploadNewCave: {
             name: null | string;
@@ -14848,6 +14874,17 @@ export interface components {
             caveTypeId: null | number;
             /** @default false */
             locationProtected: boolean;
+        };
+        SurveyUploadOlderVersionsDto: {
+            /** Format: int32 */
+            count: number;
+            /** Format: int64 */
+            sizeBytes: number;
+            warn: boolean;
+            /** Format: int64 */
+            warnBytes: null | number;
+            /** Format: int32 */
+            keepVersions: number;
         };
         SurveyUploadOpenRequest: {
             source: string;
@@ -14861,6 +14898,7 @@ export interface components {
             files: components["schemas"]["SurveyUploadFileDeclaration"][];
             pipeline: null | components["schemas"]["SurveyUploadPipelineRequest"];
             documentsVisibility: null | components["schemas"]["Visibility"];
+            publicLink?: null | components["schemas"]["SurveyUploadPublicLinkRequest"];
         };
         SurveyUploadPageDto: {
             items: components["schemas"]["SurveyUploadListItemDto"][];
@@ -14880,18 +14918,34 @@ export interface components {
         SurveyUploadPreferencesDto: {
             alwaysOutputs: string[];
             publicLinks: boolean;
+            defaultLinkAudience: components["schemas"]["SurveyUploadLinkAudience"];
         };
         SurveyUploadPreferencesWriteRequest: {
             alwaysOutputs: string[];
             publicLinks: boolean;
+            defaultLinkAudience?: null | components["schemas"]["SurveyUploadLinkAudience"];
         };
         SurveyUploadPublicLinkDto: {
             url: string;
             /** Format: date-time */
             createdAt: string;
+            audience: components["schemas"]["SurveyUploadLinkAudience"];
+            protectedAcknowledged: boolean;
+        };
+        SurveyUploadPublicLinkMintRequest: {
+            audience: null | components["schemas"]["SurveyUploadLinkAudience"];
+            allowProtected: null | boolean;
+        };
+        SurveyUploadPublicLinkRequest: {
+            wanted: null | boolean;
+            audience: null | components["schemas"]["SurveyUploadLinkAudience"];
+            allowProtected: null | boolean;
         };
         SurveyUploadRerunRequest: {
             pipeline: null | components["schemas"]["SurveyUploadPipelineRequest"];
+        };
+        SurveyUploadSettingsDto: {
+            firstModelOfCreatedCave: boolean;
         };
         /** @enum {unknown} */
         SurveyUploadStage: "archive" | "unpack" | "scaffold" | "compile" | "store" | "read";
@@ -20814,6 +20868,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicSurveyUploadDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Not Found */
@@ -39043,6 +39106,48 @@ export interface operations {
             };
         };
     };
+    adminSettingsSaveSurveyUploads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurveyUploadSettingsDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSettingsDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     adminSettingsSavePhotoLibraries: {
         parameters: {
             query?: never;
@@ -40649,7 +40754,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["SurveyUploadPublicLinkMintRequest"];
+            };
+        };
         responses: {
             /** @description Created */
             201: {
@@ -40658,6 +40767,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SurveyUploadPublicLinkDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Unauthorized */

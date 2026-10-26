@@ -25,7 +25,13 @@
         "contentUrl": "/api/v1/files/<uuid-1>/content?token=<token>"
       },
       "therionSources": [],
-      "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<next-upload>"
+      "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<next-upload>",
+      "publicLink": {
+        "url": "/p/survey/<next-public-token>",
+        "createdAt": "<timestamp>",
+        "audience": "public",
+        "protectedAcknowledged": false
+      }
     },
     {
       "id": "<upload>",
@@ -52,7 +58,13 @@
         "contentUrl": "/api/v1/files/<uuid-2>/content?token=<token>"
       },
       "therionSources": [],
-      "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<upload>"
+      "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<upload>",
+      "publicLink": {
+        "url": "/p/survey/<public-token>",
+        "createdAt": "<timestamp>",
+        "audience": "public",
+        "protectedAcknowledged": false
+      }
     }
   ],
   "total": 2,

@@ -101,8 +101,15 @@ public sealed record AdminSettingsDto(
     AnnouncementSettingsDto Announcements,
     PhotoLibrarySuspensionDto PhotoLibraries,
     SyncSettingsDto Sync,
+    SurveyUploadSettingsDto SurveyUploads,
     bool MailConfigured,
     bool SmsConfigured);
+
+/// <summary>
+/// What the installation has decided about surveys sent from a field device: whether a cave an
+/// upload created takes that upload's first model as its shape.
+/// </summary>
+public sealed record SurveyUploadSettingsDto(bool FirstModelOfCreatedCave);
 
 /// <summary>
 /// What the installation has decided about the mobile contract: whether phones get the people
@@ -353,6 +360,13 @@ public sealed class SyncSettingsDtoValidator : AbstractValidator<SyncSettingsDto
         RuleFor(x => x.StagedUploadRetentionDays).InclusiveBetween(1, MaxRetentionDays);
         RuleFor(x => x.RejectedHeldBytesRetentionDays).InclusiveBetween(1, MaxRetentionDays);
     }
+}
+
+public sealed class SurveyUploadSettingsDtoValidator : AbstractValidator<SurveyUploadSettingsDto>
+{
+    // One switch, and either value is a valid decision; the validator exists so the route is
+    // validated like every other settings section.
+    public SurveyUploadSettingsDtoValidator() => RuleFor(x => x).NotNull();
 }
 
 public sealed class TestMessageRequestValidator : AbstractValidator<TestMessageRequest>

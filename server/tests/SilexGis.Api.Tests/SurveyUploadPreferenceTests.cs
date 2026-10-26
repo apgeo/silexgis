@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -31,6 +32,7 @@ public sealed class SurveyUploadPreferenceTests(PostgresFixture postgres) : IDis
 
         answer.GetProperty("alwaysOutputs").GetArrayLength().ShouldBe(0);
         answer.GetProperty("publicLinks").GetBoolean().ShouldBeTrue();
+        answer.GetProperty("defaultLinkAudience").GetString().ShouldBe("public");
     }
 
     [Fact]
@@ -41,11 +43,12 @@ public sealed class SurveyUploadPreferenceTests(PostgresFixture postgres) : IDis
         var owner = await AuthHelper.BearerClientAsync(factory, "sup-owner@test.local");
         var other = await AuthHelper.BearerClientAsync(factory, "sup-other@test.local");
 
-        var saved = await owner.PutAsJsonAsync(Route, new { alwaysOutputs = new[] { "KML", "lox", "kml" }, publicLinks = false });
+        var saved = await owner.PutAsJsonAsync(Route, new { alwaysOutputs = new[] { "KML", "lox", "kml" }, publicLinks = false, defaultLinkAudience = "organization" });
         saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
         var body = await saved.Content.ReadFromJsonAsync<JsonElement>();
         Outputs(body).ShouldBe(["lox", "kml"]);
         body.GetProperty("publicLinks").GetBoolean().ShouldBeFalse();
+        body.GetProperty("defaultLinkAudience").GetString().ShouldBe("organization");
 
         // Read back as saved, and stored that way: an explicit "no links" survives the insert.
         var read = await owner.GetFromJsonAsync<JsonElement>(Route);
@@ -57,6 +60,7 @@ public sealed class SurveyUploadPreferenceTests(PostgresFixture postgres) : IDis
             var row = await db.SurveyUploadPreferences.AsNoTracking().SingleAsync(p => p.UserId == ownerId);
             row.AlwaysOutputs.ShouldBe(["lox", "kml"]);
             row.PublicLinks.ShouldBeFalse();
+            row.DefaultLinkAudience.ShouldBe(SurveyUploadLinkAudience.Organization);
         }
 
         // A second save replaces the first rather than adding to it.
@@ -66,10 +70,17 @@ public sealed class SurveyUploadPreferenceTests(PostgresFixture postgres) : IDis
         Outputs(replaced).ShouldBe(["dxf"]);
         replaced.GetProperty("publicLinks").GetBoolean().ShouldBeTrue();
 
+        // A save that does not name an audience keeps the one chosen; naming one replaces it.
+        replaced.GetProperty("defaultLinkAudience").GetString().ShouldBe("organization");
+        (await owner.PutAsJsonAsync(Route, new { alwaysOutputs = new[] { "dxf" }, publicLinks = true, defaultLinkAudience = "public" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.GetFromJsonAsync<JsonElement>(Route)).GetProperty("defaultLinkAudience").GetString().ShouldBe("public");
+
         // Another account still has the defaults: each account reads only its own choices.
         var others = await other.GetFromJsonAsync<JsonElement>(Route);
         others.GetProperty("alwaysOutputs").GetArrayLength().ShouldBe(0);
         others.GetProperty("publicLinks").GetBoolean().ShouldBeTrue();
+        others.GetProperty("defaultLinkAudience").GetString().ShouldBe("public");
     }
 
     [Fact]
@@ -84,6 +95,12 @@ public sealed class SurveyUploadPreferenceTests(PostgresFixture postgres) : IDis
 
         var missing = await web.PutAsJsonAsync(Route, new { publicLinks = true });
         missing.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // An audience outside the two, by name or by number, is refused rather than stored.
+        (await web.PutAsJsonAsync(Route, new { alwaysOutputs = Array.Empty<string>(), publicLinks = true, defaultLinkAudience = "everyone" }))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await web.PutAsJsonAsync(Route, new { alwaysOutputs = Array.Empty<string>(), publicLinks = true, defaultLinkAudience = 7 }))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
         var read = await web.GetFromJsonAsync<JsonElement>(Route);
         read.GetProperty("alwaysOutputs").GetArrayLength().ShouldBe(0);

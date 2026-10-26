@@ -61,6 +61,9 @@ public static class AdminSettingsEndpoints
         admin.MapPut("/sync", SaveSyncAsync)
             .WithValidation<SyncSettingsDto>()
             .WithSummary("Saves what the installation offers phones: the people directory and whom it lists, trip conversion, and how long waiting bytes are kept.");
+        admin.MapPut("/survey-uploads", SaveSurveyUploadsAsync)
+            .WithValidation<SurveyUploadSettingsDto>()
+            .WithSummary("Saves what the installation decides about surveys sent from a field device: whether a cave an upload created takes that upload's first model as its shape.");
         admin.MapPut("/photo-libraries", SavePhotoLibrariesAsync)
             .WithValidation<PhotoLibrarySuspensionDto>()
             .WithSummary(
@@ -251,6 +254,33 @@ public static class AdminSettingsEndpoints
                 StagedUploadRetentionDays = request.StagedUploadRetentionDays,
                 RejectedHeldBytesRetentionDays = request.RejectedHeldBytesRetentionDays,
             },
+            ct);
+
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+    }
+
+    private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveSurveyUploadsAsync(
+        SurveyUploadSettingsDto request,
+        IAccessContextAccessor accessAccessor,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        await settings.SaveAsync(
+            AppSettingSections.SurveyUploads,
+            new SurveyUploadSettings { FirstModelOfCreatedCave = request.FirstModelOfCreatedCave },
             ct);
 
         return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
@@ -576,6 +606,7 @@ public static class AdminSettingsEndpoints
         var announcements = await settings.GetAnnouncementsAsync(ct);
         var photoLibraries = await settings.GetPhotoLibrarySuspensionAsync(ct);
         var sync = await settings.GetSyncAsync(ct);
+        var surveyUploads = await settings.GetSurveyUploadsAsync(ct);
 
         return new AdminSettingsDto(
             new MailSettingsDto(
@@ -632,6 +663,7 @@ public static class AdminSettingsEndpoints
                 sync.ConvertTripsWithProblems,
                 sync.StagedUploadRetentionDays,
                 sync.RejectedHeldBytesRetentionDays),
+            new SurveyUploadSettingsDto(surveyUploads.FirstModelOfCreatedCave),
             await emailDelivery.IsConfiguredAsync(ct),
             await smsDelivery.IsConfiguredAsync(ct));
     }
