@@ -1395,11 +1395,28 @@ the sections.
 An installation can place an account under review: everything it uploads waits for a person who
 may decide about uploads, and nothing of it is written until they have. Section 8 says what such an
 upload is answered (`held`, with a `reviewId`) and what a device must send for it (`held` in
-`clientFeatures`). This section is what happens afterwards. Edits made in the browser are never held;
-only phone uploads are. A file import by such an account (a vector file, photographs, a trip
-spreadsheet, a SpeleoLoc archive or kept recording, a catalogue import) cannot be held yet and is
-refused with `409 import.review_unavailable` before anything is written, so nothing the account
-commits lands unreviewed.
+`clientFeatures`). This section is what happens afterwards. Edits made in the browser are never held.
+
+**File imports by such an account are held too.** A vector file, photographs, a catalogue selection,
+a trip spreadsheet, a SpeleoLoc archive and a kept recording are previewed and chosen on the account's
+own screen as before; pressing commit is what waits. The confirmation route makes every check it makes
+for anybody else — what the commit refuses of the selection itself included: a selection over the
+source's ceiling (`*.selection_too_large`), one that sets every candidate aside (`*.nothing_created`,
+`400`, for every source; unheld, a vector, photo or catalogue confirmation that sets everything aside
+lands as an empty batch, which held would leave a reviewer nothing to decide), and a catalogue
+selection on an installation that cannot reach the catalogue at all (`503 speologie.not_configured`) —
+then answers that the import waits instead of writing it — `held: true` on the
+answer (the photo answer's batch has `reviewState: pending`; the vector answer is `202` with no
+`jobId`; a SpeleoLoc answer for a trip it would create has no `tripLogId` yet) — and keeps the request
+on a waiting batch, with one waiting line per candidate: a row of the file, a group of pictures, a
+catalogue cave, a sheet row, a scan, and for a SpeleoLoc confirmation that creates its trip, a line for
+that trip, on which every scan depends. The account's saved review and its file are left as they are.
+Accepting runs **the same commit** the route runs unheld, over the kept request with every candidate
+not accepted turned into a skip, with the uploader's rights at that moment (the checks the route makes
+are made again, so a file deleted since, a right lost since, or a recording made into a report since
+is decided `failed`); turning the batch down writes nothing and spends nothing, so the account may
+confirm again. A catalogue that does not answer when a reviewer accepts leaves the lines waiting
+(`503`, the catalogue's own code). The phone's reviews stream carries phone uploads only.
 
 A reviewer accepts or turns down a held upload whole, row by row, or — for an edit of a feature — by
 field (`name`, `description`, `properties`, and `position`, which is the point, altitude, position

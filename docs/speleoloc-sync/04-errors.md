@@ -417,9 +417,18 @@ boundary is stated so that a gap is not mistaken for an omission.
   not written, so it could not be either — or `review.proposal_unreadable` (a kept proposal this build
   can no longer read, after an upgrade that changed its shape). Undoing an accepted upload is the ordinary undo below; a
   held or turned-down batch is refused it with `import_batch.held` (409 — nothing of it was written).
-  **A file import by an account under review** — a vector file, photographs, a trip spreadsheet, a
-  SpeleoLoc archive or kept recording, a catalogue import — is refused with `import.review_unavailable`
-  (409 — holding a file import for a reviewer is not built yet, and nothing was written).
+  **A file import by an account under review** is not refused: its confirmation answers `held: true`
+  and waits (section 14 of the protocol). On acceptance a held file import's line is decided `failed`
+  with the code its source's commit would have answered — among them `import.file_gone` (the file it
+  was made from is no longer here or no longer readable by the account), `photo_import.no_files`,
+  `access.create_forbidden` / `access.caving_group_binding_forbidden` (a right lost since),
+  `import.recording_already_converted` (the recording became a report meanwhile — another waiting
+  confirmation of it was accepted first, or a phone's conversion made it one),
+  `trip_recording.not_found` (a kept recording gone since) and `speleoloc_import.nothing_created` (only
+  the trip line of a SpeleoLoc confirmation was accepted, and a trip with no scans is not created; a scan
+  of it accepted later is then decided `review.dependency_failed`). A
+  catalogue that does not answer leaves the lines waiting and the decision is answered `503` with the
+  catalogue's code.
 
 - **The `auth.*` family and the OAuth `error` values** are in the sign-in document, with the calls
   that answer them. They are not repeated here.
