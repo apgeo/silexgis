@@ -130,7 +130,7 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
             [
                 "syncCapabilities", "syncListSets", "syncCreateSet", "syncGetSet",
                 "syncReplaceSet", "syncDeleteSet", "syncDownload", "syncUpload",
-                "syncDocuments", "syncFileLinks", "syncPeople", "syncTrips", "syncRasters",
+                "syncDocuments", "syncFileLinks", "syncPeople", "syncTrips", "syncReviews", "syncRasters",
             ],
             ignoreOrder: true);
     }
