@@ -28,7 +28,7 @@ export const specs = {
     'settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts',
     'users-admin.spec.ts',
     'feature-sets.spec.ts',
-    'users-admin.spec.ts', 'map-background-kinds.spec.ts',
+    'users-admin.spec.ts', 'map-background-kinds.spec.ts', 'sync-settings-admin.spec.ts',
   ],
   audit: ['panel.spec.ts', 'history-phone-upload.spec.ts'],
   cabinets: ['documents.spec.ts'],
@@ -36,7 +36,7 @@ export const specs = {
   catalogue: ['speologie-catalogue.spec.ts'],
   cavers: [
     'expeditions.spec.ts', 'settings.spec.ts', 'trip-removal-and-roster-times.spec.ts',
-    'caver-caving-groups.spec.ts',
+    'caver-caving-groups.spec.ts', 'phone-users.spec.ts', 'phone-users-mobile.spec.ts',
   ],
   caves: [
     'map-editing.spec.ts', 'cave-attachments.spec.ts', 'cave-grant-link.spec.ts', 'cave-levels.spec.ts', 'cave-morphometry.spec.ts',
@@ -157,6 +157,8 @@ export const specs = {
   sync: [
     'settings.spec.ts', 'review-queue.spec.ts', 'review-uploader.spec.ts',
     'review-uploader-mobile.spec.ts', 'review-file-import.spec.ts',
+    'phone-users.spec.ts', 'sync-settings-admin.spec.ts', 'recordings-attention.spec.ts',
+    'recordings-attention-mobile.spec.ts', 'phone-users-mobile.spec.ts',
   ],
   tags: ['trips.spec.ts'],
   taxonomies: [],
