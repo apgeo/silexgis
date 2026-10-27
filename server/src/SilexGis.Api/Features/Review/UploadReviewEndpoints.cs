@@ -6,6 +6,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -41,6 +42,13 @@ public static class UploadReviewEndpoints
     public const string FieldsUnsupportedCode = "review.fields_unsupported";
     public const string OwnBatchCode = "review.own_batch";
     public const string SourceUnsupportedCode = "review.source_unsupported";
+    public const string PreviewUnavailableCode = "review.preview_unavailable";
+    public const string PreviewSizeUnsupportedCode = "review.preview_size_unsupported";
+    public const string PreviewFailedCode = "review.preview_failed";
+
+    /// <summary>The sizes a held picture is drawn at: the line's thumbnail, and the larger view.</summary>
+    public static readonly int[] PreviewSizes = [480, 1200];
+
     public static void MapUploadReviewEndpoints(this RouteGroupBuilder api)
     {
         var review = api.MapGroup("/review").WithTags("Review");
@@ -53,6 +61,11 @@ public static class UploadReviewEndpoints
         review.MapGet("/batches/{id:guid}", DetailAsync)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("One held batch with its lines, as the caller may be shown them.");
+        review.MapGet("/items/{reviewId:guid}/preview", PreviewAsync)
+            .Produces(StatusCodes.Status200OK, contentType: "image/webp")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("A rendering of the picture a held photo or raster map keeps: drawn here, without metadata, never the file itself.");
         review.MapPost("/batches/{id:guid}/accept", AcceptBatchAsync)
             .WithValidation<ReviewBatchDecisionRequest>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
@@ -342,6 +355,81 @@ public static class UploadReviewEndpoints
         return TypedResults.Ok(await ResultAsync(db, handlers, found.Batch.Source, outcome.Decided!, ctx, ct));
     }
 
+    /// <summary>
+    /// A held picture as a reviewer may look at it before deciding: a rendering of the bytes the
+    /// line keeps, drawn by the thumbnail machinery — WebP, turned upright, every metadata profile
+    /// removed, so a photo's position goes nowhere — and cached beside the thumbnails under the
+    /// staged upload's id until those bytes go. Never the stored bytes themselves.
+    /// </summary>
+    /// <remarks>
+    /// Whoever may read the line's batch may ask, for a line the batch view would show them: a line
+    /// whose proposal is held back from this viewer is answered exactly like one that is not there.
+    /// A line that keeps no picture — a document that is not an image, bytes already adopted or
+    /// swept — is answered as having none.
+    /// </remarks>
+    private static async Task<Results<PhysicalFileHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> PreviewAsync(
+        Guid reviewId,
+        int? size,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessor,
+        IEnumerable<IHeldBatchHandler> handlers,
+        ThumbnailService thumbnails,
+        CancellationToken ct)
+    {
+        var ctx = await accessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var bounded = size ?? PreviewSizes[0];
+        if (!PreviewSizes.Contains(bounded))
+        {
+            return ApiProblems.BadRequest(
+                PreviewSizeUnsupportedCode, $"Supported sizes: {string.Join(", ", PreviewSizes)}.");
+        }
+
+        var found = await (from item in db.ImportBatchItems.AsNoTracking()
+                           join b in db.ImportBatches.AsNoTracking() on item.ImportBatchId equals b.Id
+                           where item.ReviewId == reviewId && item.ReviewDecision != null && b.ReviewState != ImportReviewState.NotHeld
+                           select new { Item = item, Batch = b }).FirstOrDefaultAsync(ct);
+        if (found is null || (found.Batch.ConfirmedByUserId != ctx.UserId && !MayRead(ctx))
+            || handlers.FirstOrDefault(h => h.Source == found.Batch.Source) is not { } handler)
+        {
+            return ApiProblems.NotFound(ItemNotFoundCode);
+        }
+
+        var view = (await handler.ShowAsync([found.Item], ctx, ct)).GetValueOrDefault(found.Item.Id);
+        if (view?.Proposal is null)
+        {
+            return ApiProblems.NotFound(ItemNotFoundCode);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var session = found.Item.HeldUploadSessionId is { } sessionId
+            ? await db.UploadSessions.AsNoTracking().FirstOrDefaultAsync(
+                s => s.Id == sessionId && s.UserId == found.Batch.ConfirmedByUserId
+                    && s.StagedForSync && s.StagedAt != null && s.ExpiresAt > now,
+                ct)
+            : null;
+        if (session is not { Kind: FileKind.Image })
+        {
+            return ApiProblems.NotFound(PreviewUnavailableCode);
+        }
+
+        string path;
+        try
+        {
+            path = await thumbnails.GetOrCreateAsync(session.Id, session.StoragePath, bounded, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return ApiProblems.BadRequest(PreviewFailedCode, "The picture could not be drawn.");
+        }
+
+        return TypedResults.PhysicalFile(path, contentType: "image/webp");
+    }
+
     private static async Task<(UploadReviewResult? Decided, ProblemHttpResult? Result)> DecideAsync(
         SilexGisDbContext db,
         IEnumerable<IHeldBatchHandler> handlers,
@@ -465,6 +553,17 @@ public static class UploadReviewEndpoints
             acceptable[line.Id] = handler is null ? [] : await handler.FieldsOfAsync(line, ct);
         }
 
+        // Which lines still keep a picture a rendering can be drawn from.
+        var sessionIds = lines.Where(l => l.HeldUploadSessionId is not null).Select(l => l.HeldUploadSessionId!.Value).Distinct().ToList();
+        var now = DateTimeOffset.UtcNow;
+        var pictures = sessionIds.Count == 0
+            ? new HashSet<Guid>()
+            : (await db.UploadSessions.AsNoTracking()
+                    .Where(s => sessionIds.Contains(s.Id) && s.StagedForSync && s.StagedAt != null && s.ExpiresAt > now
+                        && s.Kind == FileKind.Image)
+                    .Select(s => s.Id)
+                    .ToListAsync(ct))
+                .ToHashSet();
         var dependencyIds = lines.SelectMany(l => l.DependsOnItemIds ?? []).Distinct().ToList();
         var dependencies = dependencyIds.Count == 0
             ? new Dictionary<long, Guid?>()
@@ -492,7 +591,8 @@ public static class UploadReviewEndpoints
                 l.ReviewFailureDetail,
                 view?.ChangedSince ?? false,
                 visible ? JsonDocument.Parse(view!.Proposal!).RootElement.Clone() : null,
-                visible && view!.Fields is { } compared ? [.. compared.Select(FieldOf)] : null);
+                visible && view!.Fields is { } compared ? [.. compared.Select(FieldOf)] : null,
+                visible && l.HeldUploadSessionId is { } held && pictures.Contains(held));
         })];
     }
 

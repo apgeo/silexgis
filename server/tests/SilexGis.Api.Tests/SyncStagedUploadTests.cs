@@ -11,6 +11,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
@@ -341,6 +342,7 @@ public sealed class SyncStagedUploadTests : IAsyncLifetime, IDisposable, IClassF
         var handler = new UploadSessionSweepHandler(
             scope.ServiceProvider.GetRequiredService<SilexGisDbContext>(),
             scope.ServiceProvider.GetRequiredService<IFileStore>(),
+            scope.ServiceProvider.GetRequiredService<ThumbnailService>(),
             NullLogger<UploadSessionSweepHandler>.Instance);
         await handler.ExecuteAsync(new ProcessingJob { Kind = ProcessingJobKinds.UploadSessionSweep }, CancellationToken.None);
     }

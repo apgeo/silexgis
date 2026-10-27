@@ -362,8 +362,8 @@ export const groups = {
     'TripImportCommitTests', 'SpeleolocTripImportTests', 'TripRecordingConversionTests',
     // Every section held and accepted; lines on two held rows, across batches, reopened, raced.
     'UploadReviewSectionsTests',
-    // Part of a held edit of each kind accepted, the row now beside the proposal.
-    'UploadReviewFieldsTests',
+    // A held photo or raster map drawn for a reviewer; part of a held edit of each kind accepted.
+    'UploadReviewPreviewTests', 'UploadReviewFieldsTests',
     // What the phone is told afterwards, the messages review sends, and how long held bytes stay.
     'SyncReviewStreamTests',
   ],

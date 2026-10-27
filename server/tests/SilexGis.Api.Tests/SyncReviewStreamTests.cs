@@ -13,6 +13,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Notifications;
@@ -341,6 +342,7 @@ public sealed class SyncReviewStreamTests : IAsyncLifetime, IClassFixture<Postgr
         var handler = new UploadSessionSweepHandler(
             scope.ServiceProvider.GetRequiredService<SilexGisDbContext>(),
             scope.ServiceProvider.GetRequiredService<IFileStore>(),
+            scope.ServiceProvider.GetRequiredService<ThumbnailService>(),
             NullLogger<UploadSessionSweepHandler>.Instance);
         await handler.ExecuteAsync(new ProcessingJob { Kind = ProcessingJobKinds.UploadSessionSweep }, CancellationToken.None);
     }

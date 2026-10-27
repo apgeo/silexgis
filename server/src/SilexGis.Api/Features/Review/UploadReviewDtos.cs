@@ -53,6 +53,10 @@ public sealed record HeldBatchDto(
 /// may be accepted by, the row now beside the proposal. Absent for every other line — a feature
 /// row's current state is read through the feature's own route.
 /// </param>
+/// <param name="HasPreview">
+/// The line keeps a picture on the server — a photo or a raster map's image, still waiting or
+/// turned down and not yet swept — of which <c>/review/items/{reviewId}/preview</c> draws a rendering.
+/// </param>
 public sealed record HeldLineDto(
     Guid ReviewId,
     string? Section,
@@ -69,7 +73,8 @@ public sealed record HeldLineDto(
     string? FailureDetail,
     bool ChangedSince,
     JsonElement? Proposal,
-    IReadOnlyList<HeldFieldDto>? Fields = null);
+    IReadOnlyList<HeldFieldDto>? Fields = null,
+    bool HasPreview = false);
 
 /// <summary>One field of a waiting edit: the row now, and what the line would write.</summary>
 /// <param name="Current">The value now; absent when the row holds none, or when it is withheld.</param>

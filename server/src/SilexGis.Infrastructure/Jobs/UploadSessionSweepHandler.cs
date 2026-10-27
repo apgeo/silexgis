@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Jobs;
@@ -33,6 +34,7 @@ namespace SilexGis.Infrastructure.Jobs;
 public sealed class UploadSessionSweepHandler(
     SilexGisDbContext db,
     IFileStore fileStore,
+    ThumbnailService thumbnails,
     ILogger<UploadSessionSweepHandler> logger) : IProcessingJobHandler
 {
     /// <summary>How many are collected in one pass, so a long backlog does not hold the queue.</summary>
@@ -70,6 +72,10 @@ public sealed class UploadSessionSweepHandler(
             try
             {
                 await fileStore.DeleteAsync(session.StoragePath, ct);
+
+                // Bytes a held line kept may have been rendered for a reviewer, under the staged
+                // upload's own id; the renderings go with the bytes they were drawn from.
+                thumbnails.Purge(session.Id);
             }
             catch (IOException e)
             {

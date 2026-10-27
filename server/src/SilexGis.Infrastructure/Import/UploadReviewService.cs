@@ -6,6 +6,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
 using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -142,7 +143,8 @@ public sealed class UploadReviewService(
     SilexGisDbContext db,
     IChangeContext changes,
     IEnumerable<IHeldBatchHandler> handlers,
-    IAppSettingsService settings)
+    IAppSettingsService settings,
+    ThumbnailService thumbnails)
 {
     /// <summary>A line accepted whose own dependency could not be written.</summary>
     public const string DependencyFailedCode = "review.dependency_failed";
@@ -413,6 +415,18 @@ public sealed class UploadReviewService(
         UploadReviewNotices.Reviewed(db, decided, batches);
         await db.SaveChangesAsync(ct);
 
+        // A reviewer's renderings of waiting bytes are cached under the staged upload's id. Bytes an
+        // accepted line adopted are a document's own file now, rendered under that file's id, and
+        // the staged upload is gone: its renderings would never be asked for again.
+        var kept = decided.Where(l => l.HeldUploadSessionId is not null).Select(l => l.HeldUploadSessionId!.Value).Distinct().ToList();
+        if (kept.Count > 0)
+        {
+            var still = await db.UploadSessions.AsNoTracking().Where(s => kept.Contains(s.Id)).Select(s => s.Id).ToListAsync(ct);
+            foreach (var adopted in kept.Except(still))
+            {
+                thumbnails.Purge(adopted);
+            }
+        }
     }
 
     /// <summary>
