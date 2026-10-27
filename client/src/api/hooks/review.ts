@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { useEffect, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../client.ts';
 import type { components } from '../schema';
 import { queryKeys } from './queryKeys.ts';
-import { unwrap } from './shared.ts';
+import { retryUnlessRefused, unwrap } from './shared.ts';
 
 export type HeldBatch = components['schemas']['HeldBatchDto'];
 export type HeldLine = components['schemas']['HeldLineDto'];
+export type HeldField = components['schemas']['HeldFieldDto'];
 export type HeldBatchDetail = components['schemas']['HeldBatchDetailDto'];
 export type ReviewDecisionResult = components['schemas']['ReviewDecisionResultDto'];
 
@@ -43,6 +45,43 @@ export function useReviewBatch(id: string | undefined) {
     queryFn: () => unwrap(api.GET('/api/v1/review/batches/{id}', { params: { path: { id: id! } } })),
     enabled: Boolean(id),
   });
+}
+
+/** The sizes the server draws a held picture at: the line's thumbnail, and the larger view. */
+export type HeldPreviewSize = 480 | 1200;
+
+/**
+ * A rendering of the picture a held photo or raster map keeps, as an address an image can show.
+ *
+ * The route needs the account's bearer, which an image element cannot send, so the bytes are read
+ * through the client and handed to the image as an object address, let go when the picture leaves
+ * the screen. The server draws it from the waiting bytes without any of their metadata.
+ */
+export function useHeldPreview(reviewId: string, size: HeldPreviewSize, enabled: boolean) {
+  const query = useQuery({
+    queryKey: queryKeys.heldPreview(reviewId, size),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/review/items/{reviewId}/preview', {
+          params: { path: { reviewId }, query: { size } },
+          parseAs: 'blob',
+        }) as Promise<{ data?: Blob; error?: unknown; response: Response }>,
+      ),
+    enabled,
+    staleTime: Infinity,
+    retry: retryUnlessRefused,
+  });
+  const [url, setUrl] = useState<string>();
+  useEffect(() => {
+    if (!query.data) {
+      setUrl(undefined);
+      return undefined;
+    }
+    const address = URL.createObjectURL(query.data);
+    setUrl(address);
+    return () => URL.revokeObjectURL(address);
+  }, [query.data]);
+  return { url, loading: query.isLoading, failed: query.isError };
 }
 
 /** What a decision on a batch or a line changes: the review, and whatever an accepted line wrote. */

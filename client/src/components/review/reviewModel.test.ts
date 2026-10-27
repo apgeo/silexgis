@@ -8,10 +8,14 @@ import {
   dependenciesOf,
   dependentsOf,
   fieldDiffs,
+  fieldShape,
+  fileOf,
   foreignDependenciesOf,
   groupByCave,
   placeLines,
   pointText,
+  serverFieldDiffs,
+  spanOf,
   titleOf,
 } from './reviewModel.ts';
 
@@ -189,5 +193,38 @@ describe('a file import candidate', () => {
       ['caveTypeCode', 'cave'],
       ['createTrip', 'true'],
     ]);
+  });
+});
+
+describe('an edit the server compared', () => {
+  it('lists only the fields the line may be accepted by, with what the server withheld marked', () => {
+    const edit = line('rec', {
+      section: 'tripRecordings',
+      action: 'attach',
+      acceptableFields: ['title', 'cave'],
+      fields: [
+        { field: 'title', current: 'Before', proposed: 'After', differs: true, currentWithheld: false },
+        { field: 'cave', current: null, proposed: 'c2', differs: true, currentWithheld: true },
+        { field: 'log', current: 'x', proposed: 'y', differs: true, currentWithheld: false },
+      ],
+    });
+    const diffs = serverFieldDiffs(edit);
+    expect(diffs.map((d) => d.field)).toEqual(['title', 'cave']);
+    expect(diffs[1]).toMatchObject({ current: undefined, proposed: 'c2', withheld: true });
+    expect(defaultFields(diffs)).toEqual(['title', 'cave']);
+    expect(serverFieldDiffs(line('none', {}))).toEqual([]);
+  });
+
+  it('reads each field by its shape', () => {
+    expect(fieldShape('time')).toBe('moment');
+    expect(fieldShape('times')).toBe('span');
+    expect(fieldShape('place')).toBe('feature');
+    expect(fieldShape('caveArea')).toBe('feature');
+    expect(fieldShape('file')).toBe('file');
+    expect(fieldShape('mapType')).toBe('mapType');
+    expect(fieldShape('notes')).toBe('text');
+    expect(spanOf({ startedAt: '2026-09-12T08:00:00Z', endedAt: null })).toEqual({ start: '2026-09-12T08:00:00Z', end: null });
+    expect(fileOf({ fileName: 'plan.jpg', sizeBytes: 10 })).toEqual({ name: 'plan.jpg', size: 10 });
+    expect(fileOf(null)).toBeNull();
   });
 });

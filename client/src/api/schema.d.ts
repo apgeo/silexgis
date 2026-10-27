@@ -3745,6 +3745,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/review/items/{reviewId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A rendering of the picture a held photo or raster map keeps: drawn here, without metadata, never the file itself. */
+        get: operations["uploadReviewPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/review/batches/{id}/accept": {
         parameters: {
             query?: never;
@@ -11278,6 +11295,13 @@ export interface components {
             uploaderName?: null | string;
             decidedByName?: null | string;
         };
+        HeldFieldDto: {
+            field: string;
+            current: null | components["schemas"]["JsonElement"];
+            proposed: null | components["schemas"]["JsonElement"];
+            differs: boolean;
+            currentWithheld: boolean;
+        };
         HeldLineDto: {
             /** Format: uuid */
             reviewId: string;
@@ -11298,6 +11322,9 @@ export interface components {
             failureDetail: null | string;
             changedSince: boolean;
             proposal: null | components["schemas"]["JsonElement"];
+            fields?: null | components["schemas"]["HeldFieldDto"][];
+            /** @default false */
+            hasPreview: boolean;
         };
         HistoryEventDto: {
             /** Format: int64 */
@@ -26890,6 +26917,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HeldBatchDetailDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    uploadReviewPreview: {
+        parameters: {
+            query?: {
+                size?: number;
+            };
+            header?: never;
+            path: {
+                reviewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Unauthorized */

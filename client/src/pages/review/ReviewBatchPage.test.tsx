@@ -16,6 +16,7 @@ const spies = vi.hoisted(() => ({
   rejectItem: vi.fn(),
   acceptBatch: vi.fn(),
   rejectBatch: vi.fn(),
+  preview: vi.fn(),
 }));
 
 vi.mock('../../api/hooks.ts', async () => {
@@ -27,6 +28,7 @@ vi.mock('../../api/hooks.ts', async () => {
     useMe: () => spies.me(),
     useCan: () => spies.can(),
     useFeature: (id: string | undefined) => spies.feature(id),
+    useHeldPreview: (reviewId: string, size: number, enabled: boolean) => spies.preview(reviewId, size, enabled),
     useAcceptReviewItem: () => ({ mutateAsync: spies.acceptItem }),
     useRejectReviewItem: () => ({ mutateAsync: spies.rejectItem }),
     useAcceptReviewBatch: () => ({ mutateAsync: spies.acceptBatch }),
@@ -132,6 +134,11 @@ beforeEach(() => {
           },
         }
       : undefined,
+  }));
+  spies.preview.mockImplementation((reviewId: string, size: number, enabled: boolean) => ({
+    url: enabled ? `blob:held/${reviewId}/${size}` : undefined,
+    loading: false,
+    failed: false,
   }));
   spies.acceptItem.mockResolvedValue({ decided: [], batches: [] });
   spies.rejectItem.mockResolvedValue({ decided: [], batches: [] });
@@ -334,5 +341,115 @@ describe('the batch view', () => {
     ]);
     fireEvent.click(within(lineEl('P1')).getByTestId('review-line-toggle'));
     expect(within(lineEl('P1')).getByTestId('review-line-detail').textContent).toContain('not shown');
+  });
+
+  it('shows the picture a held photo keeps, and only a sentence for a file the server has no picture of', () => {
+    show([
+      line('D1', {
+        section: 'documents',
+        rowId: 'd1',
+        hasPreview: true,
+        proposal: { act: 'create', row: { id: 'd1', title: 'Invented photo', fileName: 'IMG_1.jpg' } },
+      }),
+      line('D2', {
+        section: 'documents',
+        rowId: 'd2',
+        hasPreview: false,
+        proposal: { act: 'create', row: { id: 'd2', title: 'Invented notes', fileName: 'notes.txt' } },
+      }),
+    ]);
+    fireEvent.click(within(lineEl('D1')).getByTestId('review-line-toggle'));
+    expect(within(lineEl('D1')).getByTestId('review-picture')).toBeTruthy();
+    const picture = within(lineEl('D1')).getByAltText('Picture of Invented photo') as HTMLImageElement;
+    expect(picture.getAttribute('src')).toBe('blob:held/D1/480');
+    expect(spies.preview).toHaveBeenCalledWith('D1', 480, true);
+    // The larger rendering is asked for only once the picture is opened.
+    expect(spies.preview).toHaveBeenCalledWith('D1', 1200, false);
+    expect(within(lineEl('D1')).getByTestId('review-line-detail').textContent).not.toContain('kept on the server');
+
+    fireEvent.click(within(lineEl('D2')).getByTestId('review-line-toggle'));
+    expect(within(lineEl('D2')).queryByTestId('review-picture')).toBeNull();
+    expect(within(lineEl('D2')).getByTestId('review-line-detail').textContent).toContain('kept on the server');
+    expect(spies.preview).not.toHaveBeenCalledWith('D2', expect.anything(), expect.anything());
+  });
+
+  const photoEdit = line('E1', {
+    section: 'documents',
+    action: 'attach',
+    rowId: 'd5',
+    hasPreview: true,
+    acceptableFields: ['title', 'description', 'file'],
+    fields: [
+      { field: 'title', current: 'Old photo title', proposed: 'New photo title', differs: true, currentWithheld: false },
+      { field: 'description', current: 'Same caption', proposed: 'Same caption', differs: false, currentWithheld: false },
+      {
+        field: 'file',
+        current: { fileName: 'old.jpg', sizeBytes: 2048 },
+        proposed: { fileName: 'new.jpg', sizeBytes: 4096 },
+        differs: true,
+        currentWithheld: false,
+      },
+    ],
+    proposal: { act: 'supersede', row: { id: 'd5', title: 'New photo title', description: 'Same caption', fileName: 'new.jpg' } },
+  });
+
+  it('shows a photo edit field by field as the server compared it, with its new picture, ticking what differs', () => {
+    show([photoEdit]);
+    fireEvent.click(within(lineEl('E1')).getByTestId('review-line-toggle'));
+    const table = within(lineEl('E1')).getByTestId('review-field-diff');
+    expect(table.textContent).toContain('Old photo title');
+    expect(table.textContent).toContain('New photo title');
+    expect(table.textContent).toContain('new.jpg');
+    expect((within(table).getByTestId('review-field-title') as HTMLInputElement).checked).toBe(true);
+    expect((within(table).getByTestId('review-field-description') as HTMLInputElement).checked).toBe(false);
+    expect((within(table).getByTestId('review-field-file') as HTMLInputElement).checked).toBe(true);
+    expect(within(lineEl('E1')).getByTestId('review-picture')).toBeTruthy();
+  });
+
+  it('sends exactly the ticked fields of an opened photo edit, and the whole of one never opened', async () => {
+    const other = { ...photoEdit, reviewId: 'E2', rowId: 'd6' } as HeldLine;
+    show([photoEdit, other]);
+    fireEvent.click(within(lineEl('E1')).getByTestId('review-line-toggle'));
+    fireEvent.click(within(lineEl('E1')).getByTestId('review-field-file'));
+    fireEvent.click(within(lineEl('E1')).getByTestId('review-line-accept'));
+    await waitFor(() => expect(spies.acceptItem).toHaveBeenCalledTimes(1));
+    expect(spies.acceptItem.mock.calls[0][0]).toMatchObject({ reviewId: 'E1', fields: ['title'] });
+
+    fireEvent.click(within(lineEl('E2')).getByTestId('review-line-accept'));
+    await waitFor(() => expect(spies.acceptItem).toHaveBeenCalledTimes(2));
+    expect(spies.acceptItem.mock.calls[1][0].reviewId).toBe('E2');
+    expect(spies.acceptItem.mock.calls[1][0].fields).toBeUndefined();
+  });
+
+  it('will not accept a compared edit with every field unticked', () => {
+    show([photoEdit]);
+    fireEvent.click(within(lineEl('E1')).getByTestId('review-line-toggle'));
+    fireEvent.click(within(lineEl('E1')).getByTestId('review-field-title'));
+    fireEvent.click(within(lineEl('E1')).getByTestId('review-field-file'));
+    expect((within(lineEl('E1')).getByTestId('review-line-accept') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows a scan edit by notes, place and time, and an earlier place the server left out as not shown', () => {
+    show([
+      line('S1', {
+        section: 'tripPoints',
+        action: 'attach',
+        rowId: 's1',
+        acceptableFields: ['notes', 'place', 'time'],
+        fields: [
+          { field: 'notes', current: 'first note', proposed: 'second note', differs: true, currentWithheld: false },
+          { field: 'place', current: null, proposed: 'f9', differs: true, currentWithheld: true },
+          { field: 'time', current: '2026-09-12T08:10:00Z', proposed: '2026-09-12T08:10:00Z', differs: false, currentWithheld: false },
+        ],
+        proposal: { act: 'update', point: { id: 's1', recordingId: 'r1', placeId: 'f9', notes: 'second note' } },
+      }),
+    ]);
+    fireEvent.click(within(lineEl('S1')).getByTestId('review-line-toggle'));
+    const table = within(lineEl('S1')).getByTestId('review-field-diff');
+    expect(table.textContent).toContain('second note');
+    expect(table.textContent).toContain('Not shown to you');
+    // The new place is named through the feature's own route.
+    expect(spies.feature).toHaveBeenCalledWith('f9');
+    expect((within(table).getByTestId('review-field-time') as HTMLInputElement).checked).toBe(false);
   });
 });

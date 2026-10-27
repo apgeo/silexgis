@@ -306,6 +306,8 @@ export interface FieldDiff {
   proposed: unknown;
   /** Whether the proposal differs from the current row (true when the current one is unknown). */
   differs: boolean;
+  /** The value now names something this reader may not read, and the server left it out. */
+  withheld?: boolean;
 }
 
 /** A stable text for a JSON value, so equal documents compare equal whatever their key order. */
@@ -366,6 +368,58 @@ export function fieldDiffs(line: HeldLine, current: CurrentRow | undefined): Fie
     });
   }
   return diffs;
+}
+
+/**
+ * The fields of a held edit of a photo, a recording, a scan or a raster map, as the server drew
+ * them: the row now beside the proposal. Only fields the line may be accepted by are listed — the
+ * server leaves out of its comparison a field it would not write (a caption on a file that is no
+ * picture), so what is shown is what can be chosen.
+ */
+export function serverFieldDiffs(line: HeldLine): FieldDiff[] {
+  return (line.fields ?? [])
+    .filter((f) => line.acceptableFields.includes(f.field))
+    .map((f) => ({
+      field: f.field,
+      current: f.current ?? undefined,
+      proposed: f.proposed ?? undefined,
+      differs: f.differs,
+      withheld: f.currentWithheld,
+    }));
+}
+
+/** How a field's value reads: plain text, a moment, a span of two, a feature, a file or a map type. */
+export type FieldShape = 'text' | 'moment' | 'span' | 'feature' | 'file' | 'mapType';
+
+export function fieldShape(field: string): FieldShape {
+  switch (field) {
+    case 'time':
+      return 'moment';
+    case 'times':
+      return 'span';
+    case 'cave':
+    case 'place':
+    case 'caveArea':
+      return 'feature';
+    case 'file':
+      return 'file';
+    case 'mapType':
+      return 'mapType';
+    default:
+      return 'text';
+  }
+}
+
+/** A span's two ends, or nothing when the value is not one. */
+export function spanOf(value: unknown): { start: string | null; end: string | null } | null {
+  return isObject(value) ? { start: str(value.startedAt), end: str(value.endedAt) } : null;
+}
+
+/** A file's name and size, or nothing when the value is not one. */
+export function fileOf(value: unknown): { name: string | null; size: number | null } | null {
+  return isObject(value)
+    ? { name: str(value.fileName), size: typeof value.sizeBytes === 'number' ? value.sizeBytes : null }
+    : null;
 }
 
 /** The fields to write by default: those the proposal changes, or all of them when nothing is known. */

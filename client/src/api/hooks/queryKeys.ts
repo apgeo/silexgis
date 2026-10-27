@@ -132,6 +132,10 @@ export const queryKeys = {
   reviewQueue: (page: number, pageSize: number) => ['review', 'queue', page, pageSize] as const,
   reviewMine: (page: number, pageSize: number) => ['review', 'mine', page, pageSize] as const,
   reviewBatch: (id: string) => ['review', 'batch', id] as const,
+  // Outside the 'review' prefix on purpose: a decision invalidates every review reading, and a
+  // picture asked again just after its line was accepted answers 404 — its bytes are the
+  // document's now. The line's own reading says whether a picture is still there.
+  heldPreview: (reviewId: string, size: number) => ['held-preview', reviewId, size] as const,
   attachments: (entityType: string, entityId: string) => ['attachments', entityType, entityId] as const,
   file: (id: string) => ['files', 'detail', id] as const,
   fileVersions: (fileId: string) => ['file-versions', fileId] as const,

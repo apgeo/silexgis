@@ -1,22 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CheckOutlined, CloseOutlined, DownOutlined, LockOutlined, RightOutlined, UndoOutlined } from '@ant-design/icons';
-import { Checkbox, Flex, Table, Tag, Typography } from 'antd';
+import { Checkbox, Flex, Image, Table, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useFeature, type HeldLine } from '../../api/hooks.ts';
+import { useFeature, useHeldPreview, type HeldLine } from '../../api/hooks.ts';
 import Button from '../../components/Button.tsx';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import {
   actOf,
   candidateEntries,
   defaultFields,
+  fieldShape,
+  fileOf,
   foreignDependenciesOf,
   fieldDiffs,
   isCreation,
   ownIdOf,
   pointText,
   recordOf,
+  serverFieldDiffs,
   shortValue,
+  spanOf,
   titleOf,
   type CurrentRow,
   type FieldDiff,
@@ -77,12 +81,201 @@ function PositionValue({ value }: { value: unknown }) {
   return <span>{pointText(value) ?? shortValue(value)}</span>;
 }
 
-function FieldValue({ field, value }: { field: string; value: unknown }) {
+/** A feature a field names, by its name as the feature's own route gives it to this reader. */
+function FeatureName({ id }: { id: string }) {
+  const { t } = useTranslation();
+  const feature = useFeature(id);
+  if (feature.isLoading) {
+    return <Typography.Text type="secondary">{t('common.loading')}</Typography.Text>;
+  }
+  return <span>{feature.data?.feature.name || t('review.untitled')}</span>;
+}
+
+function FieldValue({ field, value, withheld = false }: { field: string; value: unknown; withheld?: boolean }) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? 'en';
   if (field === 'position') {
     return <PositionValue value={value} />;
   }
-  const text = shortValue(value);
-  return text === '' ? <Typography.Text type="secondary">-</Typography.Text> : <span style={{ wordBreak: 'break-word' }}>{text}</span>;
+  if (withheld) {
+    return (
+      <Typography.Text type="secondary">
+        <LockOutlined /> {t('review.currentWithheld')}
+      </Typography.Text>
+    );
+  }
+  const empty = <Typography.Text type="secondary">-</Typography.Text>;
+  switch (fieldShape(field)) {
+    case 'moment':
+      return typeof value === 'string' ? <span>{when(value, locale)}</span> : empty;
+    case 'span': {
+      const span = spanOf(value);
+      return span?.start ? (
+        <span>{t('review.timeRange', { start: when(span.start, locale), end: span.end ? when(span.end, locale) : '-' })}</span>
+      ) : (
+        empty
+      );
+    }
+    case 'feature':
+      return typeof value === 'string' ? <FeatureName id={value} /> : empty;
+    case 'file': {
+      const file = fileOf(value);
+      if (!file) {
+        // What a raster map has now is its document's own business; the comparison names the new one.
+        return <Typography.Text type="secondary">{t('review.currentPicture')}</Typography.Text>;
+      }
+      return (
+        <span style={{ wordBreak: 'break-word' }}>
+          {[file.name, file.size === null ? null : formatSize(file.size)].filter(Boolean).join(', ')}
+        </span>
+      );
+    }
+    case 'mapType':
+      return typeof value === 'string' ? <span>{t(`review.mapTypes.${value}`, { defaultValue: value })}</span> : empty;
+    default: {
+      const text = shortValue(value);
+      return text === '' ? empty : <span style={{ wordBreak: 'break-word' }}>{text}</span>;
+    }
+  }
+}
+
+/** The fields of an edit, the row now beside the proposal, with a box per field. */
+function FieldTable({
+  diffs,
+  ticked,
+  editable,
+  onChoose,
+}: {
+  diffs: FieldDiff[];
+  ticked: string[];
+  editable: boolean;
+  onChoose: (fields: string[]) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Table<FieldDiff>
+      size="small"
+      pagination={false}
+      rowKey="field"
+      dataSource={diffs}
+      columns={[
+        {
+          title: '',
+          width: 40,
+          render: (_: unknown, d) => (
+            <Checkbox
+              data-testid={`review-field-${d.field}`}
+              aria-label={t('review.acceptField', { field: t(`review.field.${d.field}`, { defaultValue: d.field }) })}
+              disabled={!editable}
+              checked={ticked.includes(d.field)}
+              onChange={(e) => onChoose(e.target.checked ? [...ticked, d.field] : ticked.filter((f) => f !== d.field))}
+            />
+          ),
+        },
+        { title: t('review.field.label'), render: (_: unknown, d) => t(`review.field.${d.field}`, { defaultValue: d.field }) },
+        {
+          title: t('review.current'),
+          render: (_: unknown, d) => <FieldValue field={d.field} value={d.current} withheld={d.withheld} />,
+        },
+        {
+          title: t('review.proposed'),
+          render: (_: unknown, d) => (
+            <Flex gap={6} align="center" wrap>
+              <FieldValue field={d.field} value={d.proposed} />
+              {!d.differs && <Tag>{t('review.unchanged')}</Tag>}
+            </Flex>
+          ),
+        },
+      ]}
+    />
+  );
+}
+
+/**
+ * Once an edit is open and compared, what is ticked on screen becomes what is sent: a box left
+ * alone must not mean "everything", nor write a field the reviewer was not shown.
+ */
+function useChoiceOnOpen(
+  ready: boolean,
+  editable: boolean,
+  chosen: string[] | undefined,
+  diffs: readonly FieldDiff[],
+  onChoose: (fields: string[]) => void,
+) {
+  const untouched = chosen === undefined;
+  useEffect(() => {
+    if (ready && editable && untouched) {
+      onChoose(defaultFields(diffs));
+    }
+  }, [ready, editable, untouched, diffs, onChoose]);
+}
+
+/**
+ * An edit of a photo, a recording, a scan or a raster map: each field the reviewer may accept on
+ * its own, as the server compared it, with a box per field.
+ */
+function ServerFieldEdit({
+  line,
+  chosen,
+  onChoose,
+  editable,
+}: {
+  line: HeldLine;
+  /** The fields ticked; undefined until the line is opened, which stands for the whole line. */
+  chosen: string[] | undefined;
+  onChoose: (fields: string[]) => void;
+  editable: boolean;
+}) {
+  const diffs = useMemo(() => serverFieldDiffs(line), [line]);
+  const ticked = chosen ?? defaultFields(diffs);
+  useChoiceOnOpen(true, editable, chosen, diffs, onChoose);
+  return (
+    <div data-testid="review-field-diff">
+      <FieldTable diffs={diffs} ticked={ticked} editable={editable} onChoose={onChoose} />
+    </div>
+  );
+}
+
+/**
+ * The picture a held photo or raster map keeps, as the server draws it — a rendering without any
+ * metadata — small on the line, larger when opened.
+ */
+function HeldPicture({ line, name }: { line: HeldLine; name: string }) {
+  const { t } = useTranslation();
+  const [large, setLarge] = useState(false);
+  const small = useHeldPreview(line.reviewId, 480, true);
+  const big = useHeldPreview(line.reviewId, 1200, large);
+  if (small.failed) {
+    return <Typography.Text type="secondary">{t('review.pictureFailed')}</Typography.Text>;
+  }
+  if (!small.url) {
+    return <Typography.Text type="secondary">{t('common.loading')}</Typography.Text>;
+  }
+  return (
+    <Image
+      data-testid="review-picture"
+      src={small.url}
+      alt={t('review.pictureAlt', { name })}
+      width={160}
+      preview={{
+        src: big.url ?? small.url,
+        onOpenChange: (open) => {
+          if (open) {
+            setLarge(true);
+          }
+        },
+      }}
+    />
+  );
+}
+
+/** What a held file's line says of its bytes: the picture when there is one to draw. */
+function HeldFile({ line, name }: { line: HeldLine; name: string }) {
+  const { t } = useTranslation();
+  if (line.hasPreview) {
+    return <HeldPicture line={line} name={name} />;
+  }
+  return line.decision === 'pending' ? <Typography.Text type="secondary">{t('review.noPreviewHeld')}</Typography.Text> : null;
 }
 
 /**
@@ -105,15 +298,7 @@ function RowEdit({
   const { current, withheld, loading } = useCurrentRow(line.rowId, true);
   const diffs = fieldDiffs(line, current);
   const ticked = chosen ?? defaultFields(diffs);
-  const untouched = chosen === undefined;
-
-  // Once the row is open and compared, what is ticked on screen becomes what is sent: a box left
-  // alone must not mean "everything", nor write a field the reviewer was not shown.
-  useEffect(() => {
-    if (!loading && editable && untouched) {
-      onChoose(defaultFields(diffs));
-    }
-  }, [loading, editable, untouched, diffs, onChoose]);
+  useChoiceOnOpen(!loading, editable, chosen, diffs, onChoose);
 
   if (loading) {
     return <Typography.Text type="secondary">{t('common.loading')}</Typography.Text>;
@@ -129,43 +314,7 @@ function RowEdit({
         <Typography.Text type="secondary">{t('review.currentUnknown')}</Typography.Text>
       )}
       {withheld && <Typography.Text type="secondary">{t('review.positionWithheld')}</Typography.Text>}
-      <Table<FieldDiff>
-        size="small"
-        pagination={false}
-        rowKey="field"
-        dataSource={diffs}
-        columns={[
-          {
-            title: '',
-            width: 40,
-            render: (_: unknown, d) => (
-              <Checkbox
-                data-testid={`review-field-${d.field}`}
-                aria-label={t('review.acceptField', { field: t(`review.field.${d.field}`, { defaultValue: d.field }) })}
-                disabled={!editable}
-                checked={ticked.includes(d.field)}
-                onChange={(e) =>
-                  onChoose(e.target.checked ? [...ticked, d.field] : ticked.filter((f) => f !== d.field))
-                }
-              />
-            ),
-          },
-          { title: t('review.field.label'), render: (_: unknown, d) => t(`review.field.${d.field}`, { defaultValue: d.field }) },
-          {
-            title: t('review.current'),
-            render: (_: unknown, d) => <FieldValue field={d.field} value={d.current} />,
-          },
-          {
-            title: t('review.proposed'),
-            render: (_: unknown, d) => (
-              <Flex gap={6} align="center" wrap>
-                <FieldValue field={d.field} value={d.proposed} />
-                {!d.differs && <Tag>{t('review.unchanged')}</Tag>}
-              </Flex>
-            ),
-          },
-        ]}
-      />
+      <FieldTable diffs={diffs} ticked={ticked} editable={editable} onChoose={onChoose} />
     </Flex>
   );
 }
@@ -225,7 +374,7 @@ function SectionDetail({ line, lines }: { line: HeldLine; lines: readonly HeldLi
           {typeof rec.fileName === 'string' && <Fact label={t('review.file')}>{rec.fileName}</Fact>}
           {typeof rec.sizeBytes === 'number' && <Fact label={t('review.size')}>{formatSize(rec.sizeBytes)}</Fact>}
           {typeof rec.capturedAt === 'string' && <Fact label={t('review.capturedAt')}>{when(rec.capturedAt, locale)}</Fact>}
-          <Typography.Text type="secondary">{t('review.noPreviewHeld')}</Typography.Text>
+          <HeldFile line={line} name={titleOf(line) ?? t('review.untitled')} />
         </Flex>
       );
     case 'documentLinks':
@@ -284,10 +433,12 @@ function SectionDetail({ line, lines }: { line: HeldLine; lines: readonly HeldLi
       return (
         <Flex vertical gap={2}>
           {typeof rec.title === 'string' && <Fact label={t('review.field.title')}>{rec.title}</Fact>}
-          {typeof rec.mapType === 'string' && <Fact label={t('review.mapType')}>{rec.mapType}</Fact>}
+          {typeof rec.mapType === 'string' && (
+            <Fact label={t('review.mapType')}>{t(`review.mapTypes.${rec.mapType}`, { defaultValue: rec.mapType })}</Fact>
+          )}
           {typeof rec.fileName === 'string' && <Fact label={t('review.file')}>{rec.fileName}</Fact>}
           {typeof rec.sizeBytes === 'number' && <Fact label={t('review.size')}>{formatSize(rec.sizeBytes)}</Fact>}
-          <Typography.Text type="secondary">{t('review.noPreviewHeld')}</Typography.Text>
+          <HeldFile line={line} name={titleOf(line) ?? t('review.untitled')} />
         </Flex>
       );
     case 'rasterPins':
@@ -359,9 +510,11 @@ export default function ReviewLineRow({
     .map((id) => lines.find((l) => l.reviewId === id))
     .filter((l): l is HeldLine => l !== undefined);
   const isRowEdit = line.section === 'rows' && !isCreation(line) && act !== 'delete';
+  // Another kind's edit, which the server compared field by field.
+  const isComparedEdit = line.section !== 'rows' && (line.fields?.length ?? 0) > 0;
   const editable = canDecide && pending && line.acceptableFields.length > 0;
   // Nothing ticked is not an acceptance: the box is there to narrow, not to empty.
-  const nothingTicked = isRowEdit && editable && chosen !== undefined && chosen.length === 0;
+  const nothingTicked = (isRowEdit || isComparedEdit) && editable && chosen !== undefined && chosen.length === 0;
 
   return (
     <div
@@ -463,6 +616,11 @@ export default function ReviewLineRow({
             ) : (
               <RowEdit line={line} chosen={chosen} onChoose={onChoose} editable={editable} />
             )
+          ) : isComparedEdit ? (
+            <Flex vertical gap={6}>
+              {line.hasPreview && <HeldPicture line={line} name={title} />}
+              <ServerFieldEdit line={line} chosen={chosen} onChoose={onChoose} editable={editable} />
+            </Flex>
           ) : (
             <SectionDetail line={line} lines={lines} />
           )}
