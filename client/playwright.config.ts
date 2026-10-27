@@ -75,6 +75,9 @@ const PHONE_ONLY_SPECS = [
   // The map workspace on a phone: one pane, the docks as drawers, whatever the account arranged on
   // a desktop — and the survey-line notice clear of the corner controls at a phone's width.
   /(^|\/)map-workspace-mobile\.spec\.ts$/,
+  // Deciding an upload from a phone: the reviewer's queue and batch page are laid out for a
+  // finger at a phone's width, and must not grow wider than the screen.
+  /(^|\/)review-uploader-mobile\.spec\.ts$/,
 ];
 
 export default defineConfig({

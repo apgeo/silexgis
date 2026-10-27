@@ -154,7 +154,10 @@ export const specs = {
   // Surveys sent from a field device: the access-key and upload settings, the cave's list of
   // surveys, the status page of one upload and the page behind its public link.
   surveyUploads: ['access-keys.spec.ts', 'survey-uploads.spec.ts', 'public-survey.spec.ts'],
-  sync: ['settings.spec.ts'],
+  sync: [
+    'settings.spec.ts', 'review-queue.spec.ts', 'review-uploader.spec.ts',
+    'review-uploader-mobile.spec.ts', 'review-file-import.spec.ts',
+  ],
   tags: ['trips.spec.ts'],
   taxonomies: [],
   terrain: [
@@ -207,6 +210,8 @@ export const clientAreas = {
   'client/src/components/cavingGroups/': ['cavingGroups', 'settings', 'trips'],
   'client/src/components/cavers/': 'cavers',
   'client/src/components/caves/': 'caves',
+  // The upload-review parts shared by the reviewer's pages and the uploader's list on the imports tab.
+  'client/src/components/review/': ['sync', 'imports'],
   'client/src/components/surveyUploads/': 'surveyUploads',
   'client/src/components/caveview/': ['surveys', 'trips'],
   'client/src/components/documents/': 'documents',
@@ -252,6 +257,7 @@ export const clientAreas = {
   'client/src/pages/panel/': 'history',
   'client/src/pages/photolibrary/': 'photoLibraries',
   'client/src/pages/public/': 'trips',
+  'client/src/pages/review/': 'sync',
   'client/src/pages/settings/': 'settings',
   'client/src/pages/settings/AccessKeysSettingsPage': 'surveyUploads',
   'client/src/pages/settings/SurveyUploadSettingsPage': 'surveyUploads',
