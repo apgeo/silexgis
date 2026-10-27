@@ -88,7 +88,7 @@ and holds none of the recordings from `17-` on, nor the three newer ones under `
 | `04-errors.md` | Every failure this surface can answer with — whole-request refusals and the per-row codes inside a 200 — what each means, and the point of the document: the one action from a closed set that the client is supposed to take. |
 | `05-qr-landing.md` | What happens when somebody scans a code printed on a cave label, what an anonymous visitor is told, and the three conditions on the printed URL that only the client can enforce. |
 | `06-standalone-rules.md` | The thirteen invariants that keep the application working with no server at all, each with the failure it prevents — and what the server guarantees in return. |
-| `07-dev-server.md` | How to get a running server with usable data — accounts, protected and open caves, photos, a raster map, a recording, the people directory, an account under review — in one command, and how to reset it. |
+| `07-dev-server.md` | How to get a running server with usable data — accounts, protected and open caves, photos, a raster map, a recording, the people directory, an account under review — in one command, and how to reset it; and the one command that runs the app's live tests against a server built from a given checkout (§7). |
 | `08-near-future.md` | What was deliberately written down rather than built, and why. |
 
 ## What the client effort decides for itself

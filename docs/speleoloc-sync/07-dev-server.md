@@ -210,7 +210,33 @@ migrations were folded into one baseline, cannot be carried forward. The API the
 `migrations.before_baseline` in its log and `up` reports that it exited before answering; `reset`, then
 `up`, is the remedy, and costs nothing but the rows you wrote.
 
-## 7. Two things it deliberately does not do
+## 7. The app's live tests against this checkout, in one command
+
+```
+node deploy/speleoloc-e2e.mjs --app <SpeleoLoc checkout> [--runs-dir <dir>]
+```
+
+This is the check either side runs after a change that touches the wire. It resets this stack,
+brings it up from the checkout the script sits in (so the server under test is exactly that commit,
+with whatever is uncommitted in it), runs every test file in the app's `test/` that reads
+`SPELEO_LOC_SILEXGIS_LIVE` with that switch on and `SPELEO_LOC_SILEXGIS_URL` pointed at the server,
+stops the server and the database, and writes a report named for the time and the commit pair —
+`<time>Z-silexgis-<commit>-speleoloc-<commit>.md` — with the counts and each failed test's name and the
+first line of its error. The whole server log and test output are kept under `.speleoloc-e2e/logs/`
+(git ignores it).
+
+- Exit code `0`: at least one live test ran and none failed. `1`: a test failed, or **no live test
+  ran** — a live test that does not see its switch registers a passing placeholder, and the report
+  counts those separately rather than as passes. `2`: the server never came up; the report says why.
+- It refuses to run while anything already answers on the API port, rather than testing a server it
+  did not start.
+- `--tests a,b` names the app's test files instead; `--keep-data` skips the reset; `--flutter`
+  names the Flutter command; `--db-port` and `--api-port` work as for `up`. `--help` lists them.
+- A live test opts in by reading the switch. It should create what it needs and remove it again, and
+  never assume another live test ran first: the files are run one at a time against one server, but
+  in no promised order.
+
+## 8. Two things it deliberately does not do
 
 **It never touches the shared development database.** A SilexGIS checkout also carries
 `deploy/docker-compose.dev.yml`, which is the database the web application's own developers run,

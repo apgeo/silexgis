@@ -188,3 +188,5 @@ __pycache__/
 
 # Stored files and signing keys of the throwaway SpeleoLoc development server (deploy/speleoloc-dev.mjs)
 /.speleoloc-dev/
+# Reports and logs of the SpeleoLoc live-test runs (deploy/speleoloc-e2e.mjs)
+/.speleoloc-e2e/
