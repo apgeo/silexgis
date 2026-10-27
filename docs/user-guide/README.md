@@ -85,7 +85,8 @@ linking out to the reference pages for detail.
 [Uploading surveys from TopoDroid](features/topodroid-uploads.md)
 
 **Keeping the record honest**
-[History and audit](features/history-and-audit.md)
+[History and audit](features/history-and-audit.md) ·
+[Reviewing uploads](features/upload-review.md)
 
 ## Running the installation
 

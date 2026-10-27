@@ -89,7 +89,8 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Încărcarea topografiilor din TopoDroid](features/topodroid-uploads.md)
 
 **Păstrarea unei evidențe corecte**
-[Istoric și modificări](features/history-and-audit.md)
+[Istoric și modificări](features/history-and-audit.md) ·
+[Verificarea încărcărilor](features/upload-review.md)
 
 ## Administrarea instalării
 
