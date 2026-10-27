@@ -16,6 +16,7 @@ namespace SilexGis.Api.Features.SurveyUploads;
 /// <param name="CaveCreation">Whether an upload that names no cave may make one, and how.</param>
 /// <param name="Outputs">The output catalogue and what a run produces when an upload asks for nothing.</param>
 /// <param name="PollIntervalSeconds">How often a device should ask how its upload is getting on.</param>
+/// <param name="PublicLinks">What the calling account's uploads get by way of a result link when the upload does not say.</param>
 public sealed record SurveyUploadCapabilitiesDto(
     int ContractVersion,
     IReadOnlyList<string> Sources,
@@ -25,7 +26,20 @@ public sealed record SurveyUploadCapabilitiesDto(
     SurveyCompilerCapabilitiesDto Compiler,
     SurveyCaveCreationCapabilitiesDto CaveCreation,
     SurveyOutputCapabilitiesDto Outputs,
-    int PollIntervalSeconds);
+    int PollIntervalSeconds,
+    SurveyPublicLinkCapabilitiesDto PublicLinks);
+
+/// <param name="Enabled">
+/// Whether an upload of the calling account gets a link when it does not ask either way: the
+/// installation makes links and the account has not turned them off. A protected cave still gets
+/// none without the upload's explicit acknowledgement.
+/// </param>
+/// <param name="DefaultAudience">
+/// Who such a link opens for when the upload names no audience — the account's default:
+/// <c>public</c> (anybody holding the address) or <c>organization</c> (a signed-in account of this
+/// installation).
+/// </param>
+public sealed record SurveyPublicLinkCapabilitiesDto(bool Enabled, SurveyUploadLinkAudience DefaultAudience);
 
 /// <param name="Available">False when the server keeps the files but compiles nothing.</param>
 /// <param name="Version">The compiler and its version, when one is configured.</param>

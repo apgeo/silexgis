@@ -156,9 +156,23 @@ public static partial class SurveyUploadEndpoints
         return api;
     }
 
-    private static async Task<Ok<SurveyUploadCapabilitiesDto>> CapabilitiesAsync(
-        SilexGisDbContext db, IOptions<SurveyUploadOptions> options, ISurveyCompiler compiler, CancellationToken ct)
+    private static async Task<Results<Ok<SurveyUploadCapabilitiesDto>, UnauthorizedHttpResult>> CapabilitiesAsync(
+        SilexGisDbContext db,
+        IOptions<SurveyUploadOptions> options,
+        ISurveyCompiler compiler,
+        IAccessContextAccessor accessAccessor,
+        SurveyUploadPublicLinkService links,
+        CancellationToken ct)
     {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        // The account's standing link choices sit on a route a device key does not open; the device
+        // reads here what its uploads get when they do not say, to preset its own choice.
+        var (linksEnabled, defaultAudience) = await links.AccountDefaultsAsync(ctx.UserId, ct);
         var settings = options.Value;
         return TypedResults.Ok(new SurveyUploadCapabilitiesDto(
             ContractVersion,
@@ -176,7 +190,8 @@ public static partial class SurveyUploadEndpoints
                 settings.CaveCreation ? await DefaultCaveTypeIdAsync(db, settings, ct) : null,
                 [Visibility.Private, Visibility.CavingGroup, Visibility.Authenticated, Visibility.Public]),
             new SurveyOutputCapabilitiesDto(SurveyOutputs.Catalogue, settings.DefaultOutputList()),
-            PollIntervalSeconds));
+            PollIntervalSeconds,
+            new SurveyPublicLinkCapabilitiesDto(linksEnabled, defaultAudience)));
     }
 
     private static async Task<Results<Ok<SurveyUploadDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(

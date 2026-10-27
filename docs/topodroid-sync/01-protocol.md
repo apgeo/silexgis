@@ -65,6 +65,8 @@ Read once per session, before showing the export dialog (`01-capabilities`).
 | `caveCreation.defaultCaveTypeId`, `caveCreation.visibilities` | how such a cave is made |
 | `outputs.catalogue`, `outputs.defaults` | every output a run can be asked for, and what it makes when asked for none |
 | `pollIntervalSeconds` | how often to poll a run |
+| `publicLinks.enabled` | whether an upload of **this account** gets a link to its results when the open request does not say: the installation makes links and the account has not turned them off (the web's *Survey uploads* preferences). A protected cave still gets none without `publicLink.allowProtected` |
+| `publicLinks.defaultAudience` | who such a link opens for when the open request names no audience: `public` (anybody holding the address) or `organization` (a signed-in account of this installation) — the account's *Default link audience*. Preset the export block's link choice from these two; the preferences route itself does not accept the key |
 
 ## 4. Opening an upload — `POST /survey-uploads`
 

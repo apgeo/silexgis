@@ -14639,6 +14639,10 @@ export interface components {
             catalogue: string[];
             defaults: string[];
         };
+        SurveyPublicLinkCapabilitiesDto: {
+            enabled: boolean;
+            defaultAudience: components["schemas"]["SurveyUploadLinkAudience"];
+        };
         /** @enum {unknown} */
         SurveySegmentBasis: "unavailable" | "surveyFlags" | "skeletonHeuristic";
         SurveyShotDto: {
@@ -14732,6 +14736,7 @@ export interface components {
             outputs: components["schemas"]["SurveyOutputCapabilitiesDto"];
             /** Format: int32 */
             pollIntervalSeconds: number;
+            publicLinks: components["schemas"]["SurveyPublicLinkCapabilitiesDto"];
         };
         SurveyUploadCaveDto: {
             /** Format: uuid */

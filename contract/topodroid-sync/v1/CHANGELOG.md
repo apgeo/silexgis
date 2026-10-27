@@ -31,6 +31,19 @@ turns every future addition into an outage of its own making.
 
 ---
 
+## 2026-10-27 — the account's link defaults in the capabilities
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one member is added
+to the capabilities answer.
+
+- Added capabilities member `publicLinks { enabled, defaultAudience }`, for the calling account:
+  `enabled` is the installation's switch and the account's *Public links* preference together;
+  `defaultAudience` (`public` or `organization`) is the account's *Default link audience*. A device
+  presets its per-upload link choice from them; the preferences route
+  (`/api/v1/me/survey-upload-preferences`) still does not accept the key.
+- Rewritten: `01-capabilities` (the added member).
+- Codes: none added, changed or withdrawn.
+
 ## 2026-10-26 — the size of a survey's older versions, and the uploader's own status
 
 **Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one member is added

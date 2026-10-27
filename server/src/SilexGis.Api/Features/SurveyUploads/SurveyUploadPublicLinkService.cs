@@ -105,6 +105,21 @@ public sealed class SurveyUploadPublicLinkService(
     }
 
     /// <summary>
+    /// What an account's uploads get when the upload does not say: whether a link is made (the
+    /// installation's switch and the account's preference both on), and who it opens for. An account
+    /// that never saved its preferences has links on, open to anybody holding the address.
+    /// </summary>
+    public async Task<(bool Enabled, SurveyUploadLinkAudience DefaultAudience)> AccountDefaultsAsync(Guid userId, CancellationToken ct)
+    {
+        var preference = await db.SurveyUploadPreferences.AsNoTracking()
+            .Where(p => p.UserId == userId)
+            .Select(p => new { p.PublicLinks, p.DefaultLinkAudience })
+            .FirstOrDefaultAsync(ct);
+        return (InstallationOn && (preference?.PublicLinks ?? true),
+            preference?.DefaultLinkAudience ?? SurveyUploadLinkAudience.Public);
+    }
+
+    /// <summary>
     /// The audience a link made by hand opens for when the request does not say: the one the link it
     /// replaces had, else the one the upload asked for, else the caller's default.
     /// </summary>

@@ -69,5 +69,9 @@
       "extended-pdf"
     ]
   },
-  "pollIntervalSeconds": 3
+  "pollIntervalSeconds": 3,
+  "publicLinks": {
+    "enabled": true,
+    "defaultAudience": "public"
+  }
 }

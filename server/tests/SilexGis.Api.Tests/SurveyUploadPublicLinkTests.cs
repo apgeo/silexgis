@@ -38,6 +38,7 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
     private const string Uploads = "/api/v1/survey-uploads";
     private const string Public = "/api/v1/public/survey-uploads";
 
+    private readonly PostgresFixture postgres;
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];
@@ -47,6 +48,7 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
 
     public SurveyUploadPublicLinkTests(PostgresFixture postgres)
     {
+        this.postgres = postgres;
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-supub-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
@@ -452,6 +454,78 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
         status.GetProperty("publicLink").ValueKind.ShouldBe(JsonValueKind.Null);
         status.GetProperty("publicLinkRefusal").GetString().ShouldBe(SurveyUploadPublicLinks.AccountOff);
         (await LinkCountAsync(id)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_device_reads_its_accounts_link_defaults_from_the_capabilities_with_its_key()
+    {
+        var email = $"supub-cap-{suffix}@t.local";
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, email);
+        using var client = await AuthHelper.BearerClientAsync(factory, email);
+        using var device = AuthHelper.AccessKeyClient(factory, await AuthHelper.CreateAccessKeyAsync(client, "capabilities phone"));
+
+        async Task<(bool Enabled, string? Audience)> ReadAsync(HttpClient caller)
+        {
+            var links = (await caller.GetFromJsonAsync<JsonElement>($"{Uploads}/capabilities")).GetProperty("publicLinks");
+            return (links.GetProperty("enabled").GetBoolean(), links.GetProperty("defaultAudience").GetString());
+        }
+
+        // Never saved: links on, open to anybody holding the address.
+        (await ReadAsync(device)).ShouldBe((true, "public"));
+
+        (await client.PutAsJsonAsync("/api/v1/me/survey-upload-preferences",
+            new { alwaysOutputs = Array.Empty<string>(), publicLinks = false, defaultLinkAudience = "organization" }))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        (await ReadAsync(device)).ShouldBe((false, "organization"));
+        (await ReadAsync(client)).ShouldBe((false, "organization"));
+
+        (await client.PutAsJsonAsync("/api/v1/me/survey-upload-preferences",
+            new { alwaysOutputs = Array.Empty<string>(), publicLinks = true }))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        (await ReadAsync(device)).ShouldBe((true, "organization"));
+
+        // Another account's choices are not the caller's.
+        (await ReadAsync(owner)).ShouldBe((true, "public"));
+
+        // The preferences themselves stay closed to the key.
+        (await device.GetAsync("/api/v1/me/survey-upload-preferences")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task An_installation_that_makes_no_links_tells_the_device_so_whatever_the_account_prefers()
+    {
+        var root = Path.Combine(TestScratch.Root, $"silexgis-test-supub-off-{Guid.NewGuid():N}");
+        try
+        {
+            using var off = new SilexGisApiFactory(
+                postgres.ConnectionString,
+                new Dictionary<string, string?>
+                {
+                    ["Files:Root"] = root,
+                    ["Keys:Path"] = Path.Combine(root, "keys"),
+                    ["SurveyUploads:PublicLinks"] = "false",
+                },
+                JobWorkers.RemoveFrom,
+                ownHost: true);
+            var email = $"supub-instoff-{suffix}@t.local";
+            await AuthHelper.CreateUserAsync(off, GlobalRoles.Editor, email);
+            using var client = await AuthHelper.BearerClientAsync(off, email);
+            (await client.PutAsJsonAsync("/api/v1/me/survey-upload-preferences",
+                new { alwaysOutputs = Array.Empty<string>(), publicLinks = true, defaultLinkAudience = "organization" }))
+                .IsSuccessStatusCode.ShouldBeTrue();
+            using var device = AuthHelper.AccessKeyClient(off, await AuthHelper.CreateAccessKeyAsync(client, "off phone"));
+
+            var links = (await device.GetFromJsonAsync<JsonElement>($"{Uploads}/capabilities")).GetProperty("publicLinks");
+            links.GetProperty("enabled").GetBoolean().ShouldBeFalse();
+            links.GetProperty("defaultAudience").GetString().ShouldBe("organization");
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
     }
 
     [Fact]
