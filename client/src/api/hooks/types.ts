@@ -98,6 +98,7 @@ export type SmsSettingsWrite = components['schemas']['SmsSettingsWriteRequest'];
 export type SecuritySettings = components['schemas']['SecuritySettingsDto'];
 export type ProtectionSettings = components['schemas']['ProtectionSettingsDto'];
 export type ImportSettings = components['schemas']['ImportSettingsDto'];
+export type SyncSettings = components['schemas']['SyncSettingsDto'];
 export type NotificationSettings = components['schemas']['NotificationSettingsDto'];
 export type AnnouncementSettings = components['schemas']['AnnouncementSettingsDto'];
 /**

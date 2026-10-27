@@ -238,6 +238,13 @@ export const queryKeys = {
   cavingGroups: ['cavingGroups'] as const,
   syncCapabilities: ['sync', 'capabilities'] as const,
   syncSets: ['sync', 'sets'] as const,
+  phoneUsers: ['phoneUsers'] as const,
+  caveRecordings: (caveId: string, page: number, pageSize: number) =>
+    ['trip-recordings', caveId, page, pageSize] as const,
+  // The whole request is the key, as for the archive's own dry run: reading a recording is a pure
+  // function of the recording and the choices, so another survey model is a different question.
+  recordingImportPreview: (recordingId: string, body: unknown) =>
+    ['trip-recordings', 'import-preview', recordingId, body] as const,
   cavers: ['cavers'] as const,
   cavingGroupMembers: (cavingGroupId: string) => ['teams', cavingGroupId, 'members'] as const,
   cavingGroupAudience: (cavingGroupId: string) => ['teams', cavingGroupId, 'audience'] as const,
