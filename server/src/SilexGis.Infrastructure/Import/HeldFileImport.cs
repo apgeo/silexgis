@@ -174,7 +174,8 @@ public abstract class HeldFileImportHandler(SilexGisDbContext db, FeatureProtect
     public bool WritesWhole => true;
 
     /// <summary>A candidate is accepted whole: its decision is one choice, not a set of fields.</summary>
-    public IReadOnlyList<string> FieldsOf(ImportBatchItem line) => [];
+    public Task<IReadOnlyList<string>> FieldsOfAsync(ImportBatchItem line, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<string>>([]);
 
     /// <summary>
     /// Shown only when the viewer may read, at its exact position, every existing row the decision

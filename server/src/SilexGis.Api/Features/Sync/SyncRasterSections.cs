@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -138,6 +139,113 @@ internal sealed class SyncRasterMapsSection(
 
     protected override SyncUploadRasterMapDto? Rebased(SyncUploadRasterMapDto item, DateTimeOffset revision) =>
         item.BaseRevision is null ? null : item with { BaseRevision = revision };
+
+    /// <summary>
+    /// An edit is accepted by its title and order when it states them, its map type and area,
+    /// and — when it brings one — its new picture, taken whole.
+    /// </summary>
+    protected override IReadOnlyList<string> AcceptableFields(SyncRasterMapProposal proposal)
+    {
+        if (proposal.Act != SyncRasterAct.Update)
+        {
+            return [];
+        }
+
+        var fields = new List<string>(5);
+        if (!string.IsNullOrWhiteSpace(proposal.Map.Title))
+        {
+            fields.Add(SyncHeldFields.Title);
+        }
+
+        fields.Add(SyncHeldFields.MapType);
+        if (proposal.Map.SortOrder is not null)
+        {
+            fields.Add(SyncHeldFields.SortOrder);
+        }
+
+        fields.Add(SyncHeldFields.CaveArea);
+        if (proposal.SupersededVersionId is not null)
+        {
+            fields.Add(SyncHeldFields.File);
+        }
+
+        return fields;
+    }
+
+    /// <summary>
+    /// The title and order the write keeps when it is not given them; the type and the area it
+    /// replaces, so those left out are written as the map has them now; a picture left out is not
+    /// taken, and its staged bytes stay unadopted.
+    /// </summary>
+    protected override async Task<SyncRasterMapProposal> NarrowedAsync(
+        SyncUploadRun run, SyncRasterMapProposal proposal, IReadOnlyList<string> fields, CancellationToken ct)
+    {
+        if (proposal.Act != SyncRasterAct.Update)
+        {
+            return proposal;
+        }
+
+        var now = await run.Db.RasterMaps.AsNoTracking().IgnoreQueryFilters()
+            .FirstOrDefaultAsync(m => m.Id == proposal.Map.Id, ct);
+        if (now is null)
+        {
+            return proposal;
+        }
+
+        var map = proposal.Map;
+        var narrowed = proposal with
+        {
+            Map = map with
+            {
+                Title = fields.Contains(SyncHeldFields.Title) ? map.Title : null,
+                MapType = fields.Contains(SyncHeldFields.MapType) ? map.MapType : now.MapType,
+                SortOrder = fields.Contains(SyncHeldFields.SortOrder) ? map.SortOrder : null,
+                CaveAreaId = fields.Contains(SyncHeldFields.CaveArea) ? map.CaveAreaId : now.CaveAreaFeatureId,
+            },
+        };
+        return fields.Contains(SyncHeldFields.File) ? narrowed : narrowed with { SupersededVersionId = null, Sha256 = null };
+    }
+
+    protected override async Task<IReadOnlyList<HeldFieldComparison>?> CompareAsync(
+        SyncHeldComparing comparing, SyncRasterMapProposal proposal, CancellationToken ct)
+    {
+        var fields = AcceptableFields(proposal);
+        if (fields.Count == 0)
+        {
+            return null;
+        }
+
+        var now = await comparing.Db.RasterMaps.AsNoTracking().IgnoreQueryFilters()
+            .FirstOrDefaultAsync(m => m.Id == proposal.Map.Id, ct);
+        if (now is null)
+        {
+            return null;
+        }
+
+        var map = proposal.Map;
+        var readable = await comparing.ReadableFeatures(now.CaveAreaFeatureId is { } area ? [area] : [], ct);
+        var compared = new List<HeldFieldComparison>(fields.Count);
+        foreach (var field in fields)
+        {
+            compared.Add(field switch
+            {
+                SyncHeldFields.Title => SyncHeldComparisons.Of(field, now.Title, map.Title!.Trim()),
+                SyncHeldFields.MapType => SyncHeldComparisons.Of(field, now.MapType, map.MapType),
+                SyncHeldFields.SortOrder => SyncHeldComparisons.Of(field, now.SortOrder, map.SortOrder),
+                SyncHeldFields.CaveArea => SyncHeldComparisons.Feature(field, now.CaveAreaFeatureId, map.CaveAreaId, readable),
+
+                // The picture the map has now is the map's document, read under its own rules; the
+                // comparison names only the new one.
+                _ => new HeldFieldComparison(
+                    field,
+                    null,
+                    JsonSerializer.SerializeToNode(new { fileName = map.FileName, sizeBytes = map.SizeBytes }, SyncUploadJson.Options),
+                    Differs: true),
+            });
+        }
+
+        return compared;
+    }
 
     public override async Task<SyncResolution<SyncRasterMapProposal>> ResolveAsync(
         SyncUploadRun run, SyncUploadRasterMapDto item, CancellationToken ct)

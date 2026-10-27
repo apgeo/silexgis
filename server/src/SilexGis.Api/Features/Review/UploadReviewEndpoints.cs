@@ -41,7 +41,6 @@ public static class UploadReviewEndpoints
     public const string FieldsUnsupportedCode = "review.fields_unsupported";
     public const string OwnBatchCode = "review.own_batch";
     public const string SourceUnsupportedCode = "review.source_unsupported";
-
     public static void MapUploadReviewEndpoints(this RouteGroupBuilder api)
     {
         var review = api.MapGroup("/review").WithTags("Review");
@@ -318,7 +317,7 @@ public static class UploadReviewEndpoints
         if (accept && request.Fields is { } named)
         {
             var handler = handlers.FirstOrDefault(h => h.Source == found.Batch.Source);
-            var acceptable = handler?.FieldsOf(found.Item) ?? [];
+            var acceptable = handler is null ? [] : await handler.FieldsOfAsync(found.Item, ct);
             var unknown = named.Where(f => !acceptable.Contains(f, StringComparer.Ordinal)).ToList();
             if (unknown.Count > 0)
             {
@@ -460,6 +459,12 @@ public static class UploadReviewEndpoints
         var shown = handler is null
             ? new Dictionary<long, HeldLineView>()
             : await handler.ShowAsync(lines, viewer, ct);
+        var acceptable = new Dictionary<long, IReadOnlyList<string>>(lines.Count);
+        foreach (var line in lines)
+        {
+            acceptable[line.Id] = handler is null ? [] : await handler.FieldsOfAsync(line, ct);
+        }
+
         var dependencyIds = lines.SelectMany(l => l.DependsOnItemIds ?? []).Distinct().ToList();
         var dependencies = dependencyIds.Count == 0
             ? new Dictionary<long, Guid?>()
@@ -479,14 +484,21 @@ public static class UploadReviewEndpoints
                 l.ReviewDecision ?? ImportReviewDecision.Pending,
                 [.. (l.DependsOnItemIds ?? []).Select(on => dependencies.GetValueOrDefault(on)).OfType<Guid>()],
                 l.AcceptedFields,
-                handler?.FieldsOf(l) ?? [],
+                acceptable[l.Id],
                 l.DecisionNote,
                 l.DecidedAt,
                 l.DecidedByUserId,
                 l.ReviewFailureCode,
                 l.ReviewFailureDetail,
                 view?.ChangedSince ?? false,
-                visible ? JsonDocument.Parse(view!.Proposal!).RootElement.Clone() : null);
+                visible ? JsonDocument.Parse(view!.Proposal!).RootElement.Clone() : null,
+                visible && view!.Fields is { } compared ? [.. compared.Select(FieldOf)] : null);
         })];
     }
+
+    private static HeldFieldDto FieldOf(HeldFieldComparison field) =>
+        new(field.Field, ElementOf(field.Current), ElementOf(field.Proposed), field.Differs, field.CurrentWithheld);
+
+    private static JsonElement? ElementOf(System.Text.Json.Nodes.JsonNode? node) =>
+        node is null ? null : JsonSerializer.SerializeToElement(node);
 }

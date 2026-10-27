@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Files;
+using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Sync;
@@ -75,6 +77,108 @@ internal sealed class SyncDocumentsSection(
         item.BaseRevision is null ? null : item with { BaseRevision = revision };
 
     protected override IReadOnlyList<SyncUploadDocumentDto>? ItemsOf(SyncUploadRequest request) => request.Documents;
+
+    /// <summary>
+    /// An edit is accepted by the title and the caption it states, and — when it brings new bytes —
+    /// by the new file, taken whole. A member the phone did not state says nothing and is not offered.
+    /// </summary>
+    protected override IReadOnlyList<string> AcceptableFields(SyncDocumentProposal proposal)
+    {
+        if (proposal.Act is not (SyncDocumentAct.Describe or SyncDocumentAct.Supersede))
+        {
+            return [];
+        }
+
+        var fields = new List<string>(3);
+        if (!string.IsNullOrWhiteSpace(proposal.Row.Title))
+        {
+            fields.Add(SyncHeldFields.Title);
+        }
+
+        if (proposal.Row.Description is not null)
+        {
+            fields.Add(SyncHeldFields.Description);
+        }
+
+        if (proposal.Act == SyncDocumentAct.Supersede)
+        {
+            fields.Add(SyncHeldFields.File);
+        }
+
+        return fields;
+    }
+
+    /// <summary>
+    /// What is left out is not stated, so the write keeps what the document says now; new bytes
+    /// left out make the edit one of what is said about the file, and the staged bytes stay unadopted.
+    /// </summary>
+    protected override Task<SyncDocumentProposal> NarrowedAsync(
+        SyncUploadRun run, SyncDocumentProposal proposal, IReadOnlyList<string> fields, CancellationToken ct)
+    {
+        if (proposal.Act is not (SyncDocumentAct.Describe or SyncDocumentAct.Supersede))
+        {
+            return Task.FromResult(proposal);
+        }
+
+        var row = proposal.Row with
+        {
+            Title = fields.Contains(SyncHeldFields.Title) ? proposal.Row.Title : null,
+            Description = fields.Contains(SyncHeldFields.Description) ? proposal.Row.Description : null,
+        };
+        return Task.FromResult(proposal.Act == SyncDocumentAct.Supersede && !fields.Contains(SyncHeldFields.File)
+            ? proposal with { Act = SyncDocumentAct.Describe, Row = row, SupersededVersionId = null }
+            : proposal with { Row = row });
+    }
+
+    protected override async Task<IReadOnlyList<HeldFieldComparison>?> CompareAsync(
+        SyncHeldComparing comparing, SyncDocumentProposal proposal, CancellationToken ct)
+    {
+        var fields = AcceptableFields(proposal);
+        if (fields.Count == 0)
+        {
+            return null;
+        }
+
+        var db = comparing.Db;
+        var document = await db.Documents.AsNoTracking().IgnoreQueryFilters().FirstOrDefaultAsync(d => d.Id == proposal.Row.Id, ct);
+        if (document is null)
+        {
+            return null;
+        }
+
+        var current = await DocumentQueries.CurrentFileAsync(db, document.Id, ct);
+        var isImage = current?.File.Kind == FileKind.Image;
+        var caption = isImage
+            ? await db.PhotoDetails.AsNoTracking().Where(p => p.DocumentId == document.Id).Select(p => p.Caption).FirstOrDefaultAsync(ct)
+            : null;
+        var compared = new List<HeldFieldComparison>(fields.Count);
+        foreach (var field in fields)
+        {
+            switch (field)
+            {
+                case SyncHeldFields.Title:
+                    compared.Add(SyncHeldComparisons.Of(field, document.Title, proposal.Row.Title!.Trim()));
+                    break;
+
+                // Only a picture has a caption; what a phone says of any other file is not written.
+                case SyncHeldFields.Description when isImage:
+                    compared.Add(SyncHeldComparisons.Of(field, caption, NullIfBlank(proposal.Row.Description)));
+                    break;
+
+                case SyncHeldFields.File:
+                    compared.Add(new HeldFieldComparison(
+                        field,
+                        current is null ? null : JsonSerializer.SerializeToNode(
+                            new { fileName = current.File.OriginalName, sizeBytes = current.File.SizeBytes }, SyncUploadJson.Options),
+                        JsonSerializer.SerializeToNode(
+                            new { fileName = proposal.Row.FileName, sizeBytes = proposal.Row.SizeBytes }, SyncUploadJson.Options),
+                        Differs: true));
+                    break;
+            }
+        }
+
+        return compared;
+    }
 
     /// <summary>Checks one row. Reads only, and untracked.</summary>
     public override async Task<SyncResolution<SyncDocumentProposal>> ResolveAsync(

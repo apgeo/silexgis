@@ -8,6 +8,7 @@ using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Files;
+using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -99,6 +100,32 @@ internal interface ISyncUploadSection
     /// revision it was checked against, the other rows it names, and whether it carries a position.
     /// </summary>
     SyncHeldFacts FactsOf(string proposal);
+
+    /// <summary>
+    /// The fields a reviewer may accept a kept proposal by on their own; empty when it can only be
+    /// accepted whole — a create, a removal, and every change of a kind whose parts do not stand
+    /// apart.
+    /// </summary>
+    IReadOnlyList<string> FieldsOf(string proposal);
+
+    /// <summary>
+    /// The row a kept edit changes, field by field as it stands now beside what the edit would
+    /// write, for the fields <see cref="FieldsOf"/> offers; null when this section draws no such
+    /// comparison. Called only for a line the viewer may be shown.
+    /// </summary>
+    Task<IReadOnlyList<HeldFieldComparison>?> CompareAsync(SyncHeldComparing comparing, string proposal, CancellationToken ct);
+}
+
+/// <summary>What a section's comparison of a held edit may ask of whoever is shown it.</summary>
+internal sealed class SyncHeldComparing
+{
+    public required SilexGisDbContext Db { get; init; }
+
+    /// <summary>
+    /// Of these features, the ones the viewer may read. A current value that names any other — the
+    /// cave a recording was in before, the place a scan was at — is left out of the comparison.
+    /// </summary>
+    public required Func<IReadOnlyCollection<Guid>, CancellationToken, Task<IReadOnlySet<Guid>>> ReadableFeatures { get; init; }
 }
 
 /// <summary>The kinds of row a held proposal can change or name.</summary>
@@ -229,10 +256,32 @@ internal abstract class SyncUploadSection<TItem, TProposal> : ISyncUploadSection
     protected virtual TItem? Rebased(TItem item, DateTimeOffset revision) => default;
 
     /// <summary>
-    /// The proposal cut down to the fields a reviewer accepted. A section that cannot accept part
-    /// of a change takes no field list; the review routes refuse one before it gets here.
+    /// The proposal cut down to the fields a reviewer accepted: what the reviewer left out is
+    /// either not written at all or written as the row holds it now, whichever the section's write
+    /// does with a value it is not given. A section that cannot accept part of a change takes no
+    /// field list; the review routes refuse one before it gets here.
     /// </summary>
-    protected virtual TProposal Narrowed(TProposal proposal, IReadOnlyList<string> fields) => proposal;
+    /// <remarks>
+    /// Called on the proposal the acceptance has just resolved again, so a value read from the row
+    /// here is read at the revision the write checks once more before it writes.
+    /// </remarks>
+    protected virtual Task<TProposal> NarrowedAsync(
+        SyncUploadRun run, TProposal proposal, IReadOnlyList<string> fields, CancellationToken ct) =>
+        Task.FromResult(proposal);
+
+    public IReadOnlyList<string> FieldsOf(string proposal) => AcceptableFields(ReadHeld(proposal));
+
+    /// <summary>The fields a proposal of this section may be accepted by on their own; none by default.</summary>
+    protected virtual IReadOnlyList<string> AcceptableFields(TProposal proposal) => [];
+
+    public Task<IReadOnlyList<HeldFieldComparison>?> CompareAsync(
+        SyncHeldComparing comparing, string proposal, CancellationToken ct) =>
+        CompareAsync(comparing, ReadHeld(proposal), ct);
+
+    /// <summary>The comparison of a held edit of this section; none by default.</summary>
+    protected virtual Task<IReadOnlyList<HeldFieldComparison>?> CompareAsync(
+        SyncHeldComparing comparing, TProposal proposal, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<HeldFieldComparison>?>(null);
 
     public async Task<SyncHeldAcceptance> AcceptHeldAsync(
         SyncUploadRun run, string proposal, IReadOnlyList<string>? fields, bool overCurrent, CancellationToken ct)
@@ -261,7 +310,7 @@ internal abstract class SyncUploadSection<TItem, TProposal> : ISyncUploadSection
         }
 
         return new SyncHeldAcceptance(
-            await ApplyAsync(run, fields is null ? fresh : Narrowed(fresh, fields), ct), ChangedSince: false);
+            await ApplyAsync(run, fields is null ? fresh : await NarrowedAsync(run, fresh, fields, ct), ct), ChangedSince: false);
     }
 
     private TProposal ReadHeld(string proposal) =>

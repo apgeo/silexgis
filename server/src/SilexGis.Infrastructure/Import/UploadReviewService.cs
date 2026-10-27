@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -56,7 +57,7 @@ public interface IHeldBatchHandler
     /// The fields <paramref name="line"/> may be accepted by on their own; empty when it can only
     /// be accepted whole.
     /// </summary>
-    IReadOnlyList<string> FieldsOf(ImportBatchItem line);
+    Task<IReadOnlyList<string>> FieldsOfAsync(ImportBatchItem line, CancellationToken ct);
 
     /// <summary>
     /// Whether the accepted lines of one batch are handed over together rather than one at a
@@ -91,7 +92,28 @@ public interface IHeldBatchHandler
 /// A waiting edit whose row was written on the server since the uploader read it: accepting it
 /// means writing over the row as it is now.
 /// </param>
-public sealed record HeldLineView(string? Proposal, bool ChangedSince);
+/// <param name="Fields">
+/// For an edit that can be accepted field by field and whose comparison the kind's own code draws:
+/// each such field, as the row holds it now beside what the line proposes. Null otherwise — for a
+/// create, a removal, a kind accepted only whole, and a feature row, whose current state the
+/// screen reads through the feature's own route and its position rule.
+/// </param>
+public sealed record HeldLineView(string? Proposal, bool ChangedSince, IReadOnlyList<HeldFieldComparison>? Fields = null);
+
+/// <summary>One field of a held edit: what the row holds now, and what the line would write.</summary>
+/// <param name="Current">
+/// The value now, as plain JSON; null when the row holds none, or when <paramref name="CurrentWithheld"/>.
+/// </param>
+/// <param name="Differs">
+/// Whether accepting the field changes the row. True whenever the current value is withheld, so
+/// that the answer says nothing about a value the viewer is not shown.
+/// </param>
+/// <param name="CurrentWithheld">
+/// The current value names a row the viewer may not read — a recording's earlier cave, a scan's
+/// earlier place — and is left out.
+/// </param>
+public sealed record HeldFieldComparison(
+    string Field, JsonNode? Current, JsonNode? Proposed, bool Differs, bool CurrentWithheld = false);
 
 /// <summary>What a decision did: the lines it decided, and how each batch it touched now stands.</summary>
 public sealed record UploadReviewResult(
@@ -117,7 +139,10 @@ public sealed record UploadReviewResult(
 /// </para>
 /// </remarks>
 public sealed class UploadReviewService(
-    SilexGisDbContext db, IChangeContext changes, IEnumerable<IHeldBatchHandler> handlers, IAppSettingsService settings)
+    SilexGisDbContext db,
+    IChangeContext changes,
+    IEnumerable<IHeldBatchHandler> handlers,
+    IAppSettingsService settings)
 {
     /// <summary>A line accepted whose own dependency could not be written.</summary>
     public const string DependencyFailedCode = "review.dependency_failed";
@@ -387,6 +412,7 @@ public sealed class UploadReviewService(
         await HeldUploadBytes.ReleaseAsync(db, [.. decided.Select(l => l.Id)], sync.RejectedHeldBytesRetentionDays, now, ct);
         UploadReviewNotices.Reviewed(db, decided, batches);
         await db.SaveChangesAsync(ct);
+
     }
 
     /// <summary>
