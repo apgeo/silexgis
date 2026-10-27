@@ -64,6 +64,7 @@ import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import TripChecklistTab from './TripChecklistTab.tsx';
 import TripInvitationsTab from './TripInvitationsTab.tsx';
 import TripTrackingTab from './TripTrackingTab.tsx';
+import TripAttentionNotice from './TripAttentionNotice.tsx';
 import TripStateControl from './TripStateControl.tsx';
 import TripCalloutPanel from '../../components/trips/TripCalloutPanel.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
@@ -388,6 +389,12 @@ export default function TripLogDetailPage() {
           style={{ marginBottom: 12 }}
           data-testid="trip-draft-notice"
         />
+      )}
+
+      {/* A trip a phone recording was made into, with what could not be settled on its own. Drawn
+          for every reader of the trip: the reasons are codes and counts that place nothing. */}
+      {trip.attention && (
+        <TripAttentionNotice tripId={trip.id} attention={trip.attention} canEdit={canEdit} />
       )}
 
       {/* The one picture the trip is known by, where a reader meets it first. Chosen by the star

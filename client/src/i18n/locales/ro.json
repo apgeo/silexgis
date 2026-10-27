@@ -2968,6 +2968,7 @@
     "cavingGroupsWarningTitle": "Aceasta schimbă ce poate face contul persoanei",
     "cavingGroupsWarning": "Apartenența la un grup este cea care dă contului unei persoane drepturile grupului: membrii citesc și modifică ce împarte grupul și văd poziția exactă a peșterilor pe care acesta le protejează, și sunt anunțați când sunt adăugați. Scoaterea cuiva îi retrage imediat aceste drepturi. Nimic din ce s-a înregistrat despre persoană — ture, ore, rapoarte — nu se schimbă.",
     "cavingGroupsRefused": "Persoana a fost salvată, dar aceste grupuri nu au putut fi schimbate: {{names}}. Pentru a schimba cine face parte dintr-un grup este nevoie de dreptul de a modifica acel grup.",
+    "phoneUsers": "Utilizatori de telefon",
     "merge": "Unifică",
     "mergeInto": "Unifică în {{name}}",
     "mergeHint": "Alege înregistrarea duplicat. Turele și grupurile sale trec la aceasta, iar duplicatul este eliminat.",
@@ -2992,6 +2993,86 @@
     "picker": {
       "picked": "Din lista de speologi.",
       "typed": "Nu a fost ales din listă, așa că se salvează ca nume: înseamnă persoana pe care lista de speologi o are deja exact sub acest nume, iar dacă nu este nimeni, o adaugă."
+    }
+  },
+  "recordings": {
+    "title": "Înregistrări de pe telefon",
+    "intro": "Turele înregistrate cu aplicația SpeleoLoc în această peșteră. O înregistrare este ce a văzut un telefon, nu încă raportul de tură al clubului: se transformă singură în raport când este închisă și nimic din ea nu e în dubiu, iar altfel așteaptă aici o persoană.",
+    "columns": {
+      "recording": "Înregistrare",
+      "started": "Început",
+      "scans": "Scanări",
+      "standing": "Stare"
+    },
+    "scanCount": "{{count}}",
+    "stillOpen": "Încă deschisă pe telefon",
+    "standing": {
+      "waiting": "În așteptare",
+      "converted": "Transformată în tură",
+      "needsAttention": "Necesită atenție"
+    },
+    "standingHint": {
+      "waiting": "Din această înregistrare nu s-a făcut încă niciun raport de tură. O înregistrare încă deschisă pe telefon așteaptă ca telefonul s-o închidă; una pe care instalația a fost instruită să n-o transforme cu probleme te așteaptă pe tine.",
+      "converted": "Transformată în raport de tură.",
+      "needsAttention": "Transformată într-un raport de tură pe care trebuie încă să-l verifice cineva."
+    },
+    "openTrip": "Deschide tura",
+    "convert": "Transformă în tură",
+    "convertHint": "Deschide verificarea acestei înregistrări, unde alegi ridicarea topografică și tura pe care merge și stabilești fiecare scanare."
+  },
+  "tripAttention": {
+    "title": "Această tură a fost făcută dintr-o înregistrare de pe telefon și are nevoie să fie verificată",
+    "titleCleared": "Această tură a fost făcută dintr-o înregistrare de pe telefon care a avut nevoie de verificare",
+    "intro": "Tura a fost făcută automat. Ce urmează nu a putut fi stabilit de la sine, așa că în tură pot lipsi poziții sau persoane. Îndreaptă ce poți cu uneltele care există deja, apoi spune că ai terminat.",
+    "clearedAt": "Marcată ca rezolvată pe {{when}}. Motivele rămân aici pentru cine se uită după tine.",
+    "reasons": {
+      "place_unknown": "scanări fără niciun loc sau la un loc pe care această instalație nu-l mai ține ca loc marcat",
+      "unresolved_station": "scanări al căror loc nu dă o singură stație de ridicare",
+      "unmapped_person": "scanări făcute de un utilizator de telefon care nu este încă asociat unui speolog; asociază-l în pagina Utilizatori de telefon",
+      "recorded_in_future": "scanări datate mai târziu decât acum, ceea ce nicio poziție nu poate fi",
+      "recording_changed_after_conversion": "modificări făcute înregistrării pe un telefon după ce a fost făcută această tură; tura nu a fost rescrisă"
+    },
+    "unknownReason": "altceva care a avut nevoie de verificare",
+    "markResolved": "Marchează ca rezolvată",
+    "resolved": "Marcată ca rezolvată.",
+    "errors": {
+      "changed": "Semnalul a primit un motiv în timp ce îl citeai. Citește-l din nou înainte să-l marchezi ca rezolvat.",
+      "forbidden": "Poți citi această tură, dar nu o poți modifica, așa că n-o poți marca ca rezolvată.",
+      "failed": "Semnalul nu a putut fi șters."
+    }
+  },
+  "phoneUsers": {
+    "title": "Utilizatori de telefon",
+    "backToCavers": "Înapoi la speologi",
+    "intro": "Toți cei care au folosit aplicația SpeleoLoc cu această instalare, câte un rând pentru fiecare autentificare de pe un telefon. O autentificare de pe telefon nu este o persoană: spune ce speolog este fiecare, ca ceea ce înregistrează să fie trecut pe numele potrivit. Nimeni nu este asociat în locul tău, iar cine apare aici nu devine speolog sau cont.",
+    "unmappedTitle": "Unii utilizatori de telefon nu sunt încă asociați unui speolog",
+    "unmappedBody": "Până când un utilizator de telefon este asociat, ce înregistrează apare sub numele dat de telefon, marcat ca neasociat, iar o tură înregistrată de el este semnalată pentru verificare sau, dacă această instalare nu face ture din înregistrări cu probleme, așteaptă pe pagina peșterii să fie convertită manual.",
+    "columns": {
+      "user": "Utilizator de telefon",
+      "lastSeen": "Văzut ultima dată",
+      "caver": "Speolog",
+      "linkedBy": "Asociat de"
+    },
+    "firstSeen": "Văzut prima dată {{when}}",
+    "deviceAccount": "contul {{id}}",
+    "noName": "Telefonul nu a trimis niciun nume",
+    "chooseCaver": "Spune ce speolog este",
+    "unnamedCaver": "Cineva pe care pagina nu îl poate numi",
+    "notMapped": "Neasociat",
+    "sourceDevice": "Telefonul",
+    "sourceArchiveImport": "Un import de arhivă",
+    "sourceAdministrator": "Cineva care ține evidența speologilor",
+    "unlink": "Elimină asocierea",
+    "unlinkConfirm": "Elimini această asociere?",
+    "unlinkConfirmBody": "Utilizatorul de telefon rămâne în listă, ca neasociat. Ce a fost înregistrat sub numele lui nu se schimbă, iar telefonul poate spune din nou cine este.",
+    "linked": "Asociat.",
+    "unlinked": "Asociere eliminată.",
+    "empty": "Niciun telefon nu a trimis încă nimic.",
+    "forbidden": "Lista utilizatorilor de telefon este deschisă conturilor care pot citi lista speologilor.",
+    "loadFailed": "Utilizatorii de telefon nu au putut fi încărcați.",
+    "errors": {
+      "caverNotFound": "Acest speolog nu mai este în listă.",
+      "userNotFound": "Acest utilizator de telefon nu mai este listat."
     }
   },
   "statistics": {
@@ -4522,6 +4603,21 @@
       "duplicateRadiusHint": "Raza de pornire pentru o verificare nouă; cel care importă o poate schimba. Se măsoară doar față de obiectele a căror poziție exactă o poate vedea.",
       "duplicateSimilarity": "Numele se consideră identice peste",
       "duplicateSimilarityHint": "Cât de asemănătoare trebuie să fie două nume, de la 0 la 1, pentru ca un obiect din apropiere să fie considerat același lucru, nu doar aproape.",
+      "syncTab": "Sincronizare cu telefonul",
+      "syncIntro": "Ce face această instalare cu aplicația SpeleoLoc de pe telefon. O modificare se aplică imediat tuturor telefoanelor care se sincronizează; salvarea înlocuiește toate cele cinci setări împreună.",
+      "syncPeopleDirectoryEnabled": "Dă telefoanelor lista de persoane",
+      "syncPeopleDirectoryEnabledHint": "Activat: un telefon poate descărca o listă de speologi, doar nume, niciodată o adresă sau un număr de telefon, ca utilizatorul lui să poată spune cine este și cine a fost într-o tură. Dezactivat: telefoanele nu primesc lista și nu pot spune ce speolog este unul dintre utilizatorii lor. Asocierile făcute deja pe pagina Utilizatori de telefon rămân, iar ce înregistrează un telefon despre utilizatorii lui se păstrează în continuare.",
+      "syncPeopleDirectoryScope": "Ale cui nume sunt în listă",
+      "syncPeopleDirectoryScopeHint": "Un telefon poate spune că utilizatorul lui este doar cineva care i-a fost arătat, așa că aceasta stabilește și pe cine poate numi un telefon.",
+      "syncScopeMyGroups": "Speologii din grupurile de speologie ale contului telefonului și speologul propriu al contului",
+      "syncScopeEveryone": "Toți speologii din listă",
+      "syncScopeEveryoneWarning": "Toată lista este arătată fiecărui cont care sincronizează un telefon, indiferent de grup. Alege aceasta doar dacă lista speologilor nu este un secret față de cei care se autentifică.",
+      "syncConvertTripsWithProblems": "Fă ture din înregistrări cu probleme",
+      "syncConvertTripsWithProblemsHint": "O tură înregistrată pe telefon este transformată singură într-un raport de tură. Activat: asta se întâmplă și când o parte nu a putut fi potrivită, de exemplu o stație pe care nimeni nu o poate plasa sau un utilizator de telefon neasociat unui speolog. Tura este semnalată pentru verificare și spune de ce. Dezactivat: o astfel de înregistrare așteaptă pe pagina peșterii până când cineva o convertește manual.",
+      "syncStagedUploadRetentionDays": "Păstrează fotografiile trimise înaintea unei încărcări (zile)",
+      "syncStagedUploadRetentionDaysHint": "Un telefon trimite octeții unei fotografii înaintea încărcării care îi folosește. Dacă nicio încărcare nu îi preia în acest număr de zile, sunt șterși. O modificare se aplică fișierelor sosite după ea. Fișierele care așteaptă se numără în spațiul contului care le trimite, așa că lasă loc pentru fotografiile unui telefon pe cam atâtea zile. De la 1 la 365.",
+      "syncRejectedHeldBytesRetentionDays": "Păstrează fișierele unei încărcări respinse (zile)",
+      "syncRejectedHeldBytesRetentionDaysHint": "Când o încărcare ținută pentru verificare este hotărâtă fără ca fișierele ei să fie folosite, pentru că a fost respinsă, înlocuită de una ulterioară sau acceptată fără ele, fișierele sunt șterse după acest număr de zile. Cât timp o încărcare așteaptă un verificator, fișierele ei se păstrează oricât durează. De la 1 la 365.",
       "notificationsTab": "Notificări",
       "notificationsIntro": "Cât timp păstrează această instalare ce le-a spus oamenilor. Ce se salvează aici înlocuiește setarea din configurația de instalare; dacă nu o atingi, aceea rămâne în vigoare.",
       "retentionDays": "Păstrează notificările (zile)",
@@ -7201,6 +7297,7 @@
   },
   "speleolocImport": {
     "title": "Importă o tură înregistrată pe telefon",
+    "recordingTitle": "Transformă o înregistrare în tură",
     "uploadTitle": "Importă o tură înregistrată pe telefon",
     "uploadPrompt": "Trage aici un export SpeleoLoc sau apasă pentru a alege unul",
     "uploadHint": "Arhiva exportată de telefon sau baza de date din ea. Fotografiile pe care le poartă nu sunt deschise niciodată — se citește doar înregistrarea și nu se scrie nimic până nu vezi ce ar face.",
@@ -7333,6 +7430,8 @@
       "selectionEmpty": "Nicio scanare nu este luată, deci nu este nimic de înregistrat.",
       "selectionTooLarge": "Prea multe scanări pentru o singură confirmare. Lasă unele deoparte și înregistrează-le pe celelalte.",
       "nothingCreated": "Nicio scanare dintre cele alese nu a putut fi înregistrată, așa că nu s-a scris nimic. Recenzia a rămas neatinsă.",
+      "keptRecordingNotFound": "Înregistrarea aceea nu mai este aici sau nu ai voie s-o citești.",
+      "recordingPreviewFailed": "Această înregistrare nu a putut fi citită cu alegerile de acum.",
       "commitFailed": "Înregistrarea nu a putut fi importată.",
       "previewFailed": "Această arhivă nu a putut fi citită cu alegerile curente.",
       "uploadFailed": "Arhiva nu a putut fi încărcată."

@@ -2968,6 +2968,7 @@
     "cavingGroupsWarningTitle": "This changes what the person's account may do",
     "cavingGroupsWarning": "Belonging to a group is what gives a person's account the group's rights: its members read and edit what the group shares and see the exact position of the caves it protects, and they are told when they are added. Taking somebody out takes those rights away at once. Nothing recorded about them — trips, hours, reports — is changed.",
     "cavingGroupsRefused": "The person was saved, but these groups could not be changed: {{names}}. Changing who is in a group takes the right to edit that group.",
+    "phoneUsers": "Phone users",
     "merge": "Merge",
     "mergeInto": "Merge into {{name}}",
     "mergeHint": "Pick the duplicate entry to fold in. Their trips and caving groups move across, and the duplicate is removed.",
@@ -2992,6 +2993,86 @@
     "picker": {
       "picked": "From the list of cavers.",
       "typed": "Not chosen from the list, so it is saved as a name: it means whoever the list of cavers already holds under exactly this name, and adds them if nobody is."
+    }
+  },
+  "recordings": {
+    "title": "Phone recordings",
+    "intro": "Trips recorded with the SpeleoLoc app in this cave. A recording is what a phone saw, not yet the club's trip report: it is turned into a report on its own when it is closed and nothing in it is in doubt, and waits here for a person when it is not.",
+    "columns": {
+      "recording": "Recording",
+      "started": "Started",
+      "scans": "Scans",
+      "standing": "State"
+    },
+    "scanCount": "{{count}}",
+    "stillOpen": "Still open on the phone",
+    "standing": {
+      "waiting": "Waiting",
+      "converted": "Made into a trip",
+      "needsAttention": "Needs attention"
+    },
+    "standingHint": {
+      "waiting": "No trip report has been made from this recording yet. A recording still open on the phone waits for the phone to close it; one the installation was told not to convert with problems waits for you.",
+      "converted": "Made into a trip report.",
+      "needsAttention": "Made into a trip report that somebody still has to look at."
+    },
+    "openTrip": "Open the trip",
+    "convert": "Convert to a trip",
+    "convertHint": "Opens the review of this recording, where you choose the survey and the trip it goes onto and settle each scan."
+  },
+  "tripAttention": {
+    "title": "This trip was made from a phone recording and needs somebody to look at it",
+    "titleCleared": "This trip was made from a phone recording that needed looking at",
+    "intro": "The trip was made automatically. What follows could not be settled on its own, so the trip may be missing positions or people. Fix what you can with the tools that already exist, then say you are done.",
+    "clearedAt": "Marked as resolved on {{when}}. The reasons stay here for whoever looks next.",
+    "reasons": {
+      "place_unknown": "scans at no place, or at a place this installation no longer holds as a marked place",
+      "unresolved_station": "scans whose place does not give one single survey station",
+      "unmapped_person": "scans by a phone user who is not linked to a caver yet; link them on the Phone users page",
+      "recorded_in_future": "scans dated later than now, which no position can be",
+      "recording_changed_after_conversion": "changes made to the recording on a phone after this trip was made from it; the trip was not rewritten"
+    },
+    "unknownReason": "something else that needed looking at",
+    "markResolved": "Mark as resolved",
+    "resolved": "Marked as resolved.",
+    "errors": {
+      "changed": "The flag gained a reason while you were reading it. Read it again before marking it as resolved.",
+      "forbidden": "You may read this trip but not change it, so you cannot mark it as resolved.",
+      "failed": "The flag could not be cleared."
+    }
+  },
+  "phoneUsers": {
+    "title": "Phone users",
+    "backToCavers": "Back to cavers",
+    "intro": "Everyone who has used the SpeleoLoc app with this installation, one row for each login on a phone. A phone login is not a person: say which caver each one is, so that what they record is credited to the right name. Nobody is matched for you, and nobody becomes a caver or an account by being listed here.",
+    "unmappedTitle": "Some phone users are not mapped to a caver yet",
+    "unmappedBody": "Until a phone user is mapped, what they record is shown under the name their phone gave, marked as unmapped, and a trip they recorded is flagged for attention or, if this installation does not make trips from recordings with problems, waits on the cave page to be converted by hand.",
+    "columns": {
+      "user": "Phone user",
+      "lastSeen": "Last seen",
+      "caver": "Caver",
+      "linkedBy": "Mapped by"
+    },
+    "firstSeen": "First seen {{when}}",
+    "deviceAccount": "account {{id}}",
+    "noName": "No name sent",
+    "chooseCaver": "Say which caver this is",
+    "unnamedCaver": "Somebody this page cannot name",
+    "notMapped": "Not mapped",
+    "sourceDevice": "The phone",
+    "sourceArchiveImport": "An archive import",
+    "sourceAdministrator": "Somebody keeping the roster",
+    "unlink": "Remove mapping",
+    "unlinkConfirm": "Remove this mapping?",
+    "unlinkConfirmBody": "The phone user stays listed, as not mapped. What was recorded under them is not changed, and the phone may say who they are again.",
+    "linked": "Mapped.",
+    "unlinked": "Mapping removed.",
+    "empty": "No phone has sent anything yet.",
+    "forbidden": "The list of phone users is open to accounts that may read the roster of cavers.",
+    "loadFailed": "The phone users could not be loaded.",
+    "errors": {
+      "caverNotFound": "That caver is no longer on the roster.",
+      "userNotFound": "That phone user is no longer listed."
     }
   },
   "statistics": {
@@ -4509,6 +4590,21 @@
       "duplicateRadiusHint": "The starting radius for a new review; the importer can change it. Only objects whose exact position the reviewer may see are ever measured against.",
       "duplicateSimilarity": "Names count as the same above",
       "duplicateSimilarityHint": "How alike two names must be, 0 to 1, before a nearby object is called the same thing rather than merely close to it.",
+      "syncTab": "Phone sync",
+      "syncIntro": "What this installation does with the SpeleoLoc phone app. A change applies at once to every phone that syncs; saving replaces all five settings together.",
+      "syncPeopleDirectoryEnabled": "Give phones the list of people",
+      "syncPeopleDirectoryEnabledHint": "On: a phone can download a list of cavers, names only and never an address or a phone number, so that its user can say who they are and who was on a trip. Off: phones get no list and cannot say which caver one of their users is. Mappings already made on the Phone users page stay, and what a phone records about its own users is still kept.",
+      "syncPeopleDirectoryScope": "Whose names the list holds",
+      "syncPeopleDirectoryScopeHint": "A phone can only say its user is somebody it was shown, so this also decides whom a phone may name.",
+      "syncScopeMyGroups": "Cavers in the phone account's caving groups, and the account's own caver",
+      "syncScopeEveryone": "Every caver on the roster",
+      "syncScopeEveryoneWarning": "Everyone on the roster is shown to every account that syncs a phone, whatever their group. Choose this only when the roster is no secret from the people who sign in.",
+      "syncConvertTripsWithProblems": "Make trips from recordings that have problems",
+      "syncConvertTripsWithProblemsHint": "A trip recorded on a phone is turned into a trip report by itself. On: this also happens when some of it could not be matched, such as a station nobody can place or a phone user not mapped to a caver. The trip is flagged as needing attention and says why. Off: such a recording waits on the cave page until somebody converts it by hand.",
+      "syncStagedUploadRetentionDays": "Keep photos sent ahead of an upload for (days)",
+      "syncStagedUploadRetentionDaysHint": "A phone sends the bytes of a photo before the upload that uses them. If no upload claims them within this many days they are deleted. A change applies to files that arrive after it. Waiting files count against the sending account's storage, so allow room for about this many days of a phone's photographs. From 1 to 365.",
+      "syncRejectedHeldBytesRetentionDays": "Keep the files of a turned-down upload for (days)",
+      "syncRejectedHeldBytesRetentionDaysHint": "When an upload that was held for review is decided without its files being used, because it was turned down, replaced by a later one or accepted without them, the files are deleted after this many days. While an upload is still waiting for a reviewer its files are kept however long that takes. From 1 to 365.",
       "notificationsTab": "Notifications",
       "notificationsIntro": "How long this installation keeps what it has told people. What is saved here replaces the deployment's own setting; leave it alone and that setting stays in force.",
       "retentionDays": "Keep notifications for (days)",
@@ -7188,6 +7284,7 @@
   },
   "speleolocImport": {
     "title": "Import a trip recorded on a phone",
+    "recordingTitle": "Make a recording into a trip",
     "uploadTitle": "Import a trip recorded on a phone",
     "uploadPrompt": "Drop a SpeleoLoc export here, or click to choose one",
     "uploadHint": "The archive a phone exports, or the database inside it. The photographs it carries are never opened — only the recording is read, and nothing is written until you have seen what it would do.",
@@ -7320,6 +7417,8 @@
       "selectionEmpty": "No scans are taken, so there is nothing to record.",
       "selectionTooLarge": "Too many scans for one confirmation. Set some aside and record the rest.",
       "nothingCreated": "Not one of the chosen scans could be recorded, so nothing was. The review is untouched.",
+      "keptRecordingNotFound": "That recording is not here any more, or you may not read it.",
+      "recordingPreviewFailed": "This recording could not be read with the current choices.",
       "commitFailed": "The recording could not be imported.",
       "previewFailed": "This archive could not be read with the current choices.",
       "uploadFailed": "The archive could not be uploaded."
