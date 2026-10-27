@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import {
+  AuditOutlined,
   DeleteOutlined,
   KeyOutlined,
   LockOutlined,
@@ -36,6 +37,7 @@ import {
   useReinviteAdminUser,
   useResetAdminUserTwoFactor,
   useSetAdminUserLocked,
+  useSetAdminUserUploadReview,
   type AdminUser,
   type AdminUserCreated,
 } from '../../api/hooks.ts';
@@ -123,6 +125,7 @@ export default function UsersPage() {
   const create = useCreateAdminUser();
   const reinvite = useReinviteAdminUser();
   const setLocked = useSetAdminUserLocked();
+  const setUploadReview = useSetAdminUserUploadReview();
   const remove = useDeleteAdminUser();
   const resetTwoFactor = useResetAdminUserTwoFactor();
 
@@ -173,6 +176,19 @@ export default function UsersPage() {
         user.isLockedOut
           ? t('admin.users.unlocked', { name: user.label })
           : t('admin.users.locked', { name: user.label }),
+      );
+    } catch (error) {
+      message.error(userAdminProblem(error, t));
+    }
+  };
+
+  const toggleUploadReview = async (user: AdminUser) => {
+    try {
+      await setUploadReview.mutateAsync({ id: user.id, uploadsNeedReview: !user.uploadsNeedReview });
+      message.success(
+        user.uploadsNeedReview
+          ? t('admin.users.uploadReviewCleared', { name: user.label })
+          : t('admin.users.uploadReviewSet', { name: user.label }),
       );
     } catch (error) {
       message.error(userAdminProblem(error, t));
@@ -275,6 +291,11 @@ export default function UsersPage() {
                 {!user.hasPassword && <Tag color="gold">{t('admin.users.statusNoPassword')}</Tag>}
                 {user.isFullAdministrator && <Tag color="blue">{t('admin.users.statusAdministrator')}</Tag>}
                 {user.twoFactorEnabled && <Tag color="cyan">{t('admin.users.statusTwoFactor')}</Tag>}
+                {user.uploadsNeedReview && (
+                  <Tag color="orange" data-testid="user-upload-review-mark">
+                    {t('admin.users.statusUploadReview')}
+                  </Tag>
+                )}
               </Space>
             ),
           },
@@ -302,6 +323,17 @@ export default function UsersPage() {
                       onClick={() => void toggleLock(user)}
                     >
                       {user.isLockedOut ? t('admin.users.unlock') : t('admin.users.lock')}
+                    </Button>
+                  )}
+                  {canWrite && withinReach && (
+                    <Button
+                      size="small"
+                      icon={<AuditOutlined />}
+                      loading={setUploadReview.isPending && setUploadReview.variables?.id === user.id}
+                      onClick={() => void toggleUploadReview(user)}
+                      data-testid="user-upload-review-toggle"
+                    >
+                      {user.uploadsNeedReview ? t('admin.users.uploadReviewClear') : t('admin.users.uploadReviewMark')}
                     </Button>
                   )}
                   {canWrite && !user.hasPassword && (
