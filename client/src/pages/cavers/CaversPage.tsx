@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { BarChartOutlined, DeleteOutlined, MergeCellsOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  BarChartOutlined,
+  DeleteOutlined,
+  MergeCellsOutlined,
+  MobileOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import {
   Alert,
   App,
@@ -17,6 +23,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   useCan,
@@ -208,6 +215,13 @@ export default function CaversPage() {
             onChange={(e) => setSearch(e.target.value)}
             style={{ width: 240 }}
           />
+          {/* Who the people using phones are, in roster terms. Reading is open to anyone who
+              may read the roster; the page itself offers the mapping controls only to a keeper. */}
+          <Link to="/cavers/phone-users">
+            <Button icon={<MobileOutlined />} data-testid="cavers-phone-users">
+              {t('cavers.phoneUsers')}
+            </Button>
+          </Link>
           {canKeepRoster && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
               {t('cavers.new')}

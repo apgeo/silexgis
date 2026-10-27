@@ -113,7 +113,7 @@ public sealed class ImportCommitHandler(
         await commitService.CommitAsync(
             geofile, ruleSet, options, payload.Selection, decisions, payload.Mode, ctx, payload.BatchId,
             (done, total) => progress.ReportAsync(job.Id, done, total, ct),
-            ct);
+            ct: ct);
 
         await ClearSpentReviewAsync(payload, ct);
     }

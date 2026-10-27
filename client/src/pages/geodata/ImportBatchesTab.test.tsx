@@ -20,6 +20,8 @@ vi.mock('../../api/hooks.ts', () => ({
   useRevertImportBatch: () => ({ mutateAsync: revertSpy }),
   useBatchHistory: (id: string | undefined, batch: string) => historySpy(id, batch),
   useTripLogConfig: () => configSpy(),
+  // The panel of the account's own held uploads has its own test; here it has nothing to show.
+  useMyReviewBatches: () => ({ data: undefined }),
 }));
 
 const { default: ImportBatchesTab } = await import('./ImportBatchesTab.tsx');

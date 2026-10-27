@@ -97,6 +97,7 @@ vi.mock('../../components/tags/TagChips.tsx', () => ({ default: () => null }));
 vi.mock('../../components/caves/EntranceEditorModal.tsx', () => ({ default: () => null }));
 vi.mock('./CaveClosestApproachSection.tsx', () => ({ default: () => null }));
 vi.mock('./CaveTripsSection.tsx', () => ({ default: () => null }));
+vi.mock('./CaveRecordingsSection.tsx', () => ({ default: () => null }));
 vi.mock('./CenterlineSection.tsx', () => ({ default: () => null }));
 vi.mock('./CaveSurveysSection.tsx', () => ({ default: () => null }));
 vi.mock('./SurveyModelSection.tsx', () => ({ default: () => null }));

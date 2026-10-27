@@ -3566,7 +3566,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Queues the selected candidates to be created as one revertible batch, and answers with the job to watch and the batch they will appear in. Everything that can refuse the confirmation is decided before it is queued. */
+        /** Queues the selected candidates to be created as one revertible batch, and answers with the job to watch and the batch they will appear in. Everything that can refuse the confirmation is decided before it is queued. For an account under review nothing is queued: the confirmation waits for a reviewer and the answer says so (held, no job). */
         post: operations["stagedImportCommit"];
         delete?: never;
         options?: never;
@@ -3618,7 +3618,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Creates or files the selected places as one revertible batch. */
+        /** Creates or files the selected places as one revertible batch. For an account under review nothing is written: the confirmation waits for a reviewer and the answer says so (held). */
         post: operations["photoImportCommit"];
         delete?: never;
         options?: never;
@@ -3737,6 +3737,23 @@ export interface paths {
         };
         /** One held batch with its lines, as the caller may be shown them. */
         get: operations["uploadReviewDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review/items/{reviewId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A rendering of the picture a held photo or raster map keeps: drawn here, without metadata, never the file itself. */
+        get: operations["uploadReviewPreview"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3890,7 +3907,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Imports the selected caves from the speologie.org catalogue as one revertible batch, creating new caves and refreshing ones imported before. */
+        /** Imports the selected caves from the speologie.org catalogue as one revertible batch, creating new caves and refreshing ones imported before. For an account under review nothing is imported: the selection waits for a reviewer and the answer says so (held). */
         post: operations["catalogueImport"];
         delete?: never;
         options?: never;
@@ -3959,7 +3976,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Records the chosen rows as trips, as one batch that reverts as a unit. */
+        /** Records the chosen rows as trips, as one batch that reverts as a unit. For an account under review nothing is written: the confirmation waits for a reviewer and the answer says so (held). */
         post: operations["tripImportCommit"];
         delete?: never;
         options?: never;
@@ -4028,7 +4045,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Records the chosen scans as tracking positions, as one batch that reverts as a unit. */
+        /** Records the chosen scans as tracking positions, as one batch that reverts as a unit. For an account under review nothing is written: the confirmation waits for a reviewer and the answer says so (held). */
         post: operations["speleolocImportCommit"];
         delete?: never;
         options?: never;
@@ -4062,7 +4079,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Makes a recording a phone sent into tracking positions on a trip, as one batch that reverts as a unit. */
+        /** Makes a recording a phone sent into tracking positions on a trip, as one batch that reverts as a unit. For an account under review nothing is written: the confirmation waits for a reviewer and the answer says so (held). */
         post: operations["commitTripRecordingImport"];
         delete?: never;
         options?: never;
@@ -6233,6 +6250,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-recordings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The phone recordings of one cave this caller may read, most recent first, each with where it stands: waiting, made into a trip report, or made into one that needs looking at. A cave the caller may not be told about, or may not place, answers an empty page, exactly as the cave's trips do. */
+        get: operations["listTripRecordings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/checklists": {
         parameters: {
             query?: never;
@@ -7639,7 +7673,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Marks an account's phone uploads as waiting for a reviewer, and refuses its file imports while marked, or clears the mark (Write on the Users domain). */
+        /** Marks an account so that its phone uploads and its file imports wait for a reviewer before anything is written, or clears the mark (Write on the Users domain). */
         put: operations["userAdminSetUploadReview"];
         post?: never;
         delete?: never;
@@ -11276,6 +11310,15 @@ export interface components {
             sections: {
                 [key: string]: number;
             };
+            uploaderName?: null | string;
+            decidedByName?: null | string;
+        };
+        HeldFieldDto: {
+            field: string;
+            current: null | components["schemas"]["JsonElement"];
+            proposed: null | components["schemas"]["JsonElement"];
+            differs: boolean;
+            currentWithheld: boolean;
         };
         HeldLineDto: {
             /** Format: uuid */
@@ -11297,6 +11340,9 @@ export interface components {
             failureDetail: null | string;
             changedSince: boolean;
             proposal: null | components["schemas"]["JsonElement"];
+            fields?: null | components["schemas"]["HeldFieldDto"][];
+            /** @default false */
+            hasPreview: boolean;
         };
         HistoryEventDto: {
             /** Format: int64 */
@@ -11490,11 +11536,13 @@ export interface components {
         };
         ImportCommitAcceptedDto: {
             /** Format: int64 */
-            jobId: number;
+            jobId: null | number;
             /** Format: uuid */
             batchId: string;
             /** Format: int32 */
             queued: number;
+            /** @default false */
+            held: boolean;
         };
         ImportCommitRequest: {
             options: components["schemas"]["ImportOptions"];
@@ -12615,6 +12663,15 @@ export interface components {
         };
         PagedResultOfTripLogDto: {
             items: components["schemas"]["TripLogDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfTripRecordingListItemDto: {
+            items: components["schemas"]["TripRecordingListItemDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -14252,13 +14309,15 @@ export interface components {
             /** Format: uuid */
             batchId: string;
             /** Format: uuid */
-            tripLogId: string;
+            tripLogId: null | string;
             createdTrip: boolean;
             /** Format: int32 */
             createdEventCount: number;
             /** Format: int32 */
             skippedCount: number;
             failures: components["schemas"]["SpeleolocImportFailureDto"][];
+            /** @default false */
+            held: boolean;
         };
         SpeleolocImportFailureDto: {
             pointId: string;
@@ -14473,6 +14532,8 @@ export interface components {
             /** Format: int32 */
             skippedCount: number;
             failures: components["schemas"]["SpeologieFailureDto"][];
+            /** @default false */
+            held: boolean;
         };
         SpeologieSearchDto: {
             items: components["schemas"]["SpeologieCaveDto"][];
@@ -16213,6 +16274,19 @@ export interface components {
         TrackingTeamRequest: {
             title: string;
         };
+        TripAttentionDto: {
+            raised: boolean;
+            /** Format: date-time */
+            raisedAt: string;
+            /** Format: date-time */
+            clearedAt: null | string;
+            reasons: components["schemas"]["TripAttentionReasonDto"][];
+        };
+        TripAttentionReasonDto: {
+            code: string;
+            /** Format: int32 */
+            count: number;
+        };
         TripCalloutRequest: {
             /** Format: date-time */
             expectedReturnAt?: null | string;
@@ -16323,6 +16397,8 @@ export interface components {
             /** Format: int32 */
             skippedCount: number;
             failures: components["schemas"]["TripImportFailureDto"][];
+            /** @default false */
+            held: boolean;
         };
         TripImportDecision: {
             action?: null | components["schemas"]["TripImportRowAction"];
@@ -16673,6 +16749,7 @@ export interface components {
             canStandDownCallout: boolean;
             meetingGeom: null | components["schemas"]["GeoJsonGeometry"];
             checklistReadiness: null | components["schemas"]["TripChecklistReadinessDto"];
+            attention: null | components["schemas"]["TripAttentionDto"];
         };
         TripLogFeatureCollection: {
             type: string;
@@ -16786,6 +16863,23 @@ export interface components {
             /** Format: int32 */
             alreadyNamed: number;
         };
+        TripRecordingListItemDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            endedAt: null | string;
+            /** Format: int32 */
+            pointCount: number;
+            standing: components["schemas"]["TripRecordingStanding"];
+            /** Format: uuid */
+            tripLogId: null | string;
+            canConvert: boolean;
+        };
+        /** @enum {unknown} */
+        TripRecordingStanding: "waiting" | "converted" | "needsAttention";
         TripReportDownloadForm: {
             map?: null | components["schemas"]["IFormFile"];
         };
@@ -26913,6 +27007,55 @@ export interface operations {
             };
         };
     };
+    uploadReviewPreview: {
+        parameters: {
+            query?: {
+                size?: number;
+            };
+            header?: never;
+            path: {
+                reviewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     uploadReviewAcceptBatch: {
         parameters: {
             query?: never;
@@ -26975,6 +27118,15 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -27053,6 +27205,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     uploadReviewAcceptItem: {
@@ -27124,6 +27285,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     uploadReviewRejectItem: {
@@ -27188,6 +27358,15 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -33665,6 +33844,39 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    listTripRecordings: {
+        parameters: {
+            query: {
+                caveId: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagedResultOfTripRecordingListItemDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

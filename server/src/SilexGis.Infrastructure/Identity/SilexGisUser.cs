@@ -64,9 +64,9 @@ public class SilexGisUser : IdentityUser<Guid>, ITimestamped, IUserProfile
     /// <summary>
     /// Whether what this account uploads waits for a reviewer before it lands: every phone upload
     /// it commits is held as a proposal, written only when somebody holding the upload-review
-    /// right accepts it. A file import cannot be held yet, so the account's file imports are
-    /// refused while the mark is on rather than landing unreviewed. Edits made in the browser are
-    /// not held. Off for every account unless an administrator of accounts turns it on.
+    /// right accepts it. A file import it confirms — a vector file, photos, a trip sheet, a
+    /// SpeleoLoc archive or kept recording, a catalogue selection — waits the same way, and is
+    /// written by the import's own commit when accepted. Edits made in the browser are not held. Off for every account unless an administrator of accounts turns it on.
     /// </summary>
     public bool UploadsNeedReview { get; set; }
 

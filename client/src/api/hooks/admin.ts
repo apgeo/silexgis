@@ -73,6 +73,20 @@ export function useSetAdminUserLocked() {
   });
 }
 
+/**
+ * Marks an account so that everything it uploads waits for a reviewer, or clears the mark.
+ * The review queue is not refreshed: marking changes what the account's future uploads do, not
+ * what already waits.
+ */
+export function useSetAdminUserUploadReview() {
+  const invalidate = useInvalidateAdminUsers();
+  return useMutation({
+    mutationFn: ({ id, uploadsNeedReview }: { id: string; uploadsNeedReview: boolean }) =>
+      unwrap(api.PUT('/api/v1/users/{id}/upload-review', { params: { path: { id } }, body: { uploadsNeedReview } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
 /** Removes an account. The person it belonged to stays on the roster. */
 export function useDeleteAdminUser() {
   const invalidate = useInvalidateAdminUsers();

@@ -49,6 +49,11 @@ const PHONE_ONLY_SPECS = [
   // Authoring raster-map points by finger: the coarse pointer is the axis under test,
   // and only the phone profile provides one.
   /(^|\/)rastermap-mobile\.spec\.ts$/,
+  // Recordings on the cave page and the attention notice by finger: the coarse pointer is the
+  // axis under test.
+  /(^|\/)recordings-attention-mobile\.spec\.ts$/,
+  // Mapping a phone user to a caver by finger: the coarse pointer is the axis under test.
+  /(^|\/)phone-users-mobile\.spec\.ts$/,
   // The link somebody sends a family while a party is underground. Phone-only rather than
   // desktop-too because the phone IS the case: this is the one surface of this application whose
   // reader holds no account and is not a caver, and its layout is designed at 360px.
@@ -75,6 +80,9 @@ const PHONE_ONLY_SPECS = [
   // The map workspace on a phone: one pane, the docks as drawers, whatever the account arranged on
   // a desktop — and the survey-line notice clear of the corner controls at a phone's width.
   /(^|\/)map-workspace-mobile\.spec\.ts$/,
+  // Deciding an upload from a phone: the reviewer's queue and batch page are laid out for a
+  // finger at a phone's width, and must not grow wider than the screen.
+  /(^|\/)review-uploader-mobile\.spec\.ts$/,
 ];
 
 export default defineConfig({

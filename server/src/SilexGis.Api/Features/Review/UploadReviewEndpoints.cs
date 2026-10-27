@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -40,6 +42,12 @@ public static class UploadReviewEndpoints
     public const string FieldsUnsupportedCode = "review.fields_unsupported";
     public const string OwnBatchCode = "review.own_batch";
     public const string SourceUnsupportedCode = "review.source_unsupported";
+    public const string PreviewUnavailableCode = "review.preview_unavailable";
+    public const string PreviewSizeUnsupportedCode = "review.preview_size_unsupported";
+    public const string PreviewFailedCode = "review.preview_failed";
+
+    /// <summary>The sizes a held picture is drawn at: the line's thumbnail, and the larger view.</summary>
+    public static readonly int[] PreviewSizes = [480, 1200];
 
     public static void MapUploadReviewEndpoints(this RouteGroupBuilder api)
     {
@@ -53,12 +61,18 @@ public static class UploadReviewEndpoints
         review.MapGet("/batches/{id:guid}", DetailAsync)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("One held batch with its lines, as the caller may be shown them.");
+        review.MapGet("/items/{reviewId:guid}/preview", PreviewAsync)
+            .Produces(StatusCodes.Status200OK, contentType: "image/webp")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("A rendering of the picture a held photo or raster map keeps: drawn here, without metadata, never the file itself.");
         review.MapPost("/batches/{id:guid}/accept", AcceptBatchAsync)
             .WithValidation<ReviewBatchDecisionRequest>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .WithSummary("Accepts every waiting line of a held batch, with what they depend on.");
         review.MapPost("/batches/{id:guid}/reject", RejectBatchAsync)
             .WithValidation<ReviewBatchDecisionRequest>()
@@ -66,6 +80,7 @@ public static class UploadReviewEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .WithSummary("Rejects every waiting line of a held batch, and what depends on them.");
         review.MapPost("/items/{reviewId:guid}/accept", AcceptItemAsync)
             .WithValidation<ReviewItemDecisionRequest>()
@@ -73,6 +88,7 @@ public static class UploadReviewEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .WithSummary("Accepts one held line, or the named fields of one held edit, with what it depends on.");
         review.MapPost("/items/{reviewId:guid}/reject", RejectItemAsync)
             .WithValidation<ReviewItemDecisionRequest>()
@@ -80,6 +96,7 @@ public static class UploadReviewEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .WithSummary("Rejects one held line, and the waiting lines that depend on it.");
     }
 
@@ -117,7 +134,7 @@ public static class UploadReviewEndpoints
             .OrderBy(b => b.HeldAt).ThenBy(b => b.Id);
         var total = await query.CountAsync(ct);
         var batches = await query.Skip((p - 1) * size).Take(size).ToListAsync(ct);
-        return TypedResults.Ok(new PagedResult<HeldBatchDto>(await SummariesAsync(db, batches, ct), p, size, total));
+        return TypedResults.Ok(new PagedResult<HeldBatchDto>(await SummariesAsync(db, batches, ctx, ct), p, size, total));
     }
 
     private static async Task<Results<Ok<PagedResult<HeldBatchDto>>, UnauthorizedHttpResult>> MineAsync(
@@ -135,7 +152,7 @@ public static class UploadReviewEndpoints
             .OrderByDescending(b => b.HeldAt).ThenByDescending(b => b.Id);
         var total = await query.CountAsync(ct);
         var batches = await query.Skip((p - 1) * size).Take(size).ToListAsync(ct);
-        return TypedResults.Ok(new PagedResult<HeldBatchDto>(await SummariesAsync(db, batches, ct), p, size, total));
+        return TypedResults.Ok(new PagedResult<HeldBatchDto>(await SummariesAsync(db, batches, ctx, ct), p, size, total));
     }
 
     private static async Task<Results<Ok<HeldBatchDetailDto>, UnauthorizedHttpResult, ProblemHttpResult>> DetailAsync(
@@ -163,7 +180,7 @@ public static class UploadReviewEndpoints
             .Where(i => i.ImportBatchId == id && i.ReviewDecision != null)
             .OrderBy(i => i.Id)
             .ToListAsync(ct);
-        var summary = (await SummariesAsync(db, [batch], ct))[0];
+        var summary = (await SummariesAsync(db, [batch], ctx, ct))[0];
         return TypedResults.Ok(new HeldBatchDetailDto(summary, await LinesAsync(db, handlers, batch.Source, lines, ctx, ct)));
     }
 
@@ -313,7 +330,7 @@ public static class UploadReviewEndpoints
         if (accept && request.Fields is { } named)
         {
             var handler = handlers.FirstOrDefault(h => h.Source == found.Batch.Source);
-            var acceptable = handler?.FieldsOf(found.Item) ?? [];
+            var acceptable = handler is null ? [] : await handler.FieldsOfAsync(found.Item, ct);
             var unknown = named.Where(f => !acceptable.Contains(f, StringComparer.Ordinal)).ToList();
             if (unknown.Count > 0)
             {
@@ -336,6 +353,81 @@ public static class UploadReviewEndpoints
         }
 
         return TypedResults.Ok(await ResultAsync(db, handlers, found.Batch.Source, outcome.Decided!, ctx, ct));
+    }
+
+    /// <summary>
+    /// A held picture as a reviewer may look at it before deciding: a rendering of the bytes the
+    /// line keeps, drawn by the thumbnail machinery — WebP, turned upright, every metadata profile
+    /// removed, so a photo's position goes nowhere — and cached beside the thumbnails under the
+    /// staged upload's id until those bytes go. Never the stored bytes themselves.
+    /// </summary>
+    /// <remarks>
+    /// Whoever may read the line's batch may ask, for a line the batch view would show them: a line
+    /// whose proposal is held back from this viewer is answered exactly like one that is not there.
+    /// A line that keeps no picture — a document that is not an image, bytes already adopted or
+    /// swept — is answered as having none.
+    /// </remarks>
+    private static async Task<Results<PhysicalFileHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> PreviewAsync(
+        Guid reviewId,
+        int? size,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessor,
+        IEnumerable<IHeldBatchHandler> handlers,
+        ThumbnailService thumbnails,
+        CancellationToken ct)
+    {
+        var ctx = await accessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var bounded = size ?? PreviewSizes[0];
+        if (!PreviewSizes.Contains(bounded))
+        {
+            return ApiProblems.BadRequest(
+                PreviewSizeUnsupportedCode, $"Supported sizes: {string.Join(", ", PreviewSizes)}.");
+        }
+
+        var found = await (from item in db.ImportBatchItems.AsNoTracking()
+                           join b in db.ImportBatches.AsNoTracking() on item.ImportBatchId equals b.Id
+                           where item.ReviewId == reviewId && item.ReviewDecision != null && b.ReviewState != ImportReviewState.NotHeld
+                           select new { Item = item, Batch = b }).FirstOrDefaultAsync(ct);
+        if (found is null || (found.Batch.ConfirmedByUserId != ctx.UserId && !MayRead(ctx))
+            || handlers.FirstOrDefault(h => h.Source == found.Batch.Source) is not { } handler)
+        {
+            return ApiProblems.NotFound(ItemNotFoundCode);
+        }
+
+        var view = (await handler.ShowAsync([found.Item], ctx, ct)).GetValueOrDefault(found.Item.Id);
+        if (view?.Proposal is null)
+        {
+            return ApiProblems.NotFound(ItemNotFoundCode);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var session = found.Item.HeldUploadSessionId is { } sessionId
+            ? await db.UploadSessions.AsNoTracking().FirstOrDefaultAsync(
+                s => s.Id == sessionId && s.UserId == found.Batch.ConfirmedByUserId
+                    && s.StagedForSync && s.StagedAt != null && s.ExpiresAt > now,
+                ct)
+            : null;
+        if (session is not { Kind: FileKind.Image })
+        {
+            return ApiProblems.NotFound(PreviewUnavailableCode);
+        }
+
+        string path;
+        try
+        {
+            path = await thumbnails.GetOrCreateAsync(session.Id, session.StoragePath, bounded, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return ApiProblems.BadRequest(PreviewFailedCode, "The picture could not be drawn.");
+        }
+
+        return TypedResults.PhysicalFile(path, contentType: "image/webp");
     }
 
     private static async Task<(UploadReviewResult? Decided, ProblemHttpResult? Result)> DecideAsync(
@@ -372,6 +464,11 @@ public static class UploadReviewEndpoints
                 NotPendingCode,
                 "What this decision reaches was decided already, by this or another decision, or can no longer be changed."));
         }
+        catch (HeldWriteUnavailableException e)
+        {
+            db.ChangeTracker.Clear();
+            return (null, ApiProblems.ServiceUnavailable(e.Code, e.Message));
+        }
         catch (HeldChangedSinceException e)
         {
             db.ChangeTracker.Clear();
@@ -397,13 +494,18 @@ public static class UploadReviewEndpoints
             .ToListAsync(ct);
         return new ReviewDecisionResultDto(
             await LinesAsync(db, handlers, source, decided.Decided, ctx, ct),
-            await SummariesAsync(db, batches, ct));
+            await SummariesAsync(db, batches, ctx, ct));
     }
 
     private static async Task<IReadOnlyList<HeldBatchDto>> SummariesAsync(
-        SilexGisDbContext db, IReadOnlyList<ImportBatch> batches, CancellationToken ct)
+        SilexGisDbContext db, IReadOnlyList<ImportBatch> batches, AccessContext viewer, CancellationToken ct)
     {
         var ids = batches.Select(b => b.Id).ToList();
+        var labels = await ProfileDirectory.ResolveLabelsAsync(
+            db,
+            new UserContext(viewer.UserId, viewer.CavingGroupIds),
+            batches.Select(b => b.ConfirmedByUserId).Concat(batches.Where(b => b.DecidedByUserId != null).Select(b => b.DecidedByUserId!.Value)),
+            ct);
         // The bytes the batch's waiting lines keep parked, so a reviewer sees the queue's weight.
         var bytes = await (from item in db.ImportBatchItems.AsNoTracking()
                            join session in db.UploadSessions.AsNoTracking() on item.HeldUploadSessionId equals (Guid?)session.Id
@@ -426,7 +528,9 @@ public static class UploadReviewEndpoints
                 bytes.Where(x => x.ImportBatchId == b.Id).Sum(x => x.DeclaredSizeBytes),
                 mine.Where(c => c.Pending)
                     .GroupBy(c => c.ProposalSection ?? "")
-                    .ToDictionary(g => g.Key, g => g.Sum(c => c.Count), StringComparer.Ordinal));
+                    .ToDictionary(g => g.Key, g => g.Sum(c => c.Count), StringComparer.Ordinal),
+                labels.GetValueOrDefault(b.ConfirmedByUserId),
+                b.DecidedByUserId is { } decider ? labels.GetValueOrDefault(decider) : null);
         })];
     }
 
@@ -443,6 +547,23 @@ public static class UploadReviewEndpoints
         var shown = handler is null
             ? new Dictionary<long, HeldLineView>()
             : await handler.ShowAsync(lines, viewer, ct);
+        var acceptable = new Dictionary<long, IReadOnlyList<string>>(lines.Count);
+        foreach (var line in lines)
+        {
+            acceptable[line.Id] = handler is null ? [] : await handler.FieldsOfAsync(line, ct);
+        }
+
+        // Which lines still keep a picture a rendering can be drawn from.
+        var sessionIds = lines.Where(l => l.HeldUploadSessionId is not null).Select(l => l.HeldUploadSessionId!.Value).Distinct().ToList();
+        var now = DateTimeOffset.UtcNow;
+        var pictures = sessionIds.Count == 0
+            ? new HashSet<Guid>()
+            : (await db.UploadSessions.AsNoTracking()
+                    .Where(s => sessionIds.Contains(s.Id) && s.StagedForSync && s.StagedAt != null && s.ExpiresAt > now
+                        && s.Kind == FileKind.Image)
+                    .Select(s => s.Id)
+                    .ToListAsync(ct))
+                .ToHashSet();
         var dependencyIds = lines.SelectMany(l => l.DependsOnItemIds ?? []).Distinct().ToList();
         var dependencies = dependencyIds.Count == 0
             ? new Dictionary<long, Guid?>()
@@ -462,14 +583,22 @@ public static class UploadReviewEndpoints
                 l.ReviewDecision ?? ImportReviewDecision.Pending,
                 [.. (l.DependsOnItemIds ?? []).Select(on => dependencies.GetValueOrDefault(on)).OfType<Guid>()],
                 l.AcceptedFields,
-                handler?.FieldsOf(l) ?? [],
+                acceptable[l.Id],
                 l.DecisionNote,
                 l.DecidedAt,
                 l.DecidedByUserId,
                 l.ReviewFailureCode,
                 l.ReviewFailureDetail,
                 view?.ChangedSince ?? false,
-                visible ? JsonDocument.Parse(view!.Proposal!).RootElement.Clone() : null);
+                visible ? JsonDocument.Parse(view!.Proposal!).RootElement.Clone() : null,
+                visible && view!.Fields is { } compared ? [.. compared.Select(FieldOf)] : null,
+                visible && l.HeldUploadSessionId is { } held && pictures.Contains(held));
         })];
     }
+
+    private static HeldFieldDto FieldOf(HeldFieldComparison field) =>
+        new(field.Field, ElementOf(field.Current), ElementOf(field.Proposed), field.Differs, field.CurrentWithheld);
+
+    private static JsonElement? ElementOf(System.Text.Json.Nodes.JsonNode? node) =>
+        node is null ? null : JsonSerializer.SerializeToElement(node);
 }

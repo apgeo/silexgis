@@ -14,27 +14,17 @@ namespace SilexGis.Infrastructure.Import;
 /// <remarks>
 /// The rule is about the account, not about what it sends or where: an account placed under review
 /// has nothing it commits land unreviewed, whatever the source, and an account that is not has
-/// every batch land as it always did. A phone upload is held for a reviewer; a file import is, for
-/// now, refused with <see cref="FileImportUnavailableCode"/>, because holding one is not built.
-/// Edits made in the browser create no import batch and are never held.
+/// every batch land as it always did. A phone upload is held line by line; every file import — a
+/// vector file, a drop of photographs, a catalogue selection, a trip sheet, a SpeleoLoc archive or
+/// a kept recording — is held as its commit request, with a waiting line per candidate
+/// (<see cref="HeldFileImport"/>). Edits made in the browser create no import batch and are never
+/// held.
 /// </remarks>
 public static class UploadReviewHold
 {
     /// <summary>The value an upload's <c>clientFeatures</c> carries to say the device understands
     /// being answered that a row is held.</summary>
     public const string ClientFeature = "held";
-
-    /// <summary>
-    /// What a file importer answers an account under review. Holding a file import for a reviewer
-    /// is not built yet, and landing it at once would bypass the review the account was put
-    /// under, so the commit is refused before anything is written. Only the account's own mark
-    /// decides it, so the answer says nothing about any file or object.
-    /// </summary>
-    public const string FileImportUnavailableCode = "import.review_unavailable";
-
-    public const string FileImportUnavailableDetail =
-        "This account's imports wait for a reviewer, and this server cannot hold a file import yet. "
-        + "Ask an administrator to clear the review mark, or to import the file for you.";
 
     /// <summary>Whether what this account commits waits for a reviewer.</summary>
     public static Task<bool> AppliesToAsync(SilexGisDbContext db, Guid userId, CancellationToken ct = default) =>

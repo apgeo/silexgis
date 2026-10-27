@@ -86,10 +86,17 @@ public sealed class SyncPeopleTests : IAsyncLifetime, IDisposable, IClassFixture
     [Fact]
     public async Task The_directory_lists_the_callers_clubmates_and_themselves_and_never_a_stranger_or_a_contact_detail()
     {
-        var response = await owner.GetAsync("/api/v1/sync/people");
-        var payload = await response.Content.ReadAsStringAsync();
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
-        var people = JsonDocument.Parse(payload).RootElement.GetProperty("people").EnumerateArray().ToList();
+        // The caller's own entry is shown under its account's label, which the test host makes up
+        // for every account it creates; it is read first so the recording can name it.
+        var label = (await owner.GetFromJsonAsync<JsonElement>("/api/v1/sync/people")).GetProperty("people")
+            .EnumerateArray().Single(p => p.GetProperty("id").GetGuid() == ownerCaver)
+            .GetProperty("fullName").GetString()!;
+        var answer = await new ContractFixture()
+            .Literal(marker, "marker").Literal(label, "my-label").Name(ownerCaver, "me").Name(clubmate, "clubmate")
+            .Name(secondClubmate, "second-clubmate")
+            .RecordGetAsync("23-people", owner, "/api/v1/sync/people");
+        var payload = answer.GetRawText();
+        var people = answer.GetProperty("people").EnumerateArray().ToList();
 
         var ids = people.Select(p => p.GetProperty("id").GetGuid()).ToList();
         ids.ShouldContain(clubmate);

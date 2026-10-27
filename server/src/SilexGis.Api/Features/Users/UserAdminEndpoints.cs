@@ -166,7 +166,7 @@ public static class UserAdminEndpoints
             .WithSummary("Locks or unlocks an account (Write on the Users domain).");
         users.MapPut("/{id:guid}/upload-review", SetUploadReviewAsync)
             .WithValidation<AdminUserUploadReviewRequest>()
-            .WithSummary("Marks an account's phone uploads as waiting for a reviewer, and refuses its file imports while marked, or clears the mark (Write on the Users domain).");
+            .WithSummary("Marks an account so that its phone uploads and its file imports wait for a reviewer before anything is written, or clears the mark (Write on the Users domain).");
         users.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes an account (Delete on the Users domain).");
         users.MapPost("/{id:guid}/two-factor/reset", ResetTwoFactorAsync)
@@ -539,8 +539,8 @@ public static class UserAdminEndpoints
     /// <remarks>
     /// <para>
     /// The mark decides what happens to the batches the account commits from now on: each phone
-    /// upload is kept as a proposal until a reviewer decides it, and each file import is refused,
-    /// because holding one is not built and landing it unreviewed would defeat the mark. Clearing the mark
+    /// upload is kept as a proposal until a reviewer decides it, and so is each file import it
+    /// confirms, which the import's own commit writes when a reviewer accepts it. Clearing the mark
     /// does not decide what is already waiting — those batches stay in the queue until somebody
     /// accepts or rejects them, because landing them unread is exactly what the mark was for.
     /// </para>

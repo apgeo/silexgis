@@ -129,6 +129,13 @@ export const queryKeys = {
   importBatches: (params: ImportBatchListParams) => ['import-batches', 'list', params] as const,
   importBatch: (id: string) => ['import-batches', 'detail', id] as const,
   importProvenance: (featureId: string) => ['import-provenance', featureId] as const,
+  reviewQueue: (page: number, pageSize: number) => ['review', 'queue', page, pageSize] as const,
+  reviewMine: (page: number, pageSize: number) => ['review', 'mine', page, pageSize] as const,
+  reviewBatch: (id: string) => ['review', 'batch', id] as const,
+  // Outside the 'review' prefix on purpose: a decision invalidates every review reading, and a
+  // picture asked again just after its line was accepted answers 404 — its bytes are the
+  // document's now. The line's own reading says whether a picture is still there.
+  heldPreview: (reviewId: string, size: number) => ['held-preview', reviewId, size] as const,
   attachments: (entityType: string, entityId: string) => ['attachments', entityType, entityId] as const,
   file: (id: string) => ['files', 'detail', id] as const,
   fileVersions: (fileId: string) => ['file-versions', fileId] as const,
@@ -235,6 +242,13 @@ export const queryKeys = {
   cavingGroups: ['cavingGroups'] as const,
   syncCapabilities: ['sync', 'capabilities'] as const,
   syncSets: ['sync', 'sets'] as const,
+  phoneUsers: ['phoneUsers'] as const,
+  caveRecordings: (caveId: string, page: number, pageSize: number) =>
+    ['trip-recordings', caveId, page, pageSize] as const,
+  // The whole request is the key, as for the archive's own dry run: reading a recording is a pure
+  // function of the recording and the choices, so another survey model is a different question.
+  recordingImportPreview: (recordingId: string, body: unknown) =>
+    ['trip-recordings', 'import-preview', recordingId, body] as const,
   cavers: ['cavers'] as const,
   cavingGroupMembers: (cavingGroupId: string) => ['teams', cavingGroupId, 'members'] as const,
   cavingGroupAudience: (cavingGroupId: string) => ['teams', cavingGroupId, 'audience'] as const,

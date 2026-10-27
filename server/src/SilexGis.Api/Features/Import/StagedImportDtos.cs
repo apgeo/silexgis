@@ -270,11 +270,15 @@ public sealed class ImportOptionsValidator : AbstractValidator<ImportOptions>
 /// <summary>
 /// What a confirmation answers with now that the objects are created on the queue.
 /// </summary>
-/// <param name="JobId">The job to watch. Its completion is what says the batch is whole.</param>
+/// <param name="JobId">The job to watch. Its completion is what says the batch is whole. None while the import waits for a reviewer.</param>
 /// <param name="BatchId">
 /// Where the objects will be. Decided before the work starts, so the reviewer can be taken to the
 /// batch immediately rather than made to guess which one appeared most recently — and so a job
 /// retried after its transaction committed can tell that it has already run.
 /// </param>
 /// <param name="Queued">How many rows were confirmed, so the page can say what it is waiting for.</param>
-public sealed record ImportCommitAcceptedDto(long JobId, Guid BatchId, int Queued);
+/// <param name="Held">
+/// The account's imports wait for a reviewer: nothing is queued (no <paramref name="JobId"/>), the
+/// batch waits with one line per row it would write, and a reviewer's acceptance creates them.
+/// </param>
+public sealed record ImportCommitAcceptedDto(long? JobId, Guid BatchId, int Queued, bool Held = false);

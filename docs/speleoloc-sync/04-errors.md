@@ -411,15 +411,32 @@ boundary is stated so that a gap is not mistaken for an omission.
   row was written by somebody else since the phone read it; the problem lists the `reviewIds`, and
   nothing was decided — send `overCurrent: true` to write the accepted fields onto the current row),
   `review.fields_unsupported` (400 — a field list for a line that can only be decided whole, or a field
-  it does not have) and `validation.failed` (400 — a note longer than 2,000 characters).
+  it does not have; the line's `acceptableFields` lists the ones it has) and `validation.failed` (400 — a
+  note longer than 2,000 characters). The picture of a held photo or raster map
+  (`GET /api/v1/review/items/{reviewId}/preview?size=480|1200`, a rendering without metadata) answers
+  `review.item_not_found` (404) also for a line whose content the caller is not shown,
+  `review.preview_unavailable` (404 — the line keeps no picture: a file that is not an image, or bytes
+  already adopted or swept), `review.preview_size_unsupported` (400) and `review.preview_failed` (400 —
+  the bytes could not be drawn).
   **On the reviews stream**, a `failed` decision's `code` is the code the upload itself would have
   answered for that row (section 6.2), `review.dependency_failed` — a held row it depends on was
   not written, so it could not be either — or `review.proposal_unreadable` (a kept proposal this build
   can no longer read, after an upgrade that changed its shape). Undoing an accepted upload is the ordinary undo below; a
   held or turned-down batch is refused it with `import_batch.held` (409 — nothing of it was written).
-  **A file import by an account under review** — a vector file, photographs, a trip spreadsheet, a
-  SpeleoLoc archive or kept recording, a catalogue import — is refused with `import.review_unavailable`
-  (409 — holding a file import for a reviewer is not built yet, and nothing was written).
+  **A file import by an account under review** is not refused: its confirmation answers `held: true`
+  and waits (section 14 of the protocol). On acceptance a held file import's line is decided `failed`
+  with the code its source's commit would have answered — among them `import.file_gone` (the file it
+  was made from is no longer here or no longer readable by the account), `photo_import.no_files`,
+  `access.create_forbidden` / `access.caving_group_binding_forbidden` (a right lost since),
+  `import.recording_already_converted` (the recording became a report meanwhile — another waiting
+  confirmation of it was accepted first, or a phone's conversion made it one),
+  `trip_recording.not_found` (a kept recording gone since) and `speleoloc_import.nothing_created` (only
+  the trip line of a SpeleoLoc confirmation was accepted, and a trip with no scans is not created; a scan
+  of it accepted later is then decided `review.dependency_failed`), and `review.write_refused` if a
+  refusal of the replayed SpeleoLoc commit named no code of its own (every refusal this server makes
+  names one, so it is a safety net, not an answer to expect). A
+  catalogue that does not answer leaves the lines waiting and the decision is answered `503` with the
+  catalogue's code.
 
 - **The `auth.*` family and the OAuth `error` values** are in the sign-in document, with the calls
   that answer them. They are not repeated here.
@@ -526,16 +543,19 @@ Two further practical consequences:
   must talk to one.
 - Every operation on this server is named in the description, but the sync names are the ones
   chosen deliberately and pinned (`syncCapabilities`, `syncListSets`, `syncCreateSet`, `syncGetSet`,
-  `syncReplaceSet`, `syncDeleteSet`, `syncDownload`, `syncUpload`). Error handling written against
+  `syncReplaceSet`, `syncDeleteSet`, `syncDownload`, `syncUpload`, and for the second phase's routes
+  `syncDocuments`, `syncFileLinks`, `syncPeople`, `syncTrips`, `syncReviews`, `syncRasters`). Error handling written against
   those names will not move; a name elsewhere follows the code that handles the route.
 
-## 10. Three refusals recorded as bytes
+## 10. Refusals recorded as bytes
 
-Prose about a payload drifts from the payload silently, so three of the failures above are also
+Prose about a payload drifts from the payload silently, so six of the failures above are also
 committed as recorded exchanges under `contract/speleoloc-sync/v1/16-errors/` — the invalid resume
-position, the stale one, and a batch pinned to a contract version this server does not speak. Each
-carries a `status.txt` with the status line beside the problem body, because the status is what a
-client branches on before it has read a field.
+position, the stale one, a batch pinned to a contract version this server does not speak, an
+account under review uploading from a build that cannot be told so, the people directory asked for
+while it is switched off, and a document row naming bytes that were never staged. Each refusal of
+the exchange carries a `status.txt` with the status line beside the problem body, because the status
+is what a client branches on before it has read a field.
 
 They are the three worth having as bytes rather than as description. The two cursor refusals arrive
 as different statuses with different codes for what is nonetheless one decision on the device, which
@@ -547,3 +567,9 @@ meet.
 The correlation identifier a problem document carries is replaced in those recordings. It is a fresh
 value on every request, it is for reading a server log with, and nothing on a device should branch
 on it.
+
+The three added with the second set of parts are `client-update-required` (`409`, refused whole,
+no `rows`, like the version refusal), `feature-disabled` (`409` from `GET /api/v1/sync/people` while
+the directory is off) and `file-bytes-missing`. The last is not a problem document at all: it is a
+row of a `200` with status `rejected` (§6.2), so its recording has no `status.txt`, and a client
+must not look for one.

@@ -14,6 +14,7 @@ import {
   type ImportBatchItem,
   type ImportBatchUndoItem,
 } from '../../api/hooks.ts';
+import MyReviewUploads from '../../components/review/MyReviewUploads.tsx';
 import { formatDays } from '../../components/trips/tripRestoreWindow.ts';
 import { UndoOutcome, UploadRowChanges } from './PhoneUploadParts.tsx';
 
@@ -158,6 +159,7 @@ export default function ImportBatchesTab() {
 
   return (
     <>
+      <MyReviewUploads />
       <Table<ImportBatch>
         rowKey="id"
         size="middle"

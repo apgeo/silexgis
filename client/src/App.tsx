@@ -37,7 +37,12 @@ const SpeologieSearchPage = lazy(() => import('./pages/catalogue/SpeologieSearch
 const SpeologieImportPage = lazy(() => import('./pages/catalogue/SpeologieImportPage.tsx'));
 const TripImportPage = lazy(() => import('./pages/trips/TripImportPage.tsx'));
 const SpeleolocImportPage = lazy(() => import('./pages/trips/SpeleolocImportPage.tsx'));
+const SpeleolocRecordingImportPage = lazy(
+  () => import('./pages/trips/SpeleolocRecordingImportPage.tsx'),
+);
 const TermRulesPage = lazy(() => import('./pages/admin/TermRulesPage.tsx'));
+const ReviewQueuePage = lazy(() => import('./pages/review/ReviewQueuePage.tsx'));
+const ReviewBatchPage = lazy(() => import('./pages/review/ReviewBatchPage.tsx'));
 const ChecklistsPage = lazy(() => import('./pages/checklists/ChecklistsPage.tsx'));
 const SavedFiltersPage = lazy(() => import('./pages/filters/SavedFiltersPage.tsx'));
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage.tsx'));
@@ -90,6 +95,7 @@ const SharedAlbumPage = lazy(() =>
 const LinkPage = lazy(() => import('./pages/links/LinkPage.tsx'));
 const CavingGroupsPage = lazy(() => import('./pages/cavingGroups/CavingGroupsPage.tsx'));
 const CaversPage = lazy(() => import('./pages/cavers/CaversPage.tsx'));
+const PhoneUsersPage = lazy(() => import('./pages/cavers/PhoneUsersPage.tsx'));
 const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage.tsx'));
 const SharedViewPage = lazy(() => import('./pages/SharedViewPage.tsx'));
 const PublicTripPage = lazy(() => import('./pages/public/PublicTripPage.tsx'));
@@ -218,6 +224,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/trip-logs/import/:fileId', element: <Loadable><TripImportPage /></Loadable> },
           { path: '/trip-logs/speleoloc-import', element: <Loadable><SpeleolocImportPage /></Loadable> },
           { path: '/trip-logs/speleoloc-import/:fileId', element: <Loadable><SpeleolocImportPage /></Loadable> },
+          { path: '/trip-logs/speleoloc-import/recording/:recordingId', element: <Loadable><SpeleolocRecordingImportPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
           { path: '/trip-logs/:id/report', element: <Loadable><TripReportPage /></Loadable> },
           { path: '/events', element: <Loadable><EventListPage /></Loadable> },
@@ -225,6 +232,8 @@ export const routes: RouteObject[] = guarded([
           { path: '/expeditions', element: <Loadable><ExpeditionListPage /></Loadable> },
           { path: '/expeditions/:id', element: <Loadable><ExpeditionDetailPage /></Loadable> },
           { path: '/expeditions/:id/report', element: <Loadable><ExpeditionReportPage /></Loadable> },
+          { path: '/review', element: <Loadable><ReviewQueuePage /></Loadable> },
+          { path: '/review/batches/:id', element: <Loadable><ReviewBatchPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
           { path: '/admin/messaging', element: <Loadable><MessagingSettingsPage /></Loadable> },
           { path: '/admin/notification-health', element: <Loadable><NotificationHealthPage /></Loadable> },
@@ -252,6 +261,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/links/:code', element: <Loadable><LinkPage /></Loadable> },
           { path: '/caving-groups', element: <Loadable><CavingGroupsPage /></Loadable> },
           { path: '/cavers', element: <Loadable><CaversPage /></Loadable> },
+          { path: '/cavers/phone-users', element: <Loadable><PhoneUsersPage /></Loadable> },
           { path: '/notifications', element: <Loadable><NotificationsPage /></Loadable> },
           {
             path: '/settings',

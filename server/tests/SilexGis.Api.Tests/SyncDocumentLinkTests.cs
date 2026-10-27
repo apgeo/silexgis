@@ -91,14 +91,26 @@ public sealed class SyncDocumentLinkTests : IAsyncLifetime, IDisposable, IClassF
         var documentId = Guid.CreateVersion7();
 
         var batchId = Guid.CreateVersion7();
+
+        // The document is described without its size, which is optional: the size of a generated
+        // picture is the encoder's, and a recording that pinned it would be rewritten by an
+        // upgrade of the imaging library rather than by a change to this protocol. The hash is
+        // replaced in the recording for the same reason.
         var body = new
         {
             batchId,
             contractVersion = 1,
-            documents = new[] { NewDocument(documentId, bytes, staged) },
+            documents = new[]
+            {
+                new { id = documentId, title = "Shaft entrance", fileName = "photo.jpg", sha256 = Hash(bytes), stagedUploadId = staged },
+            },
             documentLinks = new[] { Link(documentId, cave) },
         };
-        var answer = await UploadAsync(owner, set, body);
+        var answer = await new ContractFixture()
+            .Literal(marker, "marker").Literal(Hash(bytes), "sha256")
+            .Name(set, "set").Name(cave, "cave").Name(batchId, "batch")
+            .Name(documentId, "document").Name(staged, "staged-upload")
+            .RecordPostAsync("19-upload-document-and-link", owner, $"/api/v1/sync/sets/{set}/upload", body);
 
         answer.GetProperty("documents").EnumerateArray().Single().GetProperty("status").GetString().ShouldBe("created");
         var link = answer.GetProperty("documentLinks").EnumerateArray().Single();

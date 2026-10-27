@@ -164,7 +164,12 @@ export default function PhotoImportWorkspacePage() {
         selection: [...selected],
         decisions,
       });
-      setResult(outcome);
+      // An account under review files nothing yet: the drop waits for a reviewer.
+      if (outcome.batch.reviewState === 'pending') {
+        message.info(t('importReview.held'));
+      } else {
+        setResult(outcome);
+      }
       setSelected(new Set());
       setDecisions({});
       setFileIds([]);

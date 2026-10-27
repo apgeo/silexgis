@@ -116,8 +116,16 @@ internal sealed class SyncRowsSection(
     /// (point, altitude, position quality and the main-entrance flag together, which move as one)
     /// is dropped the same way the withhold rule drops it.
     /// </summary>
-    protected override SyncRowProposal Narrowed(SyncRowProposal proposal, IReadOnlyList<string> fields) =>
-        proposal.Act != SyncRowAct.Update
+    private static readonly string[] EditFields =
+        [SyncHeldFields.Name, SyncHeldFields.Description, SyncHeldFields.Properties, SyncHeldFields.Position];
+
+    protected override IReadOnlyList<string> AcceptableFields(SyncRowProposal proposal) =>
+        proposal.Act == SyncRowAct.Update ? EditFields : [];
+
+    /// <summary>A field left out is not sent: the write leaves what it is not given as it stands.</summary>
+    protected override Task<SyncRowProposal> NarrowedAsync(
+        SyncUploadRun run, SyncRowProposal proposal, IReadOnlyList<string> fields, CancellationToken ct) =>
+        Task.FromResult(proposal.Act != SyncRowAct.Update
             ? proposal
             : proposal with
             {
@@ -128,7 +136,7 @@ internal sealed class SyncRowsSection(
                     Properties = fields.Contains(SyncHeldFields.Properties) ? proposal.Row.Properties : null,
                 },
                 WritesPosition = proposal.WritesPosition && fields.Contains(SyncHeldFields.Position),
-            };
+            });
 
     protected override IReadOnlyList<SyncUploadRowDto>? ItemsOf(SyncUploadRequest request) => request.Rows;
 

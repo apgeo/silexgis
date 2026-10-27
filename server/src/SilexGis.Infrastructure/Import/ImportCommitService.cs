@@ -97,7 +97,8 @@ public sealed class ImportCommitService(
         AccessContext ctx,
         Guid? batchId = null,
         Func<int, int, Task>? progress = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        HeldCommit? into = null)
     {
         var maxCommitItems = limits.Value.MaxCommitItems;
         if (selection.Count > maxCommitItems)
@@ -126,7 +127,7 @@ public sealed class ImportCommitService(
             // Supplied by the caller when the work runs on the queue, so the address of the
             // result exists before the work does and the reviewer can be sent to it immediately
             // rather than being made to hunt for whichever batch appeared most recently.
-            Id = batchId ?? Guid.CreateVersion7(),
+            Id = into?.BatchId ?? batchId ?? Guid.CreateVersion7(),
             GeofileId = geofile.Id,
             TermRuleSetId = ruleSet?.Id,
             TermRuleSetName = ruleSet?.Name,
@@ -138,13 +139,17 @@ public sealed class ImportCommitService(
 
         // Everything this confirmation writes is one change set of the batch, the batch's own row
         // included, so the history can say where each object came from and an undo can find it.
-        changes.Begin(ChangeSource.FileImport, batch.Id);
+        // A held confirmation a reviewer accepted is filed under the decision's change set.
+        if (into is null)
+        {
+            changes.Begin(ChangeSource.FileImport, batch.Id);
+        }
 
         var failures = new List<ImportFailure>();
         var items = new List<ImportBatchItem>();
         var touchedCaves = new HashSet<Guid>();
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await using var transaction = into is null ? await db.Database.BeginTransactionAsync(ct) : null;
 
         // One recompute for the batch rather than one per row. Per row it reads the whole edge
         // table and walks every tracked feature, so the cost grew with the square of the
@@ -166,6 +171,7 @@ public sealed class ImportCommitService(
                 failures.Add(new ImportFailure(
                     sourceId, null, "import.candidate_missing",
                     "The row is no longer in the file — it was read again while the review was open."));
+                into?.Failed.TryAdd(KeyOf(sourceId), new HeldCommitFailure(failures[^1].Code, failures[^1].Reason));
                 continue;
             }
 
@@ -182,6 +188,7 @@ public sealed class ImportCommitService(
 
                 item.ImportBatchId = batch.Id;
                 items.Add(item);
+                into?.Written.TryAdd(KeyOf(sourceId), item);
                 if (item.Action == ImportDecisionAction.Attach)
                 {
                     batch.AttachedCount++;
@@ -197,10 +204,12 @@ public sealed class ImportCommitService(
                 // with the row it came from, so it can be fixed and re-confirmed on its own.
                 failures.Add(new ImportFailure(
                     sourceId, candidate.SourceName, ex.Code, string.Join("; ", ex.Errors)));
+                into?.Failed.TryAdd(KeyOf(sourceId), new HeldCommitFailure(ex.Code, failures[^1].Reason));
             }
             catch (ImportCommitException ex)
             {
                 failures.Add(new ImportFailure(sourceId, candidate.SourceName, ex.Code, ex.Message));
+                into?.Failed.TryAdd(KeyOf(sourceId), new HeldCommitFailure(ex.Code, ex.Message));
             }
         }
 
@@ -213,7 +222,11 @@ public sealed class ImportCommitService(
         {
             // Nothing landed: a batch recording only failures is a row nobody can act on, and
             // the failures themselves are the answer.
-            await transaction.RollbackAsync(ct);
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(ct);
+            }
+
             throw new ImportCommitException(
                 "import.nothing_created",
                 $"None of the {failures.Count} selected rows could be created. {failures[0].Reason}");
@@ -224,8 +237,14 @@ public sealed class ImportCommitService(
         // arrive" has to be answerable afterwards.
         batch.Failures = failures.Count == 0 ? null : ImportJson.Serialize(failures);
 
-        db.ImportBatches.Add(batch);
-        db.ImportBatchItems.AddRange(items);
+        // A held batch and its lines exist already; what was written is handed back on the held
+        // lines instead.
+        if (into is null)
+        {
+            db.ImportBatches.Add(batch);
+            db.ImportBatchItems.AddRange(items);
+        }
+
         try
         {
             await db.SaveChangesAsync(ct);
@@ -242,7 +261,7 @@ public sealed class ImportCommitService(
             // neither can see the other's uncommitted row. The unique index is the only thing that
             // sees both, which is why the decision is taken here, off the error it raises, rather
             // than off a check that can be overtaken.
-            await transaction.RollbackAsync(ct);
+            await transaction!.RollbackAsync(ct);
             return await ExistingBatchAsync(batchId.Value, ct);
         }
 
@@ -258,10 +277,16 @@ public sealed class ImportCommitService(
         }
 
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(ct);
+        }
 
         return new ImportCommitResult(batch, failures);
     }
+
+    /// <summary>A candidate's key in a held confirmation: its row id in the file.</summary>
+    public static string KeyOf(long sourceId) => sourceId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Whether a failed save is this confirmation's own id being taken by another runner of the

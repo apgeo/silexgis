@@ -5,9 +5,11 @@ finds out what a server can do, how it names the caves it wants to carry, and ho
 page at a time so that a lost connection costs one page rather than the whole sync.
 
 It is written as the server is built, so a section that is not here yet is a part that does not
-exist yet. Both directions now exist: §§3–7 are the read, and §8 is the write. The server says which
-it serves — `features` in the capabilities answer names `download` and `upload` — and a device is
-expected to read that rather than to discover a gap at the first request.
+exist yet. Both directions exist: §§3–7 are the read, and §8 is the write. §§11–15 are what a phone
+carries beyond caves and places — photos and documents, the people directory, trip recordings, the
+review hold and raster maps — each with its own stream and its own upload sections. The server says
+which parts it serves — `features` in the capabilities answer — and a device is expected to read that
+rather than to discover a gap at the first request.
 
 Signing in is a separate document; everything here assumes a bearer token obtained the way that one
 describes. **No route in this slice is reachable without one.** There is no anonymous read of a sync
@@ -28,7 +30,7 @@ Authorization: Bearer <token>
   "contractVersion": 1,
   "pageSizeMax": 500,
   "uploadRowsMax": 500,
-  "features": ["download", "upload", "documents", "documentUpload"]
+  "features": ["download", "upload", "documents", "documentUpload", "trips", "reviews", "rasters", "people"]
 }
 ```
 
@@ -45,6 +47,8 @@ Authorization: Bearer <token>
 staged bytes through the transfer routes, and the upload's `documents` and `documentLinks` sections;
 `trips` means the trips stream and the upload's `tripRecordings` and `tripPoints` sections of section 13;
 `rasters` means the rasters stream and the upload's `rasterMaps` and `rasterPins` sections of section 15;
+`reviews` means the reviews stream of section 14 is served, and that an account under review is
+answered `held` to a device that opts in with `clientFeatures: ["held"]`;
 `people` means the people directory and the upload's `people` section of
   section 12 are, which an installation can switch off and which is named only to an account that
   may be told who people are. The list is worked out for each request, not fixed for the build: a part an
@@ -640,6 +644,34 @@ status is 200 by construction.
 fixture showing a `centerline` row, none showing a duplicate report, and none showing a row-level
 refusal that is not a conflict. All of them are asserted by the test suite and described above; they
 are simply not among the bodies committed as bytes.
+
+Three more refusals sit under `16-errors/`, and one of them is not a refusal of the exchange:
+
+| Directory | What it shows |
+|---|---|
+| `16-errors/client-update-required` | `409`, `sync.client_update_required`. An account under review uploading from a build that does not declare `clientFeatures: ["held"]`. Refused whole, with no `rows`, like the version refusal |
+| `16-errors/feature-disabled` | `409`, `sync.feature_disabled`. The people directory asked for while this installation has it off |
+| `16-errors/file-bytes-missing` | A `200`, **with no `status.txt`**: the batch is accepted and its one document row comes back `rejected` with `sync.file_bytes_missing` (§11). A client reads the row's status, not the exchange's |
+
+The second set of parts (§§11–15) is recorded from `17-` upward:
+
+| Directory | What it shows |
+|---|---|
+| `17-documents-first-page` | The documents stream for a reader who may not place everything a photo hangs on: `reach: "locationFree"`, and `sizeBytes`/`sha256` `null` because the bytes it will be given are not the stored file (§11) |
+| `18-files-links` | The address route, one call for the whole file and one picture; each item answered on its own (§11) |
+| `19-upload-document-and-link` | An upload carrying a staged photo and the link hanging it on a cave (§11) |
+| `20-upload-held` | An upload from an account under review: both rows `held`, no revision, a `reviewId` each, nothing written (§14) |
+| `21-reviews-first-page` | A held edit turned down, with the server's row as `current` for a caller who may place it (§14) |
+| `22-reviews-current-withheld` | The same decision for a caller who may not: `current` is absent, not blurred (§14) |
+| `23-people` | The people directory: clubmates and the caller, names only, and the caller's links (§12) |
+| `24-trips-first-page` | A club recording as another member is handed it, the scan at a place it may not see left out without a word (§13) |
+| `25-rasters-first-page` | A raster map with the one pin a member may see; the pin on a protected place is absent (§15) |
+
+The pictures these exchanges upload are generated, so their hash is replaced by `<sha256>` in the
+recordings, and an optional `sizeBytes` is left out of what goes up: both are the imaging library's,
+and pinning them would rewrite the recordings on an upgrade of that library rather than on a change
+to this protocol. The `CHANGELOG.md` entry of 2026-10-26 announces these recordings; fixtures
+`07`–`16` were not changed by it.
 
 Two files in that directory are about the recordings rather than part of them. `manifest.json`
 carries a digest for every file and one roll-up over all of them, which is how a copy of the
@@ -1395,15 +1427,39 @@ the sections.
 An installation can place an account under review: everything it uploads waits for a person who
 may decide about uploads, and nothing of it is written until they have. Section 8 says what such an
 upload is answered (`held`, with a `reviewId`) and what a device must send for it (`held` in
-`clientFeatures`). This section is what happens afterwards. Edits made in the browser are never held;
-only phone uploads are. A file import by such an account (a vector file, photographs, a trip
-spreadsheet, a SpeleoLoc archive or kept recording, a catalogue import) cannot be held yet and is
-refused with `409 import.review_unavailable` before anything is written, so nothing the account
-commits lands unreviewed.
+`clientFeatures`). This section is what happens afterwards. Edits made in the browser are never held.
 
-A reviewer accepts or turns down a held upload whole, row by row, or — for an edit of a feature — by
-field (`name`, `description`, `properties`, and `position`, which is the point, altitude, position
-quality and main-entrance flag together). Accepting writes exactly what the same upload would have
+**File imports by such an account are held too.** A vector file, photographs, a catalogue selection,
+a trip spreadsheet, a SpeleoLoc archive and a kept recording are previewed and chosen on the account's
+own screen as before; pressing commit is what waits. The confirmation route makes every check it makes
+for anybody else — what the commit refuses of the selection itself included: a selection over the
+source's ceiling (`*.selection_too_large`), one that sets every candidate aside (`*.nothing_created`,
+`400`, for every source; unheld, a vector, photo or catalogue confirmation that sets everything aside
+lands as an empty batch, which held would leave a reviewer nothing to decide), and a catalogue
+selection on an installation that cannot reach the catalogue at all (`503 speologie.not_configured`) —
+then answers that the import waits instead of writing it — `held: true` on the
+answer (the photo answer's batch has `reviewState: pending`; the vector answer is `202` with no
+`jobId`; a SpeleoLoc answer for a trip it would create has no `tripLogId` yet) — and keeps the request
+on a waiting batch, with one waiting line per candidate: a row of the file, a group of pictures, a
+catalogue cave, a sheet row, a scan, and for a SpeleoLoc confirmation that creates its trip, a line for
+that trip, on which every scan depends. The account's saved review and its file are left as they are.
+Accepting runs **the same commit** the route runs unheld, over the kept request with every candidate
+not accepted turned into a skip, with the uploader's rights at that moment (the checks the route makes
+are made again, so a file deleted since, a right lost since, or a recording made into a report since
+is decided `failed`); turning the batch down writes nothing and spends nothing, so the account may
+confirm again. A catalogue that does not answer when a reviewer accepts leaves the lines waiting
+(`503`, the catalogue's own code). The phone's reviews stream carries phone uploads only.
+
+A reviewer accepts or turns down a held upload whole, row by row, or — for an edit — by field: of a
+feature, `name`, `description`, `properties` and `position` (the point, altitude, position quality and
+main-entrance flag together); of a photo or document, its `title`, its caption (`description`) and its
+new `file`, taken whole; of a recording, `title`, `description`, `log`, `times` (start and end
+together) and `cave`; of a scan, `notes`, `place` and `time`; of a raster map, `title`, `mapType`,
+`sortOrder`, `caveArea` and its new picture (`file`). A field left out is not written — the row keeps
+what it holds for it, and new bytes not taken stay unadopted, kept no longer than a turned-down row's.
+A link, a pin, a phone user, a creation and a removal are accepted or turned down whole. The device
+sees none of this beyond the outcome: a row accepted in part is `accepted`, and its `revision` and the
+downloads give its state. Accepting writes exactly what the same upload would have
 written unheld, with **the uploading account's rights as they are at that moment**: a review never
 lands what the account could not write itself, so a row the account has since lost the right to write
 is decided `failed`. Accepting a row accepts the held rows it depends on (a place under a held cave, a

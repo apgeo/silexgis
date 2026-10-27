@@ -8,6 +8,7 @@ using NetTopologySuite.Geometries;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Features;
@@ -605,6 +606,342 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
     }
 
     /// <summary>
+    /// A recording made a trip by hand by an account under review waits for a reviewer: nothing is
+    /// recorded and the recording stays without a report until a reviewer accepts. Whether it may
+    /// still become one is asked then — two confirmations of it waiting at once make one report,
+    /// and the second is answered failed.
+    /// </summary>
+    [Fact]
+    public async Task A_recording_made_a_trip_by_hand_under_review_waits_and_is_claimed_only_on_acceptance()
+    {
+        var (cave, model) = await CaveWithSurveyAsync();
+        var atFifty = await CreatePlaceAsync(cave, depth: -50);
+        var set = await CreateSetAsync(cave);
+        var waiting = Guid.CreateVersion7();
+        var scan = Guid.CreateVersion7();
+        await SwitchAsync(convertTripsWithProblems: false);
+        try
+        {
+            var answer = await UploadAsync(
+                set,
+                [Recording(waiting, cave, mappedPhoneUser, title: $"Held by hand {marker}")],
+                [Point(scan, waiting, atFifty, 10, by: unmappedPhoneUser)]);
+            await RunConversionAsync(answer.GetProperty("importBatchId").GetGuid());
+        }
+        finally
+        {
+            await SwitchAsync(convertTripsWithProblems: true);
+        }
+
+        var marked = await admin.PutAsJsonAsync($"/api/v1/users/{uploaderId}/upload-review", new { uploadsNeedReview = true });
+        marked.StatusCode.ShouldBe(HttpStatusCode.OK, await marked.Content.ReadAsStringAsync());
+        var options = new
+        {
+            createTrip = true,
+            surveyModelId = model,
+            cavers = new Dictionary<string, Guid> { [unmappedPhoneUser.ToString()] = uploaderCaverId },
+            cavingGroupId = clubId,
+            visibility = "cavingGroup",
+            candidateCount = 5,
+        };
+        var commit = $"/api/v1/speleoloc-imports/recordings/{waiting}/commit";
+        var batches = new List<Guid>();
+        for (var i = 0; i < 2; i++)
+        {
+            var held = await uploader.PostAsJsonAsync(commit, new { options, pointIds = new[] { scan.ToString() } });
+            var heldBody = await held.Content.ReadAsStringAsync();
+            held.StatusCode.ShouldBe(HttpStatusCode.OK, heldBody);
+            var result = JsonDocument.Parse(heldBody).RootElement;
+            result.GetProperty("held").GetBoolean().ShouldBeTrue();
+            batches.Add(result.GetProperty("batchId").GetGuid());
+        }
+
+        (await RecordingAsync(waiting)).ConvertedTripLogId.ShouldBeNull();
+        (await member.GetAsync($"/api/v1/review/batches/{batches[0]}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var detail = JsonDocument.Parse(await admin.GetStringAsync($"/api/v1/review/batches/{batches[0]}")).RootElement;
+        detail.GetProperty("lines").EnumerateArray().Select(l => l.GetProperty("section").GetString())
+            .ShouldAllBe(s => s == "keptRecording");
+
+        var first = await admin.PostAsJsonAsync($"/api/v1/review/batches/{batches[0]}/accept", new { });
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        var tripId = await TripOfAsync(waiting);
+        (await EventCountAsync(tripId)).ShouldBe(1);
+
+        var second = await admin.PostAsJsonAsync($"/api/v1/review/batches/{batches[1]}/accept", new { });
+        var secondBody = await second.Content.ReadAsStringAsync();
+        second.StatusCode.ShouldBe(HttpStatusCode.OK, secondBody);
+        JsonDocument.Parse(secondBody).RootElement.GetProperty("decided").EnumerateArray()
+            .ShouldAllBe(l => l.GetProperty("failureCode").GetString() == "import.recording_already_converted");
+        (await EventCountAsync(tripId)).ShouldBe(1);
+        (await TripOfAsync(waiting)).ShouldBe(tripId);
+    }
+
+    /// <summary>
+    /// A kept recording confirmed under review and accepted a scan at a time records exactly what
+    /// the same confirmation records unheld — on one trip, made once — and only the scans accepted.
+    /// </summary>
+    [Fact]
+    public async Task A_held_kept_recording_accepted_a_scan_at_a_time_records_what_an_unheld_commit_records()
+    {
+        var (cave, model) = await CaveWithSurveyAsync();
+        var atFifty = await CreatePlaceAsync(cave, depth: -50);
+        var set = await CreateSetAsync(cave);
+        var (plain, plainScans) = await WaitingRecordingAsync(set, cave, atFifty, $"Kept plain {marker}");
+        var (held, heldScans) = await WaitingRecordingAsync(set, cave, atFifty, $"Kept held {marker}");
+
+        var made = await uploader.PostAsJsonAsync(
+            $"/api/v1/speleoloc-imports/recordings/{plain}/commit", new { options = NewTripOptions(model), pointIds = plainScans });
+        made.StatusCode.ShouldBe(HttpStatusCode.OK, await made.Content.ReadAsStringAsync());
+        var plainTrip = await TripOfAsync(plain);
+
+        await MarkUnderReviewAsync();
+        var batchId = await HoldKeptAsync(held, NewTripOptions(model), heldScans);
+        (await RecordingAsync(held)).ConvertedTripLogId.ShouldBeNull();
+        var lines = await ReviewIdsByKeyAsync(batchId);
+        lines.Keys.ShouldBe(["trip", heldScans[0], heldScans[1]], ignoreOrder: true);
+
+        // The first scan alone: it pulls in the trip it cannot be recorded without, and nothing else.
+        var first = await admin.PostAsJsonAsync($"/api/v1/review/items/{lines[heldScans[0]]}/accept", new { });
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        var heldTrip = await TripOfAsync(held);
+        (await EventsAsync(heldTrip)).ShouldBe([(await EventsAsync(plainTrip))[0]]);
+
+        // The second goes on onto the same trip rather than making another, and the two together
+        // are what the unheld confirmation recorded.
+        var second = await admin.PostAsJsonAsync($"/api/v1/review/items/{lines[heldScans[1]]}/accept", new { });
+        second.StatusCode.ShouldBe(HttpStatusCode.OK, await second.Content.ReadAsStringAsync());
+        (await TripOfAsync(held)).ShouldBe(heldTrip);
+        (await EventsAsync(heldTrip)).ShouldBe(await EventsAsync(plainTrip));
+        (await TripsTitledAsync($"Kept held {marker}")).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// Turning down a held kept recording's trip turns down its scans and records nothing; a scan
+    /// accepted after its trip could not be made is not recorded on a trip of its own; and an
+    /// uploader who lost the right to record trips since is answered failed.
+    /// </summary>
+    [Fact]
+    public async Task A_held_kept_recording_rejected_or_out_of_reach_records_nothing_and_stays_without_a_report()
+    {
+        var (cave, model) = await CaveWithSurveyAsync();
+        var atFifty = await CreatePlaceAsync(cave, depth: -50);
+        var set = await CreateSetAsync(cave);
+        var title = $"Kept turned {marker}";
+        var (recording, scans) = await WaitingRecordingAsync(set, cave, atFifty, title);
+        await MarkUnderReviewAsync();
+
+        var rejectedBatch = await HoldKeptAsync(recording, NewTripOptions(model), scans);
+        var rejectedLines = await ReviewIdsByKeyAsync(rejectedBatch);
+        var rejected = await admin.PostAsJsonAsync($"/api/v1/review/items/{rejectedLines["trip"]}/reject", new { });
+        rejected.StatusCode.ShouldBe(HttpStatusCode.OK, await rejected.Content.ReadAsStringAsync());
+        (await DecisionsAsync(rejectedBatch)).Values.ShouldAllBe(d => d == ImportReviewDecision.Rejected);
+        (await RecordingAsync(recording)).ConvertedTripLogId.ShouldBeNull();
+        (await TripsTitledAsync(title)).ShouldBe(0);
+
+        // The trip line alone records nothing, so it fails; a scan accepted after it fails with it
+        // instead of making a trip no line of the batch records.
+        var tripFirst = await HoldKeptAsync(recording, NewTripOptions(model), scans);
+        var tripFirstLines = await ReviewIdsByKeyAsync(tripFirst);
+        var alone = await admin.PostAsJsonAsync($"/api/v1/review/items/{tripFirstLines["trip"]}/accept", new { });
+        alone.StatusCode.ShouldBe(HttpStatusCode.OK, await alone.Content.ReadAsStringAsync());
+        var scanAfter = await admin.PostAsJsonAsync($"/api/v1/review/items/{tripFirstLines[scans[0]]}/accept", new { });
+        var scanAfterBody = await scanAfter.Content.ReadAsStringAsync();
+        scanAfter.StatusCode.ShouldBe(HttpStatusCode.OK, scanAfterBody);
+        JsonDocument.Parse(scanAfterBody).RootElement.GetProperty("decided").EnumerateArray()
+            .ShouldHaveSingleItem().GetProperty("failureCode").GetString().ShouldBe("review.dependency_failed");
+        (await RecordingAsync(recording)).ConvertedTripLogId.ShouldBeNull();
+        (await TripsTitledAsync(title)).ShouldBe(0);
+
+        var lost = await HoldKeptAsync(recording, NewTripOptions(model), scans);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.AccessEntries.Add(new AccessEntry
+            {
+                SubjectKind = AccessSubjectKind.User,
+                SubjectId = uploaderId,
+                Effect = AccessEffect.Deny,
+                Domain = AccessDomain.TripLogs,
+                Actions = AccessAction.Create,
+                ScopeKind = AccessScopeKind.All,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var accepted = await admin.PostAsJsonAsync($"/api/v1/review/batches/{lost}/accept", new { });
+        var acceptedBody = await accepted.Content.ReadAsStringAsync();
+        accepted.StatusCode.ShouldBe(HttpStatusCode.OK, acceptedBody);
+        var decided = JsonDocument.Parse(acceptedBody).RootElement.GetProperty("decided").EnumerateArray().ToList();
+        decided.Count.ShouldBe(3);
+        decided.ShouldAllBe(l => l.GetProperty("decision").GetString() == "failed"
+            && l.GetProperty("failureCode").GetString() == CreateRules.ForbiddenCode);
+        (await RecordingAsync(recording)).ConvertedTripLogId.ShouldBeNull();
+        (await TripsTitledAsync(title)).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// Two confirmations of one kept recording onto one existing trip, both waiting: the first
+    /// accepted makes the recording that trip's report, and the second is refused as an unheld
+    /// second commit would be, instead of recording every scan onto the trip again.
+    /// </summary>
+    [Fact]
+    public async Task A_second_held_confirmation_of_a_recording_onto_an_existing_trip_is_answered_failed()
+    {
+        var (cave, model) = await CaveWithSurveyAsync();
+        var atFifty = await CreatePlaceAsync(cave, depth: -50);
+        var set = await CreateSetAsync(cave);
+        // Both left waiting before either is made a trip: the first one's review teaches the
+        // installation who the unmapped phone account is, after which a recording of theirs
+        // converts on its own.
+        var (first, firstScans) = await WaitingRecordingAsync(set, cave, atFifty, $"Kept base {marker}");
+        var (onto, ontoScans) = await WaitingRecordingAsync(set, cave, atFifty, $"Kept onto {marker}");
+        var made = await uploader.PostAsJsonAsync(
+            $"/api/v1/speleoloc-imports/recordings/{first}/commit", new { options = NewTripOptions(model), pointIds = firstScans });
+        made.StatusCode.ShouldBe(HttpStatusCode.OK, await made.Content.ReadAsStringAsync());
+        var trip = await TripOfAsync(first);
+        var before = await EventCountAsync(trip);
+        await MarkUnderReviewAsync();
+        var options = new
+        {
+            createTrip = false,
+            tripLogId = trip,
+            surveyModelId = model,
+            cavers = new Dictionary<string, Guid> { [unmappedPhoneUser.ToString()] = uploaderCaverId },
+            candidateCount = 5,
+        };
+        var one = await HoldKeptAsync(onto, options, ontoScans);
+        var two = await HoldKeptAsync(onto, options, ontoScans);
+
+        (await admin.PostAsJsonAsync($"/api/v1/review/batches/{one}/accept", new { })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await TripOfAsync(onto)).ShouldBe(trip);
+        (await EventCountAsync(trip)).ShouldBe(before + 2);
+
+        var again = await admin.PostAsJsonAsync($"/api/v1/review/batches/{two}/accept", new { });
+        var againBody = await again.Content.ReadAsStringAsync();
+        again.StatusCode.ShouldBe(HttpStatusCode.OK, againBody);
+        JsonDocument.Parse(againBody).RootElement.GetProperty("decided").EnumerateArray()
+            .ShouldAllBe(l => l.GetProperty("failureCode").GetString() == "import.recording_already_converted");
+        (await EventCountAsync(trip)).ShouldBe(before + 2);
+    }
+
+    /// <summary>A kept recording that every chosen scan sets aside is refused as unheld, and not held.</summary>
+    [Fact]
+    public async Task A_held_kept_recording_that_sets_every_scan_aside_is_refused_and_not_held()
+    {
+        var (cave, model) = await CaveWithSurveyAsync();
+        var atFifty = await CreatePlaceAsync(cave, depth: -50);
+        var set = await CreateSetAsync(cave);
+        var (recording, scans) = await WaitingRecordingAsync(set, cave, atFifty, $"Kept aside {marker}");
+        await MarkUnderReviewAsync();
+
+        var answer = await uploader.PostAsJsonAsync($"/api/v1/speleoloc-imports/recordings/{recording}/commit", new
+        {
+            options = NewTripOptions(model),
+            pointIds = scans,
+            decisions = scans.ToDictionary(s => s, _ => (object)new { action = "skip" }),
+        });
+        var body = await answer.Content.ReadAsStringAsync();
+        answer.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        JsonDocument.Parse(body).RootElement.GetProperty("code").GetString().ShouldBe("speleoloc_import.nothing_created");
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.ImportBatches.AsNoTracking().CountAsync(b => b.ConfirmedByUserId == uploaderId && b.ReviewState != ImportReviewState.NotHeld))
+            .ShouldBe(0);
+    }
+
+    private object NewTripOptions(Guid model) => new
+    {
+        createTrip = true,
+        surveyModelId = model,
+        cavers = new Dictionary<string, Guid> { [unmappedPhoneUser.ToString()] = uploaderCaverId },
+        cavingGroupId = clubId,
+        visibility = "cavingGroup",
+        candidateCount = 5,
+    };
+
+    /// <summary>A finished recording with two scans at one place, left waiting by the conversion.</summary>
+    private async Task<(Guid Recording, string[] Scans)> WaitingRecordingAsync(Guid set, Guid cave, Guid place, string title)
+    {
+        var recording = Guid.CreateVersion7();
+        var scans = new[] { Guid.CreateVersion7(), Guid.CreateVersion7() };
+        await SwitchAsync(convertTripsWithProblems: false);
+        try
+        {
+            var answer = await UploadAsync(
+                set,
+                [Recording(recording, cave, mappedPhoneUser, title: title)],
+                [Point(scans[0], recording, place, 10, by: unmappedPhoneUser), Point(scans[1], recording, place, 20, by: unmappedPhoneUser)]);
+            await RunConversionAsync(answer.GetProperty("importBatchId").GetGuid());
+        }
+        finally
+        {
+            await SwitchAsync(convertTripsWithProblems: true);
+        }
+
+        (await RecordingAsync(recording)).ConvertedTripLogId.ShouldBeNull();
+        return (recording, [.. scans.Select(s => s.ToString())]);
+    }
+
+    private async Task MarkUnderReviewAsync()
+    {
+        var marked = await admin.PutAsJsonAsync($"/api/v1/users/{uploaderId}/upload-review", new { uploadsNeedReview = true });
+        marked.StatusCode.ShouldBe(HttpStatusCode.OK, await marked.Content.ReadAsStringAsync());
+    }
+
+    private async Task<Guid> HoldKeptAsync(Guid recording, object options, IReadOnlyList<string> scans)
+    {
+        var held = await uploader.PostAsJsonAsync(
+            $"/api/v1/speleoloc-imports/recordings/{recording}/commit", new { options, pointIds = scans });
+        var body = await held.Content.ReadAsStringAsync();
+        held.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        var result = JsonDocument.Parse(body).RootElement;
+        result.GetProperty("held").GetBoolean().ShouldBeTrue(body);
+        return result.GetProperty("batchId").GetGuid();
+    }
+
+    private async Task<Dictionary<string, Guid>> ReviewIdsByKeyAsync(Guid batchId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var lines = await db.ImportBatchItems.AsNoTracking()
+            .Where(i => i.ImportBatchId == batchId && i.ReviewId != null)
+            .ToListAsync();
+        return lines.ToDictionary(
+            l => JsonDocument.Parse(l.Proposal!).RootElement.GetProperty("key").GetString()!,
+            l => l.ReviewId!.Value);
+    }
+
+    private async Task<Dictionary<long, ImportReviewDecision?>> DecisionsAsync(Guid batchId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.ImportBatchItems.AsNoTracking()
+            .Where(i => i.ImportBatchId == batchId && i.ReviewId != null)
+            .ToDictionaryAsync(i => i.Id, i => i.ReviewDecision);
+    }
+
+    private async Task<int> TripsTitledAsync(string title)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.TripLogs.IgnoreQueryFilters().AsNoTracking().CountAsync(t => t.Title == title);
+    }
+
+    /// <summary>What a trip's positions say, in recorded order, without what makes each row its own.</summary>
+    private async Task<List<string>> EventsAsync(Guid tripId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var events = await db.TripPositionEvents.AsNoTracking()
+            .Where(e => e.TripLogId == tripId)
+            .OrderBy(e => e.RecordedAt)
+            .ToListAsync();
+        return [.. events.Select(e => string.Join("|",
+            e.Kind, e.Source, e.CaverId, e.SurveyModelId, e.CaveFeatureId, e.ViewerStationName, e.ViewerToStationName,
+            e.DepthEnteredM, e.RecordedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture), e.RecordedByUserId))];
+    }
+
+    /// <summary>
     /// What an upload changed or deleted in a recording is put back by its undo, and the batch
     /// reads as undone only once it is.
     /// </summary>
@@ -813,6 +1150,141 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
         current.ClearedAt.ShouldBeNull();
         TripRecordingConversionRules.Parse(current.Reasons).Select(r => r.Code)
             .ShouldContain(TripAttentionReasons.RecordingChangedAfterConversion);
+    }
+
+    /// <summary>
+    /// A cave's recordings say where each stands — waiting, made into a report, made into one that
+    /// still needs looking at — and the flag's reasons ride on the trip: kept, but not raised, once
+    /// somebody has cleared it.
+    /// </summary>
+    [Fact]
+    public async Task A_cave_lists_its_recordings_with_where_each_stands_and_the_trip_carries_the_flags_reasons()
+    {
+        var (cave, _) = await CaveWithSurveyAsync();
+        var atFifty = await CreatePlaceAsync(cave, depth: -50);
+        var set = await CreateSetAsync(cave);
+
+        var waiting = (await WaitingRecordingAsync(set, cave, atFifty, "Waiting trip")).Recording;
+        var settled = Guid.CreateVersion7();
+        await RunConversionAsync((await UploadAsync(
+            set,
+            [Recording(settled, cave, mappedPhoneUser, title: "Settled trip")],
+            [Point(Guid.CreateVersion7(), settled, atFifty, 10)])).GetProperty("importBatchId").GetGuid());
+        var flagged = Guid.CreateVersion7();
+        await RunConversionAsync((await UploadAsync(
+            set,
+            [Recording(flagged, cave, mappedPhoneUser, title: "Flagged trip")],
+            [Point(Guid.CreateVersion7(), flagged, null, 10)])).GetProperty("importBatchId").GetGuid());
+
+        async Task<Dictionary<Guid, JsonElement>> ListAsync(HttpClient client)
+        {
+            var page = await client.GetFromJsonAsync<JsonElement>($"/api/v1/trip-recordings?caveId={cave}");
+            return page.GetProperty("items").EnumerateArray().ToDictionary(i => i.GetProperty("id").GetGuid());
+        }
+
+        var mine = await ListAsync(uploader);
+        mine.Keys.ShouldBe([waiting, settled, flagged], ignoreOrder: true);
+        mine[waiting].GetProperty("standing").GetString().ShouldBe("waiting");
+        mine[waiting].GetProperty("tripLogId").ValueKind.ShouldBe(JsonValueKind.Null);
+        mine[waiting].GetProperty("canConvert").GetBoolean().ShouldBeTrue();
+        mine[waiting].GetProperty("pointCount").GetInt32().ShouldBe(2);
+        mine[settled].GetProperty("standing").GetString().ShouldBe("converted");
+        mine[settled].GetProperty("canConvert").GetBoolean().ShouldBeFalse();
+        mine[flagged].GetProperty("standing").GetString().ShouldBe("needsAttention");
+        mine[flagged].GetProperty("tripLogId").GetGuid().ShouldBe(await TripOfAsync(flagged));
+
+        // The club member reads the recordings and the trips but may change none of them.
+        var theirs = await ListAsync(member);
+        theirs.Keys.ShouldBe([waiting, settled, flagged], ignoreOrder: true);
+        theirs[waiting].GetProperty("canConvert").GetBoolean().ShouldBeFalse();
+        theirs[flagged].GetProperty("tripLogId").GetGuid().ShouldBe(await TripOfAsync(flagged));
+
+        // Somebody outside the club reads none of them, and is told nothing of why.
+        (await ListAsync(stranger)).ShouldBeEmpty();
+        (await anonymous.GetAsync($"/api/v1/trip-recordings?caveId={cave}")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await uploader.GetAsync("/api/v1/trip-recordings")).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // The trip names its reasons in codes and counts, to every reader of the trip.
+        var tripId = await TripOfAsync(flagged);
+        foreach (var client in new[] { uploader, member })
+        {
+            var attention = (await client.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}")).GetProperty("attention");
+            attention.GetProperty("raised").GetBoolean().ShouldBeTrue();
+            attention.GetProperty("reasons").EnumerateArray()
+                .Select(r => r.GetProperty("code").GetString()).ShouldContain(TripAttentionReasons.PlaceUnknown);
+            attention.GetProperty("reasons").EnumerateArray().ShouldAllBe(r => r.GetProperty("count").GetInt32() > 0);
+        }
+
+        // A reader of the recording who may not read its trip is told it was converted, and neither
+        // where nor that the trip still has an unanswered flag.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripLogs.Where(x => x.Id == tripId).ExecuteUpdateAsync(s => s.SetProperty(x => x.Visibility, Visibility.Private)))
+                .ShouldBe(1);
+        }
+        var hidden = (await ListAsync(member))[flagged];
+        hidden.GetProperty("standing").GetString().ShouldBe("converted");
+        hidden.GetProperty("tripLogId").ValueKind.ShouldBe(JsonValueKind.Null);
+        (await ListAsync(uploader))[flagged].GetProperty("standing").GetString().ShouldBe("needsAttention");
+
+        (await uploader.PostAsync($"/api/v1/trip-logs/{tripId}/attention/clear", null)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var cleared = (await uploader.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}")).GetProperty("attention");
+        cleared.GetProperty("raised").GetBoolean().ShouldBeFalse();
+        cleared.GetProperty("clearedAt").ValueKind.ShouldBe(JsonValueKind.String);
+        cleared.GetProperty("reasons").GetArrayLength().ShouldBeGreaterThan(0);
+        (await ListAsync(uploader))[flagged].GetProperty("standing").GetString().ShouldBe("converted");
+
+        // A trip made by hand has no flag at all.
+        var plain = await uploader.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Plain {marker}",
+            tripDate = "2026-09-10",
+            participants = Array.Empty<object>(),
+        });
+        var plainId = (await plain.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        (await uploader.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{plainId}"))
+            .GetProperty("attention").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    /// <summary>
+    /// Listing a cave's recordings names the cave, so a reader who may not be told of the cave, or
+    /// may not place it, gets an empty page where the cave's owner gets the recording.
+    /// </summary>
+    [Fact]
+    public async Task A_cave_a_reader_may_not_be_told_of_or_place_lists_no_recordings_for_that_reader()
+    {
+        foreach (var (visibility, guarded) in new[] { ("private", false), ("authenticated", true) })
+        {
+            var (cave, _) = await CaveWithSurveyAsync(visibility, guarded);
+            var set = await CreateSetAsync(cave);
+            var recording = Guid.CreateVersion7();
+            await UploadAsync(set, [Recording(recording, cave, mappedPhoneUser)], [Point(Guid.CreateVersion7(), recording, null, 10)]);
+
+            var mine = await uploader.GetFromJsonAsync<JsonElement>($"/api/v1/trip-recordings?caveId={cave}");
+            mine.GetProperty("items").GetArrayLength().ShouldBe(1, visibility);
+
+            // Fixture proof: the member is in the club that owns the recording, so only the cave
+            // gate can be what empties the page.
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+                (await db.TripRecordings.AsNoTracking().SingleAsync(r => r.Id == recording)).CavingGroupId.ShouldBe(clubId);
+            }
+
+            var theirs = await member.GetFromJsonAsync<JsonElement>($"/api/v1/trip-recordings?caveId={cave}");
+            theirs.GetProperty("items").GetArrayLength().ShouldBe(0, visibility);
+            theirs.GetProperty("totalItems").GetInt32().ShouldBe(0, visibility);
+        }
+
+        // Positive control with the same reader and the same set settings: on an open cave the
+        // member does list the recording, so the empty pages above come from the cave gate.
+        var (openCave, _) = await CaveWithSurveyAsync("authenticated", false);
+        var openSet = await CreateSetAsync(openCave);
+        var openRecording = Guid.CreateVersion7();
+        await UploadAsync(openSet, [Recording(openRecording, openCave, mappedPhoneUser)], [Point(Guid.CreateVersion7(), openRecording, null, 10)]);
+        var visible = await member.GetFromJsonAsync<JsonElement>($"/api/v1/trip-recordings?caveId={openCave}");
+        visible.GetProperty("items").GetArrayLength().ShouldBe(1);
     }
 
     private async Task<List<JsonElement>> RevertAsync(Guid importBatchId)

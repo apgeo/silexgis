@@ -221,12 +221,17 @@ public sealed record TripImportFailureDto(int Line, string? Title, string Code, 
 /// What the confirmation did. The failures are listed rather than counted: a number tells the
 /// reviewer that something went wrong and nothing about which row to go and fix.
 /// </summary>
+/// <param name="Held">
+/// The account's imports wait for a reviewer: nothing was recorded yet, the batch waits with one
+/// line per row it would record, and a reviewer's acceptance records them.
+/// </param>
 public sealed record TripImportCommitResultDto(
     Guid BatchId,
     int CreatedTripCount,
     int CreatedFeatureCount,
     int SkippedCount,
-    IReadOnlyList<TripImportFailureDto> Failures);
+    IReadOnlyList<TripImportFailureDto> Failures,
+    bool Held = false);
 
 public sealed class TripImportOptionsValidator : AbstractValidator<TripImportOptions>
 {

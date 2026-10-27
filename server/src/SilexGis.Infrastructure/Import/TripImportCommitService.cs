@@ -142,7 +142,8 @@ public sealed class TripImportCommitService(
         IReadOnlyCollection<int> selection,
         IReadOnlyDictionary<int, TripImportDecision> decisions,
         AccessContext ctx,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        HeldCommit? into = null)
     {
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(options);
@@ -189,6 +190,7 @@ public sealed class TripImportCommitService(
 
         var batch = new ImportBatch
         {
+            Id = into?.BatchId ?? Guid.CreateVersion7(),
             Source = ImportSource.TripCsv,
             ConfirmedByUserId = ctx.UserId,
             Mode = ImportBatchMode.Reviewed,
@@ -196,13 +198,20 @@ public sealed class TripImportCommitService(
         };
 
         // Everything this confirmation writes is one change set of the batch, so the history can
-        // say where each trip, cave and area came from and an undo can find it.
-        changes.Begin(ChangeSource.FileImport, batch.Id);
+        // say where each trip, cave and area came from and an undo can find it. A held
+        // confirmation a reviewer accepted is filed under the decision's change set, inside the
+        // decision's transaction.
+        if (into is null)
+        {
+            changes.Begin(ChangeSource.FileImport, batch.Id);
+        }
 
         var items = new List<ImportBatchItem>();
         var failures = new List<TripImportFailure>();
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await using var owned = into is null ? await db.Database.BeginTransactionAsync(ct) : null;
+        var transaction = owned ?? db.Database.CurrentTransaction
+            ?? throw new InvalidOperationException("A held confirmation is written inside the decision's transaction.");
 
         // The vocabulary grows once for the whole confirmation rather than once per row: a type
         // written on forty rows is one new term, and creating it per row would depend on the
@@ -228,6 +237,7 @@ public sealed class TripImportCommitService(
                 failures.Add(new TripImportFailure(
                     line, null, TripImportCommitException.RowMissingCode,
                     "That row is not one the sheet reads as importable under the current choices."));
+                into?.Failed.TryAdd(KeyOf(line), new HeldCommitFailure(failures[^1].Code, failures[^1].Reason));
                 continue;
             }
 
@@ -256,9 +266,17 @@ public sealed class TripImportCommitService(
             var areasBefore = new Dictionary<string, Guid>(areas, StringComparer.Ordinal);
             try
             {
-                items.AddRange(await RecordAsync(
-                    row, meaning, options, types, areas, caves, participantRole, proposerRole, ctx, ct));
+                var recorded = await RecordAsync(
+                    row, meaning, options, types, areas, caves, participantRole, proposerRole, ctx, ct);
+                items.AddRange(recorded);
                 await transaction.ReleaseSavepointAsync(savepoint, ct);
+                if (into is not null)
+                {
+                    // The row's trip is the line the candidate stands for; the places it created
+                    // on the way are lines of their own.
+                    into.Written.TryAdd(KeyOf(line), recorded[^1]);
+                    into.Extra.AddRange(recorded.Take(recorded.Count - 1));
+                }
             }
             catch (Exception e) when (e is TripWriteException or FeatureWriteException or TripImportCommitException)
             {
@@ -275,6 +293,7 @@ public sealed class TripImportCommitService(
                 Restore(caves, cavesBefore);
                 Restore(areas, areasBefore);
                 failures.Add(new TripImportFailure(line, row.Title, e.Code(), e.Reason()));
+                into?.Failed.TryAdd(KeyOf(line), new HeldCommitFailure(e.Code(), e.Reason()));
             }
         }
 
@@ -285,7 +304,11 @@ public sealed class TripImportCommitService(
             // chosen row was set aside is worse still, because committing it would spend a
             // review that recorded not one trip. Either way the transaction goes back, which is
             // what leaves the reviewer's saved decisions where they were.
-            await transaction.RollbackAsync(ct);
+            if (owned is not null)
+            {
+                await owned.RollbackAsync(ct);
+            }
+
             throw new TripImportCommitException(
                 TripImportCommitException.NothingCreatedCode,
                 failures.Count > 0
@@ -300,8 +323,14 @@ public sealed class TripImportCommitService(
 
         batch.CreatedCount = items.Count;
         batch.SkippedCount = skipped;
-        db.ImportBatches.Add(batch);
-        db.ImportBatchItems.AddRange(items);
+
+        // A held batch and its lines exist already; what was written is handed back instead.
+        if (into is null)
+        {
+            db.ImportBatches.Add(batch);
+            db.ImportBatchItems.AddRange(items);
+        }
+
         await db.SaveChangesAsync(ct);
 
         // The review is spent: its decisions describe rows that are now trips, and leaving it
@@ -310,13 +339,20 @@ public sealed class TripImportCommitService(
             .Where(s => s.StoredFileId == file.Id && s.UserId == ctx.UserId)
             .ExecuteDeleteAsync(ct);
 
-        await transaction.CommitAsync(ct);
+        if (owned is not null)
+        {
+            await owned.CommitAsync(ct);
+        }
+
         return new TripImportCommitResult(
             batch,
             items.Count(i => i.TripLogId != null),
             items.Count(i => i.FeatureId != null),
             failures);
     }
+
+    /// <summary>A row's key in a held confirmation: its physical line in the sheet.</summary>
+    public static string KeyOf(int line) => line.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>Puts a cache back the way it was before a row that failed touched it.</summary>
     private static void Restore(Dictionary<string, Guid> cache, Dictionary<string, Guid> before)

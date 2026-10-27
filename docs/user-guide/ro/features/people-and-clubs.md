@@ -102,6 +102,36 @@ Când nimic din listă nu o mai ține, în dialog apare **Elimină persoana**; n
 până nu apeși. **Unifică un duplicat în loc** rămâne acolo ca cealaltă cale. O persoană de pe
 [lista unei tabere](camps.md#cine-a-fost) este refuzată separat, cu o propoziție care spune asta.
 
+### Utilizatori de telefon
+
+**Speologi → Utilizatori de telefon** (butonul de lângă *Speolog nou*) arată pe toți cei care au
+folosit aplicația SpeleoLoc cu această instalare — câte un rând pentru fiecare autentificare de
+pe un telefon. O autentificare de pe telefon nu este o persoană, așa că pagina este locul unde
+cineva care ține lista speologilor spune ce speolog este fiecare.
+
+| Coloana | |
+|---|---|
+| **Utilizator de telefon** | Numele și autentificarea trimise de telefon și începutul identificatorului contului |
+| **Văzut ultima dată** | Când a trimis telefonul ceva ultima oară; ține cursorul deasupra pentru prima dată |
+| **Speolog** | Cine este. Gol până când spune cineva; căsuța caută în listă și **nu propune niciodată pe nimeni** |
+| **Asociat de** | Cine a făcut asocierea curentă: *Telefonul*, *Un import de arhivă* sau *Cineva care ține evidența speologilor* |
+
+Cei pe care nimeni nu i-a asociat sunt sus, ca munca de făcut să fie primul lucru din pagină.
+Alegerea unui speolog se salvează imediat. **Elimină asocierea** o scoate și lasă utilizatorul de
+telefon în listă, ca neasociat.
+
+- O asociere făcută aici **are prioritate** față de una făcută de un telefon sau de un import de
+  arhivă, iar un telefon nu o poate schimba. După **Elimină asocierea** nimeni nu a spus nimic,
+  deci telefonul poate spune din nou cine este.
+- Până când un utilizator de telefon este asociat, ce înregistrează apare sub numele dat de
+  telefon, marcat ca neasociat, iar o tură înregistrată de el este semnalată pentru verificare sau, dacă această instalare nu
+  face ture din înregistrări cu probleme, așteaptă pe pagina peșterii să fie convertită manual.
+- Citirea listei cere dreptul de a citi lista speologilor; asocierea și eliminarea cer dreptul de
+  a o scrie. Fără el vezi cine cu cine este asociat, dar nu și butoanele.
+
+**Ce nu face niciodată:** nu transformă singură un utilizator de telefon în speolog sau în cont
+și nu schimbă nimic din ce a fost deja înregistrat sub numele lui.
+
 ---
 
 ## Grupuri de speologie

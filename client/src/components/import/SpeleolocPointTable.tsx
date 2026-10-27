@@ -83,7 +83,7 @@ export default function SpeleolocPointTable({
       width: 80,
       render: (_, point) => (
         <Switch
-          size={controlSize === 'middle' ? 'default' : 'small'}
+          size={controlSize === 'middle' ? 'medium' : 'small'}
           checked={isTaken(point)}
           // Dead where the confirmation would refuse the row whatever this says — no station
           // could be named, or nobody has said whose scan it is. A live switch there is an offer

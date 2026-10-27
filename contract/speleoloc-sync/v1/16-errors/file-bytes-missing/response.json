@@ -1,0 +1,19 @@
+{
+  "batchId": "<batch>",
+  "importBatchId": "<uuid-1>",
+  "replayed": false,
+  "written": 0,
+  "refused": 1,
+  "rows": [],
+  "conflicts": [],
+  "duplicates": [],
+  "documents": [
+    {
+      "id": "<document>",
+      "status": "rejected",
+      "revision": null,
+      "code": "sync.file_bytes_missing",
+      "detail": "The bytes of this file are not waiting here. Upload them, then send the row again."
+    }
+  ]
+}

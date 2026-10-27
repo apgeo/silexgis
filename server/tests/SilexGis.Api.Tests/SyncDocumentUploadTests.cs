@@ -187,6 +187,23 @@ public sealed class SyncDocumentUploadTests : IAsyncLifetime, IDisposable, IClas
         results.Values.ShouldAllBe(r => r.GetProperty("status").GetString() == "rejected");
         answer.GetProperty("refused").GetInt32().ShouldBe(4);
 
+        // Recorded on its own, one row naming bytes that were never staged. It is filed with the
+        // refusals although the exchange is a 200: the batch is accepted and the row inside it is
+        // refused, which is exactly the difference a client has to read the row's status for.
+        var unstaged = Guid.CreateVersion7();
+        var unstagedBatch = Guid.CreateVersion7();
+        var recorded = await new ContractFixture()
+            .Literal(Hash(bytes), "sha256").Name(set, "set").Name(unstagedBatch, "batch").Name(unstaged, "document")
+            .RecordPostAsync(
+                Path.Combine("16-errors", "file-bytes-missing"),
+                phone,
+                $"/api/v1/sync/sets/{set}/upload",
+                Upload(unstagedBatch, new { id = unstaged, title = "Never staged", fileName = "IMG_0102.jpg", sha256 = Hash(bytes) }));
+        var unstagedRow = recorded.GetProperty("documents").EnumerateArray().Single();
+        unstagedRow.GetProperty("status").GetString().ShouldBe("rejected");
+        Code(unstagedRow).ShouldBe("sync.file_bytes_missing");
+        (await CountAsync(db => db.Documents.IgnoreQueryFilters().CountAsync(d => d.Id == unstaged))).ShouldBe(0);
+
         var ids = new[] { wrongHash, noBytes, wrongSize, notMine };
         (await CountAsync(db => db.Documents.IgnoreQueryFilters().CountAsync(d => ids.Contains(d.Id)))).ShouldBe(0);
 

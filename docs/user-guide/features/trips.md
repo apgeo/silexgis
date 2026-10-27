@@ -538,4 +538,5 @@ See [Measurements and statistics](measurements-and-statistics.md#trip-statistics
 
 Workflow: [Plan and log a trip](../workflows/plan-and-log-a-trip.md) ·
 Related: [Checklists and the callout](checklists-and-callout.md) ·
+[Phone recordings and trips that need a look](phone-recordings.md) ·
 [Camps](camps.md) · [Events and calendar](events-and-calendar.md)

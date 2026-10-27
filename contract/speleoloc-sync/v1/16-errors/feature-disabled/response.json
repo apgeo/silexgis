@@ -1,0 +1,8 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "This installation does not offer the people directory.",
+  "code": "sync.feature_disabled",
+  "traceId": "<trace>"
+}

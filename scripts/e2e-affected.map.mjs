@@ -28,7 +28,7 @@ export const specs = {
     'settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts',
     'users-admin.spec.ts',
     'feature-sets.spec.ts',
-    'users-admin.spec.ts', 'map-background-kinds.spec.ts',
+    'users-admin.spec.ts', 'map-background-kinds.spec.ts', 'sync-settings-admin.spec.ts',
   ],
   audit: ['panel.spec.ts', 'history-phone-upload.spec.ts'],
   cabinets: ['documents.spec.ts'],
@@ -36,7 +36,7 @@ export const specs = {
   catalogue: ['speologie-catalogue.spec.ts'],
   cavers: [
     'expeditions.spec.ts', 'settings.spec.ts', 'trip-removal-and-roster-times.spec.ts',
-    'caver-caving-groups.spec.ts',
+    'caver-caving-groups.spec.ts', 'phone-users.spec.ts', 'phone-users-mobile.spec.ts',
   ],
   caves: [
     'map-editing.spec.ts', 'cave-attachments.spec.ts', 'cave-grant-link.spec.ts', 'cave-levels.spec.ts', 'cave-morphometry.spec.ts',
@@ -154,7 +154,12 @@ export const specs = {
   // Surveys sent from a field device: the access-key and upload settings, the cave's list of
   // surveys, the status page of one upload and the page behind its public link.
   surveyUploads: ['access-keys.spec.ts', 'survey-uploads.spec.ts', 'public-survey.spec.ts'],
-  sync: ['settings.spec.ts'],
+  sync: [
+    'settings.spec.ts', 'review-queue.spec.ts', 'review-uploader.spec.ts',
+    'review-uploader-mobile.spec.ts', 'review-file-import.spec.ts',
+    'phone-users.spec.ts', 'sync-settings-admin.spec.ts', 'recordings-attention.spec.ts',
+    'recordings-attention-mobile.spec.ts', 'phone-users-mobile.spec.ts',
+  ],
   tags: ['trips.spec.ts'],
   taxonomies: [],
   terrain: [
@@ -207,6 +212,8 @@ export const clientAreas = {
   'client/src/components/cavingGroups/': ['cavingGroups', 'settings', 'trips'],
   'client/src/components/cavers/': 'cavers',
   'client/src/components/caves/': 'caves',
+  // The upload-review parts shared by the reviewer's pages and the uploader's list on the imports tab.
+  'client/src/components/review/': ['sync', 'imports'],
   'client/src/components/surveyUploads/': 'surveyUploads',
   'client/src/components/caveview/': ['surveys', 'trips'],
   'client/src/components/documents/': 'documents',
@@ -252,6 +259,7 @@ export const clientAreas = {
   'client/src/pages/panel/': 'history',
   'client/src/pages/photolibrary/': 'photoLibraries',
   'client/src/pages/public/': 'trips',
+  'client/src/pages/review/': 'sync',
   'client/src/pages/settings/': 'settings',
   'client/src/pages/settings/AccessKeysSettingsPage': 'surveyUploads',
   'client/src/pages/settings/SurveyUploadSettingsPage': 'surveyUploads',

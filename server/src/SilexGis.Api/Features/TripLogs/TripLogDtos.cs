@@ -171,7 +171,25 @@ public sealed record TripLogDto(
     // It is advisory and it decides nothing. It is not a state the trip is in, no write is refused
     // because of it, and it is never consulted when working out who may read the trip: a trip with
     // nothing settled is exactly as visible as one fully settled, to exactly the same people.
-    TripChecklistReadinessDto? ChecklistReadiness);
+    TripChecklistReadinessDto? ChecklistReadiness,
+    // Appended, like everything before it. Present only on a trip made automatically from a phone
+    // recording that had something to look at, and kept after it is cleared so the reasons stay
+    // readable. Told to every reader of the trip: it carries codes and counts and never a station
+    // or a place, so it places nothing.
+    TripAttentionDto? Attention);
+
+/// <summary>
+/// Why a trip made from a phone recording needs somebody to look at it, and whether somebody has
+/// said they did. <c>Raised</c> is false once it is cleared; the reasons are kept either way.
+/// </summary>
+public sealed record TripAttentionDto(
+    bool Raised,
+    DateTimeOffset RaisedAt,
+    DateTimeOffset? ClearedAt,
+    IReadOnlyList<TripAttentionReasonDto> Reasons);
+
+/// <summary>One reason a flagged trip needs looking at: the code and how many scans it covers.</summary>
+public sealed record TripAttentionReasonDto(string Code, int Count);
 
 /// <summary>
 /// What a trip has settled of the list its purpose names: <c>Ticked</c> of <c>Total</c>, computed

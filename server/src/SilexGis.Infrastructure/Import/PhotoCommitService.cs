@@ -48,7 +48,8 @@ public sealed class PhotoCommitService(
         IReadOnlyCollection<Guid> selection,
         IReadOnlyDictionary<Guid, PhotoDecision> decisions,
         AccessContext ctx,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        HeldCommit? into = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(selection);
@@ -74,6 +75,7 @@ public sealed class PhotoCommitService(
 
         var batch = new ImportBatch
         {
+            Id = into?.BatchId ?? Guid.CreateVersion7(),
             Source = ImportSource.Photos,
             TripLogId = options.TripLogId,
             ConfirmedByUserId = ctx.UserId,
@@ -83,14 +85,19 @@ public sealed class PhotoCommitService(
         };
 
         // Everything this confirmation writes is one change set of the batch, so the history can
-        // say where each place and picture came from and an undo can find it.
-        changes.Begin(ChangeSource.FileImport, batch.Id);
+        // say where each place and picture came from and an undo can find it. A held
+        // confirmation a reviewer accepted is filed under the decision's change set, inside the
+        // decision's transaction.
+        if (into is null)
+        {
+            changes.Begin(ChangeSource.FileImport, batch.Id);
+        }
 
         var failures = new List<ImportFailure>();
         var items = new List<ImportBatchItem>();
         var touchedCaves = new HashSet<Guid>();
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await using var transaction = into is null ? await db.Database.BeginTransactionAsync(ct) : null;
 
         foreach (var key in selection)
         {
@@ -99,6 +106,7 @@ public sealed class PhotoCommitService(
                 failures.Add(new ImportFailure(
                     0, null, "photo_import.candidate_missing",
                     "That group of pictures is no longer in the review — the grouping changed while it was open."));
+                into?.Failed.TryAdd(KeyOf(key), new HeldCommitFailure(failures[^1].Code, failures[^1].Reason));
                 continue;
             }
 
@@ -115,6 +123,7 @@ public sealed class PhotoCommitService(
 
                 item.ImportBatchId = batch.Id;
                 items.Add(item);
+                into?.Written.TryAdd(KeyOf(key), item);
                 if (item.Action == ImportDecisionAction.Attach)
                 {
                     batch.AttachedCount++;
@@ -130,23 +139,35 @@ public sealed class PhotoCommitService(
                 // came from, so it can be fixed and confirmed on its own.
                 failures.Add(new ImportFailure(
                     0, candidate.Members[0].OriginalName, ex.Code, string.Join("; ", ex.Errors)));
+                into?.Failed.TryAdd(KeyOf(key), new HeldCommitFailure(ex.Code, failures[^1].Reason));
             }
             catch (ImportCommitException ex)
             {
                 failures.Add(new ImportFailure(0, candidate.Members[0].OriginalName, ex.Code, ex.Message));
+                into?.Failed.TryAdd(KeyOf(key), new HeldCommitFailure(ex.Code, ex.Message));
             }
         }
 
         if (items.Count == 0 && failures.Count > 0)
         {
-            await transaction.RollbackAsync(ct);
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(ct);
+            }
+
             throw new ImportCommitException(
                 "photo_import.nothing_created",
                 $"None of the {failures.Count} selected groups could be created. {failures[0].Reason}");
         }
 
-        db.ImportBatches.Add(batch);
-        db.ImportBatchItems.AddRange(items);
+        // A held batch and its lines exist already; what was written is handed back on the held
+        // lines instead.
+        if (into is null)
+        {
+            db.ImportBatches.Add(batch);
+            db.ImportBatchItems.AddRange(items);
+        }
+
         await db.SaveChangesAsync(ct);
 
         foreach (var caveId in touchedCaves)
@@ -155,10 +176,16 @@ public sealed class PhotoCommitService(
         }
 
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(ct);
+        }
 
         return new ImportCommitResult(batch, failures);
     }
+
+    /// <summary>A candidate's key in a held confirmation: the lowest file id among its pictures.</summary>
+    public static string KeyOf(Guid key) => key.ToString("D");
 
     // ---------- one candidate ----------
 

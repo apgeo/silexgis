@@ -67,6 +67,7 @@ import TagChips from '../../components/tags/TagChips.tsx';
 import CaveClosestApproachSection from './CaveClosestApproachSection.tsx';
 import CaveDepthPlacesSection from './CaveDepthPlacesSection.tsx';
 import CaveExternalIdsSection from './CaveExternalIdsSection.tsx';
+import CaveRecordingsSection from './CaveRecordingsSection.tsx';
 import CaveTripsSection from './CaveTripsSection.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
@@ -528,6 +529,7 @@ export default function CaveDetailPage() {
       {id && <CaveClosestApproachSection caveId={id} />}
 
       {id && <CaveTripsSection caveId={id} />}
+      {id && <CaveRecordingsSection caveId={id} />}
 
       {/* Counted over the same trips the section above lists, so the number and the rows agree. */}
       {id && <TripStatisticsPanel subject="cave" id={id} />}

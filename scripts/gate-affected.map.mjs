@@ -188,8 +188,8 @@ export const groups = {
     'TripRecordingConversionTests',
     // Every import commit names its batch on the history it writes.
     'ChangeAttributionTests',
-    // An account under review cannot confirm any file import.
-    'FileImportReviewRefusalTests',
+    // An account under review has its file imports held for a reviewer.
+    'FileImportReviewHoldTests',
     // The revert route takes a phone upload back truly, and every other batch as it always did.
     'SyncUndoTests',
     // The proximity pool every importer compares against is cut after it is filtered.
@@ -256,8 +256,9 @@ export const groups = {
     'MfaAndRateLimitTests', 'PerMinuteLimitTests', 'ProfileVisibilityTests', 'ProxyHopsCheckTests',
     'StartupSettingsTests', 'TestLoginTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
     'UserAdministrationLastAdministratorTests', 'UserAdministrationTests', 'UserTwoFactorResetTests',
-    // The account mark that holds an account's uploads for review, and refuses its file imports.
-    'SyncUploadHoldTests', 'FileImportReviewRefusalTests',
+    // The account mark that holds an account's uploads and file imports for review.
+    'SyncUploadHoldTests', 'FileImportReviewHoldTests', 'TripImportCommitTests', 'SpeleolocTripImportTests',
+    'TripRecordingConversionTests',
     // The certificates tokens are signed and encrypted with, kept in the keys directory.
     'TokenCertificateTests',
     // Finished sign-in tokens and authorizations are pruned on a schedule.
@@ -355,8 +356,14 @@ export const groups = {
     'SyncUploadHoldTests',
     // A reviewer deciding them: accepted with the uploader's rights, pulled in, cascaded.
     'UploadReviewDecisionTests',
+    // A file import held for a reviewer, accepted through its source's own commit.
+    'FileImportReviewHoldTests',
+    // A trip sheet, an archive and a kept recording held and accepted the same way.
+    'TripImportCommitTests', 'SpeleolocTripImportTests', 'TripRecordingConversionTests',
     // Every section held and accepted; lines on two held rows, across batches, reopened, raced.
     'UploadReviewSectionsTests',
+    // A held photo or raster map drawn for a reviewer; part of a held edit of each kind accepted.
+    'UploadReviewPreviewTests', 'UploadReviewFieldsTests',
     // What the phone is told afterwards, the messages review sends, and how long held bytes stay.
     'SyncReviewStreamTests',
   ],
@@ -381,7 +388,7 @@ export const groups = {
     'SurveyUploadPublicLinkTests', 'AnonymousSurfaceTests',
   ],
   // The external cave register this installation reads from and imports out of.
-  catalogue: ['SpeologieCatalogueTests'],
+  catalogue: ['SpeologieCatalogueTests', 'FileImportReviewHoldTests'],
   // The elevation surface: the chain that builds it, the phases it runs, and the settings and
   // registration that decide whether it runs at all.
   terrain: [
@@ -575,8 +582,8 @@ export const crossCutting = {
     'ExpeditionReportTests', 'ExpeditionRosterRoleVocabularyTests', 'ExpeditionRosterTests',
     'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
     'FeatureHierarchyTests', 'FeatureLinkTests', 'FeatureRestoreTests', 'FeatureShareTests',
-    'FeatureTests', 'FeatureTypeWriteTests', 'FileAttachmentTests', 'GeofileTests',
-    'HistoryRestoreTests', 'HypsometryTests', 'ImmichPhotoLibraryTests',
+    'FeatureTests', 'FeatureTypeWriteTests', 'FileAttachmentTests', 'FileImportReviewHoldTests',
+    'GeofileTests', 'HistoryRestoreTests', 'HypsometryTests', 'ImmichPhotoLibraryTests',
     'MapBackgroundDocumentChoiceTests', 'MapViewTests', 'NotificationHealthTests',
     'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
     'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',
@@ -617,7 +624,7 @@ export const crossCutting = {
     'ExpeditionReportTests', 'ExpeditionSurfaceLogTests', 'FeatureFilterCompilerTests',
     'FeatureHierarchyTests', 'FeatureLinkTests', 'FeatureListFilterTests',
     'FeatureRestoreTests', 'FeatureShareTests', 'FeatureTests', 'FileAccessBatchParityTests',
-    'FileAttachmentTests', 'FileImportReviewRefusalTests', 'FilterEndpointTests',
+    'FileAttachmentTests', 'FileImportReviewHoldTests', 'FilterEndpointTests',
     'FilterKindPositionTests', 'FilterParityTests', 'FilterSpatialConditionTests',
     'FilterWorldConformanceTests', 'FilterWorldListParityTests', 'GeofileTests',
     'GeoreferencedMapTests', 'HiddenRowCapTests', 'HistoryRestoreTests', 'HistoryTests',

@@ -100,6 +100,36 @@ deleted until you press it. **Merge a duplicate instead** stays there as the oth
 person on a [camp's roster](camps.md#who-was-there) is refused separately, with a sentence
 saying so.
 
+### Phone users
+
+**Cavers → Phone users** (the button beside *New caver*) lists everyone who has used the
+SpeleoLoc app with this installation — one row for each login on a phone. A phone login is not
+a person, so the page is where somebody who keeps the roster says which caver each one is.
+
+| Column | |
+|---|---|
+| **Phone user** | The name and login the phone sent, and the head of the account's identifier |
+| **Last seen** | When the phone last sent anything; hover for the first time |
+| **Caver** | Who they are. Empty until somebody says; the box searches the roster and **never proposes anybody** |
+| **Mapped by** | Who made the current mapping: *The phone*, *An archive import*, or *Somebody keeping the roster* |
+
+People nobody has mapped are at the top, so the work waiting is the first thing on the page.
+Choosing a caver saves at once. **Remove mapping** takes it away and leaves the phone user
+listed, as not mapped.
+
+- A mapping made here **outranks** one a phone or an archive import made, and a phone cannot
+  change it. After **Remove mapping** nobody has said anything, so the phone may say who they
+  are again.
+- Until a phone user is mapped, what they record is shown under the name their phone gave,
+  marked as unmapped, and a trip they recorded is flagged for attention or, if this installation
+  does not make trips from recordings with problems, waits on the cave page to be converted by
+  hand.
+- Reading the list needs the right to read the roster; mapping and removing need the right to
+  write it. Without it you see who is mapped to whom and no controls.
+
+**What it never does:** turn a phone user into a caver or an account on its own, or change
+anything already recorded under them.
+
 ---
 
 ## Caving groups

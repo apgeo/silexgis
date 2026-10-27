@@ -31,7 +31,7 @@ Fiecare buton de pe ea urmează propriul drept, iar un buton pentru o acțiune p
 |---|---|
 | A vedea registrul și a deschide un rând | **Citire** pe **users** |
 | **Invită pe cineva** | **Creare** pe **users** |
-| **Trimite din nou invitația**, **Blochează** · **Deblochează**, **Resetează al doilea factor** | **Scriere** pe **users** |
+| **Trimite din nou invitația**, **Blochează** · **Deblochează**, **Resetează al doilea factor**, **Ține încărcările pentru verificare** · **Nu mai ține încărcările** | **Scriere** pe **users** |
 | **Șterge** | **Ștergere** pe **users** |
 | A urma numele unui grup de permisiuni către pagina lui | Citire pe **permissionGroups** — fără ea, numele sunt afișate, dar nu sunt linkuri |
 
@@ -58,6 +58,7 @@ numele de autentificare și adresa, iar diacriticele nu contează. Lista este î
 | **Fără parolă încă** | Invitat, dar titularul nu și-a ales încă parola |
 | **Administrator deplin** | Un membru al grupului Administratori deplini care se poate autentifica. Un administrator deplin *blocat* nu primește eticheta, pentru că nu ar putea acționa — dar rămâne unul și redevine unul în clipa în care este deblocat |
 | **Al doilea factor activ** | Cel puțin un al doilea factor este activat |
+| **Încărcările necesită verificare** | Tot ce încarcă acest cont așteaptă un verificator — vezi [Reținerea încărcărilor unui cont pentru verificare](#reținerea-încărcărilor-unui-cont-pentru-verificare) |
 
 **Deschide un rând** pentru a vedea grupurile de permisiuni din care face parte contul — marcat
 **membru** când este numit direct, sau *prin …*, cu numele grupurilor de speologie prin care
@@ -117,6 +118,24 @@ poate autentifica până nu îl deblochează cineva. **Deblochează** îl lasă 
 parolă tastată greșit să nu-l blocheze din nou pe loc.
 
 Blocarea nu elimină nimic: contul, înregistrarea din listă și tot ce a adăugat rămân cum erau.
+
+## Reținerea încărcărilor unui cont pentru verificare
+
+**Ține încărcările pentru verificare** pune pe cont eticheta **Încărcările necesită verificare**.
+Din acel moment tot ce trimite contul — din aplicația de telefon sau importând un fișier —
+**așteaptă**: nimic din el nu se scrie pe hărți, în documente sau în ture până nu îl acceptă cineva
+cu dreptul **Revizuirea încărcărilor**. Vezi [Verificarea încărcărilor](../features/upload-review.md).
+
+Acționează imediat, fără confirmare: *„Tot ce încarcă … va aștepta acum un verificator."* **Nu mai
+ține încărcările** scoate eticheta: *„Ce încarcă … nu mai este ținut pentru verificare."*
+
+- Marcajul schimbă ce trimite contul **de atunci încolo**. Încărcările care așteaptă deja rămân în
+  coada de verificare până sunt decise; ștergerea marcajului nu le eliberează.
+- Contul nu este anunțat de marcajul în sine. Își vede încărcările în așteptare, și fiecare decizie,
+  în propria listă de la **Geodate → Importuri**.
+- Schimbarea este trecută în jurnalul de audit, cu cine a făcut-o.
+- Nu poate fi folosit pe un cont care are mai multe drepturi decât tine: butonul nu este afișat pentru
+  contul unui administrator deplin, decât dacă ești și tu unul, iar serverul refuză celelalte cazuri.
 
 ## Resetarea unui al doilea factor pierdut
 

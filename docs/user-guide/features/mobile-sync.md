@@ -158,7 +158,8 @@ handful — not a census of the massif.
 
 **Activity → Import a recording** reads a trip a phone recorded underground — its scans of the
 markers fixed in the cave — into a trip's [tracking log](live-tracking.md). It is offered to
-anybody who may record trips.
+anybody who may record trips. A recording a phone has already sent is listed on its cave's page, where
+it can be converted the same way: see [Phone recordings](phone-recordings.md).
 
 1. **Drop the SpeleoLoc export** — the archive the phone makes, or the database inside it. The
    photographs it carries are never opened, and nothing is written until you have seen what it

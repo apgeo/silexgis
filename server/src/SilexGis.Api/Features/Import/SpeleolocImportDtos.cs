@@ -95,13 +95,19 @@ public sealed record SpeleolocImportPreviewDto(
 
 public sealed record SpeleolocImportFailureDto(string PointId, DateTimeOffset ScannedAt, string Code, string Reason);
 
+/// <param name="TripLogId">The trip the positions went onto; empty while a held confirmation that creates its trip waits.</param>
+/// <param name="Held">
+/// The account's imports wait for a reviewer: nothing was recorded yet, the batch waits with a line
+/// for the trip it would create and one per scan, and a reviewer's acceptance records them.
+/// </param>
 public sealed record SpeleolocImportCommitResultDto(
     Guid BatchId,
-    Guid TripLogId,
+    Guid? TripLogId,
     bool CreatedTrip,
     int CreatedEventCount,
     int SkippedCount,
-    IReadOnlyList<SpeleolocImportFailureDto> Failures);
+    IReadOnlyList<SpeleolocImportFailureDto> Failures,
+    bool Held = false);
 
 // ---------- writes ----------
 

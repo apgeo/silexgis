@@ -1,0 +1,28 @@
+{
+  "setRevision": 1,
+  "settings": {},
+  "maps": [
+    {
+      "id": "<map>",
+      "caveId": "<cave>",
+      "caveAreaId": null,
+      "title": "Plan",
+      "mapType": "planView",
+      "sortOrder": 0,
+      "documentId": "<uuid-1>",
+      "revision": "<timestamp>",
+      "pins": [
+        {
+          "id": "<pin>",
+          "placeId": "<place>",
+          "x": 120,
+          "y": 80,
+          "revision": "<timestamp>"
+        }
+      ]
+    }
+  ],
+  "tombstones": [],
+  "nextCursor": "<cursor>",
+  "hasMore": false
+}

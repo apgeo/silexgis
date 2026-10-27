@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
@@ -51,7 +52,8 @@ public static class SpeleolocImportEndpoints
         import.MapPost("/preview", PreviewAsync).WithValidation<SpeleolocImportPreviewRequest>()
             .WithSummary("Reads the chosen recording and answers each scan with the stations it could be.");
         import.MapPost("/commit", CommitAsync).WithValidation<SpeleolocImportCommitRequest>()
-            .WithSummary("Records the chosen scans as tracking positions, as one batch that reverts as a unit.");
+            .WithSummary("Records the chosen scans as tracking positions, as one batch that reverts as a unit."
+                + " For an account under review nothing is written: the confirmation waits for a reviewer and the answer says so (held).");
 
         // The same review over a recording a phone sent rather than one read out of an archive:
         // how a recording the automatic conversion left waiting, or could not make, becomes a trip
@@ -63,7 +65,8 @@ public static class SpeleolocImportEndpoints
             .WithSummary("Reads a recording a phone sent and answers each scan with the stations it could be.");
         kept.MapPost("/commit", CommitRecordingAsync).WithValidation<SpeleolocImportCommitRequest>()
             .WithName("commitTripRecordingImport")
-            .WithSummary("Makes a recording a phone sent into tracking positions on a trip, as one batch that reverts as a unit.");
+            .WithSummary("Makes a recording a phone sent into tracking positions on a trip, as one batch that reverts as a unit."
+                + " For an account under review nothing is written: the confirmation waits for a reviewer and the answer says so (held).");
 
         return api;
     }
@@ -455,6 +458,7 @@ public static class SpeleolocImportEndpoints
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
         SpeleolocTripImportCommitService commits,
+        IOptions<ImportLimitOptions> limits,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -467,14 +471,6 @@ public static class SpeleolocImportEndpoints
         if (RefuseCreate(ctx, options) is { } refusal)
         {
             return refusal;
-        }
-
-        // An account under review has nothing it commits land unreviewed, and a file import
-        // cannot be held for a reviewer yet: refused before anything is read or written.
-        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
-        {
-            return ApiProblems.Conflict(
-                UploadReviewHold.FileImportUnavailableCode, UploadReviewHold.FileImportUnavailableDetail);
         }
 
         var (file, problem) = await LoadReadableAsync(fileId, db, access, ctx, ct);
@@ -493,6 +489,17 @@ public static class SpeleolocImportEndpoints
         var decisions = request.Decisions is null
             ? stored
             : Merged(stored, request.Decisions);
+
+        // An account under review has nothing it commits land unreviewed: the confirmation is kept
+        // with the decisions it was made under, with a waiting line for the trip it would create and
+        // one per scan it would record, and a reviewer's acceptance records them. The saved review
+        // and the archive stay as they are.
+        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
+        {
+            return await HoldAsync(
+                db, commits, access, limits, ctx, new HeldSpeleolocImportRequest(file.Id, null, options, request.PointIds!, decisions),
+                archive: true, target.Cave.Id, tripTitle: null, new Dictionary<string, DateTimeOffset>(), ct);
+        }
 
         try
         {
@@ -522,6 +529,7 @@ public static class SpeleolocImportEndpoints
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
         SpeleolocTripImportCommitService commits,
+        IOptions<ImportLimitOptions> limits,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -536,14 +544,6 @@ public static class SpeleolocImportEndpoints
             return refusal;
         }
 
-        // An account under review has nothing it commits land unreviewed, and a file import
-        // cannot be held for a reviewer yet: refused before anything is read or written.
-        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
-        {
-            return ApiProblems.Conflict(
-                UploadReviewHold.FileImportUnavailableCode, UploadReviewHold.FileImportUnavailableDetail);
-        }
-
         var (recording, points, problem) = await LoadKeptRecordingAsync(recordingId, db, access, ctx, ct);
         if (problem is not null)
         {
@@ -554,6 +554,17 @@ public static class SpeleolocImportEndpoints
         if (problemOfTarget is not null)
         {
             return problemOfTarget;
+        }
+
+        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
+        {
+            return await HoldAsync(
+                db, commits, access, limits, ctx,
+                new HeldSpeleolocImportRequest(
+                    null, recording!.Id, options, request.PointIds!,
+                    ReadDecisions(ImportJson.Serialize(request.Decisions ?? new Dictionary<string, SpeleolocPointDecision>()))),
+                archive: false, target.Cave.Id, recording.Title,
+                points.ToDictionary(p => p.Id.ToString(), p => p.ScannedAt), ct);
         }
 
         try
@@ -577,8 +588,82 @@ public static class SpeleolocImportEndpoints
         }
     }
 
+    /// <summary>
+    /// Keeps a confirmation of an account under review for a reviewer, after every check the
+    /// route makes and the recording's own: one that already has its report, or that this account
+    /// may not change, is refused now as the commit would refuse it, and asked again when a
+    /// reviewer accepts.
+    /// </summary>
+    private static async Task<Results<Ok<SpeleolocImportCommitResultDto>, UnauthorizedHttpResult, ProblemHttpResult>> HoldAsync(
+        SilexGisDbContext db,
+        SpeleolocTripImportCommitService commits,
+        IAccessService access,
+        IOptions<ImportLimitOptions> limits,
+        AccessContext ctx,
+        HeldSpeleolocImportRequest request,
+        bool archive,
+        Guid caveId,
+        string? tripTitle,
+        IReadOnlyDictionary<string, DateTimeOffset> scannedAt,
+        CancellationToken ct)
+    {
+        if (request.PointIds.Count == 0)
+        {
+            return ApiProblems.BadRequest(SpeleolocImportCodes.SelectionEmpty, "No scans were chosen.");
+        }
+
+        if (request.PointIds.Distinct(StringComparer.OrdinalIgnoreCase).Count() > limits.Value.MaxCommitItems)
+        {
+            return ApiProblems.BadRequest(
+                SpeleolocImportCodes.SelectionTooLarge,
+                $"A single confirmation records at most {limits.Value.MaxCommitItems} positions.");
+        }
+
+        var recordingId = request.RecordingId
+            ?? (Guid.TryParse(request.Options.TripUuid, out var parsed) ? parsed : (Guid?)null);
+        if (recordingId is null)
+        {
+            return ApiProblems.BadRequest(SpeleolocImportCodes.RecordingNotFound, "No recording was chosen.");
+        }
+
+        try
+        {
+            await commits.CheckHeldAsync(recordingId.Value, ctx, ct);
+        }
+        catch (SpeleolocImportCommitException e)
+        {
+            return await CommitProblemAsync(db, access, ctx, e);
+        }
+
+        // Every chosen scan set aside is refused as the commit refuses it: held, the confirmation
+        // would leave a reviewer at most a trip with nothing on it, which the commit never makes.
+        var candidates = SpeleolocHeldImportHandler.CandidatesOf(
+            request.Options, request.PointIds, request.Decisions, caveId, tripTitle, scannedAt);
+        if (!candidates.Any(c => c.Key != SpeleolocTripImportCommitService.TripKey))
+        {
+            return ApiProblems.BadRequest(
+                SpeleolocImportCodes.NothingCreated, "Every chosen scan was set aside, so nothing would be recorded.");
+        }
+
+        var held = new ImportBatch
+        {
+            Source = ImportSource.SpeleolocArchive,
+            TripLogId = request.Options.TripLogId,
+            ConfirmedByUserId = ctx.UserId,
+            Mode = ImportBatchMode.Reviewed,
+            Options = ImportJson.Serialize(request.Options),
+        };
+        await HeldFileImport.HoldAsync(
+            db, held, ImportJson.Serialize(request),
+            archive ? SpeleolocHeldImportHandler.ArchiveSection : SpeleolocHeldImportHandler.RecordingSection,
+            candidates,
+            ct);
+        return TypedResults.Ok(new SpeleolocImportCommitResultDto(
+            held.Id, request.Options.TripLogId, false, 0, 0, [], Held: true));
+    }
+
     /// <summary>Where a confirmation's positions go, and the model they are placed on.</summary>
-    private sealed record CommitTarget(TripLog? Trip, Domain.Entities.TripTracking? Tracking, SurveyModel Model, Feature Cave);
+    internal sealed record CommitTarget(TripLog? Trip, Domain.Entities.TripTracking? Tracking, SurveyModel Model, Feature Cave);
 
     /// <summary>
     /// The trip and the model a confirmation writes to, guarded. Onto a trip this caller may write —
@@ -586,7 +671,7 @@ public static class SpeleolocImportEndpoints
     /// masking every trip write route uses — or into one the confirmation creates, which the create
     /// rights already decided.
     /// </summary>
-    private static async Task<(CommitTarget Target, ProblemHttpResult? Problem)> CommitTargetAsync(
+    internal static async Task<(CommitTarget Target, ProblemHttpResult? Problem)> CommitTargetAsync(
         SpeleolocImportOptions options,
         SilexGisDbContext db,
         IAccessService access,
@@ -668,7 +753,7 @@ public static class SpeleolocImportEndpoints
     /// A recording a phone sent, and its live scans, read-gated. Missing, deleted and unreadable are
     /// one answer.
     /// </summary>
-    private static async Task<(TripRecording? Recording, List<TripRecordingPoint> Points, ProblemHttpResult? Problem)> LoadKeptRecordingAsync(
+    internal static async Task<(TripRecording? Recording, List<TripRecordingPoint> Points, ProblemHttpResult? Problem)> LoadKeptRecordingAsync(
         Guid recordingId,
         SilexGisDbContext db,
         IAccessService access,
@@ -832,7 +917,7 @@ public static class SpeleolocImportEndpoints
     /// Decisions keyed by the scan's own identifier. A key that is not one is dropped rather than
     /// refused — a stale saved review must not make the archive unopenable.
     /// </summary>
-    private static Dictionary<string, SpeleolocPointDecision> ReadDecisions(string json)
+    internal static Dictionary<string, SpeleolocPointDecision> ReadDecisions(string json)
     {
         var decisions = new Dictionary<string, SpeleolocPointDecision>(StringComparer.OrdinalIgnoreCase);
         try
@@ -859,7 +944,7 @@ public static class SpeleolocImportEndpoints
     /// an id that answers differently from one that does not exist is an id anybody can go looking
     /// for.
     /// </summary>
-    private static async Task<(StoredFile? File, ProblemHttpResult? Problem)> LoadReadableAsync(
+    internal static async Task<(StoredFile? File, ProblemHttpResult? Problem)> LoadReadableAsync(
         Guid fileId,
         SilexGisDbContext db,
         IAccessService access,

@@ -12,6 +12,7 @@ import {
   MailOutlined,
   MobileOutlined,
   SafetyOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import {
   App,
@@ -33,6 +34,7 @@ import MapBackgroundsForm from './MapBackgroundsForm.tsx';
 import WorkspaceDefaultForm from './WorkspaceDefaultForm.tsx';
 import SurveyUploadsSettingsForm from './SurveyUploadsSettingsForm.tsx';
 import SelfHostedBasemapPanel from './SelfHostedBasemapPanel.tsx';
+import SyncSettingsForm from './SyncSettingsForm.tsx';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import {
@@ -143,6 +145,15 @@ export default function MessagingSettingsPage() {
                 </span>
               ),
               children: <ImportForm settings={settings} onSaved={onSaved} />,
+            },
+            {
+              key: 'sync',
+              label: (
+                <span>
+                  <SyncOutlined /> {t('admin.messaging.syncTab')}
+                </span>
+              ),
+              children: <SyncSettingsForm settings={settings} onSaved={onSaved} />,
             },
             {
               key: 'notifications',

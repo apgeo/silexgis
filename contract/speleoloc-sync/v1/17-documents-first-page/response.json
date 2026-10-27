@@ -1,0 +1,44 @@
+{
+  "setRevision": 1,
+  "settings": {},
+  "links": [
+    {
+      "id": "<link>",
+      "documentId": "<document>",
+      "target": {
+        "kind": "feature",
+        "id": "<cave>"
+      },
+      "role": "photoInterior",
+      "caption": null,
+      "sortOrder": 0,
+      "isPrimary": false,
+      "inDefaultSet": false,
+      "revision": "<timestamp>",
+      "document": {
+        "id": "<document>",
+        "title": "both.jpg",
+        "description": null,
+        "fileKind": "photo",
+        "mimeType": "image/jpeg",
+        "sizeBytes": null,
+        "sha256": null,
+        "versionId": "<uuid-1>",
+        "reach": "locationFree",
+        "renditions": [
+          2400,
+          1200,
+          480,
+          160
+        ],
+        "photographerCaverId": null,
+        "capturedAt": null,
+        "createdAt": "<timestamp>",
+        "updatedAt": "<timestamp>"
+      }
+    }
+  ],
+  "tombstones": [],
+  "nextCursor": "<cursor>",
+  "hasMore": false
+}

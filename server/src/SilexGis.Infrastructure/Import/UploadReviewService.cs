@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
 using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -56,7 +58,16 @@ public interface IHeldBatchHandler
     /// The fields <paramref name="line"/> may be accepted by on their own; empty when it can only
     /// be accepted whole.
     /// </summary>
-    IReadOnlyList<string> FieldsOf(ImportBatchItem line);
+    Task<IReadOnlyList<string>> FieldsOfAsync(ImportBatchItem line, CancellationToken ct);
+
+    /// <summary>
+    /// Whether the accepted lines of one batch are handed over together rather than one at a
+    /// time. A file import is written by its source's one commit, run once over every candidate
+    /// accepted with the others turned into skips; running it line by line would repeat the
+    /// commit's whole-batch work — reading the file, the derived state of the hierarchy — for
+    /// every candidate.
+    /// </summary>
+    bool WritesWhole => false;
 
     /// <summary>
     /// Writes <paramref name="lines"/> of <paramref name="batch"/>, in the order given (every line
@@ -82,7 +93,28 @@ public interface IHeldBatchHandler
 /// A waiting edit whose row was written on the server since the uploader read it: accepting it
 /// means writing over the row as it is now.
 /// </param>
-public sealed record HeldLineView(string? Proposal, bool ChangedSince);
+/// <param name="Fields">
+/// For an edit that can be accepted field by field and whose comparison the kind's own code draws:
+/// each such field, as the row holds it now beside what the line proposes. Null otherwise — for a
+/// create, a removal, a kind accepted only whole, and a feature row, whose current state the
+/// screen reads through the feature's own route and its position rule.
+/// </param>
+public sealed record HeldLineView(string? Proposal, bool ChangedSince, IReadOnlyList<HeldFieldComparison>? Fields = null);
+
+/// <summary>One field of a held edit: what the row holds now, and what the line would write.</summary>
+/// <param name="Current">
+/// The value now, as plain JSON; null when the row holds none, or when <paramref name="CurrentWithheld"/>.
+/// </param>
+/// <param name="Differs">
+/// Whether accepting the field changes the row. True whenever the current value is withheld, so
+/// that the answer says nothing about a value the viewer is not shown.
+/// </param>
+/// <param name="CurrentWithheld">
+/// The current value names a row the viewer may not read — a recording's earlier cave, a scan's
+/// earlier place — and is left out.
+/// </param>
+public sealed record HeldFieldComparison(
+    string Field, JsonNode? Current, JsonNode? Proposed, bool Differs, bool CurrentWithheld = false);
 
 /// <summary>What a decision did: the lines it decided, and how each batch it touched now stands.</summary>
 public sealed record UploadReviewResult(
@@ -108,7 +140,11 @@ public sealed record UploadReviewResult(
 /// </para>
 /// </remarks>
 public sealed class UploadReviewService(
-    SilexGisDbContext db, IChangeContext changes, IEnumerable<IHeldBatchHandler> handlers, IAppSettingsService settings)
+    SilexGisDbContext db,
+    IChangeContext changes,
+    IEnumerable<IHeldBatchHandler> handlers,
+    IAppSettingsService settings,
+    ThumbnailService thumbnails)
 {
     /// <summary>A line accepted whose own dependency could not be written.</summary>
     public const string DependencyFailedCode = "review.dependency_failed";
@@ -202,6 +238,41 @@ public sealed class UploadReviewService(
             var batch = await db.ImportBatches.AsNoTracking().FirstAsync(b => b.Id == batchId, ct);
             changes.Begin(ChangeSource.ReviewDecision, batch.Id);
 
+            if (applier.WritesWhole)
+            {
+                // Candidates of a file import depend only on lines of their own batch, so the run
+                // is written by one commit of its source — after the lines whose dependency an
+                // earlier decision left unwritten are decided failed with that reason. A scan
+                // whose trip failed to be created would otherwise make its own trip, which no
+                // line of the batch records and its undo never finds.
+                var run = new List<ImportBatchItem>();
+                for (var i = start; i < end; i++)
+                {
+                    var line = ordered[i];
+                    if (line.DependsOnItemIds?.Any(failed.Contains) == true)
+                    {
+                        failed.Add(line.Id);
+                        outcomes[line.Id] = new HeldLineOutcome(
+                            line.Id, false, null, DependencyFailedCode,
+                            "A row this one cannot be written without was not written.");
+                        continue;
+                    }
+
+                    run.Add(line);
+                }
+
+                if (run.Count > 0)
+                {
+                    foreach (var outcome in await applier.ApplyAsync(batch, run, uploader, overCurrent, ct))
+                    {
+                        outcomes[outcome.ItemId] = outcome;
+                    }
+                }
+
+                start = end;
+                continue;
+            }
+
             // A line whose dependency is now unwritable cannot be written either; it is decided
             // with the reason rather than handed to the applier to fail in a less telling way.
             // Lines are handed over one at a time, so a line's dependency in the same run has
@@ -280,6 +351,16 @@ public sealed class UploadReviewService(
                     line.RasterPinId = written.RasterPinId;
                     line.AttachmentIds = written.AttachmentIds;
                     line.SourceProperties = written.SourceProperties;
+
+                    // What only a file import's line records: the trip it wrote, and the row of
+                    // the file and the rule that made the candidate. A phone upload's held line
+                    // already carries whatever of these it has, so an empty answer keeps it.
+                    line.TripLogId = written.TripLogId ?? line.TripLogId;
+                    line.TripPositionEventId = written.TripPositionEventId ?? line.TripPositionEventId;
+                    line.SourceFeatureId = written.SourceFeatureId ?? line.SourceFeatureId;
+                    line.SourceFileId = written.SourceFileId ?? line.SourceFileId;
+                    line.RuleId = written.RuleId ?? line.RuleId;
+                    line.RuleName = written.RuleName ?? line.RuleName;
                 }
             }
         }
@@ -333,6 +414,19 @@ public sealed class UploadReviewService(
         await HeldUploadBytes.ReleaseAsync(db, [.. decided.Select(l => l.Id)], sync.RejectedHeldBytesRetentionDays, now, ct);
         UploadReviewNotices.Reviewed(db, decided, batches);
         await db.SaveChangesAsync(ct);
+
+        // A reviewer's renderings of waiting bytes are cached under the staged upload's id. Bytes an
+        // accepted line adopted are a document's own file now, rendered under that file's id, and
+        // the staged upload is gone: its renderings would never be asked for again.
+        var kept = decided.Where(l => l.HeldUploadSessionId is not null).Select(l => l.HeldUploadSessionId!.Value).Distinct().ToList();
+        if (kept.Count > 0)
+        {
+            var still = await db.UploadSessions.AsNoTracking().Where(s => kept.Contains(s.Id)).Select(s => s.Id).ToListAsync(ct);
+            foreach (var adopted in kept.Except(still))
+            {
+                thumbnails.Purge(adopted);
+            }
+        }
     }
 
     /// <summary>
@@ -408,9 +502,10 @@ public sealed class UploadReviewService(
                    select item;
         return (await mine
                 .Where(i => i.ReviewDecision == ImportReviewDecision.Rejected && i.DecidedAt >= since
-                    && !mine.Any(later => later.Id > i.Id
+                    // A file import's candidate names no row a later upload could send again.
+                    && (i.ProposalRowId == null || !mine.Any(later => later.Id > i.Id
                         && later.ProposalSection == i.ProposalSection
-                        && later.ProposalRowId == i.ProposalRowId))
+                        && later.ProposalRowId == i.ProposalRowId)))
                 .Select(i => i.Id)
                 .ToListAsync(ct))
             .ToHashSet();
@@ -424,3 +519,13 @@ public sealed class UploadReviewService(
 /// </summary>
 public sealed class HeldNotPendingException()
     : Exception("Nothing this decision reaches is waiting for it any more.");
+
+/// <summary>
+/// Something a held batch's writing needs is out of reach for now — the third party a catalogue
+/// import is read from does not answer. Nothing was decided, and the lines still wait, because a
+/// line decided failed for a passing outage could not be accepted again.
+/// </summary>
+public sealed class HeldWriteUnavailableException(string code, string message) : Exception(message)
+{
+    public string Code { get; } = code;
+}

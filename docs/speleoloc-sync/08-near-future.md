@@ -101,15 +101,31 @@ reach.
 What this section lists waited for its own reason when the contract was first published; an entry
 marked *built* has since been added to the contract, additively, and says where it is described.
 
-**Photos and documents.** They are files rather than rows, so they need a transfer shape this contract
-does not have — content addressing, resumable transfer, and a decision about what a device does when
-it has less storage than the set it carries. The row protocol was deliberately finished first so that
-the file protocol can be designed against a working one.
+**Photos and documents — built.** They are files rather than rows, so they got a transfer shape of
+their own (`01-protocol.md` §11): a catalogue stream (`GET /sync/sets/{id}/documents`) that names each
+file with its hash, size and how much of it this reader may have (`reach`), short-lived addresses from
+`POST /sync/files/links`, and, upward, bytes staged through the resumable transfer routes before the
+upload's `documents` and `documentLinks` sections name them. A photo whose position this reader may
+not be told comes down as a copy without it (`locationFree`); the stored file is never changed.
+`documents` and `documentUpload` in `features`. What a device does when it has less storage than the
+set it carries remains the device's decision: the catalogue gives it the sizes to decide with.
 
-**Raster maps.** The same file problem, and larger. Worth noting that a raster's **pixel pins can
-never become coordinates** — a pin is a position in an image, and unless the image is georeferenced
-there is nothing to turn it into. That makes them safe to carry, and it also makes them useless as a
-way to move a position, which is why they are not a protection concern.
+**Raster maps — built.** `01-protocol.md` §15: the `GET /sync/sets/{id}/rasters` stream, the upload's
+`rasterMaps` and `rasterPins` sections, and `rasters` in `features`. A raster's **pixel pins never
+become coordinates** — a pin is a position in an image, and unless the image is georeferenced there is
+nothing to turn it into — but a pin names the place it marks, so a pin on a place this reader may not
+see exactly is withheld with that place.
+
+**The people directory — built.** `01-protocol.md` §12: `GET /sync/people` lists the club's people a
+phone may attribute trips and photos to, and the upload's `people` section reports the phone's own
+users. An installation can switch it off, and `people` is in `features` only while it is on.
+
+**Review of uploads — built.** `01-protocol.md` §14: an account can be marked so that what it uploads
+waits for a reviewer. A device opts in with `clientFeatures: ["held"]` and gets such rows back `held`;
+one that does not is refused with `sync.client_update_required` rather than surprised. The decisions
+come down on `GET /sync/sets/{id}/reviews`; `reviews` in `features`. A *file* import by such an
+account (an archive, a spreadsheet, a vector file or photographs confirmed in the browser) waits for a
+reviewer too, but its decisions are not in the phone's reviews stream: they are seen in the browser.
 
 **Trips — built.** Phones now send their trip recordings through this protocol and receive the
 recordings of the caves they carry (`01-protocol.md` §13): `tripRecordings` and `tripPoints` upload
@@ -128,8 +144,9 @@ recordings, or the uploader may no longer make the trip — is made a trip by ha
 import's review reading the recording (`01-protocol.md` §13.3); the screen that opens it from a
 recording is the browser's to add.
 
-Still not built: photos on recordings and scans, and any tool for settling what a flagged report names —
-the flag is cleared by a person who may change the trip, and the fixing is theirs to do by hand.
+Photos hang on recordings and on their scans as well (`01-protocol.md` §11 and §13). Still not built:
+any tool for settling what a flagged report names — the flag is cleared by a person who may change the
+trip, and the fixing is theirs to do by hand.
 
 **Wider selection rules for a sync set.** A set names root features today, and everything contained
 in a named root is carried. Selecting by caving group, by area, or by a saved filter are all
@@ -145,10 +162,10 @@ Stated so nobody goes looking:
   copied into the application's repository and nothing else was: these documents, under
   `docs/integrations/silexgis/`, and the recorded traffic, under
   `test_data/silexgis_contract/v1/` — both byte-identical to the copies in the server repository,
-  which are the current ones. **The copy is placed in a working tree and is not committed there**:
-  the first commit in that repository for this integration belongs to the application effort, so a
-  clone of it will not carry these files until that effort commits them. The client side is a
-  separate piece of work.
+  which are the current ones at the moment of copying. The application effort has since committed
+  that copy, with a note of its own naming the upstream commit it was taken at; refreshing it is that
+  effort's job, and the `digest` in the two `manifest.json` files tells whether it is current. The
+  client side is a separate piece of work.
 - **No generated client library.** Deliberate, and the evidence is worth keeping: the served
   description has no operation identifiers outside this slice, declared no security scheme until this
   work added one, declares no error responses anywhere, and types the property document as an

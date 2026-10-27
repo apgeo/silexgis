@@ -27,6 +27,7 @@ export const NAV_SECTIONS = [
   'trip-logs/speleoloc-import', 'trip-logs/import', 'trip-logs', 'expeditions', 'checklists',
   'caving-groups', 'cavers',
   'tools/coordinates',
+  'review',
   'admin/audit', 'admin/notification-health', 'admin/messaging', 'admin/message-templates',
   'admin/published-trips',
   'admin/permission-groups', 'admin/users',

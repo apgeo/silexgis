@@ -16,8 +16,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Features.Sync;
 
 /// <summary>
-/// The fields of a held edit a reviewer may accept on their own. Only feature rows can be accepted
-/// in part; every other section's change is accepted or rejected whole.
+/// The fields a reviewer may accept a held edit by on their own, kind by kind. A feature row is
+/// accepted by name, description, properties and position; a photo or document by title, caption
+/// and its new file; a recording by title, description, log, times and cave; a scan by its notes,
+/// place and time; a raster map by title, map type, order, area and its new picture. A document
+/// link, a pin and a phone user are accepted or rejected whole: each is one fact.
 /// </summary>
 internal static class SyncHeldFields
 {
@@ -28,11 +31,54 @@ internal static class SyncHeldFields
     /// <summary>The point, altitude, position quality and main-entrance flag, which move together.</summary>
     public const string Position = "position";
 
-    private static readonly string[] RowFields = [Name, Description, Properties, Position];
+    public const string Title = "title";
 
-    /// <summary>The fields a section's held edits can be accepted by; empty when only whole.</summary>
-    public static IReadOnlyList<string> Of(string? section) =>
-        section == SyncUploadSections.Rows ? RowFields : [];
+    /// <summary>New bytes, taken whole: a file is never written in part.</summary>
+    public const string File = "file";
+
+    public const string Log = "log";
+
+    /// <summary>When a recording started and ended, which move together.</summary>
+    public const string Times = "times";
+
+    public const string Cave = "cave";
+    public const string Notes = "notes";
+    public const string Place = "place";
+
+    /// <summary>When a scan was made.</summary>
+    public const string Time = "time";
+
+    public const string MapType = "mapType";
+    public const string SortOrder = "sortOrder";
+    public const string CaveArea = "caveArea";
+}
+
+/// <summary>How a section states one field of a held edit beside the row as it stands.</summary>
+internal static class SyncHeldComparisons
+{
+    /// <summary>Both values as the upload's own JSON writes them, compared as JSON.</summary>
+    public static HeldFieldComparison Of(string field, object? current, object? proposed)
+    {
+        var now = JsonSerializer.SerializeToNode(current, SyncUploadJson.Options);
+        var then = JsonSerializer.SerializeToNode(proposed, SyncUploadJson.Options);
+        return new HeldFieldComparison(field, now, then, !JsonNode.DeepEquals(now, then));
+    }
+
+    /// <summary>
+    /// A field whose value is a feature: shown by id, for the screen to name through the feature's
+    /// own route. A current one the viewer may not read is left out.
+    /// </summary>
+    public static HeldFieldComparison Feature(string field, Guid? current, Guid? proposed, IReadOnlySet<Guid> readable) =>
+        current is { } id && !readable.Contains(id)
+            ? new HeldFieldComparison(field, null, JsonSerializer.SerializeToNode(proposed, SyncUploadJson.Options), true, CurrentWithheld: true)
+            : Of(field, current, proposed);
+
+    /// <summary>
+    /// A moment at the precision the database keeps it, in UTC, so a value that went to a phone and
+    /// came back unchanged compares equal to the stored one.
+    /// </summary>
+    public static DateTimeOffset? Moment(DateTimeOffset? value) =>
+        value is { } at ? new DateTimeOffset(at.UtcTicks / 10 * 10, TimeSpan.Zero) : null;
 }
 
 /// <summary>
@@ -64,9 +110,36 @@ internal sealed class SyncHeldBatchHandler(
     /// </summary>
     private readonly HashSet<Guid> convertQueued = [];
 
-    /// <summary>Only edits of feature rows can be accepted in part.</summary>
-    public IReadOnlyList<string> FieldsOf(ImportBatchItem line) =>
-        line.Action == ImportDecisionAction.Create ? [] : SyncHeldFields.Of(line.ProposalSection);
+    private IReadOnlyDictionary<string, ISyncUploadSection>? sections;
+
+    /// <summary>The sections by name, built once for the request the handler lives in.</summary>
+    private async Task<IReadOnlyDictionary<string, ISyncUploadSection>> SectionsAsync(CancellationToken ct) =>
+        sections ??= SyncUploadSections.InApplyOrder(
+                writer, protection, access, await settings.GetSyncAsync(ct), documents, ingest, intake)
+            .ToDictionary(s => s.Name, StringComparer.Ordinal);
+
+    /// <summary>What the line's own section says it may be accepted by; nothing for a proposal it cannot read.</summary>
+    public async Task<IReadOnlyList<string>> FieldsOfAsync(ImportBatchItem line, CancellationToken ct)
+    {
+        if (line.ProposalSection is not { } name || line.Proposal is not { } proposal
+            || !(await SectionsAsync(ct)).TryGetValue(name, out var section))
+        {
+            return [];
+        }
+
+        try
+        {
+            return section.FieldsOf(proposal);
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+        catch (InvalidOperationException)
+        {
+            return [];
+        }
+    }
 
     public async Task<IReadOnlyList<HeldLineOutcome>> ApplyAsync(
         ImportBatch batch,
@@ -163,9 +236,7 @@ internal sealed class SyncHeldBatchHandler(
             return shown;
         }
 
-        var sections = SyncUploadSections.InApplyOrder(
-                writer, protection, access, await settings.GetSyncAsync(ct), documents, ingest, intake)
-            .ToDictionary(s => s.Name, StringComparer.Ordinal);
+        var sections = await SectionsAsync(ct);
         var facts = new Dictionary<long, SyncHeldFacts>();
         foreach (var line in lines)
         {
@@ -227,6 +298,11 @@ internal sealed class SyncHeldBatchHandler(
         }
 
         var readable = await ReadableAsync([.. existing.Keys], viewer, ct);
+        var comparing = new SyncHeldComparing
+        {
+            Db = db,
+            ReadableFeatures = (ids, token) => ReadableFeaturesAsync(ids, viewer, token),
+        };
         var withheld = await SyncWithhold.WithheldIdsAsync(
             protection, viewer,
             [.. readable.Where(t => t.Kind == SyncHeldTargetKind.Feature).Select(t => t.Id)],
@@ -263,12 +339,32 @@ internal sealed class SyncHeldBatchHandler(
             // be found, is not shown: the second fails closed, since what it hung under is unknown.
             var hidePosition = fact.CarriesPosition
                 && (reach.Unresolved || reach.Rows.Any(t => t.Kind == SyncHeldTargetKind.Feature && withheld.Contains(t.Id)));
+
+            // A waiting edit the reviewer can take in part is drawn field by field, by its section,
+            // only now that the viewer may be shown the row it changes and everything it names.
+            var compared = line.ReviewDecision == ImportReviewDecision.Pending
+                && sections.TryGetValue(line.ProposalSection!, out var section)
+                && (await FieldsOfAsync(line, ct)).Count > 0
+                    ? await section.CompareAsync(comparing, line.Proposal!, ct)
+                    : null;
             shown[line.Id] = new HeldLineView(
-                hidePosition ? WithoutPosition(line.Proposal!) : line.Proposal, changedSince);
+                hidePosition ? WithoutPosition(line.Proposal!) : line.Proposal, changedSince, compared);
         }
 
         return shown;
     }
+
+    /// <summary>Of <paramref name="ids"/>, the features <paramref name="viewer"/> may read.</summary>
+    private async Task<IReadOnlySet<Guid>> ReadableFeaturesAsync(
+        IReadOnlyCollection<Guid> ids, AccessContext viewer, CancellationToken ct) =>
+        ids.Count == 0
+            ? new HashSet<Guid>()
+            : (await db.Features.AsNoTracking()
+                    .Where(f => ids.Contains(f.Id))
+                    .VisibleTo(viewer, db.Features, db.FeatureSetMembers)
+                    .Select(f => f.Id)
+                    .ToListAsync(ct))
+                .ToHashSet();
 
     /// <summary>
     /// How many held creates deep a chain is followed. A phone's tree is a cave, its entrances

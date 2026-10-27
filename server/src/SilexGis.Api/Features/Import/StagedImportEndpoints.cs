@@ -49,7 +49,8 @@ public static class StagedImportEndpoints
             .WithSummary(
                 "Queues the selected candidates to be created as one revertible batch, and answers "
                 + "with the job to watch and the batch they will appear in. Everything that can "
-                + "refuse the confirmation is decided before it is queued.");
+                + "refuse the confirmation is decided before it is queued. For an account under review "
+                + "nothing is queued: the confirmation waits for a reviewer and the answer says so (held, no job).");
 
         return api;
     }
@@ -241,14 +242,6 @@ public static class StagedImportEndpoints
             return ApiProblems.BadRequest("import.file_not_ready", "The upload has not finished being read yet.");
         }
 
-        // An account under review has nothing it commits land unreviewed, and a file import
-        // cannot be held for a reviewer yet: refused before anything is read or written.
-        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
-        {
-            return ApiProblems.Conflict(
-                UploadReviewHold.FileImportUnavailableCode, UploadReviewHold.FileImportUnavailableDetail);
-        }
-
         // Creating is decided here, once, before anything is scanned: an import binds every
         // object it creates to the same group, so one answer covers the batch. The commit
         // service asks again per object, which is what catches a group the caller may read but
@@ -306,19 +299,57 @@ public static class StagedImportEndpoints
         // refuse this has been decided above, so what remains is work rather than judgement and
         // the reviewer can be sent straight to the batch it will appear in.
         var batchId = Guid.CreateVersion7();
+        var decisions = ReadDecisions(request.Decisions);
+        var payload = new ImportCommitPayload(
+            geofile.Id,
+            batchId,
+            ctx.UserId,
+            ruleSet?.Id,
+            ImportJson.Serialize(request.Options),
+            ImportJson.Serialize(decisions),
+            selection,
+            mode);
+
+        // An account under review has nothing it commits land unreviewed: the confirmation is
+        // kept as it would have been queued, with a waiting line per row it would write, and a
+        // reviewer's acceptance runs it. The review session and the file stay as they are.
+        if (await UploadReviewHold.AppliesToAsync(db, ctx.UserId, ct))
+        {
+            var (scanned, _, _) = await candidateService.ScanAsync(
+                geofile.Id, TermRuleSetStore.RulesOf(ruleSet), request.Options, ct);
+            var candidates = VectorHeldImportHandler.CandidatesOf(
+                selection, decisions, scanned.ToDictionary(c => c.SourceId, c => c.SourceName), request.Options.LocationProtected);
+
+            // A confirmation that sets every chosen row aside leaves a reviewer nothing to decide;
+            // held, it would wait for good.
+            if (candidates.Count == 0)
+            {
+                return ApiProblems.BadRequest(
+                    "import.nothing_created", "Every chosen row was set aside, so nothing would be created.");
+            }
+
+            var held = new ImportBatch
+            {
+                Id = batchId,
+                Source = ImportSource.VectorFile,
+                GeofileId = geofile.Id,
+                TermRuleSetId = ruleSet?.Id,
+                TermRuleSetName = ruleSet?.Name,
+                ConfirmedByUserId = ctx.UserId,
+                Mode = mode,
+                Options = payload.Options,
+            };
+            await HeldFileImport.HoldAsync(db, held, ImportJson.Serialize(payload), VectorHeldImportHandler.Section, candidates, ct);
+            return TypedResults.Accepted(
+                $"/api/v1/review/batches/{held.Id}",
+                new ImportCommitAcceptedDto(null, held.Id, candidates.Count, Held: true));
+        }
+
         var job = new ProcessingJob
         {
             Kind = ProcessingJobKinds.ImportCommit,
             RequestedBy = ctx.UserId,
-            Payload = ImportJson.Serialize(new ImportCommitPayload(
-                geofile.Id,
-                batchId,
-                ctx.UserId,
-                ruleSet?.Id,
-                ImportJson.Serialize(request.Options),
-                ImportJson.Serialize(ReadDecisions(request.Decisions)),
-                selection,
-                mode)),
+            Payload = ImportJson.Serialize(payload),
         };
         db.ProcessingJobs.Add(job);
         await db.SaveChangesAsync(ct);

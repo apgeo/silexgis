@@ -225,7 +225,12 @@ export default function TripImportPage() {
   const onCommit = async () => {
     try {
       const outcome = await commit.mutateAsync({ fileId, body: { options, lines: takenLines, decisions } });
-      setResult(outcome);
+      // An account under review records nothing yet: the confirmation waits for a reviewer.
+      if (outcome.held) {
+        message.info(t('importReview.held'));
+      } else {
+        setResult(outcome);
+      }
       // The rows that were created are set aside, and only they. Clearing the decisions instead
       // left the whole selection standing: the button recomputed itself from the preview and read
       // "Create 2 trips" again over rows that had just been created, so closing the modal and

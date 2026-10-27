@@ -23,6 +23,7 @@ The page has eleven tabs:
 | **Sign-in policy** | Confirmed addresses, which second factors are offered, how long a code lives | [Sign-in policy](#sign-in-policy) |
 | **Location protection** | Two switches about how far protected places and the club's dates travel | [Location protection](#location-protection) |
 | **Vector import** | Whether an import may skip its review, and how duplicates are looked for | [Vector import](#vector-import) |
+| **Phone sync** | What the phone app is given and how long unused files wait | [Phone sync](#phone-sync) |
 | **Notifications** | How long notifications are kept, and what an announcement may cost | [Retention](#retention) · [The money guard](#the-money-guard) |
 | **Photo libraries** | Stopping and restarting the use of a photo library the installation already has | [Photo libraries](#photo-libraries) |
 | **Survey uploads** | Whether a cave made by a survey upload takes that upload's first model as its shape | [Survey uploads](#survey-uploads) |
@@ -115,6 +116,23 @@ tab is where that step can be removed, and how far duplicate detection looks by 
 | **Let a trusted user create objects without reviewing them** | Off by default. Turning it on never widens who may create — the importer still needs the right to create features — it only removes the step in between |
 | **Look for something already there within** | The starting radius for a new review; the importer can change it. Only objects whose exact position the reviewer may see are ever measured against |
 | **Names count as the same above** | How alike two names must be, 0 to 1, before a nearby object is called the same thing rather than merely close to it |
+
+## Phone sync
+
+What this installation does with the SpeleoLoc phone app (see [Mobile and offline
+sync](../features/mobile-sync.md)). A change applies at once to every phone that syncs. Saving
+replaces all five settings together.
+
+| | |
+|---|---|
+| **Give phones the list of people** | On by default. A phone can download a list of cavers — names only, never an address or a phone number — so its user can say who they are and who was on a trip. Off: phones get no list and cannot say which caver one of their users is. Mappings already made on the [Phone users](../features/people-and-clubs.md#phone-users) page stay, and what a phone records about its own users is still kept |
+| **Whose names the list holds** | *Cavers in the phone account's caving groups, and the account's own caver* (the default) or *Every caver on the roster*. A phone can only say its user is somebody it was shown, so this also decides whom a phone may name. *Every caver* shows the whole roster to every account that syncs a phone, whatever their group; choose it only when the roster is no secret from the people who sign in |
+| **Make trips from recordings that have problems** | On by default. A trip recorded on a phone is turned into a trip report by itself. On: this also happens when some of it could not be matched, such as a station nobody can place or a phone user not mapped to a caver; the trip is flagged as needing attention and says why. Off: such a recording waits on the cave page until somebody converts it by hand |
+| **Keep photos sent ahead of an upload for (days)** | 7 by default, from 1 to 365. A phone sends the bytes of a photo before the upload that uses them; if no upload claims them within this many days they are deleted. A change applies to files that arrive after it. Waiting files count against the sending account's storage, so allow room for about this many days of a phone's photographs |
+| **Keep the files of a turned-down upload for (days)** | 30 by default, from 1 to 365. When an upload held for review is decided without its files being used — turned down, replaced by a later one, or accepted without them — the files are deleted after this many days. While an upload still waits for a reviewer its files are kept however long that takes |
+
+The same five settings can be given a starting value in the deployment's environment; a value
+saved here wins over it.
 
 ## Photo libraries
 

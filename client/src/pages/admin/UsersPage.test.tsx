@@ -11,6 +11,7 @@ import type { AdminUser, AdminUserDetail } from '../../api/hooks.ts';
 const createMutate = vi.fn();
 const reinviteMutate = vi.fn();
 const lockMutate = vi.fn();
+const uploadReviewMutate = vi.fn();
 const deleteMutate = vi.fn();
 const resetMutate = vi.fn();
 let rights = 'read, write, delete, create';
@@ -44,6 +45,7 @@ const accounts: AdminUser[] = [
     twoFactorEnabled: true,
   }),
   account({ id: 'ana', label: 'Ana Pop' }),
+  account({ id: 'rev', label: 'Rareș Held', email: 'rares@example.test', uploadsNeedReview: true }),
   account({ id: 'ion', label: 'Ion Blocat', email: 'ion@example.test', isLockedOut: true, hasPassword: false }),
   account({ id: 'dana', label: 'Dana Cheie', email: 'dana@example.test', twoFactorEnabled: true }),
   account({
@@ -81,6 +83,7 @@ vi.mock('../../api/hooks.ts', async () => {
     useCreateAdminUser: () => ({ mutateAsync: createMutate, isPending: false }),
     useReinviteAdminUser: () => ({ mutateAsync: reinviteMutate, isPending: false }),
     useSetAdminUserLocked: () => ({ mutateAsync: lockMutate, isPending: false }),
+    useSetAdminUserUploadReview: () => ({ mutateAsync: uploadReviewMutate, isPending: false }),
     useDeleteAdminUser: () => ({ mutateAsync: deleteMutate, isPending: false }),
   };
 });
@@ -97,6 +100,7 @@ beforeEach(async () => {
   createMutate.mockReset();
   reinviteMutate.mockReset();
   lockMutate.mockReset().mockResolvedValue({});
+  uploadReviewMutate.mockReset().mockResolvedValue({});
   deleteMutate.mockReset().mockResolvedValue(undefined);
 });
 afterEach(cleanup);
@@ -133,6 +137,34 @@ describe('UsersPage', () => {
     expect(within(row('Ion Blocat')).getByRole('button', { name: /Unlock/ })).toBeInTheDocument();
     expect(within(row('Ion Blocat')).getByRole('button', { name: /Send the invitation again/ })).toBeInTheDocument();
     expect(within(row('Ana Pop')).queryByRole('button', { name: /Send the invitation again/ })).toBeNull();
+  });
+
+  it('marks an account for upload review and clears the mark', async () => {
+    show();
+
+    // The mark is said on the account that has it and on no other.
+    expect(within(row('Rareș Held')).getByText('Uploads need review')).toBeTruthy();
+    expect(within(row('Ana Pop')).queryByText('Uploads need review')).toBeNull();
+
+    fireEvent.click(within(row('Ana Pop')).getByRole('button', { name: /Hold uploads for review/ }));
+    await waitFor(() => expect(uploadReviewMutate).toHaveBeenCalledWith({ id: 'ana', uploadsNeedReview: true }));
+
+    fireEvent.click(within(row('Rareș Held')).getByRole('button', { name: /Stop holding uploads/ }));
+    await waitFor(() => expect(uploadReviewMutate).toHaveBeenCalledWith({ id: 'rev', uploadsNeedReview: false }));
+  });
+
+  it('offers the upload-review mark only with the right to write accounts, and not above the caller', () => {
+    rights = 'read';
+    show();
+    expect(screen.queryByRole('button', { name: /Hold uploads for review/ })).toBeNull();
+
+    rights = 'read, write';
+    callerIsFullAdmin = false;
+    cleanup();
+    show();
+    // A full administrator's account is out of reach of a caller who is not one.
+    expect(within(row('Alt Administrator')).queryByRole('button', { name: /Hold uploads for review/ })).toBeNull();
+    expect(within(row('Ana Pop')).getByRole('button', { name: /Hold uploads for review/ })).toBeTruthy();
   });
 
   it('offers only the controls the caller holds the right for', () => {

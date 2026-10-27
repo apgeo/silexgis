@@ -69,6 +69,8 @@ paginile acestea sunt detaliul spre care trimit ele.
 |---|---|
 | [Partajare, coduri QR și pagini publice](sharing-and-public-pages.md) | Fiecare suprafață anonimă a aplicației |
 | [Telefon și sincronizare offline](mobile-sync.md) | Aplicația de telefon și ce transportă |
+| [Verificarea încărcărilor](upload-review.md) | Coada încărcărilor reținute pentru verificare, citirea uneia și acceptarea ei întreagă, pe linii sau pe câmpuri |
+| [Înregistrări de pe telefon și ture care au nevoie de o privire](phone-recordings.md) | Înregistrările de pe pagina peșterii, transformarea manuală și notificarea de pe o tură semnalată |
 | [Încărcarea topografiilor din TopoDroid](topodroid-uploads.md) | Chei de acces, topografiile unei peșteri și versiunile lor, pagina de stare a unei încărcări, linkul public al rezultatului |
 
 ## Păstrarea unei evidențe corecte

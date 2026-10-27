@@ -21,8 +21,8 @@
   "notCovered": [
     "manifest.json"
   ],
-  "fileCount": 35,
-  "digest": "156e1cf743c44b9f9396663139fff4040147e5f8fd39a692962a67c2dd1ab847",
+  "fileCount": 66,
+  "digest": "429315f6b9ce5c107d7c4a68fda3aff05079c0f5cad891aa63e8a5ea08f439b1",
   "files": {
     "07-download-first-page/request.txt": {
       "bytes": 37,
@@ -116,6 +116,22 @@
       "bytes": 303,
       "sha256": "a47761d702cc300e42058a1be9dfd1fdd8b0ee934719665e4d4a0a1605abf455"
     },
+    "16-errors/client-update-required/request.json": {
+      "bytes": 253,
+      "sha256": "6be80c9312739419fb87dcb2f27c8481525c29abb4b2ef99d777b66546db49f4"
+    },
+    "16-errors/client-update-required/request.txt": {
+      "bytes": 36,
+      "sha256": "735b1d7fc6fb5cd2f8e388d48b10bc209f07755cf193c121a8315b44214d7817"
+    },
+    "16-errors/client-update-required/response.json": {
+      "bytes": 295,
+      "sha256": "b9bd8e817a7aa34bb38fb27c9ab82dc6dc37f2e24b382f6c3a4964172ff460be"
+    },
+    "16-errors/client-update-required/status.txt": {
+      "bytes": 13,
+      "sha256": "b5250d764721aa67681630221c6398cdaecb4cc961bf39d4b84764036242a3d8"
+    },
     "16-errors/contract-unsupported/request.json": {
       "bytes": 468,
       "sha256": "283724a4579a013287c1b7cf837615130464d233b8eb0a2b84bdab6a14608f2c"
@@ -156,13 +172,121 @@
       "bytes": 13,
       "sha256": "b5250d764721aa67681630221c6398cdaecb4cc961bf39d4b84764036242a3d8"
     },
+    "16-errors/feature-disabled/request.txt": {
+      "bytes": 24,
+      "sha256": "1a306e24dba51c1fc2bb88d9792bcb2deae5b3508fff0bbbe045984b4b33bc42"
+    },
+    "16-errors/feature-disabled/response.json": {
+      "bytes": 237,
+      "sha256": "7d252dabc840dbde1075563e778375ce35b2e8345e73880fdc938cc1c7026aa6"
+    },
+    "16-errors/feature-disabled/status.txt": {
+      "bytes": 13,
+      "sha256": "b5250d764721aa67681630221c6398cdaecb4cc961bf39d4b84764036242a3d8"
+    },
+    "16-errors/file-bytes-missing/request.json": {
+      "bytes": 203,
+      "sha256": "2ab2b769acaa0930347238c720ebc91f8c459aea96c3ea9c8ee55fac654cb6ad"
+    },
+    "16-errors/file-bytes-missing/request.txt": {
+      "bytes": 36,
+      "sha256": "735b1d7fc6fb5cd2f8e388d48b10bc209f07755cf193c121a8315b44214d7817"
+    },
+    "16-errors/file-bytes-missing/response.json": {
+      "bytes": 418,
+      "sha256": "2ce231182f2bdf6174b880f405e7dee92b5f1b6fa38e1b21d61f14a1ddbf234f"
+    },
+    "17-documents-first-page/request.txt": {
+      "bytes": 38,
+      "sha256": "51fdaeeb2f3674f8c1813f6bd3323347ad0418170bb4c3fe9d932d78ef094149"
+    },
+    "17-documents-first-page/response.json": {
+      "bytes": 962,
+      "sha256": "49afda7c0d9857999222e94e24ef17087b9e8f47c42053fc7470a933cfa3ab72"
+    },
+    "18-files-links/request.json": {
+      "bytes": 167,
+      "sha256": "e70dacba1d2cb9aac584f422ca80d84666f77afdfa17181464e7b96cae4c363e"
+    },
+    "18-files-links/request.txt": {
+      "bytes": 30,
+      "sha256": "aba304c18e78904d6d6fadaa55b5a3e8f7cf229a5d1ad456ba5bed1aef875206"
+    },
+    "18-files-links/response.json": {
+      "bytes": 475,
+      "sha256": "e0dc125c91c939e7e524f654701f4ad80c4e72225ceb509e6fd568010ed52c01"
+    },
+    "19-upload-document-and-link/request.json": {
+      "bytes": 417,
+      "sha256": "45425d7b168dc73866adf93e7d9bf3cc0dee77b95a76d17b7b5a222c43ad1324"
+    },
+    "19-upload-document-and-link/request.txt": {
+      "bytes": 36,
+      "sha256": "735b1d7fc6fb5cd2f8e388d48b10bc209f07755cf193c121a8315b44214d7817"
+    },
+    "19-upload-document-and-link/response.json": {
+      "bytes": 488,
+      "sha256": "2e006ada3f322cc531fa77e7d4ccf09bf70aab643e92a8b9d0bfbf79180c00f5"
+    },
+    "20-upload-held/request.json": {
+      "bytes": 706,
+      "sha256": "3a69c9c1a04e92205b3171ca68c0f82c31e240e3c7bed1d236c0bbf7d3201246"
+    },
+    "20-upload-held/request.txt": {
+      "bytes": 36,
+      "sha256": "735b1d7fc6fb5cd2f8e388d48b10bc209f07755cf193c121a8315b44214d7817"
+    },
+    "20-upload-held/response.json": {
+      "bytes": 478,
+      "sha256": "65785ad2d1f1c99a72dbd4f85fd7a5380e619493f2eb0b251e8f97c4b7ced20c"
+    },
+    "21-reviews-first-page/request.txt": {
+      "bytes": 36,
+      "sha256": "42adebabbbb44abe9fe81b57db81668b4f18399a6364109fa47492c8c5b48315"
+    },
+    "21-reviews-first-page/response.json": {
+      "bytes": 1086,
+      "sha256": "4ed3e400743100a4d295c76dfa726a2a1aedba2c70d52c9267b40904a7523abc"
+    },
+    "22-reviews-current-withheld/request.txt": {
+      "bytes": 36,
+      "sha256": "42adebabbbb44abe9fe81b57db81668b4f18399a6364109fa47492c8c5b48315"
+    },
+    "22-reviews-current-withheld/response.json": {
+      "bytes": 328,
+      "sha256": "74a571914150a3b72ab7d3b52b60f78946bd86b20c9f5daa9fbfd8232cffd3fa"
+    },
+    "23-people/request.txt": {
+      "bytes": 24,
+      "sha256": "1a306e24dba51c1fc2bb88d9792bcb2deae5b3508fff0bbbe045984b4b33bc42"
+    },
+    "23-people/response.json": {
+      "bytes": 479,
+      "sha256": "3aa0a8dcfc2f6789533ce7a6894723eab2ce15e20ea88b8f1c158cbbdba70abe"
+    },
+    "24-trips-first-page/request.txt": {
+      "bytes": 34,
+      "sha256": "6b87368bea93cafbfc95d4e59ce697a87d70a5af82570b02e54a78d33510cf01"
+    },
+    "24-trips-first-page/response.json": {
+      "bytes": 946,
+      "sha256": "a0f3bb3ec5d2b79c7f46ea3f4813bce8db26a550cbfcb6b8f32e28017229b35f"
+    },
+    "25-rasters-first-page/request.txt": {
+      "bytes": 36,
+      "sha256": "aaa1f5fe46f629743ea7bc7f1ef45173712328f2aa13e91c7c5ea1629438c9af"
+    },
+    "25-rasters-first-page/response.json": {
+      "bytes": 526,
+      "sha256": "3ae728566d1528ba72e0d32302d21e892b941617fb3b83928e2ecd738f6f514f"
+    },
     "CHANGELOG.md": {
-      "bytes": 22615,
-      "sha256": "dade240ce4f4a5d212c50078130aa9fc97cca796621b0cfaa7bf6f0b1d9b1c9c"
+      "bytes": 25173,
+      "sha256": "032b2b905c105f80b7f9374c1b4ef306d0bebe0d7e19fc037a381806dc0bcdbe"
     },
     "README.md": {
-      "bytes": 8990,
-      "sha256": "c04f47c97ab90d766dfff277c8f67b3a2db48533f3cec3dd45dd3ac68ee1502b"
+      "bytes": 12592,
+      "sha256": "7cb300aa5a5395246720142c0bfa186af7788ce7160065848154ff91a0166385"
     }
   }
 }

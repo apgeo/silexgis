@@ -1511,6 +1511,8 @@ public static class TripLogEndpoints
             onTheTrip = await TripAudience.ConcerningAsync(db, liveCallouts, user.UserId, ct);
         }
 
+        var attentions = await TripAttentionReads.ForAsync(db, tripIds, ct);
+
         var roles = await TripLogWriteService.ShippedRosterRolesAsync(db, ct);
         var participantRows = await (
             from participant in db.TripLogParticipants.AsNoTracking()
@@ -1626,7 +1628,8 @@ public static class TripLogEndpoints
                 readiness.TryGetValue(trip.Id, out var settled)
                     ? new TripChecklistReadinessDto(
                         settled.ChecklistId, settled.Readiness.Ticked, settled.Readiness.Total)
-                    : null);
+                    : null,
+                attentions.GetValueOrDefault(trip.Id));
         }
     }
 }

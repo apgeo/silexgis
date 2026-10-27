@@ -2,6 +2,7 @@
 import { App } from 'antd';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 
@@ -72,9 +73,11 @@ afterEach(() => {
 function show() {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <App>
-        <CaversPage />
-      </App>
+      <MemoryRouter>
+        <App>
+          <CaversPage />
+        </App>
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -218,5 +221,15 @@ describe('narrowing the list', () => {
     await act(async () => owed.ana([ANA]));
     await waitFor(() => expect(screen.queryByText('Bogdan Invented')).not.toBeInTheDocument());
     expect(screen.getByText('Ana Invented')).toBeInTheDocument();
+  });
+});
+
+describe('the way to the phone users', () => {
+  it('is offered even to an account that may only read the roster', async () => {
+    rosterRights = 'read';
+    show();
+
+    const link = await screen.findByTestId('cavers-phone-users');
+    expect(link.closest('a')).toHaveAttribute('href', '/cavers/phone-users');
   });
 });

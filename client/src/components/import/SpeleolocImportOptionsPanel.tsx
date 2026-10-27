@@ -43,6 +43,18 @@ interface Props {
   /** What the archive holds. Empty until it has been read once, or when it could not be read. */
   recordings: readonly SpeleolocRecording[];
   recordingsLoading: boolean;
+  /**
+   * Set when the review is of one recording already kept on the server, so there is nothing to
+   * choose: the recording is named instead of offered, with the facts the archive chooser would
+   * show for it.
+   */
+  lockedRecording?: {
+    title: string;
+    startedAt: string;
+    endedAt: string | null;
+    scans: number;
+    documents: number;
+  };
 }
 
 /**
@@ -64,6 +76,7 @@ export default function SpeleolocImportOptionsPanel({
   onChange,
   recordings,
   recordingsLoading,
+  lockedRecording,
 }: Props) {
   const { t, i18n } = useTranslation();
   const cavingGroups = useCavingGroups();
@@ -99,40 +112,59 @@ export default function SpeleolocImportOptionsPanel({
             label: t('speleolocImport.optionsRecording'),
             children: (
               <Row gutter={[16, 8]}>
-                <Col xs={24}>
-                  <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-                    {t('speleolocImport.recordingHint')}
-                  </Typography.Paragraph>
-                </Col>
-                <Col xs={24}>
-                  <Form.Item label={t('speleolocImport.recording')} style={{ marginBottom: 8 }}>
-                    <Select
-                      allowClear
-                      showSearch
-                      optionFilterProp="label"
-                      loading={recordingsLoading}
-                      placeholder={t('speleolocImport.recordingPlaceholder')}
-                      value={options.tripUuid ?? undefined}
-                      onChange={(value?: string) => set('tripUuid', value ?? null)}
-                      data-testid="speleoloc-import-recording"
-                      options={recordingOptions}
-                    />
-                  </Form.Item>
-                </Col>
-                {chosenRecording && (
+                {lockedRecording ? (
                   <Col xs={24}>
-                    <div data-testid="speleoloc-import-recording-facts">
-                      {chosenRecording.caveTitle && <Tag>{chosenRecording.caveTitle}</Tag>}
+                    <div data-testid="speleoloc-import-recording-locked">
+                      <Typography.Text strong>{lockedRecording.title}</Typography.Text>
+                      <br />
                       <Typography.Text type="secondary">
                         {t('speleolocImport.recordingFacts', {
-                          started: when(chosenRecording.startedAt),
-                          ended: when(chosenRecording.endedAt),
-                          scans: chosenRecording.pointCount,
-                          documents: chosenRecording.documentCount,
+                          started: when(lockedRecording.startedAt),
+                          ended: when(lockedRecording.endedAt),
+                          scans: lockedRecording.scans,
+                          documents: lockedRecording.documents,
                         })}
                       </Typography.Text>
                     </div>
                   </Col>
+                ) : (
+                  <>
+                    <Col xs={24}>
+                      <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                        {t('speleolocImport.recordingHint')}
+                      </Typography.Paragraph>
+                    </Col>
+                    <Col xs={24}>
+                      <Form.Item label={t('speleolocImport.recording')} style={{ marginBottom: 8 }}>
+                        <Select
+                          allowClear
+                          showSearch
+                          optionFilterProp="label"
+                          loading={recordingsLoading}
+                          placeholder={t('speleolocImport.recordingPlaceholder')}
+                          value={options.tripUuid ?? undefined}
+                          onChange={(value?: string) => set('tripUuid', value ?? null)}
+                          data-testid="speleoloc-import-recording"
+                          options={recordingOptions}
+                        />
+                      </Form.Item>
+                    </Col>
+                    {chosenRecording && (
+                      <Col xs={24}>
+                        <div data-testid="speleoloc-import-recording-facts">
+                          {chosenRecording.caveTitle && <Tag>{chosenRecording.caveTitle}</Tag>}
+                          <Typography.Text type="secondary">
+                            {t('speleolocImport.recordingFacts', {
+                              started: when(chosenRecording.startedAt),
+                              ended: when(chosenRecording.endedAt),
+                              scans: chosenRecording.pointCount,
+                              documents: chosenRecording.documentCount,
+                            })}
+                          </Typography.Text>
+                        </div>
+                      </Col>
+                    )}
+                  </>
                 )}
               </Row>
             ),

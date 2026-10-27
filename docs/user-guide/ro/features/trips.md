@@ -549,4 +549,5 @@ Vezi [Măsurători și statistici](measurements-and-statistics.md#statistici-din
 
 Flux: [Planificarea și redactarea unei ture](../workflows/plan-and-log-a-trip.md) ·
 Înrudite: [Liste de verificare și apelul de urgență](checklists-and-callout.md) ·
+[Înregistrări de pe telefon și ture care au nevoie de o privire](phone-recordings.md) ·
 [Tabere](camps.md) · [Evenimente și calendar](events-and-calendar.md)

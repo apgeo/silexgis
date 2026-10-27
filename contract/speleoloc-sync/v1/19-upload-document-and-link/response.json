@@ -1,0 +1,28 @@
+{
+  "batchId": "<batch>",
+  "importBatchId": "<uuid-1>",
+  "replayed": false,
+  "written": 2,
+  "refused": 0,
+  "rows": [],
+  "conflicts": [],
+  "duplicates": [],
+  "documents": [
+    {
+      "id": "<document>",
+      "status": "created",
+      "revision": "<timestamp>",
+      "code": null,
+      "detail": null
+    }
+  ],
+  "documentLinks": [
+    {
+      "id": "<uuid-2>",
+      "status": "created",
+      "revision": "<timestamp>",
+      "code": null,
+      "detail": null
+    }
+  ]
+}

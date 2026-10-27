@@ -1,0 +1,21 @@
+{
+  "links": [
+    {
+      "documentId": "<document>",
+      "rendition": "original",
+      "url": "/api/v1/files/<file>/content?token=<token>",
+      "expiresAt": "<timestamp>",
+      "sizeBytes": null,
+      "sha256": null
+    },
+    {
+      "documentId": "<document>",
+      "rendition": 480,
+      "url": "/api/v1/files/<file>/thumbnail?size=480&token=<token>",
+      "expiresAt": "<timestamp>",
+      "sizeBytes": null,
+      "sha256": null
+    }
+  ],
+  "refused": []
+}

@@ -164,6 +164,61 @@ public sealed class ContractFixture
         WriteExchangeAsync(caseName, requestLine, requestBody, response, status: null);
 
     /// <summary>
+    /// Reads one address, records the exchange as it happened, and hands the answer back for the
+    /// caller's own assertions — so the recording and the assertions are about the same bytes.
+    /// </summary>
+    public async Task<JsonElement> RecordGetAsync(string caseName, HttpClient client, string url)
+    {
+        using var response = await client.GetAsync(url);
+        var payload = await response.Content.ReadAsStringAsync();
+        ((int)response.StatusCode).ShouldBe(200, payload);
+        await AssertAsync(caseName, $"GET {url}", response);
+        using var document = JsonDocument.Parse(payload);
+        return document.RootElement.Clone();
+    }
+
+    /// <summary>
+    /// Sends one JSON body, records what went up and what came back, and hands the answer back.
+    /// The body is serialised here rather than by <c>PostAsJsonAsync</c>, so the recorded request
+    /// is the bytes that were sent rather than a second rendering of the same object.
+    /// </summary>
+    public async Task<JsonElement> RecordPostAsync(string caseName, HttpClient client, string url, object body)
+    {
+        var json = JsonSerializer.Serialize(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var response = await client.PostAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+        var payload = await response.Content.ReadAsStringAsync();
+        ((int)response.StatusCode).ShouldBe(200, payload);
+        await AssertAsync(caseName, $"POST {url}", json, response);
+        using var document = JsonDocument.Parse(payload);
+        return document.RootElement.Clone();
+    }
+
+    /// <summary>
+    /// Sends one JSON body the server is expected to refuse, and records the refusal with its status.
+    /// </summary>
+    public async Task<JsonElement> RecordRefusedPostAsync(string caseName, HttpClient client, string url, object body)
+    {
+        var json = JsonSerializer.Serialize(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var response = await client.PostAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+        var payload = await response.Content.ReadAsStringAsync();
+        await AssertRefusalAsync(caseName, $"POST {url}", json, response);
+        using var document = JsonDocument.Parse(payload);
+        return document.RootElement.Clone();
+    }
+
+    /// <summary>
+    /// Reads one address the server is expected to refuse, and records the refusal with its status.
+    /// </summary>
+    public async Task<JsonElement> RecordRefusedGetAsync(string caseName, HttpClient client, string url)
+    {
+        using var response = await client.GetAsync(url);
+        var payload = await response.Content.ReadAsStringAsync();
+        await AssertRefusalAsync(caseName, $"GET {url}", response);
+        using var document = JsonDocument.Parse(payload);
+        return document.RootElement.Clone();
+    }
+
+    /// <summary>
     /// Writes or checks one exchange the server refused.
     /// </summary>
     /// <remarks>

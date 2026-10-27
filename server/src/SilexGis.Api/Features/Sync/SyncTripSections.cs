@@ -4,6 +4,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
+using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Sync;
@@ -103,6 +104,81 @@ internal sealed class SyncTripRecordingsSection(IAccessService access)
 
     protected override IReadOnlyList<SyncUploadTripRecordingDto>? ItemsOf(SyncUploadRequest request) =>
         request.TripRecordings;
+
+    private static readonly string[] EditFields =
+    [
+        SyncHeldFields.Title, SyncHeldFields.Description, SyncHeldFields.Log, SyncHeldFields.Times, SyncHeldFields.Cave,
+    ];
+
+    /// <summary>An edit states the whole recording, so every field is offered.</summary>
+    protected override IReadOnlyList<string> AcceptableFields(SyncTripRecordingProposal proposal) =>
+        proposal.Act == SyncTripAct.Update ? EditFields : [];
+
+    /// <summary>
+    /// The write replaces the whole recording, so a field left out is written as the recording
+    /// holds it now.
+    /// </summary>
+    protected override async Task<SyncTripRecordingProposal> NarrowedAsync(
+        SyncUploadRun run, SyncTripRecordingProposal proposal, IReadOnlyList<string> fields, CancellationToken ct)
+    {
+        if (proposal.Act != SyncTripAct.Update)
+        {
+            return proposal;
+        }
+
+        var now = await run.Db.TripRecordings.AsNoTracking().IgnoreQueryFilters()
+            .FirstOrDefaultAsync(r => r.Id == proposal.Recording.Id, ct);
+        if (now is null)
+        {
+            // Gone since it was resolved: the write finds that out and answers it.
+            return proposal;
+        }
+
+        var item = proposal.Recording;
+        var times = fields.Contains(SyncHeldFields.Times);
+        return proposal with
+        {
+            Recording = item with
+            {
+                Title = fields.Contains(SyncHeldFields.Title) ? item.Title : now.Title,
+                Description = fields.Contains(SyncHeldFields.Description) ? item.Description : now.Description,
+                Log = fields.Contains(SyncHeldFields.Log) ? item.Log : now.Log,
+                StartedAt = times ? item.StartedAt : now.StartedAt,
+                EndedAt = times ? item.EndedAt : now.EndedAt,
+                CaveId = fields.Contains(SyncHeldFields.Cave) ? item.CaveId : now.CaveFeatureId,
+            },
+        };
+    }
+
+    protected override async Task<IReadOnlyList<HeldFieldComparison>?> CompareAsync(
+        SyncHeldComparing comparing, SyncTripRecordingProposal proposal, CancellationToken ct)
+    {
+        if (proposal.Act != SyncTripAct.Update)
+        {
+            return null;
+        }
+
+        var now = await comparing.Db.TripRecordings.AsNoTracking().IgnoreQueryFilters()
+            .FirstOrDefaultAsync(r => r.Id == proposal.Recording.Id, ct);
+        if (now is null)
+        {
+            return null;
+        }
+
+        var item = proposal.Recording;
+        var readable = await comparing.ReadableFeatures([now.CaveFeatureId], ct);
+        return
+        [
+            SyncHeldComparisons.Of(SyncHeldFields.Title, now.Title, item.Title ?? string.Empty),
+            SyncHeldComparisons.Of(SyncHeldFields.Description, now.Description, item.Description),
+            SyncHeldComparisons.Of(SyncHeldFields.Log, now.Log, item.Log),
+            SyncHeldComparisons.Of(
+                SyncHeldFields.Times,
+                new { startedAt = SyncHeldComparisons.Moment(now.StartedAt), endedAt = SyncHeldComparisons.Moment(now.EndedAt) },
+                new { startedAt = SyncHeldComparisons.Moment(item.StartedAt), endedAt = SyncHeldComparisons.Moment(item.EndedAt) }),
+            SyncHeldComparisons.Feature(SyncHeldFields.Cave, now.CaveFeatureId, item.CaveId, readable),
+        ];
+    }
 
     public override async Task<SyncResolution<SyncTripRecordingProposal>> ResolveAsync(
         SyncUploadRun run, SyncUploadTripRecordingDto item, CancellationToken ct)
@@ -321,6 +397,66 @@ internal sealed class SyncTripPointsSection(IAccessService access)
 
     protected override IReadOnlyList<SyncUploadTripPointDto>? ItemsOf(SyncUploadRequest request) =>
         request.TripPoints;
+
+    private static readonly string[] EditFields = [SyncHeldFields.Notes, SyncHeldFields.Place, SyncHeldFields.Time];
+
+    /// <summary>An edit states the whole scan, so every field is offered.</summary>
+    protected override IReadOnlyList<string> AcceptableFields(SyncTripPointProposal proposal) =>
+        proposal.Act == SyncTripAct.Update ? EditFields : [];
+
+    /// <summary>The write replaces the whole scan, so a field left out is written as the scan holds it now.</summary>
+    protected override async Task<SyncTripPointProposal> NarrowedAsync(
+        SyncUploadRun run, SyncTripPointProposal proposal, IReadOnlyList<string> fields, CancellationToken ct)
+    {
+        if (proposal.Act != SyncTripAct.Update)
+        {
+            return proposal;
+        }
+
+        var now = await run.Db.TripRecordingPoints.AsNoTracking().IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == proposal.Point.Id, ct);
+        if (now is null)
+        {
+            return proposal;
+        }
+
+        var item = proposal.Point;
+        return proposal with
+        {
+            Point = item with
+            {
+                Notes = fields.Contains(SyncHeldFields.Notes) ? item.Notes : now.Notes,
+                PlaceId = fields.Contains(SyncHeldFields.Place) ? item.PlaceId : now.PlaceFeatureId,
+                ScannedAt = fields.Contains(SyncHeldFields.Time) ? item.ScannedAt : now.ScannedAt,
+            },
+        };
+    }
+
+    protected override async Task<IReadOnlyList<HeldFieldComparison>?> CompareAsync(
+        SyncHeldComparing comparing, SyncTripPointProposal proposal, CancellationToken ct)
+    {
+        if (proposal.Act != SyncTripAct.Update)
+        {
+            return null;
+        }
+
+        var now = await comparing.Db.TripRecordingPoints.AsNoTracking().IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == proposal.Point.Id, ct);
+        if (now is null)
+        {
+            return null;
+        }
+
+        var item = proposal.Point;
+        var readable = await comparing.ReadableFeatures(now.PlaceFeatureId is { } place ? [place] : [], ct);
+        return
+        [
+            SyncHeldComparisons.Of(SyncHeldFields.Notes, now.Notes, item.Notes),
+            SyncHeldComparisons.Feature(SyncHeldFields.Place, now.PlaceFeatureId, item.PlaceId, readable),
+            SyncHeldComparisons.Of(
+                SyncHeldFields.Time, SyncHeldComparisons.Moment(now.ScannedAt), SyncHeldComparisons.Moment(item.ScannedAt)),
+        ];
+    }
 
     public override async Task<SyncResolution<SyncTripPointProposal>> ResolveAsync(
         SyncUploadRun run, SyncUploadTripPointDto item, CancellationToken ct)

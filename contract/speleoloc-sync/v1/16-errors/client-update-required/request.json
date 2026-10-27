@@ -1,0 +1,15 @@
+{
+  "batchId": "<batch>",
+  "contractVersion": 1,
+  "rows": [
+    {
+      "id": "<cave>",
+      "kind": "cave",
+      "baseRevision": null,
+      "deleted": false,
+      "name": "refused",
+      "caveTypeCode": "cave",
+      "isMain": false
+    }
+  ]
+}

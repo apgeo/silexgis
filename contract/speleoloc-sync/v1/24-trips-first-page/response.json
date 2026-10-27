@@ -1,0 +1,38 @@
+{
+  "setRevision": 1,
+  "settings": {},
+  "recordings": [
+    {
+      "id": "<recording>",
+      "caveId": "<cave>",
+      "title": "Trip",
+      "description": "Invented for the test",
+      "log": "entered; turned back at the sump",
+      "startedAt": "<timestamp>",
+      "endedAt": "<timestamp>",
+      "createdByDeviceUserId": "<uuid-1>",
+      "revision": "<timestamp>",
+      "points": [
+        {
+          "id": "<scan-at-place>",
+          "placeId": "<place>",
+          "scannedAt": "<timestamp>",
+          "notes": "scan 10",
+          "createdByDeviceUserId": null,
+          "revision": "<timestamp>"
+        },
+        {
+          "id": "<scan-at-no-place>",
+          "placeId": null,
+          "scannedAt": "<timestamp>",
+          "notes": "scan 30",
+          "createdByDeviceUserId": null,
+          "revision": "<timestamp>"
+        }
+      ]
+    }
+  ],
+  "tombstones": [],
+  "nextCursor": "<cursor>",
+  "hasMore": false
+}

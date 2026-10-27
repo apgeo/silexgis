@@ -31,7 +31,7 @@ not hold is simply not shown.
 |---|---|
 | See the register and open a row | **Read** on **users** |
 | **Invite someone** | **Create** on **users** |
-| **Send the invitation again**, **Lock** · **Unlock**, **Reset second factor** | **Write** on **users** |
+| **Send the invitation again**, **Lock** · **Unlock**, **Reset second factor**, **Hold uploads for review** · **Stop holding uploads** | **Write** on **users** |
 | **Delete** | **Delete** on **users** |
 | Follow a permission group's name to its page | Read on **permissionGroups** — without it the names are shown but not linked |
 
@@ -58,6 +58,7 @@ the address are all searched, and accents do not matter. The list is paged.
 | **No password yet** | Invited, but its owner has not chosen a password |
 | **Full administrator** | A member of Full Administrators who can sign in. A *locked* full administrator is not tagged, because they could not act — but they are still one, and become one again the moment they are unlocked |
 | **Second factor on** | At least one second factor is switched on |
+| **Uploads need review** | Everything this account uploads waits for a reviewer — see [Holding an account's uploads for review](#holding-an-accounts-uploads-for-review) |
 
 **Expand a row** to see the permission groups the account belongs to — marked **member** when
 it is named directly, or *through …* naming the caving groups that bring it in. An account in
@@ -117,6 +118,24 @@ the count of wrong passwords, so the next mistyped one does not lock it straight
 
 A lock does not remove anything: the account, its roster entry and everything it added stay as
 they were.
+
+## Holding an account's uploads for review
+
+**Hold uploads for review** puts the **Uploads need review** tag on the account. From then on
+everything that account sends in — from the phone app, or by importing a file — **waits**: nothing
+of it is written to the maps, the documents or the trips until somebody with the **Upload review**
+right accepts it. See [Reviewing uploads](../features/upload-review.md).
+
+It acts at once, with no confirmation: *"Everything … uploads will now wait for a reviewer."* **Stop
+holding uploads** takes the tag off: *"What … uploads is no longer held for review."*
+
+- The mark changes what the account sends **from then on**. Uploads already waiting stay in the
+  review queue until they are decided; clearing the mark does not release them.
+- The account is told nothing by the mark itself. It sees its uploads waiting, and each decision,
+  in its own list on **Geodata → Imports**.
+- The change is entered in the audit log, with who made it.
+- It cannot be used on an account that holds more rights than you do: the button is not shown for a
+  full administrator's account unless you are one yourself, and the server refuses the others.
 
 ## Resetting a lost second factor
 

@@ -134,7 +134,12 @@ export default function SpeologieImportPage() {
         locationProtected,
         parentId: null,
       });
-      setResult(answer);
+      // An account under review imports nothing yet: the selection waits for a reviewer.
+      if (answer.held) {
+        message.info(t('importReview.held'));
+      } else {
+        setResult(answer);
+      }
     } catch (error) {
       message.error(speologieErrorMessage(error, t) ?? t('speologie.errors.importFailed'));
     }

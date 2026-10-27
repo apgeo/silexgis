@@ -13,6 +13,8 @@ namespace SilexGis.Api.Features.Review;
 /// The size of the files the batch's waiting lines keep on the server until they are decided.
 /// </param>
 /// <param name="Sections">How many waiting lines each part of the upload holds, by its name.</param>
+/// <param name="UploaderName">The uploading account's display label, never its address.</param>
+/// <param name="DecidedByName">The deciding account's display label, once a line was decided.</param>
 public sealed record HeldBatchDto(
     Guid Id,
     ImportSource Source,
@@ -25,7 +27,9 @@ public sealed record HeldBatchDto(
     int PendingCount,
     int LineCount,
     long HeldBytes,
-    IReadOnlyDictionary<string, int> Sections);
+    IReadOnlyDictionary<string, int> Sections,
+    string? UploaderName = null,
+    string? DecidedByName = null);
 
 /// <summary>One held line: what it proposes and what became of it.</summary>
 /// <param name="ReviewId">The line's identity outside the server — the id a phone was answered with.</param>
@@ -44,6 +48,15 @@ public sealed record HeldBatchDto(
 /// What the line would write, as the viewer may be shown it: without the position of a row the
 /// viewer may not place, and absent when the line changes or names a row the viewer may not read.
 /// </param>
+/// <param name="Fields">
+/// For a waiting edit of a photo or document, a recording, a scan or a raster map: each field it
+/// may be accepted by, the row now beside the proposal. Absent for every other line — a feature
+/// row's current state is read through the feature's own route.
+/// </param>
+/// <param name="HasPreview">
+/// The line keeps a picture on the server — a photo or a raster map's image, still waiting or
+/// turned down and not yet swept — of which <c>/review/items/{reviewId}/preview</c> draws a rendering.
+/// </param>
 public sealed record HeldLineDto(
     Guid ReviewId,
     string? Section,
@@ -59,7 +72,19 @@ public sealed record HeldLineDto(
     string? FailureCode,
     string? FailureDetail,
     bool ChangedSince,
-    JsonElement? Proposal);
+    JsonElement? Proposal,
+    IReadOnlyList<HeldFieldDto>? Fields = null,
+    bool HasPreview = false);
+
+/// <summary>One field of a waiting edit: the row now, and what the line would write.</summary>
+/// <param name="Current">The value now; absent when the row holds none, or when it is withheld.</param>
+/// <param name="Differs">Whether accepting the field changes the row; true whenever the value now is withheld.</param>
+/// <param name="CurrentWithheld">
+/// The value now names a row the viewer may not read — a recording's earlier cave, a scan's
+/// earlier place — and is left out.
+/// </param>
+public sealed record HeldFieldDto(
+    string Field, JsonElement? Current, JsonElement? Proposed, bool Differs, bool CurrentWithheld);
 
 /// <summary>A held batch with its lines.</summary>
 public sealed record HeldBatchDetailDto(HeldBatchDto Batch, IReadOnlyList<HeldLineDto> Lines);
@@ -77,8 +102,12 @@ public sealed record ReviewBatchDecisionRequest(string? Note = null, bool? OverC
 
 /// <summary>Accepting or rejecting one line.</summary>
 /// <param name="Fields">
-/// For an edit of a feature row: the fields accepted, when not all of them — any of
-/// <c>name</c>, <c>description</c>, <c>properties</c>, <c>position</c>. Ignored when rejecting.
+/// For an edit, the fields accepted when not all of them — any of the line's
+/// <c>acceptableFields</c>: for a feature row <c>name</c>, <c>description</c>, <c>properties</c>,
+/// <c>position</c>; for a photo or document <c>title</c>, <c>description</c>, <c>file</c>; for a
+/// recording <c>title</c>, <c>description</c>, <c>log</c>, <c>times</c>, <c>cave</c>; for a scan
+/// <c>notes</c>, <c>place</c>, <c>time</c>; for a raster map <c>title</c>, <c>mapType</c>,
+/// <c>sortOrder</c>, <c>caveArea</c>, <c>file</c>. Ignored when rejecting.
 /// </param>
 public sealed record ReviewItemDecisionRequest(
     IReadOnlyList<string>? Fields = null, string? Note = null, bool? OverCurrent = null);
