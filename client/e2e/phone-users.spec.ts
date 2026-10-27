@@ -57,7 +57,10 @@ test('a phone user is mapped to a caver and unmapped again from the Phone users 
   // From the roster page, where the way in is offered.
   await gotoRoute(page, '/cavers');
   await page.getByTestId('cavers-phone-users').click();
-  await expect(page.getByRole('heading', { name: 'Phone users' })).toBeVisible();
+  // The page is loaded on first use: on a busy machine its first load takes longer than the
+  // default wait, so the arrival is checked by address first and the heading given the same room.
+  await expect(page).toHaveURL(/\/cavers\/phone-users$/, { timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: 'Phone users' })).toBeVisible({ timeout: 15_000 });
 
   // Nobody has said who they are: they head the list, marked as not mapped.
   await expect(page.getByTestId(`phone-user-source-${head}`)).toHaveText('Not mapped', { timeout: 30_000 });
