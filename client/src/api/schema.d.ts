@@ -11258,6 +11258,8 @@ export interface components {
             sections: {
                 [key: string]: number;
             };
+            uploaderName?: null | string;
+            decidedByName?: null | string;
         };
         HeldLineDto: {
             /** Format: uuid */

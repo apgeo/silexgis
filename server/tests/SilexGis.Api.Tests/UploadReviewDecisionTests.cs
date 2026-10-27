@@ -324,6 +324,12 @@ public sealed class UploadReviewDecisionTests : IAsyncLifetime, IDisposable, ICl
         // The uploader reads their own batch and cannot decide it.
         var mine = await uploader.GetFromJsonAsync<JsonElement>("/api/v1/review/mine");
         mine.GetProperty("items").EnumerateArray().Select(b => b.GetProperty("id").GetGuid()).ShouldContain(batchId);
+
+        // The queue names who uploaded by a display label, never by the account's address.
+        var queued = queue.GetProperty("items").EnumerateArray().Single(b => b.GetProperty("id").GetGuid() == batchId);
+        var uploaderName = queued.GetProperty("uploaderName").GetString();
+        uploaderName.ShouldNotBeNullOrWhiteSpace();
+        uploaderName.ShouldNotContain("@");
         var own = await uploader.GetFromJsonAsync<JsonElement>($"/api/v1/review/batches/{batchId}");
         own.GetProperty("lines")[0].GetProperty("decision").GetString().ShouldBe("pending");
         (await uploader.PostAsJsonAsync($"/api/v1/review/batches/{batchId}/accept", new { }))

@@ -13,6 +13,8 @@ namespace SilexGis.Api.Features.Review;
 /// The size of the files the batch's waiting lines keep on the server until they are decided.
 /// </param>
 /// <param name="Sections">How many waiting lines each part of the upload holds, by its name.</param>
+/// <param name="UploaderName">The uploading account's display label, never its address.</param>
+/// <param name="DecidedByName">The deciding account's display label, once a line was decided.</param>
 public sealed record HeldBatchDto(
     Guid Id,
     ImportSource Source,
@@ -25,7 +27,9 @@ public sealed record HeldBatchDto(
     int PendingCount,
     int LineCount,
     long HeldBytes,
-    IReadOnlyDictionary<string, int> Sections);
+    IReadOnlyDictionary<string, int> Sections,
+    string? UploaderName = null,
+    string? DecidedByName = null);
 
 /// <summary>One held line: what it proposes and what became of it.</summary>
 /// <param name="ReviewId">The line's identity outside the server — the id a phone was answered with.</param>

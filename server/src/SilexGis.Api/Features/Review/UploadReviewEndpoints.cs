@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -121,7 +122,7 @@ public static class UploadReviewEndpoints
             .OrderBy(b => b.HeldAt).ThenBy(b => b.Id);
         var total = await query.CountAsync(ct);
         var batches = await query.Skip((p - 1) * size).Take(size).ToListAsync(ct);
-        return TypedResults.Ok(new PagedResult<HeldBatchDto>(await SummariesAsync(db, batches, ct), p, size, total));
+        return TypedResults.Ok(new PagedResult<HeldBatchDto>(await SummariesAsync(db, batches, ctx, ct), p, size, total));
     }
 
     private static async Task<Results<Ok<PagedResult<HeldBatchDto>>, UnauthorizedHttpResult>> MineAsync(
@@ -139,7 +140,7 @@ public static class UploadReviewEndpoints
             .OrderByDescending(b => b.HeldAt).ThenByDescending(b => b.Id);
         var total = await query.CountAsync(ct);
         var batches = await query.Skip((p - 1) * size).Take(size).ToListAsync(ct);
-        return TypedResults.Ok(new PagedResult<HeldBatchDto>(await SummariesAsync(db, batches, ct), p, size, total));
+        return TypedResults.Ok(new PagedResult<HeldBatchDto>(await SummariesAsync(db, batches, ctx, ct), p, size, total));
     }
 
     private static async Task<Results<Ok<HeldBatchDetailDto>, UnauthorizedHttpResult, ProblemHttpResult>> DetailAsync(
@@ -167,7 +168,7 @@ public static class UploadReviewEndpoints
             .Where(i => i.ImportBatchId == id && i.ReviewDecision != null)
             .OrderBy(i => i.Id)
             .ToListAsync(ct);
-        var summary = (await SummariesAsync(db, [batch], ct))[0];
+        var summary = (await SummariesAsync(db, [batch], ctx, ct))[0];
         return TypedResults.Ok(new HeldBatchDetailDto(summary, await LinesAsync(db, handlers, batch.Source, lines, ctx, ct)));
     }
 
@@ -406,13 +407,18 @@ public static class UploadReviewEndpoints
             .ToListAsync(ct);
         return new ReviewDecisionResultDto(
             await LinesAsync(db, handlers, source, decided.Decided, ctx, ct),
-            await SummariesAsync(db, batches, ct));
+            await SummariesAsync(db, batches, ctx, ct));
     }
 
     private static async Task<IReadOnlyList<HeldBatchDto>> SummariesAsync(
-        SilexGisDbContext db, IReadOnlyList<ImportBatch> batches, CancellationToken ct)
+        SilexGisDbContext db, IReadOnlyList<ImportBatch> batches, AccessContext viewer, CancellationToken ct)
     {
         var ids = batches.Select(b => b.Id).ToList();
+        var labels = await ProfileDirectory.ResolveLabelsAsync(
+            db,
+            new UserContext(viewer.UserId, viewer.CavingGroupIds),
+            batches.Select(b => b.ConfirmedByUserId).Concat(batches.Where(b => b.DecidedByUserId != null).Select(b => b.DecidedByUserId!.Value)),
+            ct);
         // The bytes the batch's waiting lines keep parked, so a reviewer sees the queue's weight.
         var bytes = await (from item in db.ImportBatchItems.AsNoTracking()
                            join session in db.UploadSessions.AsNoTracking() on item.HeldUploadSessionId equals (Guid?)session.Id
@@ -435,7 +441,9 @@ public static class UploadReviewEndpoints
                 bytes.Where(x => x.ImportBatchId == b.Id).Sum(x => x.DeclaredSizeBytes),
                 mine.Where(c => c.Pending)
                     .GroupBy(c => c.ProposalSection ?? "")
-                    .ToDictionary(g => g.Key, g => g.Sum(c => c.Count), StringComparer.Ordinal));
+                    .ToDictionary(g => g.Key, g => g.Sum(c => c.Count), StringComparer.Ordinal),
+                labels.GetValueOrDefault(b.ConfirmedByUserId),
+                b.DecidedByUserId is { } decider ? labels.GetValueOrDefault(decider) : null);
         })];
     }
 
