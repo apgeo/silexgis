@@ -627,6 +627,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapExpeditionSurfaceLogEndpoints();
     api.MapTripChecklistEndpoints();
     api.MapTripAttentionEndpoints();
+    api.MapTripRecordingEndpoints();
     api.MapChecklistEndpoints();
     api.MapExpeditionEndpoints();
     api.MapEventEndpoints();

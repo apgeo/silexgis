@@ -1152,6 +1152,141 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
             .ShouldContain(TripAttentionReasons.RecordingChangedAfterConversion);
     }
 
+    /// <summary>
+    /// A cave's recordings say where each stands — waiting, made into a report, made into one that
+    /// still needs looking at — and the flag's reasons ride on the trip: kept, but not raised, once
+    /// somebody has cleared it.
+    /// </summary>
+    [Fact]
+    public async Task A_cave_lists_its_recordings_with_where_each_stands_and_the_trip_carries_the_flags_reasons()
+    {
+        var (cave, _) = await CaveWithSurveyAsync();
+        var atFifty = await CreatePlaceAsync(cave, depth: -50);
+        var set = await CreateSetAsync(cave);
+
+        var waiting = (await WaitingRecordingAsync(set, cave, atFifty, "Waiting trip")).Recording;
+        var settled = Guid.CreateVersion7();
+        await RunConversionAsync((await UploadAsync(
+            set,
+            [Recording(settled, cave, mappedPhoneUser, title: "Settled trip")],
+            [Point(Guid.CreateVersion7(), settled, atFifty, 10)])).GetProperty("importBatchId").GetGuid());
+        var flagged = Guid.CreateVersion7();
+        await RunConversionAsync((await UploadAsync(
+            set,
+            [Recording(flagged, cave, mappedPhoneUser, title: "Flagged trip")],
+            [Point(Guid.CreateVersion7(), flagged, null, 10)])).GetProperty("importBatchId").GetGuid());
+
+        async Task<Dictionary<Guid, JsonElement>> ListAsync(HttpClient client)
+        {
+            var page = await client.GetFromJsonAsync<JsonElement>($"/api/v1/trip-recordings?caveId={cave}");
+            return page.GetProperty("items").EnumerateArray().ToDictionary(i => i.GetProperty("id").GetGuid());
+        }
+
+        var mine = await ListAsync(uploader);
+        mine.Keys.ShouldBe([waiting, settled, flagged], ignoreOrder: true);
+        mine[waiting].GetProperty("standing").GetString().ShouldBe("waiting");
+        mine[waiting].GetProperty("tripLogId").ValueKind.ShouldBe(JsonValueKind.Null);
+        mine[waiting].GetProperty("canConvert").GetBoolean().ShouldBeTrue();
+        mine[waiting].GetProperty("pointCount").GetInt32().ShouldBe(2);
+        mine[settled].GetProperty("standing").GetString().ShouldBe("converted");
+        mine[settled].GetProperty("canConvert").GetBoolean().ShouldBeFalse();
+        mine[flagged].GetProperty("standing").GetString().ShouldBe("needsAttention");
+        mine[flagged].GetProperty("tripLogId").GetGuid().ShouldBe(await TripOfAsync(flagged));
+
+        // The club member reads the recordings and the trips but may change none of them.
+        var theirs = await ListAsync(member);
+        theirs.Keys.ShouldBe([waiting, settled, flagged], ignoreOrder: true);
+        theirs[waiting].GetProperty("canConvert").GetBoolean().ShouldBeFalse();
+        theirs[flagged].GetProperty("tripLogId").GetGuid().ShouldBe(await TripOfAsync(flagged));
+
+        // Somebody outside the club reads none of them, and is told nothing of why.
+        (await ListAsync(stranger)).ShouldBeEmpty();
+        (await anonymous.GetAsync($"/api/v1/trip-recordings?caveId={cave}")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await uploader.GetAsync("/api/v1/trip-recordings")).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // The trip names its reasons in codes and counts, to every reader of the trip.
+        var tripId = await TripOfAsync(flagged);
+        foreach (var client in new[] { uploader, member })
+        {
+            var attention = (await client.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}")).GetProperty("attention");
+            attention.GetProperty("raised").GetBoolean().ShouldBeTrue();
+            attention.GetProperty("reasons").EnumerateArray()
+                .Select(r => r.GetProperty("code").GetString()).ShouldContain(TripAttentionReasons.PlaceUnknown);
+            attention.GetProperty("reasons").EnumerateArray().ShouldAllBe(r => r.GetProperty("count").GetInt32() > 0);
+        }
+
+        // A reader of the recording who may not read its trip is told it was converted, and neither
+        // where nor that the trip still has an unanswered flag.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripLogs.Where(x => x.Id == tripId).ExecuteUpdateAsync(s => s.SetProperty(x => x.Visibility, Visibility.Private)))
+                .ShouldBe(1);
+        }
+        var hidden = (await ListAsync(member))[flagged];
+        hidden.GetProperty("standing").GetString().ShouldBe("converted");
+        hidden.GetProperty("tripLogId").ValueKind.ShouldBe(JsonValueKind.Null);
+        (await ListAsync(uploader))[flagged].GetProperty("standing").GetString().ShouldBe("needsAttention");
+
+        (await uploader.PostAsync($"/api/v1/trip-logs/{tripId}/attention/clear", null)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var cleared = (await uploader.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}")).GetProperty("attention");
+        cleared.GetProperty("raised").GetBoolean().ShouldBeFalse();
+        cleared.GetProperty("clearedAt").ValueKind.ShouldBe(JsonValueKind.String);
+        cleared.GetProperty("reasons").GetArrayLength().ShouldBeGreaterThan(0);
+        (await ListAsync(uploader))[flagged].GetProperty("standing").GetString().ShouldBe("converted");
+
+        // A trip made by hand has no flag at all.
+        var plain = await uploader.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Plain {marker}",
+            tripDate = "2026-09-10",
+            participants = Array.Empty<object>(),
+        });
+        var plainId = (await plain.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        (await uploader.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{plainId}"))
+            .GetProperty("attention").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    /// <summary>
+    /// Listing a cave's recordings names the cave, so a reader who may not be told of the cave, or
+    /// may not place it, gets an empty page where the cave's owner gets the recording.
+    /// </summary>
+    [Fact]
+    public async Task A_cave_a_reader_may_not_be_told_of_or_place_lists_no_recordings_for_that_reader()
+    {
+        foreach (var (visibility, guarded) in new[] { ("private", false), ("authenticated", true) })
+        {
+            var (cave, _) = await CaveWithSurveyAsync(visibility, guarded);
+            var set = await CreateSetAsync(cave);
+            var recording = Guid.CreateVersion7();
+            await UploadAsync(set, [Recording(recording, cave, mappedPhoneUser)], [Point(Guid.CreateVersion7(), recording, null, 10)]);
+
+            var mine = await uploader.GetFromJsonAsync<JsonElement>($"/api/v1/trip-recordings?caveId={cave}");
+            mine.GetProperty("items").GetArrayLength().ShouldBe(1, visibility);
+
+            // Fixture proof: the member is in the club that owns the recording, so only the cave
+            // gate can be what empties the page.
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+                (await db.TripRecordings.AsNoTracking().SingleAsync(r => r.Id == recording)).CavingGroupId.ShouldBe(clubId);
+            }
+
+            var theirs = await member.GetFromJsonAsync<JsonElement>($"/api/v1/trip-recordings?caveId={cave}");
+            theirs.GetProperty("items").GetArrayLength().ShouldBe(0, visibility);
+            theirs.GetProperty("totalItems").GetInt32().ShouldBe(0, visibility);
+        }
+
+        // Positive control with the same reader and the same set settings: on an open cave the
+        // member does list the recording, so the empty pages above come from the cave gate.
+        var (openCave, _) = await CaveWithSurveyAsync("authenticated", false);
+        var openSet = await CreateSetAsync(openCave);
+        var openRecording = Guid.CreateVersion7();
+        await UploadAsync(openSet, [Recording(openRecording, openCave, mappedPhoneUser)], [Point(Guid.CreateVersion7(), openRecording, null, 10)]);
+        var visible = await member.GetFromJsonAsync<JsonElement>($"/api/v1/trip-recordings?caveId={openCave}");
+        visible.GetProperty("items").GetArrayLength().ShouldBe(1);
+    }
+
     private async Task<List<JsonElement>> RevertAsync(Guid importBatchId)
     {
         var response = await uploader.PostAsync($"/api/v1/import-batches/{importBatchId}/revert", null);

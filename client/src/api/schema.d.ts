@@ -6233,6 +6233,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-recordings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The phone recordings of one cave this caller may read, most recent first, each with where it stands: waiting, made into a trip report, or made into one that needs looking at. A cave the caller may not be told about, or may not place, answers an empty page, exactly as the cave's trips do. */
+        get: operations["listTripRecordings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/checklists": {
         parameters: {
             query?: never;
@@ -12608,6 +12625,15 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfTripRecordingListItemDto: {
+            items: components["schemas"]["TripRecordingListItemDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfUnfiledDocumentDto: {
             items: components["schemas"]["UnfiledDocumentDto"][];
             /** Format: int32 */
@@ -16162,6 +16188,19 @@ export interface components {
         TrackingTeamRequest: {
             title: string;
         };
+        TripAttentionDto: {
+            raised: boolean;
+            /** Format: date-time */
+            raisedAt: string;
+            /** Format: date-time */
+            clearedAt: null | string;
+            reasons: components["schemas"]["TripAttentionReasonDto"][];
+        };
+        TripAttentionReasonDto: {
+            code: string;
+            /** Format: int32 */
+            count: number;
+        };
         TripCalloutRequest: {
             /** Format: date-time */
             expectedReturnAt?: null | string;
@@ -16624,6 +16663,7 @@ export interface components {
             canStandDownCallout: boolean;
             meetingGeom: null | components["schemas"]["GeoJsonGeometry"];
             checklistReadiness: null | components["schemas"]["TripChecklistReadinessDto"];
+            attention: null | components["schemas"]["TripAttentionDto"];
         };
         TripLogFeatureCollection: {
             type: string;
@@ -16737,6 +16777,23 @@ export interface components {
             /** Format: int32 */
             alreadyNamed: number;
         };
+        TripRecordingListItemDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            endedAt: null | string;
+            /** Format: int32 */
+            pointCount: number;
+            standing: components["schemas"]["TripRecordingStanding"];
+            /** Format: uuid */
+            tripLogId: null | string;
+            canConvert: boolean;
+        };
+        /** @enum {unknown} */
+        TripRecordingStanding: "waiting" | "converted" | "needsAttention";
         TripReportDownloadForm: {
             map?: null | components["schemas"]["IFormFile"];
         };
@@ -33643,6 +33700,39 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    listTripRecordings: {
+        parameters: {
+            query: {
+                caveId: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagedResultOfTripRecordingListItemDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
