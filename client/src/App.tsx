@@ -38,6 +38,8 @@ const SpeologieImportPage = lazy(() => import('./pages/catalogue/SpeologieImport
 const TripImportPage = lazy(() => import('./pages/trips/TripImportPage.tsx'));
 const SpeleolocImportPage = lazy(() => import('./pages/trips/SpeleolocImportPage.tsx'));
 const TermRulesPage = lazy(() => import('./pages/admin/TermRulesPage.tsx'));
+const ReviewQueuePage = lazy(() => import('./pages/review/ReviewQueuePage.tsx'));
+const ReviewBatchPage = lazy(() => import('./pages/review/ReviewBatchPage.tsx'));
 const ChecklistsPage = lazy(() => import('./pages/checklists/ChecklistsPage.tsx'));
 const SavedFiltersPage = lazy(() => import('./pages/filters/SavedFiltersPage.tsx'));
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage.tsx'));
@@ -225,6 +227,8 @@ export const routes: RouteObject[] = guarded([
           { path: '/expeditions', element: <Loadable><ExpeditionListPage /></Loadable> },
           { path: '/expeditions/:id', element: <Loadable><ExpeditionDetailPage /></Loadable> },
           { path: '/expeditions/:id/report', element: <Loadable><ExpeditionReportPage /></Loadable> },
+          { path: '/review', element: <Loadable><ReviewQueuePage /></Loadable> },
+          { path: '/review/batches/:id', element: <Loadable><ReviewBatchPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
           { path: '/admin/messaging', element: <Loadable><MessagingSettingsPage /></Loadable> },
           { path: '/admin/notification-health', element: <Loadable><NotificationHealthPage /></Loadable> },

@@ -4,6 +4,7 @@ import {
   ApartmentOutlined,
   ApiOutlined,
   AppstoreOutlined,
+  AuditOutlined,
   BarChartOutlined,
   BlockOutlined,
   BoxPlotOutlined,
@@ -137,6 +138,10 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
   // Each administration destination follows its own domain — "admin" is not a rank any more,
   // just the pages a person's rights happen to include.
   const adminPages: NavLeaf[] = [
+    // Uploads held back from accounts under review: a queue to work through, not a setting.
+    ...(gates.can('uploadReview')
+      ? [{ key: 'review', icon: <AuditOutlined />, label: t('nav.review') }]
+      : []),
     ...(gates.can('audit')
       ? [{ key: 'admin/audit', icon: <HistoryOutlined />, label: t('nav.audit') }]
       : []),
