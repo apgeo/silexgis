@@ -161,6 +161,8 @@ deja să primească vecinii cei mai apropiați — nu un recensământ al masivu
 **Activitate → Importă o înregistrare** citește o tură pe care un telefon a înregistrat-o în
 subteran — scanările marcajelor fixate în peșteră — în [jurnalul de urmărire](live-tracking.md) al
 unei ture. Este oferită oricui poate înregistra ture.
+O înregistrare pe care un telefon a trimis-o deja este listată pe pagina peșterii ei, unde poate fi
+transformată la fel: vezi [Înregistrări de pe telefon](phone-recordings.md).
 
 1. **Trage exportul SpeleoLoc** — arhiva pe care o face telefonul sau baza de date din ea.
    Fotografiile pe care le poartă nu sunt deschise niciodată și nu se scrie nimic până nu vezi ce

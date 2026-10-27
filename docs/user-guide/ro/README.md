@@ -86,6 +86,7 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 **În afara instalării**
 [Partajare, coduri QR și pagini publice](features/sharing-and-public-pages.md) ·
 [Telefon și sincronizare offline](features/mobile-sync.md) ·
+[Înregistrări de pe telefon și ture care au nevoie de o privire](features/phone-recordings.md) ·
 [Încărcarea topografiilor din TopoDroid](features/topodroid-uploads.md)
 
 **Păstrarea unei evidențe corecte**

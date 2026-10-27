@@ -70,6 +70,7 @@ detail those walkthroughs link into.
 | [Sharing, QR codes and public pages](sharing-and-public-pages.md) | Every anonymous surface the application has |
 | [Mobile and offline sync](mobile-sync.md) | The companion phone app and what it carries |
 | [Reviewing uploads](upload-review.md) | The queue of uploads held for review, reading one, and accepting it whole, by line or by field |
+| [Phone recordings and trips that need a look](phone-recordings.md) | Recordings on the cave page, converting one by hand, and the notice on a flagged trip |
 | [Uploading surveys from TopoDroid](topodroid-uploads.md) | Access keys, a cave's surveys and their versions, the status page of an upload, the public result link |
 
 ## Keeping the record honest

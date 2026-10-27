@@ -14,7 +14,7 @@ Trimiterea mesajelor** arată dacă ceva din toate acestea chiar funcționează.
 > Acestea pot fi stabilite și din mediul de instalare, iar pagina o spune. Stabilirea lor aici
 > este calea care nu are nevoie de repornire.
 
-Pagina are nouă file:
+Pagina are unsprezece file:
 
 | Fila | Ce hotărăște | Mai jos |
 |---|---|---|
@@ -23,6 +23,7 @@ Pagina are nouă file:
 | **Politică de autentificare** | Adresele confirmate, ce factori secundari se oferă, cât trăiește un cod | [Politica de autentificare](#politica-de-autentificare) |
 | **Protecția locației** | Două comutatoare despre cât de departe ajung locurile protejate și datele clubului | [Protecția locațiilor](#protecția-locațiilor) |
 | **Import vectorial** | Dacă un import poate sări peste verificare și cum se caută duplicatele | [Import vectorial](#import-vectorial) |
+| **Sincronizare cu telefonul** | Ce primește aplicația de pe telefon și cât așteaptă fișierele nefolosite | [Sincronizare cu telefonul](#sincronizare-cu-telefonul) |
 | **Notificări** | Cât se păstrează notificările și cât poate costa un anunț | [Păstrare](#păstrare) · [Garda de cheltuială](#garda-de-cheltuială) |
 | **Fototeci** | Oprirea și repornirea folosirii unei fototeci pe care instalarea o are deja | [Fototeci](#fototeci) |
 | **Spațiul de lucru** | Cu ce aranjare a spațiului de lucru al hărții pornește un cont nou | [Spațiul de lucru](#spațiul-de-lucru) |
@@ -117,6 +118,23 @@ detectarea duplicatelor.
 | **Permite unui utilizator de încredere să creeze obiecte fără verificare** | Dezactivat implicit. Activarea nu lărgește cine poate crea — cel care importă are în continuare nevoie de dreptul de a crea obiecte — ci doar elimină pasul intermediar |
 | **Caută ceva deja existent pe o rază de** | Raza de pornire pentru o verificare nouă; cel care importă o poate schimba. Se măsoară doar față de obiectele a căror poziție exactă o poate vedea cel care verifică |
 | **Numele se consideră identice peste** | Cât de asemănătoare trebuie să fie două nume, de la 0 la 1, pentru ca un obiect din apropiere să fie considerat același lucru, nu doar aproape |
+
+## Sincronizare cu telefonul
+
+Ce face această instalare cu aplicația SpeleoLoc de pe telefon (vezi [Telefon și sincronizare
+offline](../features/mobile-sync.md)). O modificare se aplică imediat tuturor telefoanelor care
+se sincronizează. Salvarea înlocuiește toate cele cinci setări împreună.
+
+| | |
+|---|---|
+| **Dă telefoanelor lista de persoane** | Activat implicit. Un telefon poate descărca o listă de speologi — doar nume, niciodată o adresă sau un număr de telefon — ca utilizatorul lui să poată spune cine este și cine a fost într-o tură. Dezactivat: telefoanele nu primesc lista și nu pot spune ce speolog este unul dintre utilizatorii lor. Asocierile făcute deja pe pagina [Utilizatori de telefon](../features/people-and-clubs.md#utilizatori-de-telefon) rămân, iar ce înregistrează un telefon despre utilizatorii lui se păstrează în continuare |
+| **Ale cui nume sunt în listă** | *Speologii din grupurile de speologie ale contului telefonului și speologul propriu al contului* (implicit) sau *Toți speologii din listă*. Un telefon poate spune că utilizatorul lui este doar cineva care i-a fost arătat, așa că aceasta stabilește și pe cine poate numi un telefon. *Toți speologii* arată toată lista fiecărui cont care sincronizează un telefon, indiferent de grup; alege-o doar dacă lista nu este un secret față de cei care se autentifică |
+| **Fă ture din înregistrări cu probleme** | Activat implicit. O tură înregistrată pe telefon este transformată singură într-un raport de tură. Activat: asta se întâmplă și când o parte nu a putut fi potrivită, de exemplu o stație pe care nimeni nu o poate plasa sau un utilizator de telefon neasociat unui speolog; tura este semnalată pentru verificare și spune de ce. Dezactivat: o astfel de înregistrare așteaptă pe pagina peșterii până când cineva o convertește manual |
+| **Păstrează fotografiile trimise înaintea unei încărcări (zile)** | Implicit 7, de la 1 la 365. Un telefon trimite octeții unei fotografii înaintea încărcării care îi folosește; dacă nicio încărcare nu îi preia în acest număr de zile, sunt șterși. O modificare se aplică fișierelor sosite după ea. Fișierele care așteaptă se numără în spațiul contului care le trimite, așa că lasă loc pentru fotografiile unui telefon pe cam atâtea zile |
+| **Păstrează fișierele unei încărcări respinse (zile)** | Implicit 30, de la 1 la 365. Când o încărcare ținută pentru verificare este hotărâtă fără ca fișierele ei să fie folosite — respinsă, înlocuită de una ulterioară sau acceptată fără ele — fișierele sunt șterse după acest număr de zile. Cât timp o încărcare așteaptă un verificator, fișierele ei se păstrează oricât durează |
+
+Aceleași cinci setări pot primi o valoare de pornire din mediul de instalare; o valoare salvată
+aici o înlocuiește.
 
 ## Fototeci
 
