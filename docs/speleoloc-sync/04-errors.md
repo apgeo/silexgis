@@ -411,7 +411,13 @@ boundary is stated so that a gap is not mistaken for an omission.
   row was written by somebody else since the phone read it; the problem lists the `reviewIds`, and
   nothing was decided — send `overCurrent: true` to write the accepted fields onto the current row),
   `review.fields_unsupported` (400 — a field list for a line that can only be decided whole, or a field
-  it does not have) and `validation.failed` (400 — a note longer than 2,000 characters).
+  it does not have; the line's `acceptableFields` lists the ones it has) and `validation.failed` (400 — a
+  note longer than 2,000 characters). The picture of a held photo or raster map
+  (`GET /api/v1/review/items/{reviewId}/preview?size=480|1200`, a rendering without metadata) answers
+  `review.item_not_found` (404) also for a line whose content the caller is not shown,
+  `review.preview_unavailable` (404 — the line keeps no picture: a file that is not an image, or bytes
+  already adopted or swept), `review.preview_size_unsupported` (400) and `review.preview_failed` (400 —
+  the bytes could not be drawn).
   **On the reviews stream**, a `failed` decision's `code` is the code the upload itself would have
   answered for that row (section 6.2), `review.dependency_failed` — a held row it depends on was
   not written, so it could not be either — or `review.proposal_unreadable` (a kept proposal this build

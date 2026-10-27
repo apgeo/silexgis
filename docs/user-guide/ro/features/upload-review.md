@@ -49,9 +49,17 @@ Apasă săgeata de lângă o linie pentru a o citi.
 - **Un loc nou** arată valorile cu care ar fi creat.
 - **O modificare a unui loc** arată un mic tabel, câmp cu câmp: locul **acum**, lângă ce
   **propune** telefonul, cu o căsuță pentru fiecare câmp. Câmpurile care coincid sunt marcate *la fel*.
-- **O fotografie sau un document** arată titlul, numele și mărimea fișierului. Fișierul în sine
-  este păstrat până se decide linia, iar imaginea apare după ce este acceptat.
+- **O fotografie sau un document** arată titlul, numele și mărimea fișierului și — pentru o
+  imagine — o copie mică a ei; apasă pe ea ca s-o vezi mai mare. Copia este desenată de server din
+  fișierul care așteaptă și nu poartă nimic din datele fișierului (nici poziția camerei). Un fișier
+  care nu este imagine nu are copie; este păstrat pe server până se decide linia.
+- **O hartă raster** arată titlul, tipul și fișierul, și o copie a imaginii ei în același fel.
 - **O înregistrare** arată titlul, jurnalul, orele și scanările ei.
+- **O modificare a unei fotografii, a unei înregistrări, a unei scanări sau a unei hărți raster**
+  arată același fel de tabel ca modificarea unui loc: fiecare câmp **acum**, lângă ce **propune**
+  telefonul, cu o căsuță pentru fiecare câmp — vezi *O parte dintr-o modificare* mai jos. Un câmp
+  care numește ceva ce nu ai voie să vezi (de pildă locul unde era înainte o scanare) spune
+  *Nu ți se arată*.
 - **Reperele unei hărți raster** arată locul lor pe hartă doar acolo unde l-a trimis serverul. Un
   reper pe un loc a cărui poziție nu ai voie să o vezi apare fără ea — vezi
   [Protecția locațiilor](../admin/location-protection.md).
@@ -74,10 +82,24 @@ este anunțat.
 |---|---|
 | Accepți sau respingi **tot** ce așteaptă | **Acceptă tot** / **Respinge tot** (respingerea cere o confirmare) |
 | Decizi **o linie** | **Acceptă** / **Respinge** pe linie |
-| Accepți **o parte dintr-o modificare** | Deschide linia, debifează câmpurile pe care nu le vrei, apasă **Acceptă**. Doar modificarea unui loc se poate accepta câmp cu câmp; orice altceva se acceptă sau se respinge întreg |
+| Accepți **o parte dintr-o modificare** | Deschide linia, debifează câmpurile pe care nu le vrei, apasă **Acceptă**. Se scrie doar ce este bifat; o linie pe care n-ai deschis-o se acceptă întreagă |
 | Decizi **mai multe linii deodată** | Bifează-le — sau folosește **Selectează** pentru *toate liniile în așteptare* ori *tot ce e de un fel*, sau bifează căsuța din titlul unei peșteri pentru a lua toate liniile în așteptare de sub ea — apoi **Acceptă selecția** / **Respinge selecția** |
 
 Nu poți decide o încărcare trimisă de tine, oricare ar fi drepturile tale: o decide alt verificator.
+
+Ce se poate accepta câmp cu câmp:
+
+| Modificarea unui/unei… | Câmpuri |
+|---|---|
+| Loc (peșteră, intrare, alt punct de pe hartă) | Nume, descriere, proprietăți, poziție (punctul, altitudinea, calitatea poziției și semnul de intrare principală merg împreună) |
+| Fotografii sau document | Titlu, legendă, fișierul nou (luat întreg sau deloc) |
+| Înregistrări | Titlu, descriere, jurnal, început și sfârșit (împreună), peșteră |
+| Scanări | Note, loc, ora scanării |
+| Hărți raster | Titlu, tipul hărții, ordine, partea peșterii, imaginea nouă |
+
+O linie nouă, o ștergere, legătura unei fotografii cu un loc, un reper pe o hartă raster și un
+utilizator al telefonului se acceptă sau se resping mereu întregi. Un fișier nou lăsat nebifat nu
+este luat; serverul îl păstrează doar cât păstrează un fișier respins.
 
 ### Dependențe
 

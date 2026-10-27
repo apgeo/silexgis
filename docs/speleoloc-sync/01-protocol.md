@@ -1450,9 +1450,16 @@ is decided `failed`); turning the batch down writes nothing and spends nothing, 
 confirm again. A catalogue that does not answer when a reviewer accepts leaves the lines waiting
 (`503`, the catalogue's own code). The phone's reviews stream carries phone uploads only.
 
-A reviewer accepts or turns down a held upload whole, row by row, or — for an edit of a feature — by
-field (`name`, `description`, `properties`, and `position`, which is the point, altitude, position
-quality and main-entrance flag together). Accepting writes exactly what the same upload would have
+A reviewer accepts or turns down a held upload whole, row by row, or — for an edit — by field: of a
+feature, `name`, `description`, `properties` and `position` (the point, altitude, position quality and
+main-entrance flag together); of a photo or document, its `title`, its caption (`description`) and its
+new `file`, taken whole; of a recording, `title`, `description`, `log`, `times` (start and end
+together) and `cave`; of a scan, `notes`, `place` and `time`; of a raster map, `title`, `mapType`,
+`sortOrder`, `caveArea` and its new picture (`file`). A field left out is not written — the row keeps
+what it holds for it, and new bytes not taken stay unadopted, kept no longer than a turned-down row's.
+A link, a pin, a phone user, a creation and a removal are accepted or turned down whole. The device
+sees none of this beyond the outcome: a row accepted in part is `accepted`, and its `revision` and the
+downloads give its state. Accepting writes exactly what the same upload would have
 written unheld, with **the uploading account's rights as they are at that moment**: a review never
 lands what the account could not write itself, so a row the account has since lost the right to write
 is decided `failed`. Accepting a row accepts the held rows it depends on (a place under a held cave, a

@@ -48,9 +48,16 @@ Press the arrow beside a line to read it.
 - **A new place** shows the values it would be created with.
 - **A change to a place** shows a small table, field by field: the place **now**, beside what the
   phone **proposes**, with a box for each field. Fields that already match are marked *same*.
-- **A photo or a document** shows its title, file name and size. The file itself is kept until the
-  line is decided, and its picture appears once it is accepted.
+- **A photo or a document** shows its title, file name and size, and — for a picture — a small copy
+  of it; click it to see it larger. The copy is drawn by the server from the waiting file and carries
+  none of the file's own data (no camera position). A file that is not a picture shows no copy; it is
+  kept on the server until the line is decided.
+- **A raster map** shows its title, type and file, and a copy of its picture in the same way.
 - **A recording** shows its title, log, times and its scans.
+- **A change to a photo, a recording, a scan or a raster map** shows the same kind of table as a
+  change to a place: each field **now** beside what the phone **proposes**, with a box per field —
+  see *Accept part of a change* below. A field naming something you may not see (the place a scan
+  was at before, say) says *Not shown to you*.
 - **A raster map's pins** show their place on the map only where the server sent it. A pin on a
   place whose position you may not see is listed without one — see
   [Location protection](../admin/location-protection.md).
@@ -72,10 +79,24 @@ before pressing the button; it goes with the next decision and the uploader is t
 |---|---|
 | Accept or reject **everything** waiting | **Accept all** / **Reject all** (rejecting asks you to confirm) |
 | Decide **one line** | **Accept** / **Reject** on the line |
-| Accept **part of a change** | Open the line, untick the fields you do not want, press **Accept**. Only a change to a place can be accepted field by field; everything else is accepted or rejected whole |
+| Accept **part of a change** | Open the line, untick the fields you do not want, press **Accept**. Only what is ticked is written; a line you never opened is accepted whole |
 | Decide **several lines at once** | Tick them — or use **Select** for *all waiting lines* or *all of one kind*, or tick the box in a cave's heading to take every waiting line under it — then **Accept selected** / **Reject selected** |
 
 You cannot decide an upload you sent yourself, whatever your rights: another reviewer does.
+
+What can be accepted field by field:
+
+| Change to… | Fields |
+|---|---|
+| A place (cave, entrance, other map point) | Name, description, properties, position (the point, altitude, position quality and main-entrance flag move together) |
+| A photo or a document | Title, caption, the new file (taken whole, or not at all) |
+| A recording | Title, description, log, start and end (together), cave |
+| A scan | Notes, place, time of the scan |
+| A raster map | Title, map type, order, part of the cave, the new picture |
+
+A new line, a removal, a photo's link to a place, a pin on a raster map and a phone user are always
+accepted or rejected whole. A new file left unticked is not taken; the server keeps it only as long
+as it keeps a rejected file.
 
 ### Dependencies
 
