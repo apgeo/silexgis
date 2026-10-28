@@ -292,6 +292,7 @@ internal sealed class SyncTripRecordingsSection(IAccessService access)
                 Visibility = group is null ? Visibility.Private : Visibility.CavingGroup,
                 ClientUpdatedAt = item.ClientUpdatedAt,
             });
+            await SyncPhoneUsers.NamedAsync(run, item.CreatedByDeviceUserId, ct);
             return new SyncApplied(SyncTripAnswers.Ok(item.Id, SyncRowStatus.Created), Line(item.Id, ImportDecisionAction.Create));
         }
 
@@ -561,6 +562,7 @@ internal sealed class SyncTripPointsSection(IAccessService access)
                 Notes = item.Notes,
                 CreatedByDeviceUserId = item.CreatedByDeviceUserId,
             });
+            await SyncPhoneUsers.NamedAsync(run, item.CreatedByDeviceUserId, ct);
             return new SyncApplied(SyncTripAnswers.Ok(item.Id, SyncRowStatus.Created), Line(item.Id, ImportDecisionAction.Create));
         }
 

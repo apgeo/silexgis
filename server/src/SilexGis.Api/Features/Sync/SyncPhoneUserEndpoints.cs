@@ -12,11 +12,17 @@ namespace SilexGis.Api.Features.Sync;
 
 /// <summary>One user of the SpeleoLoc application on some phone, as the roster's keeper sees it.</summary>
 /// <param name="DeviceUserId">The phone's own identifier for the user.</param>
-/// <param name="Username">The phone's user name; null for a user only ever met in an imported archive.</param>
+/// <param name="Username">
+/// The phone's user name; null for a user the phone has not described yet — one only named on
+/// something it sent, or only ever met in an imported archive.
+/// </param>
 /// <param name="CaverId">The caver the phone user is linked to; null while nobody has said.</param>
 /// <param name="CaverName">That caver's name as the caller is shown it anywhere else; null while unlinked.</param>
 /// <param name="LinkSource">Who made the link; null while unlinked.</param>
+/// <param name="FirstSeenAt">When this installation first met the phone user, described or only named.</param>
 /// <param name="LastSeenAt">When an upload or an import last described this phone user.</param>
+/// <param name="SentByUserId">The account whose phone or import last described the phone user, or first named it.</param>
+/// <param name="SentByName">That account's name as the caller is shown it anywhere else.</param>
 public sealed record PhoneUserDto(
     Guid DeviceUserId,
     string? Username,
@@ -26,7 +32,9 @@ public sealed record PhoneUserDto(
     string? CaverName,
     DevicePersonLinkSource? LinkSource,
     DateTimeOffset FirstSeenAt,
-    DateTimeOffset LastSeenAt);
+    DateTimeOffset LastSeenAt,
+    Guid? SentByUserId,
+    string? SentByName);
 
 /// <summary>Which caver a phone user is, as somebody keeping the roster says it.</summary>
 public sealed record PhoneUserLinkRequest(Guid CaverId);
@@ -101,8 +109,9 @@ public static class SyncPhoneUserEndpoints
         var total = await query.CountAsync(ct);
         var rows = await query.Skip((p - 1) * size).Take(size).ToListAsync(ct);
         var labels = await LabelsAsync(db, user, rows, ct);
+        var senders = await SendersAsync(db, user, rows, ct);
 
-        return TypedResults.Ok(new PagedResult<PhoneUserDto>([.. rows.Select(r => ToDto(r, labels))], p, size, total));
+        return TypedResults.Ok(new PagedResult<PhoneUserDto>([.. rows.Select(r => ToDto(r, labels, senders))], p, size, total));
     }
 
     private static async Task<Results<Ok<PhoneUserDto>, UnauthorizedHttpResult, ProblemHttpResult>> LinkAsync(
@@ -142,7 +151,7 @@ public static class SyncPhoneUserEndpoints
         person.LinkSource = DevicePersonLinkSource.Administrator;
         await db.SaveChangesAsync(ct);
 
-        return TypedResults.Ok(ToDto(person, await LabelsAsync(db, user, [person], ct)));
+        return TypedResults.Ok(ToDto(person, await LabelsAsync(db, user, [person], ct), await SendersAsync(db, user, [person], ct)));
     }
 
     private static async Task<Results<Ok<PhoneUserDto>, UnauthorizedHttpResult, ProblemHttpResult>> UnlinkAsync(
@@ -176,7 +185,7 @@ public static class SyncPhoneUserEndpoints
         person.LinkSource = DevicePersonLinkSource.Administrator;
         await db.SaveChangesAsync(ct);
 
-        return TypedResults.Ok(ToDto(person, new Dictionary<Guid, string>()));
+        return TypedResults.Ok(ToDto(person, new Dictionary<Guid, string>(), await SendersAsync(db, user, [person], ct)));
     }
 
     private static Task<Dictionary<Guid, string>> LabelsAsync(
@@ -184,7 +193,13 @@ public static class SyncPhoneUserEndpoints
         CaverDirectory.ResolveLabelsAsync(
             db, user, rows.Where(r => r.CaverId is not null).Select(r => r.CaverId!.Value), ct);
 
-    private static PhoneUserDto ToDto(DevicePerson p, IReadOnlyDictionary<Guid, string> labels) => new(
+    private static Task<Dictionary<Guid, string>> SendersAsync(
+        SilexGisDbContext db, UserContext user, IReadOnlyCollection<DevicePerson> rows, CancellationToken ct) =>
+        ProfileDirectory.ResolveLabelsAsync(
+            db, user, rows.Where(r => r.UploadedByUserId is not null).Select(r => r.UploadedByUserId!.Value), ct);
+
+    private static PhoneUserDto ToDto(
+        DevicePerson p, IReadOnlyDictionary<Guid, string> labels, IReadOnlyDictionary<Guid, string> senders) => new(
         p.DeviceUserId,
         p.Username,
         p.FirstName,
@@ -193,5 +208,7 @@ public static class SyncPhoneUserEndpoints
         p.CaverId is { } caverId ? labels.GetValueOrDefault(caverId) : null,
         p.CaverId is null ? null : p.LinkSource,
         p.FirstSeenAt,
-        p.LastSeenAt);
+        p.LastSeenAt,
+        p.UploadedByUserId,
+        p.UploadedByUserId is { } sender ? senders.GetValueOrDefault(sender) : null);
 }

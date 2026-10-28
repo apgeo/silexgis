@@ -563,20 +563,17 @@ public sealed class SyncDocumentLinkTests : IAsyncLifetime, IDisposable, IClassF
         (await CreditAsync(documentId)).GetProperty("photographerCaverId").ValueKind.ShouldBe(JsonValueKind.Null);
         (await GalleryByAsync(caver)).ShouldBeEmpty();
 
-        // Linked — the way somebody keeping the roster links a phone user — the photo is the
-        // caver's, read at once everywhere it is shown or filtered, and only that photo.
+        // Linked — the way somebody keeping the roster links a phone user, here the nameless one
+        // the photo's upload recorded — the photo is the caver's, read at once everywhere it is
+        // shown or filtered, and only that photo.
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-            db.DevicePersons.Add(new DevicePerson
-            {
-                DeviceUserId = phoneUser,
-                CaverId = caver,
-                LinkSource = DevicePersonLinkSource.Administrator,
-                FirstSeenAt = DateTimeOffset.UtcNow,
-                LastSeenAt = DateTimeOffset.UtcNow,
-            });
-            await db.SaveChangesAsync();
+            (await db.DevicePersons.Where(p => p.DeviceUserId == phoneUser)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(p => p.CaverId, caver)
+                    .SetProperty(p => p.LinkSource, DevicePersonLinkSource.Administrator)))
+                .ShouldBe(1);
         }
 
         (await CatalogueDocumentAsync(set, documentId)).GetProperty("photographerCaverId").GetGuid().ShouldBe(caver);

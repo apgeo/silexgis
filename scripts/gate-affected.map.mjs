@@ -339,6 +339,8 @@ export const groups = {
     'SyncAdministratorReadTests', 'SyncAuthTests', 'SyncDocumentStreamTests', 'SyncPageSizeTests',
     'SyncProtocolTests', 'SyncSetTests', 'SyncStreamPagingTests', 'SyncUploadSectionTests', 'SyncUploadTests',
     'SyncPeopleTests', 'SyncSettingsTests', 'SyncStagedUploadTests',
+    // A phone user a phone names without describing, recorded nameless.
+    'SyncNamelessPhoneUserTests',
     // A phone's photos and documents: staged bytes adopted, new revisions, removals.
     'SyncDocumentUploadTests',
     // Where a phone hangs its photos, and the undo of everything the photo sections write.
@@ -647,10 +649,10 @@ export const crossCutting = {
     'SurveyModelTrackedTripsTests', 'SurveySegmentSubstrateTests', 'SurveySourceTests',
     'SurveyUploadPipelineTests', 'SurveyUploadPublicLinkTests', 'SurveyUploadRouteTests',
     'SurveyUploadSchemaTests', 'SurveyWallsTests', 'SyncDocumentLinkTests',
-    'SyncDocumentStreamTests', 'SyncPageSizeTests', 'SyncProtocolTests',
-    'SyncRasterPictureTurnTests', 'SyncRasterTests', 'SyncRecordingPhotoTests',
-    'SyncReviewCurrentTests', 'SyncReviewStreamTests', 'SyncTripRecordingTests',
-    'SyncUndoTests', 'SyncUploadTests', 'TerrainProbeTests',
+    'SyncDocumentStreamTests', 'SyncNamelessPhoneUserTests', 'SyncPageSizeTests',
+    'SyncProtocolTests', 'SyncRasterPictureTurnTests', 'SyncRasterTests',
+    'SyncRecordingPhotoTests', 'SyncReviewCurrentTests', 'SyncReviewStreamTests',
+    'SyncTripRecordingTests', 'SyncUndoTests', 'SyncUploadTests', 'TerrainProbeTests',
     'TrackingCsvImportReplacementTests', 'TrackingCsvImportTests', 'TripAndTagTests',
     'TripCalloutSweepTests', 'TripCaveReachTests', 'TripHandoverTests', 'TripImportCommitTests',
     'TripImportPreviewResolutionTests', 'TripImportResolutionTests', 'TripListFacetTests',

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
 using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Sync;
 
@@ -101,18 +102,7 @@ internal sealed class SyncPeopleSection(SyncSettings settings) : SyncUploadSecti
 
         if (!proposal.Known)
         {
-            run.Db.DevicePersons.Add(new DevicePerson
-            {
-                DeviceUserId = person.DeviceUserId,
-                Username = person.Username,
-                FirstName = person.FirstName,
-                LastName = person.LastName,
-                CaverId = person.CaverId,
-                LinkSource = DevicePersonLinkSource.Device,
-                FirstSeenAt = now,
-                LastSeenAt = now,
-                UploadedByUserId = uploader,
-            });
+            SyncPhoneUsers.Add(run.Db, person.DeviceUserId, person, uploader, now);
             return new SyncApplied(Ok(person.DeviceUserId, SyncRowStatus.Created), Line(person.DeviceUserId, ImportDecisionAction.Create));
         }
 
@@ -154,4 +144,53 @@ internal sealed class SyncPeopleSection(SyncSettings settings) : SyncUploadSecti
 
     private static SyncUploadRowResultDto Refuse(Guid id, string code, string detail) =>
         new(id, SyncRowStatus.Rejected, null, code, detail);
+}
+
+/// <summary>
+/// Where a phone user's record is made, whether the phone described the user or only named them.
+/// </summary>
+/// <remarks>
+/// A phone names its users on what it sends — who started a recording, made a scan, added a photo
+/// — and usually describes them in the same upload's <c>people</c> section. One it names without
+/// ever describing is recorded at once all the same, nameless, so the roster's keeper sees it
+/// waiting and can link it to a caver; the description, when it comes, fills the names into this
+/// same record. A phone user already on record is never touched by being named: it may be another
+/// account's, and being named says nothing new about it.
+/// </remarks>
+internal static class SyncPhoneUsers
+{
+    /// <summary>
+    /// Records a phone user nobody has met: described by <paramref name="described"/>, or nameless
+    /// without it. Tracked, not saved — the upload's own save writes it.
+    /// </summary>
+    public static void Add(
+        SilexGisDbContext db, Guid deviceUserId, SyncUploadPersonDto? described, Guid uploaderUserId, DateTimeOffset now) =>
+        db.DevicePersons.Add(new DevicePerson
+        {
+            DeviceUserId = deviceUserId,
+            Username = described?.Username,
+            FirstName = described?.FirstName,
+            LastName = described?.LastName,
+            CaverId = described?.CaverId,
+            LinkSource = DevicePersonLinkSource.Device,
+            FirstSeenAt = now,
+            LastSeenAt = now,
+            UploadedByUserId = uploaderUserId,
+        });
+
+    /// <summary>
+    /// Records the phone user something the upload writes is credited to, when nobody has met them
+    /// yet — neither on record nor already added by this upload.
+    /// </summary>
+    public static async Task NamedAsync(SyncUploadRun run, Guid? deviceUserId, CancellationToken ct)
+    {
+        if (deviceUserId is not { } id
+            || run.Db.DevicePersons.Local.Any(p => p.DeviceUserId == id)
+            || await run.Db.DevicePersons.AsNoTracking().AnyAsync(p => p.DeviceUserId == id, ct))
+        {
+            return;
+        }
+
+        Add(run.Db, id, described: null, run.Access.UserId, DateTimeOffset.UtcNow);
+    }
 }

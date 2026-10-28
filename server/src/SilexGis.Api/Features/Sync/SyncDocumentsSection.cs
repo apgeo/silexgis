@@ -429,6 +429,7 @@ internal sealed class SyncDocumentsSection(
         // Kept as the phone said it, never as a caver: who that phone user is, is read through the
         // phone-user record whenever the document is shown.
         document.CreatedByDeviceUserId = row.CreatedByDeviceUserId;
+        await SyncPhoneUsers.NamedAsync(run, row.CreatedByDeviceUserId, ct);
         await DescribeAsync(db, document, row with { Title = null }, content.Kind, ct);
 
         // The bytes are the new file's own content now. The staged row goes, and its blob stays:
