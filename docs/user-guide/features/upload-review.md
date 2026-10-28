@@ -55,7 +55,11 @@ Press the arrow beside a line to read it.
 
 - **A new place** shows the values it would be created with.
 - **A change to a place** shows a small table, field by field: the place **now**, beside what the
-  phone **proposes**, with a box for each field. Fields that already match are marked *same*.
+  phone **proposes**, with a box for each field. Fields that already match are marked *same*, and
+  so is a field the phone did not send, which accepting leaves as it is. The place **now** is the
+  place as it really is — its exact position, altitude and, for an entrance, its position quality
+  and whether it is the main one — even when you could not open it, or would see it only
+  approximately, anywhere else. Caves are named the same way in the group headings.
 - **A photo or a document** shows its title, file name and size, and — for a picture — a small copy
   of it; click it to see it larger. The copy is drawn by the server from the waiting file and carries
   none of the file's own data (no camera position). A file that is not a picture shows no copy; it is

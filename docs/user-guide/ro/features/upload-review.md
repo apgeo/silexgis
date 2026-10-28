@@ -57,7 +57,11 @@ Apasă săgeata de lângă o linie pentru a o citi.
 
 - **Un loc nou** arată valorile cu care ar fi creat.
 - **O modificare a unui loc** arată un mic tabel, câmp cu câmp: locul **acum**, lângă ce
-  **propune** telefonul, cu o căsuță pentru fiecare câmp. Câmpurile care coincid sunt marcate *la fel*.
+  **propune** telefonul, cu o căsuță pentru fiecare câmp. Câmpurile care coincid sunt marcate *la fel*,
+  la fel ca un câmp pe care telefonul nu l-a trimis și pe care acceptarea îl lasă cum este. Locul
+  **acum** este locul așa cum este de fapt — poziția exactă, altitudinea și, pentru o intrare,
+  calitatea poziției și dacă este cea principală — chiar dacă în altă parte nu l-ai putea deschide
+  sau l-ai vedea doar aproximativ. La fel sunt numite peșterile în titlurile grupurilor.
 - **O fotografie sau un document** arată titlul, numele și mărimea fișierului și — pentru o
   imagine — o copie mică a ei; apasă pe ea ca s-o vezi mai mare. Copia este desenată de server din
   fișierul care așteaptă și nu poartă nimic din datele fișierului (nici poziția camerei). Un fișier

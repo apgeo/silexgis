@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CheckOutlined, CloseOutlined, DownOutlined, LockOutlined, RightOutlined, UndoOutlined } from '@ant-design/icons';
 import { Checkbox, Flex, Image, Table, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useFeature, useHeldPreview, type HeldLine } from '../../api/hooks.ts';
+import { useHeldPreview, type HeldLine } from '../../api/hooks.ts';
 import Button from '../../components/Button.tsx';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import {
@@ -13,16 +13,16 @@ import {
   fieldShape,
   fileOf,
   foreignDependenciesOf,
-  fieldDiffs,
   isCreation,
   ownIdOf,
   pointText,
+  positionOf,
   recordOf,
   serverFieldDiffs,
   shortValue,
   spanOf,
   titleOf,
-  type CurrentRow,
+  type FeatureNames,
   type FieldDiff,
 } from '../../components/review/reviewModel.ts';
 
@@ -52,49 +52,45 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-/** What the server holds now of a feature row an edit names, read when the line is opened. */
-function useCurrentRow(rowId: string | null, enabled: boolean): { current: CurrentRow | undefined; withheld: boolean; loading: boolean } {
-  const feature = useFeature(enabled && rowId ? rowId : undefined);
-  const dto = feature.data?.feature;
-  if (!dto) {
-    return { current: undefined, withheld: false, loading: feature.isLoading };
-  }
-  // A position the reader is shown only approximately is not a position to compare against.
-  const withheld = dto.approximateLocation || dto.omittedLocation;
-  return {
-    current: {
-      name: dto.name,
-      description: dto.description,
-      properties: dto.properties,
-      geometry: withheld ? undefined : dto.geometry,
-    },
-    withheld,
-    loading: false,
-  };
-}
-
+/** A feature row's position as the server compared it: the point, its altitude, and an entrance's quality and rank. */
 function PositionValue({ value }: { value: unknown }) {
   const { t } = useTranslation();
   if (value === undefined || value === null) {
     return <Typography.Text type="secondary">{t('review.positionNotShown')}</Typography.Text>;
   }
-  return <span>{pointText(value) ?? shortValue(value)}</span>;
-}
-
-/** A feature a field names, by its name as the feature's own route gives it to this reader. */
-function FeatureName({ id }: { id: string }) {
-  const { t } = useTranslation();
-  const feature = useFeature(id);
-  if (feature.isLoading) {
-    return <Typography.Text type="secondary">{t('common.loading')}</Typography.Text>;
+  const position = positionOf(value);
+  if (!position) {
+    return <span>{pointText(value) ?? shortValue(value)}</span>;
   }
-  return <span>{feature.data?.feature.name || t('review.untitled')}</span>;
+  const parts = [
+    position.point ?? t('review.positionShape'),
+    position.altitude === null ? null : t('review.altitudeValue', { value: position.altitude }),
+    position.quality === null ? null : t(`entrances.qualityValues.${position.quality}`, { defaultValue: position.quality }),
+    position.isMain ? t('review.mainEntrance') : null,
+  ];
+  return <span>{parts.filter(Boolean).join(', ')}</span>;
 }
 
-function FieldValue({ field, value, withheld = false }: { field: string; value: unknown; withheld?: boolean }) {
+/** A feature a field names, by the name the batch gives it for this reader. */
+function FeatureName({ id, names }: { id: string; names: FeatureNames }) {
+  const { t } = useTranslation();
+  return <span>{names.get(id)?.name || t('review.untitled')}</span>;
+}
+
+function FieldValue({
+  field,
+  value,
+  names,
+  withheld = false,
+}: {
+  field: string;
+  value: unknown;
+  names: FeatureNames;
+  withheld?: boolean;
+}) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? 'en';
-  if (field === 'position') {
+  if (field === 'position' && !withheld) {
     return <PositionValue value={value} />;
   }
   if (withheld) {
@@ -117,7 +113,7 @@ function FieldValue({ field, value, withheld = false }: { field: string; value: 
       );
     }
     case 'feature':
-      return typeof value === 'string' ? <FeatureName id={value} /> : empty;
+      return typeof value === 'string' ? <FeatureName id={value} names={names} /> : empty;
     case 'file': {
       const file = fileOf(value);
       if (!file) {
@@ -142,11 +138,13 @@ function FieldValue({ field, value, withheld = false }: { field: string; value: 
 /** The fields of an edit, the row now beside the proposal, with a box per field. */
 function FieldTable({
   diffs,
+  names,
   ticked,
   editable,
   onChoose,
 }: {
   diffs: FieldDiff[];
+  names: FeatureNames;
   ticked: string[];
   editable: boolean;
   onChoose: (fields: string[]) => void;
@@ -175,13 +173,13 @@ function FieldTable({
         { title: t('review.field.label'), render: (_: unknown, d) => t(`review.field.${d.field}`, { defaultValue: d.field }) },
         {
           title: t('review.current'),
-          render: (_: unknown, d) => <FieldValue field={d.field} value={d.current} withheld={d.withheld} />,
+          render: (_: unknown, d) => <FieldValue field={d.field} value={d.current} names={names} withheld={d.withheld} />,
         },
         {
           title: t('review.proposed'),
           render: (_: unknown, d) => (
             <Flex gap={6} align="center" wrap>
-              <FieldValue field={d.field} value={d.proposed} />
+              <FieldValue field={d.field} value={d.proposed} names={names} />
               {!d.differs && <Tag>{t('review.unchanged')}</Tag>}
             </Flex>
           ),
@@ -196,7 +194,6 @@ function FieldTable({
  * alone must not mean "everything", nor write a field the reviewer was not shown.
  */
 function useChoiceOnOpen(
-  ready: boolean,
   editable: boolean,
   chosen: string[] | undefined,
   diffs: readonly FieldDiff[],
@@ -204,35 +201,41 @@ function useChoiceOnOpen(
 ) {
   const untouched = chosen === undefined;
   useEffect(() => {
-    if (ready && editable && untouched) {
+    if (editable && untouched) {
       onChoose(defaultFields(diffs));
     }
-  }, [ready, editable, untouched, diffs, onChoose]);
+  }, [editable, untouched, diffs, onChoose]);
 }
 
 /**
- * An edit of a photo, a recording, a scan or a raster map: each field the reviewer may accept on
- * its own, as the server compared it, with a box per field.
+ * An edit of a feature row, a photo, a recording, a scan or a raster map: each field the reviewer
+ * may accept on its own, as the server compared it — the row now beside the proposal — with a box
+ * per field.
  */
 function ServerFieldEdit({
   line,
+  names,
   chosen,
   onChoose,
   editable,
 }: {
   line: HeldLine;
+  names: FeatureNames;
   /** The fields ticked; undefined until the line is opened, which stands for the whole line. */
   chosen: string[] | undefined;
   onChoose: (fields: string[]) => void;
   editable: boolean;
 }) {
+  const { t } = useTranslation();
   const diffs = useMemo(() => serverFieldDiffs(line), [line]);
   const ticked = chosen ?? defaultFields(diffs);
-  useChoiceOnOpen(true, editable, chosen, diffs, onChoose);
+  useChoiceOnOpen(editable, chosen, diffs, onChoose);
+  const positionWithheld = diffs.some((d) => d.field === 'position' && d.withheld);
   return (
-    <div data-testid="review-field-diff">
-      <FieldTable diffs={diffs} ticked={ticked} editable={editable} onChoose={onChoose} />
-    </div>
+    <Flex vertical gap={6} data-testid="review-field-diff">
+      {positionWithheld && <Typography.Text type="secondary">{t('review.positionWithheld')}</Typography.Text>}
+      <FieldTable diffs={diffs} names={names} ticked={ticked} editable={editable} onChoose={onChoose} />
+    </Flex>
   );
 }
 
@@ -279,47 +282,9 @@ function HeldFile({ line, name }: { line: HeldLine; name: string }) {
 }
 
 /**
- * An edit of a feature row: each field the reviewer may accept on its own, the row now beside the
- * phone's version, with a box per field.
+ * A feature row the phone creates, or an edit no longer waiting: the values it would be (or was)
+ * written with.
  */
-function RowEdit({
-  line,
-  chosen,
-  onChoose,
-  editable,
-}: {
-  line: HeldLine;
-  /** The fields ticked; undefined until the reviewer touches a box, which stands for the default. */
-  chosen: string[] | undefined;
-  onChoose: (fields: string[]) => void;
-  editable: boolean;
-}) {
-  const { t } = useTranslation();
-  const { current, withheld, loading } = useCurrentRow(line.rowId, true);
-  const diffs = fieldDiffs(line, current);
-  const ticked = chosen ?? defaultFields(diffs);
-  useChoiceOnOpen(!loading, editable, chosen, diffs, onChoose);
-
-  if (loading) {
-    return <Typography.Text type="secondary">{t('common.loading')}</Typography.Text>;
-  }
-  return (
-    <Flex vertical gap={6} data-testid="review-field-diff">
-      {line.rowId === null && (
-        <Typography.Text type="secondary">
-          <LockOutlined /> {t('review.rowHidden')}
-        </Typography.Text>
-      )}
-      {current === undefined && line.rowId !== null && (
-        <Typography.Text type="secondary">{t('review.currentUnknown')}</Typography.Text>
-      )}
-      {withheld && <Typography.Text type="secondary">{t('review.positionWithheld')}</Typography.Text>}
-      <FieldTable diffs={diffs} ticked={ticked} editable={editable} onChoose={onChoose} />
-    </Flex>
-  );
-}
-
-/** A feature row the phone creates: the values it would be created with. */
 function RowCreation({ line }: { line: HeldLine }) {
   const { t } = useTranslation();
   const row = recordOf(line);
@@ -346,14 +311,14 @@ function RowCreation({ line }: { line: HeldLine }) {
   );
 }
 
-/** A removal asked for by the phone: the row it would take away. */
-function RowRemoval({ line }: { line: HeldLine }) {
+/** A removal asked for by the phone: the row it would take away, by the name the batch gives it. */
+function RowRemoval({ line, names }: { line: HeldLine; names: FeatureNames }) {
   const { t } = useTranslation();
-  const { current } = useCurrentRow(line.rowId, true);
+  const name = line.rowId ? names.get(line.rowId)?.name : null;
   return (
-    <Flex vertical gap={2}>
+    <Flex vertical gap={2} data-testid="review-removal">
       <Typography.Text>{t('review.removalExplain')}</Typography.Text>
-      {current?.name && <Fact label={t('review.field.name')}>{current.name}</Fact>}
+      {name && <Fact label={t('review.field.name')}>{name}</Fact>}
     </Flex>
   );
 }
@@ -475,6 +440,8 @@ function SectionDetail({ line, lines }: { line: HeldLine; lines: readonly HeldLi
 export interface ReviewLineRowProps {
   line: HeldLine;
   lines: readonly HeldLine[];
+  /** The existing features the batch's lines name, as the server lets this reader see them. */
+  names: FeatureNames;
   /** Whether this reader may decide; false for a reader of the queue and for the uploader. */
   canDecide: boolean;
   selected: boolean;
@@ -490,6 +457,7 @@ export interface ReviewLineRowProps {
 export default function ReviewLineRow({
   line,
   lines,
+  names,
   canDecide,
   selected,
   onSelect,
@@ -509,12 +477,11 @@ export default function ReviewLineRow({
   const needs = line.dependsOnReviewIds
     .map((id) => lines.find((l) => l.reviewId === id))
     .filter((l): l is HeldLine => l !== undefined);
-  const isRowEdit = line.section === 'rows' && !isCreation(line) && act !== 'delete';
-  // Another kind's edit, which the server compared field by field.
-  const isComparedEdit = line.section !== 'rows' && (line.fields?.length ?? 0) > 0;
+  // A waiting edit the server compared field by field, the row now beside the proposal.
+  const isComparedEdit = (line.fields?.length ?? 0) > 0;
   const editable = canDecide && pending && line.acceptableFields.length > 0;
   // Nothing ticked is not an acceptance: the box is there to narrow, not to empty.
-  const nothingTicked = (isRowEdit || isComparedEdit) && editable && chosen !== undefined && chosen.length === 0;
+  const nothingTicked = isComparedEdit && editable && chosen !== undefined && chosen.length === 0;
 
   return (
     <div
@@ -608,19 +575,15 @@ export default function ReviewLineRow({
             <Typography.Text type="secondary">
               <LockOutlined /> {t('review.proposalHidden')}
             </Typography.Text>
-          ) : line.section === 'rows' ? (
-            act === 'delete' ? (
-              <RowRemoval line={line} />
-            ) : isCreation(line) ? (
-              <RowCreation line={line} />
-            ) : (
-              <RowEdit line={line} chosen={chosen} onChoose={onChoose} editable={editable} />
-            )
-          ) : isComparedEdit ? (
+          ) : line.section === 'rows' && act === 'delete' ? (
+            <RowRemoval line={line} names={names} />
+          ) : isComparedEdit && !isCreation(line) ? (
             <Flex vertical gap={6}>
               {line.hasPreview && <HeldPicture line={line} name={title} />}
-              <ServerFieldEdit line={line} chosen={chosen} onChoose={onChoose} editable={editable} />
+              <ServerFieldEdit line={line} names={names} chosen={chosen} onChoose={onChoose} editable={editable} />
             </Flex>
+          ) : line.section === 'rows' ? (
+            <RowCreation line={line} />
           ) : (
             <SectionDetail line={line} lines={lines} />
           )}

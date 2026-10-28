@@ -7,13 +7,13 @@ import {
   defaultFields,
   dependenciesOf,
   dependentsOf,
-  fieldDiffs,
   fieldShape,
   fileOf,
   foreignDependenciesOf,
   groupByCave,
   placeLines,
   pointText,
+  positionOf,
   serverFieldDiffs,
   spanOf,
   titleOf,
@@ -120,52 +120,52 @@ describe('what a decision reaches', () => {
   });
 });
 
-describe('the fields of an edit', () => {
+describe('the fields of a feature row edit', () => {
   const edit = line('edit', {
     action: 'attach',
     rowId: 'f1',
     acceptableFields: ['name', 'description', 'properties', 'position'],
-    proposal: {
-      act: 'update',
-      row: {
-        id: 'f1',
-        name: 'New name',
-        description: 'Same text',
-        properties: { b: 2, a: 1 },
-        geometry: { type: 'Point', coordinates: [25.1, 45.2] },
+    fields: [
+      { field: 'name', current: 'Old name', proposed: 'New name', differs: true, currentWithheld: false },
+      { field: 'description', current: 'Same text', proposed: null, differs: false, currentWithheld: false },
+      { field: 'properties', current: { a: 1 }, proposed: { a: 1 }, differs: false, currentWithheld: false },
+      {
+        field: 'position',
+        current: { geometry: { type: 'Point', coordinates: [25.1, 45.2] }, altitude: 640, positionQuality: 'gps', isMain: true },
+        proposed: { geometry: { type: 'Point', coordinates: [25.3, 45.4] }, altitude: 650, positionQuality: 'gps', isMain: true },
+        differs: true,
+        currentWithheld: false,
       },
-    },
+    ],
+    proposal: { act: 'update', row: { id: 'f1', name: 'New name' } },
   });
-  const now = {
-    name: 'Old name',
-    description: 'Same text',
-    properties: { a: 1, b: 2 },
-    geometry: { type: 'Point', coordinates: [25.1, 45.2] },
-  };
 
-  it('marks only what differs, comparing documents whatever the order of their members', () => {
-    const diffs = fieldDiffs(edit, now);
+  it('takes the server comparison as it is, ticking what differs', () => {
+    const diffs = serverFieldDiffs(edit);
     expect(diffs.map((d) => [d.field, d.differs])).toEqual([
       ['name', true],
       ['description', false],
       ['properties', false],
-      ['position', false],
+      ['position', true],
     ]);
-    expect(defaultFields(diffs)).toEqual(['name']);
+    expect(defaultFields(diffs)).toEqual(['name', 'position']);
   });
 
-  it('shows every field as changed when the row now is unknown, and ticks them all', () => {
-    const diffs = fieldDiffs(edit, undefined);
-    expect(diffs.every((d) => d.differs)).toBe(true);
-    expect(defaultFields(diffs)).toEqual(['name', 'description', 'properties', 'position']);
+  it('lists no position the server did not compare', () => {
+    const without = line('w', { ...edit, fields: edit.fields!.filter((f) => f.field !== 'position') });
+    expect(serverFieldDiffs(without).map((d) => d.field)).toEqual(['name', 'description', 'properties']);
   });
 
-  it('lists no position when the proposal carries none (held back from this reader)', () => {
-    const hidden = line('h', {
-      ...edit,
-      proposal: { act: 'update', row: { id: 'f1', name: 'New name' } },
+  it('reads a compared position, and nothing from a value that is not one', () => {
+    expect(positionOf(edit.fields![3].current)).toEqual({ point: '45.20000, 25.10000', altitude: 640, quality: 'gps', isMain: true });
+    expect(positionOf({ geometry: { type: 'Point', coordinates: [25.1, 45.2] }, altitude: null })).toEqual({
+      point: '45.20000, 25.10000',
+      altitude: null,
+      quality: null,
+      isMain: null,
     });
-    expect(fieldDiffs(hidden, now).map((d) => d.field)).toEqual(['name', 'description', 'properties']);
+    expect(positionOf(null)).toBeNull();
+    expect(positionOf({ type: 'Point', coordinates: [25.1, 45.2] })).toBeNull();
   });
 
   it('reads a point and compares equal documents as equal', () => {

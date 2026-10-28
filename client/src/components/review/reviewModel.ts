@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { TFunction } from 'i18next';
-import type { HeldBatch, HeldLine } from '../../api/hooks.ts';
+import type { HeldBatch, HeldFeature, HeldLine } from '../../api/hooks.ts';
 
 /**
  * What the review screens make of a held batch's lines.
@@ -95,6 +95,13 @@ export function titleOf(line: HeldLine): string | null {
 export function ownIdOf(line: HeldLine): string | null {
   const rec = recordOf(line);
   return str(line.rowId) ?? str(rec.id) ?? str(rec.deviceUserId);
+}
+
+/** The existing features a batch's lines name, by id, as the server lets this reader see them. */
+export type FeatureNames = ReadonlyMap<string, HeldFeature>;
+
+export function featureNames(features: readonly HeldFeature[] | undefined): FeatureNames {
+  return new Map((features ?? []).map((f) => [f.id, f]));
 }
 
 /** Which cave a line belongs under, as the id of the cave, or null for a line under none. */
@@ -325,56 +332,11 @@ export function canonical(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
-/** What the server holds of a feature row, as far as the review compares it. */
-export interface CurrentRow {
-  name: string | null;
-  description: string | null;
-  properties: unknown;
-  geometry: unknown;
-}
-
 /**
- * The fields of a held edit that can be accepted on their own, each with the row now beside what
- * the phone proposes.
- *
- * A field the server did not offer for acceptance is not listed. The position is listed only when
- * the proposal carries one: a proposal whose position the server held back (because this reviewer
- * may not place the row) has nothing to accept there, and showing it as unchanged would claim a
- * comparison nobody made.
- */
-export function fieldDiffs(line: HeldLine, current: CurrentRow | undefined): FieldDiff[] {
-  const row = recordOf(line);
-  const diffs: FieldDiff[] = [];
-  for (const field of line.acceptableFields) {
-    if (field === 'position') {
-      if (row.geometry === undefined || row.geometry === null) {
-        continue;
-      }
-      diffs.push({
-        field,
-        current: current?.geometry,
-        proposed: row.geometry,
-        differs: current === undefined || canonical(current.geometry) !== canonical(row.geometry),
-      });
-      continue;
-    }
-    const proposed = row[field];
-    const now = current?.[field as keyof CurrentRow];
-    diffs.push({
-      field,
-      current: now,
-      proposed,
-      differs: current === undefined || canonical(now ?? null) !== canonical(proposed ?? null),
-    });
-  }
-  return diffs;
-}
-
-/**
- * The fields of a held edit of a photo, a recording, a scan or a raster map, as the server drew
- * them: the row now beside the proposal. Only fields the line may be accepted by are listed — the
- * server leaves out of its comparison a field it would not write (a caption on a file that is no
- * picture), so what is shown is what can be chosen.
+ * The fields of a held edit, as the server drew them: the row now beside the proposal, through the
+ * same view as the proposal. Only fields the line may be accepted by are listed — the server leaves
+ * out of its comparison a field it would not write (a caption on a file that is no picture, a
+ * position an edit carries none of), so what is shown is what can be chosen.
  */
 export function serverFieldDiffs(line: HeldLine): FieldDiff[] {
   return (line.fields ?? [])
@@ -449,6 +411,30 @@ export function pointText(geometry: unknown): string | null {
   }
   const [lon, lat] = geometry.coordinates as unknown[];
   return typeof lon === 'number' && typeof lat === 'number' ? `${lat.toFixed(5)}, ${lon.toFixed(5)}` : null;
+}
+
+/**
+ * A feature row's position as the server compares it: the point, the altitude and, for an entrance,
+ * the position quality and whether it is the main one. Null when the value is not one.
+ */
+export interface PositionFacts {
+  /** The point as text, or null for a shape that is not a point. */
+  point: string | null;
+  altitude: number | null;
+  quality: string | null;
+  isMain: boolean | null;
+}
+
+export function positionOf(value: unknown): PositionFacts | null {
+  if (!isObject(value) || !isObject(value.geometry)) {
+    return null;
+  }
+  return {
+    point: pointText(value.geometry),
+    altitude: typeof value.altitude === 'number' ? value.altitude : null,
+    quality: str(value.positionQuality),
+    isMain: typeof value.isMain === 'boolean' ? value.isMain : null,
+  };
 }
 
 /** The scalar members of a record, for the generic view of a part this screen has no special view of. */

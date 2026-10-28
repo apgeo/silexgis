@@ -10,6 +10,8 @@ export type HeldBatch = components['schemas']['HeldBatchDto'];
 export type HeldLine = components['schemas']['HeldLineDto'];
 export type HeldField = components['schemas']['HeldFieldDto'];
 export type HeldBatchDetail = components['schemas']['HeldBatchDetailDto'];
+/** An existing feature a held batch's lines name, by name and kind, as the server lets this reader see it. */
+export type HeldFeature = components['schemas']['HeldFeatureDto'];
 export type ReviewDecisionResult = components['schemas']['ReviewDecisionResultDto'];
 
 /** The refusal code of a decision that reaches a row written after the uploader read it. */

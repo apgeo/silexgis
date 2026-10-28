@@ -11,7 +11,6 @@ import {
   useAcceptReviewBatch,
   useAcceptReviewItem,
   useCan,
-  useFeature,
   useMe,
   useRejectReviewBatch,
   useRejectReviewItem,
@@ -22,19 +21,31 @@ import Button from '../../components/Button.tsx';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import ReviewLineRow from './ReviewLineRow.tsx';
 import { SectionTags } from '../../components/review/ReviewParts.tsx';
-import { dependenciesOf, dependentsOf, foreignDependenciesOf, groupByCave, sourceLabel, titleOf } from '../../components/review/reviewModel.ts';
+import {
+  dependenciesOf,
+  dependentsOf,
+  featureNames,
+  foreignDependenciesOf,
+  groupByCave,
+  sourceLabel,
+  titleOf,
+  type FeatureNames,
+} from '../../components/review/reviewModel.ts';
 import { reviewProblem } from './reviewProblems.ts';
 
-/** The name a group of lines is listed under: the cave they hang on, when the reader may see it. */
-function GroupTitle({ caveId, lines }: { caveId: string | null; lines: readonly HeldLine[] }) {
+/**
+ * The name a group of lines is listed under: the cave they hang on, by the name the server gives
+ * it with the batch — for a reviewer every existing cave, for anybody else one they may read.
+ */
+function GroupTitle({ caveId, lines, names }: { caveId: string | null; lines: readonly HeldLine[]; names: FeatureNames }) {
   const { t } = useTranslation();
-  // A cave the batch itself creates is not on the server yet; its name is in the proposal.
-  const inBatch = caveId ? lines.find((l) => l.section === 'rows' && l.rowId === caveId) : undefined;
-  const feature = useFeature(caveId && !inBatch ? caveId : undefined);
   if (caveId === null) {
     return <span>{t('review.groupOther')}</span>;
   }
-  const name = (inBatch ? titleOf(inBatch) : null) ?? feature.data?.feature.name;
+  // A cave the batch itself creates is not on the server yet; its name is in the proposal.
+  const inBatch = lines.find((l) => l.section === 'rows' && l.rowId === caveId && l.proposal !== null);
+  const known = names.get(caveId);
+  const name = (inBatch ? titleOf(inBatch) : null) ?? (known ? known.name || t('review.untitled') : null);
   return <span>{name ?? t('review.groupHiddenCave')}</span>;
 }
 
@@ -95,6 +106,7 @@ export default function ReviewBatchPage() {
 
   const batch = detail.data?.batch;
   const lines = useMemo(() => detail.data?.lines ?? [], [detail.data]);
+  const names = useMemo(() => featureNames(detail.data?.features), [detail.data]);
   const pendingLines = useMemo(() => lines.filter((l) => l.decision === 'pending'), [lines]);
   // Once nothing waits, the decided lines are the page: an empty list would say nothing happened.
   const visible = showDecided || pendingLines.length === 0 ? lines : pendingLines;
@@ -429,7 +441,7 @@ export default function ReviewBatchPage() {
                     data-testid="review-group-select"
                   />
                 )}
-                <GroupTitle caveId={group.caveId} lines={lines} />
+                <GroupTitle caveId={group.caveId} lines={lines} names={names} />
               </Flex>
             }
           >
@@ -438,6 +450,7 @@ export default function ReviewBatchPage() {
                 key={line.reviewId}
                 line={line}
                 lines={lines}
+                names={names}
                 canDecide={canDecide}
                 selected={selected.has(line.reviewId)}
                 onSelect={(checked) => {

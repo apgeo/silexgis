@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
-import type { HeldBatch, HeldLine } from '../../api/hooks.ts';
+import type { HeldBatch, HeldFeature, HeldLine } from '../../api/hooks.ts';
 
 const spies = vi.hoisted(() => ({
   detail: vi.fn(),
@@ -27,6 +27,7 @@ vi.mock('../../api/hooks.ts', async () => {
     useReviewBatch: () => spies.detail(),
     useMe: () => spies.me(),
     useCan: () => spies.can(),
+    // Present only so a read of a feature through its ordinary route would be seen: the page must make none.
     useFeature: (id: string | undefined) => spies.feature(id),
     useHeldPreview: (reviewId: string, size: number, enabled: boolean) => spies.preview(reviewId, size, enabled),
     useAcceptReviewItem: () => ({ mutateAsync: spies.acceptItem }),
@@ -73,6 +74,12 @@ const edit = line('L3', {
   rowId: 'f1',
   changedSince: true,
   acceptableFields: ['name', 'description', 'properties', 'position'],
+  // The server's comparison: the proposal carries no position, so none is compared.
+  fields: [
+    { field: 'name', current: 'Old name', proposed: 'New name', differs: true, currentWithheld: false },
+    { field: 'description', current: 'Same text', proposed: 'Same text', differs: false, currentWithheld: false },
+    { field: 'properties', current: {}, proposed: {}, differs: false, currentWithheld: false },
+  ],
   proposal: {
     act: 'update',
     row: { id: 'f1', parentId: 'c1', name: 'New name', description: 'Same text', properties: {} },
@@ -98,8 +105,8 @@ function batch(overrides: Partial<HeldBatch> = {}): HeldBatch {
   } as HeldBatch;
 }
 
-function show(lines: HeldLine[], b: HeldBatch = batch()) {
-  spies.detail.mockReturnValue({ data: { batch: b, lines }, isLoading: false, error: null });
+function show(lines: HeldLine[], b: HeldBatch = batch(), features: HeldFeature[] = []) {
+  spies.detail.mockReturnValue({ data: { batch: b, lines, features }, isLoading: false, error: null });
   return render(
     <AntApp>
       <MemoryRouter initialEntries={['/review/batches/B1']}>
@@ -120,21 +127,8 @@ beforeEach(() => {
   }
   spies.me.mockReturnValue({ data: { id: 'reviewer' } });
   spies.can.mockReturnValue(true);
-  spies.feature.mockImplementation((id: string | undefined) => ({
-    isLoading: false,
-    data: id
-      ? {
-          feature: {
-            name: id === 'f1' ? 'Old name' : 'Existing Cave',
-            description: 'Same text',
-            properties: {},
-            geometry: null,
-            approximateLocation: false,
-            omittedLocation: false,
-          },
-        }
-      : undefined,
-  }));
+  // What the ordinary route would answer a reader who may not read the row.
+  spies.feature.mockReturnValue({ isLoading: false, data: undefined });
   spies.preview.mockImplementation((reviewId: string, size: number, enabled: boolean) => ({
     url: enabled ? `blob:held/${reviewId}/${size}` : undefined,
     loading: false,
@@ -172,7 +166,7 @@ describe('the batch view', () => {
     expect(within(lineEl('L1')).queryByTestId('review-changed-since')).toBeNull();
   });
 
-  it('shows an edit field by field, current beside proposed, ticking only what differs', () => {
+  it('shows an edit field by field as the server compared it, current beside proposed, ticking only what differs', () => {
     show([cave, edit]);
     fireEvent.click(within(lineEl('L3')).getByTestId('review-line-toggle'));
     const table = within(lineEl('L3')).getByTestId('review-field-diff');
@@ -180,6 +174,66 @@ describe('the batch view', () => {
     expect(table.textContent).toContain('New name');
     expect((within(table).getByTestId('review-field-name') as HTMLInputElement).checked).toBe(true);
     expect((within(table).getByTestId('review-field-description') as HTMLInputElement).checked).toBe(false);
+    expect(spies.feature).not.toHaveBeenCalled();
+  });
+
+  it('shows where a row is now, from the server, and names existing caves and rows from the batch alone', () => {
+    const moved = line('M1', {
+      action: 'attach',
+      rowId: 'e5',
+      acceptableFields: ['name', 'description', 'properties', 'position'],
+      fields: [
+        { field: 'name', current: 'Invented Entrance', proposed: 'Invented Entrance', differs: false, currentWithheld: false },
+        {
+          field: 'position',
+          current: { geometry: { type: 'Point', coordinates: [22.5, 45.6] }, altitude: 640, positionQuality: 'gps', isMain: true },
+          proposed: { geometry: { type: 'Point', coordinates: [22.7, 45.8] }, altitude: 650, positionQuality: 'gps', isMain: true },
+          differs: true,
+          currentWithheld: false,
+        },
+      ],
+      proposal: { act: 'update', row: { id: 'e5', parentId: 'c5', name: 'Invented Entrance', geometry: { type: 'Point', coordinates: [22.7, 45.8] } } },
+    });
+    const removal = line('R1', {
+      action: 'attach',
+      rowId: 'p5',
+      proposal: { act: 'delete', row: { id: 'p5', parentId: 'c5', kind: 'generic', deleted: true } },
+    });
+    show([moved, removal], batch(), [
+      { id: 'c5', name: 'Invented Existing Cave', kind: 'cave' },
+      { id: 'e5', name: 'Invented Entrance', kind: 'caveEntrance' },
+      { id: 'p5', name: 'Invented Place', kind: 'generic' },
+    ]);
+    expect(screen.getAllByTestId('review-group')[0].textContent).toContain('Invented Existing Cave');
+    fireEvent.click(within(lineEl('M1')).getByTestId('review-line-toggle'));
+    const table = within(lineEl('M1')).getByTestId('review-field-diff');
+    expect(table.textContent).toContain('45.60000, 22.50000');
+    expect(table.textContent).toContain('640 m');
+    expect(table.textContent).toContain('45.80000, 22.70000');
+    expect((within(table).getByTestId('review-field-position') as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(within(lineEl('R1')).getByTestId('review-line-toggle'));
+    expect(within(lineEl('R1')).getByTestId('review-removal').textContent).toContain('Invented Place');
+    expect(spies.feature).not.toHaveBeenCalled();
+  });
+
+  it('titles a cave the server does not name as one this reader may not see, and says a withheld position is not compared', () => {
+    const hidden = line('H1', {
+      action: 'attach',
+      rowId: 'e6',
+      acceptableFields: ['name', 'description', 'properties', 'position'],
+      fields: [
+        { field: 'name', current: 'Invented Old', proposed: 'Invented New', differs: true, currentWithheld: false },
+        { field: 'position', current: null, proposed: null, differs: true, currentWithheld: true },
+      ],
+      proposal: { act: 'update', row: { id: 'e6', parentId: 'c6', name: 'Invented New' } },
+    });
+    show([hidden]);
+    expect(screen.getAllByTestId('review-group')[0].textContent).toContain('A cave you may not see');
+    fireEvent.click(within(lineEl('H1')).getByTestId('review-line-toggle'));
+    const detail = within(lineEl('H1')).getByTestId('review-field-diff');
+    expect(detail.textContent).toContain('withheld from you');
+    expect(detail.textContent).toContain('Not shown to you');
+    expect(spies.feature).not.toHaveBeenCalled();
   });
 
   it('accepts one field of an edit and sends just that field', async () => {
@@ -452,13 +506,14 @@ describe('the batch view', () => {
         ],
         proposal: { act: 'update', point: { id: 's1', recordingId: 'r1', placeId: 'f9', notes: 'second note' } },
       }),
-    ]);
+    ], batch(), [{ id: 'f9', name: 'Invented Place', kind: 'generic' }]);
     fireEvent.click(within(lineEl('S1')).getByTestId('review-line-toggle'));
     const table = within(lineEl('S1')).getByTestId('review-field-diff');
     expect(table.textContent).toContain('second note');
     expect(table.textContent).toContain('Not shown to you');
-    // The new place is named through the feature's own route.
-    expect(spies.feature).toHaveBeenCalledWith('f9');
+    // The new place is named by the batch, not read through the feature's own route.
+    expect(table.textContent).toContain('Invented Place');
+    expect(spies.feature).not.toHaveBeenCalled();
     expect((within(table).getByTestId('review-field-time') as HTMLInputElement).checked).toBe(false);
   });
 });
