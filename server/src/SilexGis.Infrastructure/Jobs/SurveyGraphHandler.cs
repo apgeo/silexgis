@@ -569,11 +569,12 @@ public sealed class SurveyGraphHandler(
                 SkeletonPathCount = shape.SkeletonPathCount,
                 LengthM = shape.LengthM,
             },
-            // A model a field device's upload stored never takes the cave's current mark, not even
-            // as the cave's first: which survey a cave is drawn and measured from is somebody's
-            // deliberate choice on the web. The default shape follows that mark, so it stays
-            // unset too until somebody makes the choice.
-            firstBecomesDefault: model.SurveyUploadId is null,
+            // A model a field device's upload stored does not become the cave's shape on its own:
+            // which survey a cave is drawn and measured from is somebody's deliberate choice on the
+            // web. The default shape and the current mark are one fact, so an upload's model whose
+            // run gave it the mark (the first model of a cave that upload made) gives the cave its
+            // shape as well, and every other upload's model leaves both unset.
+            firstBecomesDefault: model.SurveyUploadId is null || model.IsCurrent,
             ct);
     }
 

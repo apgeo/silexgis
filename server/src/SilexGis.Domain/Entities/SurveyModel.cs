@@ -197,9 +197,11 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     public Guid? CaveSurveyId { get; set; }
 
     /// <summary>
-    /// The upload whose run produced this model, when one did. Such a model never takes the cave's
-    /// current mark on its own — which model a cave shows is a person's choice, not a side effect
-    /// of a phone sending a survey.
+    /// The upload whose run produced this model, when one did. Such a model does not take the
+    /// cave's current mark on its own — which model a cave shows is a person's choice, not a side
+    /// effect of a phone sending a survey — with one exception an installation may switch off: the
+    /// first model of a cave the upload itself created, while the cave has no other model and no
+    /// centreline, since nobody has chosen anything for that cave yet.
     /// </summary>
     public Guid? SurveyUploadId { get; set; }
 

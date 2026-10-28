@@ -96,6 +96,12 @@ are nevoie de cel puțin 10 caractere.
 > *„Schimbarea parolei te deconectează peste tot, inclusiv aici. Apoi te autentifici din nou cu
 > cea nouă."*
 
+**Revocă și cheile mele de acces** (oprit implicit) revocă și fiecare
+[cheie de acces](topodroid-uploads.md#o-cheie-de-acces-pentru-telefon) cu care un dispozitiv
+încarcă topografii. Lăsat oprit, acele dispozitive continuă să încarce; pornește-l când schimbi
+parola pentru că altcineva s-ar putea s-o fi avut. Pagina de *resetare a parolei* are același
+comutator.
+
 Un cont care se autentifică doar printr-un furnizor extern nu are parolă aici, iar cardul o
 spune. Primești un e-mail de fiecare dată când parola este schimbată sau resetată — o singură
 dată — astfel încât o schimbare pe care nu ai făcut-o să nu treacă neobservată.
@@ -141,9 +147,11 @@ pur și simplu nu sunt disponibile, iar pagina spune de ce.
 ### Pierderea unui dispozitiv
 
 > **Schimbarea sau resetarea parolei revocă fiecare jeton și fiecare autorizație de pe contul
-> tău — fiecare client, fiecare dispozitiv, inclusiv cel pe care îl folosești.**
+> tău — fiecare client, fiecare dispozitiv, inclusiv cel pe care îl folosești.** Cu **Revocă și
+> cheile mele de acces** bifat, revocă și cheile cu care dispozitivele încarcă topografii.
 
-Acesta este răspunsul la un telefon pierdut sau furat, și este **o singură acțiune la care ajunge
+Acesta este răspunsul la un telefon pierdut sau furat — bifează comutatorul dacă acel telefon
+avea o cheie de acces — și este **o singură acțiune la care ajunge
 orice speolog**, fără să aștepte un administrator. Ești deconectat peste tot și te
 reconectezi pe dispozitivele pe care încă le ai.
 

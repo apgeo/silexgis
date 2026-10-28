@@ -171,6 +171,22 @@ public class SurveyUpload : ITimestamped, IAuditable, IAuditChild
     /// </summary>
     public string? PublicLinkRefusal { get; set; }
 
+    /// <summary>
+    /// Whether the upload asked for a public link of its own accord: true or false overrides the
+    /// account's preference for this upload alone; null leaves it to the preference.
+    /// </summary>
+    public bool? PublicLinkWanted { get; set; }
+
+    /// <summary>Who the upload asked its link to open for; null means the account's default audience.</summary>
+    public SurveyUploadLinkAudience? PublicLinkAudience { get; set; }
+
+    /// <summary>
+    /// Whether the uploader, warned that the results show where the cave's passages are, asked for
+    /// a link even if the cave's position is protected. Never implied by any switch or preference;
+    /// recorded on the link it makes as the uploader's acknowledgement at the time of opening.
+    /// </summary>
+    public bool PublicLinkAllowProtected { get; set; }
+
     /// <summary>The account that opened the upload.</summary>
     public Guid RequestedBy { get; set; }
 

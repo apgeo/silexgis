@@ -68,11 +68,11 @@ problem (`errors` keyed by member) before any of the above.
 |---|---|---|---|
 | `survey_upload.files_missing` | 400 | `complete` | a declared file has not arrived; member `files` lists them. `11-errors/files-missing` |
 | `survey_upload.expired` | 410 | `complete` | as above |
-| `survey_upload.not_receiving` | 409 | `DELETE` | the upload is complete; it is undone from the web, not abandoned. `11-errors/not-receiving` |
+| `survey_upload.not_receiving` | 409 | `DELETE` | the upload is complete; a completed upload is not abandoned, and there is no way to delete it yet, neither through the exchange nor on the web. `11-errors/not-receiving` |
 | `survey_upload.not_completed` | 409 | `rerun` | the upload never completed |
 | `survey_upload.run_in_progress` | 409 | `rerun` | a run is already queued or running. `11-errors/run-in-progress` |
 | `survey_upload.output_unknown` | 400 | `rerun` | as for opening |
-| `survey_upload.not_found` | 404 | all | the upload is not one the account may see |
+| `survey_upload.not_found` | 404 | all | the upload is not one the account may see. Its uploader, who may still read the cave but no longer place it exactly, is answered on `GET /survey-uploads/{id}` with the run's state and every link withheld (`01-protocol.md`, "Who sees what") — and `404` on every other route |
 
 `complete` repeated on a completed upload answers `202` with where it stands; `DELETE` repeated on
 an abandoned one answers `204`.
@@ -86,18 +86,22 @@ reason to show beside the missing link:
 |---|---|
 | `installation-off` | this installation makes no public links |
 | `account-off` | the uploader turned public links off in their SilexGIS settings |
+| `not-wanted` | the upload itself asked for no link (`publicLink.wanted: false` when it was opened) |
 | `no-share-right` | the account that completed the upload may not share the cave with people outside the installation |
-| `protected-cave` | the cave's position is protected, so its survey results are never published — also when protection was switched on after the link was made |
-| `revoked` | someone who may write to the cave withdrew the link on the web |
+| `protected-cave` | the cave's position is protected and nobody asked for a link acknowledging it — also when protection was switched on after an ordinary link was made. A link made with `allowProtected: true` keeps opening while the cave stays protected |
+| `revoked` | someone who may write to the cave withdrew the link, on the web or from a device |
 
-The web's routes for making a link again and withdrawing it (not opened by an access key):
+The routes for making a link again and withdrawing it — the web's status page and the device's
+result screen, which opens them with its access key:
 
 | Code | Status | Route | When |
 |---|---|---|---|
 | `survey_upload.not_completed` | 409 | `POST …/public-link` | the upload is still receiving files, or was abandoned |
 | `survey_upload.public_links_disabled` | 409 | `POST …/public-link` | the installation makes no public links |
 | `survey_upload.public_link_forbidden` | 403 | `POST …/public-link` | the account may not share the cave |
-| `survey_upload.public_link_refused_protected` | 409 | `POST …/public-link` | the cave's position is protected |
+| `survey_upload.public_link_refused_protected` | 409 | `POST …/public-link` | the cave's position is protected and the request did not send `allowProtected: true` |
+| `validation.failed` | 400 | `POST …/public-link`, `POST /api/v1/survey-uploads` | `audience` is neither `public` nor `organization` (an unknown name is refused as a body that does not read, also 400) |
+| `survey_upload.public_link_sign_in_required` | 401 | `GET /api/v1/public/survey-uploads/{token}` | the link opens for the installation's signed-in accounts only (`audience: organization`) and the reader is not signed in — an access key does not count. Asked only of a link that would otherwise open; ask the reader to sign in on the web. `11-errors/public-link-sign-in-required` |
 | `survey_upload.public_link_not_found` | 404 | `GET /api/v1/public/survey-uploads/{token}` | **one answer for everything**: an invented, malformed, withdrawn or replaced token, a cave protected now, an installation that turned links off, an upload or cave that is gone. `11-errors/public-link-not-found` |
 
 ## How a processing run ended *(row)*

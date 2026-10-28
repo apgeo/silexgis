@@ -64,8 +64,9 @@ public static class AccessKeySchemes
 /// <remarks>
 /// <para>
 /// Everything is re-read on every request — the key row and the account — so revoking a key,
-/// changing the password (which revokes every key) or locking the account takes effect on the very
-/// next call. That is the difference from a sign-in access token, which is a self-contained signed
+/// revoking every key (a password change or reset with key revocation asked for, or an
+/// administrator's reset of the second factor) or locking the account takes effect on the very next
+/// call. A plain password change or reset, without key revocation asked for, leaves keys working. That is the difference from a sign-in access token, which is a self-contained signed
 /// value checked against its signature and keeps working for up to its fifteen minutes.
 /// </para>
 /// <para>

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -19,6 +19,9 @@ vi.mock('../../api/hooks.ts', async () => {
   };
 });
 
+const signIn = vi.fn(async () => {});
+vi.mock('../../auth/auth.tsx', () => ({ useAuth: () => ({ signIn }) }));
+
 const { default: PublicSurveyResultPage } = await import('./PublicSurveyResultPage.tsx');
 
 function show() {
@@ -35,6 +38,7 @@ afterEach(() => {
   cleanup();
   view = undefined;
   failure = undefined;
+  signIn.mockClear();
 });
 
 describe('PublicSurveyResultPage', () => {
@@ -89,6 +93,23 @@ describe('PublicSurveyResultPage', () => {
     show();
     expect(screen.getByTestId('public-survey-unavailable')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
+  });
+
+  it('asks a reader of a link made for the organization to sign in, and brings them back here', () => {
+    failure = new ApiError(401, 'survey_upload.public_link_sign_in_required');
+    show();
+    expect(screen.getByTestId('public-survey-sign-in')).toBeTruthy();
+    expect(screen.queryByTestId('public-survey-unavailable')).toBeNull();
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
+    fireEvent.click(screen.getByTestId('public-survey-sign-in-button'));
+    expect(signIn).toHaveBeenCalledWith('/p/survey/abc');
+  });
+
+  it('does not take any other 401 for the organization prompt', () => {
+    failure = new ApiError(401, 'auth.something_else');
+    show();
+    expect(screen.queryByTestId('public-survey-sign-in')).toBeNull();
+    expect(screen.getByTestId('public-survey-unavailable')).toBeTruthy();
   });
 
   it('offers a retry when the failure is not a refusal', () => {

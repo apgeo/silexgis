@@ -179,7 +179,7 @@ transformată la fel: vezi [Înregistrări de pe telefon](phone-recordings.md).
    este făcută din titlul înregistrării și din cele două momente ale ei, cu exact persoanele pe
    care le numești pe lista de participanți, iar tu spui cine o poate citi și care
    este grupul organizator.
-4. **În ce ridicare topografică sunt pozițiile.** O poziție este o stație a unui model topografic,
+4. **În ce topografie sunt pozițiile.** O poziție este o stație a unui model topografic,
    deci alegi **Peștera** (în același fel de casetă de căutare) și apoi unul dintre **modelele
    topografice** ale ei. Alegerea altei peșteri golește modelul. O peșteră a cărei poziție exactă
    nu îți poate fi spusă nu listează niciunul.
@@ -187,7 +187,7 @@ transformată la fel: vezi [Înregistrări de pe telefon](phone-recordings.md).
    nu se ghicește nimic: spune cine este fiecare cont. O scanare făcută de un cont pe care nu l-a
    numit nimeni este lăsată deoparte.
 6. **Verifică scanările.** Adâncimea marcajului fiecărei scanări este oferită ca cele mai
-   apropiate stații ale ridicării, cea mai apropiată întâi; ia scanarea sau las-o deoparte și
+   apropiate stații ale topografiei, cea mai apropiată întâi; ia scanarea sau las-o deoparte și
    alege altă stație dintre cele oferite dacă prima este greșită. O scanare marcată **Mai multe
    stații la acea adâncime** este una la care alegerea contează cel mai mult. O scanare pentru care
    nu se poate propune nimic — nu numește niciun marcaj, marcajul nu are adâncime, nicio stație nu

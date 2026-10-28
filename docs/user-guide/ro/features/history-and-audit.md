@@ -72,7 +72,7 @@ O formă mică — punctul unei intrări, conturul unui obiect — este înregis
 înregistrată integral)"**. Rezumatul nu conține nicio coordonată, deci nu poate localiza o peșteră
 protejată. Pentru un obiect modificat după ce au început să se păstreze copii integrale, serverul
 ține forma anterioară întreagă lângă rezumat, așa că ea poate fi pusă la loc; pentru istoricul mai
-vechi și pentru liniile unei ridicări, care se reconstruiesc din fișierul ei, nu poate, iar
+vechi și pentru liniile unei topografii, care se reconstruiesc din fișierul ei, nu poate, iar
 restaurarea spune acest lucru.
 
 ### Câmpuri cu nume lizibile

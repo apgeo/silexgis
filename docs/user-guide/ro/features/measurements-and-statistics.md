@@ -133,7 +133,7 @@ verticală, cu roca hașurată între ele. Apasă un punct de pe curbă și locu
 citirea este marcat — pe hartă și în vizualizarea 3D — și numit sub grafic: distanța, grosimea și
 segmentul traseului care a răspuns.
 
-> **Distanța de-a lungul nu este un drum de la intrare.** O ridicare topografică este o rețea, nu
+> **Distanța de-a lungul nu este un drum de la intrare.** O topografie este o rețea, nu
 > un traseu. Axa este lungimea cumulată, în ordinea în care o înregistrează traseul.
 
 **O întrerupere a curbei este un loc pentru care nimeni nu a măsurat terenul**, nu un loc în care
@@ -143,7 +143,7 @@ citirile acoperite, cu numărul lor afișat, astfel încât o peșteră acoperit
 raportată ca mai puțin adâncă decât este.
 
 Spune asta direct, în loc să nu deseneze nimic, în patru cazuri diferite: peștera nu are traseu;
-ridicarea a fost desenată în plan, fără adâncimi, deci nu există din ce să se scadă; pe această
+topografia a fost desenată în plan, fără adâncimi, deci nu există din ce să se scadă; pe această
 instalare nu au fost pregătite deloc date de elevație; sau au fost, dar niciuna nu ajunge la
 această peșteră. Acestea sunt probleme diferite, pentru oameni diferiți.
 

@@ -189,11 +189,11 @@ persoana a treia rămân așa cum sunt.
 | Callout record (what the tracking journal says it is not) | Evidență a apelului de urgență |
 | About the cave, not about a person (a write-up journal's line that reports no person) | Despre peșteră, nu despre o persoană |
 | Station list (the block a write-up prints beside the journal; the document's own word) | Lista stațiilor |
-| The stations of the survey this trip was followed in (what the station list says it is) | Stațiile ridicării în care a fost urmărită tura |
+| The stations of the survey this trip was followed in (what the station list says it is) | Stațiile topografiei în care a fost urmărită tura |
 | Depths measured below (before the station a printed list's depths are measured from) | Adâncimi măsurate sub |
 | entrance (the mark on a printed station the survey calls one) | intrare |
 | The station list is not shown in this copy (to a reader who may not be told where the cave is) | Lista stațiilor nu este inclusă în acest exemplar |
-| Stations printed / Stations in the survey (the closing line of a list cut short) | Stații tipărite / Stații în ridicare |
+| Stations printed / Stations in the survey (the closing line of a list cut short) | Stații tipărite / Stații în topografie |
 | Delete for good | Șterge definitiv |
 | Held reports (recorded with no answer from the server, kept in the browser) | Rapoarte în așteptare |
 | Send now / Send again / Discard (a held report) | Trimite acum / Trimite din nou / Aruncă |
@@ -225,7 +225,7 @@ persoana a treia rămân așa cum sunt.
 | Follow link | Link de urmărire |
 | Caption (on the public page) | Etichetă |
 | Past trips in this cave | Ture trecute în această peșteră |
-| Survey (the drawing a party is placed on) | Ridicare |
+| Survey (the drawing a party is placed on) | Topografie |
 | Party / Team | Echipă |
 | Underground (where somebody stands) | În peșteră |
 | Last heard | Ultima veste |
@@ -390,7 +390,7 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Export | Exportă |
 | Bake (terrain) | Generare |
 | Access keys · Create key · Revoke | Chei de acces · Creează cheia · Revocă |
-| Survey uploads (a Settings page) | Încărcări de ridicări |
+| Survey uploads (a Settings page) | Încărcări de topografii |
 | Public link (an upload's) · Withdraw | Link public · Retrage |
 | Not needed (a stage the run skipped) | Nu era nevoie |
 

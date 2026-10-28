@@ -68,6 +68,17 @@ public sealed class SurveyUploadOptions
     public int KeepArtefactVersions { get; set; }
 
     /// <summary>
+    /// How many megabytes what a survey's older versions produced may take before the survey's
+    /// pages warn about it, naming the size and the setting above. A warning only: nothing is
+    /// removed because of it. 500 by default; 0 or less never warns.
+    /// </summary>
+    public int OlderVersionsWarnMegabytes { get; set; } = 500;
+
+    /// <summary>The warning threshold in bytes, or null when the installation never warns.</summary>
+    public long? OlderVersionsWarnBytes() =>
+        OlderVersionsWarnMegabytes > 0 ? OlderVersionsWarnMegabytes * 1024L * 1024L : null;
+
+    /// <summary>
     /// Whether uploads get a public link to their results — a page anybody holding the address can
     /// open without an account. On by default; each account can still turn it off for its own
     /// uploads, and a cave whose position is protected never gets one. Turning this off also stops

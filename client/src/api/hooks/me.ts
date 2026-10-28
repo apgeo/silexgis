@@ -146,8 +146,8 @@ export function useChangeUsername() {
 
 export function useChangePassword() {
   return useMutation({
-    mutationFn: (body: { currentPassword: string; newPassword: string }) =>
-      unwrapVoid(api.PUT('/api/v1/me/password', { body })),
+    mutationFn: (body: { currentPassword: string; newPassword: string; revokeAccessKeys?: boolean }) =>
+      unwrapVoid(api.PUT('/api/v1/me/password', { body: { revokeAccessKeys: false, ...body } })),
   });
 }
 

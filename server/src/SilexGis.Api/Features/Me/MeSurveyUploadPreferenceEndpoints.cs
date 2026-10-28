@@ -17,14 +17,23 @@ namespace SilexGis.Api.Features.Me;
 /// </param>
 /// <param name="PublicLinks">
 /// Whether this account's uploads get a public link to their results. The installation must allow
-/// such links too, and a location-protected cave never gets one whatever this says.
+/// such links too, and a location-protected cave never gets one whatever this says — only an upload
+/// that asks for one explicitly, acknowledging the cave is protected, does.
 /// </param>
-public sealed record SurveyUploadPreferencesDto(IReadOnlyList<string> AlwaysOutputs, bool PublicLinks);
+/// <param name="DefaultLinkAudience">
+/// Who this account's links open for when an upload or a person making one does not say:
+/// <c>public</c> (anybody holding the address) or <c>organization</c> (only a signed-in account of
+/// this installation).
+/// </param>
+public sealed record SurveyUploadPreferencesDto(
+    IReadOnlyList<string> AlwaysOutputs, bool PublicLinks, SurveyUploadLinkAudience DefaultLinkAudience);
 
 /// <summary>Replaces the caller's survey-upload choices as a whole.</summary>
 /// <param name="AlwaysOutputs">Catalogue names; case does not matter and repeats are dropped.</param>
 /// <param name="PublicLinks">Whether this account's uploads get public result links.</param>
-public sealed record SurveyUploadPreferencesWriteRequest(IReadOnlyList<string> AlwaysOutputs, bool PublicLinks);
+/// <param name="DefaultLinkAudience">Who the links open for by default; the stored choice is kept when not sent.</param>
+public sealed record SurveyUploadPreferencesWriteRequest(
+    IReadOnlyList<string> AlwaysOutputs, bool PublicLinks, SurveyUploadLinkAudience? DefaultLinkAudience = null);
 
 public sealed class SurveyUploadPreferencesWriteRequestValidator : AbstractValidator<SurveyUploadPreferencesWriteRequest>
 {
@@ -38,13 +47,17 @@ public sealed class SurveyUploadPreferencesWriteRequestValidator : AbstractValid
             .Must(list => list.Count <= MaxListed)
             .WithMessage("Too many outputs.")
             .When(x => x.AlwaysOutputs is not null);
+
+        // The serializer takes an audience as a number too; one outside the two would be stored as
+        // an audience nobody defined.
+        RuleFor(x => x.DefaultLinkAudience).IsInEnum().When(x => x.DefaultLinkAudience is not null);
     }
 }
 
 /// <summary>
 /// The account's own survey-upload choices: outputs every upload produces, and whether uploads
-/// get public result links. An account that never saved any has the defaults — nothing added, and
-/// links on.
+/// get public result links, and who those links open for. An account that never saved any has the
+/// defaults — nothing added, links on, open to anybody holding the address.
 /// </summary>
 /// <remarks>
 /// Held as typed columns of their own rather than in the interface-preference document, because the
@@ -61,7 +74,7 @@ public static class MeSurveyUploadPreferenceEndpoints
         var preferences = api.MapGroup("/me/survey-upload-preferences").WithTags("Me");
 
         preferences.MapGet("/", GetAsync)
-            .WithSummary("The caller's survey-upload choices: outputs always produced, and whether results get a public link.");
+            .WithSummary("The caller's survey-upload choices: outputs always produced, whether results get a public link, and who it opens for.");
         preferences.MapPut("/", PutAsync)
             .WithValidation<SurveyUploadPreferencesWriteRequest>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
@@ -71,7 +84,7 @@ public static class MeSurveyUploadPreferenceEndpoints
     }
 
     /// <summary>The defaults an account with no stored choices has.</summary>
-    public static SurveyUploadPreferencesDto Defaults { get; } = new([], true);
+    public static SurveyUploadPreferencesDto Defaults { get; } = new([], true, SurveyUploadLinkAudience.Public);
 
     private static async Task<Results<Ok<SurveyUploadPreferencesDto>, UnauthorizedHttpResult>> GetAsync(
         IUserContextAccessor userAccessor, SilexGisDbContext db, CancellationToken ct)
@@ -116,6 +129,7 @@ public static class MeSurveyUploadPreferenceEndpoints
         // Stored in catalogue form: lower-case, each once, in catalogue order.
         stored.AlwaysOutputs = [.. SurveyOutputs.Effective(request.AlwaysOutputs, [], [], [])];
         stored.PublicLinks = request.PublicLinks;
+        stored.DefaultLinkAudience = request.DefaultLinkAudience ?? stored.DefaultLinkAudience;
 
         try
         {
@@ -128,6 +142,7 @@ public static class MeSurveyUploadPreferenceEndpoints
             var existing = await db.SurveyUploadPreferences.FirstAsync(p => p.UserId == user.UserId, ct);
             existing.AlwaysOutputs = stored.AlwaysOutputs;
             existing.PublicLinks = stored.PublicLinks;
+            existing.DefaultLinkAudience = request.DefaultLinkAudience ?? existing.DefaultLinkAudience;
             await db.SaveChangesAsync(ct);
             stored = existing;
         }
@@ -136,5 +151,5 @@ public static class MeSurveyUploadPreferenceEndpoints
     }
 
     private static SurveyUploadPreferencesDto ToDto(SurveyUploadPreference p) =>
-        new(SurveyOutputs.Effective(p.AlwaysOutputs, [], [], []), p.PublicLinks);
+        new(SurveyOutputs.Effective(p.AlwaysOutputs, [], [], []), p.PublicLinks, p.DefaultLinkAudience);
 }

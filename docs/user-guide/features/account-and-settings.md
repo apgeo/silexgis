@@ -96,6 +96,11 @@ password needs at least 10 characters.
 > *"Changing your password signs you out everywhere, including here. You then sign in again with
 > the new one."*
 
+**Also revoke my access keys** (off by default) revokes every
+[access key](topodroid-uploads.md#an-access-key-for-the-phone) a device uploads surveys with as
+well. Left off, those devices keep uploading; turn it on when you change the password because
+somebody else may have had it. The *reset your password* page has the same switch.
+
 An account that signs in only through an external provider has no password here, and the card
 says so. You are sent an email whenever your password is changed or reset — once — so a change
 you did not make does not go unnoticed.
@@ -140,9 +145,10 @@ page says why.
 ### Losing a device
 
 > **Changing or resetting your password revokes every token and every authorisation on your
-> account — every client, every device, including the one you are using.**
+> account — every client, every device, including the one you are using.** With **Also revoke
+> my access keys** ticked, it revokes the keys that devices upload surveys with too.
 
-That is the answer to a lost or stolen phone, and it is **one action any caver can reach**
+That is the answer to a lost or stolen phone — tick the switch if that phone held an access key — and it is **one action any caver can reach**
 without waiting for an administrator. You are signed out everywhere, and you sign back in on
 the devices you still have.
 

@@ -6502,10 +6502,22 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("progress");
 
+                    b.Property<bool>("PublicLinkAllowProtected")
+                        .HasColumnType("boolean")
+                        .HasColumnName("public_link_allow_protected");
+
+                    b.Property<short?>("PublicLinkAudience")
+                        .HasColumnType("smallint")
+                        .HasColumnName("public_link_audience");
+
                     b.Property<string>("PublicLinkRefusal")
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)")
                         .HasColumnName("public_link_refusal");
+
+                    b.Property<bool?>("PublicLinkWanted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("public_link_wanted");
 
                     b.Property<Guid>("RequestedBy")
                         .HasColumnType("uuid")
@@ -6688,6 +6700,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<short>("DefaultLinkAudience")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((short)0)
+                        .HasColumnName("default_link_audience");
+
                     b.Property<bool>("PublicLinks")
                         .HasColumnType("boolean")
                         .HasColumnName("public_links");
@@ -6708,6 +6726,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<short>("Audience")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((short)0)
+                        .HasColumnName("audience");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -6715,6 +6739,14 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<Guid>("CreatedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
+
+                    b.Property<DateTimeOffset?>("ProtectedAcknowledgedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("protected_acknowledged_at");
+
+                    b.Property<Guid?>("ProtectedAcknowledgedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("protected_acknowledged_by");
 
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("timestamp with time zone")
@@ -6746,6 +6778,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex(new[] { "CreatedBy" }, "ix_survey_upload_public_links_created_by")
                         .HasDatabaseName("ix_survey_upload_public_links_created_by");
 
+                    b.HasIndex(new[] { "ProtectedAcknowledgedBy" }, "ix_survey_upload_public_links_protected_acknowledged_by")
+                        .HasDatabaseName("ix_survey_upload_public_links_protected_acknowledged_by");
+
                     b.HasIndex(new[] { "SurveyUploadId" }, "ux_survey_upload_public_links_live")
                         .IsUnique()
                         .HasDatabaseName("ux_survey_upload_public_links_live")
@@ -6755,7 +6790,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ux_survey_upload_public_links_token_hash");
 
-                    b.ToTable("survey_upload_public_links", (string)null);
+                    b.ToTable("survey_upload_public_links", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_upload_public_links_acknowledgement", "(protected_acknowledged_by IS NULL) = (protected_acknowledged_at IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SyncLinkRemoval", b =>
@@ -10724,6 +10762,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_survey_upload_public_links_users_created_by");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("ProtectedAcknowledgedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_upload_public_links_users_protected_acknowledged_by");
 
                     b.HasOne("SilexGis.Domain.Entities.SurveyUpload", null)
                         .WithMany()

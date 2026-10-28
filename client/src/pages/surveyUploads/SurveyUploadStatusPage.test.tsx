@@ -31,6 +31,9 @@ vi.mock('../../api/hooks.ts', async () => {
     useRerunSurveyUpload: () => ({ mutateAsync: rerunMutate, isPending: false }),
     useMintSurveyUploadPublicLink: () => ({ mutateAsync: mintMutate, isPending: false }),
     useRevokeSurveyUploadPublicLink: () => ({ mutateAsync: revokeMutate, isPending: false }),
+    useSurveyUploadPreferences: () => ({
+      data: { alwaysOutputs: [], publicLinks: true, defaultLinkAudience: 'organization' },
+    }),
   };
 });
 
@@ -60,6 +63,7 @@ function made(over: Partial<SurveyUpload> = {}): SurveyUpload {
     statusPageUrl: '/caves/c1/surveys/s1/uploads/u1',
     publicLink: null,
     publicLinkRefusal: null,
+    olderVersions: { count: 0, sizeBytes: 0, warn: false, warnBytes: 524288000, keepVersions: 0 },
     createdAt: '2026-10-25T10:15:00Z',
     expiresAt: '2026-10-26T10:15:00Z',
     startedAt: '2026-10-25T10:15:01Z',
@@ -137,7 +141,7 @@ describe('the upload status page', () => {
   });
 
   it('shows a public link in full with copy, and withdraws it only after confirmation', async () => {
-    upload = made({ publicLink: { url: '/p/survey/abc', createdAt: '2026-10-25T10:16:00Z' } });
+    upload = made({ publicLink: { url: '/p/survey/abc', createdAt: '2026-10-25T10:16:00Z', audience: 'public', protectedAcknowledged: false } });
     show();
 
     expect(screen.getByTestId('survey-upload-link')).toHaveTextContent(`${window.location.origin}/p/survey/abc`);
@@ -147,6 +151,78 @@ describe('the upload status page', () => {
     expect(revokeMutate).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
     await waitFor(() => expect(revokeMutate).toHaveBeenCalledWith('u1'));
+  });
+
+  it('shows the link\'s address and audience to a reader, but only a writer may replace or withdraw it', () => {
+    canWrite = false;
+    upload = made({ publicLink: { url: '/p/survey/abc', createdAt: '2026-10-25T10:16:00Z', audience: 'organization', protectedAcknowledged: false } });
+    show();
+    expect(screen.getByTestId('survey-upload-link')).toHaveTextContent('/p/survey/abc');
+    expect(screen.getByTestId('survey-upload-link-audience-tag')).toHaveTextContent('Signed-in accounts only');
+    expect(screen.queryByTestId('survey-upload-link-remint')).toBeNull();
+    expect(screen.queryByTestId('survey-upload-link-revoke')).toBeNull();
+  });
+
+  it('makes a link for the audience chosen in the dialog, starting from the account\'s default', async () => {
+    show();
+    fireEvent.click(screen.getByTestId('survey-upload-link-make'));
+    expect(await screen.findByTestId('survey-upload-link-dialog')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Signed-in accounts only/ })).toBeChecked();
+    expect(screen.queryByTestId('survey-upload-link-acknowledge')).toBeNull();
+
+    fireEvent.click(screen.getByRole('radio', { name: /Anyone with the link/ }));
+    fireEvent.click(screen.getByTestId('survey-upload-link-dialog-ok'));
+    await waitFor(() => expect(mintMutate).toHaveBeenCalledWith({ id: 'u1', audience: 'public', allowProtected: false }));
+  });
+
+  it('replaces a link with one for the same audience unless another is chosen', async () => {
+    upload = made({ publicLink: { url: '/p/survey/abc', createdAt: '2026-10-25T10:16:00Z', audience: 'public', protectedAcknowledged: false } });
+    show();
+    fireEvent.click(screen.getByTestId('survey-upload-link-remint'));
+    expect(await screen.findByText(/old address stops working/)).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Anyone with the link/ })).toBeChecked();
+    fireEvent.click(screen.getByTestId('survey-upload-link-dialog-ok'));
+    await waitFor(() => expect(mintMutate).toHaveBeenCalledWith({ id: 'u1', audience: 'public', allowProtected: false }));
+  });
+
+  it('marks a link made knowingly for a protected cave, and asks again for the acknowledgement to replace it', async () => {
+    upload = made({ publicLink: { url: '/p/survey/abc', createdAt: '2026-10-25T10:16:00Z', audience: 'public', protectedAcknowledged: true } });
+    show();
+    expect(screen.getByTestId('survey-upload-link-protected')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('survey-upload-link-remint'));
+    expect(await screen.findByTestId('survey-upload-link-acknowledge')).not.toBeChecked();
+    expect(screen.getByTestId('survey-upload-link-dialog-ok')).toBeDisabled();
+  });
+
+  it('draws only what the uploader who lost sight of the cave\'s position is sent', () => {
+    canWrite = false;
+    upload = made({
+      logTail: null,
+      publicLink: null,
+      files: [
+        { name: 'inv1.zip', role: 'archive', status: 'stored', declaredSize: 2048, receivedSize: 2048, sha256: null, refusalCode: null, sourceId: null, documentId: null, contentUrl: null },
+      ],
+    } as Partial<SurveyUpload>);
+    show();
+    expect(screen.getByTestId('survey-upload-stages')).toBeInTheDocument();
+    expect(screen.getByText('inv1.zip')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /download/i })).toBeNull();
+    expect(screen.queryByTestId('survey-upload-log-tail')).toBeNull();
+    expect(screen.queryByTestId('survey-upload-link')).toBeNull();
+  });
+
+  it('warns when the survey\'s older versions take more than the installation warns at', () => {
+    upload = made({ olderVersions: { count: 3, sizeBytes: 734003200, warn: true, warnBytes: 524288000, keepVersions: 0 } });
+    show();
+    const warning = screen.getByTestId('survey-upload-older-versions-warning');
+    expect(warning).toHaveTextContent('versions: 3');
+    expect(warning).toHaveTextContent('SILEXGIS__SurveyUploads__KeepArtefactVersions');
+    expect(warning).toHaveTextContent('is 0 now');
+
+    cleanup();
+    upload = made();
+    show();
+    expect(screen.queryByTestId('survey-upload-older-versions-warning')).toBeNull();
   });
 
   it('offers to make a link when there is none, to someone who may write', () => {
@@ -161,18 +237,30 @@ describe('the upload status page', () => {
   });
 
   it('opens the public link in a new tab', () => {
-    upload = made({ publicLink: { url: '/p/survey/abc', createdAt: '2026-10-25T10:16:00Z' } });
+    upload = made({ publicLink: { url: '/p/survey/abc', createdAt: '2026-10-25T10:16:00Z', audience: 'public', protectedAcknowledged: false } });
     show();
     const open = screen.getByTestId('survey-upload-link-open');
     expect(open.getAttribute('href')).toBe(`${window.location.origin}/p/survey/abc`);
     expect(open.getAttribute('target')).toBe('_blank');
   });
 
-  it('says why there is no link when the server gives a reason, and offers no button for a protected cave', () => {
+  it('says why there is no link, and makes one for a protected cave only with the acknowledgement', async () => {
     upload = made({ publicLinkRefusal: 'protected-cave' });
     show();
     expect(screen.getByTestId('survey-upload-no-link')).toHaveTextContent('position is protected');
-    expect(screen.queryByTestId('survey-upload-link-make')).toBeNull();
+    fireEvent.click(screen.getByTestId('survey-upload-link-make'));
+    expect(await screen.findByTestId('survey-upload-link-protected-warning')).toBeInTheDocument();
+    const ok = screen.getByTestId('survey-upload-link-dialog-ok');
+    expect(ok).toBeDisabled();
+    fireEvent.click(ok);
+    expect(mintMutate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('survey-upload-link-acknowledge'));
+    expect(ok).toBeEnabled();
+    fireEvent.click(ok);
+    await waitFor(() =>
+      expect(mintMutate).toHaveBeenCalledWith({ id: 'u1', audience: 'organization', allowProtected: true }),
+    );
 
     cleanup();
     upload = made({ publicLinkRefusal: 'account-off' });
@@ -201,10 +289,20 @@ describe('the upload status page', () => {
   });
 
   it('turns the server\'s refusal to make a link into its sentence', async () => {
+    mintMutate.mockRejectedValueOnce(new ApiError(403, 'survey_upload.public_link_forbidden'));
+    show();
+    fireEvent.click(screen.getByTestId('survey-upload-link-make'));
+    fireEvent.click(await screen.findByTestId('survey-upload-link-dialog-ok'));
+    expect(await screen.findByText(/takes the right to share the cave/)).toBeInTheDocument();
+  });
+
+  it('asks for the acknowledgement when the server says the cave has become protected', async () => {
     mintMutate.mockRejectedValueOnce(new ApiError(409, 'survey_upload.public_link_refused_protected'));
     show();
     fireEvent.click(screen.getByTestId('survey-upload-link-make'));
-    expect(await screen.findByText(/position is protected, so its survey results are not published/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByTestId('survey-upload-link-dialog-ok'));
+    expect(await screen.findByTestId('survey-upload-link-acknowledge')).not.toBeChecked();
+    expect(screen.getByTestId('survey-upload-link-dialog-ok')).toBeDisabled();
   });
 
   it('lists the survey\'s versions and points to a newer one', () => {

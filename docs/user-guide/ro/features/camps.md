@@ -104,7 +104,7 @@ urmărește niciun ceas și nu dă nicio alarmă."*
   niciodată nu apare deloc — nici ca echipă goală, nici ca un rând de zerouri. Turele în
   urmărire sunt primele, cea pornită cel mai recent sus; apoi cele încheiate, cea încheiată cel
   mai recent sus.
-- **Nu arată niciun loc — nimănui.** Nicio stație, nicio adâncime, nicio ridicare și nicio
+- **Nu arată niciun loc — nimănui.** Nicio stație, nicio adâncime, nicio topografie și nicio
   peșteră nu se află pe această filă, nici măcar pentru cineva care le vede pe toate pe tură.
   Este o numărătoare, nu o hartă. Tocmai de aceea poate număra o echipă dintr-o peșteră a cărei
   locație îți este protejată: ți se spune că Ana este în peșteră, nu și unde. Locul în care a

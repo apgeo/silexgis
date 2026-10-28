@@ -773,7 +773,7 @@ public static class UserAdminEndpoints
         });
 
         await TwoFactorSwitch.SwitchAllOffAsync(user, userManager, db, ct);
-        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, db, DateTimeOffset.UtcNow, user.Id, ct);
+        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, db, DateTimeOffset.UtcNow, user.Id, revokeAccessKeys: true, ct);
         await transaction.CommitAsync(ct);
 
         var administrators = await FullAdministratorIdsAsync(db, ct);

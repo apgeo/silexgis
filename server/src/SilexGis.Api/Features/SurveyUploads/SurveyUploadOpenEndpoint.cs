@@ -188,6 +188,9 @@ public static partial class SurveyUploadEndpoints
             VersionAt = SurveyVersionStamp.Next(now, latest),
             CreatedCave = createdCave,
             DocumentsVisibility = request.DocumentsVisibility,
+            PublicLinkWanted = request.PublicLink?.Wanted,
+            PublicLinkAudience = request.PublicLink?.Audience,
+            PublicLinkAllowProtected = request.PublicLink?.AllowProtected ?? false,
             Options = JsonSerializer.Serialize(run.Options, JsonSerializerOptions.Web),
             RequestedBy = ctx.UserId,
             ExpiresAt = now + settings.UploadSession,
@@ -217,7 +220,7 @@ public static partial class SurveyUploadEndpoints
             return ApiProblems.Conflict(BusyCode, "Another upload of this survey arrived at the same moment; send it again.");
         }
 
-        var dto = await ToDtoAsync(db, tokens, links, upload, cave, writable: true, ct);
+        var dto = await ToDtoAsync(db, tokens, links, options.Value, upload, cave, writable: true, ct);
         return TypedResults.Created($"/api/v1/survey-uploads/{upload.Id}", dto);
     }
 

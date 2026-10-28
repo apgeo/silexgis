@@ -156,9 +156,23 @@ public static partial class SurveyUploadEndpoints
         return api;
     }
 
-    private static async Task<Ok<SurveyUploadCapabilitiesDto>> CapabilitiesAsync(
-        SilexGisDbContext db, IOptions<SurveyUploadOptions> options, ISurveyCompiler compiler, CancellationToken ct)
+    private static async Task<Results<Ok<SurveyUploadCapabilitiesDto>, UnauthorizedHttpResult>> CapabilitiesAsync(
+        SilexGisDbContext db,
+        IOptions<SurveyUploadOptions> options,
+        ISurveyCompiler compiler,
+        IAccessContextAccessor accessAccessor,
+        SurveyUploadPublicLinkService links,
+        CancellationToken ct)
     {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        // The account's standing link choices sit on a route a device key does not open; the device
+        // reads here what its uploads get when they do not say, to preset its own choice.
+        var (linksEnabled, defaultAudience) = await links.AccountDefaultsAsync(ctx.UserId, ct);
         var settings = options.Value;
         return TypedResults.Ok(new SurveyUploadCapabilitiesDto(
             ContractVersion,
@@ -176,12 +190,14 @@ public static partial class SurveyUploadEndpoints
                 settings.CaveCreation ? await DefaultCaveTypeIdAsync(db, settings, ct) : null,
                 [Visibility.Private, Visibility.CavingGroup, Visibility.Authenticated, Visibility.Public]),
             new SurveyOutputCapabilitiesDto(SurveyOutputs.Catalogue, settings.DefaultOutputList()),
-            PollIntervalSeconds));
+            PollIntervalSeconds,
+            new SurveyPublicLinkCapabilitiesDto(linksEnabled, defaultAudience)));
     }
 
     private static async Task<Results<Ok<SurveyUploadDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
         Guid id,
         SilexGisDbContext db,
+        IOptions<SurveyUploadOptions> options,
         IAccessService access,
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
@@ -196,18 +212,41 @@ public static partial class SurveyUploadEndpoints
         }
 
         var found = await VisibleUploadAsync(db, access, protection, ctx, id, ct);
-        if (found is null)
+        if (found is not null)
         {
-            return ApiProblems.NotFound(NotFoundCode);
+            var writable = await SurveyModelAccess.WritableAsync(access, ctx, found.Cave, ct);
+            return TypedResults.Ok(await ToDtoAsync(db, tokens, links, options.Value, found.Upload, found.Cave, writable, ct));
         }
 
-        var writable = await SurveyModelAccess.WritableAsync(access, ctx, found.Cave, ct);
-        return TypedResults.Ok(await ToDtoAsync(db, tokens, links, found.Upload, found.Cave, writable, ct));
+        // The one who sent it keeps sight of how their own upload went after losing the cave's
+        // exact position: a caver whose upload failed has to be able to read why. Only the run's
+        // state is theirs then — everything that draws, lists or links the survey's stations is the
+        // position the protection now withholds from them, and stays withheld.
+        var own = await OwnUploadAsync(db, access, ctx, id, ct);
+        return own is null
+            ? ApiProblems.NotFound(NotFoundCode)
+            : TypedResults.Ok(await ToDtoAsync(db, tokens, links, options.Value, own.Upload, own.Cave, writable: false, ct, exact: false));
+    }
+
+    /// <summary>
+    /// The caller's own upload on a cave they may still read but no longer place exactly — or null
+    /// in every other case, so the answer is the same not-found as for anybody else's.
+    /// </summary>
+    private static async Task<VisibleUpload?> OwnUploadAsync(
+        SilexGisDbContext db, IAccessService access, AccessContext ctx, Guid id, CancellationToken ct)
+    {
+        var upload = await db.SurveyUploads.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id && u.RequestedBy == ctx.UserId, ct);
+        var cave = upload is null ? null : await CaveAsync(db, upload.CaveFeatureId, ct);
+        return upload is not null && cave is not null
+            && (await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed
+            ? new VisibleUpload(upload, cave)
+            : null;
     }
 
     private static async Task<Results<Accepted<SurveyUploadDto>, UnauthorizedHttpResult, ProblemHttpResult>> CompleteAsync(
         Guid id,
         SilexGisDbContext db,
+        IOptions<SurveyUploadOptions> options,
         IAccessService access,
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
@@ -241,7 +280,7 @@ public static partial class SurveyUploadEndpoints
         if (upload.Status is SurveyUploadStatus.Queued or SurveyUploadStatus.Running
             or SurveyUploadStatus.Succeeded or SurveyUploadStatus.Failed)
         {
-            return Accepted(await ToDtoAsync(db, tokens, links, upload, found.Cave, writable: true, ct));
+            return Accepted(await ToDtoAsync(db, tokens, links, options.Value, upload, found.Cave, writable: true, ct));
         }
 
         if (upload.Status != SurveyUploadStatus.Receiving)
@@ -280,7 +319,7 @@ public static partial class SurveyUploadEndpoints
         await links.MintAtCompletionAsync(access, ctx, upload, found.Cave, ct);
         await db.SaveChangesAsync(ct);
 
-        return Accepted(await ToDtoAsync(db, tokens, links, upload, found.Cave, writable: true, ct));
+        return Accepted(await ToDtoAsync(db, tokens, links, options.Value, upload, found.Cave, writable: true, ct));
     }
 
     private static async Task<Results<Accepted<SurveyUploadDto>, UnauthorizedHttpResult, ProblemHttpResult>> RerunAsync(
@@ -352,7 +391,7 @@ public static partial class SurveyUploadEndpoints
 
         await db.Entry(upload).ReloadAsync(ct);
 
-        return Accepted(await ToDtoAsync(db, tokens, links, upload, found.Cave, writable: true, ct));
+        return Accepted(await ToDtoAsync(db, tokens, links, options.Value, upload, found.Cave, writable: true, ct));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> AbandonAsync(
@@ -390,7 +429,7 @@ public static partial class SurveyUploadEndpoints
         if (upload.Status != SurveyUploadStatus.Receiving)
         {
             return ApiProblems.Conflict(
-                NotReceivingCode, "Every file of this upload arrived; it is undone from the web, not abandoned.");
+                NotReceivingCode, "Every file of this upload arrived; a completed upload is not abandoned, and it cannot be deleted yet.");
         }
 
         // Only the session ends. What arrived stays archived: it is the caver's survey, and
@@ -409,6 +448,7 @@ public static partial class SurveyUploadEndpoints
         IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         IFileAccessTokenService tokens,
+        SurveyUploadPublicLinkService links,
         Guid? caveId,
         Guid? caveSurveyId,
         string? source,
@@ -488,6 +528,7 @@ public static partial class SurveyUploadEndpoints
             .ToListAsync(ct);
         var revisions = await CurrentRevisionsAsync(db, [.. files.Select(f => f.DocumentId!.Value)], ct);
         var labels = await ProfileDirectory.ResolveLabelsAsync(db, user, rows.Select(r => r.RequestedBy), ct);
+        var openLinks = await links.OpenLinksAsync([.. rows.Select(r => (r.Id, r.CaveFeatureId))], ct);
 
         SurveyUploadListFileDto? Listed(SurveyUploadFile f) =>
             revisions.TryGetValue(f.DocumentId!.Value, out var r)
@@ -512,7 +553,8 @@ public static partial class SurveyUploadEndpoints
                 u.CreatedAt,
                 own.Where(f => f.Role == SurveyUploadFileRole.Archive).Select(Listed).FirstOrDefault(x => x is not null),
                 [.. own.Where(f => f.Role == SurveyUploadFileRole.TherionSource).Select(Listed).OfType<SurveyUploadListFileDto>()],
-                SurveyUploadLinks.StatusPage(u.CaveFeatureId, u.CaveSurveyId, u.Id));
+                SurveyUploadLinks.StatusPage(u.CaveFeatureId, u.CaveSurveyId, u.Id),
+                openLinks.GetValueOrDefault(u.Id));
         }).ToList();
 
         return TypedResults.Ok(new SurveyUploadPageDto(items, total, number, size));
@@ -655,10 +697,12 @@ public static partial class SurveyUploadEndpoints
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
         SurveyUploadPublicLinkService links,
+        SurveyUploadOptions settings,
         SurveyUpload upload,
         Feature cave,
         bool writable,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool exact = true)
     {
         var title = await db.CaveSurveys.AsNoTracking()
             .Where(s => s.Id == upload.CaveSurveyId)
@@ -704,7 +748,7 @@ public static partial class SurveyUploadEndpoints
                 kind,
                 f.Name,
                 revision.SizeBytes,
-                ContentUrl(tokens, revision.FileId),
+                exact ? ContentUrl(tokens, revision.FileId) : null,
                 f.SurveyModelId,
                 f.SurveyModelId is null && f.SurveySourceId is null ? f.DocumentId : null,
                 f.SurveySourceId,
@@ -713,7 +757,11 @@ public static partial class SurveyUploadEndpoints
                 error));
         }
 
-        var (publicLink, publicLinkRefusal) = await links.StateAsync(upload, writable, ct);
+        // The link's address goes to everybody who may read the upload: they may already download
+        // every file the link shows.
+        // Not to an uploader without the exact position: the link's page shows what they may no
+        // longer download.
+        var (publicLink, publicLinkRefusal) = await links.StateAsync(upload, showAddress: exact, ct);
 
         return new SurveyUploadDto(
             upload.Id,
@@ -737,7 +785,7 @@ public static partial class SurveyUploadEndpoints
                 f.RefusalCode,
                 f.SurveySourceId,
                 f.DocumentId,
-                f.DocumentId is { } doc && revisions.TryGetValue(doc, out var r) ? ContentUrl(tokens, r.FileId) : null))],
+                exact && f.DocumentId is { } doc && revisions.TryGetValue(doc, out var r) ? ContentUrl(tokens, r.FileId) : null))],
             artefacts,
             upload.CompilerVersion is { } compiler ? new SurveyUploadCompilerDto(compiler) : null,
             options.Outputs,
@@ -748,6 +796,7 @@ public static partial class SurveyUploadEndpoints
             SurveyUploadLinks.StatusPage(cave.Id, upload.CaveSurveyId, upload.Id),
             publicLink,
             publicLinkRefusal,
+            await OlderVersionsAsync(db, upload.CaveSurveyId, settings, ct),
             upload.CreatedAt,
             upload.ExpiresAt,
             upload.StartedAt,
@@ -755,6 +804,35 @@ public static partial class SurveyUploadEndpoints
     }
 
     private sealed record Revision(Guid FileId, long SizeBytes);
+
+    /// <summary>
+    /// What the versions of a survey older than its newest one hold of their runs' outputs. Counted
+    /// by the uploaded file of each output's current revision — what the sweep would remove — and
+    /// not the earlier revisions a run again left behind, which belong to the document's history.
+    /// </summary>
+    private static async Task<SurveyUploadOlderVersionsDto> OlderVersionsAsync(
+        SilexGisDbContext db, Guid caveSurveyId, SurveyUploadOptions settings, CancellationToken ct)
+    {
+        var newest = await db.SurveyUploads.AsNoTracking()
+            .Where(u => u.CaveSurveyId == caveSurveyId)
+            .MaxAsync(u => (DateTimeOffset?)u.VersionAt, ct);
+        var held = await (
+            from upload in db.SurveyUploads.AsNoTracking()
+            join file in db.SurveyUploadFiles.AsNoTracking() on upload.Id equals file.SurveyUploadId
+            join version in db.DocumentVersions.AsNoTracking() on file.DocumentId equals version.DocumentId
+            join stored in db.StoredFiles.AsNoTracking() on version.Id equals stored.DocumentVersionId
+            where upload.CaveSurveyId == caveSurveyId && upload.VersionAt < newest
+                && (file.Role == SurveyUploadFileRole.Output || file.Role == SurveyUploadFileRole.Log)
+                && file.Status == SurveyUploadFileStatus.Stored
+                && version.IsCurrent && stored.ConvertedFromFileId == null
+            group stored.SizeBytes by upload.Id into perVersion
+            select perVersion.Sum())
+            .ToListAsync(ct);
+        var size = held.Sum();
+        var warnAt = settings.OlderVersionsWarnBytes();
+        return new SurveyUploadOlderVersionsDto(
+            held.Count, size, warnAt is { } limit && size > limit, warnAt, Math.Max(0, settings.KeepArtefactVersions));
+    }
 
     /// <summary>The uploaded file of each document's current revision — not a rendition made from it.</summary>
     private static async Task<Dictionary<Guid, Revision>> CurrentRevisionsAsync(

@@ -106,4 +106,40 @@ test.describe('the public result page, against the real route', () => {
       await visitor.close();
     }
   });
+
+  test('a link made for the organization asks a visitor to sign in, and opens for a signed-in account', async ({
+    browser,
+    page,
+    consoleErrors,
+  }) => {
+    consoleErrors.allow(
+      /Failed to load resource: .*401/,
+      'a link made for the organization is answered 401 to a visitor who has not signed in, which the page turns into a sign-in prompt',
+    );
+    await login(page);
+    const upload = await seedUpload(page, `E2E Organization ${Date.now()}`, { publicLink: { audience: 'organization' } });
+    expect(upload.publicLinkUrl, 'the upload asked for a link for the organization and got one').toBeTruthy();
+    const path = new URL(upload.publicLinkUrl!, 'http://localhost').pathname;
+
+    const visitor = await ownContext(browser);
+    try {
+      const anonymous = await visitor.newPage();
+      await anonymous.goto(path);
+      await expect(anonymous.getByTestId('public-survey-sign-in')).toBeVisible({ timeout: 30_000 });
+      await expect(anonymous.getByTestId('public-survey-result')).toHaveCount(0);
+      await expect(anonymous.getByTestId('public-survey-sign-in-button')).toBeVisible();
+    } finally {
+      await visitor.close();
+    }
+
+    // The browser signed in on `page` holds no special right here: holding the address and being
+    // signed in is what the link asks. A link opened afresh starts without the account's tokens
+    // (they live in the page's memory only), so the page asks once; pressing the button goes
+    // through the sign-in this browser already has and comes back to the same address.
+    await page.goto(path);
+    await page.getByTestId('public-survey-sign-in-button').click({ timeout: 30_000 });
+    await expect(page.getByTestId('public-survey-result')).toBeVisible({ timeout: 60_000 });
+    expect(new URL(page.url()).pathname).toBe(path);
+    await expect(page.getByTestId('public-survey-cave')).toContainText(upload.caveName);
+  });
 });

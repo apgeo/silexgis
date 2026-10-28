@@ -38,7 +38,8 @@ is no grace period:
 |---|---|
 | The caver revoked the key on the web | refused |
 | The key reached its expiry date | refused |
-| The caver changed or reset their password | **every** key of the account is revoked |
+| The caver changed or reset their password **and ticked *Also revoke my access keys*** | **every** key of the account is revoked |
+| The caver changed or reset their password, leaving the switch off (the default) | keys keep working; only the signed-in sessions end |
 | An administrator reset the account's two-factor sign-in | every key of the account is revoked |
 | An administrator locked (disabled) the account | refused while the lock lasts |
 | The account was deleted | refused |
@@ -65,6 +66,8 @@ routing table, so a route cannot start or stop accepting a key without that test
 | `POST /api/v1/survey-uploads/{id}/complete` | say every file is in; queues the run |
 | `POST /api/v1/survey-uploads/{id}/rerun` | run a finished upload again |
 | `DELETE /api/v1/survey-uploads/{id}` | give up an upload still receiving files |
+| `POST /api/v1/survey-uploads/{id}/public-link` | make a new public link for a finished upload (the result screen's *Make a new link*) |
+| `DELETE /api/v1/survey-uploads/{id}/public-link` | withdraw the upload's public link (*Withdraw link*) |
 
 **Every other route that needs an account answers `403 auth.access_key_not_accepted`** to a key
 (recorded in `11-errors/access-key-not-accepted/`). That is a different answer from a 401 on
@@ -90,13 +93,17 @@ go.
 A name is at most 100 characters. A lifetime over the installation's ceiling is refused with
 `400 access_key.lifetime_invalid`; another account's key answers `404 access_key.not_found`.
 
-On the web this is *Settings › Access keys*.
+On the web this is *Settings › Access keys*. A key belongs to one account and acts as that account;
+there is no list of a club's or caving group's keys, and an administrator does not see or manage
+other people's keys there — taking every key of an account back is the two-factor reset above, or
+the caver's own password change with the switch on.
 
 ## 5. Keeping a key safe in the tool
 
 - Store it as a password: a password-type field, never printed in a log line, a crash report or a
   settings export.
 - Show only its first 12 characters once saved, as the web does.
-- *Forget* on the tool clears it locally; only the web revokes it. Tell the caver so.
+- *Forget* on the tool clears it locally; only the web revokes it. Tell the caver so — and that
+  changing the password on the web takes keys back only when they tick *Also revoke my access keys*.
 - Send it only over HTTPS to the installation the caver typed. A key is a bearer credential: whoever
   holds it may upload surveys as its owner until it expires or is revoked.

@@ -7,15 +7,16 @@ import en from '../../i18n/locales/en.json';
 import ro from '../../i18n/locales/ro.json';
 
 /**
- * The account's survey-upload choices: which results are always produced, and public links.
+ * The account's survey-upload choices: which results are always produced, public links, and who
+ * a link opens for by default.
  *
  * The outputs offered come from what the installation says it produces, and what is saved is the
- * whole pair in the catalogue's own order.
+ * whole set, outputs in the catalogue's own order.
  */
 
 const saveMutate = vi.fn();
 const CATALOGUE = ['lox', '3d', 'plan-pdf', 'extended-pdf', 'kml', 'shp'];
-let preferences: { alwaysOutputs: string[]; publicLinks: boolean };
+let preferences: { alwaysOutputs: string[]; publicLinks: boolean; defaultLinkAudience: 'public' | 'organization' };
 let loading: boolean;
 
 vi.mock('../../api/hooks.ts', async () => {
@@ -50,7 +51,7 @@ function show() {
 
 beforeEach(() => {
   saveMutate.mockReset();
-  preferences = { alwaysOutputs: ['kml'], publicLinks: true };
+  preferences = { alwaysOutputs: ['kml'], publicLinks: true, defaultLinkAudience: 'public' };
   loading = false;
 });
 
@@ -68,7 +69,7 @@ describe('the survey-upload settings page', () => {
     expect(screen.getByRole('switch', { name: 'Public links for my uploads' })).toBeChecked();
   });
 
-  it('keeps Save off until something changed, then saves the whole pair in catalogue order', async () => {
+  it('keeps Save off until something changed, then saves the whole set in catalogue order', async () => {
     saveMutate.mockResolvedValue({});
 
     show();
@@ -83,19 +84,46 @@ describe('the survey-upload settings page', () => {
     fireEvent.click(save);
 
     await waitFor(() =>
-      expect(saveMutate).toHaveBeenCalledWith({ alwaysOutputs: ['lox', 'plan-pdf', 'kml'], publicLinks: false }),
+      expect(saveMutate).toHaveBeenCalledWith({
+        alwaysOutputs: ['lox', 'plan-pdf', 'kml'],
+        publicLinks: false,
+        defaultLinkAudience: 'public',
+      }),
     );
   });
 
   it('drops a saved output the installation no longer produces instead of sending it back', async () => {
-    preferences = { alwaysOutputs: ['kml', 'gone'], publicLinks: true };
+    preferences = { alwaysOutputs: ['kml', 'gone'], publicLinks: true, defaultLinkAudience: 'organization' };
     saveMutate.mockResolvedValue({});
 
     show();
     fireEvent.click(screen.getByRole('checkbox', { name: 'GIS shapefile (SHP)' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(saveMutate).toHaveBeenCalledWith({ alwaysOutputs: ['kml', 'shp'], publicLinks: true }));
+    await waitFor(() =>
+      expect(saveMutate).toHaveBeenCalledWith({
+        alwaysOutputs: ['kml', 'shp'],
+        publicLinks: true,
+        defaultLinkAudience: 'organization',
+      }),
+    );
+  });
+
+  it('shows the saved default audience and saves a changed one with the rest', async () => {
+    saveMutate.mockResolvedValue({});
+
+    show();
+    expect(screen.getByRole('radio', { name: 'Anyone with the link' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: 'Signed-in accounts only' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(saveMutate).toHaveBeenCalledWith({
+        alwaysOutputs: ['kml'],
+        publicLinks: true,
+        defaultLinkAudience: 'organization',
+      }),
+    );
   });
 
   it('names the defaults the installation produces when nothing is asked for', () => {

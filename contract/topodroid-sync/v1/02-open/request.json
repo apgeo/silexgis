@@ -16,5 +16,10 @@
   ],
   "pipeline": {
     "compile": true
+  },
+  "publicLink": {
+    "wanted": true,
+    "audience": "public",
+    "allowProtected": false
   }
 }

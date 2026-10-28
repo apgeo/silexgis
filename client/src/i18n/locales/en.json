@@ -3417,6 +3417,8 @@
       "rejected": "This password is not accepted. Use at least 10 characters.",
       "notSet": "This account signs in without a password.",
       "signsOut": "Changing your password signs you out everywhere, including here. You then sign in again with the new one.",
+      "revokeKeys": "Also revoke my access keys",
+      "revokeKeysHint": "Devices that upload with one of your keys stop working until you give them a new key. Leave it off to keep them working.",
       "submit": "Change password",
       "changed": "Your password was changed."
     },
@@ -4432,8 +4434,10 @@
       "outputsTitle": "Always produce",
       "outputsIntro": "When a survey is uploaded from a device, these results are produced in addition to what the device asks for. With nothing asked for, the installation produces: {{defaults}}.",
       "linksTitle": "Public links",
-      "linksIntro": "Each upload can get a link that shows its results to anyone who has it, without signing in. It never includes the survey files themselves, the team or station names. A cave with a protected location never gets one.",
-      "linksSwitch": "Public links for my uploads"
+      "linksIntro": "Each upload can get a link that shows its results to whoever holds it — anyone, or only signed-in accounts of this installation. It never includes the survey files themselves, the team or station names. A cave with a protected location gets one only when you ask for it explicitly for that upload.",
+      "linksSwitch": "Public links for my uploads",
+      "audienceTitle": "Default link audience",
+      "audienceIntro": "Who a new upload's link opens for, unless the upload asks otherwise. A link for signed-in accounts asks whoever opens it to sign in."
     },
     "sync": {
       "intro": "Choose the caves a phone carries offline. A selection names caves — it never takes them over — so ending one here stops a device asking for them and changes nothing about the caves themselves.",
@@ -4636,6 +4640,11 @@
       "dailyPaidMessageCap": "Charged message segments a day",
       "dailyPaidMessageCapHint": "A carrier bills a text message by the segment, not by the message: 160 characters of the plain Latin alphabet travel in one segment, but a single accented letter re-encodes the whole message into segments of 70, so the same wording costs twice as much in Romanian as in English. An announcement that would take the day past this is refused outright rather than sent to half the roster. Segments already committed today count, including ones still waiting to go out.",
       "photoLibrariesTab": "Photo libraries",
+      "surveyUploadsTab": "Survey uploads",
+      "surveyUploadsIntro": "Choices about surveys sent from a field device, such as TopoDroid.",
+      "firstModelOfCreatedCave": "A cave made by an upload takes its first model",
+      "firstModelOfCreatedCaveHint": "When an upload creates a cave, the first model it brings becomes the cave's current model and its centreline the cave's shape. Off: a model from an upload never becomes current on its own; somebody chooses on the web.",
+      "surveyUploadsEnvironmentNote": "How many versions of a survey keep their results (SILEXGIS__SurveyUploads__KeepArtefactVersions) and the size the pages warn at (SILEXGIS__SurveyUploads__OlderVersionsWarnMegabytes) are set in the server's environment.",
       "photoLibrariesIntro": "These switches stop this installation using a photo library it already has, and start it again afterwards. They cannot connect one: which libraries this installation has is decided by the deployment that gave them their addresses and credentials."
     },
     "basemap": {
@@ -5064,6 +5073,9 @@
   },
   "publicSurvey": {
     "notFound": "This link does not work. It may have been withdrawn, or it may never have existed.",
+    "signInRequired": "This link opens for signed-in accounts of this installation.",
+    "signInRequiredHint": "Whoever made it chose to show these results to the installation's accounts only. Sign in and you come back to this page.",
+    "signIn": "Sign in",
     "loadFailed": "The result could not be loaded.",
     "caveAndVersion": "{{cave}} — uploaded {{when}}"
   },
@@ -6562,12 +6574,17 @@
       "outputUnknown": "One of the requested results is not produced by this server.",
       "publicLinksDisabled": "This installation makes no public links.",
       "publicLinkForbidden": "Making a public link takes the right to share the cave.",
-      "publicLinkProtected": "The cave's position is protected, so its survey results are not published.",
+      "publicLinkProtected": "The cave's position is protected. A link to its results is made only when asked for explicitly, knowing that they show where its passages are.",
       "forbidden": "You may see this cave but not change it.",
       "requestFailed": "That did not work. Please try again."
     },
     "page": {
       "versionsTitle": "Versions of this survey",
+      "olderVersionsTitle": "Older versions of this survey hold {{size}} of results (versions: {{count}}).",
+      "olderVersionsTitleNamed": "Older versions of “{{survey}}” hold {{size}} of results (versions: {{count}}).",
+      "olderVersionsHint": "Every version keeps what its run produced unless the installation keeps fewer. The setting {{setting}} {{keep}} An administrator can set it to 1 to keep only the newest version's results.",
+      "olderVersionsKeepAll": "is 0 now, so every version keeps its results.",
+      "olderVersionsKeepNewest": "is {{count}} now: that many of the newest versions keep their results.",
       "thisVersion": "(this one)",
       "newerExists": "A newer version of this survey exists. Open it from the list below.",
       "notFound": "This upload was not found, or you may not see it.",
@@ -6605,10 +6622,24 @@
       "revoke": "Withdraw",
       "revokeConfirm": "Withdraw the link? Anyone holding it can no longer open the results.",
       "made": "Link made.",
+      "dialogTitle": "Make a public link",
+      "audienceLabel": "Who the link opens for",
+      "audience": {
+        "public": "Anyone with the link",
+        "organization": "Signed-in accounts only"
+      },
+      "audienceHint": {
+        "public": "Opens without signing in, for whoever is given the address.",
+        "organization": "Whoever opens it is asked to sign in with an account of this installation. No right on the cave is needed beyond holding the address."
+      },
+      "protectedWarning": "This cave's position is protected. The results — the 3D model and the drawings — show where its passages are, and anyone the link opens for can see them.",
+      "protectedAcknowledge": "I understand, and I want a link to this protected cave's results.",
+      "protectedTag": "Protected cave — linked knowingly",
       "open": "Open",
       "refusal": {
-        "protected-cave": "No public link is made for this upload because the cave's position is protected.",
+        "protected-cave": "No public link was made because the cave's position is protected. One can be made only by asking for it explicitly, knowing that the results show where the cave's passages are.",
         "account-off": "No public link was made because \"Public links for my uploads\" is switched off for the account that sent it.",
+        "not-wanted": "No public link was made because whoever sent this upload asked for none.",
         "installation-off": "No public link was made because this installation has public links switched off.",
         "no-share-right": "No public link was made because the account that sent this upload may not share the cave.",
         "revoked": "The public link of this upload was withdrawn. Somebody who may change the cave can make a new one."

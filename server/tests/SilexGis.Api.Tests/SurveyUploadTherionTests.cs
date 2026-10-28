@@ -138,7 +138,8 @@ public sealed class SurveyUploadTherionTests : IAsyncLifetime, IDisposable, ICla
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             var model = await db.SurveyModels.AsNoTracking().SingleAsync(m => m.Id == loxId);
             model.SourceEpsg.ShouldNotBeNull();
-            model.IsCurrent.ShouldBeFalse();
+            // The upload made the cave and this is its first model, so it is the cave's current one.
+            model.IsCurrent.ShouldBeTrue();
             var queued = await db.ProcessingJobs.AsNoTracking().Where(j => j.Status == ProcessingJobStatus.Queued).ToListAsync();
             readingId = queued.Where(j => j.Kind == ProcessingJobKinds.SurveyGraph)
                 .Single(j => JsonSerializer.Deserialize<SurveyGraphPayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyModelId == loxId).Id;
@@ -163,14 +164,15 @@ public sealed class SurveyUploadTherionTests : IAsyncLifetime, IDisposable, ICla
             (await db.SurveyCompilations.AsNoTracking().SingleAsync(c => c.SurveyModelId == loxId))
                 .Status.ShouldBe(SurveyCompilationStatus.Read);
 
-            // Read, and still not the cave's current model — although the upload made the cave and
-            // this is its first model — so its centreline is not the cave's shape either.
-            model.IsCurrent.ShouldBeFalse();
+            // Read, still the cave's current model and its only one, and its centreline the cave's
+            // shape: the cave the upload made is drawn from the survey that made it.
+            model.IsCurrent.ShouldBeTrue();
             var caveId = status.GetProperty("cave").GetProperty("id").GetGuid();
-            (await db.SurveyModels.AsNoTracking().AnyAsync(m => m.CaveFeatureId == caveId && m.IsCurrent)).ShouldBeFalse();
+            (await db.SurveyModels.AsNoTracking().Where(m => m.CaveFeatureId == caveId && m.IsCurrent).Select(m => m.Id).ToListAsync())
+                .ShouldBe([loxId]);
             var lines = await db.Centerlines.AsNoTracking().Where(c => c.CaveFeatureId == caveId).ToListAsync();
             lines.ShouldHaveSingleItem().SurveyModelId.ShouldBe(loxId);
-            lines[0].IsDefault.ShouldBeFalse();
+            lines[0].IsDefault.ShouldBeTrue();
         }
     }
 

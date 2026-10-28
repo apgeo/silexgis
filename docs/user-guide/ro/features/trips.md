@@ -351,27 +351,27 @@ pune cuvântul într-un model propriu, sub un titlu ales de tine
   încărcare.
 
 **Lista stațiilor, pentru un model care o cere.** Un rând care conține doar cuvântul `survey`
-tipărește stațiile ridicării în care a fost urmărită tura, fiecare cu adâncimea la care se află
+tipărește stațiile topografiei în care a fost urmărită tura, fiecare cu adâncimea la care se află
 sub stația de la care se măsoară adâncimile — foaia pe care o vrea un coordonator de la suprafață
 lângă jurnal, ca să poată căuta o stație numită într-un raport. **Modelul standard nu o
 tipărește** — pune cuvântul într-un model propriu, sub un titlu ales de tine
 (`heading: Stații în subteran`, apoi `survey`).
 
-- **Spune ce este.** Blocul începe prin a spune că este lista ridicării și că nu spune nimic
+- **Spune ce este.** Blocul începe prin a spune că este lista topografiei și că nu spune nimic
   despre unde a fost cineva. Aceste cuvinte sunt ale documentului, în limba ta.
 - **Este tipărită doar pentru un cititor căruia i se poate spune unde este peștera.** O listă de
   stații este tot vocabularul de stații al unei peșteri, așa că urmează regula pe care o urmează
-  și căutarea de stații a ridicării: un cititor care poate citi peștera și o poate localiza
+  și căutarea de stații a topografiei: un cititor care poate citi peștera și o poate localiza
   exact primește lista, iar oricine altcineva citește un singur rând care spune că lista nu este
   inclusă — niciodată un titlu cu un gol sub el. În copia **clasată pe tură**, stațiile sunt
   tipărite doar acolo unde poate fi comunicat **oricărui** cont unde se află peștera, așa că
   stațiile unei peșteri protejate nu sunt în copia aceea pentru nimeni.
 - **Adâncimile sunt măsurate sub o singură stație**, numită în document: cea de la care a fost
-  pusă să măsoare urmărirea turei sau, în lipsa ei, cea mai înaltă intrare a ridicării.
+  pusă să măsoare urmărirea turei sau, în lipsa ei, cea mai înaltă intrare a topografiei.
 - **Ordinea este de la cea mai puțin adâncă**, așa cum le întâlnești intrând.
 - **O listă lungă este scurtată, iar documentul spune cu cât**: câte stații a tipărit și câte
-  ține ridicarea. Toată lista se află pe pagina peșterii.
-- **La o tură care nu a fost urmărită sau a cărei urmărire nu numește nicio ridicare, rândul nu
+  ține topografia. Toată lista se află pe pagina peșterii.
+- **La o tură care nu a fost urmărită sau a cărei urmărire nu numește nicio topografie, rândul nu
   tipărește nimic**, iar un titlu rămas fără nimic sub el dispare odată cu el.
 - **Doar în modelul unei ture.** Modelul unei tabere care folosește cuvântul este refuzat la
   încărcare.

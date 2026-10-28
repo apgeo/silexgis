@@ -23,6 +23,7 @@ Values that differ on every run are replaced before anything is written:
 | `<uuid-N>` | any other identifier, numbered in order of first appearance within one exchange |
 | `<timestamp>` | every time the server stamped |
 | `<token>` | the token of a signed download address |
+| `<public-token>`, `<next-public-token>`, `<made-public-token>` | the tokens of the public links the test was handed |
 | `<marker>` | the per-run suffix the test puts in the names it makes |
 | `<uploader-label>` | the uploader's label, which is made from their id when they have set no name |
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { Alert, Card, Flex, Form, Input, Typography } from 'antd';
+import { Alert, Card, Flex, Form, Input, Switch, Typography } from 'antd';
 import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -8,6 +8,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 interface ResetFormValues {
   newPassword: string;
   confirmPassword: string;
+  revokeAccessKeys?: boolean;
 }
 
 /**
@@ -16,6 +17,9 @@ interface ResetFormValues {
  * An invitation to an account an administrator opened lands here too, marked `invite=1`: it is the
  * same link and the same request, and only the wording changes — somebody choosing their first
  * password has nothing to reset.
+ *
+ * A reset asks, as a change at the settings does, whether the account's personal access keys go
+ * too; they stay unless the reader says so. An invitation does not ask — a new account has no keys.
  */
 export default function ResetPasswordPage() {
   const { t } = useTranslation();
@@ -41,7 +45,12 @@ export default function ResetPasswordPage() {
       const response = await fetch('/api/v1/auth/password/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, token, newPassword: values.newPassword }),
+        body: JSON.stringify({
+          email,
+          token,
+          newPassword: values.newPassword,
+          revokeAccessKeys: !invite && (values.revokeAccessKeys ?? false),
+        }),
       });
 
       if (!response.ok) {
@@ -109,6 +118,17 @@ export default function ResetPasswordPage() {
             >
               <Input.Password autoComplete="new-password" />
             </Form.Item>
+            {!invite && (
+              <Form.Item
+                name="revokeAccessKeys"
+                label={t('security.password.revokeKeys')}
+                valuePropName="checked"
+                initialValue={false}
+                extra={t('security.password.revokeKeysHint')}
+              >
+                <Switch data-testid="reset-revoke-access-keys" />
+              </Form.Item>
+            )}
             <Button type="primary" htmlType="submit" block loading={submitting}>
               {t('auth.resetPasswordSubmit')}
             </Button>

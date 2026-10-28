@@ -31,6 +31,72 @@ turns every future addition into an outage of its own making.
 
 ---
 
+## 2026-10-27 — the account's link defaults in the capabilities
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one member is added
+to the capabilities answer.
+
+- Added capabilities member `publicLinks { enabled, defaultAudience }`, for the calling account:
+  `enabled` is the installation's switch and the account's *Public links* preference together;
+  `defaultAudience` (`public` or `organization`) is the account's *Default link audience*. A device
+  presets its per-upload link choice from them; the preferences route
+  (`/api/v1/me/survey-upload-preferences`) still does not accept the key.
+- Rewritten: `01-capabilities` (the added member).
+- Codes: none added, changed or withdrawn.
+
+## 2026-10-26 — the size of a survey's older versions, and the uploader's own status
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one member is added
+to the status answer, and one caller who was answered `404` is now answered with less in it.
+
+- Added status member `olderVersions { count, sizeBytes, warn, warnBytes, keepVersions }`: what the
+  survey's versions older than its newest still hold of their runs' outputs, and whether that is
+  past the installation's warning size (`SILEXGIS__SurveyUploads__OlderVersionsWarnMegabytes`,
+  500 MB by default; `warnBytes` is `null` when the installation never warns). `keepVersions` is
+  the installation's `KeepArtefactVersions`.
+- `GET /api/v1/survey-uploads/{id}` now answers **the uploader** who may still read the cave but has
+  lost its exact position — with `contentUrl` of every artefact and file, `publicLink` and `logTail`
+  all `null`. Before, they were answered `404 survey_upload.not_found`; every other route still is.
+- The first model of a cave the upload itself created becomes the cave's current model, its
+  centreline the cave's shape, unless the installation switched that off. Nothing in the exchange
+  changes; the protocol's sentence that no upload model becomes current is corrected.
+- Rewritten: `02-open`, `04-complete`, `05-status-queued`, `06-status-succeeded`,
+  `06b-status-compiled`, `07-open-next-version`, `08-status-failed`, `10-rerun` (the added member).
+- Codes: none added, changed or withdrawn.
+
+## 2026-10-26 — link audiences, a per-upload link choice, and making or withdrawing a link from the device
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — every change adds a
+member, a route the key opens, or a code for a new situation; nothing sent before changes meaning.
+
+- Added request member on `POST /api/v1/survey-uploads`: `publicLink { wanted, audience,
+  allowProtected }`, all optional. `wanted: false` asks for no link even when the account's
+  preference makes one; `wanted: true` asks for one even when it does not. `audience` is `public`
+  (anybody holding the address) or `organization` (only a signed-in account of the installation);
+  empty means the account's *Default link audience*. `allowProtected: true` is the caver's explicit
+  acknowledgement — after a warning that the results show where the passages are — that a link may
+  be made although the cave's position is protected; without it a protected cave still gets none.
+  Absent, everything is decided as before.
+- Added members on `publicLink` wherever it is answered (the status, the completion, the run-again
+  answer, the listing): `audience` and `protectedAcknowledged`.
+- `publicLink` is now answered to every caller who may read the upload, not only to those who may
+  write to the cave, and the listing (`GET /api/v1/survey-uploads`) carries it on each item.
+- A new value of `publicLinkRefusal`: `not-wanted` (the upload asked for no link).
+- `POST` and `DELETE /api/v1/survey-uploads/{id}/public-link` now accept the survey-upload access
+  key (they answered `403 auth.access_key_not_accepted` before). `POST` takes an optional body
+  `{ audience, allowProtected }`; with no audience it keeps the audience of the link it replaces,
+  else the upload's, else the account's default. A protected cave without `allowProtected: true`
+  is still `409 survey_upload.public_link_refused_protected`.
+- A new code: `401 survey_upload.public_link_sign_in_required` from the public page for a link made
+  for the organization, read without signing in (a key does not count as signed in there). Asked
+  only once the link would otherwise open; everything else is still the one `404`.
+- A link made with the acknowledgement keeps opening while the cave stays protected; an ordinary
+  link still closes the moment its cave is protected.
+- Recordings rewritten: `02-open` (the request now carries `publicLink`), `04-complete`,
+  `05-status-queued`, `06-status-succeeded`, `06b-status-compiled`, `08-status-failed`, `09-list`,
+  `10-rerun`. Added: `13-make-public-link` (the device making an organization link with its key)
+  and `11-errors/public-link-sign-in-required`.
+
 ## 2026-10-25 — per-output errors and a recorded compiled run
 
 **Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — no tool has been

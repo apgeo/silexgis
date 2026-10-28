@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Auth;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Permissions;
@@ -11,7 +13,7 @@ using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Features.SurveyUploads;
 
-/// <summary>The public page of an upload's results, as anybody holding its link reads it.</summary>
+/// <summary>The public page of an upload's results, as anybody holding its link reads it — or, for a link made for the organization, any signed-in account.</summary>
 /// <remarks>
 /// Self-contained and shared with nothing: it is not the signed-in status answer with members
 /// blanked, because that one carries the cave's id, the party, the uploaded files and the log, and
@@ -83,41 +85,53 @@ public static partial class SurveyUploadEndpoints
     public const string PublicLinksDisabledCode = "survey_upload.public_links_disabled";
     public const string PublicLinkForbiddenCode = "survey_upload.public_link_forbidden";
     public const string PublicLinkProtectedCode = "survey_upload.public_link_refused_protected";
+    public const string PublicLinkSignInRequiredCode = "survey_upload.public_link_sign_in_required";
 
     /// <summary>
-    /// Making and withdrawing an upload's public link by hand — the web's status page — and the
-    /// public page itself. The first two are not opened by a personal access key: a link is handed
-    /// to the world by a person at the web, and taken back there.
+    /// Making and withdrawing an upload's public link by hand, and the public page itself. The first
+    /// two are opened by a personal access key made for survey uploads as well as by a signed-in
+    /// account: the device that sent the survey offers to withdraw its link or make a new one on its
+    /// result screen. The key carries its account's rights and no more, so it can do here exactly
+    /// what that account could at the web.
     /// </summary>
     private static void MapPublicLinkEndpoints(RouteGroupBuilder api)
     {
-        var web = api.MapGroup("/survey-uploads").WithTags("SurveyUploads");
-        web.MapPost("/{id:guid}/public-link", MintPublicLinkAsync)
+        var links = api.MapGroup("/survey-uploads").WithTags("SurveyUploads").AcceptsAccessKey(AccessKeyPurpose.SurveyUpload);
+        links.MapPost("/{id:guid}/public-link", MintPublicLinkAsync)
             .WithName("mintSurveyUploadPublicLink")
+            .WithValidation<SurveyUploadPublicLinkMintRequest>()
+            .AddEndpointFilter<ContractFilter>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
-            .WithSummary("Makes a new public link to the upload's results, withdrawing the one it had (Write and Share on the cave; never for a protected cave).");
-        web.MapDelete("/{id:guid}/public-link", RevokePublicLinkAsync)
+            .WithSummary("Makes a new public link to the upload's results, withdrawing the one it had (Write and Share on the cave; a protected cave only with allowProtected).");
+        links.MapDelete("/{id:guid}/public-link", RevokePublicLinkAsync)
             .WithName("revokeSurveyUploadPublicLink")
+            .AddEndpointFilter<ContractFilter>()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Withdraws the upload's public link; it then answers as an address that never existed (Write on the cave).");
 
         // The token is the credential, so this sits on the anonymous allow-list. What it may show
-        // is re-decided on every read: a protected cave, a withdrawn link and an installation that
-        // has turned links off all answer as an invented token does.
+        // is re-decided on every read: a cave protected without the link having been made knowing
+        // it, a withdrawn link and an installation that has turned links off all answer as an
+        // invented token does. A link made for the organization asks an anonymous caller to sign
+        // in — only once everything else has said it opens, so the different answer says nothing
+        // about a token that would not.
         api.MapGet("/public/survey-uploads/{token}", PublicAsync)
             .WithTags("SurveyUploads")
             .WithName("publicSurveyUpload")
             .AllowAnonymous()
             .RequireRateLimiting(PublicSurveyUploadRateLimits.PolicyName)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .WithSummary("The public page of an upload's results: its survey title, the cave's name, the run's progress and the files it produced.");
+            .WithSummary("The public page of an upload's results: its survey title, the cave's name, the run's progress and the files it produced. 401 survey_upload.public_link_sign_in_required for a link made for the organization, read without signing in.");
     }
 
     private static async Task<Results<Created<SurveyUploadPublicLinkDto>, UnauthorizedHttpResult, ProblemHttpResult>> MintPublicLinkAsync(
         Guid id,
+        SurveyUploadPublicLinkMintRequest? request,
         SilexGisDbContext db,
         IAccessService access,
         FeatureProtection protection,
@@ -147,7 +161,9 @@ public static partial class SurveyUploadEndpoints
             return ApiProblems.Conflict(NotCompletedCode, "An upload gets a public link once it is complete.");
         }
 
-        switch (await links.RefusalForHandAsync(access, ctx, found.Cave, ct))
+        var allowProtected = request?.AllowProtected ?? false;
+        var (refusal, caveProtected) = await links.RefusalForHandAsync(access, ctx, found.Cave, allowProtected, ct);
+        switch (refusal)
         {
             case SurveyUploadPublicLinks.InstallationOff:
                 return ApiProblems.Conflict(PublicLinksDisabledCode, "This installation makes no public links.");
@@ -159,13 +175,14 @@ public static partial class SurveyUploadEndpoints
             case SurveyUploadPublicLinks.ProtectedCave:
                 return ApiProblems.Conflict(
                     PublicLinkProtectedCode,
-                    "The cave's position is protected, so its survey results are not published.");
+                    "The cave's position is protected: its survey results show where its passages are, and a link is made only when asked for with allowProtected.");
         }
 
-        var (token, link) = await links.ReplaceAsync(found.Upload, ctx.UserId, ct);
+        var audience = request?.Audience ?? await links.AudienceForHandAsync(found.Upload, ctx.UserId, ct);
+        var (token, link) = await links.ReplaceAsync(found.Upload, ctx.UserId, audience, caveProtected && allowProtected, ct);
         return TypedResults.Created(
             $"/api/v1/survey-uploads/{found.Upload.Id}/public-link",
-            new SurveyUploadPublicLinkDto(SurveyUploadLinks.PublicPage(token), link.CreatedAt));
+            new SurveyUploadPublicLinkDto(SurveyUploadLinks.PublicPage(token), link.CreatedAt, link.Audience, link.ProtectedAcknowledged));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> RevokePublicLinkAsync(
@@ -204,6 +221,7 @@ public static partial class SurveyUploadEndpoints
         string token,
         SilexGisDbContext db,
         SurveyUploadPublicLinkService links,
+        IAccessContextAccessor accessAccessor,
         IFileAccessTokenService tokens,
         CancellationToken ct)
     {
@@ -212,7 +230,19 @@ public static partial class SurveyUploadEndpoints
             return ApiProblems.NotFound(PublicLinkNotFoundCode);
         }
 
-        var (upload, cave) = found;
+        var (upload, cave, audience) = found;
+
+        // Any signed-in account of this installation will do; nothing is asked of its rights on the
+        // cave, because holding the address is what the link grants. A personal access key is never
+        // a signed-in caller here: its principal is taken away on a route that needs no account.
+        if (audience != SurveyUploadLinkAudience.Public
+            && !SurveyUploadPublicLinks.Admits(audience, signedIn: await accessAccessor.GetAsync(ct) is not null))
+        {
+            return TypedResults.Problem(
+                detail: "This link opens for the installation's signed-in accounts only; sign in to read it.",
+                statusCode: StatusCodes.Status401Unauthorized,
+                extensions: new Dictionary<string, object?> { ["code"] = PublicLinkSignInRequiredCode });
+        }
         var title = await db.CaveSurveys.AsNoTracking()
             .Where(s => s.Id == upload.CaveSurveyId)
             .Select(s => s.Title)

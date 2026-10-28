@@ -55,15 +55,15 @@ public sealed record TripStationListWording
 
     public static TripStationListWording Romanian { get; } = new()
     {
-        Scope = "Stațiile ridicării în care a fost urmărită tura, fiecare cu adâncimea la care "
-            + "se află sub stația de la care se măsoară adâncimile. Este lista ridicării: spune "
+        Scope = "Stațiile topografiei în care a fost urmărită tura, fiecare cu adâncimea la care "
+            + "se află sub stația de la care se măsoară adâncimile. Este lista topografiei: spune "
             + "unde se află numele din jurnalul acestui document, nu unde a fost cineva.",
         Datum = "Adâncimi măsurate sub",
         Entrance = "intrare",
         NotShown = "Lista stațiilor nu este inclusă în acest exemplar. Stațiile unei peșteri sunt "
             + "scrise doar pentru un cititor căruia i se poate spune unde se află peștera.",
-        Truncated = "Stații tipărite: {0}. Stații în ridicare: {1}. Toată lista se află în "
-            + "ridicarea peșterii, pe pagina peșterii.",
+        Truncated = "Stații tipărite: {0}. Stații în topografie: {1}. Toată lista se află în "
+            + "topografia peșterii, pe pagina peșterii.",
     };
 
     /// <summary>

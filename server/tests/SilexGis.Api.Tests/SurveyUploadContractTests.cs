@@ -113,6 +113,7 @@ public sealed class SurveyUploadContractTests : IAsyncLifetime, IDisposable, ICl
             description = "Invented survey for the recorded contract",
             files = new[] { new { name = "pestera_inventata.zip", size = archive.LongLength, role = "archive" } },
             pipeline = new { compile = true },
+            publicLink = new { wanted = true, audience = "public", allowProtected = false },
         });
         var opened = await device.PostAsync(Uploads, JsonContent(openBody));
         var first = await BodyAsync(opened, HttpStatusCode.Created);
@@ -310,6 +311,19 @@ public sealed class SurveyUploadContractTests : IAsyncLifetime, IDisposable, ICl
             "12b-public-link-compiled",
             $"GET /api/v1/public/survey-uploads/{token}",
             await anonymous.GetAsync($"/api/v1/public/survey-uploads/{token}"));
+
+        // The device's result screen: withdraw the link, then make one for the organization only,
+        // which a reader without an account is asked to sign in for.
+        (await phone.DeleteAsync($"{Uploads}/{uploadId}/public-link")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var makeBody = Json(new { audience = "organization", allowProtected = false });
+        var made = await phone.PostAsync($"{Uploads}/{uploadId}/public-link", JsonContent(makeBody));
+        var madeToken = (await BodyAsync(made, HttpStatusCode.Created)).GetProperty("url").GetString()!["/p/survey/".Length..];
+        fixture.Literal(madeToken, "made-public-token");
+        await fixture.AssertWithStatusAsync("13-make-public-link", $"POST {Uploads}/{uploadId}/public-link", makeBody, made);
+        await fixture.AssertRefusalAsync(
+            "11-errors/public-link-sign-in-required",
+            "GET /api/v1/public/survey-uploads/<made-public-token>",
+            await anonymous.GetAsync($"/api/v1/public/survey-uploads/{madeToken}"));
     }
 
     [Fact]

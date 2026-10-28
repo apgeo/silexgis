@@ -222,8 +222,21 @@ public sealed class AccessKeyTests(PostgresFixture postgres) : IDisposable, ICla
     }
 
     [Fact]
-    public async Task Changing_the_password_revokes_every_key_of_the_account()
+    public async Task Changing_the_password_keeps_the_keys_unless_asked_to_revoke_them()
     {
+        // Kept: the switch is off unless the caller turns it on. That sessions still end with it off
+        // is proved where the session tokens are read, beside the other credential revocations.
+        const string KeepEmail = "key-password-change-keep@test.local";
+        var keeperId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, KeepEmail);
+        var keeperWeb = await AuthHelper.BearerClientAsync(factory, KeepEmail);
+        var kept = AuthHelper.AccessKeyClient(factory, await AuthHelper.CreateAccessKeyAsync(keeperWeb, "kept"));
+        var keep = await keeperWeb.PutAsJsonAsync(
+            "/api/v1/me/password", new { currentPassword = AuthHelper.Password, newPassword = NewPassword });
+        keep.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await kept.GetAsync("/api/v1/me")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await RevokedCountAsync(keeperId)).ShouldBe(0);
+
+        // Revoked: every key of the account, when asked.
         const string Email = "key-password-change@test.local";
         var userId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, Email);
         var web = await AuthHelper.BearerClientAsync(factory, Email);
@@ -233,7 +246,8 @@ public sealed class AccessKeyTests(PostgresFixture postgres) : IDisposable, ICla
         (await second.GetAsync("/api/v1/me")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var change = await web.PutAsJsonAsync(
-            "/api/v1/me/password", new { currentPassword = AuthHelper.Password, newPassword = NewPassword });
+            "/api/v1/me/password",
+            new { currentPassword = AuthHelper.Password, newPassword = NewPassword, revokeAccessKeys = true });
         change.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         (await first.GetAsync("/api/v1/me")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -242,27 +256,39 @@ public sealed class AccessKeyTests(PostgresFixture postgres) : IDisposable, ICla
     }
 
     [Fact]
-    public async Task Resetting_the_password_revokes_every_key_of_the_account()
+    public async Task Resetting_the_password_keeps_the_keys_unless_asked_to_revoke_them()
     {
+        const string KeepEmail = "key-password-reset-keep@test.local";
+        var keeperId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, KeepEmail);
+        var keeperWeb = await AuthHelper.BearerClientAsync(factory, KeepEmail);
+        var kept = AuthHelper.AccessKeyClient(factory, await AuthHelper.CreateAccessKeyAsync(keeperWeb));
+        var keep = await factory.CreateClient().PostAsJsonAsync(
+            "/api/v1/auth/password/reset",
+            new { email = KeepEmail, token = await ResetTokenAsync(KeepEmail), newPassword = NewPassword });
+        keep.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await kept.GetAsync("/api/v1/me")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await RevokedCountAsync(keeperId)).ShouldBe(0);
+
         const string Email = "key-password-reset@test.local";
         var userId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, Email);
         var web = await AuthHelper.BearerClientAsync(factory, Email);
         var device = AuthHelper.AccessKeyClient(factory, await AuthHelper.CreateAccessKeyAsync(web));
         (await device.GetAsync("/api/v1/me")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        string token;
-        await using (var scope = factory.Services.CreateAsyncScope())
-        {
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
-            token = await users.GeneratePasswordResetTokenAsync((await users.FindByEmailAsync(Email))!);
-        }
-
         var reset = await factory.CreateClient().PostAsJsonAsync(
-            "/api/v1/auth/password/reset", new { email = Email, token, newPassword = NewPassword });
+            "/api/v1/auth/password/reset",
+            new { email = Email, token = await ResetTokenAsync(Email), newPassword = NewPassword, revokeAccessKeys = true });
         reset.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         (await device.GetAsync("/api/v1/me")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await RevokedCountAsync(userId)).ShouldBe(1);
+    }
+
+    private async Task<string> ResetTokenAsync(string email)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+        return await users.GeneratePasswordResetTokenAsync((await users.FindByEmailAsync(email))!);
     }
 
     private async Task<(HttpStatusCode Status, string? Code, string Challenge)> RefusalAsync(string bearer)

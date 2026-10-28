@@ -12,6 +12,7 @@ import {
 import Button from '../../components/Button.tsx';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import SurveyUploadArtefacts from '../../components/surveyUploads/SurveyUploadArtefacts.tsx';
+import OlderVersionsWarning from '../../components/surveyUploads/OlderVersionsWarning.tsx';
 
 /**
  * The surveys a cave holds as they arrived from a device, each with every version that was handed
@@ -27,6 +28,9 @@ import SurveyUploadArtefacts from '../../components/surveyUploads/SurveyUploadAr
  * a survey, and an empty card on all of them would be noise. The listing the section reads is
  * withheld from callers who may not see the cave's position exactly, so a protected cave looks the
  * same as one with none — by design.
+ *
+ * A survey whose older versions hold more of their runs' results than the installation warns at
+ * says so above the list, with the size and the setting that keeps fewer versions' results.
  */
 export default function CaveSurveysSection({ caveId }: { caveId: string }) {
   const { t, i18n } = useTranslation();
@@ -46,6 +50,11 @@ export default function CaveSurveysSection({ caveId }: { caveId: string }) {
       <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
         {t('surveyUploads.surveys.explanation')}
       </Typography.Paragraph>
+      {surveys
+        .filter((survey) => survey.versionCount > 1)
+        .map((survey) => (
+          <SurveySizeWarning key={survey.id} survey={survey} />
+        ))}
       <Table<CaveSurveyGroup>
         scroll={{ x: 'max-content' }}
         rowKey="id"
@@ -75,6 +84,23 @@ export default function CaveSurveysSection({ caveId }: { caveId: string }) {
         ]}
       />
     </Card>
+  );
+}
+
+/**
+ * The older-versions warning of one survey. The size is on the single upload's answer (the same on
+ * every version of a survey), so it is asked for the newest version, and only for surveys that
+ * have older versions at all.
+ */
+function SurveySizeWarning({ survey }: { survey: CaveSurveyGroup }) {
+  const { data: upload } = useSurveyUpload(survey.versions[0]?.id);
+  if (!upload?.olderVersions.warn) {
+    return null;
+  }
+  return (
+    <div style={{ marginBottom: 12 }} data-testid={`cave-survey-size-warning-${survey.id}`}>
+      <OlderVersionsWarning olderVersions={upload.olderVersions} surveyTitle={survey.title} />
+    </div>
   );
 }
 

@@ -1,0 +1,8 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.2",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "This link opens for the installation's signed-in accounts only; sign in to read it.",
+  "code": "survey_upload.public_link_sign_in_required",
+  "traceId": "<trace>"
+}

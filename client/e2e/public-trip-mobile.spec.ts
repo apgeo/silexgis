@@ -396,7 +396,7 @@ test.describe('the language of a published trip', () => {
       // The frame a club pastes into an article answers the same way, and carries the button in
       // the two letters a narrow box has room for.
       await page.goto(`/shared/trips/${TOKEN}/embed`);
-      await expect(page.getByText('Nu există nicio ridicare topografică de arătat')).toBeVisible();
+      await expect(page.getByText('Nu există nicio topografie de arătat')).toBeVisible();
       await expect(page.locator('html')).toHaveAttribute('lang', 'ro');
       await expect(page.getByTestId('public-trip-language')).toHaveText('EN');
       await page.goto(`/shared/trips/${TOKEN}/embed?lang=en`);

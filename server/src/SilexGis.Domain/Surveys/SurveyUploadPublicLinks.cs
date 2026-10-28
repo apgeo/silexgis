@@ -29,20 +29,68 @@ public static class SurveyUploadPublicLinks
     /// <summary>A link was made and somebody who may write to the cave withdrew it.</summary>
     public const string Revoked = "revoked";
 
+    /// <summary>The upload itself asked for no link, whatever the account's preference says.</summary>
+    public const string NotWanted = "not-wanted";
+
     /// <summary>The longest token a request may present; anything longer is not looked up at all.</summary>
     public const int MaxTokenLength = 100;
 
     /// <summary>
-    /// Why a completed upload gets no link, or null when it gets one. Checked in this order so the
-    /// reason given is the one a person could act on first: an installation that makes no links
-    /// at all, an account that asked for none, a caller without the right, and only then the cave.
+    /// Why a link is not made, or null when it is. Checked in this order so the reason given is the
+    /// one a person could act on first: an installation that makes no links at all, an account that
+    /// asked for none, a caller without the right, and only then the cave. A protected cave is
+    /// refused unless the person making the link acknowledged, explicitly and for this link, that
+    /// its results show where the cave's passages are — no switch or preference stands in for that.
     /// </summary>
-    public static string? Refusal(bool installationOn, bool accountOn, bool mayShare, bool caveProtected) =>
+    public static string? Refusal(
+        bool installationOn, bool accountOn, bool mayShare, bool caveProtected, bool protectedAcknowledged = false) =>
         !installationOn ? InstallationOff
         : !accountOn ? AccountOff
         : !mayShare ? NoShareRight
-        : caveProtected ? ProtectedCave
+        : caveProtected && !protectedAcknowledged ? ProtectedCave
         : null;
+
+    /// <summary>
+    /// Whether, and how, a completed upload gets its link. The upload's own choice comes first: it
+    /// may refuse a link the account's preference would have made, or ask for one the preference
+    /// would not; when it says nothing the preference decides. The audience is the upload's, else
+    /// the account's default. The acknowledgement for a protected cave is the upload's only.
+    /// </summary>
+    public static SurveyUploadLinkDecision AtCompletion(
+        bool installationOn,
+        bool accountOn,
+        SurveyUploadLinkAudience accountAudience,
+        bool? wanted,
+        SurveyUploadLinkAudience? audience,
+        bool allowProtected,
+        bool mayShare,
+        bool caveProtected)
+    {
+        var refusal = installationOn && wanted == false
+            ? NotWanted
+            : Refusal(installationOn, wanted ?? accountOn, mayShare, caveProtected, allowProtected);
+        return new SurveyUploadLinkDecision(
+            refusal,
+            audience ?? accountAudience,
+            ProtectedAcknowledged: refusal is null && caveProtected && allowProtected);
+    }
+
+    /// <summary>
+    /// Whether a live link still opens. Asked again on every read: an ordinary link closes the
+    /// moment its cave becomes protected, because protection is switched on by somebody who has just
+    /// decided the cave needs it; a link made with the explicit acknowledgement that the cave is
+    /// protected was made knowing that, and keeps answering while the cave stays protected.
+    /// </summary>
+    public static bool Opens(bool caveProtected, bool protectedAcknowledged) =>
+        !caveProtected || protectedAcknowledged;
+
+    /// <summary>
+    /// Whether a link's audience admits the caller. A public link admits anybody; an organization
+    /// link admits any account signed in to this installation and asks nothing more of it — no right
+    /// on the cave — because holding the address is what the link grants.
+    /// </summary>
+    public static bool Admits(SurveyUploadLinkAudience audience, bool signedIn) =>
+        audience == SurveyUploadLinkAudience.Public || signedIn;
 
     /// <summary>
     /// A fresh token. The same kind, made the same way, as every other link this application hands
@@ -104,6 +152,13 @@ public static class SurveyUploadPublicLinks
         };
     }
 }
+
+/// <summary>
+/// What a completed upload's link comes to: the refusal (null when a link is made), the audience it
+/// opens for, and whether it is made with the acknowledgement that the cave is protected — true only
+/// when the cave is protected and the upload asked for the link anyway.
+/// </summary>
+public sealed record SurveyUploadLinkDecision(string? Refusal, SurveyUploadLinkAudience Audience, bool ProtectedAcknowledged);
 
 /// <summary>How far one stage of a run has got, for a page that lists them.</summary>
 public enum SurveyUploadStageState

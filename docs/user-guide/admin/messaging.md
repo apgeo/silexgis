@@ -26,6 +26,7 @@ The page has eleven tabs:
 | **Phone sync** | What the phone app is given and how long unused files wait | [Phone sync](#phone-sync) |
 | **Notifications** | How long notifications are kept, and what an announcement may cost | [Retention](#retention) · [The money guard](#the-money-guard) |
 | **Photo libraries** | Stopping and restarting the use of a photo library the installation already has | [Photo libraries](#photo-libraries) |
+| **Survey uploads** | Whether a cave made by a survey upload takes that upload's first model as its shape | [Survey uploads](#survey-uploads) |
 | **Workspace** | Which arrangement of the map workspace a new account starts with | [Workspace](#workspace) |
 | **Maps in documents** | Which map backgrounds a document may copy | [Maps in documents](#maps-in-documents) |
 | **Own basemap** | The installation's own vector basemap: what is served, and downloading a region | [Own basemap](#own-basemap) |
@@ -142,6 +143,24 @@ the library itself holds or who can sign in to it directly.
 
 The switch cannot *connect* a library: which libraries an installation has is decided when it is
 deployed, and the page says so — or says that there is nothing to stop.
+
+## Survey uploads
+
+The **Survey uploads** tab holds choices about surveys sent from a field device such as TopoDroid
+(see [Uploading surveys from TopoDroid](../features/topodroid-uploads.md)).
+
+**A cave made by an upload takes its first model** — on unless switched off. When an upload
+itself created the cave, and the cave has no other model and no centreline yet, the Therion model
+the upload produced becomes the cave's current model and its centreline the line the cave is drawn
+with, so a cave made from the phone is not shapeless until somebody chooses. Later versions of the
+survey, and uploads to a cave that already existed, never take that place on their own. Off, a
+model from an upload never becomes current by itself; somebody chooses it on the cave's page.
+
+Two related choices are not on this tab: how many versions of a survey keep the results their runs
+produced (`SILEXGIS__SurveyUploads__KeepArtefactVersions` — 0 keeps every version's, 1 only the
+newest's) and the size at which the cave's *Surveys* card and the status page warn that older
+versions hold a lot (`SILEXGIS__SurveyUploads__OlderVersionsWarnMegabytes`, 500 MB by default).
+Both are set in the deployment's environment; the tab names them.
 
 ## Workspace
 

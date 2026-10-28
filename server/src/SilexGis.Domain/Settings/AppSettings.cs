@@ -467,6 +467,23 @@ public sealed record SyncSettings
     public int RejectedHeldBytesRetentionDays { get; init; } = 30;
 }
 
+/// <summary>
+/// What an administrator decides, while the application runs, about surveys sent from a field
+/// device. The limits of a single upload (file sizes, counts, how long an upload waits) are
+/// deployment limits bound from the environment and are not here.
+/// </summary>
+public sealed record SurveyUploadSettings
+{
+    /// <summary>
+    /// Whether a cave the upload itself created takes that upload's first model as its shape: the
+    /// model becomes the cave's current one and its extracted centreline the cave's default. Only
+    /// while the cave has no other model of the same kind and no other centreline — an upload never
+    /// takes the mark from something a person chose. Off, every upload model waits for somebody to
+    /// choose it on the web.
+    /// </summary>
+    public bool FirstModelOfCreatedCave { get; init; } = true;
+}
+
 public static class AppSettingSections
 {
     public const string Mail = "mail";
@@ -495,6 +512,9 @@ public static class AppSettingSections
     /// <summary>What the installation has decided about the mobile contract.</summary>
     public const string Sync = "sync";
 
+    /// <summary>What the installation has decided about surveys sent from a field device.</summary>
+    public const string SurveyUploads = "surveyUploads";
+
     public static IReadOnlyList<string> All { get; } =
-        [Mail, Sms, Security, Protection, Import, Interface, Notifications, Announcements, PhotoLibrarySuspension, Sync];
+        [Mail, Sms, Security, Protection, Import, Interface, Notifications, Announcements, PhotoLibrarySuspension, Sync, SurveyUploads];
 }
