@@ -12882,6 +12882,9 @@ export interface components {
             firstSeenAt: string;
             /** Format: date-time */
             lastSeenAt: string;
+            /** Format: uuid */
+            sentByUserId: null | string;
+            sentByName: null | string;
         };
         PhoneUserLinkRequest: {
             /** Format: uuid */
@@ -15333,6 +15336,8 @@ export interface components {
             notes: null | string;
             /** Format: uuid */
             createdByDeviceUserId: null | string;
+            /** Format: uuid */
+            createdByCaverId: null | string;
             /** Format: date-time */
             revision: string;
         };
@@ -15358,6 +15363,8 @@ export interface components {
             endedAt: null | string;
             /** Format: uuid */
             createdByDeviceUserId: null | string;
+            /** Format: uuid */
+            createdByCaverId: null | string;
             /** Format: date-time */
             revision: string;
             points: components["schemas"]["SyncTripPointDto"][];
