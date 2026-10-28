@@ -109,6 +109,12 @@ public sealed class UploadSessionOpenRequestValidator : AbstractValidator<Upload
 
 public static class FileEndpoints
 {
+    /// <summary>
+    /// The member of an <c>upload.chunk_out_of_order</c> refusal naming the byte offset the next
+    /// piece has to start at: how far the transfer got.
+    /// </summary>
+    public const string ExpectedOffsetMember = "expectedOffset";
+
     /// <summary>The content this caller already holds cannot be stored twice unasked.</summary>
     public const string DuplicateCode = "file.duplicate";
 
@@ -948,10 +954,13 @@ public static class FileEndpoints
 
             case ChunkDisposition.OutOfOrder:
                 // The response carries how far the file actually got, so the client's next
-                // attempt is right rather than another guess.
+                // attempt is right rather than another guess — as a member a client reads, beside
+                // the sentence a person does.
                 return ApiProblems.Conflict(
                     UploadSessionRules.OutOfOrderCode,
-                    $"The next piece starts at {session.ReceivedBytes}.");
+                    $"The next piece starts at {session.ReceivedBytes}.",
+                    ExpectedOffsetMember,
+                    session.ReceivedBytes);
 
             case ChunkDisposition.Overflow:
                 return ApiProblems.BadRequest(
@@ -971,7 +980,10 @@ public static class FileEndpoints
             // Two pieces of one upload arriving at once: the store refuses to open the blob
             // twice, and the loser is told where the file ends so it can resend from there.
             return ApiProblems.Conflict(
-                UploadSessionRules.OutOfOrderCode, $"The next piece starts at {session.ReceivedBytes}.");
+                UploadSessionRules.OutOfOrderCode,
+                $"The next piece starts at {session.ReceivedBytes}.",
+                ExpectedOffsetMember,
+                session.ReceivedBytes);
         }
 
         // Taken from the stored bytes rather than added up here. What actually landed is the

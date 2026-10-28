@@ -306,7 +306,12 @@ public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable, IC
         // resume so the next attempt is right rather than another guess.
         var gap = await SendChunkAsync(owner, session, 900, bytes[900..1000]);
         gap.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        (await ReadCodeAsync(gap)).ShouldBe("upload.chunk_out_of_order");
+        var refusal = JsonDocument.Parse(await gap.Content.ReadAsStringAsync()).RootElement;
+        refusal.GetProperty("code").GetString().ShouldBe("upload.chunk_out_of_order");
+
+        // Where to resume is a member a client reads, not only the sentence a person does.
+        refusal.GetProperty("expectedOffset").GetInt64().ShouldBe(500);
+        refusal.GetProperty("detail").GetString().ShouldBe("The next piece starts at 500.");
         (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/files/uploads/{session}"))
             .GetProperty("receivedBytes").GetInt64().ShouldBe(500);
     }
