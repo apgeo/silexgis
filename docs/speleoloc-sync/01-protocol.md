@@ -839,7 +839,10 @@ keys it on `documentId` and `versionId`.
 - **`photographerCaverId`** is who took a photo: the caver named on it in the browser, or — when
   nobody is named, by caver or by name — the caver its phone user is linked to (section 12),
   resolved as the catalogue is read, so a link made in the browser later applies and an unlink
-  takes it off. A photographer named in the browser always wins.
+  takes it off. A photographer named in the browser always wins. It is given to every reader of the
+  photo, whatever the people directory lists for them, exactly as the web gallery shows the
+  photographer to every reader of the photo — it is the photo's credit, not a directory entry; a
+  device names it from `people` when it can, and otherwise shows the photo without a name.
 - **`createdByDeviceUserId`** is the phone user who added the file, as the phone's upload stated it
   (section 11.3); null when none did, or when the file did not come from a phone. It round-trips as
   a recording's does.
@@ -1063,7 +1066,8 @@ that is not a picture. An absent member says nothing — the caption stands — 
 witness. `createdByDeviceUserId` is kept on the document a create makes, as the phone user's
 identifier and never as a caver, and the catalogue gives it back (section 11.1); a photo that names
 no photographer is shown as taken by the caver that phone user is linked to (section 12), wherever a
-photographer is shown or filtered on. An edit does not move it. `clientUpdatedAt` is informational.
+photographer is shown or filtered on. An edit does not move it. A phone user the phone never described
+is recorded nameless when the document is written (section 12). `clientUpdatedAt` is informational.
 
 #### Hanging a document on a feature
 
@@ -1183,6 +1187,12 @@ something resolves the phone's identifier through that record, and so does the a
 review, so a phone user mapped once — on the phone, in the browser or while importing an archive —
 is not asked about again.
 
+A phone user the phone **names without describing** — as who added a photo or a document, started a
+recording or made a scan (`createdByDeviceUserId`), with no `people` item for it ever — is recorded
+**at once, nameless**, when the row naming it is written, so somebody keeping the roster sees it
+waiting and can link it to a caver. A later `people` item fills its names into the same record. Naming
+a phone user that is already on record, whoever described it, changes nothing about it.
+
 This part is announced as `people` in `features`, **only while the installation offers it** (the
 *people directory* switch, on by default) **and the account may be told who people are**. Read it
 from each capabilities answer.
@@ -1215,6 +1225,9 @@ Authorization: Bearer <token>
   replace the phone's own choice with what `links` says.
 - Switched off, the route answers `409 sync.feature_disabled`; an account that may not be told who
   people are gets `403 access.forbidden`. Neither is a reason to retry.
+- The same listing decides whether a recording or a scan on the trips stream names the caver who
+  recorded it (`createdByCaverId`, section 13.1): only a caver `people` lists for this account, and
+  nobody while the directory is switched off.
 
 ### 12.2 The `people` section of an upload
 
@@ -1241,6 +1254,8 @@ people are not arbitrated on a revision). An upload without the array is answere
   names are taken — and answered `updated` or `unchanged`; the directory's `links` then says which
   caver stands. A link the phone made earlier is replaced by its new choice.
 - A phone user sent again exactly as recorded is `unchanged`, and nothing is added to the history.
+  One the server recorded nameless, because something an upload sent named it first, is `updated`
+  when the phone first describes it.
 - Undoing the upload takes back what it did to each phone user: a link it made is removed, names it
   changed go back. A phone user it described for the first time stays recorded, without the link. A
   value somebody changed since is left, as for rows — and a link is changed since when its caver or
@@ -1279,9 +1294,10 @@ Authorization: Bearer <token>
     {
       "id": "…", "caveId": "…", "title": "…", "description": "…", "log": "…",
       "startedAt": "2026-09-12T08:00:00+00:00", "endedAt": "2026-09-12T16:00:00+00:00",
-      "createdByDeviceUserId": "…", "revision": "…",
+      "createdByDeviceUserId": "…", "createdByCaverId": "…", "revision": "…",
       "points": [
-        { "id": "…", "placeId": "…", "scannedAt": "…", "notes": "…", "createdByDeviceUserId": "…", "revision": "…" }
+        { "id": "…", "placeId": "…", "scannedAt": "…", "notes": "…", "createdByDeviceUserId": "…",
+          "createdByCaverId": null, "revision": "…" }
       ]
     }
   ],
@@ -1316,6 +1332,15 @@ Authorization: Bearer <token>
   any other scan that is merely missing** from `points` — it is withheld, or now stands at a place
   the account may not be given, and the device's own copy is not wrong for that.
 - `deviceUuid` never travels; `createdByDeviceUserId` is the phone user's identifier (section 12).
+- **`createdByCaverId`**, on a recording and on each scan, is the caver that phone user is linked
+  to — given **only while the people directory is switched on and lists that caver for this account**
+  (section 12.1), so the name it stands for is one the device can already show from `people`. It is
+  null when the phone user is linked to nobody, is linked to a caver the directory does not list for
+  this account, or when the directory is off. A recording made on another account's phone names its
+  recorder this way too; its `createdByDeviceUserId` is not among this account's `links`. A link
+  made or changed later does not by itself bring the recording again: the device reads the new value
+  at the recording's next change, and resolves `createdByDeviceUserId` through `links` meanwhile
+  where it can.
 
 ### 13.2 The `tripRecordings` and `tripPoints` sections of an upload
 

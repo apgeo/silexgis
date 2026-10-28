@@ -11,6 +11,7 @@
       "startedAt": "<timestamp>",
       "endedAt": "<timestamp>",
       "createdByDeviceUserId": "<uuid-1>",
+      "createdByCaverId": null,
       "revision": "<timestamp>",
       "points": [
         {
@@ -19,6 +20,7 @@
           "scannedAt": "<timestamp>",
           "notes": "scan 10",
           "createdByDeviceUserId": null,
+          "createdByCaverId": null,
           "revision": "<timestamp>"
         },
         {
@@ -27,6 +29,7 @@
           "scannedAt": "<timestamp>",
           "notes": "scan 30",
           "createdByDeviceUserId": null,
+          "createdByCaverId": null,
           "revision": "<timestamp>"
         }
       ]

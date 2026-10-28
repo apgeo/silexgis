@@ -476,3 +476,33 @@ Recorded exchanges re-written in this entry: `25-rasters-first-page` (`pictureMi
 `pictureTurn` on the map). Everything else is byte-for-byte unchanged.
 
 Codes: none new.
+
+## 2026-10-28 (third entry) — a recording says which caver recorded it; a phone user only named is recorded
+
+**Contract version: 1, unchanged. A build pinned to it keeps working.** One member is added to each
+recording and each scan of the trips stream, and an upload records one thing more; nothing a version-1
+build reads changes meaning, and an upload is answered as before.
+
+- **`createdByCaverId`** on each recording and each scan of `GET /sync/sets/{id}/trips` (and so on
+  the reviews stream's `current` for `tripRecordings` and `tripPoints`, which is shaped by the same
+  code): the caver the phone user named by `createdByDeviceUserId` is linked to — **only while the
+  people directory is switched on and lists that caver for this account**, the same listing
+  `GET /sync/people` answers; null when the phone user is linked to nobody, linked to a caver the
+  directory does not list for this account, or the directory is off. It is how a device names who
+  recorded a trip sent from another account's phone, whose phone user is not among its `links`. A
+  link made or changed later does not by itself bring a recording again.
+- **A phone user an upload names without describing is recorded at once, nameless** — by
+  `createdByDeviceUserId` on a document, a recording or a scan, with no `people` item for it — when
+  the row naming it is written (for a held upload, when a reviewer accepts that row). A later
+  `people` item for it is answered `updated` rather than `created`, and fills in its names; nothing
+  else about the answer changes. A phone user already on record is not touched by being named.
+- The catalogue's `photographerCaverId` is unchanged: it is given to every reader of the photo, as the
+  photographer is shown on the web gallery, and is not limited by the directory.
+
+Described in `docs/speleoloc-sync/01-protocol.md` §11.1, §11.3, §12, §12.1 and §13.1, and
+`02-field-mapping.md` §8 and §9.
+
+Recorded exchanges re-written in this entry: `24-trips-first-page` (`createdByCaverId`, null, on the
+recording and its scans). Everything else is byte-for-byte unchanged.
+
+Codes: none new.

@@ -154,7 +154,43 @@ reasonable and none of them is in this version.
 
 ---
 
-## 6. What this effort did not build at all
+## 6. Identifying a phone user the phone never described
+
+**Partly built: the user is listed; nothing yet helps say who it is.**
+
+A phone names its users on what it sends — who took a photo, started a recording, made a scan — and
+usually describes them in the same upload's `people` section. When it names one it never describes,
+the server records that phone user at once, nameless (`01-protocol.md` §12), so it waits on the Phone
+users page with what is already known: whose phone sent it and when it was first seen. The owner asked
+for it to be listed rather than kept as a bare identifier, and asked that what would identify it be
+written down.
+
+What would have to be built, in the order it would pay:
+
+- **The phone is told which of its users the server has no description for.** The upload's answer
+  (or `GET /sync/capabilities`) would carry `undescribedUsers` — the `deviceUserId`s this account's
+  phone has named and never described — and the device would send a `people` item for each with its
+  next upload. *Judgement: the cheapest and most useful.* It needs one query over the phone-user
+  records this account created and one array in an answer, plus a device change; until the app takes
+  it up it costs nothing. It does nothing for a user the phone itself no longer has, which is why the
+  next item is still worth having.
+- **The Phone users page lists what each nameless user is credited with** — how many photos,
+  documents, recordings and scans name it, with links to them — so the roster's keeper can tell who it
+  is from what they recorded. *Judgement: worth building second.* Every link has to pass the ordinary
+  read rule of what it points at (a count over things the keeper may not read says those things
+  exist), so it is a small listing with its own permission checks and tests, not a column.
+- **The device's own name or label**, sent with an upload and shown beside the phone user. *Judgement:
+  not worth building now.* The server does not hold one (sign-in records a client identifier and a
+  date, §4 above), the app would have to start sending it, and "Ana's phone" tells the keeper little
+  that the account the phone signed in as does not already say — which the page shows.
+
+Not built now because the phone already describes its users with every upload in the normal case, and
+because each of these changes the contract or adds a disclosure surface that wants its own review.
+Until then the keeper links a nameless user like any other, or leaves it until the phone describes it.
+
+---
+
+## 7. What this effort did not build at all
 
 Stated so nobody goes looking:
 

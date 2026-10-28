@@ -22,7 +22,7 @@
     "manifest.json"
   ],
   "fileCount": 81,
-  "digest": "67325de2dda5a9e1dcb268933aa9325b2d6580c4eb6ebd7c3f5e44e5235b1d07",
+  "digest": "922e50a0679faf2bfb8763ce1834d78573704152d0491ecf7f4f6ffacbd3bb37",
   "files": {
     "07-download-first-page/request.txt": {
       "bytes": 37,
@@ -281,8 +281,8 @@
       "sha256": "6b87368bea93cafbfc95d4e59ce697a87d70a5af82570b02e54a78d33510cf01"
     },
     "24-trips-first-page/response.json": {
-      "bytes": 971,
-      "sha256": "bf7fa54026e23f72b672bb761ce94f7543d78e4f16dd3566ef9b4116de973072"
+      "bytes": 1075,
+      "sha256": "5d0f138c0403a6df57235f934127d4d240a5adc563ff721d90ab3b60129765bf"
     },
     "25-rasters-first-page/request.txt": {
       "bytes": 36,
@@ -341,8 +341,8 @@
       "sha256": "e681a371c5b8cdf71c075a855309a8d3963f39b2f91e7a7446e065579869048d"
     },
     "CHANGELOG.md": {
-      "bytes": 32410,
-      "sha256": "9138a3b205027d62398ca0b4564ad9ba98f37add6c4dd873276706a1821978b2"
+      "bytes": 34538,
+      "sha256": "66078952e0604d53f14ff395754dd7e94bb72b9a91effc7102000a2808834ec2"
     },
     "README.md": {
       "bytes": 13752,

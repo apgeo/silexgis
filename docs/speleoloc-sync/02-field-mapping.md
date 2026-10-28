@@ -247,7 +247,9 @@ A new link hangs the document's current file, and moves with the document when n
 
 A phone's own users are recorded on the server as **one phone user each**, keyed by the phone's
 identifier, and linked to at most one caver. One caver may be several phone users (the same person on
-two phones).
+two phones). A phone user an upload only names — on a document, a recording or a scan — without a
+`people` item is recorded nameless when that row is written, and its names come with the first
+`people` item that describes it; one already on record is not changed by being named.
 
 | On the phone | In an upload's `people` item | On the server |
 |---|---|---|
@@ -283,7 +285,8 @@ naming the place scanned. The protocol document's section on trips says how they
 | `cave_trips.cave_uuid` | `caveId` | The cave the recording was made in |
 | `cave_trips.title`, `description`, `log` | `title`, `description`, `log` | Kept as sent (`title` may be empty) |
 | `cave_trips.trip_started_at`, `trip_ended_at` | `startedAt`, `endedAt` | Kept as sent; `endedAt` absent while open |
-| `cave_trips.created_by_user_uuid` | `createdByDeviceUserId` | A phone user's identifier, resolved through the phone-user record (section 8), never stored as a caver |
+| `cave_trips.created_by_user_uuid` | `createdByDeviceUserId` | A phone user's identifier, resolved through the phone-user record (section 8), never stored as a caver; recorded nameless when no `people` item described it |
+| — | `createdByCaverId` (stream only) | The caver that phone user is linked to, while the people directory is on and lists that caver for the reader; null otherwise. Resolved when read, never stored on the recording |
 | `cave_trips.updated_at` | `clientUpdatedAt` | Provenance only, never compared |
 | — | `revision` | The server's revision of the recording |
 | The uploading account | — | The recording's owner |
@@ -297,6 +300,7 @@ naming the place scanned. The protocol document's section on trips says how they
 | `cave_trip_points.scanned_at` | `scannedAt` | Kept as sent |
 | `cave_trip_points.notes` | `notes` | Kept as sent |
 | `cave_trip_points.created_by_user_uuid` | `createdByDeviceUserId` | A phone user's identifier |
+| — | `createdByCaverId` (stream only) | As for the recording |
 | — | `revision` | The server's revision of the scan |
 
 **Never in a recording or a scan: a position.** Where a scan was is its place's position, delivered (or
