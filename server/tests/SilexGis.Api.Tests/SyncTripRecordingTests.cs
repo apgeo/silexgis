@@ -173,6 +173,89 @@ public sealed class SyncTripRecordingTests : IAsyncLifetime, IDisposable, IClass
     }
 
     [Fact]
+    public async Task A_removed_scan_is_named_to_a_reader_who_would_be_given_it_and_is_silent_where_its_place_is_withheld()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var openPlace = await CreatePlaceAsync(cave, locationProtected: false);
+        var guardedPlace = await CreatePlaceAsync(cave, locationProtected: true);
+        var uploadSet = await CreateSetAsync(uploader, [cave], clubId);
+        var membersSet = await CreateSetAsync(member, [cave]);
+
+        var recording = Guid.CreateVersion7();
+        var atOpen = Guid.CreateVersion7();
+        var atGuarded = Guid.CreateVersion7();
+        var atNoPlace = Guid.CreateVersion7();
+        var created = await UploadAsync(
+            uploadSet,
+            recordings: [Recording(recording, cave)],
+            points:
+            [
+                Point(atOpen, recording, openPlace, minutes: 10),
+                Point(atGuarded, recording, guardedPlace, minutes: 20),
+                Point(atNoPlace, recording, null, minutes: 30),
+            ]);
+        var membersBefore = await GetPageAsync(member, $"/api/v1/sync/sets/{membersSet}/trips");
+        PointIds(Single(membersBefore, recording)).ShouldBe([atOpen, atNoPlace]);
+        PointTombstones(membersBefore).ShouldBeEmpty();
+        var membersCursor = membersBefore.GetProperty("nextCursor").GetString()!;
+        var uploadersCursor = (await GetPageAsync(uploader, $"/api/v1/sync/sets/{uploadSet}/trips")).GetProperty("nextCursor").GetString()!;
+
+        var removed = await UploadAsync(uploadSet, points:
+        [
+            new { id = atOpen, recordingId = recording, baseRevision = Result(created, "tripPoints", atOpen).GetProperty("revision").GetDateTimeOffset(), deleted = true },
+            new { id = atGuarded, recordingId = recording, baseRevision = Result(created, "tripPoints", atGuarded).GetProperty("revision").GetDateTimeOffset(), deleted = true },
+        ]);
+        Statuses(removed, "tripPoints").ShouldBe(["deleted", "deleted"]);
+
+        // The member is told the scan it was given went, beside the recording that comes again
+        // without it, and not a word of the scan of the place it is withheld. The tombstone names
+        // the recording it was on.
+        var membersAfter = await GetPageAsync(member, $"/api/v1/sync/sets/{membersSet}/trips?cursor={Uri.EscapeDataString(membersCursor)}");
+        PointIds(Single(membersAfter, recording)).ShouldBe([atNoPlace]);
+        PointTombstones(membersAfter).ShouldBe([atOpen]);
+        var tombstone = membersAfter.GetProperty("pointTombstones")[0];
+        tombstone.GetProperty("recordingId").GetGuid().ShouldBe(recording);
+        tombstone.TryGetProperty("deletedAt", out _).ShouldBeTrue();
+        membersAfter.GetRawText().ShouldNotContain(atGuarded.ToString());
+        Tombstones(membersAfter).ShouldBeEmpty();
+
+        // The uploader, who is handed both places, is told of both.
+        var uploadersAfter = await GetPageAsync(uploader, $"/api/v1/sync/sets/{uploadSet}/trips?cursor={Uri.EscapeDataString(uploadersCursor)}");
+        PointTombstones(uploadersAfter).ShouldBe([atOpen, atGuarded], ignoreOrder: true);
+
+        // On the stream's one cursor: told once, never again after the position that carried it,
+        // and on a first read from the start too — one row a page, so the cut is what is tested.
+        var caughtUp = await GetPageAsync(member, $"/api/v1/sync/sets/{membersSet}/trips?cursor={Uri.EscapeDataString(membersAfter.GetProperty("nextCursor").GetString()!)}");
+        PointTombstones(caughtUp).ShouldBeEmpty();
+        RecordingIds(caughtUp).ShouldBeEmpty();
+        var walked = new List<Guid>();
+        string? cursor = null;
+        for (var page = 0; page < 10; page++)
+        {
+            var url = $"/api/v1/sync/sets/{membersSet}/trips?pageSize=1" + (cursor is null ? "" : $"&cursor={Uri.EscapeDataString(cursor)}");
+            var answer = await GetPageAsync(member, url);
+            (RecordingIds(answer).Count + PointTombstones(answer).Count + Tombstones(answer).Count).ShouldBeLessThanOrEqualTo(1);
+            walked.AddRange(PointTombstones(answer));
+            cursor = answer.GetProperty("nextCursor").GetString();
+            if (!answer.GetProperty("hasMore").GetBoolean())
+            {
+                break;
+            }
+        }
+
+        walked.ShouldBe([atOpen]);
+
+        // A removed recording takes its scans with it under its own tombstone: none of its scans is
+        // named again, whatever the reader may be given.
+        var standing = Single(await GetPageAsync(uploader, $"/api/v1/sync/sets/{uploadSet}/trips"), recording)
+            .GetProperty("revision").GetDateTimeOffset();
+        await UploadAsync(uploadSet, recordings: [new { id = recording, baseRevision = standing, deleted = true }]);
+        var fromStart = await GetPageAsync(member, $"/api/v1/sync/sets/{membersSet}/trips");
+        Tombstones(fromStart).ShouldBe([recording]);
+        PointTombstones(fromStart).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Recordings_and_scans_are_arbitrated_one_by_one_a_resend_writes_nothing_and_removals_reach_the_stream()
     {
         var cave = await CreateCaveAsync(locationProtected: false);
@@ -489,6 +572,9 @@ public sealed class SyncTripRecordingTests : IAsyncLifetime, IDisposable, IClass
 
     private static IReadOnlyList<Guid> Tombstones(JsonElement page) =>
         [.. page.GetProperty("tombstones").EnumerateArray().Select(t => t.GetProperty("id").GetGuid())];
+
+    private static IReadOnlyList<Guid> PointTombstones(JsonElement page) =>
+        [.. page.GetProperty("pointTombstones").EnumerateArray().Select(t => t.GetProperty("id").GetGuid())];
 
     private static IReadOnlyList<Guid> PointIds(JsonElement recording) =>
         [.. recording.GetProperty("points").EnumerateArray().Select(p => p.GetProperty("id").GetGuid())];

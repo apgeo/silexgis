@@ -212,6 +212,79 @@ public sealed class SyncRasterTests : IAsyncLifetime, IDisposable, IClassFixture
     }
 
     [Fact]
+    public async Task A_removed_pin_is_named_to_a_reader_who_would_be_given_it_and_is_silent_where_its_place_is_withheld()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var openPlace = await CreatePlaceAsync(cave, locationProtected: false);
+        var guardedPlace = await CreatePlaceAsync(cave, locationProtected: true);
+        var uploadSet = await CreateSetAsync(uploader, [cave], clubId);
+        var memberSet = await CreateSetAsync(member, [cave]);
+
+        var map = Guid.CreateVersion7();
+        var atOpen = Guid.CreateVersion7();
+        var atGuarded = Guid.CreateVersion7();
+        var created = await UploadAsync(
+            uploader, uploadSet,
+            maps: [await NewMapAsync(map, cave, "Plan", "planView")],
+            pins: [Pin(atOpen, map, openPlace, 10, 20), Pin(atGuarded, map, guardedPlace, 30, 40)]);
+        var membersBefore = await GetPageAsync(member, $"/api/v1/sync/sets/{memberSet}/rasters");
+        PinIds(Map(membersBefore, map)).ShouldBe([atOpen]);
+        PinTombstones(membersBefore).ShouldBeEmpty();
+        var membersCursor = membersBefore.GetProperty("nextCursor").GetString()!;
+        var uploadersCursor = (await GetPageAsync(uploader, $"/api/v1/sync/sets/{uploadSet}/rasters")).GetProperty("nextCursor").GetString()!;
+
+        var removed = await UploadAsync(uploader, uploadSet, pins:
+        [
+            PinRemoval(atOpen, map, Revision(created, "rasterPins", atOpen)),
+            PinRemoval(atGuarded, map, Revision(created, "rasterPins", atGuarded)),
+        ]);
+        Statuses(removed, "rasterPins").ShouldBe(["deleted", "deleted"]);
+
+        // The member is told the pin it was given went, beside the map that comes again without
+        // it, and not a word of the pin on the place it is withheld. The tombstone names the map.
+        var membersAfter = await GetPageAsync(member, $"/api/v1/sync/sets/{memberSet}/rasters?cursor={Uri.EscapeDataString(membersCursor)}");
+        PinIds(Map(membersAfter, map)).ShouldBeEmpty();
+        PinTombstones(membersAfter).ShouldBe([atOpen]);
+        var tombstone = membersAfter.GetProperty("pinTombstones")[0];
+        tombstone.GetProperty("mapId").GetGuid().ShouldBe(map);
+        tombstone.TryGetProperty("deletedAt", out _).ShouldBeTrue();
+        membersAfter.GetRawText().ShouldNotContain(atGuarded.ToString());
+        membersAfter.GetRawText().ShouldNotContain(guardedPlace.ToString());
+        Tombstones(membersAfter).ShouldBeEmpty();
+
+        var uploadersAfter = await GetPageAsync(uploader, $"/api/v1/sync/sets/{uploadSet}/rasters?cursor={Uri.EscapeDataString(uploadersCursor)}");
+        PinTombstones(uploadersAfter).ShouldBe([atOpen, atGuarded], ignoreOrder: true);
+
+        // On the stream's one cursor: told once and not again, and on a first read from the start
+        // too — one row a page, so the cut is what is tested.
+        var caughtUp = await GetPageAsync(member, $"/api/v1/sync/sets/{memberSet}/rasters?cursor={Uri.EscapeDataString(membersAfter.GetProperty("nextCursor").GetString()!)}");
+        PinTombstones(caughtUp).ShouldBeEmpty();
+        MapIds(caughtUp).ShouldBeEmpty();
+        var walked = new List<Guid>();
+        string? cursor = null;
+        for (var page = 0; page < 10; page++)
+        {
+            var url = $"/api/v1/sync/sets/{memberSet}/rasters?pageSize=1" + (cursor is null ? "" : $"&cursor={Uri.EscapeDataString(cursor)}");
+            var answer = await GetPageAsync(member, url);
+            (MapIds(answer).Count + PinTombstones(answer).Count + Tombstones(answer).Count).ShouldBeLessThanOrEqualTo(1);
+            walked.AddRange(PinTombstones(answer));
+            cursor = answer.GetProperty("nextCursor").GetString();
+            if (!answer.GetProperty("hasMore").GetBoolean())
+            {
+                break;
+            }
+        }
+
+        walked.ShouldBe([atOpen]);
+
+        // A removed map takes its pins with it under its own tombstone: none is named again.
+        await UploadAsync(uploader, uploadSet, maps: [MapRemoval(map, await CurrentRevisionAsync(map))]);
+        var fromStart = await GetPageAsync(member, $"/api/v1/sync/sets/{memberSet}/rasters");
+        Tombstones(fromStart).ShouldBe([map]);
+        PinTombstones(fromStart).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Maps_and_pins_are_arbitrated_one_by_one_a_resend_writes_nothing_and_removals_reach_the_stream()
     {
         var cave = await CreateCaveAsync(locationProtected: false);
@@ -565,6 +638,9 @@ public sealed class SyncRasterTests : IAsyncLifetime, IDisposable, IClassFixture
 
     private static IReadOnlyList<Guid> Tombstones(JsonElement page) =>
         [.. page.GetProperty("tombstones").EnumerateArray().Select(t => t.GetProperty("id").GetGuid())];
+
+    private static IReadOnlyList<Guid> PinTombstones(JsonElement page) =>
+        [.. page.GetProperty("pinTombstones").EnumerateArray().Select(t => t.GetProperty("id").GetGuid())];
 
     private static IReadOnlyList<Guid> PinIds(JsonElement map) =>
         [.. map.GetProperty("pins").EnumerateArray().Select(p => p.GetProperty("id").GetGuid())];

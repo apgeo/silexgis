@@ -56,8 +56,8 @@ public sealed record SyncUploadTripPointDto(
 /// </param>
 /// <param name="Points">
 /// Every live scan on the recording that this reader may be given, in the order they were made.
-/// The list is otherwise complete, so a phone replaces its copy of the recording's scans wholesale.
-/// A scan of a place this reader is not handed is left out rather than sent without its place.
+/// A scan of a place this reader is not handed is left out rather than sent without its place, so
+/// a scan missing here is not a removal: a removed scan is named in the page's <c>pointTombstones</c>.
 /// </param>
 public sealed record SyncTripRecordingDto(
     Guid Id,
@@ -80,14 +80,27 @@ public sealed record SyncTripPointDto(
     Guid? CreatedByDeviceUserId,
     DateTimeOffset Revision);
 
+/// <summary>A scan removed from a recording the trips stream hands this reader.</summary>
+/// <param name="Id">The scan's own identifier, as the recording's <c>points</c> carried it.</param>
+/// <param name="RecordingId">The recording the scan belonged to.</param>
+public sealed record SyncTripPointTombstoneDto(Guid Id, Guid RecordingId, DateTimeOffset DeletedAt);
+
 /// <summary>
-/// One page of the trips stream: the recordings made in the caves the set hands this reader, and
-/// the recordings that have gone, on one cursor.
+/// One page of the trips stream: the recordings made in the caves the set hands this reader, the
+/// recordings that have gone, and the scans removed from recordings it is handed, on one cursor.
 /// </summary>
+/// <param name="PointTombstones">
+/// Scans removed after the cursor from recordings this reader is handed, each only when its place
+/// is one the reader is handed now (or it names none) — the scans it would be given were they live.
+/// A phone removes the scans named here; a scan merely missing from a recording's <c>points</c> is
+/// withheld, not removed. A removed recording's scans are not repeated: its own tombstone removes
+/// them.
+/// </param>
 public sealed record SyncTripsPageDto(
     long SetRevision,
     JsonElement Settings,
     IReadOnlyList<SyncTripRecordingDto> Recordings,
     IReadOnlyList<SyncTombstoneDto> Tombstones,
+    IReadOnlyList<SyncTripPointTombstoneDto> PointTombstones,
     string? NextCursor,
     bool HasMore);

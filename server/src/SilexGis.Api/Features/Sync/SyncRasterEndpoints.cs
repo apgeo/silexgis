@@ -45,6 +45,8 @@ public static class SyncRasterEndpoints
 
     private static readonly SyncStreamOrder<SyncRasterGone> ByGone = new(g => g.At, g => g.Id);
 
+    private static readonly SyncStreamOrder<SyncRasterPinGone> ByPinGone = new(g => g.At, g => g.Id);
+
     public static void MapSyncRasterEndpoints(this RouteGroupBuilder sets)
     {
         sets.MapGet("/{id:guid}/rasters", RastersAsync)
@@ -82,7 +84,7 @@ public static class SyncRasterEndpoints
         if (opening.Roots.Count == 0)
         {
             return TypedResults.Ok(new SyncRastersPageDto(
-                opening.Set.Revision, opening.Settings, [], [], opening.Cursor, false));
+                opening.Set.Revision, opening.Settings, [], [], [], opening.Cursor, false));
         }
 
         var handed = await SyncScope.HandedAsync(db, protection, ctx, opening.Roots, ct);
@@ -90,8 +92,8 @@ public static class SyncRasterEndpoints
         // The pins' latest change is read over removed pins too — that a pin went is a change to its
         // map — and over nothing else: a pin of a map that went is hidden with the map.
         var live =
-            from map in db.RasterMaps.AsNoTracking()
-            join cave in handed on map.CaveFeatureId equals cave.Id
+            from carried in Carried(db, handed)
+            let map = carried.Map
             let pinsAt = db.RasterPins
                 .Where(p => p.RasterMapId == map.Id)
                 .Max(p => (DateTimeOffset?)p.UpdatedAt) ?? map.UpdatedAt
@@ -105,7 +107,7 @@ public static class SyncRasterEndpoints
             select new SyncRasterRow
             {
                 Map = map,
-                CaveUpdatedAt = cave.UpdatedAt,
+                CaveUpdatedAt = carried.CaveUpdatedAt,
                 PinsChangedAt = placesAt != null && placesAt > pinsAt ? placesAt.Value : pinsAt,
             };
         live = SyncStreamPaging.After(live, ByChange, opening.From);
@@ -116,34 +118,85 @@ public static class SyncRasterEndpoints
             ByGone,
             opening.Size).ToList();
 
-        var cut = SyncStreamPaging.Cut(opening, liveRows.Select(ByChange.Entry), goneRows.Select(ByGone.Entry));
-        var rows = cut.Rows.OfType<SyncRasterRow>().ToList();
-        var pins = await PinsAsync(db, handed, [.. rows.Select(r => r.Map.Id)], ct);
+        var pinsGone = PinsGone(db, handed);
+        pinsGone = SyncStreamPaging.After(pinsGone, ByPinGone, opening.From);
+        var pinsGoneRows = await SyncStreamPaging.Probe(pinsGone, ByPinGone, opening.Size).ToListAsync(ct);
 
-        // The area a map hangs in is a feature of its own: it is named only to a reader the set
-        // hands it to, and a map of a withheld area is otherwise complete.
-        var areaIds = rows.Where(r => r.Map.CaveAreaFeatureId is not null)
-            .Select(r => r.Map.CaveAreaFeatureId!.Value).Distinct().ToList();
-        var handedAreas = areaIds.Count == 0
-            ? []
-            : (await handed.Where(f => areaIds.Contains(f.Id)).Select(f => f.Id).ToListAsync(ct)).ToHashSet();
+        var cut = SyncStreamPaging.Cut(
+            opening,
+            liveRows.Select(ByChange.Entry),
+            goneRows.Select(ByGone.Entry),
+            pinsGoneRows.Select(ByPinGone.Entry));
+        var maps = await ShapeAsync(db, handed, [.. cut.Rows.OfType<SyncRasterRow>().Select(r => r.Map)], ct);
 
         return TypedResults.Ok(new SyncRastersPageDto(
             opening.Set.Revision,
             opening.Settings,
-            [.. rows.Select(r => new SyncRasterMapDto(
-                r.Map.Id,
-                r.Map.CaveFeatureId,
-                r.Map.CaveAreaFeatureId is { } area && handedAreas.Contains(area) ? area : null,
-                r.Map.Title,
-                r.Map.MapType,
-                r.Map.SortOrder,
-                r.Map.DocumentId,
-                r.Map.UpdatedAt,
-                pins.GetValueOrDefault(r.Map.Id) ?? []))],
+            maps,
             [.. cut.Rows.OfType<SyncRasterGone>().Select(g => new SyncTombstoneDto(g.Id, g.At))],
+            [.. cut.Rows.OfType<SyncRasterPinGone>().Select(g => new SyncRasterPinTombstoneDto(g.Id, g.MapId, g.At))],
             cut.NextCursor,
             cut.HasMore));
+    }
+
+    /// <summary>
+    /// The live maps the stream carries for a reader: those of the caves in <paramref name="handed"/>.
+    /// Every question about which maps, and so which of their pins, a reader is given starts here.
+    /// </summary>
+    internal static IQueryable<SyncCarriedMap> Carried(SilexGisDbContext db, IQueryable<Feature> handed) =>
+        from map in db.RasterMaps.AsNoTracking()
+        join cave in handed on map.CaveFeatureId equals cave.Id
+        select new SyncCarriedMap { Map = map, CaveUpdatedAt = cave.UpdatedAt };
+
+    /// <summary>
+    /// Maps as the stream hands them to a reader, each with the pins it may be given and the area
+    /// it hangs in named only when that area is handed too. <paramref name="maps"/> are maps the
+    /// stream carries for that reader.
+    /// </summary>
+    internal static async Task<List<SyncRasterMapDto>> ShapeAsync(
+        SilexGisDbContext db, IQueryable<Feature> handed, IReadOnlyList<RasterMap> maps, CancellationToken ct)
+    {
+        var pins = await PinsAsync(db, handed, [.. maps.Select(m => m.Id)], ct);
+
+        // The area a map hangs in is a feature of its own: it is named only to a reader the set
+        // hands it to, and a map of a withheld area is otherwise complete.
+        var areaIds = maps.Where(m => m.CaveAreaFeatureId is not null)
+            .Select(m => m.CaveAreaFeatureId!.Value).Distinct().ToList();
+        var handedAreas = areaIds.Count == 0
+            ? []
+            : (await handed.Where(f => areaIds.Contains(f.Id)).Select(f => f.Id).ToListAsync(ct)).ToHashSet();
+
+        return [.. maps.Select(m => new SyncRasterMapDto(
+            m.Id,
+            m.CaveFeatureId,
+            m.CaveAreaFeatureId is { } area && handedAreas.Contains(area) ? area : null,
+            m.Title,
+            m.MapType,
+            m.SortOrder,
+            m.DocumentId,
+            m.UpdatedAt,
+            pins.GetValueOrDefault(m.Id) ?? []))];
+    }
+
+    /// <summary>
+    /// The pins removed from maps the stream carries, each stamped with the moment it went — only
+    /// those of places the reader is handed now, which are exactly the pins it would be given
+    /// were they live.
+    /// </summary>
+    /// <remarks>
+    /// A removal of a pin whose place is withheld stays silent, as the pin itself does: naming it
+    /// would say a pin stood there. A pin of a map that went is not repeated here — the map's own
+    /// tombstone removes its pins with it, and a removed map is not carried.
+    /// </remarks>
+    private static IQueryable<SyncRasterPinGone> PinsGone(SilexGisDbContext db, IQueryable<Feature> handed)
+    {
+        var handedIds = handed.Select(f => f.Id);
+        return
+            from pin in db.RasterPins.AsNoTracking()
+            where pin.DeletedAt != null
+            join carried in Carried(db, handed) on pin.RasterMapId equals carried.Map.Id
+            where handedIds.Contains(pin.PlaceFeatureId)
+            select new SyncRasterPinGone { Id = pin.Id, MapId = pin.RasterMapId, At = pin.DeletedAt!.Value };
     }
 
     /// <summary>
@@ -181,7 +234,7 @@ public static class SyncRasterEndpoints
     /// set does not hand this reader is left out — asked of the same answer the maps' caves were,
     /// for every place the page names at once.
     /// </summary>
-    private static async Task<Dictionary<Guid, List<SyncRasterPinDto>>> PinsAsync(
+    internal static async Task<Dictionary<Guid, List<SyncRasterPinDto>>> PinsAsync(
         SilexGisDbContext db,
         IQueryable<Feature> handed,
         IReadOnlyList<Guid> mapIds,
@@ -221,6 +274,24 @@ internal sealed class SyncRasterRow
 
     /// <summary>When any of the map's pins last changed, or the map's own time if it has none.</summary>
     public required DateTimeOffset PinsChangedAt { get; init; }
+}
+
+/// <summary>A live map the rasters stream carries for a reader, with its cave's last change.</summary>
+internal sealed class SyncCarriedMap
+{
+    public required RasterMap Map { get; init; }
+
+    public required DateTimeOffset CaveUpdatedAt { get; init; }
+}
+
+/// <summary>A pin removed from a map the rasters stream carries, as the stream tells it.</summary>
+internal sealed class SyncRasterPinGone
+{
+    public Guid Id { get; init; }
+
+    public Guid MapId { get; init; }
+
+    public DateTimeOffset At { get; init; }
 }
 
 /// <summary>A map that has gone, as the rasters stream tells it.</summary>

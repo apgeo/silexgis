@@ -46,6 +46,8 @@ public static class SyncTripEndpoints
 
     private static readonly SyncStreamOrder<SyncRecordingGone> ByGone = new(g => g.At, g => g.Id);
 
+    private static readonly SyncStreamOrder<SyncPointGone> ByPointGone = new(g => g.At, g => g.Id);
+
     public static void MapSyncTripEndpoints(this RouteGroupBuilder sets)
     {
         sets.MapGet("/{id:guid}/trips", TripsAsync)
@@ -83,7 +85,7 @@ public static class SyncTripEndpoints
         if (opening.Roots.Count == 0)
         {
             return TypedResults.Ok(new SyncTripsPageDto(
-                opening.Set.Revision, opening.Settings, [], [], opening.Cursor, false));
+                opening.Set.Revision, opening.Settings, [], [], [], opening.Cursor, false));
         }
 
         var handed = await SyncScope.HandedAsync(db, protection, ctx, opening.Roots, ct);
@@ -92,15 +94,14 @@ public static class SyncTripEndpoints
         // to its recording — and over nothing else: a scan of a recording that went is hidden with
         // the recording.
         var live =
-            from recording in db.TripRecordings.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs)
-            join cave in handed on recording.CaveFeatureId equals cave.Id
+            from carried in Carried(db, ctx, handed)
             select new SyncRecordingRow
             {
-                Recording = recording,
-                CaveUpdatedAt = cave.UpdatedAt,
+                Recording = carried.Recording,
+                CaveUpdatedAt = carried.CaveUpdatedAt,
                 PointsChangedAt = db.TripRecordingPoints
-                    .Where(p => p.RecordingId == recording.Id)
-                    .Max(p => (DateTimeOffset?)p.UpdatedAt) ?? recording.UpdatedAt,
+                    .Where(p => p.RecordingId == carried.Recording.Id)
+                    .Max(p => (DateTimeOffset?)p.UpdatedAt) ?? carried.Recording.UpdatedAt,
             };
         live = SyncStreamPaging.After(live, ByChange, opening.From);
         var liveRows = await SyncStreamPaging.Probe(live, ByChange, opening.Size).ToListAsync(ct);
@@ -110,27 +111,82 @@ public static class SyncTripEndpoints
             ByGone,
             opening.Size).ToList();
 
-        var cut = SyncStreamPaging.Cut(opening, liveRows.Select(ByChange.Entry), goneRows.Select(ByGone.Entry));
-        var rows = cut.Rows.OfType<SyncRecordingRow>().ToList();
-        var points = await PointsAsync(db, handed, [.. rows.Select(r => r.Recording.Id)], ct);
+        var pointsGone = SyncStreamPaging.After(PointsGone(db, ctx, handed), ByPointGone, opening.From);
+        var pointsGoneRows = await SyncStreamPaging.Probe(pointsGone, ByPointGone, opening.Size).ToListAsync(ct);
+
+        var cut = SyncStreamPaging.Cut(
+            opening,
+            liveRows.Select(ByChange.Entry),
+            goneRows.Select(ByGone.Entry),
+            pointsGoneRows.Select(ByPointGone.Entry));
+        var recordings = await ShapeAsync(
+            db, handed, [.. cut.Rows.OfType<SyncRecordingRow>().Select(r => r.Recording)], ct);
 
         return TypedResults.Ok(new SyncTripsPageDto(
             opening.Set.Revision,
             opening.Settings,
-            [.. rows.Select(r => new SyncTripRecordingDto(
-                r.Recording.Id,
-                r.Recording.CaveFeatureId,
-                r.Recording.Title,
-                r.Recording.Description,
-                r.Recording.Log,
-                r.Recording.StartedAt,
-                r.Recording.EndedAt,
-                r.Recording.CreatedByDeviceUserId,
-                r.Recording.UpdatedAt,
-                points.GetValueOrDefault(r.Recording.Id) ?? []))],
+            recordings,
             [.. cut.Rows.OfType<SyncRecordingGone>().Select(g => new SyncTombstoneDto(g.Id, g.At))],
+            [.. cut.Rows.OfType<SyncPointGone>().Select(g => new SyncTripPointTombstoneDto(g.Id, g.RecordingId, g.At))],
             cut.NextCursor,
             cut.HasMore));
+    }
+
+    /// <summary>
+    /// The live recordings the stream carries for a reader: those it may read under the trip rules,
+    /// in the caves of <paramref name="handed"/>. Every question about which recordings, and so
+    /// which of their scans, a reader is given starts here.
+    /// </summary>
+    internal static IQueryable<SyncCarriedRecording> Carried(
+        SilexGisDbContext db, AccessContext ctx, IQueryable<Domain.Entities.Feature> handed) =>
+        from recording in db.TripRecordings.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs)
+        join cave in handed on recording.CaveFeatureId equals cave.Id
+        select new SyncCarriedRecording { Recording = recording, CaveUpdatedAt = cave.UpdatedAt };
+
+    /// <summary>
+    /// Recordings as the stream hands them to a reader, each with the scans it may be given.
+    /// <paramref name="recordings"/> are recordings the stream carries for that reader.
+    /// </summary>
+    internal static async Task<List<SyncTripRecordingDto>> ShapeAsync(
+        SilexGisDbContext db,
+        IQueryable<Domain.Entities.Feature> handed,
+        IReadOnlyList<Domain.Entities.TripRecording> recordings,
+        CancellationToken ct)
+    {
+        var points = await PointsAsync(db, handed, [.. recordings.Select(r => r.Id)], ct);
+        return [.. recordings.Select(r => new SyncTripRecordingDto(
+            r.Id,
+            r.CaveFeatureId,
+            r.Title,
+            r.Description,
+            r.Log,
+            r.StartedAt,
+            r.EndedAt,
+            r.CreatedByDeviceUserId,
+            r.UpdatedAt,
+            points.GetValueOrDefault(r.Id) ?? []))];
+    }
+
+    /// <summary>
+    /// The scans removed from recordings the stream carries, each stamped with the moment it went —
+    /// only those of a place the reader is handed now, or of no place, which are exactly the scans
+    /// it would be given were they live.
+    /// </summary>
+    /// <remarks>
+    /// A removal of a scan whose place is withheld stays silent, as the scan itself does: naming it
+    /// would say a scan was made there. A scan of a recording that went is not repeated here — the
+    /// recording's own tombstone removes its scans with it, and a removed recording is not carried.
+    /// </remarks>
+    private static IQueryable<SyncPointGone> PointsGone(
+        SilexGisDbContext db, AccessContext ctx, IQueryable<Domain.Entities.Feature> handed)
+    {
+        var handedIds = handed.Select(f => f.Id);
+        return
+            from point in db.TripRecordingPoints.AsNoTracking()
+            where point.DeletedAt != null
+            join carried in Carried(db, ctx, handed) on point.RecordingId equals carried.Recording.Id
+            where point.PlaceFeatureId == null || handedIds.Contains(point.PlaceFeatureId.Value)
+            select new SyncPointGone { Id = point.Id, RecordingId = point.RecordingId, At = point.DeletedAt!.Value };
     }
 
     /// <summary>
@@ -173,7 +229,7 @@ public static class SyncTripEndpoints
     /// the order they were made. A scan of a place the set does not hand this reader is left out —
     /// asked of the same answer the recordings' caves were, for every place the page names at once.
     /// </summary>
-    private static async Task<Dictionary<Guid, List<SyncTripPointDto>>> PointsAsync(
+    internal static async Task<Dictionary<Guid, List<SyncTripPointDto>>> PointsAsync(
         SilexGisDbContext db,
         IQueryable<Domain.Entities.Feature> handed,
         IReadOnlyList<Guid> recordingIds,
@@ -214,6 +270,24 @@ internal sealed class SyncRecordingRow
 
     /// <summary>When any of the recording's scans last changed, or the recording's own time if it has none.</summary>
     public required DateTimeOffset PointsChangedAt { get; init; }
+}
+
+/// <summary>A live recording the trips stream carries for a reader, with its cave's last change.</summary>
+internal sealed class SyncCarriedRecording
+{
+    public required Domain.Entities.TripRecording Recording { get; init; }
+
+    public required DateTimeOffset CaveUpdatedAt { get; init; }
+}
+
+/// <summary>A scan removed from a recording the trips stream carries, as the stream tells it.</summary>
+internal sealed class SyncPointGone
+{
+    public Guid Id { get; init; }
+
+    public Guid RecordingId { get; init; }
+
+    public DateTimeOffset At { get; init; }
 }
 
 /// <summary>A recording that has gone, as the trips stream tells it.</summary>

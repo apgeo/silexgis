@@ -67,9 +67,9 @@ public sealed record SyncUploadRasterPinDto(
 /// edits the map. Its pins carry revisions of their own.
 /// </param>
 /// <param name="Pins">
-/// Every live pin on the map that this reader may be given. The list is otherwise complete, so a
-/// phone replaces its copy of the map's pins wholesale. A pin of a place this reader is not handed
-/// is left out rather than sent without its place.
+/// Every live pin on the map that this reader may be given. A pin of a place this reader is not
+/// handed is left out rather than sent without its place, so a pin missing here is not a removal:
+/// a removed pin is named in the page's <c>pinTombstones</c>.
 /// </param>
 public sealed record SyncRasterMapDto(
     Guid Id,
@@ -85,14 +85,26 @@ public sealed record SyncRasterMapDto(
 /// <summary>One pin on a raster map, as the rasters stream hands it.</summary>
 public sealed record SyncRasterPinDto(Guid Id, Guid PlaceId, int X, int Y, DateTimeOffset Revision);
 
+/// <summary>A pin removed from a map the rasters stream hands this reader.</summary>
+/// <param name="Id">The pin's own identifier, as the map's <c>pins</c> carried it.</param>
+/// <param name="MapId">The map the pin was on.</param>
+public sealed record SyncRasterPinTombstoneDto(Guid Id, Guid MapId, DateTimeOffset DeletedAt);
+
 /// <summary>
-/// One page of the rasters stream: the raster maps of the caves the set hands this reader, and the
-/// maps that have gone, on one cursor.
+/// One page of the rasters stream: the raster maps of the caves the set hands this reader, the
+/// maps that have gone, and the pins removed from maps it is handed, on one cursor.
 /// </summary>
+/// <param name="PinTombstones">
+/// Pins removed after the cursor from maps this reader is handed, each only when its place is one
+/// the reader is handed now — the pins it would be given were they live. A phone removes the pins
+/// named here; a pin merely missing from a map's <c>pins</c> is withheld, not removed. A removed
+/// map's pins are not repeated: its own tombstone removes them.
+/// </param>
 public sealed record SyncRastersPageDto(
     long SetRevision,
     JsonElement Settings,
     IReadOnlyList<SyncRasterMapDto> Maps,
     IReadOnlyList<SyncTombstoneDto> Tombstones,
+    IReadOnlyList<SyncRasterPinTombstoneDto> PinTombstones,
     string? NextCursor,
     bool HasMore);
