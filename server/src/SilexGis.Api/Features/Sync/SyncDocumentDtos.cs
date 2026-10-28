@@ -52,6 +52,14 @@ public sealed record SyncLinkTargetDto(SyncLinkTargetKind Kind, Guid Id);
 /// <param name="Sha256">The hash of the same bytes, on the same terms as <paramref name="SizeBytes"/>.</param>
 /// <param name="VersionId">The document revision this entry describes; a new one means new bytes.</param>
 /// <param name="Renditions">The picture sizes the server draws of it, largest first; empty for none.</param>
+/// <param name="PhotographerCaverId">
+/// Who took a photo: the caver it names, or — when it names nobody — the caver the phone user who
+/// added it is linked to, resolved as it is read.
+/// </param>
+/// <param name="CreatedByDeviceUserId">
+/// The phone user who added the file on a phone, by the phone's own identifier, as that phone's
+/// upload stated it; null when none did.
+/// </param>
 /// <param name="CapturedAt">When the content was made, as read from the file, where it could be.</param>
 public sealed record SyncDocumentDto(
     Guid Id,
@@ -65,6 +73,7 @@ public sealed record SyncDocumentDto(
     SyncOriginalReach Reach,
     IReadOnlyList<int> Renditions,
     Guid? PhotographerCaverId,
+    Guid? CreatedByDeviceUserId,
     DateTimeOffset? CapturedAt,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

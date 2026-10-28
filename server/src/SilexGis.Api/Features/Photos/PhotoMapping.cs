@@ -95,7 +95,7 @@ internal static class PhotoMapping
     }
 
     private static PhotoCreditDto CreditOf(PhotoRow row) => new(
-        row.Details?.PhotographerCaverId,
+        row.PhotographerCaverId,
         // The caver's label when one is credited, and the free-text name only when nobody on the
         // roster is. Two names for one picture would be a picture with two photographers.
         row.PhotographerLabel ?? row.Details?.PhotographerName,

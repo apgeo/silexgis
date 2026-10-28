@@ -10,6 +10,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -99,6 +100,142 @@ public static class SyncDocumentEndpoints
         // on a withheld cave is absent, not stubbed, because a row hanging there says where to look.
         var handed = await SyncScope.HandedAsync(db, protection, ctx, opening.Roots, ct);
         var handedIds = handed.Select(f => f.Id);
+        var (linked, onRecordings, onScans) = Candidates(db, ctx, handed);
+        var (liveFeature, liveRecording, liveScan) = await CarriedAsync(db, ctx, handed, ct);
+
+        // Three kinds of going. A link detached — by any path, including the cascades no application
+        // code sees — is in the removal log the database keeps. A link whose document was deleted
+        // is still a row, and goes when the document did. A link on a recording or a scan that was
+        // removed goes when its object did. All are told for links on what the set hands this
+        // caller, as an identifier and a moment that locate nothing.
+        var removed = db.SyncLinkRemovals.AsNoTracking()
+            .Where(r => r.FeatureId != null && handedIds.Contains(r.FeatureId.Value))
+            .Select(r => new SyncLinkGone { Id = r.AttachmentId, At = r.RemovedAt });
+        var orphaned = await OrphanedAsync(
+            db,
+            linked.Where(x => !db.Documents.Any(d => d.Id == x.DocumentId))
+                .Select(x => new LinkedDocument(x.Link.Id, x.DocumentId)),
+            ct);
+        orphaned.AddRange(await OrphanedAsync(
+            db,
+            onRecordings.Where(x => !db.Documents.Any(d => d.Id == x.DocumentId))
+                .Select(x => new LinkedDocument(x.Link.Id, x.DocumentId)),
+            ct));
+        orphaned.AddRange(await OrphanedAsync(
+            db,
+            onScans.Where(x => !db.Documents.Any(d => d.Id == x.DocumentId))
+                .Select(x => new LinkedDocument(x.Link.Id, x.DocumentId)),
+            ct));
+        var objectsGone = await GoneWithObjectAsync(db, ctx, handed, opening.From, ct);
+
+        liveFeature = SyncStreamPaging.After(liveFeature, ByChange, opening.From);
+        liveRecording = SyncStreamPaging.After(liveRecording, ByChange, opening.From);
+        liveScan = SyncStreamPaging.After(liveScan, ByChange, opening.From);
+        removed = SyncStreamPaging.After(removed, ByGone, opening.From);
+
+        var featureRows = await SyncStreamPaging.Probe(liveFeature, ByChange, opening.Size).ToListAsync(ct);
+        var recordingRows = await SyncStreamPaging.Probe(liveRecording, ByChange, opening.Size).ToListAsync(ct);
+        var scanRows = await SyncStreamPaging.Probe(liveScan, ByChange, opening.Size).ToListAsync(ct);
+        var removedRows = await SyncStreamPaging.Probe(removed, ByGone, opening.Size).ToListAsync(ct);
+        var orphanedRows = SyncStreamPaging.Probe(
+            SyncStreamPaging.After(orphaned.AsQueryable(), ByGone, opening.From), ByGone, opening.Size).ToList();
+        var objectRows = SyncStreamPaging.Probe(
+            SyncStreamPaging.After(objectsGone.AsQueryable(), ByGone, opening.From), ByGone, opening.Size).ToList();
+
+        var cut = SyncStreamPaging.Cut(
+            opening,
+            featureRows.Select(ByChange.Entry),
+            recordingRows.Select(ByChange.Entry),
+            scanRows.Select(ByChange.Entry),
+            removedRows.Select(ByGone.Entry),
+            orphanedRows.Select(ByGone.Entry),
+            objectRows.Select(ByGone.Entry));
+
+        var links = await ShapeAsync(db, photos, ctx, [.. cut.Rows.OfType<SyncLinkRow>()], ct);
+
+        return TypedResults.Ok(new SyncDocumentsPageDto(
+            opening.Set.Revision,
+            opening.Settings,
+            links,
+            [.. cut.Rows.OfType<SyncLinkGone>().Select(g => new SyncTombstoneDto(g.Id, g.At))],
+            cut.NextCursor,
+            cut.HasMore));
+    }
+
+    /// <summary>
+    /// Links as the stream hands them to this caller, each with its document as a catalogue entry
+    /// — the reach of every file decided by the one reach rule for all of them at once.
+    /// <paramref name="rows"/> are links the stream carries for this caller.
+    /// </summary>
+    internal static async Task<List<SyncDocumentLinkDto>> ShapeAsync(
+        SilexGisDbContext db,
+        PhotoPositionDisclosure photos,
+        AccessContext ctx,
+        IReadOnlyList<SyncLinkRow> rows,
+        CancellationToken ct)
+    {
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        var reach = await photos.ReachAsync(ctx, [.. rows.Select(r => r.File.Id)], ct);
+        var documentIds = rows.Select(r => r.Document.Id).Distinct().ToList();
+        var details = await db.PhotoDetails.AsNoTracking()
+            .Where(p => documentIds.Contains(p.DocumentId))
+            .ToDictionaryAsync(p => p.DocumentId, ct);
+        var photographers = await PhotographerResolution.LinkedCaversAsync(
+            db,
+            [.. rows.Where(r => r.File.Kind == FileKind.Image).Select(r => r.Document)],
+            details,
+            ct);
+
+        return [.. rows.Select(r => new SyncDocumentLinkDto(
+            r.Link.Id,
+            r.Document.Id,
+            new SyncLinkTargetDto(r.TargetKind, r.TargetId),
+            r.Link.Role,
+            r.Link.Caption,
+            r.Link.SortOrder,
+            r.Link.IsPrimary,
+            r.Link.InDeviceDefaultSet,
+            r.Link.UpdatedAt,
+            SyncDocuments.ToDto(
+                r.Document,
+                r.File,
+                details.GetValueOrDefault(r.Document.Id),
+                reach,
+                photographers.TryGetValue(r.Document.Id, out var caver) ? caver : null)))];
+    }
+
+    /// <summary>
+    /// The links the stream carries for this caller, one query per kind of object they hang on:
+    /// on a feature in <paramref name="handed"/>, on a recording the caller may read in a cave in
+    /// it, and on a scan of such a recording whose place is in it too (or that names none) — each
+    /// narrowed to documents the caller may read. Every question about which links, and so which
+    /// documents, a caller is given starts here.
+    /// </summary>
+    internal static async Task<(IQueryable<SyncLinkRow> Features, IQueryable<SyncLinkRow> Recordings, IQueryable<SyncLinkRow> Scans)>
+        CarriedAsync(SilexGisDbContext db, AccessContext ctx, IQueryable<Domain.Entities.Feature> handed, CancellationToken ct)
+    {
+        var (linked, onRecordings, onScans) = Candidates(db, ctx, handed);
+
+        // Being able to read the cave a document hangs on is how most documents are reached, but
+        // a rule written against the document itself is asked first and its deny is final — the
+        // stream lists only what the caller may read, decided before the page is cut.
+        return (
+            await ReadableLinksAsync(db, ctx, linked, ct),
+            await ReadableLinksAsync(db, ctx, onRecordings, ct),
+            await ReadableLinksAsync(db, ctx, onScans, ct));
+    }
+
+    /// <summary>
+    /// The links on what the set hands this caller, before the documents' own rules are asked.
+    /// </summary>
+    private static (IQueryable<LinkedFile> Features, IQueryable<LinkedFile> Recordings, IQueryable<LinkedFile> Scans)
+        Candidates(SilexGisDbContext db, AccessContext ctx, IQueryable<Domain.Entities.Feature> handed)
+    {
+        var handedIds = handed.Select(f => f.Id);
 
         var linked =
             from link in db.Attachments.AsNoTracking()
@@ -164,87 +301,7 @@ public static class SyncDocumentEndpoints
                 TargetUpdatedAt = scanOrRecording > caveOrPlace ? scanOrRecording : caveOrPlace,
             };
 
-        // Being able to read the cave a document hangs on is how most documents are reached, but
-        // a rule written against the document itself is asked first and its deny is final — the
-        // stream lists only what the caller may read, decided before the page is cut.
-        var liveFeature = await ReadableLinksAsync(db, ctx, linked, ct);
-        var liveRecording = await ReadableLinksAsync(db, ctx, onRecordings, ct);
-        var liveScan = await ReadableLinksAsync(db, ctx, onScans, ct);
-
-        // Three kinds of going. A link detached — by any path, including the cascades no application
-        // code sees — is in the removal log the database keeps. A link whose document was deleted
-        // is still a row, and goes when the document did. A link on a recording or a scan that was
-        // removed goes when its object did. All are told for links on what the set hands this
-        // caller, as an identifier and a moment that locate nothing.
-        var removed = db.SyncLinkRemovals.AsNoTracking()
-            .Where(r => r.FeatureId != null && handedIds.Contains(r.FeatureId.Value))
-            .Select(r => new SyncLinkGone { Id = r.AttachmentId, At = r.RemovedAt });
-        var orphaned = await OrphanedAsync(
-            db,
-            linked.Where(x => !db.Documents.Any(d => d.Id == x.DocumentId))
-                .Select(x => new LinkedDocument(x.Link.Id, x.DocumentId)),
-            ct);
-        orphaned.AddRange(await OrphanedAsync(
-            db,
-            onRecordings.Where(x => !db.Documents.Any(d => d.Id == x.DocumentId))
-                .Select(x => new LinkedDocument(x.Link.Id, x.DocumentId)),
-            ct));
-        orphaned.AddRange(await OrphanedAsync(
-            db,
-            onScans.Where(x => !db.Documents.Any(d => d.Id == x.DocumentId))
-                .Select(x => new LinkedDocument(x.Link.Id, x.DocumentId)),
-            ct));
-        var objectsGone = await GoneWithObjectAsync(db, ctx, handed, opening.From, ct);
-
-        liveFeature = SyncStreamPaging.After(liveFeature, ByChange, opening.From);
-        liveRecording = SyncStreamPaging.After(liveRecording, ByChange, opening.From);
-        liveScan = SyncStreamPaging.After(liveScan, ByChange, opening.From);
-        removed = SyncStreamPaging.After(removed, ByGone, opening.From);
-
-        var featureRows = await SyncStreamPaging.Probe(liveFeature, ByChange, opening.Size).ToListAsync(ct);
-        var recordingRows = await SyncStreamPaging.Probe(liveRecording, ByChange, opening.Size).ToListAsync(ct);
-        var scanRows = await SyncStreamPaging.Probe(liveScan, ByChange, opening.Size).ToListAsync(ct);
-        var removedRows = await SyncStreamPaging.Probe(removed, ByGone, opening.Size).ToListAsync(ct);
-        var orphanedRows = SyncStreamPaging.Probe(
-            SyncStreamPaging.After(orphaned.AsQueryable(), ByGone, opening.From), ByGone, opening.Size).ToList();
-        var objectRows = SyncStreamPaging.Probe(
-            SyncStreamPaging.After(objectsGone.AsQueryable(), ByGone, opening.From), ByGone, opening.Size).ToList();
-
-        var cut = SyncStreamPaging.Cut(
-            opening,
-            featureRows.Select(ByChange.Entry),
-            recordingRows.Select(ByChange.Entry),
-            scanRows.Select(ByChange.Entry),
-            removedRows.Select(ByGone.Entry),
-            orphanedRows.Select(ByGone.Entry),
-            objectRows.Select(ByGone.Entry));
-
-        var rows = cut.Rows.OfType<SyncLinkRow>().ToList();
-
-        // What each file may be handed out as, decided by the one reach rule for the page at once.
-        var reach = await photos.ReachAsync(ctx, [.. rows.Select(r => r.File.Id)], ct);
-        var documentIds = rows.Select(r => r.Document.Id).Distinct().ToList();
-        var details = await db.PhotoDetails.AsNoTracking()
-            .Where(p => documentIds.Contains(p.DocumentId))
-            .ToDictionaryAsync(p => p.DocumentId, ct);
-
-        return TypedResults.Ok(new SyncDocumentsPageDto(
-            opening.Set.Revision,
-            opening.Settings,
-            [.. rows.Select(r => new SyncDocumentLinkDto(
-                r.Link.Id,
-                r.Document.Id,
-                new SyncLinkTargetDto(r.TargetKind, r.TargetId),
-                r.Link.Role,
-                r.Link.Caption,
-                r.Link.SortOrder,
-                r.Link.IsPrimary,
-                r.Link.InDeviceDefaultSet,
-                r.Link.UpdatedAt,
-                SyncDocuments.ToDto(r.Document, r.File, details.GetValueOrDefault(r.Document.Id), reach)))],
-            [.. cut.Rows.OfType<SyncLinkGone>().Select(g => new SyncTombstoneDto(g.Id, g.At))],
-            cut.NextCursor,
-            cut.HasMore));
+        return (linked, onRecordings, onScans);
     }
 
     /// <summary>

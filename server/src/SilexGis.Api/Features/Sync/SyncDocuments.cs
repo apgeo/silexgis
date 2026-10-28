@@ -66,7 +66,12 @@ internal static class SyncDocuments
     /// The catalogue entry for a document's file as this caller sees it. Carries no position on
     /// any reach: where a picture was taken is not part of what a phone is told about it here.
     /// </summary>
-    public static SyncDocumentDto ToDto(Document document, StoredFile file, PhotoDetails? details, PhotoReach reach)
+    /// <param name="linkedPhotographer">
+    /// For a photo that names no photographer, the caver its phone user is linked to
+    /// (<see cref="PhotographerResolution.LinkedCaversAsync"/>); credited only when the photo names nobody.
+    /// </param>
+    public static SyncDocumentDto ToDto(
+        Document document, StoredFile file, PhotoDetails? details, PhotoReach reach, Guid? linkedPhotographer)
     {
         var original = reach.OriginalOf(file);
         var announced = ReachOf(original, file.Kind);
@@ -87,7 +92,8 @@ internal static class SyncDocuments
             file.DocumentVersionId,
             announced,
             file.Kind == FileKind.Image ? RenditionSizes : [],
-            details?.PhotographerCaverId,
+            PhotographerResolution.CaverOf(details, linkedPhotographer),
+            document.CreatedByDeviceUserId,
             file.ContentCreatedAt,
             document.CreatedAt,
             document.UpdatedAt);

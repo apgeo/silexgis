@@ -2177,6 +2177,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<Guid?>("CreatedByDeviceUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_device_user_id");
+
                     b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
@@ -2232,6 +2236,10 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("CavingGroupId")
                         .HasDatabaseName("ix_documents_caving_group_id");
+
+                    b.HasIndex("CreatedByDeviceUserId")
+                        .HasDatabaseName("ix_documents_created_by_device_user_id")
+                        .HasFilter("created_by_device_user_id is not null");
 
                     b.HasIndex("DeletedAt")
                         .HasDatabaseName("ix_documents_deleted_at")

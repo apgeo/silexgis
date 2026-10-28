@@ -13,10 +13,16 @@ namespace SilexGis.Infrastructure.Documents;
 /// A photograph and everything a response about it is built from, gathered once so a listing
 /// does not fetch the same rows per item.
 /// </summary>
+/// <param name="PhotographerCaverId">
+/// The caver credited with the picture: the one it names, or the one its phone user is linked to
+/// when it names nobody (<see cref="PhotographerResolution"/>).
+/// </param>
+/// <param name="PhotographerLabel">The name that caver may be shown under.</param>
 public sealed record PhotoRow(
     Document Document,
     StoredFile File,
     PhotoDetails? Details,
+    Guid? PhotographerCaverId,
     string? PhotographerLabel);
 
 /// <summary>
@@ -250,13 +256,21 @@ public static class PhotographReads
             .Where(p => ids.Contains(p.DocumentId))
             .ToDictionaryAsync(p => p.DocumentId, ct);
 
+        var linked = await PhotographerResolution.LinkedCaversAsync(
+            db, [.. documents.Where(d => fileByDocument.ContainsKey(d.Id))], details, ct);
+        var credited = new Dictionary<Guid, Guid>();
+        foreach (var d in documents)
+        {
+            Guid? viaPhone = linked.TryGetValue(d.Id, out var l) ? l : null;
+            if (PhotographerResolution.CaverOf(details.GetValueOrDefault(d.Id), viaPhone) is { } caver)
+            {
+                credited[d.Id] = caver;
+            }
+        }
+
         // Resolved rather than joined, because the name a person may be shown under is a rule
         // with one home — and it is never their address.
-        var caverIds = details.Values
-            .Where(d => d.PhotographerCaverId is not null)
-            .Select(d => d.PhotographerCaverId!.Value)
-            .Distinct()
-            .ToList();
+        var caverIds = credited.Values.Distinct().ToList();
         var caverLabels = caverIds.Count == 0
             ? []
             : await db.Cavers.AsNoTracking()
@@ -271,10 +285,9 @@ public static class PhotographReads
                 .Select(d =>
                 {
                     var detail = details.GetValueOrDefault(d.Id);
-                    var label = detail?.PhotographerCaverId is { } caver
-                        ? caverLabels.GetValueOrDefault(caver)
-                        : null;
-                    return new PhotoRow(d, fileByDocument[d.Id], detail, label);
+                    Guid? caver = credited.TryGetValue(d.Id, out var c) ? c : null;
+                    var label = caver is { } id ? caverLabels.GetValueOrDefault(id) : null;
+                    return new PhotoRow(d, fileByDocument[d.Id], detail, caver, label);
                 }),
         ];
     }

@@ -51,6 +51,10 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
         // "Everything that came out of that archive" — filtered, because almost every row is
         // null and an index over them would be mostly a copy of the table.
         builder.HasIndex(x => x.UploadBatchId).HasFilter("upload_batch_id is not null");
+        // The photos a caver took through a phone user linked to them: a gallery filtered by
+        // photographer asks which documents name each of that caver's phone users.
+        builder.HasIndex(x => x.CreatedByDeviceUserId).HasFilter("created_by_device_user_id is not null")
+            .HasDatabaseName("ix_documents_created_by_device_user_id");
 
         // The purge sweep reads by this and nothing else, and almost every row is null: a
         // filtered index over the deleted ones is small however large the archive is.

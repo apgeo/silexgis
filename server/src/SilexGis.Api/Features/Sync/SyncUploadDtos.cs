@@ -210,7 +210,11 @@ public sealed record SyncUploadPersonDto(
 /// When the content was made, as the phone recorded it. Kept only where the file's own metadata
 /// states nothing, because the file is the better witness.
 /// </param>
-/// <param name="CreatedByDeviceUserId">The phone user who added the file, when the phone records one. Not kept yet.</param>
+/// <param name="CreatedByDeviceUserId">
+/// The phone user who added the file, when the phone records one. Kept on the document a create
+/// makes and returned by the catalogue; a photo that names no photographer is credited to the
+/// caver that phone user is linked to.
+/// </param>
 /// <param name="ClientUpdatedAt">When the phone last changed the row. Informational.</param>
 /// <param name="BaseVersionId">
 /// The revision of the bytes the phone holds, as the catalogue's <c>versionId</c> named it. A

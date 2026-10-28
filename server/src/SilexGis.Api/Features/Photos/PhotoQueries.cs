@@ -101,8 +101,7 @@ public static class PhotoQueries
 
         if (query.CaverId is { } caverId)
         {
-            photographs = photographs.Where(d =>
-                db.PhotoDetails.Any(p => p.DocumentId == d.Id && p.PhotographerCaverId == caverId));
+            photographs = photographs.Where(PhotographerResolution.TakenBy(db, caverId));
         }
 
         if (query.TagId is { } tagId)

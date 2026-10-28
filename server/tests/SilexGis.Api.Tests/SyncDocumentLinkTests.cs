@@ -507,6 +507,133 @@ public sealed class SyncDocumentLinkTests : IAsyncLifetime, IDisposable, IClassF
         (await LinkCountAsync(documentId, cave)).ShouldBe(1);
     }
 
+    [Fact]
+    public async Task A_photo_keeps_its_phone_user_and_is_credited_to_the_caver_that_user_is_linked_to_until_somebody_names_a_photographer()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var set = await CreateSetAsync(owner, [cave]);
+        var bytes = Corpus.GeotaggedJpeg(45.33, 25.63);
+        var staged = await StageAsync(owner, "IMG_7.jpg", bytes);
+        var plainBytes = Corpus.GeotaggedJpeg(45.34, 25.64);
+        var plainStaged = await StageAsync(owner, "IMG_8.jpg", plainBytes);
+        var documentId = Guid.CreateVersion7();
+        var plainId = Guid.CreateVersion7();
+        var phoneUser = Guid.CreateVersion7();
+
+        var answer = await UploadAsync(owner, set, new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            documents = new object[]
+            {
+                new { id = documentId, fileName = "photo.jpg", sha256 = Hash(bytes), stagedUploadId = staged, createdByDeviceUserId = phoneUser },
+                NewDocument(plainId, plainBytes, plainStaged),
+            },
+            documentLinks = new[] { Link(documentId, cave), Link(plainId, cave) },
+        });
+        answer.GetProperty("documents").EnumerateArray().Select(r => r.GetProperty("status").GetString())
+            .ShouldBe(["created", "created"]);
+
+        // Kept on the document, as the phone sent it, and given back on the catalogue; a document
+        // from a phone that named nobody carries null.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Documents.AsNoTracking().SingleAsync(d => d.Id == documentId)).CreatedByDeviceUserId.ShouldBe(phoneUser);
+            (await db.Documents.AsNoTracking().SingleAsync(d => d.Id == plainId)).CreatedByDeviceUserId.ShouldBeNull();
+        }
+
+        var catalogue = await CatalogueDocumentAsync(set, documentId);
+        catalogue.GetProperty("createdByDeviceUserId").GetGuid().ShouldBe(phoneUser);
+        catalogue.GetProperty("photographerCaverId").ValueKind.ShouldBe(JsonValueKind.Null);
+        var plain = await CatalogueDocumentAsync(set, plainId);
+        plain.GetProperty("createdByDeviceUserId").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // While the phone user is linked to nobody, nobody is credited.
+        Guid caver;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var person = new Caver { FullName = $"Photographer {marker}" };
+            db.Cavers.Add(person);
+            await db.SaveChangesAsync();
+            caver = person.Id;
+        }
+
+        (await CreditAsync(documentId)).GetProperty("photographerCaverId").ValueKind.ShouldBe(JsonValueKind.Null);
+        (await GalleryByAsync(caver)).ShouldBeEmpty();
+
+        // Linked — the way somebody keeping the roster links a phone user — the photo is the
+        // caver's, read at once everywhere it is shown or filtered, and only that photo.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.DevicePersons.Add(new DevicePerson
+            {
+                DeviceUserId = phoneUser,
+                CaverId = caver,
+                LinkSource = DevicePersonLinkSource.Administrator,
+                FirstSeenAt = DateTimeOffset.UtcNow,
+                LastSeenAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        (await CatalogueDocumentAsync(set, documentId)).GetProperty("photographerCaverId").GetGuid().ShouldBe(caver);
+        (await CatalogueDocumentAsync(set, plainId)).GetProperty("photographerCaverId").ValueKind.ShouldBe(JsonValueKind.Null);
+        var credit = await CreditAsync(documentId);
+        credit.GetProperty("photographerCaverId").GetGuid().ShouldBe(caver);
+        credit.GetProperty("photographerName").GetString().ShouldNotBeNullOrEmpty();
+        (await GalleryByAsync(caver)).ShouldBe([documentId]);
+
+        // Unlinked, the credit goes with the link.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.DevicePersons.Where(p => p.DeviceUserId == phoneUser)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.CaverId, (Guid?)null));
+        }
+
+        (await CreditAsync(documentId)).GetProperty("photographerCaverId").ValueKind.ShouldBe(JsonValueKind.Null);
+        (await GalleryByAsync(caver)).ShouldBeEmpty();
+        (await CatalogueDocumentAsync(set, documentId)).GetProperty("photographerCaverId").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // Linked again, then a photographer named in the browser by name alone: the name wins, and
+        // the phone user's caver is credited nowhere.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.DevicePersons.Where(p => p.DeviceUserId == phoneUser)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.CaverId, caver));
+        }
+
+        (await GalleryByAsync(caver)).ShouldBe([documentId]);
+        var named = await owner.PutAsJsonAsync($"/api/v1/photos/{documentId}/credit", new { photographerName = "A visiting caver" });
+        named.StatusCode.ShouldBe(HttpStatusCode.OK, await named.Content.ReadAsStringAsync());
+        var written = await CreditAsync(documentId);
+        written.GetProperty("photographerCaverId").ValueKind.ShouldBe(JsonValueKind.Null);
+        written.GetProperty("photographerName").GetString().ShouldBe("A visiting caver");
+        (await GalleryByAsync(caver)).ShouldBeEmpty();
+        (await CatalogueDocumentAsync(set, documentId)).GetProperty("photographerCaverId").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    private async Task<JsonElement> CatalogueDocumentAsync(Guid set, Guid documentId)
+    {
+        var page = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/sync/sets/{set}/documents");
+        return page.GetProperty("links").EnumerateArray()
+            .First(l => l.GetProperty("documentId").GetGuid() == documentId)
+            .GetProperty("document").Clone();
+    }
+
+    private async Task<JsonElement> CreditAsync(Guid documentId) =>
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/photos/{documentId}")).GetProperty("credit").Clone();
+
+    private async Task<List<Guid>> GalleryByAsync(Guid caverId)
+    {
+        var page = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/photos?pageSize=100&caverId={caverId}");
+        return [.. page.GetProperty("items").EnumerateArray().Select(p => p.GetProperty("documentId").GetGuid())];
+    }
+
     private static object NewDocument(Guid id, byte[] bytes, Guid staged) => new
     {
         id,

@@ -77,6 +77,17 @@ public class Document : IProtectedEntity, ITimestamped, IAuditable
     public Guid? UploadBatchId { get; set; }
 
     /// <summary>
+    /// The phone user who added this file on a phone, by the phone's own identifier, when it came
+    /// from one that said so. Set when the document is created and never moved.
+    /// <para>
+    /// Not a caver: who that phone user is lives in one place, the phone-user record, and is
+    /// resolved through it whenever it is read — so a link made in the browser afterwards applies
+    /// to every picture already here, and an unlink takes it back off them.
+    /// </para>
+    /// </summary>
+    public Guid? CreatedByDeviceUserId { get; set; }
+
+    /// <summary>
     /// When somebody deleted this, if they have.
     ///
     /// <para>
