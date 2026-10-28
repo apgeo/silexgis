@@ -11286,6 +11286,7 @@ export interface components {
         HeldBatchDetailDto: {
             batch: components["schemas"]["HeldBatchDto"];
             lines: components["schemas"]["HeldLineDto"][];
+            features: components["schemas"]["HeldFeatureDto"][];
         };
         HeldBatchDto: {
             /** Format: uuid */
@@ -11312,6 +11313,12 @@ export interface components {
             };
             uploaderName?: null | string;
             decidedByName?: null | string;
+        };
+        HeldFeatureDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            kind: components["schemas"]["FeatureKind"];
         };
         HeldFieldDto: {
             field: string;
