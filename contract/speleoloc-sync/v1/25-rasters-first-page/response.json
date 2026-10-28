@@ -12,6 +12,8 @@
       "documentId": "<uuid-1>",
       "pictureWidth": 64,
       "pictureHeight": 48,
+      "pictureMirrored": false,
+      "pictureTurn": 0,
       "revision": "<timestamp>",
       "pins": [
         {

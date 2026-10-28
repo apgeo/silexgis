@@ -22,7 +22,7 @@
     "manifest.json"
   ],
   "fileCount": 81,
-  "digest": "9fdc04e57a33f279a93b3e6a127f9f00d0e18214d2665bceef6a7cfd82f5d65a",
+  "digest": "67325de2dda5a9e1dcb268933aa9325b2d6580c4eb6ebd7c3f5e44e5235b1d07",
   "files": {
     "07-download-first-page/request.txt": {
       "bytes": 37,
@@ -289,8 +289,8 @@
       "sha256": "aaa1f5fe46f629743ea7bc7f1ef45173712328f2aa13e91c7c5ea1629438c9af"
     },
     "25-rasters-first-page/response.json": {
-      "bytes": 602,
-      "sha256": "9b1571370da2baf611a14751cdf5fc68b9b71cb84c83b72efda862acefdd487b"
+      "bytes": 658,
+      "sha256": "a74a3671a6b3634b6c15b05ad24f7e5b3851fe1a4081d6014290ed6331702eb4"
     },
     "26-files-upload-open/request.json": {
       "bytes": 80,
@@ -341,8 +341,8 @@
       "sha256": "e681a371c5b8cdf71c075a855309a8d3963f39b2f91e7a7446e065579869048d"
     },
     "CHANGELOG.md": {
-      "bytes": 30617,
-      "sha256": "5ba236ea50870d8fcad8b6c1c2fe33a5d1bfc694fdedeeb95011379762d8c66c"
+      "bytes": 32410,
+      "sha256": "9138a3b205027d62398ca0b4564ad9ba98f37add6c4dd873276706a1821978b2"
     },
     "README.md": {
       "bytes": 13752,

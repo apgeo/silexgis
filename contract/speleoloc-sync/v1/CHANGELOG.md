@@ -449,3 +449,30 @@ byte-for-byte unchanged.
 
 Codes: none new. `upload.chunk_out_of_order` is recorded as bytes for the first time, now with
 `expectedOffset`.
+
+## 2026-10-28 (second entry) — each map says how its renditions are turned and mirrored
+
+**Contract version: 1, unchanged. A build pinned to it keeps working.** Two members are added to each
+map of the rasters stream, and a map comes again in one more case; nothing a version-1 build reads
+changes meaning.
+
+- **`pictureMirrored`** (boolean) and **`pictureTurn`** (`0`, `90`, `180` or `270`) beside
+  `pictureWidth` / `pictureHeight`: how the map's upright renditions are drawn from the stored frame
+  the pins are measured in — **flipped left to right first** when `pictureMirrored` is `true`, **then
+  turned clockwise** by `pictureTurn`. The turn is the picture's orientation code's own plus every
+  turn recorded in the browser. Renditions **do** mirror: the orientation code is applied in full,
+  codes 2, 4, 5 and 7 included. Both are null exactly when `pictureWidth` is. The code is the one the
+  server's renderer obeys, read when the picture is stored (a scanner's TIFF states it in its own tag,
+  not in EXIF), so a device does not read it out of the file. §15.1 gives the point formulas and a
+  worked example. A device that drew pins only on renditions whose axes were not swapped can now draw
+  every case, and the half-turn case it could not detect is told.
+- **A map comes again when its picture is turned in the browser**, since that changes `pictureTurn`
+  and every rendition; a device keeping renditions fetches them again when the map comes with a
+  different `pictureMirrored` / `pictureTurn`.
+
+Described in `docs/speleoloc-sync/01-protocol.md` §15.1 and `02-field-mapping.md` §10.
+
+Recorded exchanges re-written in this entry: `25-rasters-first-page` (`pictureMirrored` and
+`pictureTurn` on the map). Everything else is byte-for-byte unchanged.
+
+Codes: none new.

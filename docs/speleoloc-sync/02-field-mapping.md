@@ -362,7 +362,7 @@ protocol document's section on raster maps says how they are read and sent.
 | `raster_maps.title` | `title` | Kept as sent, trimmed |
 | `raster_maps.map_type` | `mapType` | See the table below |
 | `raster_maps.sort_order` | `sortOrder` | Kept as sent |
-| The map's image file | `stagedUploadId`, `sha256`, `sizeBytes`, `fileName` | A document made from the staged bytes, hung on the cave with the map role; `documentId` on the stream, with the stored picture's `pictureWidth` and `pictureHeight`. `sha256` is required with `stagedUploadId` and ignored without it |
+| The map's image file | `stagedUploadId`, `sha256`, `sizeBytes`, `fileName` | A document made from the staged bytes, hung on the cave with the map role; `documentId` on the stream, with the stored picture's `pictureWidth` and `pictureHeight`, and `pictureMirrored` / `pictureTurn` — how its upright renditions are drawn from that frame (flip left to right first, then the clockwise turn: the orientation code the renderer obeys plus every turn recorded in the browser). `sha256` is required with `stagedUploadId` and ignored without it |
 | `raster_maps.updated_at` | `clientUpdatedAt` | Provenance only, never compared |
 | — | `revision` | The server's revision of the map |
 | The uploading account | — | The map's owner |

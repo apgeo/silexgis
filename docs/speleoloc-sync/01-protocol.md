@@ -1590,7 +1590,8 @@ Authorization: Bearer <token>
   "maps": [
     {
       "id": "…", "caveId": "…", "caveAreaId": "…", "title": "…", "mapType": "planView",
-      "sortOrder": 0, "documentId": "…", "pictureWidth": 4000, "pictureHeight": 3000, "revision": "…",
+      "sortOrder": 0, "documentId": "…", "pictureWidth": 4000, "pictureHeight": 3000,
+      "pictureMirrored": false, "pictureTurn": 90, "revision": "…",
       "pins": [ { "id": "…", "placeId": "…", "x": 120, "y": 80, "revision": "…" } ]
     }
   ],
@@ -1610,8 +1611,8 @@ Authorization: Bearer <token>
 - **Which pins.** `pins` lists the map's live pins, **leaving out every pin of a place the feature
   stream would not hand this account**. On a picture that may one day be laid on the ground a pixel
   is a position, so no route shows a pin of a place its reader may not be given.
-- **When a map comes again.** When it changes, when any of its pins is added, moved or removed, or when
-  its cave changes. `revision` is the map's own revision, the value an upload sends back as
+- **When a map comes again.** When it changes, when any of its pins is added, moved or removed, when
+  its picture is turned in the browser (which changes `pictureTurn`), or when its cave changes. `revision` is the map's own revision, the value an upload sends back as
   `baseRevision`; each pin has its own. A pin added or removed does not move the map's own `revision`.
 - **`mapType`** is `planView`, `projectedProfile`, `extendedProfile` or `other` (field mapping, section 10).
 - **The picture** is `documentId`, a document of the documents stream: it is listed there as a link of
@@ -1619,12 +1620,33 @@ Authorization: Bearer <token>
   reader who may not be shown where the picture was taken is handed it whole without its location data.
 - **`pictureWidth`** and **`pictureHeight`** are the pixel size of the map's current picture as
   stored — the frame `x` and `y` are measured in. They follow a new picture revision, and the map
-  comes again when it gets one. Null only when the picture's size could not be read. A reader handed
-  only renditions of the picture scales the pins by `renditionWidth / pictureWidth` (the same factor
-  vertically): a rendition keeps the picture's aspect ratio, its longer side fitted to the size asked
-  for. Renditions are drawn upright, though — turned by the picture's own orientation tag and by any
-  turn recorded in the browser — so for a picture stored on its side the rendition's axes are the
-  stored ones swapped; a phone's own pictures of plans are normally stored upright.
+  comes again when it gets one. Null only when the picture's size could not be read.
+- **Renditions are drawn upright**, by the picture's own orientation code and then by any turn
+  recorded in the browser, and the code may mirror the picture. **`pictureMirrored`** and
+  **`pictureTurn`** say exactly how a rendition is drawn from the stored frame, in a fixed order:
+  **flip left to right first** when `pictureMirrored` is `true` (orientation codes 2, 4, 5 and 7),
+  **then turn clockwise** by `pictureTurn` — `0`, `90`, `180` or `270`, the code's own turn plus the
+  recorded turns. Both are null exactly when `pictureWidth` is. The code is the one the server's
+  renderer obeys, read when the picture was stored — a scanner's TIFF states it in its own tag and
+  carries no EXIF, and a HEIF or AVIF picture is decoded upright already (code 1) — so a device
+  never reads the orientation out of the file itself. A pin at (x, y) in a picture `W × H`:
+  - after the flip (only when mirrored): x′ = W − 1 − x, y′ = y; otherwise x′ = x, y′ = y;
+  - then the turn: `0` → (x′, y′); `90` → (H − 1 − y′, x′); `180` → (W − 1 − x′, H − 1 − y′);
+    `270` → (y′, W − 1 − x′);
+  - the turned frame is `W × H` for `0` and `180`, `H × W` for `90` and `270`. A rendition keeps that
+    frame's aspect ratio, its longer side fitted to the size asked for, so scale the turned point by
+    `renditionWidth / turnedWidth` (the same factor vertically).
+
+  *Worked example.* A phone's portrait photograph of a plan, stored 4000 × 3000 with code 6:
+  `pictureMirrored: false`, `pictureTurn: 90`. The pin at (120, 80) turns to
+  (3000 − 1 − 80, 120) = (2919, 120) in the 3000 × 4000 upright frame; the 1200 rendition is
+  900 × 1200, the factor 1200 / 4000 = 0.3, and the pin is drawn at (875.7, 36). Turned once more in
+  the browser, the same map comes again with `pictureTurn: 180` and the pin at
+  (4000 − 1 − 120, 3000 − 1 − 80) = (3879, 2919), in a 1200 × 900 rendition at (1163.7, 875.7).
+
+  Pins stay in the stored frame whatever the turn: a pin sent up is still `x`/`y` in the picture as
+  stored. A device that keeps renditions keeps the `pictureMirrored`/`pictureTurn` it fetched them
+  under, and fetches them again when the map comes with different ones.
 - **Tombstones** name maps removed after the cursor, in caves the set hands this account. A removed
   map takes its pins with it; they are not named again.
 - **`pinTombstones`** name pins removed after the cursor (from the start, on a first read) from maps
