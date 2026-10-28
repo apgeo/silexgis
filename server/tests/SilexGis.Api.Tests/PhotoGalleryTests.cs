@@ -236,6 +236,36 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable, IClassFixtu
     }
 
     [Fact]
+    public async Task A_phones_portrait_photograph_stored_on_its_side_gets_a_portrait_tile()
+    {
+        // Stored 64 wide and 48 high, with the code a phone writes for a portrait shot: drawn
+        // upright it is 48 wide and 64 high, and that is the shape the grid is told.
+        var bytes = Corpus.Oriented(MagickFormat.Jpeg, 6, 64, 48, comment: $"portrait {Guid.NewGuid()}");
+        var file = await UploadAsync(owner, "portrait.jpg", bytes, "image/jpeg");
+        var documentId = await DocumentIdOfAsync(file);
+
+        var tile = (await GalleryAsync(owner)).Single(p => p.GetProperty("documentId").GetGuid() == documentId);
+        tile.GetProperty("width").GetInt32().ShouldBe(48);
+        tile.GetProperty("height").GetInt32().ShouldBe(64);
+
+        // Fixture proof: the rendition really is that shape.
+        using (var rendition = new MagickImage(await owner.GetByteArrayAsync(tile.GetProperty("thumbnailUrl").GetString())))
+        {
+            ((int)rendition.Width, (int)rendition.Height).ShouldBe((48, 64));
+        }
+
+        // A quarter turn recorded on top of the code's quarter turn lies it on its other side.
+        (await owner.PostAsJsonAsync("/api/v1/photos/bulk", new
+        {
+            documentIds = new[] { documentId },
+            rotateQuarterTurns = 1,
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var turned = (await GalleryAsync(owner)).Single(p => p.GetProperty("documentId").GetGuid() == documentId);
+        turned.GetProperty("width").GetInt32().ShouldBe(64);
+        turned.GetProperty("height").GetInt32().ShouldBe(48);
+    }
+
+    [Fact]
     public async Task Turning_a_photograph_four_times_leaves_it_where_it_started()
     {
         var photo = await UploadPhotoAsync(owner, "spun.png");

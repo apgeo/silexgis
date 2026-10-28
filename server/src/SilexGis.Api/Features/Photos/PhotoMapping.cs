@@ -47,7 +47,7 @@ internal static class PhotoMapping
         var token = tokens.CreateToken(file.Id, delivery);
 
         var exif = PhotoExif.FromMetadata(file.Metadata);
-        var (width, height) = SizeOf(exif, file.OrientationQuarterTurns);
+        var (width, height) = SizeOf(file, exif);
 
         return new PhotoDto(
             row.Document.Id,
@@ -76,21 +76,28 @@ internal static class PhotoMapping
     }
 
     /// <summary>
-    /// The dimensions a rendering will actually have — the recorded turn already applied.
+    /// The dimensions a rendering will actually have — the orientation code and the recorded turn
+    /// both applied.
     /// </summary>
     /// <remarks>
     /// What a grid needs before it has any bytes. A tile sized from the stored dimensions alone
     /// is the wrong shape for every rotated picture in the archive, and a grid that reflows once
-    /// the images arrive is the thing lazy loading is supposed to avoid.
+    /// the images arrive is the thing lazy loading is supposed to avoid. The stated size is the
+    /// stored one, before any orientation code: a phone's portrait photograph is usually stored
+    /// on its side with a code saying so, and is drawn upright, so the code has to be applied
+    /// here as the renderer applies it. The code is the one the renderer obeys, read when the
+    /// file was written; a file written before that was recorded falls back to its camera
+    /// profile's, which is the same code for every camera's JPEG.
     /// </remarks>
-    private static (int? Width, int? Height) SizeOf(PhotoExif exif, int quarterTurns)
+    internal static (int? Width, int? Height) SizeOf(StoredFile file, PhotoExif exif)
     {
         if (exif.WidthPixels is not { } width || exif.HeightPixels is not { } height)
         {
             return (null, null);
         }
 
-        var (w, h) = PhotoOrientation.Apply(width, height, quarterTurns);
+        var (w, h) = PhotoOrientation.UprightSize(
+            width, height, file.PixelOrientation ?? exif.Orientation, file.OrientationQuarterTurns);
         return (w, h);
     }
 

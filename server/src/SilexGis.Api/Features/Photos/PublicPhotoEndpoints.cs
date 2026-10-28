@@ -179,10 +179,8 @@ public static class PublicPhotoEndpoints
             .. rows.Select(row =>
             {
                 var token = tokens.CreateToken(row.File.Id, FileDelivery.DerivativesOnly);
-                var exif = Domain.Documents.PhotoExif.FromMetadata(row.File.Metadata);
-                var (width, height) = exif.WidthPixels is { } w && exif.HeightPixels is { } h
-                    ? Domain.Documents.PhotoOrientation.Apply(w, h, row.File.OrientationQuarterTurns)
-                    : (0, 0);
+                var (width, height) = PhotoMapping.SizeOf(
+                    row.File, Domain.Documents.PhotoExif.FromMetadata(row.File.Metadata));
 
                 return new PublicPhotoDto(
                     row.Document.Id,
@@ -193,8 +191,8 @@ public static class PublicPhotoEndpoints
                     // A place name is a caption somebody typed, not a position — the two are
                     // separate columns precisely so this one can be shown here.
                     row.Details?.PlaceName,
-                    width == 0 ? null : width,
-                    height == 0 ? null : height,
+                    width,
+                    height,
                     Rendering(row.File.Id, token, PhotoMapping.ThumbnailSize),
                     Rendering(row.File.Id, token, PhotoMapping.PreviewSize));
             }),
