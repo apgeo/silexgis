@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
+using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -34,15 +35,27 @@ public enum SyncReviewOutcome
 /// </summary>
 /// <param name="ReviewId">The id the upload answered the row with.</param>
 /// <param name="Entity">The upload section the row came in: <c>rows</c>, <c>people</c>,
-/// <c>documents</c>, <c>documentLinks</c>, <c>tripRecordings</c> or <c>tripPoints</c>.</param>
+/// <c>documents</c>, <c>documentLinks</c>, <c>tripRecordings</c>, <c>tripPoints</c>,
+/// <c>rasterMaps</c> or <c>rasterPins</c>.</param>
 /// <param name="RowId">The row's id as the upload answered it (for a document link, the document's).</param>
 /// <param name="Note">What the reviewer wrote to the uploader, if anything.</param>
 /// <param name="Revision">The revision the server holds the row at now; absent when it holds no such
 /// row this caller may read (a create that was not written, say).</param>
 /// <param name="Code">Why a <see cref="SyncReviewOutcome.Failed"/> row could not be written — the code
 /// the upload itself would have answered.</param>
-/// <param name="Current">For a turned-down or failed edit or removal of a feature, the server's row
-/// shaped as the feature stream would deliver it; absent when this caller may not be given it.</param>
+/// <param name="Partial">
+/// True on an <see cref="SyncReviewOutcome.Accepted"/> edit of which a reviewer wrote only some of the
+/// proposed fields; absent when the whole edit was written, and on every other outcome.
+/// </param>
+/// <param name="Current">
+/// For a turned-down or failed edit or removal, and for an edit accepted in part, the server's row shaped exactly as that section's
+/// own stream delivers it: for <c>rows</c> a feature of the feature download, for <c>documents</c>
+/// the catalogue's <c>document</c>, for <c>documentLinks</c> a catalogue link, for
+/// <c>tripRecordings</c> a recording of the trips stream with its scans, for <c>tripPoints</c> one
+/// entry of a recording's <c>points</c>, for <c>rasterMaps</c> a map of the rasters stream with its
+/// pins, for <c>rasterPins</c> one entry of a map's <c>pins</c>. Absent whenever that stream would
+/// not hand this caller the row now — withheld, unreadable or gone — and never for <c>people</c>.
+/// </param>
 public sealed record SyncReviewDto(
     Guid ReviewId,
     string Entity,
@@ -52,7 +65,8 @@ public sealed record SyncReviewDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Note,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? Revision,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Code,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SyncFeatureDto? Current);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Partial,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] object? Current);
 
 /// <summary>One page of the reviews stream, in decision order.</summary>
 public sealed record SyncReviewsPageDto(
@@ -103,6 +117,8 @@ public static class SyncReviewEndpoints
             int? pageSize,
             SilexGisDbContext db,
             FeatureProtection protection,
+            PhotoPositionDisclosure photos,
+            IEnumerable<IHeldBatchHandler> handlers,
             IAccessContextAccessor accessAccessor,
             IOptions<SyncOptions> options,
             CancellationToken ct)
@@ -142,26 +158,39 @@ public static class SyncReviewEndpoints
                 Note = item.DecisionNote,
                 FailureCode = item.ReviewFailureCode,
                 LinkProposal = item.ProposalSection == SyncUploadSections.DocumentLinks ? item.Proposal : null,
+                AcceptedFields = item.ReviewDecision == ImportReviewDecision.Accepted ? item.AcceptedFields : null,
+                FieldsProposal = item.ReviewDecision == ImportReviewDecision.Accepted && item.AcceptedFields != null
+                    ? item.Proposal
+                    : null,
             };
         decided = SyncStreamPaging.After(decided, ByDecision, opening.From);
         var probed = await SyncStreamPaging.Probe(decided, ByDecision, opening.Size).ToListAsync(ct);
         var cut = SyncStreamPaging.Cut(opening, probed.Select(ByDecision.Entry));
         var rows = cut.Rows.OfType<SyncReviewRow>().ToList();
+        foreach (var row in rows.Where(r => r.LinkProposal is not null))
+        {
+            row.Link = JsonSerializer.Deserialize<SyncLinkProposal>(row.LinkProposal!, SyncUploadJson.Options);
+        }
+
+        // An edit accepted in part leaves the phone showing its own version of the fields that were
+        // not written, and the row's revision says nothing of which those were — so it is marked,
+        // and answered with the server's row as a turned-down one is.
+        var sync = handlers.FirstOrDefault(h => h.Source == ImportSource.DeviceSync);
+        foreach (var row in rows.Where(r => r.AcceptedFields is not null && r.FieldsProposal is not null))
+        {
+            var proposed = sync is null
+                ? []
+                : await sync.FieldsOfAsync(
+                    new ImportBatchItem { ProposalSection = row.Section, Proposal = row.FieldsProposal }, ct);
+            row.Partial = proposed.Any(f => !row.AcceptedFields!.Contains(f, StringComparer.Ordinal));
+        }
 
         var revisions = await RevisionsAsync(db, ctx, rows, ct);
 
-        // A turned-down edit or removal of a feature is the one decision that leaves the phone
-        // showing something the server does not hold, so it is the one answered with the server's
-        // row. A create turned down has no server row to send; the phone drops its own.
-        var echoed = rows
-            .Where(r => r.Section == SyncUploadSections.Rows
-                && r.Action != ImportDecisionAction.Create
-                && r.Decision is ImportReviewDecision.Rejected or ImportReviewDecision.Failed)
-            .Select(r => r.RowId)
-            .Distinct()
-            .ToList();
-        var current = (await SyncFeatureShaping.CurrentAsync(db, protection, ctx, echoed, ct))
-            .ToDictionary(f => f.Id);
+        // A turned-down edit or removal is the one decision that leaves the phone showing
+        // something the server does not hold, so it is the one answered with the server's row. A
+        // create turned down has no server row to send; the phone drops its own.
+        var current = await SyncReviewCurrent.OfAsync(db, protection, photos, ctx, rows, ct);
 
         return TypedResults.Ok(new SyncReviewsPageDto(
             opening.Set.Revision,
@@ -175,9 +204,8 @@ public static class SyncReviewEndpoints
                 r.Note,
                 revisions.TryGetValue((r.Section, r.RowId), out var revision) ? revision : null,
                 r.Decision == ImportReviewDecision.Failed ? r.FailureCode : null,
-                r.Section == SyncUploadSections.Rows && echoed.Contains(r.RowId)
-                    ? current.GetValueOrDefault(r.RowId)
-                    : null))],
+                r.Partial ? true : null,
+                current.GetValueOrDefault(r.ReviewId)))],
             cut.NextCursor,
             cut.HasMore));
     }
@@ -195,16 +223,7 @@ public static class SyncReviewEndpoints
     /// The id the upload answered the row with. A document link has no id of its own the phone
     /// chose, and was answered with its document's; every other row with its own.
     /// </summary>
-    private static Guid AnswerIdOf(SyncReviewRow row)
-    {
-        if (row.LinkProposal is { } proposal
-            && JsonSerializer.Deserialize<SyncLinkProposal>(proposal, SyncUploadJson.Options) is { } link)
-        {
-            return link.Row.DocumentId;
-        }
-
-        return row.RowId;
-    }
+    private static Guid AnswerIdOf(SyncReviewRow row) => row.Link?.Row.DocumentId ?? row.RowId;
 
     /// <summary>
     /// The revision each page row's server row stands at now, for the rows this caller may read —
@@ -326,6 +345,18 @@ internal sealed class SyncReviewRow
 
     public string? FailureCode { get; init; }
 
-    /// <summary>A document link's kept proposal, read only to name the document it answered with.</summary>
+    /// <summary>A document link's kept proposal, read to name the document it answered with and what it hangs on.</summary>
     public string? LinkProposal { get; init; }
+
+    /// <summary><see cref="LinkProposal"/>, read.</summary>
+    public SyncLinkProposal? Link { get; set; }
+
+    /// <summary>For an accepted line: the fields the reviewer accepted, when not all of them were named.</summary>
+    public List<string>? AcceptedFields { get; init; }
+
+    /// <summary>The kept proposal of a line accepted by field, read to know which fields it proposed.</summary>
+    public string? FieldsProposal { get; init; }
+
+    /// <summary>Accepted, with at least one proposed field not written.</summary>
+    public bool Partial { get; set; }
 }

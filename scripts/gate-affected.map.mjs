@@ -366,6 +366,8 @@ export const groups = {
     'UploadReviewPreviewTests', 'UploadReviewFieldsTests',
     // What the phone is told afterwards, the messages review sends, and how long held bytes stay.
     'SyncReviewStreamTests',
+    // The server's row for a turned-down edit of every section, and its absence when withheld.
+    'SyncReviewCurrentTests',
   ],
   // A printed code resolved by somebody with no account at all, so the anonymous surface is
   // named here with it: the landing page is the one route where getting the protection wrong
@@ -644,8 +646,8 @@ export const crossCutting = {
     'SurveyUploadPipelineTests', 'SurveyUploadPublicLinkTests', 'SurveyUploadRouteTests',
     'SurveyUploadSchemaTests', 'SurveyWallsTests', 'SyncDocumentLinkTests',
     'SyncDocumentStreamTests', 'SyncPageSizeTests', 'SyncProtocolTests', 'SyncRasterTests',
-    'SyncRecordingPhotoTests', 'SyncReviewStreamTests', 'SyncTripRecordingTests',
-    'SyncUndoTests', 'SyncUploadTests', 'TerrainProbeTests',
+    'SyncRecordingPhotoTests', 'SyncReviewCurrentTests', 'SyncReviewStreamTests',
+    'SyncTripRecordingTests', 'SyncUndoTests', 'SyncUploadTests', 'TerrainProbeTests',
     'TrackingCsvImportReplacementTests', 'TrackingCsvImportTests', 'TripAndTagTests',
     'TripCalloutSweepTests', 'TripCaveReachTests', 'TripHandoverTests', 'TripImportCommitTests',
     'TripImportPreviewResolutionTests', 'TripImportResolutionTests', 'TripListFacetTests',
