@@ -143,7 +143,47 @@ To see the two photo reaches and the withheld pin side by side, create one sync 
 `review@dev.local` (§2) is there for the review hold: sign in as it and send any upload to see the
 `sync.client_update_required` refusal, then send `clientFeatures: ["held"]` to see rows come back
 `held` and the reviews stream (`GET /api/v1/sync/sets/{id}/reviews`) report what a reviewer did with
-them. A reviewer decides in the browser, signed in as the administrator.
+them. A reviewer decides in the browser, signed in as the administrator — or from the command line,
+below.
+
+### Deciding a held upload without the browser
+
+```
+node deploy/speleoloc-dev.mjs review list
+node deploy/speleoloc-dev.mjs review accept <reviewId> [--note "…"]
+node deploy/speleoloc-dev.mjs review reject <reviewId> [--note "…"]
+```
+
+Run beside `up`, against the server it serves (`--api-port` as for `up`). Each signs in as the
+administrator and calls the routes the browser's review screens call, so a phone's live test can take
+a held upload all the way to `accepted` or `rejected` on the reviews stream with no browser:
+
+- `list` prints one line per row still waiting, oldest upload first: its `reviewId` (the id the
+  upload answered the row with), the section it came in, and the row's id — `-` where the server
+  shows none (a document link waits under an id of its own, not the document's).
+- `accept` and `reject` decide the one row, and print one line per row the decision decided —
+  accepting also accepts the waiting rows it depends on, rejecting also rejects the ones that depend
+  on it: the `reviewId`, the outcome (`accepted`, `rejected`, or `failed` with the code the upload
+  would have answered), and nothing else. `--note` is what the uploader reads on the reviews stream.
+- A refusal exits `1` and prints `refused: <status> <code>` — `404 review.item_not_found` for an id
+  that waits nowhere, `409 review.not_pending` for one already decided, `409 review.changed_since`
+  for an edit whose row changed on the server since it was sent (accept it in the browser, over the
+  row as it stands, or reject it). The codes are the review routes', listed in `04-errors.md`.
+
+The same thing with curl, once a token for the administrator is in `$ADMIN_TOKEN` (the sign-in of
+§4, as `admin@dev.local`) and the base URL `up` printed in `$BASE`:
+
+```
+# waiting uploads, then the lines of one of them ("decision": "pending" is waiting)
+curl -sS "$BASE/api/v1/review/batches?page=1&pageSize=100" -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -sS "$BASE/api/v1/review/batches/$BATCH_ID" -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# decide one line; the answer's "decided" lists every line the decision decided
+curl -sS -X POST "$BASE/api/v1/review/items/$REVIEW_ID/accept" -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{}'
+curl -sS -X POST "$BASE/api/v1/review/items/$REVIEW_ID/reject" -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"note":"Not this one"}'
+```
 
 ## 4. Signing in
 

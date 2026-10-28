@@ -2,7 +2,7 @@
 //
 // A throwaway SilexGIS installation for writing a mobile client against the sync API.
 //
-// Cross-platform (Node 18+, no shell-isms). Three commands:
+// Cross-platform (Node 18+, no shell-isms). Four commands:
 //
 //   node deploy/speleoloc-dev.mjs up
 //       Starts a dedicated PostGIS container on a loopback port with its own named volume,
@@ -24,6 +24,16 @@
 //   node deploy/speleoloc-dev.mjs reset
 //       Removes the container and its volume, and the stored files and signing keys beside
 //       them, so the next `up` starts from an empty installation.
+//
+//   node deploy/speleoloc-dev.mjs review list
+//   node deploy/speleoloc-dev.mjs review accept <reviewId> [--note "…"]
+//   node deploy/speleoloc-dev.mjs review reject <reviewId> [--note "…"]
+//       Decides what `review@dev.local` sent while it waits for a reviewer, from the command
+//       line rather than the browser, so a phone's live test can drive the whole review cycle.
+//       Signs in as the development administrator and calls the review routes the browser uses
+//       against the server `up` is serving: `list` prints one line per waiting row (review id,
+//       section, row id), a decision one line per row it decided (review id, outcome, and the
+//       code when the row could not be written). A refusal exits 1 with its status and code.
 //
 // WHY THIS DOES NOT USE THE SHARED DEVELOPMENT DATABASE
 // docker-compose.dev.yml is the database the web application's developers use, published on
@@ -147,6 +157,28 @@ function fail(message, hint) {
     console.error(hint);
   }
   process.exit(1);
+}
+
+/**
+ * The words of a command line that are neither a flag nor a flag's value, in order — what
+ * `parseArgs` reads past.
+ *
+ * Exported for its own test; the commands are what a developer runs.
+ */
+export function positionals(argv) {
+  const words = [];
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg.startsWith('--')) {
+      const next = argv[i + 1];
+      if (next !== undefined && !next.startsWith('--')) {
+        i += 1;
+      }
+      continue;
+    }
+    words.push(arg);
+  }
+  return words;
 }
 
 /** `--name value` and `--flag` out of the command line, with no dependency to do it. */
@@ -660,6 +692,118 @@ export async function proveSyncContent(baseUrl, accessToken) {
 }
 
 /**
+ * A review route that refused, with the status and the problem's stable `code` — what the
+ * `review` command prints and exits on. A refusal is an answer, not a fault: an id that is not
+ * waiting, a row changed since it was sent, or an account deciding its own uploads.
+ */
+export class ReviewRefusal extends Error {
+  constructor(status, code, detail) {
+    super(`refused: ${status} ${code ?? '(no code)'}${detail ? ` — ${detail}` : ''}`);
+    this.status = status;
+    this.code = code ?? null;
+  }
+}
+
+/** Reads a review route's answer, or throws the refusal it is. */
+async function reviewAnswer(response) {
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new ReviewRefusal(response.status, body?.code, body?.detail ?? body?.title);
+  }
+  return body;
+}
+
+/**
+ * The rows waiting for a reviewer, oldest batch first: every page of the queue, and each
+ * batch's lines that are still waiting. Asked as the administrator, through the routes the
+ * browser's review queue reads.
+ *
+ * Exported for its own test; `review list` is what a developer runs.
+ */
+export async function reviewWaiting(baseUrl, accessToken) {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const waiting = [];
+  for (let page = 1; page <= 100; page += 1) {
+    const queue = await reviewAnswer(await fetch(
+      `${baseUrl}/api/v1/review/batches?page=${page}&pageSize=100`, { headers }));
+    const batches = Array.isArray(queue?.items) ? queue.items : [];
+    for (const batch of batches) {
+      const detail = await reviewAnswer(await fetch(`${baseUrl}/api/v1/review/batches/${batch.id}`, { headers }));
+      for (const line of Array.isArray(detail?.lines) ? detail.lines : []) {
+        if (line?.decision === 'pending') {
+          waiting.push({ reviewId: line.reviewId, entity: line.section ?? null, rowId: line.rowId ?? null });
+        }
+      }
+    }
+    if (batches.length === 0 || page * (queue.pageSize ?? 100) >= (queue.totalItems ?? 0)) {
+      break;
+    }
+  }
+  return waiting;
+}
+
+/**
+ * Accepts or rejects one waiting row, with what it depends on (accepting) or what depends on it
+ * (rejecting), and returns every row the decision decided.
+ *
+ * Exported for its own test; `review accept` and `review reject` are what a developer runs.
+ */
+export async function reviewDecide(baseUrl, accessToken, reviewId, accept, note) {
+  const verb = accept ? 'accept' : 'reject';
+  const body = typeof note === 'string' && note !== '' ? { note } : {};
+  const answer = await reviewAnswer(await fetch(
+    `${baseUrl}/api/v1/review/items/${encodeURIComponent(reviewId)}/${verb}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }));
+  return (Array.isArray(answer?.decided) ? answer.decided : []).map((line) => ({
+    reviewId: line.reviewId,
+    outcome: line.decision,
+    code: line.failureCode ?? null,
+  }));
+}
+
+/** One printed line of `review list`. Exported for its own test. */
+export function waitingLine({ reviewId, entity, rowId }) {
+  return `${reviewId}  ${entity ?? '-'}  ${rowId ?? '-'}`;
+}
+
+/** One printed line of a decision. Exported for its own test. */
+export function decidedLine({ reviewId, outcome, code }) {
+  return code ? `${reviewId}  ${outcome}  ${code}` : `${reviewId}  ${outcome}`;
+}
+
+const REVIEW_USAGE = 'usage: node deploy/speleoloc-dev.mjs review list | accept <reviewId> | reject <reviewId> [--note "…"]';
+
+async function reviewCommand(options, words) {
+  const [action, reviewId] = words;
+  if (!['list', 'accept', 'reject'].includes(action) || (action !== 'list' && !reviewId)) {
+    fail(REVIEW_USAGE);
+  }
+  const baseUrl = baseUrlFor(portsFrom(options).apiPort);
+  try {
+    const tokens = await signIn(baseUrl, ADMIN_EMAIL, ADMIN_PASSWORD);
+    if (action === 'list') {
+      for (const line of await reviewWaiting(baseUrl, tokens.access_token)) {
+        console.log(waitingLine(line));
+      }
+      return;
+    }
+    const note = typeof options.note === 'string' ? options.note : undefined;
+    for (const line of await reviewDecide(baseUrl, tokens.access_token, reviewId, action === 'accept', note)) {
+      console.log(decidedLine(line));
+    }
+  } catch (error) {
+    if (error instanceof ReviewRefusal) {
+      console.error(error.message);
+      process.exit(1);
+    }
+    fail(error.message, `Is the server up on ${baseUrl}? \`node deploy/speleoloc-dev.mjs up\` serves it.`);
+  }
+}
+
+/**
  * True when a container of this stack's name is one this stack may use.
  *
  * The judgement, not the docker call, because the judgement is the part that was wrong: it is
@@ -878,11 +1022,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     case 'up': await upCommand(options); break;
     case 'down': downCommand(options); break;
     case 'reset': resetCommand(options); break;
+    case 'review': await reviewCommand(options, positionals(rest)); break;
     default:
       console.log('A throwaway SilexGIS server for the SpeleoLoc sync API.\n');
       console.log('  node deploy/speleoloc-dev.mjs up      start it and print how to sign in');
       console.log('  node deploy/speleoloc-dev.mjs down    stop it, keeping the data');
-      console.log('  node deploy/speleoloc-dev.mjs reset   throw the database away\n');
+      console.log('  node deploy/speleoloc-dev.mjs reset   throw the database away');
+      console.log('  node deploy/speleoloc-dev.mjs review list | accept <reviewId> | reject <reviewId> [--note "…"]');
+      console.log('                                        decide review@dev.local\'s waiting rows as the administrator\n');
       console.log(`  --db-port N    default ${DEFAULT_DB_PORT}`);
       console.log(`  --api-port N   default ${DEFAULT_API_PORT}`);
       process.exit(command ? 1 : 0);

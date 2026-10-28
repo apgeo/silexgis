@@ -20,12 +20,14 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
   ADMIN_EMAIL,
+  ADMIN_PASSWORD,
   CLIENT_ID,
   COMPOSE_PROJECT,
   DEFAULT_API_PORT,
@@ -57,6 +59,13 @@ import {
   withheldPinProblem,
   openPlaceIdIn,
   OPEN_PLACE_NAME,
+  REVIEW_EMAIL,
+  ReviewRefusal,
+  decidedLine,
+  positionals,
+  reviewDecide,
+  reviewWaiting,
+  waitingLine,
 } from './speleoloc-dev.mjs';
 
 const deployDir = dirname(fileURLToPath(import.meta.url));
@@ -407,6 +416,114 @@ describe('the command line', () => {
   });
 });
 
+describe('the review command', () => {
+  // A stand-in for the review routes: two pages of queue, a batch with a waiting line and a
+  // decided one, and decisions that either answer or refuse with a problem document. What is
+  // pinned is what the command asks for and what it makes of the answer — the routes themselves
+  // are the server's, and its own suite tests them.
+  let server;
+  let baseUrl;
+  const seen = [];
+  const batches = [
+    { id: 'b1', lines: [
+      { reviewId: 'r1', section: 'rows', rowId: 'row-1', decision: 'pending' },
+      { reviewId: 'r0', section: 'rows', rowId: 'row-0', decision: 'rejected' },
+    ] },
+    { id: 'b2', lines: [{ reviewId: 'r2', section: 'documentLinks', rowId: null, decision: 'pending' }] },
+  ];
+
+  before(async () => {
+    server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', () => {
+        seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, body });
+        const send = (status, payload) => {
+          res.writeHead(status, { 'Content-Type': status >= 400 ? 'application/problem+json' : 'application/json' });
+          res.end(JSON.stringify(payload));
+        };
+        const url = new URL(req.url, 'http://x');
+        if (req.method === 'GET' && url.pathname === '/api/v1/review/batches') {
+          const page = Number(url.searchParams.get('page'));
+          return send(200, { items: page <= 2 ? [{ id: batches[page - 1].id }] : [], page, pageSize: 1, totalItems: 2 });
+        }
+        const detail = /^\/api\/v1\/review\/batches\/(\w+)$/.exec(url.pathname);
+        if (req.method === 'GET' && detail) {
+          const batch = batches.find((b) => b.id === detail[1]);
+          return send(200, { batch: { id: batch.id }, lines: batch.lines });
+        }
+        const decide = /^\/api\/v1\/review\/items\/([\w-]+)\/(accept|reject)$/.exec(url.pathname);
+        if (req.method === 'POST' && decide) {
+          if (decide[1] === 'gone') {
+            return send(409, { status: 409, title: 'Not waiting', detail: 'That row was decided.', code: 'review.not_pending' });
+          }
+          return send(200, {
+            decided: [
+              { reviewId: decide[1], decision: decide[2] === 'accept' ? 'accepted' : 'rejected', failureCode: null },
+              { reviewId: 'dependent', decision: 'failed', failureCode: 'review.dependency_failed' },
+            ],
+            batches: [],
+          });
+        }
+        return send(404, { status: 404, code: 'route.not_found' });
+      });
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    baseUrl = `http://127.0.0.1:${server.address().port}`;
+  });
+
+  after(() => server?.close());
+
+  it('lists every waiting row of every page of the queue, and nothing already decided', async () => {
+    const waiting = await reviewWaiting(baseUrl, 'tok');
+    assert.deepEqual(waiting, [
+      { reviewId: 'r1', entity: 'rows', rowId: 'row-1' },
+      { reviewId: 'r2', entity: 'documentLinks', rowId: null },
+    ]);
+    assert.deepEqual(waiting.map(waitingLine), ['r1  rows  row-1', 'r2  documentLinks  -']);
+    assert.ok(seen.every((r) => r.auth === 'Bearer tok'), 'every call carries the administrator\'s token');
+  });
+
+  it('accepts and rejects through the line routes, the note riding along, one line per row decided', async () => {
+    seen.length = 0;
+    const accepted = await reviewDecide(baseUrl, 'tok', 'r1', true);
+    assert.deepEqual(accepted.map(decidedLine), ['r1  accepted', 'dependent  failed  review.dependency_failed']);
+    assert.equal(seen[0].method, 'POST');
+    assert.equal(seen[0].url, '/api/v1/review/items/r1/accept');
+    assert.deepEqual(JSON.parse(seen[0].body), {});
+
+    const rejected = await reviewDecide(baseUrl, 'tok', 'r2', false, 'Wrong cave');
+    assert.equal(rejected[0].outcome, 'rejected');
+    assert.equal(seen[1].url, '/api/v1/review/items/r2/reject');
+    assert.deepEqual(JSON.parse(seen[1].body), { note: 'Wrong cave' });
+  });
+
+  it('turns a refusal into the problem code, which the command prints before exiting 1', async () => {
+    await assert.rejects(reviewDecide(baseUrl, 'tok', 'gone', true), (error) => {
+      assert.ok(error instanceof ReviewRefusal);
+      assert.equal(error.status, 409);
+      assert.equal(error.code, 'review.not_pending');
+      assert.match(error.message, /^refused: 409 review\.not_pending/);
+      return true;
+    });
+  });
+
+  it('reads the review id and the note off the command line, wherever the note sits', () => {
+    assert.deepEqual(positionals(['reject', '--note', 'Wrong cave', 'r2']), ['reject', 'r2']);
+    assert.deepEqual(positionals(['reject', 'r2', '--note', 'Wrong cave', '--api-port', '6001']), ['reject', 'r2']);
+    assert.deepEqual(parseArgs(['reject', 'r2', '--note', 'Wrong cave']), { note: 'Wrong cave' });
+  });
+
+  it('is dispatched, signs in as the administrator, and is documented', () => {
+    assert.match(script, /case 'review': await reviewCommand\(options, positionals\(rest\)\)/);
+    assert.match(script, /signIn\(baseUrl, ADMIN_EMAIL, ADMIN_PASSWORD\)/);
+    const doc = readFileSync(join(deployDir, '..', 'docs', 'speleoloc-sync', '07-dev-server.md'), 'utf8');
+    assert.match(doc, /speleoloc-dev\.mjs review list/);
+    assert.match(doc, /\/api\/v1\/review\/items\/\$REVIEW_ID\/accept/);
+  });
+});
+
 describe('the port a flag asked for reaches docker compose', () => {
   // The compose file reads both ports from the environment. A flag that stopped at the script
   // would leave the database on the default port while the connection string, the readiness
@@ -592,5 +709,50 @@ describe('the server this script starts', () => {
       const tokens = await signIn(BASE_URL, MEMBER_EMAIL, MEMBER_PASSWORD);
       assert.equal(capabilitiesProblem(await readCapabilities(BASE_URL, tokens.access_token)), null);
       await proveSyncContent(BASE_URL, tokens.access_token);
+    });
+
+  it('lets the review command decide what the account under review sent, and its phone reads the decision',
+    { skip, timeout: 180_000 },
+    async () => {
+      const phone = await signIn(BASE_URL, REVIEW_EMAIL, MEMBER_PASSWORD);
+      const headers = { Authorization: `Bearer ${phone.access_token}`, 'Content-Type': 'application/json' };
+      const created = await fetch(`${BASE_URL}/api/v1/sync/sets`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: `review check ${Date.now()}`, uploadVisibility: 'private', rootFeatureIds: [], settings: {} }),
+      });
+      const set = await created.json();
+      assert.equal(created.status, 201, JSON.stringify(set));
+      try {
+        const upload = await fetch(`${BASE_URL}/api/v1/sync/sets/${set.id}/upload`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            batchId: crypto.randomUUID(),
+            contractVersion: 1,
+            clientFeatures: ['held'],
+            // A phone user is what an account that owns nothing and may create no cave can send:
+            // anything it may not write is refused outright rather than held.
+            people: [{ deviceUserId: crypto.randomUUID(), username: 'invented-phone-user' }],
+          }),
+        });
+        const answer = await upload.json();
+        assert.equal(upload.status, 200, JSON.stringify(answer));
+        const { reviewId, status } = answer.people[0];
+        assert.equal(status, 'held', JSON.stringify(answer.people[0]));
+
+        const admin = await signIn(BASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD);
+        assert.ok((await reviewWaiting(BASE_URL, admin.access_token)).some((line) => line.reviewId === reviewId));
+        const decided = await reviewDecide(BASE_URL, admin.access_token, reviewId, false, 'Not this one');
+        assert.deepEqual(decided.map((line) => [line.reviewId, line.outcome]), [[reviewId, 'rejected']]);
+        await assert.rejects(reviewDecide(BASE_URL, admin.access_token, reviewId, false), ReviewRefusal);
+
+        const reviews = await (await fetch(`${BASE_URL}/api/v1/sync/sets/${set.id}/reviews`, { headers })).json();
+        const told = reviews.reviews.find((review) => review.reviewId === reviewId);
+        assert.equal(told?.outcome, 'rejected');
+        assert.equal(told?.note, 'Not this one');
+      } finally {
+        await fetch(`${BASE_URL}/api/v1/sync/sets/${set.id}`, { method: 'DELETE', headers }).catch(() => {});
+      }
     });
 });
