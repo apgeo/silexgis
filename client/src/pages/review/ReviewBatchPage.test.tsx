@@ -157,6 +157,15 @@ describe('the batch view', () => {
     expect(within(lineEl('L2')).getByTestId('review-needs').textContent).toContain('Invented Cave');
   });
 
+  it('tells a reviewer that waiting changes are shown in full, and not the uploader reading their own', () => {
+    show([cave]);
+    expect(screen.getByTestId('review-whole-view').textContent).toContain('exact positions of protected caves');
+    cleanup();
+    spies.me.mockReturnValue({ data: { id: 'uploader' } });
+    show([cave]);
+    expect(screen.queryByTestId('review-whole-view')).toBeNull();
+  });
+
   it('marks an edit whose row changed since the phone read it', () => {
     show([cave, edit]);
     expect(within(lineEl('L3')).getByTestId('review-changed-since')).toBeTruthy();

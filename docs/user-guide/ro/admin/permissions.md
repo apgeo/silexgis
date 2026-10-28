@@ -141,6 +141,16 @@ Aplicația refuză categoric două lucruri:
 - orice ar **lăsa niciun administrator deplin activ capabil să se autentifice**,
 - o regulă care ar **acorda drepturi pe care nu le deții tu**.
 
+### Acordarea dreptului de a verifica încărcările
+
+Dreptul **Revizuirea încărcărilor** îi arată celui care îl deține **în întregime** fiecare încărcare
+care așteaptă verificarea: pozițiile exacte ale peșterilor protejate și fotografiile peșterilor pe
+care altfel nu le-ar putea deschide. Fila **Reguli** a unui grup spune asta de îndată ce o regulă
+acordă dreptul, iar fila **Membri** o spune pentru un grup care îl acordă — inclusiv Administratorii
+deplini. Dă-l doar persoanelor de încredere pentru toate peșterile. În afara paginilor de verificare,
+cel care îl deține vede în continuare doar ce îi permit celelalte drepturi. Vezi
+[Verificarea încărcărilor](../features/upload-review.md).
+
 ### Previzualizarea
 
 **Alege un utilizator sau un grup de speologie pentru a vedea drepturile pe care le-ar deține.** Extinde un

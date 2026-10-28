@@ -1121,6 +1121,7 @@
   "review": {
     "queueTitle": "Uploads awaiting review",
     "queueExplain": "Uploads from accounts that are under review wait here. Nothing in them has been written yet: what you accept is written then, and what you turn down never is.",
+    "wholeView": "Waiting changes are shown here in full, including the exact positions of protected caves and pictures of caves you could not otherwise open.",
     "queueEmpty": "Nothing is waiting for review.",
     "forbidden": "You may not review uploads.",
     "uploader": "Sent by",
@@ -3262,6 +3263,10 @@
     "viaExpedition": "From a camp",
     "viaExpeditionHint": "Some of these rules were written by a camp this trip belongs to, and are changed there rather than here. They are shown so the whole list of who may read this trip is in one place.",
     "denyHint": "A deny outweighs every allow at the same level, and a rule on the object itself outweighs anything inherited. Check what it costs before saving.",
+    "reviewRightWarning": {
+      "title": "Whoever reviews uploads sees every waiting change in full",
+      "body": "The right to review uploads shows every change waiting for review as it was sent, including the exact positions of protected caves and pictures of caves the reviewer could not otherwise open. Give it only to people trusted with all caves. Outside review, a reviewer still sees only what their other rights allow."
+    },
     "viaNamedExpedition": "Granted through camp {{name}}",
     "proposed": "proposed",
     "proposedHint": "This was opened from a link about {{name}}. Read on this object, and nothing more, is proposed for them in the row marked “proposed”. Nothing is granted until you press OK.",

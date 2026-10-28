@@ -42,6 +42,9 @@ export default function ReviewQueuePage() {
         {t('review.queueTitle')}
       </Typography.Title>
       <Typography.Paragraph type="secondary">{t('review.queueExplain')}</Typography.Paragraph>
+      <Typography.Paragraph type="warning" data-testid="review-whole-view">
+        {t('review.wholeView')}
+      </Typography.Paragraph>
       <Table<HeldBatch>
         size="small"
         rowKey="id"

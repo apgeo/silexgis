@@ -20,6 +20,8 @@ import {
   useGenericFeatureTypes,
 } from '../../../api/hooks.ts';
 import { joinActions } from '../../../components/permissions/accessDisplay.ts';
+import ReviewRightWarning from '../../../components/permissions/ReviewRightWarning.tsx';
+import { grantsUploadReview } from '../../../components/permissions/reviewRight.ts';
 import RuleAnchorPicker from './RuleAnchorPicker.tsx';
 
 interface DraftRule {
@@ -184,6 +186,8 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
           }
         />
       )}
+
+      {grantsUploadReview(drafts) && <ReviewRightWarning />}
 
       <Table<DraftRule>
         scroll={{ x: 'max-content' }}

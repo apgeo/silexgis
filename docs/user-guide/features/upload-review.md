@@ -16,6 +16,14 @@ the documents or the trips until somebody with the right to review it says yes.
 This page is for that somebody. It needs the **Upload review** right: *read* to see the waiting
 uploads, *write* to decide them.
 
+**A reviewer sees everything waiting in full.** Every line is shown as it was sent, whatever else
+you may read: the exact position of a protected cave or entrance, a picture of a cave you could not
+otherwise open, a recording you may not read anywhere else. You cannot judge what you are not shown.
+This reaches only what is waiting here — on the map, in the registry and everywhere else your
+ordinary rights and location protection apply as before — and what you accept is still written with
+the uploader's rights, never yours. The page says so at its top, and the screens that hand out the
+right warn about it: give it only to people trusted with all caves.
+
 ---
 
 ## The queue
@@ -56,11 +64,8 @@ Press the arrow beside a line to read it.
 - **A recording** shows its title, log, times and its scans.
 - **A change to a photo, a recording, a scan or a raster map** shows the same kind of table as a
   change to a place: each field **now** beside what the phone **proposes**, with a box per field —
-  see *Accept part of a change* below. A field naming something you may not see (the place a scan
-  was at before, say) says *Not shown to you*.
-- **A raster map's pins** show their place on the map only where the server sent it. A pin on a
-  place whose position you may not see is listed without one — see
-  [Location protection](../admin/location-protection.md).
+  see *Accept part of a change* below.
+- **A raster map's pins** show where on the map each one is, the pin on a protected place included.
 
 A line may also say **"Changed since the phone read it"**: somebody changed that place on the
 server after the phone took its copy. See [Changed since](#changed-since) below.
@@ -134,8 +139,9 @@ above the list of confirmations. Each row is one upload: when you sent it, from 
 holds, how it stands — **Waiting**, **Accepted**, **Partly accepted** or **Rejected** — who decided
 it and when, and the **note** the reviewer left.
 
-Press a row to open it. You see the same page the reviewer sees, minus the buttons: what was
-proposed, line by line, and what became of each line. You cannot decide your own upload, whatever
+Press a row to open it. You see the same page the reviewer sees, minus the buttons — and, unlike a
+reviewer, only what your own rights show anywhere else: what was proposed, line by line, and what
+became of each line. You cannot decide your own upload, whatever
 your rights. A rejected upload is not written anywhere; send it again, changed, if it was meant to
 be.
 

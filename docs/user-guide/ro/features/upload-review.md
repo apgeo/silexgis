@@ -16,6 +16,15 @@ hărți, în documente sau în ture până nu spune „da" cineva care are drept
 Pagina aceasta este pentru acel cineva. Are nevoie de dreptul **Revizuirea încărcărilor**:
 *citire* pentru a vedea încărcările în așteptare, *scriere* pentru a le decide.
 
+**Un verificator vede în întregime tot ce așteaptă.** Fiecare linie este arătată așa cum a fost
+trimisă, orice altceva ai voie să citești: poziția exactă a unei peșteri sau a unei intrări
+protejate, fotografia unei peșteri pe care altfel nu ai putea-o deschide, o înregistrare pe care nu
+o poți citi în altă parte. Nu poți judeca ce nu ți se arată. Aceasta privește doar ce așteaptă aici
+— pe hartă, în registru și oriunde altundeva se aplică în continuare drepturile tale obișnuite și
+protecția locațiilor — iar ce accepți se scrie tot cu drepturile celui care a încărcat, niciodată cu
+ale tale. Pagina spune asta în partea de sus, iar ecranele care acordă dreptul avertizează: dă-l doar
+persoanelor de încredere pentru toate peșterile.
+
 ---
 
 ## Coada
@@ -57,12 +66,9 @@ Apasă săgeata de lângă o linie pentru a o citi.
 - **O înregistrare** arată titlul, jurnalul, orele și scanările ei.
 - **O modificare a unei fotografii, a unei înregistrări, a unei scanări sau a unei hărți raster**
   arată același fel de tabel ca modificarea unui loc: fiecare câmp **acum**, lângă ce **propune**
-  telefonul, cu o căsuță pentru fiecare câmp — vezi *O parte dintr-o modificare* mai jos. Un câmp
-  care numește ceva ce nu ai voie să vezi (de pildă locul unde era înainte o scanare) spune
-  *Nu ți se arată*.
-- **Reperele unei hărți raster** arată locul lor pe hartă doar acolo unde l-a trimis serverul. Un
-  reper pe un loc a cărui poziție nu ai voie să o vezi apare fără ea — vezi
-  [Protecția locațiilor](../admin/location-protection.md).
+  telefonul, cu o căsuță pentru fiecare câmp — vezi *O parte dintr-o modificare* mai jos.
+- **Reperele unei hărți raster** arată unde se află fiecare pe hartă, inclusiv reperul de pe un loc
+  protejat.
 
 O linie poate spune și **„Modificat după ce l-a citit telefonul"**: cineva a schimbat acel loc pe
 server după ce telefonul și-a luat copia. Vezi [Modificat între timp](#modificat-între-timp) mai jos.
@@ -138,8 +144,9 @@ tale în verificare** deasupra listei de confirmări. Fiecare rând este o înc�
 de unde, ce conține, cum stă — **În așteptare**, **Acceptată**, **Acceptată în parte** sau
 **Respinsă** —, cine a decis-o și când, și **nota** lăsată de verificator.
 
-Apasă pe un rând ca să o deschizi. Vezi aceeași pagină ca verificatorul, fără butoane: ce s-a
-propus, linie cu linie, și ce s-a ales pentru fiecare. Nu îți poți decide propria încărcare,
+Apasă pe un rând ca să o deschizi. Vezi aceeași pagină ca verificatorul, fără butoane — și, spre
+deosebire de un verificator, doar ce îți arată propriile drepturi și în altă parte: ce s-a propus,
+linie cu linie, și ce s-a ales pentru fiecare. Nu îți poți decide propria încărcare,
 oricare ar fi drepturile tale. O încărcare respinsă nu se scrie nicăieri; trimite-o din nou,
 schimbată, dacă trebuia să ajungă acolo.
 

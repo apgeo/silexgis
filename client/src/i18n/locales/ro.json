@@ -1121,6 +1121,7 @@
   "review": {
     "queueTitle": "Încărcări care așteaptă verificarea",
     "queueExplain": "Aici așteaptă încărcările conturilor aflate sub verificare. Nimic din ele nu a fost scris încă: ce accepți se scrie atunci, iar ce respingi nu se scrie niciodată.",
+    "wholeView": "Aici schimbările care așteaptă sunt arătate în întregime, inclusiv pozițiile exacte ale peșterilor protejate și fotografiile peșterilor pe care altfel nu le-ai putea deschide.",
     "queueEmpty": "Nimic nu așteaptă verificarea.",
     "forbidden": "Nu ai voie să verifici încărcări.",
     "uploader": "Trimis de",
@@ -3262,6 +3263,10 @@
     "viaExpedition": "Din tabără",
     "viaExpeditionHint": "Unele dintre aceste reguli au fost scrise de o tabără din care face parte această tură și se modifică acolo, nu aici. Sunt afișate pentru ca lista completă a celor care pot citi tura să fie într-un singur loc.",
     "denyHint": "O interdicție cântărește mai greu decât orice permisiune de la același nivel, iar o regulă pusă direct pe obiect cântărește mai greu decât una moștenită. Verifică ce efect are înainte de a salva.",
+    "reviewRightWarning": {
+      "title": "Cine verifică încărcările vede în întregime tot ce așteaptă verificarea",
+      "body": "Dreptul de a verifica încărcările arată fiecare schimbare care așteaptă verificarea așa cum a fost trimisă, inclusiv pozițiile exacte ale peșterilor protejate și fotografiile peșterilor pe care verificatorul altfel nu le-ar putea deschide. Acordă-l doar persoanelor de încredere pentru toate peșterile. În afara verificării, un verificator vede în continuare doar ce îi permit celelalte drepturi."
+    },
     "viaNamedExpedition": "Acordată prin tabăra {{name}}",
     "proposed": "propusă",
     "proposedHint": "Dialogul a fost deschis dintr-o legătură despre {{name}}. În rândul marcat „propusă” i se propune Citire pe acest obiect și nimic mai mult. Nimic nu se acordă până nu apeși OK.",

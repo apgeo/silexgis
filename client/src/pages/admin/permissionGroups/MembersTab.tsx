@@ -9,6 +9,7 @@ import { ApiError } from '../../../api/client.ts';
 import {
   useAddPermissionGroupMember,
   useCavingGroups,
+  usePermissionGroupEntries,
   usePermissionGroupMembers,
   useRemovePermissionGroupMember,
   useUserSearch,
@@ -16,6 +17,8 @@ import {
   type PermissionGroup,
 } from '../../../api/hooks.ts';
 import { useDebouncedValue } from '../../../hooks/useDebouncedValue.ts';
+import ReviewRightWarning from '../../../components/permissions/ReviewRightWarning.tsx';
+import { grantsUploadReview } from '../../../components/permissions/reviewRight.ts';
 
 /**
  * The trustee list: users, and caving groups whose account-holding members inherit the
@@ -27,6 +30,11 @@ export default function MembersTab({ group }: { group: PermissionGroup }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { data: members, isPending } = usePermissionGroupMembers(group.id);
+  const { data: entries } = usePermissionGroupEntries(group.id);
+  // A member of this group is handed the right to review uploads when its rules give it, and
+  // always when the group is full administration.
+  const grantsReview =
+    (group.isProtected && group.slug === 'full-administrators') || grantsUploadReview(entries);
   const addMember = useAddPermissionGroupMember(group.id);
   const removeMember = useRemovePermissionGroupMember(group.id);
   const { data: cavingGroups } = useCavingGroups();
@@ -63,6 +71,7 @@ export default function MembersTab({ group }: { group: PermissionGroup }) {
 
   return (
     <Flex vertical gap={12}>
+      {grantsReview && <ReviewRightWarning />}
       <Flex gap={8} wrap>
         <Select
           value={memberKind}

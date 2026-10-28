@@ -316,6 +316,10 @@ export default function ReviewBatchPage() {
       {!isOwn && !mayWrite && (
         <Alert type="info" showIcon style={{ marginTop: 12 }} title={t('review.readOnly')} data-testid="review-readonly" />
       )}
+      {!isOwn && (
+        // A reviewer is shown every held change whole, whatever they may read elsewhere.
+        <Alert type="warning" showIcon style={{ marginTop: 12 }} title={t('review.wholeView')} data-testid="review-whole-view" />
+      )}
 
       {canDecide && pendingLines.length > 0 && (
         <Card size="small" style={{ marginTop: 16 }} data-testid="review-controls">

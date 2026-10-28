@@ -137,6 +137,15 @@ The application refuses two things outright:
 - anything that would **leave no active Full Administrator able to sign in**,
 - a rule that would **hand out rights you do not hold yourself**.
 
+### Handing out the right to review uploads
+
+The **Upload review** right shows its holder every upload waiting for review **in full**: the exact
+positions of protected caves, and pictures of caves they could not otherwise open. A group's
+**Rules** tab says so as soon as a rule gives the right, and its **Members** tab says so for a group
+that gives it — Full Administrators included. Give it only to people trusted with all caves.
+Outside the review pages the holder still sees only what their other rights allow. See
+[Reviewing uploads](../features/upload-review.md).
+
 ### The preview
 
 **Pick a user or caving group to see the rights they would hold.** Expand a row to see which
