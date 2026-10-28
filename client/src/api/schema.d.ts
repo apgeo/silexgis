@@ -14997,6 +14997,8 @@ export interface components {
             renditions: number[];
             /** Format: uuid */
             photographerCaverId: null | string;
+            /** Format: uuid */
+            createdByDeviceUserId: null | string;
             /** Format: date-time */
             capturedAt: null | string;
             /** Format: date-time */
@@ -15152,6 +15154,10 @@ export interface components {
             sortOrder: number;
             /** Format: uuid */
             documentId: string;
+            /** Format: int32 */
+            pictureWidth: null | number;
+            /** Format: int32 */
+            pictureHeight: null | number;
             /** Format: date-time */
             revision: string;
             pins: components["schemas"]["SyncRasterPinDto"][];
@@ -15168,12 +15174,21 @@ export interface components {
             /** Format: date-time */
             revision: string;
         };
+        SyncRasterPinTombstoneDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            mapId: string;
+            /** Format: date-time */
+            deletedAt: string;
+        };
         SyncRastersPageDto: {
             /** Format: int64 */
             setRevision: number;
             settings: components["schemas"]["JsonElement"];
             maps: components["schemas"]["SyncRasterMapDto"][];
             tombstones: components["schemas"]["SyncTombstoneDto"][];
+            pinTombstones: components["schemas"]["SyncRasterPinTombstoneDto"][];
             nextCursor: null | string;
             hasMore: boolean;
         };
@@ -15190,7 +15205,8 @@ export interface components {
             /** Format: date-time */
             revision: null | string;
             code: null | string;
-            current: null | components["schemas"]["SyncFeatureDto"];
+            partial: null | boolean;
+            current: unknown;
         };
         /** @enum {unknown} */
         SyncReviewOutcome: "accepted" | "rejected" | "superseded" | "failed";
@@ -15258,6 +15274,14 @@ export interface components {
             /** Format: date-time */
             revision: string;
         };
+        SyncTripPointTombstoneDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            recordingId: string;
+            /** Format: date-time */
+            deletedAt: string;
+        };
         SyncTripRecordingDto: {
             /** Format: uuid */
             id: string;
@@ -15282,6 +15306,7 @@ export interface components {
             settings: components["schemas"]["JsonElement"];
             recordings: components["schemas"]["SyncTripRecordingDto"][];
             tombstones: components["schemas"]["SyncTombstoneDto"][];
+            pointTombstones: components["schemas"]["SyncTripPointTombstoneDto"][];
             nextCursor: null | string;
             hasMore: boolean;
         };
