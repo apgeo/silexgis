@@ -33,15 +33,17 @@ public static class SyncRasterEndpoints
 {
     /// <summary>
     /// A map changed when it was itself last written, when any of its pins was — added, moved or
-    /// removed — or when its cave was, whichever is latest. The pins' time is what tells a phone
-    /// holding the map that its list of pins moved, since the list is replaced wholesale. The
-    /// cave's time carries a map to a phone that already read past it when the cave comes into what
-    /// the set hands this reader through a change to its own row alone.
+    /// removed — when its picture's file was, or when its cave was, whichever is latest. The pins'
+    /// time is what tells a phone holding the map that its list of pins moved, since the list is
+    /// replaced wholesale. The picture's time carries a turn recorded in the browser, which changes
+    /// how every rendition relates to the frame the pins are measured in and is written on the file
+    /// alone. The cave's time carries a map to a phone that already read past it when the cave
+    /// comes into what the set hands this reader through a change to its own row alone.
     /// </summary>
     private static readonly SyncStreamOrder<SyncRasterRow> ByChange = new(
-        r => r.Map.UpdatedAt > r.PinsChangedAt
+        r => r.Map.UpdatedAt > r.ContentChangedAt
             ? (r.Map.UpdatedAt > r.CaveUpdatedAt ? r.Map.UpdatedAt : r.CaveUpdatedAt)
-            : (r.PinsChangedAt > r.CaveUpdatedAt ? r.PinsChangedAt : r.CaveUpdatedAt),
+            : (r.ContentChangedAt > r.CaveUpdatedAt ? r.ContentChangedAt : r.CaveUpdatedAt),
         r => r.Map.Id);
 
     private static readonly SyncStreamOrder<SyncRasterGone> ByGone = new(g => g.At, g => g.Id);
@@ -105,11 +107,18 @@ public static class SyncRasterEndpoints
                             where p.RasterMapId == map.Id && p.DeletedAt == null
                             join f in db.Features on p.PlaceFeatureId equals f.Id
                             select (DateTimeOffset?)f.UpdatedAt).Max()
+            let pinsChangedAt = placesAt != null && placesAt > pinsAt ? placesAt.Value : pinsAt
+            // The current picture's files: a turn recorded in the browser is written on the file,
+            // and moves neither the map nor its document.
+            let pictureAt = (from v in db.DocumentVersions
+                             where v.DocumentId == map.DocumentId && v.IsCurrent
+                             join f in db.StoredFiles on v.Id equals f.DocumentVersionId
+                             select (DateTimeOffset?)f.UpdatedAt).Max()
             select new SyncRasterRow
             {
                 Map = map,
                 CaveUpdatedAt = carried.CaveUpdatedAt,
-                PinsChangedAt = placesAt != null && placesAt > pinsAt ? placesAt.Value : pinsAt,
+                ContentChangedAt = pictureAt != null && pictureAt > pinsChangedAt ? pictureAt.Value : pinsChangedAt,
             };
         live = SyncStreamPaging.After(live, ByChange, opening.From);
         var liveRows = await SyncStreamPaging.Probe(live, ByChange, opening.Size).ToListAsync(ct);
@@ -170,14 +179,26 @@ public static class SyncRasterEndpoints
         // The pins' frame: the current picture's size as the file was read when it was stored —
         // or, for a picture stored before that was recorded, as its camera profile states it.
         // A revision may hold more than one file (a converted copy beside the original); the
-        // first stored is the original, as every listing of a photograph takes it.
+        // first stored is the original, as every listing of a photograph takes it, and it is
+        // also the file the address route draws renditions from — so the turn told here is the
+        // one on that file, and the frame it turns from is that file's own.
         var documentIds = maps.Select(m => m.DocumentId).Distinct().ToList();
         var pictures = documentIds.Count == 0
             ? []
             : (await (from version in db.DocumentVersions.AsNoTracking()
                       where version.IsCurrent && documentIds.Contains(version.DocumentId)
                       join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
-                      select new { version.DocumentId, file.Id, file.CreatedAt, file.Metadata, file.PixelWidth, file.PixelHeight })
+                      select new
+                      {
+                          version.DocumentId,
+                          file.Id,
+                          file.CreatedAt,
+                          file.Metadata,
+                          file.PixelWidth,
+                          file.PixelHeight,
+                          file.PixelOrientation,
+                          file.OrientationQuarterTurns,
+                      })
                     .ToListAsync(ct))
                 .GroupBy(f => f.DocumentId)
                 .ToDictionary(
@@ -186,21 +207,47 @@ public static class SyncRasterEndpoints
                     {
                         var original = g.OrderBy(f => f.CreatedAt).ThenBy(f => f.Id).First();
                         var stated = PhotoExif.FromMetadata(original.Metadata);
-                        return (Width: original.PixelWidth ?? stated.WidthPixels, Height: original.PixelHeight ?? stated.HeightPixels);
+                        var width = original.PixelWidth ?? stated.WidthPixels;
+                        var height = original.PixelHeight ?? stated.HeightPixels;
+                        if (width is null)
+                        {
+                            return SyncPicture.Unread;
+                        }
+
+                        // The code the renderer obeys, read at write; for an older file, the code
+                        // its camera profile states, on the same terms as its size.
+                        var (mirrored, turn) = PhotoOrientation.Upright(
+                            original.PixelOrientation ?? stated.Orientation, original.OrientationQuarterTurns);
+                        return new SyncPicture(width, height, mirrored, turn);
                     });
 
-        return [.. maps.Select(m => new SyncRasterMapDto(
-            m.Id,
-            m.CaveFeatureId,
-            m.CaveAreaFeatureId is { } area && handedAreas.Contains(area) ? area : null,
-            m.Title,
-            m.MapType,
-            m.SortOrder,
-            m.DocumentId,
-            pictures.TryGetValue(m.DocumentId, out var picture) ? picture.Width : null,
-            pictures.TryGetValue(m.DocumentId, out var sized) ? sized.Height : null,
-            m.UpdatedAt,
-            pins.GetValueOrDefault(m.Id) ?? []))];
+        return [.. maps.Select(m =>
+        {
+            var picture = pictures.GetValueOrDefault(m.DocumentId) ?? SyncPicture.Unread;
+            return new SyncRasterMapDto(
+                m.Id,
+                m.CaveFeatureId,
+                m.CaveAreaFeatureId is { } area && handedAreas.Contains(area) ? area : null,
+                m.Title,
+                m.MapType,
+                m.SortOrder,
+                m.DocumentId,
+                picture.Width,
+                picture.Height,
+                picture.Mirrored,
+                picture.Turn,
+                m.UpdatedAt,
+                pins.GetValueOrDefault(m.Id) ?? []);
+        })];
+    }
+
+    /// <summary>
+    /// A map's picture as the stream describes it: its stored size, and how its renditions are drawn
+    /// from that frame. All four are null together when the size could not be read.
+    /// </summary>
+    private sealed record SyncPicture(int? Width, int? Height, bool? Mirrored, int? Turn)
+    {
+        public static readonly SyncPicture Unread = new(null, null, null, null);
     }
 
     /// <summary>
@@ -297,8 +344,11 @@ internal sealed class SyncRasterRow
     /// <summary>When the map's cave last changed.</summary>
     public required DateTimeOffset CaveUpdatedAt { get; init; }
 
-    /// <summary>When any of the map's pins last changed, or the map's own time if it has none.</summary>
-    public required DateTimeOffset PinsChangedAt { get; init; }
+    /// <summary>
+    /// When any of the map's pins, the places they pin or its current picture's files last changed,
+    /// or the map's own time if none of them is later.
+    /// </summary>
+    public required DateTimeOffset ContentChangedAt { get; init; }
 }
 
 /// <summary>A live map the rasters stream carries for a reader, with its cave's last change.</summary>

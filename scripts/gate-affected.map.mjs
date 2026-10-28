@@ -348,6 +348,8 @@ export const groups = {
     'SyncRecordingPhotoTests',
     // A phone's raster maps and pins, and the rasters stream.
     'SyncRasterTests',
+    // How a map's renditions are drawn from its stored picture, proved against the renderer.
+    'SyncRasterPictureTurnTests',
     // An upload names its batch on every history row it writes.
     'ChangeAttributionTests',
     // An upload is taken back out of that history: created, edited and deleted rows alike.
@@ -645,9 +647,10 @@ export const crossCutting = {
     'SurveyModelTrackedTripsTests', 'SurveySegmentSubstrateTests', 'SurveySourceTests',
     'SurveyUploadPipelineTests', 'SurveyUploadPublicLinkTests', 'SurveyUploadRouteTests',
     'SurveyUploadSchemaTests', 'SurveyWallsTests', 'SyncDocumentLinkTests',
-    'SyncDocumentStreamTests', 'SyncPageSizeTests', 'SyncProtocolTests', 'SyncRasterTests',
-    'SyncRecordingPhotoTests', 'SyncReviewCurrentTests', 'SyncReviewStreamTests',
-    'SyncTripRecordingTests', 'SyncUndoTests', 'SyncUploadTests', 'TerrainProbeTests',
+    'SyncDocumentStreamTests', 'SyncPageSizeTests', 'SyncProtocolTests',
+    'SyncRasterPictureTurnTests', 'SyncRasterTests', 'SyncRecordingPhotoTests',
+    'SyncReviewCurrentTests', 'SyncReviewStreamTests', 'SyncTripRecordingTests',
+    'SyncUndoTests', 'SyncUploadTests', 'TerrainProbeTests',
     'TrackingCsvImportReplacementTests', 'TrackingCsvImportTests', 'TripAndTagTests',
     'TripCalloutSweepTests', 'TripCaveReachTests', 'TripHandoverTests', 'TripImportCommitTests',
     'TripImportPreviewResolutionTests', 'TripImportResolutionTests', 'TripListFacetTests',

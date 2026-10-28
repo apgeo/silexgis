@@ -67,6 +67,16 @@ public sealed record SyncUploadRasterPinDto(
 /// measured in. Null only when the picture's size could not be read.
 /// </param>
 /// <param name="PictureHeight">The picture's height in pixels as stored, on the same terms.</param>
+/// <param name="PictureMirrored">
+/// Whether the picture's renditions are its stored frame flipped left to right before they are
+/// turned — true for the four orientation codes that mirror. Null exactly when
+/// <paramref name="PictureWidth"/> is.
+/// </param>
+/// <param name="PictureTurn">
+/// The clockwise turn, 0, 90, 180 or 270, from the stored frame (after the flip, when there is one)
+/// to the picture's upright renditions: the orientation code's own turn plus every turn recorded in
+/// the browser. Null exactly when <paramref name="PictureWidth"/> is.
+/// </param>
 /// <param name="Revision">
 /// The map's own server revision — the value the phone sends back as its base revision when it
 /// edits the map. Its pins carry revisions of their own.
@@ -86,6 +96,8 @@ public sealed record SyncRasterMapDto(
     Guid DocumentId,
     int? PictureWidth,
     int? PictureHeight,
+    bool? PictureMirrored,
+    int? PictureTurn,
     DateTimeOffset Revision,
     IReadOnlyList<SyncRasterPinDto> Pins);
 

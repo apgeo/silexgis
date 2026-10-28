@@ -576,6 +576,41 @@ internal static class Corpus
         return image.ToByteArray(MagickFormat.Jpeg);
     }
 
+    /// <summary>
+    /// A white picture stored with an orientation code, with a black square at
+    /// <paramref name="mark"/> (its top left corner, in the stored frame) when one is asked for.
+    /// </summary>
+    /// <remarks>
+    /// A JPEG carries the code in its EXIF profile, as a camera writes it. A TIFF carries it in the
+    /// TIFF's own tag and has no EXIF profile at all, which is what a scanner writes — and the case
+    /// where a reader that looked only at EXIF would draw the picture the wrong way round. The
+    /// imaging library writes the code from the image's own orientation, so that is what is set;
+    /// the JPEG's profile is given the code too, because the writer only updates a code the
+    /// profile already holds.
+    /// </remarks>
+    public static byte[] Oriented(
+        MagickFormat format, int code, uint width, uint height, (int X, int Y, int Size)? mark = null, string? comment = null)
+    {
+        using var image = new MagickImage(MagickColors.White, width, height);
+        if (mark is { } square)
+        {
+            using var black = new MagickImage(MagickColors.Black, (uint)square.Size, (uint)square.Size);
+            image.Composite(black, square.X, square.Y, CompositeOperator.Over);
+        }
+
+        if (format == MagickFormat.Jpeg)
+        {
+            var exif = new ExifProfile();
+            exif.SetValue(ExifTag.Software, "SilexCam 2.1");
+            exif.SetValue(ExifTag.Orientation, (ushort)code);
+            image.SetProfile(exif);
+        }
+
+        image.Orientation = (OrientationType)code;
+        image.Comment = comment ?? Guid.NewGuid().ToString("N");
+        return image.ToByteArray(format);
+    }
+
     public static byte[] GeotaggedJpeg(double lat, double lon)
     {
         using var image = new MagickImage(MagickColors.ForestGreen, 64, 64);
