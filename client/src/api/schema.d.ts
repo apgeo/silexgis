@@ -15217,6 +15217,9 @@ export interface components {
             pictureWidth: null | number;
             /** Format: int32 */
             pictureHeight: null | number;
+            pictureMirrored: null | boolean;
+            /** Format: int32 */
+            pictureTurn: null | number;
             /** Format: date-time */
             revision: string;
             pins: components["schemas"]["SyncRasterPinDto"][];
