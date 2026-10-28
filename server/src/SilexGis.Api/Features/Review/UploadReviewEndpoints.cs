@@ -184,7 +184,8 @@ public static class UploadReviewEndpoints
             .OrderBy(i => i.Id)
             .ToListAsync(ct);
         var summary = (await SummariesAsync(db, [batch], ctx, ct))[0];
-        return TypedResults.Ok(new HeldBatchDetailDto(summary, await LinesAsync(db, handlers, batch.Source, lines, ctx, ct)));
+        var (shown, features) = await LinesAsync(db, handlers, batch.Source, lines, ctx, ct);
+        return TypedResults.Ok(new HeldBatchDetailDto(summary, shown, features));
     }
 
     private static Task<Results<Ok<ReviewDecisionResultDto>, UnauthorizedHttpResult, ProblemHttpResult>> AcceptBatchAsync(
@@ -497,7 +498,7 @@ public static class UploadReviewEndpoints
             .OrderBy(b => b.HeldAt)
             .ToListAsync(ct);
         return new ReviewDecisionResultDto(
-            await LinesAsync(db, handlers, source, decided.Decided, ctx, ct),
+            (await LinesAsync(db, handlers, source, decided.Decided, ctx, ct)).Lines,
             await SummariesAsync(db, batches, ctx, ct));
     }
 
@@ -538,7 +539,8 @@ public static class UploadReviewEndpoints
         })];
     }
 
-    private static async Task<IReadOnlyList<HeldLineDto>> LinesAsync(
+    /// <summary>The lines as the viewer may be shown them, and the features the shown ones name.</summary>
+    private static async Task<(IReadOnlyList<HeldLineDto> Lines, IReadOnlyList<HeldFeatureDto> Features)> LinesAsync(
         SilexGisDbContext db,
         IEnumerable<IHeldBatchHandler> handlers,
         ImportSource source,
@@ -574,7 +576,14 @@ public static class UploadReviewEndpoints
             : await db.ImportBatchItems.AsNoTracking()
                 .Where(i => dependencyIds.Contains(i.Id))
                 .ToDictionaryAsync(i => i.Id, i => i.ReviewId, ct);
-        return [.. lines.OrderBy(l => l.Id).Select(l =>
+        var features = shown.Values
+            .Where(v => v.Proposal is not null)
+            .SelectMany(v => v.Features ?? [])
+            .DistinctBy(f => f.Id)
+            .OrderBy(f => f.Id)
+            .Select(f => new HeldFeatureDto(f.Id, f.Name, f.Kind))
+            .ToList();
+        return ([.. lines.OrderBy(l => l.Id).Select(l =>
         {
             var view = shown.GetValueOrDefault(l.Id);
             var visible = view?.Proposal is not null;
@@ -597,7 +606,7 @@ public static class UploadReviewEndpoints
                 visible ? JsonDocument.Parse(view!.Proposal!).RootElement.Clone() : null,
                 visible && view!.Fields is { } compared ? [.. compared.Select(FieldOf)] : null,
                 visible && l.HeldUploadSessionId is { } held && pictures.Contains(held));
-        })];
+        })], features);
     }
 
     private static HeldFieldDto FieldOf(HeldFieldComparison field) =>

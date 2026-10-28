@@ -111,7 +111,8 @@ internal interface ISyncUploadSection
     /// <summary>
     /// The row a kept edit changes, field by field as it stands now beside what the edit would
     /// write, for the fields <see cref="FieldsOf"/> offers; null when this section draws no such
-    /// comparison. Called only for a line the viewer may be shown.
+    /// comparison. Called only for a line the viewer may be shown, with the proposal as they are
+    /// shown it.
     /// </summary>
     Task<IReadOnlyList<HeldFieldComparison>?> CompareAsync(SyncHeldComparing comparing, string proposal, CancellationToken ct);
 }
@@ -126,6 +127,12 @@ internal sealed class SyncHeldComparing
     /// cave a recording was in before, the place a scan was at — is left out of the comparison.
     /// </summary>
     public required Func<IReadOnlyCollection<Guid>, CancellationToken, Task<IReadOnlySet<Guid>>> ReadableFeatures { get; init; }
+
+    /// <summary>
+    /// The line's position is not shown to the viewer: neither the one it proposes nor the one the
+    /// row has now is compared, and the proposal handed over has its position members removed.
+    /// </summary>
+    public bool PositionWithheld { get; init; }
 }
 
 /// <summary>The kinds of row a held proposal can change or name.</summary>

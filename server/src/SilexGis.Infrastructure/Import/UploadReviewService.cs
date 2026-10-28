@@ -95,16 +95,31 @@ public interface IHeldBatchHandler
 /// means writing over the row as it is now.
 /// </param>
 /// <param name="Fields">
-/// For an edit that can be accepted field by field and whose comparison the kind's own code draws:
-/// each such field, as the row holds it now beside what the line proposes. Null otherwise — for a
-/// create, a removal, a kind accepted only whole, and a feature row, whose current state the
-/// screen reads through the feature's own route and its position rule.
+/// For an edit that can be accepted field by field: each such field, as the row holds it now beside
+/// what the line proposes, drawn through the same view of the rows as the proposal. Null otherwise
+/// — for a create, a removal, and a kind accepted only whole.
 /// </param>
-public sealed record HeldLineView(string? Proposal, bool ChangedSince, IReadOnlyList<HeldFieldComparison>? Fields = null);
+/// <param name="Features">
+/// The existing features the line names — the row it changes or removes, what it hangs on, a
+/// comparison's feature now and proposed — by name and kind, so a screen can title them without
+/// reading them by the viewer's ordinary rights. Only features the viewer may be shown; none for a
+/// line that is not shown.
+/// </param>
+public sealed record HeldLineView(
+    string? Proposal,
+    bool ChangedSince,
+    IReadOnlyList<HeldFieldComparison>? Fields = null,
+    IReadOnlyList<HeldFeatureName>? Features = null);
+
+/// <summary>An existing feature a held line names, as the line's viewer may be shown it.</summary>
+public sealed record HeldFeatureName(Guid Id, string? Name, FeatureKind Kind);
 
 /// <summary>One field of a held edit: what the row holds now, and what the line would write.</summary>
 /// <param name="Current">
 /// The value now, as plain JSON; null when the row holds none, or when <paramref name="CurrentWithheld"/>.
+/// </param>
+/// <param name="Proposed">
+/// What the line would write; null when it writes none, and for a position the viewer may not place.
 /// </param>
 /// <param name="Differs">
 /// Whether accepting the field changes the row. True whenever the current value is withheld, so
@@ -112,7 +127,7 @@ public sealed record HeldLineView(string? Proposal, bool ChangedSince, IReadOnly
 /// </param>
 /// <param name="CurrentWithheld">
 /// The current value names a row the viewer may not read — a recording's earlier cave, a scan's
-/// earlier place — and is left out.
+/// earlier place — or is a position the viewer may not place, and is left out.
 /// </param>
 public sealed record HeldFieldComparison(
     string Field, JsonNode? Current, JsonNode? Proposed, bool Differs, bool CurrentWithheld = false);

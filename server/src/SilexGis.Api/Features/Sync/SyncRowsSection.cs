@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
@@ -137,6 +139,96 @@ internal sealed class SyncRowsSection(
                 },
                 WritesPosition = proposal.WritesPosition && fields.Contains(SyncHeldFields.Position),
             });
+
+    /// <summary>
+    /// An edit beside the row as it stands, field by field: its name, its description, its
+    /// property document, and its position as one — the point, the altitude and, for an entrance,
+    /// the position quality and the main-entrance flag, each as the write would leave it. A field
+    /// the phone left out is one the write leaves alone, so it is never shown as a change.
+    /// </summary>
+    /// <remarks>
+    /// A cave's position is not compared: its point is its main entrance's, and an edit of the cave
+    /// writes none. A position the viewer may not place is stated as withheld on both sides, and an
+    /// edit that carries no point has none to compare.
+    /// </remarks>
+    protected override async Task<IReadOnlyList<HeldFieldComparison>?> CompareAsync(
+        SyncHeldComparing comparing, SyncRowProposal proposal, CancellationToken ct)
+    {
+        if (proposal.Act != SyncRowAct.Update)
+        {
+            return null;
+        }
+
+        var db = comparing.Db;
+        var row = proposal.Row;
+        var now = await db.Features.AsNoTracking().IgnoreQueryFilters().FirstOrDefaultAsync(f => f.Id == row.Id, ct);
+        if (now is null)
+        {
+            return null;
+        }
+
+        var compared = new List<HeldFieldComparison>(EditFields.Length)
+        {
+            Partial(SyncHeldFields.Name, now.Name, row.Name),
+            Partial(SyncHeldFields.Description, now.Description, row.Description),
+            Partial(SyncHeldFields.Properties, JsonNode.Parse(now.Properties), row.Properties),
+        };
+        if (now.Kind == FeatureKind.Cave)
+        {
+            return compared;
+        }
+
+        if (comparing.PositionWithheld)
+        {
+            compared.Add(new HeldFieldComparison(SyncHeldFields.Position, null, null, Differs: true, CurrentWithheld: true));
+            return compared;
+        }
+
+        if (row.Geometry?.ToGeometryOrNull() is not { } geom)
+        {
+            return compared;
+        }
+
+        if (now.Kind == FeatureKind.CaveEntrance
+            && await db.CaveEntrances.AsNoTracking().IgnoreQueryFilters().FirstOrDefaultAsync(e => e.Id == now.Id, ct) is { } entrance)
+        {
+            // What the write leaves: a main entrance stays main when the phone does not say so,
+            // and a position quality not sent is written as unknown.
+            compared.Add(SyncHeldComparisons.Of(
+                SyncHeldFields.Position,
+                new { geometry = Flat(now.Geom), altitude = (double?)entrance.Altitude, positionQuality = entrance.PositionQuality, isMain = entrance.IsMain },
+                new
+                {
+                    geometry = Flat(geom),
+                    altitude = (double?)AltitudeOf(row, geom),
+                    positionQuality = row.PositionQuality ?? PositionQuality.Unknown,
+                    isMain = row.IsMain || entrance.IsMain,
+                }));
+            return compared;
+        }
+
+        compared.Add(SyncHeldComparisons.Of(
+            SyncHeldFields.Position,
+            new { geometry = Flat(now.Geom), altitude = now.Geom is Point stored ? ZOf(stored) : null },
+            new { geometry = Flat(geom), altitude = geom is Point ? (double?)AltitudeOf(row, geom) : null }));
+        return compared;
+    }
+
+    /// <summary>A field an upload may leave out: one it does not send, the write leaves as it stands.</summary>
+    private static HeldFieldComparison Partial(string field, object? current, object? proposed) =>
+        proposed is null
+            ? new HeldFieldComparison(field, JsonSerializer.SerializeToNode(current, SyncUploadJson.Options), null, Differs: false)
+            : SyncHeldComparisons.Of(field, current, proposed);
+
+    /// <summary>A point without its third ordinate, which the comparison states as the altitude.</summary>
+    private static GeoJsonGeometry? Flat(Geometry? geometry) => geometry switch
+    {
+        null => null,
+        Point point => GeoJsonGeometry.From(new Point(point.X, point.Y) { SRID = 4326 }),
+        _ => GeoJsonGeometry.From(geometry),
+    };
+
+    private static double? ZOf(Point point) => double.IsNaN(point.Coordinate.Z) ? null : point.Coordinate.Z;
 
     protected override IReadOnlyList<SyncUploadRowDto>? ItemsOf(SyncUploadRequest request) => request.Rows;
 

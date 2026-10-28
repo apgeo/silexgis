@@ -49,9 +49,9 @@ public sealed record HeldBatchDto(
 /// viewer may not place, and absent when the line changes or names a row the viewer may not read.
 /// </param>
 /// <param name="Fields">
-/// For a waiting edit of a photo or document, a recording, a scan or a raster map: each field it
-/// may be accepted by, the row now beside the proposal. Absent for every other line — a feature
-/// row's current state is read through the feature's own route.
+/// For a waiting edit of a feature row, a photo or document, a recording, a scan or a raster map:
+/// each field it may be accepted by, the row now beside the proposal, through the same view as the
+/// proposal — whole for a reviewer, the current position included. Absent for every other line.
 /// </param>
 /// <param name="HasPreview">
 /// The line keeps a picture on the server — a photo or a raster map's image, still waiting or
@@ -86,8 +86,17 @@ public sealed record HeldLineDto(
 public sealed record HeldFieldDto(
     string Field, JsonElement? Current, JsonElement? Proposed, bool Differs, bool CurrentWithheld);
 
+/// <summary>An existing feature the lines of a held batch name, by its name and kind.</summary>
+public sealed record HeldFeatureDto(Guid Id, string? Name, FeatureKind Kind);
+
 /// <summary>A held batch with its lines.</summary>
-public sealed record HeldBatchDetailDto(HeldBatchDto Batch, IReadOnlyList<HeldLineDto> Lines);
+/// <param name="Features">
+/// The existing features its shown lines name — the rows they change or remove, the caves and
+/// places they hang on, a comparison's feature now and proposed — so the screen titles them without
+/// reading them by the viewer's ordinary rights: every one for a reviewer, and for anybody else
+/// only those they may read.
+/// </param>
+public sealed record HeldBatchDetailDto(HeldBatchDto Batch, IReadOnlyList<HeldLineDto> Lines, IReadOnlyList<HeldFeatureDto> Features);
 
 /// <summary>What a decision did: the lines it decided and the batches it touched.</summary>
 public sealed record ReviewDecisionResultDto(IReadOnlyList<HeldLineDto> Decided, IReadOnlyList<HeldBatchDto> Batches);

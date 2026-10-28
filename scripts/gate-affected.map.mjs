@@ -368,6 +368,8 @@ export const groups = {
     'UploadReviewSectionsTests',
     // A held photo or raster map drawn for a reviewer; part of a held edit of each kind accepted.
     'UploadReviewPreviewTests', 'UploadReviewFieldsTests',
+    // The now side of a held feature-row edit and the names of what held lines name, as each viewer is shown them.
+    'UploadReviewCurrentStateTests',
     // What the phone is told afterwards, the messages review sends, and how long held bytes stay.
     'SyncReviewStreamTests',
     // The server's row for a turned-down edit of every section, and its absence when withheld.
@@ -611,8 +613,9 @@ export const crossCutting = {
     'TripRosterTimesFromTrackingTests', 'TripStatisticsTests', 'TripTrackImportTests',
     'TripTrackingCaveNoteTests', 'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
     'TripTrackingTests', 'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
-    'UploadReviewDecisionTests', 'UserAdministrationLastAdministratorTests',
-    'UserAdministrationTests', 'UserTwoFactorResetTests',
+    'UploadReviewCurrentStateTests', 'UploadReviewDecisionTests',
+    'UserAdministrationLastAdministratorTests', 'UserAdministrationTests',
+    'UserTwoFactorResetTests',
   ],
   locationClasses: [
     'AccessAnchorCleanupTests', 'AccessHistoryTests', 'AclAndCavingGroupTests',
@@ -662,8 +665,8 @@ export const crossCutting = {
     'TripRoleLinkUnitOfWorkTests', 'TripSoftDeleteTests', 'TripStatisticsTests',
     'TripStatsTests', 'TripTrackingCaveNoteTests', 'TripTrackingPicturesTests',
     'TripTrackingPublicationTests', 'TripTrackingStationNamesTests', 'TripTrackingStretchTests',
-    'TripTrackingTests', 'UploadReviewDecisionTests', 'UploadReviewSectionsTests',
-    'WorkAreaTests', 'WorkingSridBehaviourTests',
+    'TripTrackingTests', 'UploadReviewCurrentStateTests', 'UploadReviewDecisionTests',
+    'UploadReviewSectionsTests', 'WorkAreaTests', 'WorkingSridBehaviourTests',
   ],
 };
 

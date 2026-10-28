@@ -51,6 +51,9 @@ internal static class SyncHeldFields
     public const string MapType = "mapType";
     public const string SortOrder = "sortOrder";
     public const string CaveArea = "caveArea";
+
+    /// <summary>The fields whose value is a feature, compared by its id.</summary>
+    public static readonly IReadOnlySet<string> FeatureValued = new HashSet<string>(StringComparer.Ordinal) { Cave, Place, CaveArea };
 }
 
 /// <summary>How a section states one field of a held edit beside the row as it stands.</summary>
@@ -65,8 +68,8 @@ internal static class SyncHeldComparisons
     }
 
     /// <summary>
-    /// A field whose value is a feature: shown by id, for the screen to name through the feature's
-    /// own route. A current one the viewer may not read is left out.
+    /// A field whose value is a feature: shown by id, named among the features the line names. A
+    /// current one the viewer may not read is left out.
     /// </summary>
     public static HeldFieldComparison Feature(string field, Guid? current, Guid? proposed, IReadOnlySet<Guid> readable) =>
         current is { } id && !readable.Contains(id)
@@ -298,7 +301,7 @@ internal sealed class SyncHeldBatchHandler(
         }
 
         var lens = await LensAsync([.. existing.Keys], viewer, ct);
-        var comparing = new SyncHeldComparing { Db = db, ReadableFeatures = lens.ReadableFeatures };
+        var named = new Dictionary<long, HashSet<Guid>>();
 
         foreach (var line in lines)
         {
@@ -334,14 +337,87 @@ internal sealed class SyncHeldBatchHandler(
                     || reach.Rows.Any(t => t.Kind == SyncHeldTargetKind.Feature && lens.Withheld.Contains(t.Id)));
 
             // A waiting edit the reviewer can take in part is drawn field by field, by its section,
-            // only now that the viewer may be shown the row it changes and everything it names.
+            // only now that the viewer may be shown the row it changes and everything it names, and
+            // through the same lens: the row's values now as this viewer may be shown them, and the
+            // position on neither side when the proposal's is not shown.
+            var proposal = hidePosition ? WithoutPosition(line.Proposal!) : line.Proposal!;
+            var comparing = new SyncHeldComparing
+            {
+                Db = db,
+                ReadableFeatures = lens.ReadableFeatures,
+                PositionWithheld = hidePosition,
+            };
             var compared = line.ReviewDecision == ImportReviewDecision.Pending
                 && sections.TryGetValue(line.ProposalSection!, out var section)
                 && (await FieldsOfAsync(line, ct)).Count > 0
-                    ? await section.CompareAsync(comparing, line.Proposal!, ct)
+                    ? await section.CompareAsync(comparing, proposal, ct)
                     : null;
-            shown[line.Id] = new HeldLineView(
-                hidePosition ? WithoutPosition(line.Proposal!) : line.Proposal, changedSince, compared);
+            shown[line.Id] = new HeldLineView(proposal, changedSince, compared);
+            named[line.Id] = NamedFeatures(fact, existing, compared);
+        }
+
+        return await WithNamesAsync(shown, named, lens, ct);
+    }
+
+    /// <summary>
+    /// The existing features a shown line names: the row it changes and the rows it hangs on, and
+    /// the features a comparison has now or proposes.
+    /// </summary>
+    private static HashSet<Guid> NamedFeatures(
+        SyncHeldFacts fact,
+        Dictionary<SyncHeldTarget, DateTimeOffset> existing,
+        IReadOnlyList<HeldFieldComparison>? compared)
+    {
+        var ids = TargetsOf(fact)
+            .Where(t => t.Kind == SyncHeldTargetKind.Feature && existing.ContainsKey(t))
+            .Select(t => t.Id)
+            .ToHashSet();
+        foreach (var field in compared ?? [])
+        {
+            if (SyncHeldFields.FeatureValued.Contains(field.Field))
+            {
+                foreach (var value in new[] { field.Current, field.Proposed })
+                {
+                    if (value is JsonValue id && id.TryGetValue<string>(out var text) && Guid.TryParse(text, out var feature))
+                    {
+                        ids.Add(feature);
+                    }
+                }
+            }
+        }
+
+        return ids;
+    }
+
+    /// <summary>
+    /// Each shown line with the names of the features it names, as far as the lens lets the viewer
+    /// read them: every one for a reviewer, and for anybody else only the features they may read —
+    /// a comparison's earlier cave they may not read is left unnamed, as its value is left out.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<long, HeldLineView>> WithNamesAsync(
+        Dictionary<long, HeldLineView> shown,
+        Dictionary<long, HashSet<Guid>> named,
+        HeldLens lens,
+        CancellationToken ct)
+    {
+        var asked = named.Values.SelectMany(ids => ids).Distinct().ToList();
+        if (asked.Count == 0)
+        {
+            return shown;
+        }
+
+        var readable = (await lens.ReadableFeatures(asked, ct)).ToList();
+        var names = (await db.Features.AsNoTracking().IgnoreQueryFilters()
+                .Where(f => readable.Contains(f.Id))
+                .Select(f => new { f.Id, f.Name, f.Kind })
+                .ToListAsync(ct))
+            .ToDictionary(f => f.Id, f => new HeldFeatureName(f.Id, f.Name, f.Kind));
+        foreach (var (lineId, ids) in named)
+        {
+            shown[lineId] = shown[lineId] with
+            {
+                Features = [.. ids.Where(names.ContainsKey).Select(id => names[id]).OrderBy(n => n.Id)],
+            };
         }
 
         return shown;
