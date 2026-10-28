@@ -49,4 +49,52 @@ public static class PhotoOrientation
     /// <summary>The dimensions a rendering of this picture will actually have.</summary>
     public static (int Width, int Height) Apply(int width, int height, int quarterTurns) =>
         SwapsAxes(quarterTurns) ? (height, width) : (width, height);
+
+    /// <summary>
+    /// How a rendering is drawn from the picture as stored: flipped left to right first when
+    /// <c>Mirrored</c>, then turned clockwise by <c>TurnDegrees</c> (0, 90, 180 or 270).
+    /// </summary>
+    /// <param name="orientationTag">
+    /// The orientation code the renderer obeys, 1–8 as EXIF and TIFF number them. Null, or a value
+    /// outside that range, is a picture drawn as stored — which is what the renderer does with a
+    /// tag it cannot read.
+    /// </param>
+    /// <param name="quarterTurns">The turn somebody recorded, applied after the tag.</param>
+    /// <remarks>
+    /// <para>
+    /// Every one of the eight codes is one of the four turns, with or without a flip first. The
+    /// four that mirror (2, 4, 5, 7) are the ones a camera never writes and a scanner or an editor
+    /// sometimes does; a reader who assumed renderings never mirror would put every pin of such a
+    /// picture on the wrong side of it. Writing each as "flip, then turn" rather than "turn, then
+    /// flip" is a choice, and the only one that matters is that it is fixed: it is what lets a
+    /// recorded turn simply add to the tag's own, because it is applied after both.
+    /// </para>
+    /// <para>
+    /// Code 5 is the picture reflected in its main diagonal — flipped and turned three quarters —
+    /// and code 7 in its other diagonal, flipped and turned one quarter.
+    /// </para>
+    /// </remarks>
+    public static (bool Mirrored, int TurnDegrees) Upright(int? orientationTag, int quarterTurns)
+    {
+        var (mirrored, tagTurns) = orientationTag switch
+        {
+            2 => (true, 0),
+            3 => (false, 2),
+            4 => (true, 2),
+            5 => (true, 3),
+            6 => (false, 1),
+            7 => (true, 1),
+            8 => (false, 3),
+            _ => (false, 0),
+        };
+
+        return (mirrored, Degrees(tagTurns + quarterTurns));
+    }
+
+    /// <summary>
+    /// The dimensions a rendering of this picture will actually have, the orientation code and the
+    /// recorded turn both applied.
+    /// </summary>
+    public static (int Width, int Height) UprightSize(int width, int height, int? orientationTag, int quarterTurns) =>
+        Apply(width, height, Upright(orientationTag, quarterTurns).TurnDegrees / 90);
 }
