@@ -176,7 +176,7 @@ public sealed class UploadReviewFieldsTests : IAsyncLifetime, IClassFixture<Post
     }
 
     [Fact]
-    public async Task A_scan_edit_accepted_by_notes_and_time_keeps_its_place_and_an_earlier_place_the_viewer_may_not_read_is_left_out()
+    public async Task A_scan_edit_accepted_by_notes_and_time_keeps_its_place_and_a_reviewer_is_shown_an_earlier_place_they_may_not_read()
     {
         var caveId = Guid.CreateVersion7();
         var first = Guid.CreateVersion7();
@@ -202,24 +202,28 @@ public sealed class UploadReviewFieldsTests : IAsyncLifetime, IClassFixture<Post
         Strings(line.GetProperty("acceptableFields")).ShouldBe(["notes", "place", "time"]);
         FieldsOf(line)["place"].GetProperty("current").GetGuid().ShouldBe(first);
 
-        // A reader of the queue who may read the trip and the new place but not the earlier one is
-        // shown the comparison without it.
+        // A reviewer who may read the trip and the new place but not the earlier one is shown the
+        // comparison whole all the same — what they judge includes where the scan was — and still
+        // may not read that place anywhere else.
         var readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"urf-rd-{marker}@t.local");
         using var reader = await AuthHelper.BearerClientAsync(factory, $"urf-rd-{marker}@t.local");
         await GrantAsync(readerId, AccessEffect.Allow, AccessDomain.UploadReview);
         await GrantAsync(readerId, AccessEffect.Allow, AccessDomain.Features);
         await GrantAsync(readerId, AccessEffect.Allow, AccessDomain.TripLogs);
         await GrantAsync(readerId, AccessEffect.Deny, AccessDomain.Features, first);
-        var blindRaw = await reader.GetStringAsync($"/api/v1/review/batches/{held.GetProperty("importBatchId").GetGuid()}");
-        var blind = JsonDocument.Parse(blindRaw).RootElement.GetProperty("lines").EnumerateArray()
+        (await reader.GetAsync($"/api/v1/features/{first}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/v1/features/{second}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var seenRaw = await reader.GetStringAsync($"/api/v1/review/batches/{held.GetProperty("importBatchId").GetGuid()}");
+        var seen = JsonDocument.Parse(seenRaw).RootElement.GetProperty("lines").EnumerateArray()
             .Single(l => l.GetProperty("reviewId").GetGuid() == reviewId);
-        blind.GetProperty("proposal").ValueKind.ShouldBe(JsonValueKind.Object);
-        var place = FieldsOf(blind)["place"];
-        place.GetProperty("currentWithheld").GetBoolean().ShouldBeTrue();
+        seen.GetProperty("proposal").ValueKind.ShouldBe(JsonValueKind.Object);
+        var place = FieldsOf(seen)["place"];
+        place.GetProperty("currentWithheld").GetBoolean().ShouldBeFalse();
         place.GetProperty("differs").GetBoolean().ShouldBeTrue();
-        (place.TryGetProperty("current", out var current) ? current.ValueKind : JsonValueKind.Null).ShouldBe(JsonValueKind.Null);
+        place.GetProperty("current").GetGuid().ShouldBe(first);
         place.GetProperty("proposed").GetGuid().ShouldBe(second);
-        blindRaw.ShouldNotContain(first.ToString());
+        (await reader.GetAsync($"/api/v1/features/{first}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         await AcceptAsync(reviewId, "notes", "time");
         await using var scope = factory.Services.CreateAsyncScope();

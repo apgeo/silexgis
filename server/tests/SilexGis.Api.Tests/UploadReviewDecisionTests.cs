@@ -347,10 +347,11 @@ public sealed class UploadReviewDecisionTests : IAsyncLifetime, IDisposable, ICl
     }
 
     [Fact]
-    public async Task A_held_edit_of_a_row_the_viewer_may_not_place_is_shown_without_its_position()
+    public async Task A_reviewer_sees_a_held_edit_of_a_protected_row_at_its_exact_position_and_outside_review_still_does_not()
     {
-        // A protected entrance the uploader edits with its true point. The reviewer (a full
-        // administrator) sees the point; a reader of the queue without exact view does not.
+        // A protected entrance the uploader edits with its true point. A reviewer who may read the
+        // row but not place it is shown the point in review — they have to see what they judge —
+        // and reading the same row anywhere else is still snapped.
         var caveId = Guid.CreateVersion7();
         var entranceId = Guid.CreateVersion7();
         var created = await UploadAsync(Held: false, Cave(caveId, "Guarded"), Entrance(entranceId, caveId));
@@ -370,28 +371,38 @@ public sealed class UploadReviewDecisionTests : IAsyncLifetime, IDisposable, ICl
         var held = await UploadAsync(Held: true, moved);
         var batchId = held.GetProperty("importBatchId").GetGuid();
 
-        // The reader may read the row — only placing it is withheld; a reader who may not read
-        // it at all is the next test's.
         var readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"rev-pos-{marker}@t.local");
         using var reader = await AuthHelper.BearerClientAsync(factory, $"rev-pos-{marker}@t.local");
         await GrantAsync(readerId, AccessEffect.Allow, AccessDomain.UploadReview, AccessAction.Read);
         await GrantAsync(readerId, AccessEffect.Allow, AccessDomain.Features, AccessAction.Read);
 
-        var exact = await reviewer.GetStringAsync($"/api/v1/review/batches/{batchId}");
-        exact.ShouldContain("22.6111");
-        var blind = await reader.GetStringAsync($"/api/v1/review/batches/{batchId}");
-        blind.ShouldNotContain("22.6111");
-        blind.ShouldNotContain("45.6222");
-        JsonDocument.Parse(blind).RootElement.GetProperty("lines")[0].GetProperty("proposal")
-            .GetProperty("row").GetProperty("id").GetGuid().ShouldBe(entranceId);
+        // Fixture proof: outside review the reader is shown the entrance snapped, not where it is.
+        await ShouldBeSnappedAsync(reader, entranceId, 22.51);
+
+        var seen = await reader.GetStringAsync($"/api/v1/review/batches/{batchId}");
+        seen.ShouldContain("22.6111");
+        seen.ShouldContain("45.6222");
+        var row = JsonDocument.Parse(seen).RootElement.GetProperty("lines")[0].GetProperty("proposal").GetProperty("row");
+        row.GetProperty("id").GetGuid().ShouldBe(entranceId);
+        row.GetProperty("altitude").GetDouble().ShouldBe(640.0);
+
+        // Seeing it in review lifts nothing anywhere else.
+        await ShouldBeSnappedAsync(reader, entranceId, 22.51);
+
+        // An account without the review right is still refused the queue and is not shown the batch.
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"rev-pos-no-{marker}@t.local");
+        using var outsider = await AuthHelper.BearerClientAsync(factory, $"rev-pos-no-{marker}@t.local");
+        (await outsider.GetAsync("/api/v1/review/batches")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await outsider.GetAsync($"/api/v1/review/batches/{batchId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
-    public async Task A_held_point_under_a_held_cave_in_a_protected_area_is_shown_only_to_who_may_place_it()
+    public async Task A_held_point_under_a_held_cave_in_a_protected_area_is_shown_whole_to_a_reviewer_who_may_not_place_it()
     {
         // A protected area the uploader made earlier; then, held, a new cave under it and an
         // entrance under that cave with its true point. The entrance names only the held cave, so
-        // only following the chain up to the area tells whether its point may be shown.
+        // only following the chain up to the area tells whether its point may be shown; a
+        // reviewer is shown it whole wherever the chain leads.
         var areaId = Guid.CreateVersion7();
         await UploadAsync(Held: false, Area(areaId));
         await ProtectAsync(areaId);
@@ -403,27 +414,28 @@ public sealed class UploadReviewDecisionTests : IAsyncLifetime, IDisposable, ICl
             Held: true, Cave(caveId, "Under the guarded area", areaId), Entrance(entranceId, caveId, at: [22.7333, 45.7444]));
         var batchId = held.GetProperty("importBatchId").GetGuid();
 
-        // A reader of the queue who may read the area but not place anything inside it.
+        // A reviewer who may read the area but not place anything inside it.
         var readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"rev-chain-{marker}@t.local");
         using var reader = await AuthHelper.BearerClientAsync(factory, $"rev-chain-{marker}@t.local");
         await GrantAsync(readerId, AccessEffect.Allow, AccessDomain.UploadReview, AccessAction.Read);
         await GrantAsync(readerId, AccessEffect.Allow, AccessDomain.Features, AccessAction.Read);
 
-        var exact = await reviewer.GetStringAsync($"/api/v1/review/batches/{batchId}");
-        exact.ShouldContain("22.7333");
-        var blind = await reader.GetStringAsync($"/api/v1/review/batches/{batchId}");
-        blind.ShouldNotContain("22.7333");
-        blind.ShouldNotContain("45.7444");
-        var entrance = JsonDocument.Parse(blind).RootElement.GetProperty("lines").EnumerateArray()
+        var seen = await reader.GetStringAsync($"/api/v1/review/batches/{batchId}");
+        seen.ShouldContain("22.7333");
+        seen.ShouldContain("45.7444");
+        var entrance = JsonDocument.Parse(seen).RootElement.GetProperty("lines").EnumerateArray()
             .Single(l => l.GetProperty("rowId").GetGuid() == entranceId);
-        entrance.GetProperty("proposal").GetProperty("row").TryGetProperty("geometry", out _).ShouldBeFalse();
+        entrance.GetProperty("proposal").GetProperty("row").TryGetProperty("geometry", out _).ShouldBeTrue();
+
+        // Outside review the same account is shown the area snapped.
+        await ShouldBeSnappedAsync(reader, areaId, 22.70);
     }
 
     [Fact]
-    public async Task A_held_edit_of_a_row_the_viewer_may_not_read_shows_nothing_of_the_row()
+    public async Task A_reviewer_sees_a_held_edit_of_a_row_they_may_not_read_and_still_may_not_read_it_outside_review()
     {
         // An unprotected entrance kept private to its owner. Nothing about protection hides its
-        // point; only that the reader may not read the row at all.
+        // point; only that the reviewer may not read the row at all.
         var caveId = Guid.CreateVersion7();
         var entranceId = Guid.CreateVersion7();
         var created = await UploadAsync(Held: false, Cave(caveId, "Private only"), Entrance(entranceId, caveId));
@@ -437,18 +449,33 @@ public sealed class UploadReviewDecisionTests : IAsyncLifetime, IDisposable, ICl
         using var reader = await AuthHelper.BearerClientAsync(factory, $"rev-unread-{marker}@t.local");
         await GrantAsync(readerId, AccessEffect.Allow, AccessDomain.UploadReview, AccessAction.Read);
 
-        var exact = await reviewer.GetStringAsync($"/api/v1/review/batches/{batchId}");
-        exact.ShouldContain("22.8111");
-        exact.ShouldContain("Intrare ascunsa privata");
+        // Fixture proof: the reviewer may not read the entrance or its cave anywhere else.
+        (await reader.GetAsync($"/api/v1/features/{entranceId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/v1/features/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
-        var blind = await reader.GetStringAsync($"/api/v1/review/batches/{batchId}");
-        blind.ShouldNotContain("22.8111");
-        blind.ShouldNotContain("Intrare ascunsa privata");
-        blind.ShouldNotContain(entranceId.ToString());
-        blind.ShouldNotContain(caveId.ToString());
-        var line = JsonDocument.Parse(blind).RootElement.GetProperty("lines")[0];
-        line.GetProperty("proposal").ValueKind.ShouldBe(JsonValueKind.Null);
-        line.GetProperty("decision").GetString().ShouldBe("pending");
+        var seen = await reader.GetStringAsync($"/api/v1/review/batches/{batchId}");
+        seen.ShouldContain("22.8111");
+        seen.ShouldContain("Intrare ascunsa privata");
+        var line = JsonDocument.Parse(seen).RootElement.GetProperty("lines")[0];
+        line.GetProperty("rowId").GetGuid().ShouldBe(entranceId);
+        line.GetProperty("proposal").GetProperty("row").GetProperty("parentId").GetGuid().ShouldBe(caveId);
+
+        (await reader.GetAsync($"/api/v1/features/{entranceId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// Read through the shared feature route, the row is placed approximately and not at
+    /// <paramref name="trueLongitude"/>.
+    /// </summary>
+    private static async Task ShouldBeSnappedAsync(HttpClient client, Guid featureId, double trueLongitude)
+    {
+        var envelope = await client.GetFromJsonAsync<JsonElement>($"/api/v1/features/{featureId}");
+        var feature = envelope.GetProperty("feature");
+        feature.GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
+        if (feature.TryGetProperty("geometry", out var geometry) && geometry.ValueKind == JsonValueKind.Object)
+        {
+            Math.Abs(geometry.GetProperty("coordinates")[0].GetDouble() - trueLongitude).ShouldBeGreaterThan(1e-9);
+        }
     }
 
     private async Task ProtectAsync(Guid featureId)

@@ -297,16 +297,8 @@ internal sealed class SyncHeldBatchHandler(
             }
         }
 
-        var readable = await ReadableAsync([.. existing.Keys], viewer, ct);
-        var comparing = new SyncHeldComparing
-        {
-            Db = db,
-            ReadableFeatures = (ids, token) => ReadableFeaturesAsync(ids, viewer, token),
-        };
-        var withheld = await SyncWithhold.WithheldIdsAsync(
-            protection, viewer,
-            [.. readable.Where(t => t.Kind == SyncHeldTargetKind.Feature).Select(t => t.Id)],
-            ct);
+        var lens = await LensAsync([.. existing.Keys], viewer, ct);
+        var comparing = new SyncHeldComparing { Db = db, ReadableFeatures = lens.ReadableFeatures };
 
         foreach (var line in lines)
         {
@@ -324,7 +316,7 @@ internal sealed class SyncHeldBatchHandler(
                 Walk(target, existing, heldCreates, reach, new HashSet<Guid>());
             }
 
-            if (reach.Rows.Any(t => !readable.Contains(t)))
+            if (reach.Rows.Any(t => !lens.Readable.Contains(t)))
             {
                 shown[line.Id] = new HeldLineView(null, false);
                 continue;
@@ -338,7 +330,8 @@ internal sealed class SyncHeldBatchHandler(
             // A position under a row the viewer may not place, or under a row that can no longer
             // be found, is not shown: the second fails closed, since what it hung under is unknown.
             var hidePosition = fact.CarriesPosition
-                && (reach.Unresolved || reach.Rows.Any(t => t.Kind == SyncHeldTargetKind.Feature && withheld.Contains(t.Id)));
+                && ((reach.Unresolved && lens.HidesUnresolved)
+                    || reach.Rows.Any(t => t.Kind == SyncHeldTargetKind.Feature && lens.Withheld.Contains(t.Id)));
 
             // A waiting edit the reviewer can take in part is drawn field by field, by its section,
             // only now that the viewer may be shown the row it changes and everything it names.
@@ -352,6 +345,47 @@ internal sealed class SyncHeldBatchHandler(
         }
 
         return shown;
+    }
+
+    /// <summary>
+    /// What a viewer may be shown of the rows held lines name: which of them they may read, which
+    /// features' positions are withheld from them, and whether a position under a chain that
+    /// cannot be followed to an existing row is hidden.
+    /// </summary>
+    private sealed record HeldLens(
+        IReadOnlySet<SyncHeldTarget> Readable,
+        IReadOnlySet<Guid> Withheld,
+        Func<IReadOnlyCollection<Guid>, CancellationToken, Task<IReadOnlySet<Guid>>> ReadableFeatures,
+        bool HidesUnresolved);
+
+    /// <summary>
+    /// The lens <paramref name="viewer"/> looks at held lines through. A reviewer's shows every row
+    /// and every position — the one exception to the read and position rules, decided by
+    /// <see cref="UploadReviewRules.SeesHeldWhole"/> and nowhere else here; anybody else's is their
+    /// own read rights and the withhold rule over <paramref name="existing"/>.
+    /// </summary>
+    private async Task<HeldLens> LensAsync(
+        IReadOnlyCollection<SyncHeldTarget> existing, AccessContext viewer, CancellationToken ct)
+    {
+        if (UploadReviewRules.SeesHeldWhole(viewer))
+        {
+            return new HeldLens(
+                existing.ToHashSet(),
+                new HashSet<Guid>(),
+                (ids, _) => Task.FromResult<IReadOnlySet<Guid>>(ids.ToHashSet()),
+                HidesUnresolved: false);
+        }
+
+        var readable = await ReadableAsync(existing, viewer, ct);
+        var withheld = await SyncWithhold.WithheldIdsAsync(
+            protection, viewer,
+            [.. readable.Where(t => t.Kind == SyncHeldTargetKind.Feature).Select(t => t.Id)],
+            ct);
+        return new HeldLens(
+            readable,
+            withheld,
+            (ids, token) => ReadableFeaturesAsync(ids, viewer, token),
+            HidesUnresolved: true);
     }
 
     /// <summary>Of <paramref name="ids"/>, the features <paramref name="viewer"/> may read.</summary>

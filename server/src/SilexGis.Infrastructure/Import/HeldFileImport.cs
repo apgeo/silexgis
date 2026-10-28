@@ -178,23 +178,18 @@ public abstract class HeldFileImportHandler(SilexGisDbContext db, FeatureProtect
         Task.FromResult<IReadOnlyList<string>>([]);
 
     /// <summary>
-    /// Shown only when the viewer may read, at its exact position, every existing row the decision
-    /// names — a candidate filed under a protected cave says where that cave is — and never with
-    /// a position for something that is to be protected.
+    /// Shown whole to a reviewer (<see cref="UploadReviewRules.SeesHeldWhole"/>). To anybody else,
+    /// shown only when they may read, at its exact position, every existing row the decision names
+    /// — a candidate filed under a protected cave says where that cave is — and never with a
+    /// position for something that is to be protected.
     /// </summary>
     public async Task<IReadOnlyDictionary<long, HeldLineView>> ShowAsync(
         IReadOnlyList<ImportBatchItem> lines, AccessContext viewer, CancellationToken ct)
     {
         var proposals = lines.ToDictionary(l => l.Id, HeldFileImport.Read);
         var named = proposals.Values.Where(p => p is not null).SelectMany(p => p!.Names).Distinct().ToList();
-        var readable = named.Count == 0
-            ? []
-            : await Db.Features.AsNoTracking()
-                .Where(f => named.Contains(f.Id))
-                .VisibleTo(viewer, Db.Features, Db.FeatureSetMembers)
-                .Select(f => f.Id)
-                .ToListAsync(ct);
-        var placeable = readable.Count == 0 ? [] : await protection.ExactViewIdsAsync(viewer, readable, ct);
+        var whole = UploadReviewRules.SeesHeldWhole(viewer);
+        var placeable = whole ? named.ToHashSet() : await PlaceableAsync(named, viewer, ct);
 
         var shown = new Dictionary<long, HeldLineView>();
         foreach (var (id, proposal) in proposals)
@@ -206,7 +201,7 @@ public abstract class HeldFileImportHandler(SilexGisDbContext db, FeatureProtect
             }
 
             var node = JsonSerializer.SerializeToNode(proposal, ImportJson.Options)!.AsObject();
-            if (proposal.PositionProtected && node["decision"] is JsonObject decision)
+            if (proposal.PositionProtected && !whole && node["decision"] is JsonObject decision)
             {
                 foreach (var member in PositionMembers)
                 {
@@ -219,6 +214,19 @@ public abstract class HeldFileImportHandler(SilexGisDbContext db, FeatureProtect
         }
 
         return shown;
+    }
+
+    /// <summary>Of <paramref name="named"/>, the features <paramref name="viewer"/> may read at their exact position.</summary>
+    private async Task<IReadOnlySet<Guid>> PlaceableAsync(IReadOnlyList<Guid> named, AccessContext viewer, CancellationToken ct)
+    {
+        var readable = named.Count == 0
+            ? []
+            : await Db.Features.AsNoTracking()
+                .Where(f => named.Contains(f.Id))
+                .VisibleTo(viewer, Db.Features, Db.FeatureSetMembers)
+                .Select(f => f.Id)
+                .ToListAsync(ct);
+        return readable.Count == 0 ? new HashSet<Guid>() : await protection.ExactViewIdsAsync(viewer, readable, ct);
     }
 
     /// <summary>

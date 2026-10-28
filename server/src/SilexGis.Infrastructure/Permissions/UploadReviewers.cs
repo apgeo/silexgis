@@ -65,7 +65,7 @@ public static class UploadReviewers
         foreach (var candidate in candidates.Distinct())
         {
             var ctx = await AccessContextResolver.ResolveAsync(db, candidate, ct);
-            if (AccessEvaluator.Decide(ctx, AccessDomain.UploadReview, AccessAction.Write, null).Allowed)
+            if (UploadReviewRules.MayDecide(ctx))
             {
                 holders.Add(candidate);
             }

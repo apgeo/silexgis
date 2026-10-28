@@ -29,8 +29,13 @@ namespace SilexGis.Api.Features.Review;
 /// A decision reaches beyond what it names: accepting a line accepts the waiting lines it depends
 /// on, before it, and rejecting a line rejects the waiting lines that depend on it. Accepting
 /// writes with the uploader's rights as they are now — a line the uploader may no longer write is
-/// decided as failed, with the reason — and every held content shown here passes the same
-/// position rule as everything else that shows a row.
+/// decided as failed, with the reason.
+/// </para>
+/// <para>
+/// Whoever may read the queue is shown every held line whole, its picture included, whatever they
+/// could read elsewhere — the true position of a protected cave too. That is the one exception to
+/// the read and position rules here, and it is <see cref="UploadReviewRules"/>'s to state; an
+/// uploader reading their own held batch is shown it under the ordinary rules.
 /// </para>
 /// </remarks>
 public static class UploadReviewEndpoints
@@ -107,11 +112,9 @@ public static class UploadReviewEndpoints
     private static ProblemHttpResult OwnBatch() =>
         ApiProblems.Forbidden(OwnBatchCode, "Uploads are decided by somebody other than the account that sent them.");
 
-    private static bool MayRead(AccessContext ctx) =>
-        AccessEvaluator.Decide(ctx, AccessDomain.UploadReview, AccessAction.Read, null).Allowed;
+    private static bool MayRead(AccessContext ctx) => UploadReviewRules.MayRead(ctx);
 
-    private static bool MayDecide(AccessContext ctx) =>
-        AccessEvaluator.Decide(ctx, AccessDomain.UploadReview, AccessAction.Write, null).Allowed;
+    private static bool MayDecide(AccessContext ctx) => UploadReviewRules.MayDecide(ctx);
 
     private static async Task<Results<Ok<PagedResult<HeldBatchDto>>, UnauthorizedHttpResult, ProblemHttpResult>> QueueAsync(
         int? page, int? pageSize, SilexGisDbContext db, IAccessContextAccessor accessor, CancellationToken ct)
@@ -363,7 +366,8 @@ public static class UploadReviewEndpoints
     /// </summary>
     /// <remarks>
     /// Whoever may read the line's batch may ask, for a line the batch view would show them: a line
-    /// whose proposal is held back from this viewer is answered exactly like one that is not there.
+    /// whose proposal is held back from this viewer — never one in a reviewer's view, which shows
+    /// every line whole — is answered exactly like one that is not there.
     /// A line that keeps no picture — a document that is not an image, bytes already adopted or
     /// swept — is answered as having none.
     /// </remarks>

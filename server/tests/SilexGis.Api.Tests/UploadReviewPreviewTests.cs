@@ -152,7 +152,7 @@ public sealed class UploadReviewPreviewTests : IAsyncLifetime, IClassFixture<Pos
     }
 
     [Fact]
-    public async Task Without_the_review_right_or_the_cave_a_picture_is_answered_as_no_line_at_all()
+    public async Task Without_the_review_right_a_picture_is_answered_as_no_line_at_all_and_with_it_even_a_cave_the_reviewer_may_not_read_is_drawn()
     {
         // A private cave the uploader made before being placed under review; then, held, a map of it.
         var caveId = Guid.CreateVersion7();
@@ -188,17 +188,23 @@ public sealed class UploadReviewPreviewTests : IAsyncLifetime, IClassFixture<Pos
         refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await CodeAsync(refused)).ShouldBe("review.item_not_found");
 
-        // May read the queue, but not the cave the map is of: the batch view shows the line
-        // without its proposal, and the picture is answered as if the line were not there.
+        // May read the queue, but not the cave the map is of: a reviewer is shown the line and its
+        // picture all the same, and still may not read the cave anywhere else.
         var readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"urp-rd-{marker}@t.local");
         using var reader = await AuthHelper.BearerClientAsync(factory, $"urp-rd-{marker}@t.local");
         await GrantAsync(readerId, AccessDomain.UploadReview);
-        var blind = await LineAsync(reader, answer, mapReview);
-        blind.GetProperty("proposal").ValueKind.ShouldBe(JsonValueKind.Null);
-        blind.GetProperty("hasPreview").GetBoolean().ShouldBeFalse();
-        var hidden = await reader.GetAsync($"/api/v1/review/items/{mapReview}/preview");
-        hidden.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await CodeAsync(hidden)).ShouldBe("review.item_not_found");
+        (await reader.GetAsync($"/api/v1/features/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var seen = await LineAsync(reader, answer, mapReview);
+        seen.GetProperty("proposal").ValueKind.ShouldBe(JsonValueKind.Object);
+        seen.GetProperty("hasPreview").GetBoolean().ShouldBeTrue();
+        var drawn = await reader.GetAsync($"/api/v1/review/items/{mapReview}/preview");
+        drawn.StatusCode.ShouldBe(HttpStatusCode.OK, await drawn.Content.ReadAsStringAsync());
+        using (var image = new MagickImage(await drawn.Content.ReadAsByteArrayAsync()))
+        {
+            image.GetExifProfile().ShouldBeNull();
+        }
+
+        (await reader.GetAsync($"/api/v1/features/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]

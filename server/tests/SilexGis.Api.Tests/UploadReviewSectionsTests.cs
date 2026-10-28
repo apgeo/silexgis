@@ -377,11 +377,11 @@ public sealed class UploadReviewSectionsTests : IAsyncLifetime, IClassFixture<Po
     }
 
     [Fact]
-    public async Task A_held_pin_on_a_place_the_viewer_may_not_place_is_shown_without_its_pixel()
+    public async Task A_held_pin_on_a_place_a_reviewer_may_not_place_is_shown_with_its_pixel()
     {
         // A protected cave and entrance the uploader made before being placed under review; then,
-        // held, a map of the cave with a pin on the entrance. A reader of the queue who may read
-        // the entrance but not place it is not shown where on the map the entrance lies.
+        // held, a map of the cave with a pin on the entrance. A reviewer who may read the entrance
+        // but not place it is shown where on the map the entrance lies, as everything else held is.
         var caveId = Guid.CreateVersion7();
         var entranceId = Guid.CreateVersion7();
         await MarkAsync(false);
@@ -416,17 +416,20 @@ public sealed class UploadReviewSectionsTests : IAsyncLifetime, IClassFixture<Po
 
         var exact = await reviewer.GetStringAsync($"/api/v1/review/batches/{batchId}");
         exact.ShouldContain("777123");
-        var blind = await reader.GetStringAsync($"/api/v1/review/batches/{batchId}");
-        blind.ShouldNotContain("777123");
-        blind.ShouldNotContain("888456");
-        var pin = JsonDocument.Parse(blind).RootElement.GetProperty("lines").EnumerateArray()
+        var seen = await reader.GetStringAsync($"/api/v1/review/batches/{batchId}");
+        var pin = JsonDocument.Parse(seen).RootElement.GetProperty("lines").EnumerateArray()
             .Single(l => l.GetProperty("rowId").GetGuid() == pinId).GetProperty("proposal").GetProperty("pin");
         pin.GetProperty("placeId").GetGuid().ShouldBe(entranceId);
-        pin.TryGetProperty("x", out _).ShouldBeFalse();
+        pin.GetProperty("x").GetInt32().ShouldBe(777123);
+        pin.GetProperty("y").GetInt32().ShouldBe(888456);
+
+        // Outside review the entrance is still snapped for the same account.
+        var envelope = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/features/{entranceId}");
+        envelope.GetProperty("feature").GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
     }
 
     [Fact]
-    public async Task A_held_photo_link_on_a_recording_the_viewer_may_not_read_shows_nothing_of_it()
+    public async Task A_held_photo_link_on_a_recording_a_reviewer_may_not_read_is_shown_whole()
     {
         // A recording the uploader sent before being placed under review, kept private; then, held,
         // a photo hung on it. Whether the link may be shown is the recording's to decide.
@@ -475,9 +478,18 @@ public sealed class UploadReviewSectionsTests : IAsyncLifetime, IClassFixture<Po
         var exact = await reviewer.GetFromJsonAsync<JsonElement>($"/api/v1/review/batches/{batchId}");
         exact.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("reviewId").GetGuid() == linkReview)
             .GetProperty("proposal").ValueKind.ShouldBe(JsonValueKind.Object);
-        var blind = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/review/batches/{batchId}");
-        blind.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("reviewId").GetGuid() == linkReview)
-            .GetProperty("proposal").ValueKind.ShouldBe(JsonValueKind.Null);
+        var seen = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/review/batches/{batchId}");
+        var link = seen.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("reviewId").GetGuid() == linkReview)
+            .GetProperty("proposal");
+        link.ValueKind.ShouldBe(JsonValueKind.Object);
+        link.GetRawText().ShouldContain(recordingId.ToString());
+
+        // Outside review the same account still may not read the recording: the cave page's list
+        // of recordings, which shows it to the uploader, shows it nothing.
+        (await uploader.GetFromJsonAsync<JsonElement>($"/api/v1/trip-recordings?caveId={caveId}")).GetProperty("items")
+            .EnumerateArray().Select(r => r.GetProperty("id").GetGuid()).ShouldContain(recordingId);
+        (await reader.GetFromJsonAsync<JsonElement>($"/api/v1/trip-recordings?caveId={caveId}")).GetProperty("items")
+            .GetArrayLength().ShouldBe(0);
     }
 
     private sealed record Written(int Features, int People, int Documents, int Links, int Recordings, int Points);

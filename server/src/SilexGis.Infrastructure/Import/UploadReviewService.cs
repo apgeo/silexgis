@@ -45,11 +45,12 @@ public interface IHeldBatchHandler
     ImportSource Source { get; }
 
     /// <summary>
-    /// Each line as <paramref name="viewer"/> may be shown it, keyed by line id: what the line
-    /// would write, without any position the viewer may not place, and nothing at all of a line
-    /// that changes or names a row the viewer may not read. A held proposal can carry the true
-    /// position of a protected row it edits or hangs under, and the content of a row it edits; the
-    /// review queue is a path that emits both like any other.
+    /// Each line as <paramref name="viewer"/> may be shown it, keyed by line id. A viewer who may
+    /// read the review queue (<see cref="UploadReviewRules.SeesHeldWhole"/>) is shown every line
+    /// whole, positions and all. Anybody else — an uploader reading their own batch — is shown what
+    /// the line would write without any position they may not place, and nothing at all of a line
+    /// that changes or names a row they may not read: a held proposal can carry the true position
+    /// of a protected row it edits or hangs under, and the content of a row it edits.
     /// </summary>
     Task<IReadOnlyDictionary<long, HeldLineView>> ShowAsync(
         IReadOnlyList<ImportBatchItem> lines, AccessContext viewer, CancellationToken ct);
