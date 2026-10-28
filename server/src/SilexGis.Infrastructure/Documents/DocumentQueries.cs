@@ -135,4 +135,14 @@ public static class DocumentQueries
             .Where(f => f.DocumentVersionId == versionId)
             .OrderBy(f => f.CreatedAt)
             .ThenBy(f => f.Id);
+
+    /// <summary>
+    /// The files of a document's current revision, oldest first, tracked — so the first of them is
+    /// the upload a change to the file has to be recorded on, never a copy derived from it.
+    /// </summary>
+    public static IQueryable<StoredFile> FilesOfCurrentVersion(SilexGisDbContext db, Guid documentId) =>
+        db.StoredFiles
+            .Where(f => db.DocumentVersions.Any(v => v.Id == f.DocumentVersionId && v.IsCurrent && v.DocumentId == documentId))
+            .OrderBy(f => f.CreatedAt)
+            .ThenBy(f => f.Id);
 }

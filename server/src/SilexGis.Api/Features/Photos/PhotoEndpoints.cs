@@ -525,10 +525,7 @@ public static class PhotoEndpoints
         Guid userId,
         CancellationToken ct)
     {
-        var file = await db.StoredFiles.FirstOrDefaultAsync(
-            f => db.DocumentVersions.Any(v =>
-                v.Id == f.DocumentVersionId && v.IsCurrent && v.DocumentId == document.Id),
-            ct);
+        var file = await DocumentQueries.FilesOfCurrentVersion(db, document.Id).FirstOrDefaultAsync(ct);
 
         if (request.Delete == true)
         {

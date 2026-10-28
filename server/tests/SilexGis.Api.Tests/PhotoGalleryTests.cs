@@ -283,6 +283,55 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable, IClassFixtu
     }
 
     [Fact]
+    public async Task A_turn_is_recorded_on_the_upload_and_never_on_a_copy_made_from_it()
+    {
+        var photo = await UploadPhotoAsync(owner, "converted.png");
+
+        // A copy derived from the upload, on the same revision and stored after it — what a
+        // conversion leaves beside an original. The upload's row is then rewritten through an
+        // indexed column, there and back, which moves it behind the copy's both in the table and
+        // in every index, so a read that takes "the first file" in whatever order the database
+        // returns finds the copy.
+        Guid copyId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var upload = await db.StoredFiles.AsNoTracking().FirstAsync(f => f.Id == photo.FileId);
+            var digest = Guid.NewGuid().ToString("N");
+            var copy = new StoredFile
+            {
+                DocumentVersionId = upload.DocumentVersionId,
+                ConvertedFromFileId = upload.Id,
+                StoragePath = $"test/{upload.Id:N}-converted",
+                OriginalName = $"{upload.Id:N}.webp",
+                MimeType = "image/webp",
+                Kind = FileKind.Image,
+                Sha256 = digest + digest,
+                SizeBytes = 1,
+            };
+            db.StoredFiles.Add(copy);
+            await db.SaveChangesAsync();
+            copyId = copy.Id;
+            (await db.StoredFiles.AsNoTracking().FirstAsync(f => f.Id == copyId)).CreatedAt
+                .ShouldBeGreaterThan(upload.CreatedAt);
+            await db.StoredFiles.Where(f => f.Id == upload.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(f => f.Kind, FileKind.Other));
+            await db.StoredFiles.Where(f => f.Id == upload.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(f => f.Kind, FileKind.Image));
+        }
+
+        var turned = await owner.PostAsJsonAsync("/api/v1/photos/bulk", new
+        {
+            documentIds = new[] { photo.DocumentId },
+            rotateQuarterTurns = 1,
+        });
+        turned.StatusCode.ShouldBe(HttpStatusCode.OK, await turned.Content.ReadAsStringAsync());
+
+        (await FileFactsAsync(photo.FileId)).Orientation.ShouldBe(1);
+        (await FileFactsAsync(copyId)).Orientation.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task A_bulk_change_reports_what_it_could_not_touch_and_says_nothing_about_the_rest()
     {
         var mine = await UploadPhotoAsync(member, "mine.png");
