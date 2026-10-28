@@ -201,6 +201,8 @@ public sealed class DocumentWriteService(
             DirectionIsMagnetic = capture.DirectionIsMagnetic,
             PositionDop = capture.Dop,
             Metadata = (capture.Exif ?? PhotoExif.None).IntoMetadata(null),
+            PixelWidth = capture.WidthPixels,
+            PixelHeight = capture.HeightPixels,
             Author = Trim(facts.Author, NameFactMaxLength),
             Producer = Trim(facts.Producer, NameFactMaxLength),
             ContentCreatedAt = Utc(facts.ContentCreatedAt),

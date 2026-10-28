@@ -189,6 +189,16 @@ public class StoredFile : ITimestamped, IAuditable
     /// </summary>
     public int OrientationQuarterTurns { get; set; }
 
+    /// <summary>
+    /// A picture's width in pixels as the bytes store it — before any orientation tag or recorded
+    /// turn — read once when the file was written. Null for anything that is not a picture, for
+    /// a picture whose size could not be read, and for files written before it was recorded.
+    /// </summary>
+    public int? PixelWidth { get; set; }
+
+    /// <summary>A picture's height in pixels as stored, on the same terms as <see cref="PixelWidth"/>.</summary>
+    public int? PixelHeight { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

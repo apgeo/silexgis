@@ -285,6 +285,34 @@ public sealed class SyncRasterTests : IAsyncLifetime, IDisposable, IClassFixture
     }
 
     [Fact]
+    public async Task A_maps_hash_is_required_beside_staged_bytes_and_ignored_without_them()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var set = await CreateSetAsync(uploader, [cave], clubId);
+
+        // Staged bytes without the hash that describes them: the upload is refused whole.
+        var staged = await StageAsync(uploader, "map.jpg", Corpus.Jpeg());
+        var refused = await uploader.PostAsJsonAsync($"/api/v1/sync/sets/{set}/upload", new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            rasterMaps = new[] { new { id = Guid.CreateVersion7(), caveId = cave, title = "Plan", mapType = "planView", stagedUploadId = staged } },
+        });
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+
+        // No staged bytes: the hash is not asked for. A new map then lacks its picture, which is
+        // its row's answer; an edit keeps the picture it has.
+        var map = Guid.CreateVersion7();
+        var missing = await UploadAsync(uploader, set, maps: [new { id = map, caveId = cave, title = "Plan", mapType = "planView" }]);
+        Code(missing, "rasterMaps", map).ShouldBe("sync.file_bytes_missing");
+
+        var created = await UploadAsync(uploader, set, maps: [await NewMapAsync(map, cave, "Plan", "planView")]);
+        var edited = await UploadAsync(uploader, set, maps:
+            [new { id = map, baseRevision = Revision(created, "rasterMaps", map), caveId = cave, title = "Renamed", mapType = "planView" }]);
+        Statuses(edited, "rasterMaps").ShouldBe(["updated"]);
+    }
+
+    [Fact]
     public async Task Maps_and_pins_are_arbitrated_one_by_one_a_resend_writes_nothing_and_removals_reach_the_stream()
     {
         var cave = await CreateCaveAsync(locationProtected: false);
@@ -480,12 +508,26 @@ public sealed class SyncRasterTests : IAsyncLifetime, IDisposable, IClassFixture
         var made = await UploadAsync(uploader, set,
             maps: [await NewMapAsync(map2, cave, "Plan", "planView", first, sortOrder: 1)], pins: [Pin(pin2, map2, placeA, 10, 10)]);
         var doc2 = await DocumentOfAsync(map2);
+
+        // The frame the pins are measured in: the stored picture's own size, 64 by 48 here.
+        var madePage = await GetPageAsync(uploader, $"/api/v1/sync/sets/{set}/rasters");
+        var asMade = Map(madePage, map2);
+        asMade.GetProperty("pictureWidth").GetInt32().ShouldBe(64);
+        asMade.GetProperty("pictureHeight").GetInt32().ShouldBe(48);
         var changed = await UploadAsync(uploader, set,
             maps: [await NewMapAsync(map2, cave, "Renamed", "other", second, baseRevision: Revision(made, "rasterMaps", map2), sortOrder: 9)],
             pins: [Pin(pin2, map2, placeB, 77, 88, baseRevision: Revision(made, "rasterPins", pin2))]);
         Statuses(changed, "rasterMaps").ShouldBe(["updated"]);
         (await VersionCountAsync(doc2)).ShouldBe(2, "the new picture is a new revision; the earlier one is kept");
         (await CurrentHashAsync(doc2)).ShouldBe(Hash(second));
+
+        // A new picture of another size is the frame from then on, and the map comes again past
+        // the position a phone held, so the phone learns of it.
+        var resized = Map(await GetPageAsync(
+            uploader,
+            $"/api/v1/sync/sets/{set}/rasters?cursor={Uri.EscapeDataString(madePage.GetProperty("nextCursor").GetString()!)}"), map2);
+        resized.GetProperty("pictureWidth").GetInt32().ShouldBe(64);
+        resized.GetProperty("pictureHeight").GetInt32().ShouldBe(64);
 
         var undoChange = await RevertAsync(uploader, changed.GetProperty("importBatchId").GetGuid());
         undoChange.GetProperty("items").EnumerateArray().ShouldAllBe(i => i.GetProperty("outcome").GetString() == "undone");

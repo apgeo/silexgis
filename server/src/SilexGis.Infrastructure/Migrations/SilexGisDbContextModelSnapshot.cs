@@ -5644,6 +5644,14 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("page_count");
 
+                    b.Property<int?>("PixelHeight")
+                        .HasColumnType("integer")
+                        .HasColumnName("pixel_height");
+
+                    b.Property<int?>("PixelWidth")
+                        .HasColumnType("integer")
+                        .HasColumnName("pixel_width");
+
                     b.Property<double?>("PositionDop")
                         .HasColumnType("double precision")
                         .HasColumnName("position_dop");

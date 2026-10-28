@@ -529,10 +529,13 @@ public sealed class SyncUploadRequestValidator : AbstractValidator<SyncUploadReq
             map.RuleFor(m => m.MapType).NotNull().When(m => !m.Deleted);
             map.RuleFor(m => m.MapType).IsInEnum().When(m => m.MapType is not null);
             map.RuleFor(m => m.FileName).MaximumLength(StoredFileNameMaxLength);
+            // The hash describes staged bytes and is read only beside them: required with a
+            // staged upload, ignored without one. A new map without staged bytes is answered on
+            // its row, as missing its picture.
             map.RuleFor(m => m.Sha256)
                 .NotEmpty()
-                .When(m => !m.Deleted && m.BaseRevision is null)
-                .WithMessage("A new raster map states the hash of its picture.");
+                .When(m => !m.Deleted && m.StagedUploadId is not null)
+                .WithMessage("A raster map that brings a picture states the hash of it.");
             map.RuleFor(m => m.Sha256)
                 .Matches("^[0-9a-fA-F]{64}$")
                 .When(m => m.Sha256 is not null)

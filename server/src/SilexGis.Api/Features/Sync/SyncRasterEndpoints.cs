@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -166,6 +167,28 @@ public static class SyncRasterEndpoints
             ? []
             : (await handed.Where(f => areaIds.Contains(f.Id)).Select(f => f.Id).ToListAsync(ct)).ToHashSet();
 
+        // The pins' frame: the current picture's size as the file was read when it was stored —
+        // or, for a picture stored before that was recorded, as its camera profile states it.
+        // A revision may hold more than one file (a converted copy beside the original); the
+        // first stored is the original, as every listing of a photograph takes it.
+        var documentIds = maps.Select(m => m.DocumentId).Distinct().ToList();
+        var pictures = documentIds.Count == 0
+            ? []
+            : (await (from version in db.DocumentVersions.AsNoTracking()
+                      where version.IsCurrent && documentIds.Contains(version.DocumentId)
+                      join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
+                      select new { version.DocumentId, file.Id, file.CreatedAt, file.Metadata, file.PixelWidth, file.PixelHeight })
+                    .ToListAsync(ct))
+                .GroupBy(f => f.DocumentId)
+                .ToDictionary(
+                    g => g.Key,
+                    g =>
+                    {
+                        var original = g.OrderBy(f => f.CreatedAt).ThenBy(f => f.Id).First();
+                        var stated = PhotoExif.FromMetadata(original.Metadata);
+                        return (Width: original.PixelWidth ?? stated.WidthPixels, Height: original.PixelHeight ?? stated.HeightPixels);
+                    });
+
         return [.. maps.Select(m => new SyncRasterMapDto(
             m.Id,
             m.CaveFeatureId,
@@ -174,6 +197,8 @@ public static class SyncRasterEndpoints
             m.MapType,
             m.SortOrder,
             m.DocumentId,
+            pictures.TryGetValue(m.DocumentId, out var picture) ? picture.Width : null,
+            pictures.TryGetValue(m.DocumentId, out var sized) ? sized.Height : null,
             m.UpdatedAt,
             pins.GetValueOrDefault(m.Id) ?? []))];
     }

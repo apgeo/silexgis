@@ -22,7 +22,9 @@ public sealed record PhotoCapture(
     double? DirectionDegrees = null,
     bool DirectionIsMagnetic = false,
     double? Dop = null,
-    PhotoExif? Exif = null)
+    PhotoExif? Exif = null,
+    int? WidthPixels = null,
+    int? HeightPixels = null)
 {
     /// <summary>A file that stated nothing, or one nothing here could read.</summary>
     public static readonly PhotoCapture None = new();
@@ -47,10 +49,17 @@ public sealed class MagickPhotoGeotagReader : IPhotoGeotagReader
         try
         {
             using var image = new MagickImage(absolutePath);
+
+            // The picture's own size, as stored, whether or not it carries a profile: a scanned
+            // plan states nothing about a camera, and is still the frame things are placed on.
+            int? width = image.Width > 0 ? (int)image.Width : null;
+            int? height = image.Height > 0 ? (int)image.Height : null;
             var exif = image.GetExifProfile();
             if (exif is null)
             {
-                return PhotoCapture.None;
+                return width is null && height is null
+                    ? PhotoCapture.None
+                    : new PhotoCapture(WidthPixels: width, HeightPixels: height);
             }
 
             return new PhotoCapture(
@@ -64,7 +73,9 @@ public sealed class MagickPhotoGeotagReader : IPhotoGeotagReader
                 // — a number that looks measured and is not, which is worse than the honest
                 // dimensionless one the file actually states.
                 Positive(Rational(exif, ExifTag.GPSDOP)),
-                ReadCamera(exif, image));
+                ReadCamera(exif, image),
+                width,
+                height);
         }
         catch (MagickException)
         {

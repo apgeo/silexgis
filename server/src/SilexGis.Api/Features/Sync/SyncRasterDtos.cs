@@ -18,8 +18,8 @@ namespace SilexGis.Api.Features.Sync;
 /// <param name="SortOrder">Where the map sits among the cave's maps on the phone.</param>
 /// <param name="FileName">The picture's file name on the phone; the staged transfer's own name otherwise.</param>
 /// <param name="Sha256">
-/// The lowercase hex SHA-256 of the picture. Required on a new map, which always brings its picture;
-/// a map already here keeps the picture it has.
+/// The lowercase hex SHA-256 of the staged picture: required with <paramref name="StagedUploadId"/>
+/// and ignored without it.
 /// </param>
 /// <param name="SizeBytes">The picture's size, checked against the staged bytes when stated.</param>
 /// <param name="StagedUploadId">The staged transfer holding the picture; required on a new map.</param>
@@ -62,6 +62,11 @@ public sealed record SyncUploadRasterPinDto(
 /// The picture, as a document of the documents stream. It reaches the phone through that stream's
 /// catalogue and the file links route, under the same reach rule as any other photo.
 /// </param>
+/// <param name="PictureWidth">
+/// The width in pixels of the map's current picture as stored — the frame the pins' <c>x</c> is
+/// measured in. Null only when the picture's size could not be read.
+/// </param>
+/// <param name="PictureHeight">The picture's height in pixels as stored, on the same terms.</param>
 /// <param name="Revision">
 /// The map's own server revision — the value the phone sends back as its base revision when it
 /// edits the map. Its pins carry revisions of their own.
@@ -79,6 +84,8 @@ public sealed record SyncRasterMapDto(
     RasterMapType MapType,
     int SortOrder,
     Guid DocumentId,
+    int? PictureWidth,
+    int? PictureHeight,
     DateTimeOffset Revision,
     IReadOnlyList<SyncRasterPinDto> Pins);
 
