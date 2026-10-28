@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -65,6 +67,7 @@ public static class SyncTripEndpoints
             int? pageSize,
             SilexGisDbContext db,
             FeatureProtection protection,
+            IAppSettingsService settings,
             IAccessContextAccessor accessAccessor,
             IOptions<SyncOptions> options,
             CancellationToken ct)
@@ -120,7 +123,12 @@ public static class SyncTripEndpoints
             goneRows.Select(ByGone.Entry),
             pointsGoneRows.Select(ByPointGone.Entry));
         var recordings = await ShapeAsync(
-            db, handed, [.. cut.Rows.OfType<SyncRecordingRow>().Select(r => r.Recording)], ct);
+            db,
+            ctx,
+            await settings.GetSyncAsync(ct),
+            handed,
+            [.. cut.Rows.OfType<SyncRecordingRow>().Select(r => r.Recording)],
+            ct);
 
         return TypedResults.Ok(new SyncTripsPageDto(
             opening.Set.Revision,
@@ -149,11 +157,23 @@ public static class SyncTripEndpoints
     /// </summary>
     internal static async Task<List<SyncTripRecordingDto>> ShapeAsync(
         SilexGisDbContext db,
+        AccessContext ctx,
+        SyncSettings sync,
         IQueryable<Domain.Entities.Feature> handed,
         IReadOnlyList<Domain.Entities.TripRecording> recordings,
         CancellationToken ct)
     {
         var points = await PointsAsync(db, handed, [.. recordings.Select(r => r.Id)], ct);
+        var authors = await AuthorsAsync(
+            db,
+            ctx,
+            sync,
+            [.. recordings.Select(r => r.CreatedByDeviceUserId)
+                .Concat(points.Values.SelectMany(p => p).Select(p => p.CreatedByDeviceUserId))],
+            ct);
+        Guid? AuthorOf(Guid? deviceUserId) =>
+            deviceUserId is { } id && authors.TryGetValue(id, out var caver) ? caver : null;
+
         return [.. recordings.Select(r => new SyncTripRecordingDto(
             r.Id,
             r.CaveFeatureId,
@@ -163,8 +183,34 @@ public static class SyncTripEndpoints
             r.StartedAt,
             r.EndedAt,
             r.CreatedByDeviceUserId,
+            AuthorOf(r.CreatedByDeviceUserId),
             r.UpdatedAt,
-            points.GetValueOrDefault(r.Id) ?? []))];
+            [.. (points.GetValueOrDefault(r.Id) ?? []).Select(p => p with { CreatedByCaverId = AuthorOf(p.CreatedByDeviceUserId) })]))];
+    }
+
+    /// <summary>
+    /// The caver each of <paramref name="deviceUserIds"/> is linked to, for the phone users whose
+    /// caver the people directory lists for this reader right now — nobody while the directory is
+    /// off, or while the reader may not be told who people are at all.
+    /// </summary>
+    /// <remarks>
+    /// The recording phone may be another account's, and that account's link is not this reader's
+    /// to learn; the name it stands for is one only because the reader's own directory would show
+    /// it anyway. So the link is filtered through the directory's one listing rule rather than a
+    /// copy of it, and a link to anybody else is left unsaid, exactly as an unlinked phone user is.
+    /// </remarks>
+    private static async Task<Dictionary<Guid, Guid>> AuthorsAsync(
+        SilexGisDbContext db, AccessContext ctx, SyncSettings sync, IReadOnlyCollection<Guid?> deviceUserIds, CancellationToken ct)
+    {
+        var ids = deviceUserIds.OfType<Guid>().Distinct().ToList();
+        if (ids.Count == 0 || !sync.PeopleDirectoryEnabled)
+        {
+            return [];
+        }
+
+        var links = await DevicePersonMapping.LinksOfAsync(db, ids, ct);
+        var listed = await SyncPeopleDirectory.ListedAmongAsync(db, ctx, sync, [.. links.Values.Distinct()], ct);
+        return links.Where(l => listed.Contains(l.Value)).ToDictionary(l => l.Key, l => l.Value);
     }
 
     /// <summary>
@@ -256,7 +302,7 @@ public static class SyncTripEndpoints
             .ToDictionary(
                 g => g.Key,
                 g => g.Select(p => new SyncTripPointDto(
-                    p.Id, p.PlaceFeatureId, p.ScannedAt, p.Notes, p.CreatedByDeviceUserId, p.UpdatedAt)).ToList());
+                    p.Id, p.PlaceFeatureId, p.ScannedAt, p.Notes, p.CreatedByDeviceUserId, null, p.UpdatedAt)).ToList());
     }
 }
 

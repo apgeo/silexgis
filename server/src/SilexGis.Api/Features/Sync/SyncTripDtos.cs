@@ -54,6 +54,12 @@ public sealed record SyncUploadTripPointDto(
 /// The recording's own server revision — the value the phone sends back as its base revision when
 /// it edits the recording. Its scans carry revisions of their own.
 /// </param>
+/// <param name="CreatedByCaverId">
+/// The caver the recording phone's user is linked to — given only while the people directory is on
+/// and lists that caver for this reader, so a phone can name somebody it may already name; null
+/// when the phone user is linked to nobody, to somebody the directory does not list for this
+/// reader, or when the directory is off.
+/// </param>
 /// <param name="Points">
 /// Every live scan on the recording that this reader may be given, in the order they were made.
 /// A scan of a place this reader is not handed is left out rather than sent without its place, so
@@ -68,16 +74,19 @@ public sealed record SyncTripRecordingDto(
     DateTimeOffset StartedAt,
     DateTimeOffset? EndedAt,
     Guid? CreatedByDeviceUserId,
+    Guid? CreatedByCaverId,
     DateTimeOffset Revision,
     IReadOnlyList<SyncTripPointDto> Points);
 
 /// <summary>One scan on a recording, as the trips stream hands it.</summary>
+/// <param name="CreatedByCaverId">The caver the scanning phone's user is linked to, by the recording's rule.</param>
 public sealed record SyncTripPointDto(
     Guid Id,
     Guid? PlaceId,
     DateTimeOffset ScannedAt,
     string? Notes,
     Guid? CreatedByDeviceUserId,
+    Guid? CreatedByCaverId,
     DateTimeOffset Revision);
 
 /// <summary>A scan removed from a recording the trips stream hands this reader.</summary>

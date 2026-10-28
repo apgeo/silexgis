@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -58,6 +59,7 @@ internal static class SyncReviewCurrent
         FeatureProtection protection,
         PhotoPositionDisclosure photos,
         AccessContext ctx,
+        SyncSettings sync,
         IReadOnlyList<SyncReviewRow> rows,
         CancellationToken ct)
     {
@@ -122,7 +124,7 @@ internal static class SyncReviewCurrent
                 .Where(c => recordingsAsked.Contains(c.Recording.Id))
                 .Select(c => c.Recording)
                 .ToListAsync(ct);
-            var shaped = (await SyncTripEndpoints.ShapeAsync(db, handed, carried, ct)).ToDictionary(r => r.Id);
+            var shaped = (await SyncTripEndpoints.ShapeAsync(db, ctx, sync, handed, carried, ct)).ToDictionary(r => r.Id);
             Answer(SyncUploadSections.TripRecordings, r => shaped.GetValueOrDefault(r.RowId));
             var scans = shaped.Values.SelectMany(r => r.Points).ToDictionary(p => p.Id);
             Answer(SyncUploadSections.TripPoints, r => scans.GetValueOrDefault(r.RowId));

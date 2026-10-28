@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -119,6 +120,7 @@ public static class SyncReviewEndpoints
             FeatureProtection protection,
             PhotoPositionDisclosure photos,
             IEnumerable<IHeldBatchHandler> handlers,
+            IAppSettingsService settings,
             IAccessContextAccessor accessAccessor,
             IOptions<SyncOptions> options,
             CancellationToken ct)
@@ -190,7 +192,7 @@ public static class SyncReviewEndpoints
         // A turned-down edit or removal is the one decision that leaves the phone showing
         // something the server does not hold, so it is the one answered with the server's row. A
         // create turned down has no server row to send; the phone drops its own.
-        var current = await SyncReviewCurrent.OfAsync(db, protection, photos, ctx, rows, ct);
+        var current = await SyncReviewCurrent.OfAsync(db, protection, photos, ctx, await settings.GetSyncAsync(ct), rows, ct);
 
         return TypedResults.Ok(new SyncReviewsPageDto(
             opening.Set.Revision,

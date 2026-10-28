@@ -494,6 +494,144 @@ public sealed class SyncTripRecordingTests : IAsyncLifetime, IDisposable, IClass
         kept.ConvertedTripLogId.ShouldBeNull("the recording outlives its report and may be made into one again");
     }
 
+    [Fact]
+    public async Task A_recording_names_the_caver_its_phone_user_is_linked_to_only_while_the_directory_lists_that_caver_for_the_reader()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var uploadSet = await CreateSetAsync(uploader, [cave], clubId);
+        var membersSet = await CreateSetAsync(member, [cave]);
+
+        // Three phone users of the uploader's phone: one linked to a clubmate, one linked to a
+        // caver of another club, and one linked to nobody.
+        var listedUser = Guid.CreateVersion7();
+        var unlistedUser = Guid.CreateVersion7();
+        var unmappedUser = Guid.CreateVersion7();
+        Guid clubmate;
+        Guid outsider;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var other = new CavingGroup { Name = $"Other {marker}", Slug = $"other-{marker}" };
+            var mate = new Caver { FullName = $"Clubmate {marker}" };
+            var stranger = new Caver { FullName = $"Outsider {marker}" };
+            db.CavingGroups.Add(other);
+            db.Cavers.AddRange(mate, stranger);
+            await db.SaveChangesAsync();
+            db.CavingGroupMemberships.AddRange(
+                new CavingGroupMembership { CavingGroupId = clubId, CaverId = mate.Id, Role = CavingGroupRole.Member },
+                new CavingGroupMembership { CavingGroupId = other.Id, CaverId = stranger.Id, Role = CavingGroupRole.Member });
+            var now = DateTimeOffset.UtcNow;
+            db.DevicePersons.AddRange(
+                new DevicePerson { DeviceUserId = listedUser, Username = "listed", CaverId = mate.Id, LinkSource = DevicePersonLinkSource.Administrator, FirstSeenAt = now, LastSeenAt = now, UploadedByUserId = uploaderId },
+                new DevicePerson { DeviceUserId = unlistedUser, Username = "unlisted", CaverId = stranger.Id, LinkSource = DevicePersonLinkSource.Administrator, FirstSeenAt = now, LastSeenAt = now, UploadedByUserId = uploaderId },
+                new DevicePerson { DeviceUserId = unmappedUser, Username = "unmapped", FirstSeenAt = now, LastSeenAt = now, UploadedByUserId = uploaderId });
+            await db.SaveChangesAsync();
+            clubmate = mate.Id;
+            outsider = stranger.Id;
+        }
+
+        var byListed = Guid.CreateVersion7();
+        var byUnlisted = Guid.CreateVersion7();
+        var byUnmapped = Guid.CreateVersion7();
+        var scanByListed = Guid.CreateVersion7();
+        var scanByUnlisted = Guid.CreateVersion7();
+        var answer = await UploadAsync(
+            uploadSet,
+            recordings:
+            [
+                Recording(byListed, cave, author: listedUser),
+                Recording(byUnlisted, cave, author: unlistedUser),
+                Recording(byUnmapped, cave, author: unmappedUser),
+            ],
+            points:
+            [
+                Point(scanByListed, byListed, null, minutes: 10, author: listedUser),
+                Point(scanByUnlisted, byListed, null, minutes: 20, author: unlistedUser),
+            ]);
+        Statuses(answer, "tripRecordings").ShouldBe(["created", "created", "created"]);
+
+        // Fixture proof: the member's directory lists the clubmate and not the outsider, who is
+        // linked all the same — so only the directory's rule keeps the outsider's id off the page.
+        var directory = (await GetPageAsync(member, "/api/v1/sync/people")).GetProperty("people").EnumerateArray()
+            .Select(p => p.GetProperty("id").GetGuid()).ToList();
+        directory.ShouldContain(clubmate);
+        directory.ShouldNotContain(outsider);
+
+        var page = await GetPageAsync(member, $"/api/v1/sync/sets/{membersSet}/trips");
+        AuthorOf(Single(page, byListed)).ShouldBe(clubmate);
+        AuthorOf(Single(page, byUnlisted)).ShouldBeNull();
+        AuthorOf(Single(page, byUnmapped)).ShouldBeNull();
+        var scans = Single(page, byListed).GetProperty("points").EnumerateArray()
+            .ToDictionary(p => p.GetProperty("id").GetGuid());
+        AuthorOf(scans[scanByListed]).ShouldBe(clubmate);
+        AuthorOf(scans[scanByUnlisted]).ShouldBeNull();
+        Single(page, byUnlisted).GetProperty("createdByDeviceUserId").GetGuid().ShouldBe(unlistedUser);
+        page.GetRawText().ShouldNotContain(outsider.ToString());
+
+        // Read a recording at a time, every page names the author the whole read did.
+        var paged = new Dictionary<Guid, Guid?>();
+        string? cursor = null;
+        for (var guard = 0; guard < 10; guard++)
+        {
+            var url = $"/api/v1/sync/sets/{membersSet}/trips?pageSize=1" + (cursor is null ? "" : $"&cursor={Uri.EscapeDataString(cursor)}");
+            var one = await GetPageAsync(member, url);
+            foreach (var recording in one.GetProperty("recordings").EnumerateArray())
+            {
+                paged[recording.GetProperty("id").GetGuid()] = AuthorOf(recording);
+            }
+
+            cursor = one.GetProperty("hasMore").GetBoolean() ? one.GetProperty("nextCursor").GetString() : null;
+            if (cursor is null)
+            {
+                break;
+            }
+        }
+
+        paged.ShouldBe(new Dictionary<Guid, Guid?> { [byListed] = clubmate, [byUnlisted] = null, [byUnmapped] = null }, ignoreOrder: true);
+
+        // With the directory switched off nobody is named, the clubmate included.
+        await SetDirectoryAsync(enabled: false);
+        try
+        {
+            var off = await GetPageAsync(member, $"/api/v1/sync/sets/{membersSet}/trips");
+            AuthorOf(Single(off, byListed)).ShouldBeNull();
+            Single(off, byListed).GetProperty("points").EnumerateArray().ShouldAllBe(p => AuthorOf(p) == null);
+        }
+        finally
+        {
+            await SetDirectoryAsync(enabled: true);
+        }
+
+        AuthorOf(Single(await GetPageAsync(member, $"/api/v1/sync/sets/{membersSet}/trips"), byListed)).ShouldBe(clubmate);
+    }
+
+    private static Guid? AuthorOf(JsonElement row) =>
+        row.GetProperty("createdByCaverId") is { ValueKind: JsonValueKind.String } id ? id.GetGuid() : null;
+
+    private async Task SetDirectoryAsync(bool enabled)
+    {
+        var email = $"st-adm-{marker}@t.local";
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            if (!await db.Users.AnyAsync(u => u.Email == email))
+            {
+                await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, email);
+            }
+        }
+
+        using var admin = await AuthHelper.BearerClientAsync(factory, email);
+        var saved = await admin.PutAsJsonAsync("/api/v1/admin/settings/sync", new
+        {
+            peopleDirectoryEnabled = enabled,
+            peopleDirectoryScope = "myGroups",
+            convertTripsWithProblems = true,
+            stagedUploadRetentionDays = 7,
+            rejectedHeldBytesRetentionDays = 30,
+        });
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+    }
+
     public async ValueTask DisposeAsync()
     {
         await factory.DisposeAsync();
@@ -509,7 +647,7 @@ public sealed class SyncTripRecordingTests : IAsyncLifetime, IDisposable, IClass
     }
 
     private static object Recording(
-        Guid id, Guid caveId, string title = "Trip", DateTimeOffset? baseRevision = null) => new
+        Guid id, Guid caveId, string title = "Trip", DateTimeOffset? baseRevision = null, Guid? author = null) => new
     {
         id,
         baseRevision,
@@ -519,16 +657,17 @@ public sealed class SyncTripRecordingTests : IAsyncLifetime, IDisposable, IClass
         log = "entered; turned back at the sump",
         startedAt = new DateTimeOffset(2026, 9, 12, 8, 0, 0, TimeSpan.Zero),
         endedAt = new DateTimeOffset(2026, 9, 12, 16, 0, 0, TimeSpan.Zero),
-        createdByDeviceUserId = Guid.CreateVersion7(),
+        createdByDeviceUserId = author ?? Guid.CreateVersion7(),
     };
 
-    private static object Point(Guid id, Guid recordingId, Guid? placeId, int minutes) => new
+    private static object Point(Guid id, Guid recordingId, Guid? placeId, int minutes, Guid? author = null) => new
     {
         id,
         recordingId,
         placeId,
         scannedAt = new DateTimeOffset(2026, 9, 12, 8, 0, 0, TimeSpan.Zero).AddMinutes(minutes),
         notes = $"scan {minutes}",
+        createdByDeviceUserId = author,
     };
 
     private Task<JsonElement> UploadAsync(
