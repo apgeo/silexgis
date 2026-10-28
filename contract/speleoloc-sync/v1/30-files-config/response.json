@@ -1,0 +1,14 @@
+{
+  "maxUploadBytes": 536870912,
+  "remainingBytes": null,
+  "quotaBytes": null,
+  "usedBytes": null,
+  "acceptedExtensions": [],
+  "refusedExtensions": [],
+  "chunkBytes": 8388608,
+  "resumableThresholdBytes": 33554432,
+  "archiveExtensions": [
+    ".zip"
+  ],
+  "conversionAvailable": false
+}

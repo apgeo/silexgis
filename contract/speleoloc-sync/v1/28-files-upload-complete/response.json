@@ -1,0 +1,10 @@
+{
+  "id": "<upload>",
+  "fileName": "field-notes.txt",
+  "sizeBytes": 920,
+  "sha256": "2ade24dc7491adbfcb008ebee4cf4487b964b56202294744aa4e22788c00f32c",
+  "mimeType": "text/plain",
+  "kind": "document",
+  "stagedAt": "<timestamp>",
+  "expiresAt": "<timestamp>"
+}

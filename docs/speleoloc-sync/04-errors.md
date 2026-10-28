@@ -377,7 +377,7 @@ routes' own:
 | 400 | `file.type_not_accepted` | The installation does not accept files of this type | `surface-to-user` |
 | 403 | `access.create_forbidden` | This account may not add documents anywhere | `stop` — keep the file on the phone |
 | 409 | `file.quota_exceeded` | Not enough storage room left for this account or for the installation; staged bytes already count | `surface-to-user` — send the rows that need no file, or withdraw staged files nothing will adopt |
-| 409 | `upload.chunk_out_of_order` | The piece does not continue the file; the detail names the offset to send from | `apply-and-resubmit` — send from that offset |
+| 409 | `upload.chunk_out_of_order` | The piece does not continue the file; the integer member `expectedOffset` names the offset to send from (the detail says the same in words) | `apply-and-resubmit` — send from `expectedOffset`, or, when the answer was lost, from the `receivedBytes` that `GET /api/v1/files/uploads/{id}` reports |
 | 400 | `upload.size_mismatch` | The pieces add up to more than the declared size — including any piece sent after the bytes were staged | `stop` — open a new transfer with the right size |
 | 409 | `upload.incomplete` | Completed before every byte arrived | `apply-and-resubmit` — ask how far it got (`GET`), send the rest, complete again |
 | 404 | `upload.session_not_found` | No such transfer for this account: it never existed, belongs to another account, was withdrawn, or waited past its retention (or 24 hours idle while still arriving) | `apply-and-resubmit` — open a new transfer and send the bytes again |

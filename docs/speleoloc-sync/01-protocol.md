@@ -777,6 +777,7 @@ orders its own rows and one's position says nothing about where to resume the ot
         "reach": "original",
         "renditions": [2400, 1200, 480, 160],
         "photographerCaverId": null,
+        "createdByDeviceUserId": null,
         "capturedAt": "2026-02-11T10:02:00Z",
         "createdAt": "2026-10-20T18:00:01.000001Z",
         "updatedAt": "2026-10-20T18:00:01.000001Z"
@@ -835,6 +836,13 @@ keys it on `documentId` and `versionId`.
     `renditions` or `none`.
 - **`renditions`** lists the picture sizes the server draws, largest first; it is empty for any
   file that is not an image.
+- **`photographerCaverId`** is who took a photo: the caver named on it in the browser, or — when
+  nobody is named, by caver or by name — the caver its phone user is linked to (section 12),
+  resolved as the catalogue is read, so a link made in the browser later applies and an unlink
+  takes it off. A photographer named in the browser always wins.
+- **`createdByDeviceUserId`** is the phone user who added the file, as the phone's upload stated it
+  (section 11.3); null when none did, or when the file did not come from a phone. It round-trips as
+  a recording's does.
 - **No position, ever.** Not the photo's capture point, not its target's coordinates. Where a picture
   was taken is not part of this row on any reach; a device that needs the cave's position reads it
   from the feature download, under that stream's rules.
@@ -935,9 +943,15 @@ Content-Type: application/octet-stream
 
 Each answer says how far the file has got. A piece the server already holds is answered `200` again,
 so a piece whose answer was lost can simply be sent again; a piece that does not continue the file is
-`409 upload.chunk_out_of_order` with the offset to send from. `GET /api/v1/files/uploads/{id}` says
-how far a transfer got after a dropped connection. While the bytes are still arriving the transfer
-lives for 24 hours after its last piece.
+`409 upload.chunk_out_of_order` with the offset to send from. Send from the refusal's
+`expectedOffset` (an integer member beside `code`), or, when that answer was lost, read
+`receivedBytes` from `GET /api/v1/files/uploads/{id}`, which says how far a transfer got after a
+dropped connection. While the bytes are still arriving the transfer lives for 24 hours after its last
+piece.
+
+The answers of these routes and of `GET /api/v1/files/config` are recorded in the contract
+(`26-files-upload-open` to `30-files-config`, and `16-errors/chunk-out-of-order`), and their members,
+as recorded there, are part of contract version 1.
 
 When every byte has arrived:
 
@@ -1046,7 +1060,10 @@ carried none. A resend of the same `batchId` is answered from the record and wri
 that is not a picture. An absent member says nothing — the caption stands — and an empty one clears it.
 `title`, absent or blank, keeps the name the document has; on a create the file name stands in.
 `capturedAt` is kept only when the file itself states no capture time, because the file is the better
-witness. `createdByDeviceUserId` is accepted and not yet kept; `clientUpdatedAt` is informational.
+witness. `createdByDeviceUserId` is kept on the document a create makes, as the phone user's
+identifier and never as a caver, and the catalogue gives it back (section 11.1); a photo that names
+no photographer is shown as taken by the caver that phone user is linked to (section 12), wherever a
+photographer is shown or filtered on. An edit does not move it. `clientUpdatedAt` is informational.
 
 #### Hanging a document on a feature
 
@@ -1230,8 +1247,8 @@ people are not arbitrated on a revision). An upload without the array is answere
   who made it is: a link the roster's keeper has confirmed is theirs, and stays. A link a forced undo
   puts back is put back as the phone's.
 
-`uploadRowsMax` counts the items of every section together — `rows`, `people`, `tripRecordings` and
-`tripPoints` (section 13).
+`uploadRowsMax` counts the items of every section together — `rows`, `people`, `documents`,
+`documentLinks`, `rasterMaps`, `tripRecordings`, `tripPoints` and `rasterPins` (sections 11, 13 and 15).
 
 ## 13. Trips
 
@@ -1269,6 +1286,7 @@ Authorization: Bearer <token>
     }
   ],
   "tombstones": [ { "id": "…", "deletedAt": "…" } ],
+  "pointTombstones": [ { "id": "…", "recordingId": "…", "deletedAt": "…" } ],
   "nextCursor": "…",
   "hasMore": false
 }
@@ -1276,20 +1294,27 @@ Authorization: Bearer <token>
 
 - Paged exactly as the feature stream is (section 3): an opaque cursor of its own — a cursor of
   another stream is refused `400 sync.cursor_invalid` — `409 sync.cursor_stale` when the set moved,
-  `pageSize` clamped to `pageSizeMax`, tombstones riding the same cursor.
+  `pageSize` clamped to `pageSizeMax`, both kinds of tombstone riding the same cursor.
 - **Which recordings.** A recording is on a page when its cave is one the feature stream would hand
   this account right now — inside the set, readable, and **not withheld** — and the recording itself is
   readable under the trip rules. A recording in a withheld cave is **absent, not stubbed**, exactly as a
   photograph on that cave is.
 - **Which scans.** `points` lists the recording's live scans in the order they were made, **leaving out
-  every scan of a place the feature stream would not hand this account**; the list is otherwise
-  complete, so replace the recording's scans wholesale. A scan carries no position of its own: where it
-  was is its place's position.
+  every scan of a place the feature stream would not hand this account**. A scan carries no position
+  of its own: where it was is its place's position.
 - **When a recording comes again.** When it changes, when any of its scans is added, edited or removed,
   or when its cave changes (so a cave that comes into the set brings its recordings). `revision` is the
   recording's own revision, the value an upload sends back as `baseRevision`; each scan has its own.
 - **Tombstones** name recordings removed after the cursor, in caves the set hands this account, that the
-  account may read. A removed scan is not a tombstone: its recording comes again without it.
+  account may read. A removed recording takes its scans with it; they are not named again.
+- **`pointTombstones`** name scans removed after the cursor (from the start, on a first read) from
+  recordings this page's rules hand the account, each with the recording it was on — and only a scan
+  the account would be given were it live: one of a place the feature stream hands it now, or of no
+  place. The removal of a scan of a withheld place is silent, as the scan itself is. The recording
+  also comes again without the scan, so a device that ignores the array works as before.
+- **What a device does with the scans.** Remove a scan that a `pointTombstones` entry names; **keep
+  any other scan that is merely missing** from `points` — it is withheld, or now stands at a place
+  the account may not be given, and the device's own copy is not wrong for that.
 - `deviceUuid` never travels; `createdByDeviceUserId` is the phone user's identifier (section 12).
 
 ### 13.2 The `tripRecordings` and `tripPoints` sections of an upload
@@ -1513,16 +1538,23 @@ an empty stream.
 | `note` | What the reviewer wrote to the uploader; absent when nothing. |
 | `revision` | The revision the server holds the row at now, when it holds one this account may read. After `accepted` it is the row as written — store it as the row's base revision. Absent for a new row that was not written. |
 | `code` | For `failed` only: why the row could not be written — the code the upload itself would have answered (section 6.2 of the errors document), `review.dependency_failed` when a row it depends on was not written, or `review.proposal_unreadable` when the kept proposal could no longer be read. |
-| `current` | For a `rejected` or `failed` **edit or removal of a feature**: the server's row, shaped exactly as the feature stream delivers it, so the device can put back what it still shows. **Absent when this account may not be given that row's position** — the conflict echo's rule (section 8.6), absence and never a blurred stand-in; the device re-reads the set instead. |
+| `partial` | On an `accepted` **edit** of which the reviewer wrote only some of the proposed fields: `true`. Absent when the whole edit was written, and on every other outcome. |
+| `current` | For a `rejected` or `failed` **edit or removal**, and for an edit `accepted` with `partial`, of a row of any section but `people`: the server's row, shaped exactly as that section's own stream delivers it, so the device can put back what it still shows — for `rows` a feature of the feature download; for `documents` the catalogue's `document`; for `documentLinks` a catalogue link (when the document hangs there more than once, the link the upload named, else the first by identifier); for `tripRecordings` a recording of the trips stream with its `points`; for `tripPoints` one entry of a recording's `points`; for `rasterMaps` a map of the rasters stream with its `pins`; for `rasterPins` one entry of a map's `pins`. **Absent whenever that stream would not hand this account the row now** — its cave, place or target withheld (the conflict echo's rule, section 8.6: absence and never a blurred stand-in), unreadable, or gone — whichever of the account's sets the row was sent through. `people` carries none: a phone user's link is read from `GET /sync/people` `links`. |
 
 What a device does with each outcome:
 
 - **`accepted`** — nothing to undo. The written row also reaches the device through its own stream as
-  any written row does; `revision` saves waiting for it.
+  any written row does; `revision` saves waiting for it. **With `partial: true`** the device's version
+  of the fields that were not written is not the server's: replace the row with `current`, or, when
+  `current` is absent, with what that section's stream hands when it is read again from the
+  beginning — the row did not change after the revision the device now holds, so an incremental read
+  would not bring it again.
 - **`rejected`** — the device's version will not be written unless a reviewer later accepts it after
   all (which arrives as a later `accepted` for the same `reviewId`). A new row is dropped locally (or kept
   as a local draft, the app's choice); an edit or removal is replaced by `current`, or, when `current`
-  is absent, by whatever the next read of the set brings.
+  is absent, by what **that section's stream** hands when it is read again **from the beginning** —
+  drop that stream's cursor, not the others'. The server's row did not change, so an incremental read
+  from the device's position would not bring it again.
 - **`superseded`** — ignore; the later `reviewId` will be decided in its turn.
 - **`failed`** — as `rejected`, and worth telling the caver: the account may have lost a right.
 
@@ -1558,11 +1590,12 @@ Authorization: Bearer <token>
   "maps": [
     {
       "id": "…", "caveId": "…", "caveAreaId": "…", "title": "…", "mapType": "planView",
-      "sortOrder": 0, "documentId": "…", "revision": "…",
+      "sortOrder": 0, "documentId": "…", "pictureWidth": 4000, "pictureHeight": 3000, "revision": "…",
       "pins": [ { "id": "…", "placeId": "…", "x": 120, "y": 80, "revision": "…" } ]
     }
   ],
   "tombstones": [ { "id": "…", "deletedAt": "…" } ],
+  "pinTombstones": [ { "id": "…", "mapId": "…", "deletedAt": "…" } ],
   "nextCursor": "…",
   "hasMore": false
 }
@@ -1570,14 +1603,13 @@ Authorization: Bearer <token>
 
 - Paged exactly as the feature stream is (section 3): an opaque cursor of its own — a cursor of
   another stream is refused `400 sync.cursor_invalid` — `409 sync.cursor_stale` when the set moved,
-  `pageSize` clamped to `pageSizeMax`, tombstones riding the same cursor.
+  `pageSize` clamped to `pageSizeMax`, both kinds of tombstone riding the same cursor.
 - **Which maps.** A map is on a page when its cave is one the feature stream would hand this account
   right now — inside the set, readable, and **not withheld**. A map of a withheld cave is **absent, not
   stubbed**, exactly as a photograph on that cave is.
 - **Which pins.** `pins` lists the map's live pins, **leaving out every pin of a place the feature
-  stream would not hand this account**; the list is otherwise complete, so replace the map's pins
-  wholesale. On a picture that may one day be laid on the ground a pixel is a position, so no route
-  shows a pin of a place its reader may not be given.
+  stream would not hand this account**. On a picture that may one day be laid on the ground a pixel
+  is a position, so no route shows a pin of a place its reader may not be given.
 - **When a map comes again.** When it changes, when any of its pins is added, moved or removed, or when
   its cave changes. `revision` is the map's own revision, the value an upload sends back as
   `baseRevision`; each pin has its own. A pin added or removed does not move the map's own `revision`.
@@ -1585,8 +1617,24 @@ Authorization: Bearer <token>
 - **The picture** is `documentId`, a document of the documents stream: it is listed there as a link of
   the document to the cave with the role `map2d`, and its bytes are fetched like any photograph's — a
   reader who may not be shown where the picture was taken is handed it whole without its location data.
+- **`pictureWidth`** and **`pictureHeight`** are the pixel size of the map's current picture as
+  stored — the frame `x` and `y` are measured in. They follow a new picture revision, and the map
+  comes again when it gets one. Null only when the picture's size could not be read. A reader handed
+  only renditions of the picture scales the pins by `renditionWidth / pictureWidth` (the same factor
+  vertically): a rendition keeps the picture's aspect ratio, its longer side fitted to the size asked
+  for. Renditions are drawn upright, though — turned by the picture's own orientation tag and by any
+  turn recorded in the browser — so for a picture stored on its side the rendition's axes are the
+  stored ones swapped; a phone's own pictures of plans are normally stored upright.
 - **Tombstones** name maps removed after the cursor, in caves the set hands this account. A removed
-  pin is not a tombstone: its map comes again without it.
+  map takes its pins with it; they are not named again.
+- **`pinTombstones`** name pins removed after the cursor (from the start, on a first read) from maps
+  this page's rules hand the account, each with the map it was on — and only a pin the account would
+  be given were it live: one of a place the feature stream hands it now. The removal of a pin of a
+  withheld place is silent, as the pin itself is. The map also comes again without the pin, so a
+  device that ignores the array works as before.
+- **What a device does with the pins.** Remove a pin that a `pinTombstones` entry names; **keep any
+  other pin that is merely missing** from `pins` — it is withheld, or now stands on a place the
+  account may not be given, and the device's own copy is not wrong for that.
 
 ### 15.2 The `rasterMaps` and `rasterPins` sections of an upload
 
@@ -1596,7 +1644,9 @@ the per-item shape of `rows`. They are applied in the fixed order of the upload 
 sent beside its cave finds it, and a pin sent beside its map and its place finds both.
 
 **A map** — `{ id, baseRevision, deleted, caveId, caveAreaId?, title, mapType, sortOrder?, fileName?,
-sha256, sizeBytes?, stagedUploadId, clientUpdatedAt? }`:
+sha256?, sizeBytes?, stagedUploadId?, clientUpdatedAt? }`. `sha256` describes staged bytes: it is
+**required with `stagedUploadId`** (an upload that stages bytes for a map without it is refused whole
+with `400`) and **ignored without it**, so an edit that brings no new picture may leave it out:
 
 - A **new** map (no `baseRevision`) brings its picture as bytes staged beforehand (section 11.3,
   `stageForSync`), named by `stagedUploadId` and stated by `sha256`. The picture has to be an image. It

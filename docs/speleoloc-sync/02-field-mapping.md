@@ -221,7 +221,7 @@ What a phone's document row in an upload's `documents` array becomes on the serv
 | `sizeBytes` | — | Checked against the staged bytes |
 | `stagedUploadId` | The staged bytes the revision is made of | Consumed on adoption |
 | `capturedAt` | The file's capture time | Only when the file states none |
-| `createdByDeviceUserId` | — | Not kept yet |
+| `createdByDeviceUserId` | The phone user who added the file | Kept on a create, never moved by an edit; a phone user's identifier, resolved through the phone-user record (section 8), never stored as a caver. Returned on the catalogue's `document`. A photo that names no photographer is credited to the caver that phone user is linked to, resolved when read; a photographer named in the browser always wins |
 | `clientUpdatedAt` | — | Informational |
 
 The type, the position, the direction and the capture time inside the file are read from the bytes,
@@ -362,7 +362,7 @@ protocol document's section on raster maps says how they are read and sent.
 | `raster_maps.title` | `title` | Kept as sent, trimmed |
 | `raster_maps.map_type` | `mapType` | See the table below |
 | `raster_maps.sort_order` | `sortOrder` | Kept as sent |
-| The map's image file | `stagedUploadId`, `sha256`, `sizeBytes`, `fileName` | A document made from the staged bytes, hung on the cave with the map role; `documentId` on the stream |
+| The map's image file | `stagedUploadId`, `sha256`, `sizeBytes`, `fileName` | A document made from the staged bytes, hung on the cave with the map role; `documentId` on the stream, with the stored picture's `pictureWidth` and `pictureHeight`. `sha256` is required with `stagedUploadId` and ignored without it |
 | `raster_maps.updated_at` | `clientUpdatedAt` | Provenance only, never compared |
 | — | `revision` | The server's revision of the map |
 | The uploading account | — | The map's owner |

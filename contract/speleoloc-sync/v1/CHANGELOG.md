@@ -382,3 +382,70 @@ Recorded exchanges written or re-written in this entry: none.
 
 Codes: no new ones — `sync.target_not_found`, `sync.location_forbidden`, `sync.row_forbidden` and
 `sync.kind_unsupported` are met on recording and scan targets.
+
+## 2026-10-28 — removed pins and scans are named, every turned-down edit carries the server's row, documents keep their phone user
+
+**Contract version: 1, unchanged. A build pinned to it keeps working.** Every change is a member
+added to an answer; nothing a version-1 build reads changes meaning, and an upload is answered as
+before.
+
+- **`pinTombstones`** on the rasters stream (`{ id, mapId, deletedAt }`) and **`pointTombstones`** on
+  the trips stream (`{ id, recordingId, deletedAt }`), riding that stream's one cursor exactly as
+  `tombstones` do. Each names a pin (scan) removed from a map (recording) the account is handed, and
+  only one the account would be given were it live — its place handed by the feature stream now (or,
+  for a scan, no place). The removal of a pin or scan of a withheld place stays silent. `pins` and
+  `points` still list every live one except the withheld, so the device rule becomes **remove what a
+  tombstone names, keep what is merely missing**. A removed map or recording is its own tombstone and
+  takes its children with it. The parent still comes again when a child goes, so a device that
+  ignores the new arrays works as before.
+- **`current` on the reviews stream for every section that carries an edit or a removal** —
+  `documents`, `documentLinks`, `tripRecordings`, `tripPoints`, `rasterMaps` and `rasterPins` beside
+  `rows` — shaped exactly as that section's stream delivers the row (a catalogue `document`, a
+  catalogue link, a recording with its `points`, one scan, a map with its `pins`, one pin), and absent
+  whenever that stream would not hand the account the row now. `people` carries none. When `current`
+  is absent, the device re-reads **that section's stream from the beginning** (drops that stream's
+  cursor, not the others'). In the served description `current` is now typed as any value, since its
+  shape follows `entity`.
+- **`partial: true` on an `accepted` edit written only in part** (a reviewer accepted some of its
+  fields), with `current` beside it under the same shapers and withholding rule, for every section.
+  The member is absent when the whole edit was written. When `current` is absent on a partial
+  acceptance, the device re-reads that section's stream from the beginning. A build that ignores
+  `partial` keeps the behaviour it had: it stores the revision against its own version.
+- **`documents[].createdByDeviceUserId` is kept** on the document a create makes, and the catalogue's
+  `document` gains **`createdByDeviceUserId`** (null when none). A photo that names no photographer is
+  shown as taken by the caver that phone user is linked to — the catalogue's `photographerCaverId`
+  included — resolved when read; a photographer named in the browser always wins.
+- **Each map on the rasters stream gains `pictureWidth` and `pictureHeight`**, the pixel size of its
+  current picture as stored — the frame pins' `x`/`y` are measured in — null only when the size could
+  not be read. A reader handed only renditions scales pins by `renditionWidth / pictureWidth`
+  (renditions keep the aspect ratio; they are drawn upright, so a picture stored on its side has its
+  axes swapped in them). **A map's `sha256` is required with `stagedUploadId` and ignored without it**:
+  an upload staging bytes for a map without the hash is now refused whole with `400` (an edit was
+  answered `rejected sync.file_hash_mismatch` before), and a new map with neither is answered on its
+  row `rejected sync.file_bytes_missing` (it was a `400`). An edit without new bytes may leave it out,
+  as it always could.
+- **The byte-staging routes and `GET /api/v1/files/config` are recorded**, and their members, as
+  recorded, are part of contract version 1: opening a transfer with `stageForSync: true`, one piece,
+  completing, the transfer's status, and the files settings. **`409 upload.chunk_out_of_order` gains
+  the integer member `expectedOffset`**, the offset to send the next piece from; `detail` is
+  unchanged. Send from `expectedOffset`, or, when that answer was lost, from the `receivedBytes`
+  that `GET /api/v1/files/uploads/{id}` reports.
+- Two corrections of the text, no behaviour changed: `20-upload-held/request.json` now sends the
+  canonical `"positionQuality": "unknown"` (the recording sent `"Unknown"`, which the server also
+  accepts — it reads that value without regard to case); and `01-protocol.md` §12.2 no longer says
+  `uploadRowsMax` counts four sections — it counts every section, as §8 and `04-errors.md` say.
+
+Described in `docs/speleoloc-sync/01-protocol.md` §11.1, §11.3, §12.2, §13.1, §14.1 and §15.1,
+`02-field-mapping.md` §7.1, and `04-errors.md` (the transfer routes' refusals).
+
+Recorded exchanges written in this entry: `26-files-upload-open` (a `201`, with `status.txt`),
+`27-files-upload-piece` (the request line only — the body is the file's bytes),
+`28-files-upload-complete`, `29-files-upload-status`, `30-files-config` and
+`16-errors/chunk-out-of-order`. Re-written: `17-documents-first-page` (`createdByDeviceUserId` on
+the document), `20-upload-held` (the request's `positionQuality`), `24-trips-first-page`
+(`pointTombstones`, empty) and `25-rasters-first-page` (`pinTombstones`, empty, and the map's
+`pictureWidth`/`pictureHeight`). Everything else is
+byte-for-byte unchanged.
+
+Codes: none new. `upload.chunk_out_of_order` is recorded as bytes for the first time, now with
+`expectedOffset`.

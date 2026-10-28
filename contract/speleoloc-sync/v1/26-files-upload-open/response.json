@@ -1,0 +1,10 @@
+{
+  "id": "<upload>",
+  "receivedBytes": 0,
+  "declaredSizeBytes": 920,
+  "chunkBytes": 8388608,
+  "expiresAt": "<timestamp>",
+  "stagedForSync": true,
+  "stagedAt": null,
+  "sha256": null
+}

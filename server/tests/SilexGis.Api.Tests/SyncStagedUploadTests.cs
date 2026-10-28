@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -148,6 +149,55 @@ public sealed class SyncStagedUploadTests : IAsyncLifetime, IDisposable, IClassF
         var extra = await SendChunkAsync(phone, session, bytes.Length, [1, 2, 3]);
         extra.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await ReadCodeAsync(extra)).ShouldBe("upload.size_mismatch");
+    }
+
+    [Fact]
+    public async Task The_staging_routes_and_the_files_settings_are_recorded_as_a_phone_meets_them()
+    {
+        // Invented text, fixed, so the recorded size and hash are the bytes' own and never move.
+        var bytes = Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat("Invented field notes for a recorded exchange.\n", 20)));
+        var half = bytes.Length / 2;
+        var open = new { fileName = "field-notes.txt", sizeBytes = bytes.Length, stageForSync = true };
+        var openJson = JsonSerializer.Serialize(open, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        using var opened = await phone.PostAsync("/api/v1/files/uploads", new StringContent(openJson, Encoding.UTF8, "application/json"));
+        var openPayload = await opened.Content.ReadAsStringAsync();
+        opened.StatusCode.ShouldBe(HttpStatusCode.Created, openPayload);
+        var session = JsonDocument.Parse(openPayload).RootElement.GetProperty("id").GetGuid();
+        var recorder = new ContractFixture().Name(session, "upload");
+        await recorder.AssertWithStatusAsync("26-files-upload-open", "POST /api/v1/files/uploads", openJson, opened);
+
+        // One piece: its body is the raw bytes, so the request line is what is recorded of it.
+        using var piece = await SendChunkAsync(phone, session, 0, bytes[..half]);
+        piece.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await recorder.AssertAsync("27-files-upload-piece", $"PUT /api/v1/files/uploads/{session}?offset=0", piece);
+
+        // A piece that does not continue the file: refused, naming where to resume.
+        using var gap = await SendChunkAsync(phone, session, half + 10, bytes[(half + 10)..]);
+        gap.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        await recorder.AssertRefusalAsync(
+            "16-errors/chunk-out-of-order", $"PUT /api/v1/files/uploads/{session}?offset={half + 10}", gap);
+        var refusal = JsonDocument.Parse(await gap.Content.ReadAsStringAsync()).RootElement;
+        refusal.GetProperty("code").GetString().ShouldBe("upload.chunk_out_of_order");
+        refusal.GetProperty("expectedOffset").GetInt64().ShouldBe(half);
+
+        using var rest = await SendChunkAsync(phone, session, half, bytes[half..]);
+        rest.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        using var completed = await phone.PostAsync($"/api/v1/files/uploads/{session}/complete", null);
+        completed.StatusCode.ShouldBe(HttpStatusCode.OK, await completed.Content.ReadAsStringAsync());
+        await recorder.AssertAsync("28-files-upload-complete", $"POST /api/v1/files/uploads/{session}/complete", completed);
+
+        var status = await recorder.RecordGetAsync("29-files-upload-status", phone, $"/api/v1/files/uploads/{session}");
+        status.GetProperty("stagedForSync").GetBoolean().ShouldBeTrue();
+        status.GetProperty("receivedBytes").GetInt64().ShouldBe(bytes.Length);
+        status.GetProperty("sha256").GetString().ShouldBe(Convert.ToHexStringLower(SHA256.HashData(bytes)));
+        status.GetProperty("stagedAt").ValueKind.ShouldBe(JsonValueKind.String);
+        status.GetProperty("expiresAt").ValueKind.ShouldBe(JsonValueKind.String);
+
+        var config = await recorder.RecordGetAsync("30-files-config", phone, "/api/v1/files/config");
+        config.GetProperty("chunkBytes").GetInt32().ShouldBeGreaterThan(0);
+        config.GetProperty("maxUploadBytes").GetInt64().ShouldBeGreaterThan(bytes.Length);
     }
 
     [Fact]

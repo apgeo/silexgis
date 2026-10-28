@@ -62,6 +62,7 @@ Two consequences worth stating, because they are easy to misread:
 | `16-errors/client-update-required` | An account whose uploads wait for a reviewer, sending from a build that does not declare `clientFeatures: ["held"]`. `409`, refused whole like the version refusal and with no `rows` either: nothing is written, and the device tells its user to update rather than retrying |
 | `16-errors/feature-disabled` | The people directory asked for while this installation has it switched off. `409`, not an empty list — a phone stops offering the choice instead of reading "nobody" |
 | `16-errors/file-bytes-missing` | A document row naming bytes that were never staged. **Not a refusal of the exchange** and so **no `status.txt`**: the batch is a `200`, and the row inside it comes back `rejected` with the code. It is filed here because it is the refusal a phone meets when an upload of the bytes was lost; the device uploads them and sends the row again |
+| `16-errors/chunk-out-of-order` | A piece that does not continue the file. `409`, with the offset to send from as the member `expectedOffset` |
 | `17-documents-first-page` | The documents stream for a reader who may read the cave but not place everything the photo hangs on. The photo is announced with `reach: "locationFree"`, and its `sizeBytes` and `sha256` are `null`: the bytes this reader will be given are a copy without the position, not the stored file, so the stored file's figures would be wrong |
 | `18-files-links` | The address route, asked for the whole file and one picture of it in one call. Each item is answered on its own; the addresses are short-lived and carry a token |
 | `19-upload-document-and-link` | One upload carrying a photo, from bytes the device staged first, and the link hanging it on a cave. The document keeps the device's identifier; the link is given one by the server |
@@ -70,7 +71,12 @@ Two consequences worth stating, because they are easy to misread:
 | `22-reviews-current-withheld` | The same decision for a caller who may no longer place the row. The decision and its revision are told; `current` is **absent**, not blurred |
 | `23-people` | The people directory: the caller's clubmates and the caller, names only, and the links the caller's phones have sent (none yet) |
 | `24-trips-first-page` | A trip recording as another member of the club is handed it: two of its three scans. The third is on a place this member may not see exactly, and there is no word of it — a phone cannot tell a scan withheld from a scan never made |
+| `30-files-config` | What this installation takes and how much room the account has left: the largest file, the room, the types it accepts and refuses, the piece size |
 | `25-rasters-first-page` | A raster map as a member is handed it, with the one pin on a place it may see. The map's other pin is on a protected place and is absent; the picture itself is a document, reached through `17`'s stream and `18`'s route |
+| `26-files-upload-open` | A phone opening a transfer for bytes it will name in an upload (`stageForSync: true`). `201`, with the transfer's `id`, how much has arrived, the piece size to send and when the transfer expires |
+| `27-files-upload-piece` | One piece of the bytes, sent as the raw request body at `?offset=` — only the request line is recorded, since the body is the file. The answer says how far the file has got |
+| `28-files-upload-complete` | The last piece in, completing: the bytes hashed and typed, waiting under the transfer's `id` as the staged upload a document row names, with `stagedAt` and `expiresAt`. No document is made |
+| `29-files-upload-status` | Asking about a transfer after a dropped connection or before sending the row that needs it: `receivedBytes`, `stagedForSync`, `stagedAt`, `sha256` and `expiresAt` |
 
 A refusal is recorded with a `status.txt` beside its body, holding the status line. A successful
 exchange has no such file: its status is 200 by construction, and a file saying so on every case

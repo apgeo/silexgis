@@ -1,0 +1,9 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "The next piece starts at 460.",
+  "code": "upload.chunk_out_of_order",
+  "expectedOffset": 460,
+  "traceId": "<trace>"
+}

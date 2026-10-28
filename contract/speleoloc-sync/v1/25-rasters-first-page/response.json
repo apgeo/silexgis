@@ -10,6 +10,8 @@
       "mapType": "planView",
       "sortOrder": 0,
       "documentId": "<uuid-1>",
+      "pictureWidth": 64,
+      "pictureHeight": 48,
       "revision": "<timestamp>",
       "pins": [
         {
@@ -23,6 +25,7 @@
     }
   ],
   "tombstones": [],
+  "pinTombstones": [],
   "nextCursor": "<cursor>",
   "hasMore": false
 }

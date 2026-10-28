@@ -403,7 +403,7 @@ public sealed class SyncUploadHoldTests : IAsyncLifetime, IDisposable, IClassFix
         isMain = true,
         geometry = new { type = "Point", coordinates = new[] { 22.51, 45.61 } },
         altitude = 640.0,
-        positionQuality = "Unknown",
+        positionQuality = "unknown",
     };
 
     private async Task<JsonElement> UploadAsync(object request) => (await UploadRawAsync(request)).Answer;

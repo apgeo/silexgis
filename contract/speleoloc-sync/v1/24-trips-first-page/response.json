@@ -33,6 +33,7 @@
     }
   ],
   "tombstones": [],
+  "pointTombstones": [],
   "nextCursor": "<cursor>",
   "hasMore": false
 }

@@ -32,6 +32,7 @@
           160
         ],
         "photographerCaverId": null,
+        "createdByDeviceUserId": null,
         "capturedAt": null,
         "createdAt": "<timestamp>",
         "updatedAt": "<timestamp>"
