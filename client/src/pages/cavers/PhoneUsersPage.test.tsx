@@ -63,6 +63,16 @@ const DEVICE_MAPPED = {
   linkSource: 'device',
 };
 const IMPORTED = { ...DEVICE_MAPPED, deviceUserId: 'dddddddd-0000-7000-8000-000000000004', linkSource: 'archiveImport' };
+/** A phone user a phone named on a photo or a recording and never described. */
+const NAMELESS = {
+  ...UNMAPPED,
+  deviceUserId: 'eeeeeeee-0000-7000-8000-000000000005',
+  username: null,
+  firstName: null,
+  lastName: null,
+  sentByUserId: 'user-invented',
+  sentByName: 'Ion Inventat',
+};
 
 const answer = <T,>(data: T) => ({ data, response: new Response(null, { status: 200 }) });
 
@@ -123,6 +133,22 @@ describe('the phone users list', () => {
     expect(body[0]).toHaveTextContent('Nia Invented');
     expect(body[1]).toHaveTextContent('democaver');
     expect(screen.getByTestId('phone-users-unmapped')).toHaveTextContent('Some phone users are not mapped to a caver yet');
+  });
+
+  it('shows a phone user the phone never described as such, with who sent it and since when', async () => {
+    rows = [NAMELESS, UNMAPPED];
+    show();
+
+    const label = await screen.findByTestId('phone-user-nameless-eeeeeeee');
+    expect(label).toHaveTextContent('Not yet described by the phone');
+    const row = label.closest('tr') as HTMLElement;
+    expect(row).toHaveTextContent('Sent by Ion Inventat');
+    expect(row).toHaveTextContent('First seen');
+    // Linked like any other, from the same picker.
+    expect(within(row).getByTestId('phone-user-pick-eeeeeeee')).toBeInTheDocument();
+    // A described user is shown by its name, never as undescribed.
+    expect(screen.queryByTestId('phone-user-nameless-aaaaaaaa')).toBeNull();
+    expect(screen.getByText('Nia Invented')).toBeInTheDocument();
   });
 
   it('shows a mapped row with the caver, and an unmapped one with nobody proposed', async () => {

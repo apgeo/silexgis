@@ -3078,6 +3078,8 @@
     "firstSeen": "Văzut prima dată {{when}}",
     "deviceAccount": "contul {{id}}",
     "noName": "Telefonul nu a trimis niciun nume",
+    "notDescribed": "Încă nedescris de telefon",
+    "sentBy": "Trimis de {{name}}",
     "chooseCaver": "Spune ce speolog este",
     "unnamedCaver": "Cineva pe care pagina nu îl poate numi",
     "notMapped": "Neasociat",

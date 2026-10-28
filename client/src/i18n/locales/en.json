@@ -3078,6 +3078,8 @@
     "firstSeen": "First seen {{when}}",
     "deviceAccount": "account {{id}}",
     "noName": "No name sent",
+    "notDescribed": "Not yet described by the phone",
+    "sentBy": "Sent by {{name}}",
     "chooseCaver": "Say which caver this is",
     "unnamedCaver": "Somebody this page cannot name",
     "notMapped": "Not mapped",

@@ -111,7 +111,7 @@ cineva care ține lista speologilor spune ce speolog este fiecare.
 
 | Coloana | |
 |---|---|
-| **Utilizator de telefon** | Numele și autentificarea trimise de telefon și începutul identificatorului contului |
+| **Utilizator de telefon** | Numele și autentificarea trimise de telefon și începutul identificatorului contului; contul al cărui telefon l-a trimis |
 | **Văzut ultima dată** | Când a trimis telefonul ceva ultima oară; ține cursorul deasupra pentru prima dată |
 | **Speolog** | Cine este. Gol până când spune cineva; căsuța caută în listă și **nu propune niciodată pe nimeni** |
 | **Asociat de** | Cine a făcut asocierea curentă: *Telefonul*, *Un import de arhivă* sau *Cineva care ține evidența speologilor* |
@@ -126,6 +126,11 @@ telefon în listă, ca neasociat.
 - Până când un utilizator de telefon este asociat, ce înregistrează apare sub numele dat de
   telefon, marcat ca neasociat, iar o tură înregistrată de el este semnalată pentru verificare sau, dacă această instalare nu
   face ture din înregistrări cu probleme, așteaptă pe pagina peșterii să fie convertită manual.
+- Uneori un telefon numește unul dintre utilizatorii săi — ca autor al unei fotografii, al unei
+  înregistrări sau al unei scanări — fără să-l descrie vreodată. Un astfel de utilizator apare imediat
+  ca **Încă nedescris de telefon**, cu contul al cărui telefon l-a trimis și cu data când a fost văzut
+  prima dată; atât se știe despre el. Asociază-l ca pe oricine altcineva sau așteaptă: numele apar
+  când telefonul îl descrie.
 - Citirea listei cere dreptul de a citi lista speologilor; asocierea și eliminarea cer dreptul de
   a o scrie. Fără el vezi cine cu cine este asociat, dar nu și butoanele.
 

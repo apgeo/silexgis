@@ -24,6 +24,15 @@ function shortAccount(deviceUserId: string) {
   return deviceUserId.slice(0, 8);
 }
 
+/**
+ * Whether the phone has described the user at all. A phone always sends a login with a
+ * description, so a user without one is known only by being named on something it sent — or from
+ * an imported archive, which names its users by identifier alone.
+ */
+function described(user: PhoneUser) {
+  return user.username !== null;
+}
+
 /** What the phone sent for the person, as one line: the name they typed, else the login. */
 function phoneUserLabel(user: PhoneUser) {
   const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
@@ -202,13 +211,33 @@ export default function PhoneUsersPage() {
             key: 'user',
             render: (_: unknown, user: PhoneUser) => (
               <Flex vertical>
-                <Typography.Text strong>
-                  {phoneUserLabel(user) ?? t('phoneUsers.noName')}
-                </Typography.Text>
+                {described(user) ? (
+                  <Typography.Text strong>{phoneUserLabel(user) ?? t('phoneUsers.noName')}</Typography.Text>
+                ) : (
+                  // Nothing else is known of such a user than what is shown under it: which
+                  // account's phone sent it, and since when.
+                  <Typography.Text
+                    strong
+                    type="secondary"
+                    data-testid={`phone-user-nameless-${shortAccount(user.deviceUserId)}`}
+                  >
+                    {t('phoneUsers.notDescribed')}
+                  </Typography.Text>
+                )}
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   {user.username ? `${user.username} · ` : ''}
                   {t('phoneUsers.deviceAccount', { id: shortAccount(user.deviceUserId) })}
                 </Typography.Text>
+                {(user.sentByName || !described(user)) && (
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {[
+                      user.sentByName ? t('phoneUsers.sentBy', { name: user.sentByName }) : null,
+                      described(user) ? null : t('phoneUsers.firstSeen', { when: when(user.firstSeenAt) }),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Typography.Text>
+                )}
               </Flex>
             ),
           },

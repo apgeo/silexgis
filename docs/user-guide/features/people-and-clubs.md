@@ -108,7 +108,7 @@ a person, so the page is where somebody who keeps the roster says which caver ea
 
 | Column | |
 |---|---|
-| **Phone user** | The name and login the phone sent, and the head of the account's identifier |
+| **Phone user** | The name and login the phone sent, and the head of the account's identifier; the account whose phone sent it |
 | **Last seen** | When the phone last sent anything; hover for the first time |
 | **Caver** | Who they are. Empty until somebody says; the box searches the roster and **never proposes anybody** |
 | **Mapped by** | Who made the current mapping: *The phone*, *An archive import*, or *Somebody keeping the roster* |
@@ -124,6 +124,10 @@ listed, as not mapped.
   marked as unmapped, and a trip they recorded is flagged for attention or, if this installation
   does not make trips from recordings with problems, waits on the cave page to be converted by
   hand.
+- A phone sometimes names one of its users — as who took a photo, started a recording or made a
+  scan — without ever describing them. Such a user is listed at once as **Not yet described by the
+  phone**, with the account whose phone sent it and when it was first seen; that is all that is
+  known of it. Map it like anybody else, or wait: the names appear when the phone describes the user.
 - Reading the list needs the right to read the roster; mapping and removing need the right to
   write it. Without it you see who is mapped to whom and no controls.
 
