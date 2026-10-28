@@ -199,6 +199,20 @@ public class StoredFile : ITimestamped, IAuditable
     /// <summary>A picture's height in pixels as stored, on the same terms as <see cref="PixelWidth"/>.</summary>
     public int? PixelHeight { get; set; }
 
+    /// <summary>
+    /// The orientation code, 1–8, that renderings of this picture are drawn upright by — read
+    /// beside <see cref="PixelWidth"/> from the same decoded image, on the same terms.
+    /// </summary>
+    /// <remarks>
+    /// Not the EXIF orientation in the metadata bag, although for a camera's JPEG the two agree. The
+    /// renderer obeys what the imaging library decoded, and that comes from a TIFF's own tag where
+    /// a TIFF has no EXIF profile, and is 1 for a picture whose decoder already turned the pixels
+    /// while the EXIF inside it still names a turn. Together with <see cref="OrientationQuarterTurns"/>
+    /// it says exactly how a rendering relates to the stored frame, which is what anything measured
+    /// in that frame — a pin on a map — needs in order to be drawn on a rendering.
+    /// </remarks>
+    public int? PixelOrientation { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

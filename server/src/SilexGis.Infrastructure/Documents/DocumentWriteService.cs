@@ -203,6 +203,7 @@ public sealed class DocumentWriteService(
             Metadata = (capture.Exif ?? PhotoExif.None).IntoMetadata(null),
             PixelWidth = capture.WidthPixels,
             PixelHeight = capture.HeightPixels,
+            PixelOrientation = capture.Orientation,
             Author = Trim(facts.Author, NameFactMaxLength),
             Producer = Trim(facts.Producer, NameFactMaxLength),
             ContentCreatedAt = Utc(facts.ContentCreatedAt),

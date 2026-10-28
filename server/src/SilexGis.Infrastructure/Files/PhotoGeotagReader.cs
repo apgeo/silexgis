@@ -24,7 +24,8 @@ public sealed record PhotoCapture(
     double? Dop = null,
     PhotoExif? Exif = null,
     int? WidthPixels = null,
-    int? HeightPixels = null)
+    int? HeightPixels = null,
+    int? Orientation = null)
 {
     /// <summary>A file that stated nothing, or one nothing here could read.</summary>
     public static readonly PhotoCapture None = new();
@@ -54,12 +55,13 @@ public sealed class MagickPhotoGeotagReader : IPhotoGeotagReader
             // plan states nothing about a camera, and is still the frame things are placed on.
             int? width = image.Width > 0 ? (int)image.Width : null;
             int? height = image.Height > 0 ? (int)image.Height : null;
+            int? orientation = width is null && height is null ? null : RendererOrientation(image);
             var exif = image.GetExifProfile();
             if (exif is null)
             {
                 return width is null && height is null
                     ? PhotoCapture.None
-                    : new PhotoCapture(WidthPixels: width, HeightPixels: height);
+                    : new PhotoCapture(WidthPixels: width, HeightPixels: height, Orientation: orientation);
             }
 
             return new PhotoCapture(
@@ -75,7 +77,8 @@ public sealed class MagickPhotoGeotagReader : IPhotoGeotagReader
                 Positive(Rational(exif, ExifTag.GPSDOP)),
                 ReadCamera(exif, image),
                 width,
-                height);
+                height,
+                orientation);
         }
         catch (MagickException)
         {
@@ -83,6 +86,26 @@ public sealed class MagickPhotoGeotagReader : IPhotoGeotagReader
             return PhotoCapture.None;
         }
     }
+
+    /// <summary>
+    /// The orientation code the renderer will obey when it draws this picture upright, 1–8.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read from the decoded image rather than from its EXIF profile, because the two are not the
+    /// same thing and only this one is what renderings are drawn by. A TIFF states its orientation
+    /// in its own tag and has no EXIF profile at all; a PNG this imaging library wrote states it in
+    /// a chunk of its own; and a HEIF or AVIF decoder turns the pixels itself and reports the
+    /// result as upright, whatever the EXIF block inside the file still says. The width and height
+    /// read beside this are of the same decoded image, so the three always describe one frame.
+    /// </para>
+    /// <para>
+    /// An image the library read no orientation for is drawn as stored, which is code 1; that is
+    /// written as 1, not left empty, so that empty keeps meaning "never read".
+    /// </para>
+    /// </remarks>
+    private static int RendererOrientation(IMagickImage image) =>
+        (int)image.Orientation is var code and >= 1 and <= 8 ? code : 1;
 
     // ---------- position ----------
 

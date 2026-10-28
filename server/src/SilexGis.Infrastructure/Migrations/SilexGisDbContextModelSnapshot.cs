@@ -5648,6 +5648,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("pixel_height");
 
+                    b.Property<int?>("PixelOrientation")
+                        .HasColumnType("integer")
+                        .HasColumnName("pixel_orientation");
+
                     b.Property<int?>("PixelWidth")
                         .HasColumnType("integer")
                         .HasColumnName("pixel_width");
