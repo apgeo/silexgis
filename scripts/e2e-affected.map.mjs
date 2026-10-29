@@ -75,7 +75,7 @@ export const specs = {
   featureShares: [],
   files: [
     'uploads.spec.ts', 'documents.spec.ts', 'gallery.spec.ts', 'cave-attachments.spec.ts',
-    'attachment-default-set.spec.ts',
+    'attachment-default-set.spec.ts', 'place-map.spec.ts',
   ],
   filters: [
     'trip-list.spec.ts', 'trip-map.spec.ts', 'registry-statistics.spec.ts',
@@ -95,6 +95,8 @@ export const specs = {
   georeferencedMaps: [
     'rastermap.spec.ts', 'rastermap-authoring.spec.ts', 'rastermap-public.spec.ts',
     'rastermap-tracking.spec.ts', 'rastermap-mobile.spec.ts',
+    // A phone's map of a cave opened as a map, and its places on a survey's map tab.
+    'place-map.spec.ts',
   ],
   history: ['panel.spec.ts', 'map-editing.spec.ts'],
   imports: ['vector-import.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts', 'import-batch-undo.spec.ts'],
@@ -131,7 +133,7 @@ export const specs = {
     'public-trip-as-installed.spec.ts',
   ],
   qr: ['qr-landing.spec.ts'],
-  resLinks: ['reslinks.spec.ts', 'annotated-text.spec.ts', 'cave-grant-link.spec.ts'],
+  resLinks: ['reslinks.spec.ts', 'annotated-text.spec.ts', 'cave-grant-link.spec.ts', 'place-map.spec.ts'],
   scene: ['scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts', 'scene3d-backgrounds.spec.ts'],
   search: ['documents.spec.ts'],
   settings: [
