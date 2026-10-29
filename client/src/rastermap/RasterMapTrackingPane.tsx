@@ -10,7 +10,7 @@ import type { TrackedCaver } from '../caveview/trackedCavers.ts';
 import CaveViewTrackingOverlay, {
   type TrackedPlace,
 } from '../components/caveview/CaveViewTrackingOverlay.tsx';
-import { displayableImageUrl } from '../components/documents/derivativeUrl.ts';
+import { renditionImageUrl } from '../components/documents/derivativeUrl.ts';
 import {
   placedSheetCavers,
   stationsWithoutPoint,
@@ -145,7 +145,9 @@ export default function RasterMapTrackingPane({
     return <Skeleton active data-testid="rastermap-tracking-loading" />;
   }
 
-  const imageUrl = displayableImageUrl(file);
+  // Always the server's upright rendition, never the stored bytes: points are kept in the frame of
+  // the picture as drawn, which the bytes do not carry, and a scan's format may not display at all.
+  const imageUrl = renditionImageUrl(file);
   if (imageUrl === null) {
     return <Typography.Text type="secondary">{t('rastermap.imageMissing')}</Typography.Text>;
   }

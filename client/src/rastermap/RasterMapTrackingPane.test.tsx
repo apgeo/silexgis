@@ -25,7 +25,7 @@ vi.mock('../api/hooks.ts', () => ({
       id: 'file-1',
       mimeType: 'image/png',
       contentUrl: 'http://files.local/f1',
-      thumbnailUrl: null,
+      thumbnailUrl: 'http://files.local/f1/thumbnail?size=480&token=t',
       mayDownloadOriginal: true,
     },
   }),
@@ -34,6 +34,7 @@ vi.mock('../api/hooks.ts', () => ({
 /** What the pane last handed the drawing, read back by the assertions. */
 let view:
   | {
+      imageUrl: string;
       markers: readonly MapStationMarker[];
       cavers?: readonly SheetCaverDrawnMarker[];
       focus?: { x: number; y: number } | null;
@@ -167,6 +168,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('RasterMapTrackingPane', () => {
+  it('draws the server rendition of the map, never its stored bytes', () => {
+    show();
+    expect(view!.imageUrl).toContain('/thumbnail?');
+    expect(view!.imageUrl).toContain('size=2400');
+  });
+
   it('draws a caver whose station has a point here, and not the one whose station has none', () => {
     show();
 

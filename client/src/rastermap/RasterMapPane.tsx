@@ -14,7 +14,7 @@ import {
 } from '../api/hooks.ts';
 import { shortNameOf } from '../caveview/modelParts.ts';
 import List from '../components/List.tsx';
-import { displayableImageUrl } from '../components/documents/derivativeUrl.ts';
+import { renditionImageUrl } from '../components/documents/derivativeUrl.ts';
 import { resLinkProblemMessage } from '../components/reslinks/problems.ts';
 import { coarsePointer } from '../map/pointer.ts';
 import {
@@ -103,10 +103,9 @@ export default function RasterMapPane({
   const { t } = useTranslation();
   const { message } = App.useApp();
 
-  // The map image is the document's current file, delivered through the same entitlement
-  // machinery as every other picture: original bytes for full-reach readers, a bounded
-  // rendering otherwise. The link display cannot serve here — it names no file id, and
-  // the file id is what the pin filter runs on.
+  // The map image is the document's current file, drawn as the server's rendition — the frame its
+  // points are measured in. The link display cannot serve here — it names no file id, and the file
+  // id is what the pin filter runs on.
   const { data: document } = useDocument(declaration.documentId);
   const { data: file } = useFile(document?.currentFileId);
 
@@ -238,7 +237,9 @@ export default function RasterMapPane({
     return <Skeleton active data-testid="rastermap-pane-loading" />;
   }
 
-  const imageUrl = displayableImageUrl(file);
+  // Always the server's upright rendition, never the stored bytes: points are kept in the frame of
+  // the picture as drawn, which the bytes do not carry, and a scan's format may not display at all.
+  const imageUrl = renditionImageUrl(file);
   if (imageUrl === null) {
     // A file that offers no rendering to this reader is a real state, not an error: the
     // declaration is visible, the picture is not, and saying so beats a broken image.

@@ -34,7 +34,7 @@ vi.mock('../api/hooks.ts', () => ({
       id: 'file-1',
       mimeType: 'image/png',
       contentUrl: 'http://files.local/f1',
-      thumbnailUrl: null,
+      thumbnailUrl: 'http://files.local/f1/thumbnail?size=480&token=t',
       mayDownloadOriginal: true,
     },
   }),
@@ -50,16 +50,18 @@ vi.mock('../api/hooks/placePoints.ts', () => ({
 // click contract, so the fake is that contract with buttons on it.
 vi.mock('./RasterMapView.tsx', () => ({
   default: function FakeRasterMapView({
+    imageUrl,
     markers,
     onMapClick,
     onMarkerClick,
   }: {
+    imageUrl: string;
     markers: readonly MapStationMarker[];
     onMapClick?: (at: { x: number; y: number }) => void;
     onMarkerClick?: (marker: MapStationMarker, at: { x: number; y: number } | null) => void;
   }) {
     return (
-      <div data-testid="fake-view" data-writing={String(onMapClick !== undefined)}>
+      <div data-testid="fake-view" data-image={imageUrl} data-writing={String(onMapClick !== undefined)}>
         <button data-testid="fake-click-sheet" onClick={() => onMapClick?.({ x: 0.5, y: 0.25 })} />
         {markers.map((marker) => (
           <div key={(marker as unknown as { key: string }).key}>
@@ -179,6 +181,13 @@ afterEach(() => {
 });
 
 describe('the authoring controls', () => {
+  it('draws the server rendition, never the stored bytes, even to a reader who may download them', () => {
+    show([pinLink('p.g.7')]);
+    const image = screen.getByTestId('fake-view').getAttribute('data-image')!;
+    expect(image).toContain('/thumbnail?');
+    expect(image).toContain('size=2400');
+  });
+
   it('a read-only mount (no lease) shows no authoring controls and takes no clicks', () => {
     show([pinLink('p.g.7')]);
     expect(screen.queryByTestId('rastermap-define')).not.toBeInTheDocument();
