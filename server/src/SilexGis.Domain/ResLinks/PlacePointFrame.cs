@@ -111,6 +111,24 @@ public static class PlacePointFrame
 }
 
 /// <summary>
+/// A point of a picture, in fractions of the picture as it is drawn, carried through a turn recorded
+/// on the picture afterwards — so a point measured before the turn still marks the same spot of the
+/// picture after it.
+/// </summary>
+public static class ImageRegionTurn
+{
+    /// <summary>The point after the picture is turned clockwise by <paramref name="quarterTurns"/>.</summary>
+    public static (double X, double Y) TurnPoint(double x, double y, int quarterTurns) =>
+        PhotoOrientation.Normalize(quarterTurns) switch
+        {
+            1 => (1 - y, x),
+            2 => (1 - x, 1 - y),
+            3 => (y, 1 - x),
+            _ => (x, y),
+        };
+}
+
+/// <summary>
 /// The anchor payload of a place pinned on a phone's map: a point region carrying, beside the
 /// fraction it is drawn at, the stored-frame pixel the phone measured.
 /// </summary>

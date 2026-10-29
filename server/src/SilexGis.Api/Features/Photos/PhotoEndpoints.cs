@@ -516,6 +516,10 @@ public static class PhotoEndpoints
             .Where(e => e.State == EntityState.Modified && e.Property(f => f.OrientationQuarterTurns).IsModified)
             .Select(e => e.Entity.Id)
             .ToList();
+
+        // The survey stations marked on a turned scan turn with it, so each still marks the spot it
+        // was placed on.
+        await StationPointTurns.TurnAsync(db, turned, request.RotateQuarterTurns ?? 0, ct);
         await db.SaveChangesAsync(ct);
 
         // A turn moves the frame the browser measures points in and leaves the stored frame a phone

@@ -152,4 +152,31 @@ public class PlacePointFrameTests
         PlacePointAnchor.CarriesStoredPixel(null).ShouldBeFalse();
         PlacePointAnchor.CarriesStoredPixel("not json").ShouldBeFalse();
     }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(-1)]
+    public void A_point_turned_with_its_picture_marks_the_same_stored_pixel(int quarterTurns)
+    {
+        // A station point measured on the upright picture, then the picture is turned: the point
+        // carried through the turn lands on the same stored pixel the one conversion gives.
+        var before = PictureFrame.Of(7, 4, 6, 0);
+        var after = PictureFrame.Of(7, 4, 6, quarterTurns);
+        for (var x = 0; x < 7; x++)
+        {
+            for (var y = 0; y < 4; y++)
+            {
+                var (fx, fy) = PlacePointFrame.ToFraction(before, x, y)!.Value;
+                var (tx, ty) = ImageRegionTurn.TurnPoint(fx, fy, quarterTurns);
+                PlacePointFrame.FromFraction(after, tx, ty).ShouldBe((x, y));
+            }
+        }
+    }
+
+    [Fact]
+    public void A_whole_turn_leaves_a_point_where_it_was() =>
+        ImageRegionTurn.TurnPoint(0.2, 0.7, 4).ShouldBe((0.2, 0.7));
 }

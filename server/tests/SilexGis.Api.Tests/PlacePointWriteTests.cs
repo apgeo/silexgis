@@ -201,7 +201,7 @@ public sealed class PlacePointWriteTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     [Fact]
-    public async Task A_turn_recorded_on_the_picture_redraws_its_pins_and_leaves_what_the_phones_hold()
+    public async Task A_turn_recorded_on_the_picture_redraws_its_pins_and_turns_its_station_points()
     {
         var cave = await CreateCaveAsync();
         var place = await CreatePlaceAsync(cave);
@@ -211,6 +211,7 @@ public sealed class PlacePointWriteTests : IAsyncLifetime, IDisposable, IClassFi
         var revision = Revision(made, "rasterPins", pin);
         var picture = await DocumentOfAsync(map);
         (await AnchorAsync(pin)).X!.Value.ShouldBe(10.5 / 64, 1e-12);
+        var station = await StationPointAsync(picture, await CurrentFileAsync(picture), 0.25, 0.75);
 
         var turned = await uploader.PostAsJsonAsync("/api/v1/photos/bulk", new { documentIds = new[] { picture }, rotateQuarterTurns = 1 });
         turned.StatusCode.ShouldBe(HttpStatusCode.OK, await turned.Content.ReadAsStringAsync());
@@ -226,6 +227,12 @@ public sealed class PlacePointWriteTests : IAsyncLifetime, IDisposable, IClassFi
             .EnumerateArray().ShouldHaveSingleItem();
         (sent.GetProperty("x").GetInt32(), sent.GetProperty("y").GetInt32()).ShouldBe((10, 20));
         (DateTimeOffset.Parse(sent.GetProperty("revision").GetString()!).UtcTicks / 10).ShouldBe(revision.UtcTicks / 10);
+
+        // A survey station marked on the same scan turns with it, a quarter clockwise: the spot a
+        // quarter across and three quarters down is drawn a quarter across and a quarter down.
+        var stationPoint = JsonDocument.Parse(await StationAnchorAsync(station)).RootElement;
+        stationPoint.GetProperty("x").GetDouble().ShouldBe(0.25, 1e-12);
+        stationPoint.GetProperty("y").GetDouble().ShouldBe(0.25, 1e-12);
     }
 
     [Fact]
@@ -396,6 +403,38 @@ public sealed class PlacePointWriteTests : IAsyncLifetime, IDisposable, IClassFi
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var anchor = await db.ResLinkMembers.AsNoTracking().Where(m => m.ResLinkId == pin && m.IsMain).Select(m => m.Anchor).SingleAsync();
         return PlacePointAnchor.Read(anchor)!.Value;
+    }
+
+    /// <summary>
+    /// A survey station marked on the picture: a point of it beside a station of a model, as the
+    /// survey viewer writes one. The model is named and never read here.
+    /// </summary>
+    private async Task<Guid> StationPointAsync(Guid document, Guid file, double x, double y)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var relation = await db.ResLinkRelationTypes.Where(r => r.Code == ResLinkRelationTypeSeeds.MapStationPointCode).Select(r => r.Id).SingleAsync();
+        var link = new ResLink { ShortCode = ResLinkRules.NewShortCode(), RelationTypeId = relation, CreatedBy = uploaderId };
+        db.ResLinks.Add(link);
+        db.ResLinkMembers.Add(new ResLinkMember
+        {
+            ResLinkId = link.Id, EntityType = AttachedEntityType.Document, EntityId = document, IsMain = true,
+            AnchorKind = AnchorKind.ImageRegion, Anchor = JsonSerializer.Serialize(new { shape = "point", x, y }), AnchorFileId = file,
+        });
+        db.ResLinkMembers.Add(new ResLinkMember
+        {
+            ResLinkId = link.Id, EntityType = AttachedEntityType.SurveyModel, EntityId = Guid.CreateVersion7(),
+            AnchorKind = AnchorKind.ModelStation, Anchor = """{"station":"a.1"}""", SortOrder = 1,
+        });
+        await db.SaveChangesAsync();
+        return link.Id;
+    }
+
+    private async Task<string> StationAnchorAsync(Guid link)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return (await db.ResLinkMembers.AsNoTracking().Where(m => m.ResLinkId == link && m.IsMain).Select(m => m.Anchor).SingleAsync())!;
     }
 
     private async Task<Guid?> AnchorFileAsync(Guid pin)
