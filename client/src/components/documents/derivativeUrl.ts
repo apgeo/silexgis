@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /** The rendering widths the server will produce; asking for anything else is refused. */
-export const thumbnailSizes = [160, 480, 1200] as const;
+export const thumbnailSizes = [160, 480, 1200, 2400] as const;
 export type ThumbnailSize = (typeof thumbnailSizes)[number];
 
 /**
@@ -64,4 +64,18 @@ export function displayableImageUrl(file: {
     return file.contentUrl;
   }
   return file.thumbnailUrl === null ? null : thumbnailAtSize(file.thumbnailUrl, 1200);
+}
+
+/**
+ * The URL a picture is drawn from when points are measured on it: the server's rendition, never
+ * the stored bytes, whoever is looking.
+ *
+ * The rendition is drawn upright — the orientation the picture states and any turn recorded on it
+ * are applied — which is the frame every point on a picture is stored in. The stored bytes carry
+ * neither, and a scan's format may not display in a browser at all, so a point measured over them
+ * would land somewhere else for everybody else. The largest rendering is asked for, since the points
+ * are read and placed on it.
+ */
+export function renditionImageUrl(file: { thumbnailUrl: string | null }): string | null {
+  return file.thumbnailUrl === null ? null : thumbnailAtSize(file.thumbnailUrl, 2400);
 }

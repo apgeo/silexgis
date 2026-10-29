@@ -30,6 +30,7 @@ import PhotoPositionAction from './PhotoPositionAction.tsx';
 import { formatSize } from './fileFormat.ts';
 import LocationRemovedTag from './LocationRemovedTag.tsx';
 import { downloadTitle } from './downloadTitle.ts';
+import PlaceMapAction from '../../rastermap/PlaceMapAction.tsx';
 
 interface AttachmentSectionProps {
   entityType: AttachedEntityType;
@@ -318,6 +319,14 @@ export default function AttachmentSection({
                         </Tooltip>
                       )}
                       <OpenDocument documentId={attachment.file.documentId} />
+                      {/* A map filed on a cave opens as a map, with the places phones pinned on it. */}
+                      {attachment.role === 'map2d' && entityType === 'feature' && (
+                        <PlaceMapAction
+                          documentId={attachment.file.documentId}
+                          title={attachment.caption ?? null}
+                          canEdit={canEdit}
+                        />
+                      )}
                       <PhotoFactsPanel file={attachment.file} />
                       <PhotoPositionAction
                         file={attachment.file}

@@ -30,6 +30,8 @@ class FakeImage {
 }
 
 const MARKER = {
+  key: 'member-1',
+  label: '7',
   station: 'p.g.7',
   x: 0.25,
   y: 0.25,
@@ -184,7 +186,7 @@ describe('RasterMapView', () => {
     expect(Map.prototype.dispose).toHaveBeenCalledTimes(1);
   });
 
-  it('draws a marker at the flipped pixel coordinate, labelled with the short station name', async () => {
+  it('draws a marker at the flipped pixel coordinate, labelled as the caller words it', async () => {
     render(
       <RasterMapView imageUrl="http://files.local/map" alt="Sheet A" markers={[MARKER]} active />,
     );

@@ -17,6 +17,7 @@ import { useDeleteResLink, useResLinksForTarget, type ResLink } from '../../api/
 import AddMemberModal from './AddMemberModal.tsx';
 import MemberChip from './MemberChip.tsx';
 import { mayEditResLink } from './permissions.ts';
+import { MAP_PLACE_POINT_CODE } from '../../rastermap/vocabulary.ts';
 import { relationPhraseFor } from './relations.ts';
 import { linkPageRoute, linkPageUrl, type ResLinkTargetType } from './registry.ts';
 
@@ -77,6 +78,9 @@ function LinkRow({
   const deleteLink = useDeleteResLink();
 
   const mayEdit = mayEditResLink(link);
+  // A place a phone pinned on its map is moved on the map and never edited as a link; removing it
+  // is the one change this row offers, and the phones are told.
+  const placePoint = link.relationType?.code === MAP_PLACE_POINT_CODE;
 
   // The entity whose page this is speaks for itself; repeating its chip in its own row
   // would say nothing. Everything else is what the row is actually about.
@@ -145,11 +149,11 @@ function LinkRow({
           items: [
             { key: 'open', icon: <ExportOutlined />, label: t('resLinks.openPage') },
             { key: 'copy', icon: <CopyOutlined />, label: t('resLinks.copyUrl') },
+            ...(mayEdit && !placePoint
+              ? [{ key: 'edit', icon: <EditOutlined />, label: t('resLinks.edit') }]
+              : []),
             ...(mayEdit
-              ? [
-                  { key: 'edit', icon: <EditOutlined />, label: t('resLinks.edit') },
-                  { key: 'delete', icon: <DeleteOutlined />, label: t('resLinks.delete'), danger: true },
-                ]
+              ? [{ key: 'delete', icon: <DeleteOutlined />, label: t('resLinks.delete'), danger: true }]
               : []),
           ],
           onClick: ({ key }) => {

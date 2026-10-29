@@ -56,7 +56,7 @@ vi.mock('./RasterMapView.tsx', () => ({
       <div data-testid="fake-view" data-writing={String(onMapClick !== undefined)}>
         <button data-testid="fake-click-sheet" onClick={() => onMapClick?.({ x: 0.5, y: 0.25 })} />
         {markers.map((marker) => (
-          <div key={marker.memberId}>
+          <div key={(marker as unknown as { key: string }).key}>
             {/* A press inside the marker's halo: the click's own point rides along… */}
             <button
               data-testid={`fake-marker-${marker.station}`}

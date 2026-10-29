@@ -11,25 +11,26 @@ import ImageStatic from 'ol/source/ImageStatic';
 import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
 import { useTranslation } from 'react-i18next';
-import { shortNameOf } from '../caveview/modelParts.ts';
 import { rasterMapPalette as palette } from '../map/markerPalette.ts';
 import { coarsePointer } from '../map/pointer.ts';
 import { markerHit } from './authoring.ts';
 import { sheetCaverHit, type SheetCaverMarker } from './caverPlacement.ts';
-import { fromMapCoordinate, imageExtent, toMapCoordinate, type ImageSize } from './coordinates.ts';
-import type { MapStationMarker } from './mapPoints.ts';
+import {
+  fromMapCoordinate, imageExtent, toMapCoordinate, type ImageSize, type SheetMarker,
+} from './coordinates.ts';
 
-interface Props {
+interface Props<M extends SheetMarker> {
   /** The rendering the reader is entitled to, as the derivative machinery minted it. */
   imageUrl: string;
   /** What the picture is, for assistive readers — the map document's title. */
   alt: string;
   /**
-   * The station points to draw, in stored fractions. The caller has already applied every
-   * fold rule — point shape, file pin, newest-wins — this component draws what it is
-   * handed and decides nothing about what deserves drawing.
+   * The points to draw, in stored fractions, each with its key and its label — stations on a
+   * survey's map, places on a phone's. The caller has already applied every fold rule — point
+   * shape, file pin, newest-wins — this component draws what it is handed and decides nothing
+   * about what deserves drawing.
    */
-  markers: readonly MapStationMarker[];
+  markers: readonly M[];
   /**
    * Whether the pane the map lives in is really on screen. A tab keeps its inactive panes
    * mounted but hidden, and an OL map built inside `display:none` measures 0×0 — so the
@@ -53,7 +54,7 @@ interface Props {
    * the marker is merely *near* the intended spot can still honor the click; null when
    * the click sat inside the tolerance halo but outside the picture.
    */
-  onMarkerClick?: (marker: MapStationMarker, at: { x: number; y: number } | null) => void;
+  onMarkerClick?: (marker: M, at: { x: number; y: number } | null) => void;
   /**
    * The party to draw over the pins — each dot already placed (through a station pin and
    * no other path; the fold owns that rule), already worded (the label is the same line
@@ -84,17 +85,17 @@ export interface SheetCaverDrawnMarker {
 }
 
 /** What lay where on the sheet at the moment of a press, and where the press landed. */
-interface SheetAsPressed {
+interface SheetAsPressed<M extends SheetMarker> {
   /** The pressed point of the picture, in the map's own pixel frame. */
   coordinate: number[];
   resolution: number;
-  markers: readonly MapStationMarker[];
+  markers: readonly M[];
   size: ImageSize | null;
   cavers: readonly SheetCaverDrawnMarker[] | undefined;
 }
 
 /**
- * A scanned cave map with station pins over it.
+ * A scanned cave map with points over it — station pins, or the places a phone pinned.
  *
  * <b>A throwaway OpenLayers map over a pixel projection</b> — the trip-sketch pattern,
  * never the workspace singleton: the image is drawn as an `ImageStatic` over an extent
@@ -106,7 +107,7 @@ interface SheetAsPressed {
  * Coordinates arrive as stored fractions and are converted at the OL boundary only
  * (`coordinates.ts` owns the y-flip); OL objects live in refs, never in React state.
  */
-export default function RasterMapView({
+export default function RasterMapView<M extends SheetMarker>({
   imageUrl,
   alt,
   markers,
@@ -118,7 +119,7 @@ export default function RasterMapView({
   cavers,
   onCaverClick,
   focus,
-}: Props) {
+}: Props<M>) {
   const { t } = useTranslation();
   const target = useRef<HTMLDivElement | null>(null);
   const map = useRef<Map | null>(null);
@@ -135,7 +136,7 @@ export default function RasterMapView({
   clickState.current = { onMapClick, onMarkerClick, markers, size, cavers, onCaverClick };
   // The sheet as it stood when the press now waiting for its answer was made; null when
   // no press is waiting.
-  const pressed = useRef<SheetAsPressed | null>(null);
+  const pressed = useRef<SheetAsPressed<M> | null>(null);
 
   const teardown = () => {
     map.current?.setTarget(undefined);
@@ -298,22 +299,23 @@ export default function RasterMapView({
     // hit tolerances: the pointer is the size it is, whatever the stored point is.
     const radius = coarsePointer() ? 9 : 7;
     for (const marker of markers) {
+      const colour = marker.place === true ? palette.place : palette.station;
       const feature = new Feature({
         geometry: new Point(toMapCoordinate(marker, size)),
       });
-      feature.setId(marker.memberId);
+      feature.setId(marker.key);
       feature.setStyle(
         new Style({
           image: new CircleStyle({
             radius,
-            fill: new Fill({ color: palette.station }),
+            fill: new Fill({ color: colour }),
             stroke: new Stroke({ color: palette.stroke, width: 2 }),
           }),
           text: new Text({
-            text: shortNameOf(marker.station),
+            text: marker.label,
             font: '12px sans-serif',
             offsetY: -(radius + 8),
-            fill: new Fill({ color: palette.station }),
+            fill: new Fill({ color: colour }),
             stroke: new Stroke({ color: palette.labelHalo, width: 3 }),
           }),
         }),

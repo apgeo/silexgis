@@ -2,7 +2,7 @@
 import type { ResLinkCreate } from '../api/hooks.ts';
 import { regionAnchor } from '../imagelink/regions.ts';
 import { toMapCoordinate, type ImageSize } from './coordinates.ts';
-import { newestPinForStation, type MapPin, type MapStationMarker } from './mapPoints.ts';
+import { newestPinForStation, type MapPin } from './mapPoints.ts';
 
 /**
  * What authoring a pin writes and decides — the single home for the shapes the paired
@@ -171,15 +171,15 @@ export async function rewritePin(
  * pure function of what the caller drew: `tolerancePx * resolution` is the on-screen
  * radius a finger or a cursor is owed, translated into map units at the current zoom.
  */
-export function markerHit(
-  markers: readonly MapStationMarker[],
+export function markerHit<M extends { x: number; y: number }>(
+  markers: readonly M[],
   size: ImageSize,
   coordinate: readonly number[],
   resolution: number,
   tolerancePx: number,
-): MapStationMarker | null {
+): M | null {
   const reach = tolerancePx * resolution;
-  let best: MapStationMarker | null = null;
+  let best: M | null = null;
   let bestDistance = Infinity;
   for (const marker of markers) {
     const [mx, my] = toMapCoordinate(marker, size);

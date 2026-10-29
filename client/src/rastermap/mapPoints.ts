@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { ResLink, ResLinkMember } from '../api/hooks.ts';
+import { shortNameOf } from '../caveview/modelParts.ts';
 import { readRegion, type ImageRegion } from '../imagelink/regions.ts';
+import type { SheetMarker } from './coordinates.ts';
 import { MAP_STATION_POINT_CODE } from './vocabulary.ts';
 
 /**
@@ -166,6 +168,15 @@ export function stationMarkers(pins: readonly MapPin[], fileId: string): MapStat
       mayEdit: pin.mayEdit,
     }))
     .sort((a, b) => a.station.localeCompare(b.station));
+}
+
+/**
+ * Station markers as a sheet draws them: told apart by the member that carries the point, and
+ * labelled with the station's short name — the last step of its path, which is what fits beside a
+ * dot on a scan.
+ */
+export function stationSheetMarkers(markers: readonly MapStationMarker[]): (MapStationMarker & SheetMarker)[] {
+  return markers.map((marker) => ({ ...marker, key: marker.memberId, label: shortNameOf(marker.station) }));
 }
 
 /**

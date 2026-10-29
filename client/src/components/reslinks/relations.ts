@@ -43,6 +43,8 @@ export const SEEDED_RELATION_CODES = [
   'map-profile-of',
   'map-other-of',
   'map-station-point',
+  // A place a phone pinned on its map of a cave, at a point of the picture.
+  'map-place-point',
 ] as const;
 
 export type SeededRelationCode = (typeof SEEDED_RELATION_CODES)[number];
@@ -68,6 +70,7 @@ export const DIRECTED_RELATION_CODES: readonly SeededRelationCode[] = [
   'map-profile-of',
   'map-other-of',
   'map-station-point',
+  'map-place-point',
 ];
 
 export function isSeededRelationCode(code: string): code is SeededRelationCode {

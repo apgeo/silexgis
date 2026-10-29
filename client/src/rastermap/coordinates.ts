@@ -12,6 +12,20 @@
  * mirrored on any other.
  */
 
+/**
+ * One point drawn over a sheet, whatever it marks — a survey station, a place a phone pinned:
+ * where it is, in stored fractions, what it is called on the sheet, and a key that tells it from
+ * every other point drawn there.
+ */
+export interface SheetMarker {
+  key: string;
+  label: string;
+  x: number;
+  y: number;
+  /** A place a phone pinned rather than a station of the survey; drawn in its own colour. */
+  place?: boolean;
+}
+
 /** The picture's natural size in pixels, which is the map's whole coordinate space. */
 export interface ImageSize {
   width: number;

@@ -27,6 +27,7 @@ import {
 import {
   mapPinsFromLinks,
   stationMarkers,
+  stationSheetMarkers,
   supersededPointCount,
   supersededPointPins,
   type MapPin,
@@ -111,7 +112,7 @@ export default function RasterMapPane({
     [links, surveyModelId, declaration.documentId],
   );
   const markers = useMemo(
-    () => (file === undefined ? [] : stationMarkers(pins, file.id)),
+    () => (file === undefined ? [] : stationSheetMarkers(stationMarkers(pins, file.id))),
     [pins, file],
   );
   const superseded = file === undefined ? 0 : supersededPointCount(pins, file.id);

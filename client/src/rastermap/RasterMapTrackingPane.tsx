@@ -16,7 +16,7 @@ import {
   stationsWithoutPoint,
   type SheetCaverMarker,
 } from './caverPlacement.ts';
-import { mapPinsFromLinks, stationMarkers, supersededPointCount } from './mapPoints.ts';
+import { mapPinsFromLinks, stationMarkers, stationSheetMarkers, supersededPointCount } from './mapPoints.ts';
 import type { RasterMapDeclaration } from './rasterMaps.ts';
 import RasterMapView, { type SheetCaverDrawnMarker } from './RasterMapView.tsx';
 
@@ -100,6 +100,7 @@ export default function RasterMapTrackingPane({
     [pins, file],
   );
   const superseded = file === undefined ? 0 : supersededPointCount(pins, file.id);
+  const sheetMarkers = useMemo(() => stationSheetMarkers(markers), [markers]);
 
   const coarse = coarsePointer();
   const placed = useMemo(
@@ -163,7 +164,7 @@ export default function RasterMapTrackingPane({
         <RasterMapView
           imageUrl={imageUrl}
           alt={declaration.title ?? t('rastermap.untitledMap')}
-          markers={markers}
+          markers={sheetMarkers}
           cavers={drawn}
           active={active}
           height={height}

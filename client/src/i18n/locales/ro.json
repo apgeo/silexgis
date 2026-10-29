@@ -5433,6 +5433,10 @@
       "map-station-point": {
         "name": "Marchează stația",
         "inverse": "Marcat pe hartă"
+      },
+      "map-place-point": {
+        "name": "Marchează locul",
+        "inverse": "Marcat pe hartă"
       }
     },
     "members": "Elemente",
@@ -5555,6 +5559,12 @@
       "forbidden": "Nu ai voie să faci asta.",
       "createForbidden": "Nu ai voie să creezi obiecte aici.",
       "validationFailed": "Ceva din formular nu este acceptat. Verifică valorile și încearcă din nou.",
+      "placePointFixed": "Un punct de pe harta unui telefon se mută sau se șterge pe hartă, nu se editează ca legătură.",
+      "placePointMapNotFound": "Această imagine nu este o hartă de pe telefon.",
+      "placePointPlaceNotFound": "Acest loc nu este în peștera hărții sau nu ai voie să vezi unde se află.",
+      "placePointPlacePinned": "Acest loc are deja un punct pe această hartă.",
+      "placePointNotCurrentFile": "Imaginea hărții s-a schimbat între timp. Deschide din nou harta și încearcă din nou.",
+      "placePointFrameUnknown": "Dimensiunea acestei imagini nu este cunoscută, așa că telefoanele nu ar putea folosi un punct pe ea.",
       "linkGone": "Această legătură nu mai există.",
       "codeUnresolved": "Această adresă de legătură nu duce nicăieri.",
       "typeUnknown": "Aplicația a cerut un tip de element pe care serverul nu îl cunoaște.",
@@ -7924,6 +7934,28 @@
     "replacePin": "Replasează",
     "pinSaved": "Punct salvat pentru {{station}}.",
     "pinDeleted": "Punct șters."
+  },
+  "placeMap": {
+    "openAsMap": "Deschide ca hartă",
+    "title": "{{title}} — hartă",
+    "untitled": "Hartă",
+    "earlierPicture_one": "{{count}} punct a fost măsurat pe o imagine anterioară.",
+    "earlierPicture": "{{count}} de puncte au fost măsurate pe o imagine anterioară.",
+    "notOnPicture_one": "{{count}} punct nu este pe această imagine.",
+    "notOnPicture": "{{count}} de puncte nu sunt pe această imagine.",
+    "addPoint": "Adaugă un punct",
+    "addHint": "Fă clic pe hartă acolo unde este locul.",
+    "moveHint": "Fă clic pe hartă acolo unde trebuie să fie {{place}}.",
+    "stopPlacing": "Oprește",
+    "pickPlaceTitle": "Ce loc este aici?",
+    "pickPlace": "Loc",
+    "move": "Mută",
+    "delete": "Șterge",
+    "deleteConfirm": "Ștergi acest punct de pe hartă? Telefoanele care au harta vor fi anunțate.",
+    "saved": "Punct salvat.",
+    "deleted": "Punct șters.",
+    "cannotEdit": "Nu poți modifica punctele acestei hărți.",
+    "unnamedPlace": "Loc fără nume"
   },
   "publishedTrips": {
     "title": "Ture publicate",

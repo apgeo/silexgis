@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -269,5 +269,26 @@ describe('LinksSection', () => {
     expect(screen.queryByText('Thing 4')).not.toBeInTheDocument();
     const overflow = screen.getByText('+2');
     expect(overflow.closest('a')).toHaveAttribute('href', '/links/Ab3xY9Zq');
+  });
+
+  it('offers a place a phone pinned removal, and never an edit as a link', async () => {
+    const pinned = link({
+      id: 'pin',
+      relationType: {
+        id: 9,
+        code: 'map-place-point',
+        name: 'Marks place',
+        description: null,
+        sortOrder: 240,
+        directed: true,
+        inverseName: 'Marked on map',
+        seeded: true,
+      },
+      members: [member({ id: 'pin-self', targetId: 'self' }), member({ id: 'pin-picture', targetType: 'document', targetId: 'doc' })],
+    });
+    show(1, [pinned]);
+    fireEvent.click(screen.getByRole('button', { name: 'Link actions' }));
+    expect(await screen.findByText('Delete link')).toBeInTheDocument();
+    expect(screen.queryByText('Edit link')).not.toBeInTheDocument();
   });
 });

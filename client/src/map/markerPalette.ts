@@ -140,6 +140,8 @@ export const libraryPhotoPalette = {
  */
 export const rasterMapPalette = {
   station: '#146262',
+  // A place a phone pinned, drawn apart from the survey's stations on the same sheet.
+  place: '#9a3412',
   stroke: '#ffffff',
   labelHalo: 'rgba(255, 255, 255, 0.85)',
 } as const;

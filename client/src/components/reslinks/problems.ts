@@ -55,6 +55,13 @@ const byCode: Record<string, string> = {
   'access.create_forbidden': 'resLinks.problems.createForbidden',
   'acl.forbidden': 'resLinks.problems.forbidden',
   'validation.failed': 'resLinks.problems.validationFailed',
+  // A place a phone pinned on its map, written from the map screen.
+  'reslink.place_point.fixed': 'resLinks.problems.placePointFixed',
+  'reslink.place_point.map_not_found': 'resLinks.problems.placePointMapNotFound',
+  'reslink.place_point.place_not_found': 'resLinks.problems.placePointPlaceNotFound',
+  'reslink.place_point.place_pinned': 'resLinks.problems.placePointPlacePinned',
+  'reslink.place_point.not_current_file': 'resLinks.problems.placePointNotCurrentFile',
+  'reslink.place_point.frame_unknown': 'resLinks.problems.placePointFrameUnknown',
 };
 
 /** The message to show for a failed link write. */

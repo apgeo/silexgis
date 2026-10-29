@@ -5420,6 +5420,10 @@
       "map-station-point": {
         "name": "Marks station",
         "inverse": "Marked on map"
+      },
+      "map-place-point": {
+        "name": "Marks place",
+        "inverse": "Marked on map"
       }
     },
     "members": "Members",
@@ -5542,6 +5546,12 @@
       "forbidden": "You are not allowed to do that.",
       "createForbidden": "You are not allowed to create features here.",
       "validationFailed": "Something in the form is not accepted. Check the values and try again.",
+      "placePointFixed": "A point on a phone's map is moved or removed on its map, not edited as a link.",
+      "placePointMapNotFound": "This picture is not a map a phone carries.",
+      "placePointPlaceNotFound": "That place is not in this map's cave, or you may not see where it is.",
+      "placePointPlacePinned": "That place already has a point on this map.",
+      "placePointNotCurrentFile": "The map's picture changed meanwhile. Open the map again and try again.",
+      "placePointFrameUnknown": "The size of this picture is not known, so the phones could not use a point on it.",
       "linkGone": "This link no longer exists.",
       "codeUnresolved": "This link address does not lead anywhere.",
       "typeUnknown": "This client asked for a kind of item the server does not know.",
@@ -7911,6 +7921,28 @@
     "replacePin": "Re-place",
     "pinSaved": "Point saved for {{station}}.",
     "pinDeleted": "Point deleted."
+  },
+  "placeMap": {
+    "openAsMap": "Open as map",
+    "title": "{{title}} — map",
+    "untitled": "Map",
+    "earlierPicture_one": "{{count}} point was measured on an earlier picture.",
+    "earlierPicture": "{{count}} points were measured on an earlier picture.",
+    "notOnPicture_one": "{{count}} point is not on this picture.",
+    "notOnPicture": "{{count}} points are not on this picture.",
+    "addPoint": "Add a point",
+    "addHint": "Click the map where the place is.",
+    "moveHint": "Click the map where {{place}} should be.",
+    "stopPlacing": "Stop",
+    "pickPlaceTitle": "Which place is here?",
+    "pickPlace": "Place",
+    "move": "Move",
+    "delete": "Delete",
+    "deleteConfirm": "Remove this point from the map? Phones carrying the map are told.",
+    "saved": "Point saved.",
+    "deleted": "Point removed.",
+    "cannotEdit": "You may not change the points of this map.",
+    "unnamedPlace": "Place without a name"
   },
   "publishedTrips": {
     "title": "Published trips",

@@ -13,6 +13,7 @@ import {
   stationsWithoutPoint,
   type SheetCaverMarker,
 } from '../../rastermap/caverPlacement.ts';
+import { stationSheetMarkers } from '../../rastermap/mapPoints.ts';
 import type { PublishedSheet } from '../../rastermap/publishedSheets.ts';
 import RasterMapView, { type SheetCaverDrawnMarker } from '../../rastermap/RasterMapView.tsx';
 import { usePinnedModelUrl } from './pinnedModelUrl.ts';
@@ -83,6 +84,7 @@ export default function PublicTripSheetPane({
   const imageUrl = usePinnedModelUrl(sheet.imageUrl, token);
 
   const coarse = coarsePointer();
+  const sheetMarkers = useMemo(() => stationSheetMarkers(sheet.markers), [sheet.markers]);
   const placed = useMemo(
     () => placedSheetCavers(cavers, sheet.markers, coarse ? 20 : 16),
     [cavers, sheet.markers, coarse],
@@ -141,7 +143,7 @@ export default function PublicTripSheetPane({
       <RasterMapView
         imageUrl={imageUrl}
         alt={sheet.title ?? t('rastermap.untitledMap')}
-        markers={sheet.markers}
+        markers={sheetMarkers}
         cavers={drawn}
         active={active}
         height={height}

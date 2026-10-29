@@ -22,6 +22,12 @@ export type MapViewCode = (typeof MAP_VIEW_CODES)[number];
 /** The code claiming a point on a raster map IS a survey station — a calibration-grade claim. */
 export const MAP_STATION_POINT_CODE = 'map-station-point';
 
+/**
+ * The code of a place a phone pinned on a picture of its cave, at one pixel. Written only by the
+ * phone's sync and by the map screen built for it, and shown whole or not at all.
+ */
+export const MAP_PLACE_POINT_CODE = 'map-place-point';
+
 /** The view a map declares itself to be, which is nothing but its relation code read out. */
 export type MapViewKind = 'plan' | 'profile' | 'other';
 
