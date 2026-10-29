@@ -143,6 +143,21 @@ feature can do it. The switch only says the file is *offered*; a phone fetches i
 for the default set, and only if that account may read it. A photograph still reaches a phone the way
 it reaches the browser — see [Photographs](photographs.md#downloading-the-original).
 
+### A phone's maps of a cave
+
+A phone can carry pictures of a cave — a scanned plan, a drawn profile — with the cave's places pinned
+on them. An uploaded map is filed among the cave's photographs, and **Open as map** (the pin button
+beside it) opens it with every pinned place drawn as a marker, named for the place. Whoever may change
+the cave can press a marker to **move** or **delete** it, or **Add a point** by clicking the map and
+choosing the place. The phones get the change at their next sync, under the same pin.
+
+A pin is shown only to someone who may open the picture, read the place and see exactly where the place
+is — the phone's own rule. Points measured on an earlier picture of another size, and points that fall
+outside the picture, are counted rather than drawn. When the same picture is also a survey's plan or
+profile, the survey viewer's map tab draws the pinned places too.
+
+*This part of the phone sync is provisional and may still change.*
+
 ### Defaults and duplicate warnings
 
 A device that does not name a kind gets a sensible default — a cave lands as a cave, an

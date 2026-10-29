@@ -145,6 +145,22 @@ peșterii sau obiectului. Comutatorul spune doar că fișierul este *oferit*; te
 cel care îl folosește cere setul implicit și doar dacă acel cont are voie să îl citească. O fotografie
 ajunge pe telefon la fel ca în browser — vezi [Fotografii](photographs.md#descărcarea-originalului).
 
+### Hărțile unei peșteri de pe telefon
+
+Un telefon poate purta imagini ale unei peșteri — un plan scanat, un profil desenat — cu locurile
+peșterii fixate pe ele. O hartă încărcată ajunge printre fotografiile peșterii, iar **Deschide ca hartă**
+(butonul cu pioneză de lângă ea) o deschide cu fiecare loc fixat desenat ca marcaj, cu numele locului.
+Cine are voie să modifice peștera poate apăsa un marcaj ca să îl **mute** sau să îl **șteargă**, ori
+poate **Adăuga un punct** făcând clic pe hartă și alegând locul. Telefoanele primesc schimbarea la
+următoarea sincronizare, sub același punct.
+
+Un punct se arată doar cuiva care poate deschide imaginea, poate citi locul și poate vedea exact unde se
+află locul — regula telefonului însuși. Punctele măsurate pe o imagine anterioară de altă mărime și cele
+care cad în afara imaginii sunt numărate, nu desenate. Când aceeași imagine este și planul sau profilul
+unei ridicări topografice, fila de hartă din vizualizatorul ridicării desenează și locurile fixate.
+
+*Această parte a sincronizării cu telefonul este provizorie și se poate încă schimba.*
+
 ### Valori implicite și avertismente de duplicat
 
 Un dispozitiv care nu numește un fel primește o valoare implicită rezonabilă — o peșteră aterizează
