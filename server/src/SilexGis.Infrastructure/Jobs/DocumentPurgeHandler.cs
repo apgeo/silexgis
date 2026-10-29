@@ -10,6 +10,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Infrastructure.Jobs;
 
@@ -93,6 +94,12 @@ public sealed class DocumentPurgeHandler(
             // Everything that names the document without a foreign key of its own. The rest —
             // versions, files, pages, memberships, taggings, attachments — goes by cascade from
             // the document row, which is what those cascades are for.
+            // A place pinned on a map of this picture means nothing without it, removed pins
+            // included: the whole link goes, and its members with it by cascade.
+            await PlacePointQueries.PlacePoints(db, db.ResLinks)
+                .Where(l => db.ResLinkMembers.Any(m => m.ResLinkId == l.Id
+                    && m.EntityType == AttachedEntityType.Document && m.EntityId == documentId))
+                .ExecuteDeleteAsync(ct);
             await db.ResLinkMembers
                 .Where(m => m.EntityType == AttachedEntityType.Document && m.EntityId == documentId)
                 .ExecuteDeleteAsync(ct);

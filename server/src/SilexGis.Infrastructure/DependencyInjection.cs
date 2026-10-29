@@ -230,6 +230,8 @@ public static class DependencyInjection
         services.AddScoped<Permissions.FeatureProtection>();
         services.AddScoped<Permissions.AssociationDisclosure>();
         services.AddScoped<Permissions.PhotoPositionDisclosure>();
+        services.AddScoped<Permissions.PlacePointDisclosure>();
+        services.AddScoped<RasterMaps.PlacePointStore>();
         services.AddScoped<Permissions.FullAdminGuard>();
         services.AddScoped<Permissions.AccessExplainer>();
 

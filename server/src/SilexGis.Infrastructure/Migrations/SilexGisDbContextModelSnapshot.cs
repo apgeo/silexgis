@@ -5073,63 +5073,13 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasFilter("deleted_at is not null");
 
                     b.HasIndex("DocumentId")
-                        .HasDatabaseName("ix_raster_maps_document_id");
+                        .IsUnique()
+                        .HasDatabaseName("ux_raster_maps_document_id");
 
                     b.HasIndex("OwnerUserId")
                         .HasDatabaseName("ix_raster_maps_owner_user_id");
 
                     b.ToTable("raster_maps", (string)null);
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.RasterPin", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid>("PlaceFeatureId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("place_feature_id");
-
-                    b.Property<Guid>("RasterMapId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("raster_map_id");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<int>("X")
-                        .HasColumnType("integer")
-                        .HasColumnName("x");
-
-                    b.Property<int>("Y")
-                        .HasColumnType("integer")
-                        .HasColumnName("y");
-
-                    b.HasKey("Id")
-                        .HasName("pk_raster_pins");
-
-                    b.HasIndex("PlaceFeatureId")
-                        .HasDatabaseName("ix_raster_pins_place_feature_id");
-
-                    b.HasIndex("RasterMapId", "PlaceFeatureId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_raster_pins_map_place_live")
-                        .HasFilter("deleted_at is null");
-
-                    b.HasIndex("RasterMapId", "UpdatedAt")
-                        .HasDatabaseName("ix_raster_pins_map_updated");
-
-                    b.ToTable("raster_pins", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.ReportTemplate", b =>
@@ -5201,6 +5151,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
                     b.Property<string>("Description")
                         .HasColumnType("text")
                         .HasColumnName("description");
@@ -5224,6 +5178,10 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("CreatedBy")
                         .HasDatabaseName("ix_res_links_created_by");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_res_links_deleted_at")
+                        .HasFilter("deleted_at is not null");
 
                     b.HasIndex("RelationTypeId")
                         .HasDatabaseName("ix_res_links_relation_type_id");
@@ -10283,11 +10241,11 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_import_batch_items_raster_maps_raster_map_id");
 
-                    b.HasOne("SilexGis.Domain.Entities.RasterPin", null)
+                    b.HasOne("SilexGis.Domain.Entities.ResLink", null)
                         .WithMany()
                         .HasForeignKey("RasterPinId")
                         .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_import_batch_items_raster_pins_raster_pin_id");
+                        .HasConstraintName("fk_import_batch_items_res_links_raster_pin_id");
 
                     b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
                         .WithMany()
@@ -10420,25 +10378,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_raster_maps_users_owner_user_id");
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.RasterPin", b =>
-                {
-                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
-                        .WithMany()
-                        .HasForeignKey("PlaceFeatureId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_raster_pins_features_place_feature_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.RasterMap", "RasterMap")
-                        .WithMany("Pins")
-                        .HasForeignKey("RasterMapId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_raster_pins_raster_maps_raster_map_id");
-
-                    b.Navigation("RasterMap");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.ReportTemplate", b =>
@@ -11347,11 +11286,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Navigation("Centerline");
 
                     b.Navigation("Entrance");
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.RasterMap", b =>
-                {
-                    b.Navigation("Pins");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SurveyCompilation", b =>

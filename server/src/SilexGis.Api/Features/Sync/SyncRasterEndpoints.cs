@@ -8,6 +8,7 @@ using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.Sync;
 
@@ -97,15 +98,15 @@ public static class SyncRasterEndpoints
         var live =
             from carried in Carried(db, handed)
             let map = carried.Map
-            let pinsAt = db.RasterPins
-                .Where(p => p.RasterMapId == map.Id)
+            let pinsAt = PlacePointQueries.Rows(db)
+                .Where(p => p.MapId == map.Id)
                 .Max(p => (DateTimeOffset?)p.UpdatedAt) ?? map.UpdatedAt
             // The pinned places' own times: a pin whose place comes into (or goes out of) what the
             // set hands this reader through a change to the place's own row alone is a change to the
             // map's list, and the pins' times do not move with it.
-            let placesAt = (from p in db.RasterPins
-                            where p.RasterMapId == map.Id && p.DeletedAt == null
-                            join f in db.Features on p.PlaceFeatureId equals f.Id
+            let placesAt = (from p in PlacePointQueries.Rows(db)
+                            where p.MapId == map.Id && p.DeletedAt == null
+                            join f in db.Features on p.PlaceId equals f.Id
                             select (DateTimeOffset?)f.UpdatedAt).Max()
             let pinsChangedAt = placesAt != null && placesAt > pinsAt ? placesAt.Value : pinsAt
             // The current picture's files: a turn recorded in the browser is written on the file,
@@ -264,11 +265,11 @@ public static class SyncRasterEndpoints
     {
         var handedIds = handed.Select(f => f.Id);
         return
-            from pin in db.RasterPins.AsNoTracking()
+            from pin in PlacePointQueries.Rows(db).AsNoTracking()
             where pin.DeletedAt != null
-            join carried in Carried(db, handed) on pin.RasterMapId equals carried.Map.Id
-            where handedIds.Contains(pin.PlaceFeatureId)
-            select new SyncRasterPinGone { Id = pin.Id, MapId = pin.RasterMapId, At = pin.DeletedAt!.Value };
+            join carried in Carried(db, handed) on pin.MapId equals carried.Map.Id
+            where handedIds.Contains(pin.PlaceId)
+            select new SyncRasterPinGone { Id = pin.Id, MapId = pin.MapId, At = pin.DeletedAt!.Value };
     }
 
     /// <summary>
@@ -317,22 +318,26 @@ public static class SyncRasterEndpoints
             return [];
         }
 
-        var pins = await db.RasterPins.AsNoTracking()
-            .Where(p => mapIds.Contains(p.RasterMapId) && p.DeletedAt == null)
+        var pins = await PlacePointQueries.Rows(db).AsNoTracking()
+            .Where(p => mapIds.Contains(p.MapId) && p.DeletedAt == null)
             .OrderBy(p => p.CreatedAt).ThenBy(p => p.Id)
             .ToListAsync(ct);
 
-        var placeIds = pins.Select(p => p.PlaceFeatureId).Distinct().ToList();
+        var placeIds = pins.Select(p => p.PlaceId).Distinct().ToList();
         var handedPlaces = placeIds.Count == 0
             ? []
             : (await handed.Where(f => placeIds.Contains(f.Id)).Select(f => f.Id).ToListAsync(ct)).ToHashSet();
 
+        // The pixel the phone sent is read back as it was stored — the stored-frame pixel the pin
+        // carries, never one worked back from the fraction the browser draws it at.
         return pins
-            .Where(p => handedPlaces.Contains(p.PlaceFeatureId))
-            .GroupBy(p => p.RasterMapId)
+            .Where(p => handedPlaces.Contains(p.PlaceId))
+            .Select(p => (Row: p, Pixel: PlacePointQueries.Pixel(p)))
+            .Where(p => p.Pixel is not null)
+            .GroupBy(p => p.Row.MapId)
             .ToDictionary(
                 g => g.Key,
-                g => g.Select(p => new SyncRasterPinDto(p.Id, p.PlaceFeatureId, p.X, p.Y, p.UpdatedAt)).ToList());
+                g => g.Select(p => new SyncRasterPinDto(p.Row.Id, p.Row.PlaceId, p.Pixel!.Value.X, p.Pixel.Value.Y, p.Row.UpdatedAt)).ToList());
     }
 }
 

@@ -13,6 +13,7 @@ using SilexGis.Domain.ResLinks;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.ResLinks;
 
@@ -71,6 +72,15 @@ public static class ResLinkEndpoints
     public const string AnchorFileInvalidCode = ResLinkRules.AnchorFileInvalidCode;
     public const string GeoPointUnavailableCode = "reslink.member.geo_point_unavailable";
 
+    /// <summary>
+    /// A place pinned on a phone's map is made, moved and removed only through its own routes, and
+    /// never edited or made through these.
+    /// </summary>
+    public const string PlacePointFixedCode = "reslink.place_point.fixed";
+
+    private const string PlacePointFixedDetail =
+        "A place pinned on a phone's map is moved or removed from its map, and is not edited as a link.";
+
     /// <summary>The seeded feature kind a GPS-point member is born as — an ordinary
     /// generic feature, editable and protectable like any other from its first moment.</summary>
     private const string GeoPointFeatureTypeCode = "generic";
@@ -93,7 +103,7 @@ public static class ResLinkEndpoints
         links.MapPatch("/{id:guid}", UpdateAsync).WithValidation<ResLinkUpdateRequest>()
             .WithSummary("Sets description and relation type (creator, admin, or a writer of the main member); mainMemberId moves the marker with them.");
         links.MapDelete("/{id:guid}", DeleteAsync)
-            .WithSummary("Hard-deletes a link and its members, audited (creator, admin, or a writer of the main member).");
+            .WithSummary("Hard-deletes a link and its members, audited (creator, admin, or a writer of the main member); a place pinned on a phone's map is removed for the phones instead, by whoever may change its cave.");
         links.MapPost("/{id:guid}/members", AddMemberAsync).WithValidation<ResLinkMemberAddRequest>()
             .WithSummary("Adds a member — a readable target, or a new GPS point via newGeoPoint (creator, admin, or a writer of the main member).");
         links.MapPatch("/{id:guid}/members/{memberId:guid}", UpdateMemberAsync)
@@ -101,6 +111,7 @@ public static class ResLinkEndpoints
             .WithSummary("Edits isMain/sortOrder/note; anchors are replace-only — delete and re-add.");
         links.MapDelete("/{id:guid}/members/{memberId:guid}", DeleteMemberAsync)
             .WithSummary("Removes a member; the last member is refused — delete the link instead.");
+        links.MapPlacePointEndpoints();
 
         return api;
     }
@@ -126,6 +137,11 @@ public static class ResLinkEndpoints
         if (request.RelationTypeId is not null && relation is null)
         {
             return ApiProblems.BadRequest(RelationNotFoundCode, "The relation type does not exist.");
+        }
+
+        if (ResLinkRules.IsPlacePoint(relation?.Code))
+        {
+            return ApiProblems.BadRequest(PlacePointFixedCode, PlacePointFixedDetail);
         }
 
         var members = new List<ResLinkMember>();
@@ -238,6 +254,7 @@ public static class ResLinkEndpoints
         AssociationDisclosure associations,
         FeatureProtection protection,
         PhotoPositionDisclosure photoPositions,
+        PlacePointDisclosure placePoints,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -253,7 +270,7 @@ public static class ResLinkEndpoints
         if (Guid.TryParse(idOrCode, out var id))
         {
             var byId = await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
-            return byId is null
+            return byId is null || await placePoints.IsHiddenAsync(ctx, byId.Id, ct)
                 ? ApiProblems.NotFound(NotFoundCode)
                 : TypedResults.Ok((await ProjectAsync(
                     db, targets, associations, protection, photoPositions, access, ctx, [byId], ct)).Single());
@@ -262,7 +279,7 @@ public static class ResLinkEndpoints
         var byCode = ResLinkRules.IsShortCode(idOrCode)
             ? await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.ShortCode == idOrCode, ct)
             : null;
-        return byCode is null
+        return byCode is null || await placePoints.IsHiddenAsync(ctx, byCode.Id, ct)
             ? ApiProblems.NotFound(CodeUnresolvedCode)
             : TypedResults.Ok((await ProjectAsync(
                 db, targets, associations, protection, photoPositions, access, ctx, [byCode], ct)).Single());
@@ -276,6 +293,7 @@ public static class ResLinkEndpoints
         AssociationDisclosure associations,
         FeatureProtection protection,
         PhotoPositionDisclosure photoPositions,
+        PlacePointDisclosure placePoints,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -287,15 +305,27 @@ public static class ResLinkEndpoints
         }
 
         var link = await Standing(db).FirstOrDefaultAsync(l => l.Id == id, ct);
-        if (link is null)
+        if (link is null || await placePoints.IsHiddenAsync(ctx, link.Id, ct))
         {
             return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        if (await FixedPlacePointAsync(db, link, ct) is { } fixedProblem)
+        {
+            return fixedProblem;
         }
 
         var relation = await RelationAsync(db, request.RelationTypeId, ct);
         if (request.RelationTypeId is not null && relation is null)
         {
             return ApiProblems.BadRequest(RelationNotFoundCode, "The relation type does not exist.");
+        }
+
+        // Nor is a link of another kind turned into one: a pin made by a side door would answer to
+        // none of the cave, place and one-per-place rules a pin is written under.
+        if (ResLinkRules.IsPlacePoint(relation?.Code))
+        {
+            return ApiProblems.Conflict(PlacePointFixedCode, PlacePointFixedDetail);
         }
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -306,7 +336,7 @@ public static class ResLinkEndpoints
         // taken on a snapshot this write would not go on to see could let a caller whose
         // right came from the old main member finish a write after the subject had already
         // been handed to something else.
-        if (!await MayEditAsync(db, targets, ctx, link, ct))
+        if (!await MayEditAsync(db, access, targets, ctx, link, ct))
         {
             return ApiProblems.Forbidden();
         }
@@ -370,6 +400,9 @@ public static class ResLinkEndpoints
         Guid id,
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
+        PlacePointDisclosure placePoints,
+        PlacePointStore placePointStore,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -380,9 +413,16 @@ public static class ResLinkEndpoints
         }
 
         var link = await Standing(db).FirstOrDefaultAsync(l => l.Id == id, ct);
-        if (link is null)
+        if (link is null || await placePoints.IsHiddenAsync(ctx, link.Id, ct))
         {
             return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        // A place pinned on a phone's map is removed the way a phone removes it — stamped, so the
+        // phones are told, and by whoever may change the map's cave.
+        if (await IsPlacePointAsync(db, link, ct))
+        {
+            return await PlacePointEndpoints.RemoveAsync(db, placePointStore, access, ctx, link.Id, ct);
         }
 
         // Locked like every other write of this link, so the edit decision and the delete
@@ -393,7 +433,7 @@ public static class ResLinkEndpoints
 
         // Inside the lock, for the reason the update handler above spells out: the rule
         // reads the main marker, and the marker moves.
-        if (!await MayEditAsync(db, targets, ctx, link, ct))
+        if (!await MayEditAsync(db, access, targets, ctx, link, ct))
         {
             return ApiProblems.Forbidden();
         }
@@ -413,6 +453,7 @@ public static class ResLinkEndpoints
         ResLinkMemberAddRequest request,
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
+        PlacePointDisclosure placePoints,
         FeatureWriteService featureWriter,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -425,9 +466,14 @@ public static class ResLinkEndpoints
         }
 
         var link = await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
-        if (link is null)
+        if (link is null || await placePoints.IsHiddenAsync(ctx, link.Id, ct))
         {
             return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        if (await FixedPlacePointAsync(db, link, ct) is { } fixedProblem)
+        {
+            return fixedProblem;
         }
 
         // The whole act — the edit decision, the optional new feature, the marker handover
@@ -438,7 +484,7 @@ public static class ResLinkEndpoints
 
         // Inside the lock, for the reason the update handler above spells out: the rule
         // reads the main marker, and the marker moves.
-        if (!await MayEditAsync(db, targets, ctx, link, ct))
+        if (!await MayEditAsync(db, access, targets, ctx, link, ct))
         {
             return ApiProblems.Forbidden();
         }
@@ -643,6 +689,7 @@ public static class ResLinkEndpoints
         ResLinkMemberUpdateRequest request,
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
+        PlacePointDisclosure placePoints,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -654,9 +701,14 @@ public static class ResLinkEndpoints
         }
 
         var link = await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
-        if (link is null)
+        if (link is null || await placePoints.IsHiddenAsync(ctx, link.Id, ct))
         {
             return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        if (await FixedPlacePointAsync(db, link, ct) is { } fixedProblem)
+        {
+            return fixedProblem;
         }
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -664,7 +716,7 @@ public static class ResLinkEndpoints
 
         // Inside the lock, for the reason the update handler above spells out: the rule
         // reads the main marker, and the marker moves.
-        if (!await MayEditAsync(db, targets, ctx, link, ct))
+        if (!await MayEditAsync(db, access, targets, ctx, link, ct))
         {
             return ApiProblems.Forbidden();
         }
@@ -720,6 +772,8 @@ public static class ResLinkEndpoints
         Guid memberId,
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
+        PlacePointDisclosure placePoints,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -730,9 +784,14 @@ public static class ResLinkEndpoints
         }
 
         var link = await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
-        if (link is null)
+        if (link is null || await placePoints.IsHiddenAsync(ctx, link.Id, ct))
         {
             return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        if (await FixedPlacePointAsync(db, link, ct) is { } fixedProblem)
+        {
+            return fixedProblem;
         }
 
         // Locked first: the one-member floor and the directed-main successor rule count
@@ -743,7 +802,7 @@ public static class ResLinkEndpoints
 
         // Inside the lock, for the reason the update handler above spells out: the rule
         // reads the main marker, and the marker moves.
-        if (!await MayEditAsync(db, targets, ctx, link, ct))
+        if (!await MayEditAsync(db, access, targets, ctx, link, ct))
         {
             return ApiProblems.Forbidden();
         }
@@ -823,6 +882,7 @@ public static class ResLinkEndpoints
         AssociationDisclosure associations,
         FeatureProtection protection,
         PhotoPositionDisclosure photoPositions,
+        PlacePointDisclosure placePoints,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct,
@@ -877,6 +937,15 @@ public static class ResLinkEndpoints
         if (relationTypeId is { } roleId)
         {
             incidentLinks = incidentLinks.Where(l => l.RelationTypeId == roleId);
+        }
+
+        // Places pinned on phones' maps are shown whole or not at all, and a hidden one is not
+        // counted either: cut from the query both arms below order, page and count, for the reason
+        // the relation filter is.
+        var hiddenPins = await placePoints.HiddenLinkIdsAsync(ctx, incidentLinks, ct);
+        if (hiddenPins.Count > 0)
+        {
+            incidentLinks = incidentLinks.Where(l => !hiddenPins.Contains(l.Id));
         }
 
         var linkQuery = incidentLinks
@@ -945,7 +1014,7 @@ public static class ResLinkEndpoints
                     .Where(m => pageIds.Contains(m.ResLinkId) && m.IsMain)
                     .ToListAsync(ct);
             var curated = await CuratedLinkIdsAsync(
-                targets, ctx, [.. candidates.Where(l => pageIds.Contains(l.Id))], pageMains, ct);
+                db, access, targets, ctx, [.. candidates.Where(l => pageIds.Contains(l.Id))], pageMains, ct);
             return TypedResults.Ok(new PagedResult<ResLinkDto>(
                 [.. rows.Select(l => l with { MayEdit = curated.Contains(l.Id) })],
                 p,
@@ -1036,26 +1105,8 @@ public static class ResLinkEndpoints
 
     // ---- shared pieces --------------------------------------------------------------
 
-    /// <summary>
-    /// The links that stand, which is every link but the ones that cannot mean anything without
-    /// a trip that is deleted.
-    /// </summary>
-    /// <remarks>
-    /// Deleting a trip removes nothing, so that putting it back is exact: its links stay in
-    /// storage with their members. What they must not do meanwhile is read as links. A trip's
-    /// role link without its trip is a relation between the caves it named that nobody ever
-    /// asserted, and it would sit on each of those caves' panels until the trip was removed for
-    /// good. So every route here that finds a link finds it through this, reads and writes
-    /// alike, and such a link answers as one that is not there — which is what it becomes if the
-    /// trip is never restored, by the same rule, asked in the same place.
-    ///
-    /// Tracked or not is each caller's to say, and the two that edit what they find say
-    /// nothing, which means tracked. That holds only while nothing composed into this states
-    /// an option of its own: one written inside a subquery is taken for the whole query, and a
-    /// link read through it would be edited, saved and answered without being written.
-    /// </remarks>
-    private static IQueryable<ResLink> Standing(SilexGisDbContext db) =>
-        db.ResLinks.Where(TripLinkFate.Not(TripLinkFate.EndsWithout(db, TripLinkFate.OfNoLiveTrip(db))));
+    /// <summary>The links that stand — read through their one home.</summary>
+    private static IQueryable<ResLink> Standing(SilexGisDbContext db) => ResLinkStanding.Of(db);
 
     /// <summary>
     /// Whether this caller may edit or delete one link, at write time. The rule itself
@@ -1065,6 +1116,7 @@ public static class ResLinkEndpoints
     /// </summary>
     private static async Task<bool> MayEditAsync(
         SilexGisDbContext db,
+        IAccessService access,
         ResLinkTargetDirectory targets,
         AccessContext ctx,
         ResLink link,
@@ -1078,7 +1130,7 @@ public static class ResLinkEndpoints
             .Where(m => m.ResLinkId == link.Id && m.IsMain)
             .FirstOrDefaultAsync(ct);
         var curated = await CuratedLinkIdsAsync(
-            targets, ctx, [link], main is null ? [] : [main], ct);
+            db, access, targets, ctx, [link], main is null ? [] : [main], ct);
         return curated.Contains(link.Id);
     }
 
@@ -1126,6 +1178,21 @@ public static class ResLinkEndpoints
             : ApiProblems.Forbidden(
                 detail: "Saying what documents a moment of a trip takes the right to edit that trip.");
     }
+
+    /// <summary>Whether a link is a place pinned on a phone's map.</summary>
+    internal static async Task<bool> IsPlacePointAsync(SilexGisDbContext db, ResLink link, CancellationToken ct) =>
+        link.RelationTypeId is { } relationId
+        && relationId == await PlacePointQueries.RelationIdAsync(db, ct);
+
+    /// <summary>
+    /// The refusal a generic edit of a place pin gets: its members and its relation are what the
+    /// pin is, and they are written only by the place-pin store.
+    /// </summary>
+    private static async Task<ProblemHttpResult?> FixedPlacePointAsync(
+        SilexGisDbContext db, ResLink link, CancellationToken ct) =>
+        await IsPlacePointAsync(db, link, ct)
+            ? ApiProblems.Conflict(PlacePointFixedCode, PlacePointFixedDetail)
+            : null;
 
     private static Task<ResLinkRelationType?> RelationAsync(
         SilexGisDbContext db, long? relationTypeId, CancellationToken ct) =>
@@ -1222,7 +1289,7 @@ public static class ResLinkEndpoints
     /// collision. 62⁸ makes a collision lottery-grade, so the code is never checked
     /// first — the index is the arbiter and the loser simply draws again.
     /// </summary>
-    private static async Task SaveWithFreshShortCodeAsync(
+    internal static async Task SaveWithFreshShortCodeAsync(
         SilexGisDbContext db, ResLink link, CancellationToken ct)
     {
         for (var attempt = 0; ; attempt++)
@@ -1251,7 +1318,7 @@ public static class ResLinkEndpoints
     /// the caller with memberships that caller asserted in the same request, so the
     /// disclosure cut every other link projection applies is deliberately not re-asked.
     /// </param>
-    private static async Task<List<ResLinkDto>> ProjectAsync(
+    internal static async Task<List<ResLinkDto>> ProjectAsync(
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
         AssociationDisclosure associations,
@@ -1336,7 +1403,7 @@ public static class ResLinkEndpoints
 
         var curated = skipCuration
             ? []
-            : await CuratedLinkIdsAsync(targets, ctx, links, mainMembers, ct);
+            : await CuratedLinkIdsAsync(db, access, targets, ctx, links, mainMembers, ct);
 
         var memberDtos = await AssembleMembersAsync(db, access, ctx, members, displays, ct);
         var byLink = members
@@ -1399,6 +1466,8 @@ public static class ResLinkEndpoints
     /// </para>
     /// </remarks>
     private static async Task<HashSet<Guid>> CuratedLinkIdsAsync(
+        SilexGisDbContext db,
+        IAccessService access,
         ResLinkTargetDirectory targets,
         AccessContext ctx,
         IReadOnlyList<ResLink> links,
@@ -1410,7 +1479,16 @@ public static class ResLinkEndpoints
             return [.. links.Select(l => l.Id)];
         }
 
-        var curated = new HashSet<Guid>(
+        // A place pinned on a phone's map is curated by whoever may change the map's cave — the
+        // right a phone needs to move or remove it — and by nobody else: neither its creator nor a
+        // writer of the picture. So the button matches the route.
+        var placeRelation = await PlacePointQueries.RelationIdAsync(db, ct);
+        var pins = links.Where(l => placeRelation is not null && l.RelationTypeId == placeRelation).Select(l => l.Id).ToHashSet();
+        var curated = await PlacePointEndpoints.WritableAsync(db, access, ctx, pins, ct);
+        links = [.. links.Where(l => !pins.Contains(l.Id))];
+        mainMembers = [.. mainMembers.Where(m => !pins.Contains(m.ResLinkId))];
+
+        curated.UnionWith(
             links.Where(l => l.CreatedBy is { } creator && creator == ctx.UserId).Select(l => l.Id));
         var undecided = mainMembers.Where(m => !curated.Contains(m.ResLinkId)).ToList();
         if (undecided.Count == 0)

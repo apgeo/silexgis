@@ -9,6 +9,7 @@ using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.Sync;
 
@@ -630,7 +631,9 @@ internal sealed class SyncRasterMapsSection(
 /// A pin is part of its map: adding, moving or removing one needs the right to change the map's
 /// cave. A pin names a place, and the place has to be one the uploader may read and one that lies
 /// in the map's cave — a place that is not here, one the uploader may not read and one in another
-/// cave are answered alike. A place carries one live pin per map.
+/// cave are answered alike. A place carries one live pin per map. A pin is stored as a link of the
+/// place-pin relation between the map's picture and the place, under the phone's identifier, and is
+/// written only through the place-pin store.
 /// </remarks>
 internal sealed class SyncRasterPinsSection(IAccessService access)
     : SyncUploadSection<SyncUploadRasterPinDto, SyncRasterPinProposal>
@@ -668,8 +671,16 @@ internal sealed class SyncRasterPinsSection(IAccessService access)
     {
         var db = run.Db;
         var ctx = run.Access;
-        var existing = await db.RasterPins.AsNoTracking().IgnoreQueryFilters()
+        var placePoints = new PlacePointStore(db);
+        var existing = await PlacePointQueries.Rows(db).AsNoTracking().IgnoreQueryFilters()
             .FirstOrDefaultAsync(p => p.Id == item.Id, ct);
+
+        // A pin is a link under the phone's identifier, so a link of any other kind holding that
+        // identifier has taken it, as a pin of another map has.
+        if (existing is null && await db.ResLinks.AsNoTracking().AnyAsync(l => l.Id == item.Id, ct))
+        {
+            return Answer(SyncRasterAnswers.Taken(item.Id));
+        }
 
         if (existing is null)
         {
@@ -702,7 +713,7 @@ internal sealed class SyncRasterPinsSection(IAccessService access)
                 return Answer(SyncRasterAnswers.Refuse(item.Id, SyncRasterAnswers.PlaceNotFound, "That place is not in this map's cave."));
             }
 
-            if (await LivePinOfAsync(db, map.Id, item.PlaceId.Value, except: item.Id, ct))
+            if (await placePoints.LivePinOfAsync(map.Id, item.PlaceId.Value, except: item.Id, ct))
             {
                 return Answer(SyncRasterAnswers.Refuse(item.Id, SyncRasterAnswers.PinTaken,
                     "That place is already pinned on this map."));
@@ -712,12 +723,12 @@ internal sealed class SyncRasterPinsSection(IAccessService access)
         }
 
         var owning = await db.RasterMaps.AsNoTracking().IgnoreQueryFilters()
-            .FirstAsync(m => m.Id == existing.RasterMapId, ct);
+            .FirstAsync(m => m.Id == existing.MapId, ct);
         var owningCave = await db.Features.AsNoTracking().FirstOrDefaultAsync(f => f.Id == owning.CaveFeatureId, ct);
 
         // A pin belongs to one map for good, and one in a cave the caller may not read is somebody
         // else's: either way the identifier is taken.
-        if (existing.RasterMapId != item.RasterMapId
+        if (existing.MapId != item.RasterMapId
             || owningCave is null
             || !(await access.DecideAsync(ctx, AccessAction.Read, owningCave, ct)).Allowed)
         {
@@ -752,14 +763,14 @@ internal sealed class SyncRasterPinsSection(IAccessService access)
             return Write(new SyncRasterPinProposal(SyncRasterAct.Delete, item, existing.UpdatedAt));
         }
 
-        if (item.PlaceId != existing.PlaceFeatureId)
+        if (item.PlaceId != existing.PlaceId)
         {
             if (!await SyncRasterAnswers.InCaveAndReadableAsync(run, access, item.PlaceId!.Value, owning.CaveFeatureId, ct))
             {
                 return Answer(SyncRasterAnswers.Refuse(item.Id, SyncRasterAnswers.PlaceNotFound, "That place is not in this map's cave."));
             }
 
-            if (await LivePinOfAsync(db, owning.Id, item.PlaceId.Value, except: item.Id, ct))
+            if (await placePoints.LivePinOfAsync(owning.Id, item.PlaceId.Value, except: item.Id, ct))
             {
                 return Answer(SyncRasterAnswers.Refuse(item.Id, SyncRasterAnswers.PinTaken,
                     "That place is already pinned on this map."));
@@ -774,44 +785,68 @@ internal sealed class SyncRasterPinsSection(IAccessService access)
     {
         var db = run.Db;
         var item = proposal.Pin;
+        var placePoints = new PlacePointStore(db);
+
+        // Every write of a map's pins queues on the map, so "one live pin per place" asked below
+        // is asked of what every earlier writer of this map has committed.
+        await placePoints.LockAsync(item.RasterMapId, ct);
         if (proposal.Act == SyncRasterAct.Create)
         {
-            // Two copies of a pin can arrive in different batches at once; the unique index on the
-            // live (map, place) pair is the last word, so ask again just before writing.
-            if (await LivePinOfAsync(db, item.RasterMapId, item.PlaceId!.Value, except: item.Id, ct))
+            // Two copies of a pin can arrive in different batches at once: the second, queued
+            // behind the first on the map, finds what the first wrote.
+            if (await db.ResLinks.AsNoTracking().AnyAsync(l => l.Id == item.Id, ct))
+            {
+                return new SyncApplied(SyncRasterAnswers.Taken(item.Id), null);
+            }
+
+            if (await placePoints.LivePinOfAsync(item.RasterMapId, item.PlaceId!.Value, except: item.Id, ct))
             {
                 return new SyncApplied(SyncRasterAnswers.Refuse(item.Id, SyncRasterAnswers.PinTaken,
                     "That place is already pinned on this map."), null);
             }
 
-            db.RasterPins.Add(new RasterPin
+            var map = await db.RasterMaps.AsNoTracking().FirstOrDefaultAsync(m => m.Id == item.RasterMapId, ct);
+            var picture = map is null ? null : await placePoints.PictureOfAsync(map, ct);
+            if (map is null || picture is null)
             {
-                Id = item.Id,
-                RasterMapId = item.RasterMapId,
-                PlaceFeatureId = item.PlaceId.Value,
-                X = item.X!.Value,
-                Y = item.Y!.Value,
-            });
+                return new SyncApplied(SyncRasterAnswers.Refuse(item.Id, SyncRasterAnswers.MapNotFound,
+                    "The map this pin belongs to is not on this server."), null);
+            }
+
+            await placePoints.AddAsync(map, picture, item.Id, item.PlaceId.Value, item.X!.Value, item.Y!.Value, run.Access.UserId, ct);
             return new SyncApplied(SyncRasterAnswers.Ok(item.Id, SyncRowStatus.Created), Line(item.Id, ImportDecisionAction.Create));
         }
 
-        var existing = await db.RasterPins.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == item.Id, ct);
+        var existing = await placePoints.FindAsync(item.Id, ct);
         if (existing is null
-            || existing.DeletedAt is not null
-            || !SyncRevisions.Same(existing.UpdatedAt, proposal.BaseRevision!.Value))
+            || existing.Link.DeletedAt is not null
+            || !SyncRevisions.Same(existing.Link.UpdatedAt, proposal.BaseRevision!.Value))
         {
-            return new SyncApplied(SyncRasterAnswers.Conflict(item.Id, existing?.UpdatedAt), null);
+            return new SyncApplied(SyncRasterAnswers.Conflict(item.Id, existing?.Link.UpdatedAt), null);
         }
 
         if (proposal.Act == SyncRasterAct.Delete)
         {
-            existing.DeletedAt = DateTimeOffset.UtcNow;
+            PlacePointStore.Remove(existing, DateTimeOffset.UtcNow);
             return new SyncApplied(SyncRasterAnswers.Ok(item.Id, SyncRowStatus.Deleted), Line(item.Id, ImportDecisionAction.Attach));
         }
 
-        existing.PlaceFeatureId = item.PlaceId!.Value;
-        existing.X = item.X!.Value;
-        existing.Y = item.Y!.Value;
+        if (item.PlaceId!.Value != existing.PlaceId)
+        {
+            if (await placePoints.LivePinOfAsync(existing.Map.Id, item.PlaceId.Value, except: item.Id, ct))
+            {
+                return new SyncApplied(SyncRasterAnswers.Refuse(item.Id, SyncRasterAnswers.PinTaken,
+                    "That place is already pinned on this map."), null);
+            }
+
+            placePoints.SetPlace(existing, item.PlaceId.Value);
+        }
+
+        if (existing.Pixel != (item.X!.Value, item.Y!.Value))
+        {
+            await placePoints.MoveAsync(existing, item.X.Value, item.Y.Value, ct);
+        }
+
         return new SyncApplied(SyncRasterAnswers.Ok(item.Id, SyncRowStatus.Updated), Line(item.Id, ImportDecisionAction.Attach));
     }
 
@@ -824,19 +859,14 @@ internal sealed class SyncRasterPinsSection(IAccessService access)
             return results;
         }
 
-        var stamps = await run.Db.RasterPins.AsNoTracking().IgnoreQueryFilters()
-            .Where(p => written.Contains(p.Id))
-            .ToDictionaryAsync(p => p.Id, p => p.UpdatedAt, ct);
+        // A pin's revision is its link's write time, stamped by the save.
+        var stamps = await run.Db.ResLinks.AsNoTracking()
+            .Where(l => written.Contains(l.Id))
+            .ToDictionaryAsync(l => l.Id, l => l.UpdatedAt, ct);
         return [.. results.Select(r => SyncUploadTally.IsWritten(r.Status) && stamps.TryGetValue(r.Id, out var at)
             ? r with { Revision = at }
             : r)];
     }
-
-    /// <summary>Whether another live pin already marks the place on the map.</summary>
-    private static Task<bool> LivePinOfAsync(
-        SilexGisDbContext db, Guid mapId, Guid placeId, Guid except, CancellationToken ct) =>
-        db.RasterPins.AsNoTracking().IgnoreQueryFilters()
-            .AnyAsync(p => p.RasterMapId == mapId && p.PlaceFeatureId == placeId && p.DeletedAt == null && p.Id != except, ct);
 
     private static SyncResolution<SyncRasterPinProposal> Answer(SyncUploadRowResultDto result) =>
         SyncResolution<SyncRasterPinProposal>.Answer(result);

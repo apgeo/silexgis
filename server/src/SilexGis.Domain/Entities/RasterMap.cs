@@ -36,6 +36,14 @@ public enum RasterMapType : short
 /// may change it is whoever may change the cave. Its identifier is the phone's own, adopted verbatim
 /// the first time it arrives.
 /// </para>
+/// <para>
+/// The places pinned on the map are resource links of the place-pin relation between the map's
+/// picture, at a pixel of it, and the place. A pin is a pixel and never a position, but it still
+/// tells where a place is — on a picture that this application may one day draw on the ground, a
+/// pixel is a coordinate — so a pin is shown whole or not at all, exactly when its place is. The
+/// map a pin belongs to is the one whose picture its link names; every map has a picture document
+/// of its own, so that is one map for good.
+/// </para>
 /// </remarks>
 public class RasterMap : ITimestamped, IAuditable
 {
@@ -73,51 +81,7 @@ public class RasterMap : ITimestamped, IAuditable
 
     public DateTimeOffset? DeletedAt { get; set; }
 
-    public List<RasterPin> Pins { get; set; } = [];
-
     public bool IsDeleted => DeletedAt is not null;
 
     public string AuditId => Id.ToString();
-}
-
-/// <summary>One place pinned on a raster map, at a pixel of the picture.</summary>
-/// <remarks>
-/// <para>
-/// A pin is a pixel and never a position. It still tells where a place is — on a picture that this
-/// application may one day draw on the ground, a pixel is a coordinate — so a pin is given to a
-/// reader exactly when its place is, and no route shows a pin of a place its reader may not be
-/// given. At most one live pin per place on a map.
-/// </para>
-/// </remarks>
-public class RasterPin : ITimestamped, IAuditable, IAuditChild
-{
-    /// <summary>The phone's identifier for the pin, adopted verbatim.</summary>
-    public Guid Id { get; set; }
-
-    public Guid RasterMapId { get; set; }
-
-    public RasterMap? RasterMap { get; set; }
-
-    /// <summary>The place pinned.</summary>
-    public Guid PlaceFeatureId { get; set; }
-
-    /// <summary>Pixels from the left edge of the picture.</summary>
-    public int X { get; set; }
-
-    /// <summary>Pixels from the top edge of the picture.</summary>
-    public int Y { get; set; }
-
-    public DateTimeOffset CreatedAt { get; set; }
-
-    public DateTimeOffset UpdatedAt { get; set; }
-
-    public DateTimeOffset? DeletedAt { get; set; }
-
-    public bool IsDeleted => DeletedAt is not null;
-
-    public string AuditId => Id.ToString();
-
-    public string? RootEntityType => nameof(RasterMap);
-
-    public string? RootEntityId => RasterMapId.ToString();
 }

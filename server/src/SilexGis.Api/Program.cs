@@ -75,6 +75,7 @@ using SilexGis.Infrastructure;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 Log.Logger = new LoggerConfiguration()
     // On the bootstrap logger as well as on the configured one, and that is not belt and braces:
@@ -680,6 +681,10 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
 
         await db.Database.MigrateAsync();
         await TaxonomySeeder.SeedAsync(db);
+        // Pins carried across from the table phones' pins were kept in arrive with their pixels
+        // only; the fraction the browser draws them at is worked out here, by the one conversion
+        // there is, rather than by a copy of it in the migration. Nothing to do on every later start.
+        await new PlacePointStore(db).RefreshFramesAsync(null);
         await MapLayerStartup.SeedAsync(app.Environment.ContentRootPath, scope.ServiceProvider, db);
         await TermRuleSeeder.SeedAsync(db);
         // Permission groups must exist before the bootstrap admin joins Full Administrators.

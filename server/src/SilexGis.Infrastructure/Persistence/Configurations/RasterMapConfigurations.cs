@@ -31,43 +31,13 @@ public sealed class RasterMapConfiguration : IEntityTypeConfiguration<RasterMap>
 
         // "Which maps are of these caves?" — the question the rasters stream asks of every page.
         builder.HasIndex(x => x.CaveFeatureId).HasDatabaseName("ix_raster_maps_cave_feature_id");
-        builder.HasIndex(x => x.DocumentId).HasDatabaseName("ix_raster_maps_document_id");
+        // One map per picture: a place pinned on a map is a link naming the map's picture, and that
+        // is how the pin's map is found again.
+        builder.HasIndex(x => x.DocumentId).IsUnique().HasDatabaseName("ux_raster_maps_document_id");
         builder.HasIndex(x => x.CaveAreaFeatureId).HasFilter("cave_area_feature_id is not null")
             .HasDatabaseName("ix_raster_maps_cave_area_feature_id");
         builder.HasIndex(x => x.OwnerUserId).HasDatabaseName("ix_raster_maps_owner_user_id");
         builder.HasIndex(x => x.DeletedAt).HasFilter("deleted_at is not null")
             .HasDatabaseName("ix_raster_maps_deleted_at");
-    }
-}
-
-public sealed class RasterPinConfiguration : IEntityTypeConfiguration<RasterPin>
-{
-    public void Configure(EntityTypeBuilder<RasterPin> builder)
-    {
-        builder.ToTable("raster_pins");
-        builder.Property(x => x.Id).ValueGeneratedNever();
-        builder.HasOne(x => x.RasterMap).WithMany(m => m.Pins).HasForeignKey(x => x.RasterMapId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // Hidden while its map is deleted — and only then. A pin's own removal is not filtered
-        // here, on purpose: the moment a pin went is what tells a phone its map changed, so the
-        // rasters stream reads removed pins' times beside the live ones. Every read of a map's live
-        // pins says so itself.
-        builder.HasQueryFilter(x => x.RasterMap!.DeletedAt == null);
-
-        // A pin means nothing without its place: removing a place for good takes its pins.
-        builder.HasOne<Feature>().WithMany().HasForeignKey(x => x.PlaceFeatureId).OnDelete(DeleteBehavior.Cascade);
-
-        // One live pin per place on a map. Removed pins stay as rows (a phone is told they went), so
-        // the rule holds only among the live ones.
-        builder.HasIndex(x => new { x.RasterMapId, x.PlaceFeatureId })
-            .IsUnique()
-            .HasFilter("deleted_at is null")
-            .HasDatabaseName("ux_raster_pins_map_place_live");
-        // A map's pins in the order they are read and changed: the stream asks for the latest
-        // change of each map's pins.
-        builder.HasIndex(x => new { x.RasterMapId, x.UpdatedAt })
-            .HasDatabaseName("ix_raster_pins_map_updated");
-        builder.HasIndex(x => x.PlaceFeatureId).HasDatabaseName("ix_raster_pins_place_feature_id");
     }
 }

@@ -6,8 +6,10 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
 using SilexGis.Domain.Import;
+using SilexGis.Domain.ResLinks;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Infrastructure.Import;
 
@@ -25,11 +27,26 @@ public sealed partial class DeviceSyncUndoService
         nameof(RasterMap.SortOrder), nameof(RasterMap.ClientUpdatedAt),
     ];
 
-    /// <summary>The fields of a pin an undo puts back.</summary>
-    private static readonly string[] RasterPinFields =
-    [
-        nameof(RasterPin.PlaceFeatureId), nameof(RasterPin.X), nameof(RasterPin.Y),
-    ];
+    /// <summary>
+    /// How the history of a pin written before pins were links names it, and the fields of a pin an
+    /// undo puts back, under the names those rows record them by. A pin written since is a link and
+    /// two members, and its rows are read into the same fields.
+    /// </summary>
+    private const string LegacyPinType = "RasterPin";
+
+    private const string PinPlaceField = "PlaceFeatureId";
+
+    private const string PinXField = "X";
+
+    private const string PinYField = "Y";
+
+    private const string DeletedField = "DeletedAt";
+
+    private PlacePointStore PlacePoints => placePointStore ??= new PlacePointStore(db);
+
+    private PlacePointStore? placePointStore;
+
+    private static readonly string[] RasterPinFields = [PinPlaceField, PinXField, PinYField];
 
     /// <summary>
     /// Takes back what an upload did to one raster map or one pin. A map it created is removed
@@ -66,13 +83,13 @@ public sealed partial class DeviceSyncUndoService
         var now = DateTimeOffset.UtcNow;
         if (!mapLine)
         {
-            var pin = await db.RasterPins.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == item.RasterPinId, ct);
+            var pin = await PlacePoints.FindAsync(item.RasterPinId!.Value, ct);
             if (pin is null)
             {
                 return Line(SyncUndoChanges.Created, SyncUndoOutcomes.NotUndone, SyncUndoReasons.Purged);
             }
 
-            pin.DeletedAt ??= now;
+            PlacePointStore.Remove(pin, now);
             return Line(SyncUndoChanges.Created, SyncUndoOutcomes.Undone, null);
         }
 
@@ -119,8 +136,10 @@ public sealed partial class DeviceSyncUndoService
         var mapLine = item.RasterMapId is not null;
         var rowId = (item.RasterMapId ?? item.RasterPinId)!.Value;
         var key = rowId.ToString();
-        var entityType = mapLine ? nameof(RasterMap) : nameof(RasterPin);
-        var edits = written.Where(a => a.EntityType == entityType && a.EntityId == key && a.Action == AuditActions.Updated).ToList();
+        var pin = mapLine ? null : await PlacePoints.FindAsync(rowId, ct);
+        var edits = mapLine
+            ? written.Where(a => a.EntityType == nameof(RasterMap) && a.EntityId == key && a.Action == AuditActions.Updated).ToList()
+            : PinEdits(written, key, pin);
 
         SyncUndoItemResult Line(
             string change,
@@ -141,7 +160,7 @@ public sealed partial class DeviceSyncUndoService
         var span = new Dictionary<string, (JsonNode? Old, JsonNode? New)>(StringComparer.Ordinal);
         foreach (var edit in edits)
         {
-            foreach (var (field, pair) in HistoryRestoreService.ChangesOf(edit))
+            foreach (var (field, pair) in mapLine ? HistoryRestoreService.ChangesOf(edit) : PinChangesOf(edit, pin))
             {
                 var old = (pair as JsonObject)?["old"];
                 var @new = (pair as JsonObject)?["new"];
@@ -149,23 +168,15 @@ public sealed partial class DeviceSyncUndoService
             }
         }
 
-        var deletedByUpload = span.TryGetValue(nameof(RasterMap.DeletedAt), out var deletion)
+        var deletedByUpload = span.TryGetValue(DeletedField, out var deletion)
             && deletion.Old is null && deletion.New is not null;
         var change = deletedByUpload ? SyncUndoChanges.Deleted : SyncUndoChanges.Updated;
 
-        RasterMap? map;
-        RasterPin? pin = null;
-        if (mapLine)
-        {
-            map = await db.RasterMaps.IgnoreQueryFilters().FirstOrDefaultAsync(m => m.Id == rowId, ct);
-        }
-        else
-        {
-            pin = await db.RasterPins.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == rowId, ct);
-            map = pin is null
+        var map = mapLine
+            ? await db.RasterMaps.IgnoreQueryFilters().FirstOrDefaultAsync(m => m.Id == rowId, ct)
+            : pin is null
                 ? null
-                : await db.RasterMaps.IgnoreQueryFilters().FirstOrDefaultAsync(m => m.Id == pin.RasterMapId, ct);
-        }
+                : await db.RasterMaps.IgnoreQueryFilters().FirstOrDefaultAsync(m => m.Id == pin.Map.Id, ct);
 
         if (map is null || (!mapLine && pin is null))
         {
@@ -184,7 +195,7 @@ public sealed partial class DeviceSyncUndoService
             return Line(change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.Forbidden);
         }
 
-        DateTimeOffset? currentDeletedAt = mapLine ? map.DeletedAt : pin!.DeletedAt;
+        DateTimeOffset? currentDeletedAt = mapLine ? map.DeletedAt : pin!.Link.DeletedAt;
         if (!mapLine && map.DeletedAt is not null)
         {
             // A pin comes back only inside a map that is there.
@@ -221,17 +232,15 @@ public sealed partial class DeviceSyncUndoService
             }
             else
             {
-                // The place may have been pinned afresh since; two live pins of one place on a map
-                // is a state the database refuses, so the pin stays gone.
-                var taken = await db.RasterPins.AsNoTracking()
-                    .AnyAsync(p => p.RasterMapId == pin!.RasterMapId && p.PlaceFeatureId == pin.PlaceFeatureId
-                        && p.DeletedAt == null && p.Id != pin.Id, ct);
-                if (taken)
+                // The place may have been pinned afresh since, and a place carries one live pin on
+                // a map, so the pin stays gone.
+                await PlacePoints.LockAsync(map.Id, ct);
+                if (await PlacePoints.LivePinOfAsync(map.Id, pin!.PlaceId, pin.Link.Id, ct))
                 {
                     return Line(change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.Superseded);
                 }
 
-                pin!.DeletedAt = null;
+                PlacePoints.Restore(pin);
             }
 
             return Line(change, SyncUndoOutcomes.Undone, null);
@@ -246,6 +255,12 @@ public sealed partial class DeviceSyncUndoService
         var fields = mapLine ? RasterMapFields : RasterPinFields;
         var applied = new List<string>();
         var skipped = new List<HistoryRestoreSkip>();
+        var pixel = pin?.Pixel ?? (0, 0);
+        if (!mapLine)
+        {
+            await PlacePoints.LockAsync(map.Id, ct);
+        }
+
         foreach (var field in fields)
         {
             if (!span.TryGetValue(field, out var values) || JsonNode.DeepEquals(values.Old, values.New))
@@ -261,7 +276,7 @@ public sealed partial class DeviceSyncUndoService
             }
 
             var old = ValueOf(values.Old, type);
-            if (old is Guid named && field is nameof(RasterMap.CaveAreaFeatureId) or nameof(RasterPin.PlaceFeatureId))
+            if (old is Guid named && field is nameof(RasterMap.CaveAreaFeatureId) or PinPlaceField)
             {
                 var feature = await db.Features.AsNoTracking().FirstOrDefaultAsync(f => f.Id == named, ct);
                 if (feature is null || !(await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed)
@@ -270,9 +285,7 @@ public sealed partial class DeviceSyncUndoService
                     continue;
                 }
 
-                if (!mapLine
-                    && await db.RasterPins.AsNoTracking().AnyAsync(p => p.RasterMapId == pin!.RasterMapId
-                        && p.PlaceFeatureId == named && p.DeletedAt == null && p.Id != pin.Id, ct))
+                if (!mapLine && await PlacePoints.LivePinOfAsync(map.Id, named, pin!.Link.Id, ct))
                 {
                     skipped.Add(new HistoryRestoreSkip(field, HistoryRestoreReasons.Superseded));
                     continue;
@@ -285,10 +298,27 @@ public sealed partial class DeviceSyncUndoService
             }
             else
             {
-                SetField(pin!, field, old);
+                switch (field)
+                {
+                    case PinPlaceField when old is Guid place:
+                        PlacePoints.SetPlace(pin!, place);
+                        break;
+                    case PinXField when old is int x:
+                        pixel = (x, pixel.Y);
+                        break;
+                    case PinYField when old is int y:
+                        pixel = (pixel.X, y);
+                        break;
+                }
             }
 
             applied.Add(field);
+        }
+
+        // The pixel goes back as one move, so the pin is redrawn once for both of its halves.
+        if (pin is not null && pixel != pin.Pixel)
+        {
+            await PlacePoints.MoveAsync(pin, pixel.X, pixel.Y, ct);
         }
 
         // A picture the upload replaced steps back to the revision before it, which stays in the
@@ -340,13 +370,62 @@ public sealed partial class DeviceSyncUndoService
         _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
     };
 
-    private static (Type Type, object? Value) FieldOf(RasterPin p, string field) => field switch
+    private static (Type Type, object? Value) FieldOf(PlacePoint p, string field) => field switch
     {
-        nameof(RasterPin.PlaceFeatureId) => (typeof(Guid), p.PlaceFeatureId),
-        nameof(RasterPin.X) => (typeof(int), p.X),
-        nameof(RasterPin.Y) => (typeof(int), p.Y),
+        PinPlaceField => (typeof(Guid), p.PlaceId),
+        PinXField => (typeof(int), p.Pixel.X),
+        PinYField => (typeof(int), p.Pixel.Y),
         _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
     };
+
+    /// <summary>
+    /// The history rows an upload wrote about one pin, oldest first: under the pin's own name for a
+    /// pin written before pins were links, and otherwise the rows of its link and of its two members.
+    /// </summary>
+    private static List<AuditEntry> PinEdits(List<AuditEntry> written, string key, PlacePoint? pin)
+    {
+        var memberKeys = pin is null ? [] : new[] { pin.Picture.Id.ToString(), pin.Place.Id.ToString() };
+        return
+        [
+            .. written.Where(a => a.Action == AuditActions.Updated
+                && ((a.EntityType is LegacyPinType or nameof(ResLink) && a.EntityId == key)
+                    || (a.EntityType == nameof(ResLinkMember) && a.EntityId is { } id && memberKeys.Contains(id)))),
+        ];
+    }
+
+    /// <summary>
+    /// One history row of a pin, as the fields an undo puts back: a row written before pins were
+    /// links already names them; a link row names the removal; the picture member's row names the
+    /// pixel inside its payload; the place member's row names the place.
+    /// </summary>
+    private static IEnumerable<KeyValuePair<string, JsonNode?>> PinChangesOf(AuditEntry edit, PlacePoint? pin)
+    {
+        var changes = HistoryRestoreService.ChangesOf(edit);
+        if (edit.EntityType is LegacyPinType or nameof(ResLink))
+        {
+            return changes;
+        }
+
+        var result = new List<KeyValuePair<string, JsonNode?>>();
+        foreach (var (field, pair) in changes)
+        {
+            if (field == nameof(ResLinkMember.FeatureId) && edit.EntityId == pin?.Place.Id.ToString())
+            {
+                result.Add(new(PinPlaceField, pair?.DeepClone()));
+            }
+            else if (field == nameof(ResLinkMember.Anchor))
+            {
+                var old = PlacePointAnchor.Read(Text((pair as JsonObject)?["old"]));
+                var @new = PlacePointAnchor.Read(Text((pair as JsonObject)?["new"]));
+                result.Add(new(PinXField, new JsonObject { ["old"] = old?.Px, ["new"] = @new?.Px }));
+                result.Add(new(PinYField, new JsonObject { ["old"] = old?.Py, ["new"] = @new?.Py }));
+            }
+        }
+
+        return result;
+
+        static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+    }
 
     /// <summary>
     /// A field set back to its value before the upload. A required field whose old value cannot be
@@ -370,22 +449,6 @@ public sealed partial class DeviceSyncUndoService
                 break;
             case nameof(RasterMap.ClientUpdatedAt):
                 m.ClientUpdatedAt = value as DateTimeOffset?;
-                break;
-        }
-    }
-
-    private static void SetField(RasterPin p, string field, object? value)
-    {
-        switch (field)
-        {
-            case nameof(RasterPin.PlaceFeatureId) when value is Guid place:
-                p.PlaceFeatureId = place;
-                break;
-            case nameof(RasterPin.X) when value is int x:
-                p.X = x;
-                break;
-            case nameof(RasterPin.Y) when value is int y:
-                p.Y = y;
                 break;
         }
     }

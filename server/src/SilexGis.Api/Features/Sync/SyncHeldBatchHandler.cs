@@ -12,6 +12,7 @@ using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.Sync;
 
@@ -600,7 +601,7 @@ internal sealed class SyncHeldBatchHandler(
         var pins = IdsOf(targets, SyncHeldTargetKind.RasterPin);
         if (pins.Count > 0)
         {
-            found.AddRange((await db.RasterPins.AsNoTracking().IgnoreQueryFilters()
+            found.AddRange((await PlacePointQueries.Rows(db).AsNoTracking().IgnoreQueryFilters()
                     .Where(p => pins.Contains(p.Id)).Select(p => new { p.Id, p.UpdatedAt }).ToListAsync(ct))
                 .Select(r => (new SyncHeldTarget(SyncHeldTargetKind.RasterPin, r.Id), r.UpdatedAt)));
         }
@@ -658,8 +659,8 @@ internal sealed class SyncHeldBatchHandler(
         var pinIds = IdsOf(targets, SyncHeldTargetKind.RasterPin);
         var pins = pinIds.Count == 0
             ? []
-            : await db.RasterPins.AsNoTracking().IgnoreQueryFilters()
-                .Where(p => pinIds.Contains(p.Id)).Select(p => new { p.Id, p.RasterMapId, p.PlaceFeatureId })
+            : await PlacePointQueries.Rows(db).AsNoTracking().IgnoreQueryFilters()
+                .Where(p => pinIds.Contains(p.Id)).Select(p => new { p.Id, RasterMapId = p.MapId, PlaceFeatureId = p.PlaceId })
                 .ToListAsync(ct);
         var mapIds = IdsOf(targets, SyncHeldTargetKind.RasterMap)
             .Concat(pins.Select(p => p.RasterMapId)).Distinct().ToList();

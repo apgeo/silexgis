@@ -6,6 +6,7 @@ using SilexGis.Domain.Import;
 using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.Sync;
 
@@ -109,10 +110,10 @@ internal static class SyncReviewCurrent
                 .ToDictionaryAsync(p => p.Id, p => p.RecordingId, ct);
         var pins = pinIds.Count == 0
             ? []
-            : await db.RasterPins.AsNoTracking()
+            : await PlacePointQueries.Rows(db).AsNoTracking()
                 .Where(p => pinIds.Contains(p.Id) && p.DeletedAt == null)
-                .Select(p => new { p.Id, p.RasterMapId })
-                .ToDictionaryAsync(p => p.Id, p => p.RasterMapId, ct);
+                .Select(p => new { p.Id, p.MapId })
+                .ToDictionaryAsync(p => p.Id, p => p.MapId, ct);
         var recordingsAsked = recordingIds.Concat(points.Values).Distinct().ToList();
         var mapsAsked = mapIds.Concat(pins.Values).Distinct().ToList();
 
@@ -276,9 +277,9 @@ internal static class SyncReviewCurrent
                 }
             }
 
-            features.UnionWith(await db.RasterPins.AsNoTracking()
-                .Where(p => mapIds.Contains(p.RasterMapId) && p.DeletedAt == null)
-                .Select(p => p.PlaceFeatureId)
+            features.UnionWith(await PlacePointQueries.Rows(db).AsNoTracking()
+                .Where(p => mapIds.Contains(p.MapId) && p.DeletedAt == null)
+                .Select(p => p.PlaceId)
                 .ToListAsync(ct));
         }
 

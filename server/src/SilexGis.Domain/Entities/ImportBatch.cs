@@ -506,7 +506,10 @@ public class ImportBatchItem
     /// </summary>
     public Guid? RasterMapId { get; set; }
 
-    /// <summary>The pin on a raster map this line created, edited or removed.</summary>
+    /// <summary>
+    /// The pin on a raster map this line created, edited or removed: the place-pin link, whose
+    /// identifier is the one the phone gave the pin.
+    /// </summary>
     public Guid? RasterPinId { get; set; }
 
     /// <summary>The geofile row this came from. Kept even after a re-import replaces those rows.</summary>

@@ -11,6 +11,7 @@ using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Auth;
 
@@ -244,9 +245,10 @@ public static partial class SpeleoLocDevSeeder
             DocumentId = made.Version.DocumentId,
             OwnerUserId = adminUserId,
         };
-        map.Pins.Add(new RasterPin { Id = Guid.CreateVersion7(), RasterMapId = map.Id, PlaceFeatureId = openPlaceId, X = 60, Y = 40 });
-        map.Pins.Add(new RasterPin { Id = Guid.CreateVersion7(), RasterMapId = map.Id, PlaceFeatureId = protectedPlaceId, X = 140, Y = 90 });
         db.RasterMaps.Add(map);
+        var placePoints = new PlacePointStore(db);
+        await placePoints.AddAsync(map, made.File, Guid.CreateVersion7(), openPlaceId, 60, 40, adminUserId, ct);
+        await placePoints.AddAsync(map, made.File, Guid.CreateVersion7(), protectedPlaceId, 140, 90, adminUserId, ct);
 
         // The browser lists a cave's maps by the files hung on it with the map role.
         db.Attachments.Add(new Attachment

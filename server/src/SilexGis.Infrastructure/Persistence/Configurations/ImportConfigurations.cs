@@ -240,7 +240,8 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         // A raster map or a pin removed for good leaves the line that says the upload sent it.
         builder.HasOne<RasterMap>().WithMany().HasForeignKey(x => x.RasterMapId)
             .OnDelete(DeleteBehavior.SetNull);
-        builder.HasOne<RasterPin>().WithMany().HasForeignKey(x => x.RasterPinId)
+        // A pin is the link that pins its place on the map's picture, under the phone's identifier.
+        builder.HasOne<ResLink>().WithMany().HasForeignKey(x => x.RasterPinId)
             .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.ImportBatchId);

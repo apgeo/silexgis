@@ -132,7 +132,8 @@ public class ResLinkRelationType : TaxonomyBase
 /// the installation's reveal setting says, since the name would then stand beside a
 /// position. A link keeps
 /// at least one member; removing the last one is refused — deleting the link is the
-/// explicit act, and deletion is hard (audited, no soft-delete state).
+/// explicit act, and deletion is hard (audited, no soft-delete state) — with one exception, the
+/// place pinned on a phone's map, below.
 /// </summary>
 public class ResLink : ITimestamped, IAuditable
 {
@@ -161,6 +162,14 @@ public class ResLink : ITimestamped, IAuditable
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
+
+    /// <summary>
+    /// When a place pinned on a phone's map was removed; null for every other link, which is
+    /// deleted outright. A removed pin is kept, hidden from every link route, because the phones
+    /// must be told it went, and an undo of the upload that removed it brings it back under the
+    /// identifier the phones hold.
+    /// </summary>
+    public DateTimeOffset? DeletedAt { get; set; }
 
     public string AuditId => Id.ToString();
 }

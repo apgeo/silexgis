@@ -11,6 +11,7 @@ using SilexGis.Infrastructure.Documents.Extraction;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Infrastructure.Documents;
 
@@ -731,6 +732,11 @@ public sealed class DocumentWriteService(
                 db.Taggings.Remove(tagging);
             }
         }
+
+        // Places pinned on a phone's map of this picture stay measured on the file they were
+        // measured on, unless the new one is the same stored size, where every pixel still means
+        // the same spot and the pins carry over.
+        await new PlacePointStore(db).FollowRevisionAsync(fromFileIds, toFileId, ct);
     }
 
     /// <summary>The body of <see cref="AddVersionAsync"/>, run inside whichever transaction it chose.</summary>

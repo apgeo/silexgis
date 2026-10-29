@@ -13,6 +13,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Tests;
 
@@ -466,7 +467,7 @@ public sealed class SyncRasterTests : IAsyncLifetime, IDisposable, IClassFixture
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         (await db.RasterMaps.AsNoTracking().CountAsync(m => m.CaveFeatureId == cave)).ShouldBe(1, "only the map that was written");
-        (await db.RasterPins.AsNoTracking().CountAsync(p => p.RasterMapId == map)).ShouldBe(1, "only the first pin of the place");
+        (await PlacePointQueries.Rows(db).AsNoTracking().CountAsync(p => p.MapId == map)).ShouldBe(1, "only the first pin of the place");
         // The refused PDF's bytes were not made into a document: nothing but the one picture hangs on the cave.
         (await db.Attachments.AsNoTracking().CountAsync(a => a.FeatureId == cave && a.Role == AttachmentRole.Map2d)).ShouldBe(1);
     }
@@ -497,7 +498,7 @@ public sealed class SyncRasterTests : IAsyncLifetime, IDisposable, IClassFixture
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             (await db.RasterMaps.AsNoTracking().IgnoreQueryFilters().SingleAsync(m => m.Id == map)).DeletedAt.ShouldNotBeNull();
-            (await db.RasterPins.AsNoTracking().IgnoreQueryFilters().SingleAsync(p => p.Id == pin)).DeletedAt.ShouldNotBeNull();
+            (await db.ResLinks.AsNoTracking().SingleAsync(p => p.Id == pin)).DeletedAt.ShouldNotBeNull();
             (await db.Documents.AsNoTracking().IgnoreQueryFilters().SingleAsync(d => d.Id == documentId)).DeletedAt.ShouldNotBeNull();
             (await db.Attachments.AsNoTracking().CountAsync(a => a.FeatureId == cave && a.Role == AttachmentRole.Map2d)).ShouldBe(0);
         }

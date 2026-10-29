@@ -7,6 +7,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Infrastructure.Features;
 
@@ -238,6 +239,41 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
         // maintains, re-derived here to prove no path bypassed it.
         problems.AddRange(await DocumentVersionProblemsAsync(ct));
 
+        // Places pinned on phones' maps: one live pin per place on a map is held by a lock, not an
+        // index, so this is where a write that went round the lock would show.
+        problems.AddRange(await PlacePointProblemsAsync(ct));
+
+        return problems;
+    }
+
+    /// <summary>
+    /// Two live pins of one place on one map, and a place-pin link that is not one map's picture
+    /// anchored at a point beside at most one place. A pin whose place was removed for good keeps
+    /// its picture alone; it is no pin to any reader, and it is not reported.
+    /// </summary>
+    private async Task<List<IntegrityProblem>> PlacePointProblemsAsync(CancellationToken ct)
+    {
+        var problems = new List<IntegrityProblem>();
+        var duplicates = await PlacePointQueries.Rows(db).AsNoTracking().IgnoreQueryFilters()
+            .Where(p => p.DeletedAt == null)
+            .GroupBy(p => new { p.MapId, p.PlaceId })
+            .Where(g => g.Count() > 1)
+            .Select(g => new { g.Key.MapId, g.Key.PlaceId, Count = g.Count() })
+            .ToListAsync(ct);
+        problems.AddRange(duplicates.Select(d => new IntegrityProblem(
+            "place_point_duplicate", d.PlaceId, $"{d.Count} live pins of the place on map {d.MapId}")));
+
+        var misshapen = await PlacePointQueries.PlacePoints(db, db.ResLinks.AsNoTracking())
+            .Where(l => db.ResLinkMembers.Count(m => m.ResLinkId == l.Id) > 2
+                || db.ResLinkMembers.Count(m => m.ResLinkId == l.Id && m.FeatureId != null) > 1
+                || !db.ResLinkMembers.Any(m => m.ResLinkId == l.Id && m.IsMain
+                    && m.EntityType == AttachedEntityType.Document && m.AnchorKind == AnchorKind.ImageRegion)
+                || !db.RasterMaps.IgnoreQueryFilters().Any(map => db.ResLinkMembers.Any(m => m.ResLinkId == l.Id
+                    && m.IsMain && m.EntityType == AttachedEntityType.Document && m.EntityId == map.DocumentId)))
+            .Select(l => l.Id)
+            .ToListAsync(ct);
+        problems.AddRange(misshapen.Select(id => new IntegrityProblem(
+            "place_point_shape", default, $"place pin {id} is not one map picture and one place")));
         return problems;
     }
 

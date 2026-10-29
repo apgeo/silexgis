@@ -32,6 +32,10 @@ public sealed class ResLinkConfiguration : IEntityTypeConfiguration<ResLink>
         builder.HasOne<ResLinkRelationType>().WithMany().HasForeignKey(x => x.RelationTypeId)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.SetNull);
+
+        // Only removed place pins carry it; the rasters stream reads them for its tombstones.
+        builder.HasIndex(x => x.DeletedAt).HasFilter("deleted_at is not null")
+            .HasDatabaseName("ix_res_links_deleted_at");
     }
 }
 

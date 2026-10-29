@@ -13,6 +13,7 @@ using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.Photos;
 
@@ -511,7 +512,19 @@ public static class PhotoEndpoints
         // renderings are cached under a name carrying the turn, so a rotated picture has a
         // different entry and the previous one stays valid for anybody mid-view. Turning a
         // picture back is then instant.
+        var turned = db.ChangeTracker.Entries<StoredFile>()
+            .Where(e => e.State == EntityState.Modified && e.Property(f => f.OrientationQuarterTurns).IsModified)
+            .Select(e => e.Entity.Id)
+            .ToList();
         await db.SaveChangesAsync(ct);
+
+        // A turn moves the frame the browser measures points in and leaves the stored frame a phone
+        // measures pins in alone, so the places pinned on a turned picture are redrawn from their
+        // pixels; what a phone holds of them does not change.
+        if (turned.Count > 0)
+        {
+            await new PlacePointStore(db).RefreshFramesAsync(turned, ct);
+        }
 
         return TypedResults.Ok(new PhotoBulkResultDto(changed, refused));
     }

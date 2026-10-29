@@ -271,6 +271,9 @@ export const groups = {
   resLinks: [
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
     'ResLinkTargetPictureTests',
+    // A place a phone pinned on its map is a link shown whole or not at all, and written only by
+    // the phone's sync and the map screen.
+    'PlacePointProtectionTests', 'PlacePointWriteTests',
   ],
   search: ['DocumentContentSearchSqlTests', 'DocumentContentSearchTests', 'PersistenceTests'],
   statistics: [
@@ -298,7 +301,7 @@ export const groups = {
   about: ['ApiSmokeTests', 'TestClassDisposalTests', 'TestModeTests'],
   // How a database the old migration chain built is moved onto the baseline; a change to
   // persistence or the migrations selects the whole suite anyway, so this group only names it.
-  migrationBaseline: ['MigrationBaselineTests'],
+  migrationBaseline: ['MigrationBaselineTests', 'RasterPinsAsLinksMigrationTests'],
   audit: [
     'AccessHistoryTests', 'HistoryTests', 'AuditClientAddressTests', 'ChangeAttributionTests',
     // Large shapes kept beside an edit, and put back from it.
@@ -352,6 +355,8 @@ export const groups = {
     'SyncRasterTests',
     // How a map's renditions are drawn from its stored picture, proved against the renderer.
     'SyncRasterPictureTurnTests',
+    // A phone's pins, as links: moved, added and removed in the browser, redrawn on a turn.
+    'PlacePointWriteTests',
     // An upload names its batch on every history row it writes.
     'ChangeAttributionTests',
     // An upload is taken back out of that history: created, edited and deleted rows alike.
@@ -524,6 +529,8 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Notifications/': 'notifications',
   'server/src/SilexGis.Infrastructure/Grottocenter/': 'exports',
   'server/src/SilexGis.Infrastructure/PhotoLibraries/': 'photoLibraries',
+  // Where phones' map pins are written and read, as place-pin links.
+  'server/src/SilexGis.Infrastructure/RasterMaps/': 'sync',
   'server/src/SilexGis.Infrastructure/Settings/': 'settings',
   'server/src/SilexGis.Infrastructure/Sms/': 'sms',
   'server/src/SilexGis.Infrastructure/Surveys/': 'surveys',
@@ -595,8 +602,9 @@ export const crossCutting = {
     'MapBackgroundDocumentChoiceTests', 'MapViewTests', 'NotificationHealthTests',
     'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
     'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',
-    'PublicTripMomentPicturesTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
-    'ReportTemplateTests', 'ResLinkApiTests', 'SavedFilterTests', 'SpeleolocTripImportTests',
+    'PlacePointProtectionTests', 'PlacePointWriteTests', 'PublicTripMomentPicturesTests',
+    'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests', 'ReportTemplateTests',
+    'ResLinkApiTests', 'SavedFilterTests', 'SpeleolocTripImportTests',
     'SpeologieCatalogueTests', 'StagedImportTests', 'SurveyCompilationTests',
     'SurveyModelReadingTests', 'SurveyModelTests', 'SurveySourceTests',
     'SurveyUploadPipelineTests', 'SurveyUploadPreferenceTests', 'SurveyUploadPublicLinkTests',
@@ -640,8 +648,9 @@ export const crossCutting = {
     'HypsometryTests', 'KarstLinkExportTests', 'MapClusterConfigurationTests',
     'MapDensityTests', 'MapFilterTests', 'MapKarstIndexTests', 'MapPointPatternTests',
     'MapWindowMembershipTests', 'PhotoBytesProtectionTests', 'PhotoImportTests',
-    'PolygonMorphometryTests', 'ProtectionDepthTests', 'PublicTripCachingTests',
-    'PublicTripDepthPlacesTests', 'PublicTripDiagnosticsTests', 'PublicTripMomentPicturesTests',
+    'PlacePointProtectionTests', 'PlacePointWriteTests', 'PolygonMorphometryTests',
+    'ProtectionDepthTests', 'PublicTripCachingTests', 'PublicTripDepthPlacesTests',
+    'PublicTripDiagnosticsTests', 'PublicTripMomentPicturesTests',
     'PublicTripPlannedReturnTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
     'PublishedNamesNowhereTests', 'PublishedSurveyBoundsTests', 'RegistryStatisticsTests',
     'ResLinkApiTests', 'ResLinkProtectionFloorTests', 'ResLinkTargetPictureTests',

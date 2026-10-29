@@ -19,6 +19,7 @@ using SilexGis.Domain.ResLinks;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Tests;
 
@@ -2041,6 +2042,40 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         (await anonymous.GetAsync(ContentInsteadOf(url))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         // And nothing on this surface offers the scan's upload in the first place.
         page.GetRawText().ShouldNotContain($"/api/v1/files/{sheet.File}/content");
+    }
+
+    /// <summary>
+    /// A place a phone pinned on the very picture a model declares as its map never travels: the
+    /// page reads map declarations, station pins and model-anchored links only, and a place pin is
+    /// none of them — a position of a place on a page strangers read.
+    /// </summary>
+    [Fact]
+    public async Task A_place_pinned_by_a_phone_on_a_declared_map_never_reaches_the_page()
+    {
+        var trip = await TrackedTripAsync("Phone map", locationProtected: false);
+        var sheet = await PhotographAsync("phone-sheet");
+        await DeclareMapAsync(sheet.Document, trip.Model);
+        await PinAsync(sheet.Document, sheet.File, trip.Model, "cave.upper.2", 0.25, 0.75);
+        var placePin = Guid.CreateVersion7();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var ownerId = await db.Users.AsNoTracking().Where(u => u.Email == ownerEmail).Select(u => u.Id).SingleAsync();
+            var map = new RasterMap
+            {
+                Id = Guid.CreateVersion7(), CaveFeatureId = trip.Cave, Title = "phone", DocumentId = sheet.Document, OwnerUserId = ownerId,
+            };
+            db.RasterMaps.Add(map);
+            var file = await db.StoredFiles.AsNoTracking().SingleAsync(f => f.Id == sheet.File);
+            await new PlacePointStore(db).AddAsync(map, file, placePin, trip.Cave, 2, 3, ownerId);
+            await db.SaveChangesAsync();
+        }
+
+        var (_, token) = await PublishAsync(trip.Trip);
+        var page = await FollowAsync(token);
+        Maps(page).ShouldHaveSingleItem().GetProperty("points").EnumerateArray().ShouldHaveSingleItem()
+            .GetProperty("station").GetString().ShouldBe("cave.upper.2");
+        page.GetRawText().ShouldNotContain(placePin.ToString());
     }
 
     /// <summary>

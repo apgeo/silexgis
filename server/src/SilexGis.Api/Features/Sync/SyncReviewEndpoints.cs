@@ -11,6 +11,7 @@ using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.Sync;
 
@@ -296,9 +297,9 @@ public static class SyncReviewEndpoints
         {
             var pins = pinIds.Count == 0
                 ? []
-                : await db.RasterPins.AsNoTracking()
+                : await PlacePointQueries.Rows(db).AsNoTracking()
                     .Where(p => pinIds.Contains(p.Id))
-                    .Select(p => new { p.Id, p.RasterMapId, p.PlaceFeatureId, p.UpdatedAt })
+                    .Select(p => new { p.Id, RasterMapId = p.MapId, PlaceFeatureId = p.PlaceId, p.UpdatedAt })
                     .ToListAsync(ct);
             var wanted = mapIds.Concat(pins.Select(p => p.RasterMapId)).Distinct().ToList();
             var maps = await db.RasterMaps.AsNoTracking()

@@ -372,7 +372,7 @@ public sealed class UploadReviewSectionsTests : IAsyncLifetime, IClassFixture<Po
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             (await db.RasterMaps.AsNoTracking().IgnoreQueryFilters().SingleAsync(m => m.Id == mapId)).DeletedAt.ShouldNotBeNull();
-            (await db.RasterPins.AsNoTracking().IgnoreQueryFilters().SingleAsync(p => p.Id == pinId)).DeletedAt.ShouldNotBeNull();
+            (await db.ResLinks.AsNoTracking().SingleAsync(p => p.Id == pinId)).DeletedAt.ShouldNotBeNull();
         }
     }
 
@@ -518,7 +518,7 @@ public sealed class UploadReviewSectionsTests : IAsyncLifetime, IClassFixture<Po
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         return (await db.RasterMaps.IgnoreQueryFilters().CountAsync(m => m.Id == mapId),
-            await db.RasterPins.IgnoreQueryFilters().CountAsync(p => p.Id == pinId));
+            await db.ResLinks.CountAsync(p => p.Id == pinId));
     }
 
     private async Task MarkAsync(bool needsReview)
