@@ -76,6 +76,13 @@ public static class ResLinkRelationTypeSeeds
         // promote an annotation into a position. Directed with the document member as main, so
         // whoever may edit the map document may correct its pins.
         new("map-station-point", "Marks station", true, "Marked on map"),
+
+        // A place pinned on a picture of a cave that a phone carries, at one pixel of it. Kept
+        // apart from the station pin because the two answer to different rules: a place pin is
+        // written only by the phone's sync and by the map screen built for it, keeps the
+        // identifier the phone gave it, and is shown whole or not at all — a point on a map of the
+        // cave beside the name of a place is that place's position.
+        new("map-place-point", "Marks place", true, "Marked on map"),
     ];
 
     /// <summary>
@@ -118,6 +125,13 @@ public static class ResLinkRelationTypeSeeds
     /// and the two are consumed by different folds.
     /// </summary>
     public const string MapStationPointCode = "map-station-point";
+
+    /// <summary>
+    /// The shipped code of a place pinned on a phone's raster map. Kept out of
+    /// <see cref="MapViewCodes"/> for the reason <see cref="MapStationPointCode"/> is: it names a
+    /// pin on a map, not a map of a model.
+    /// </summary>
+    public const string MapPlacePointCode = "map-place-point";
 
     private static readonly HashSet<string> Codes = [.. All.Select(s => s.Code)];
 

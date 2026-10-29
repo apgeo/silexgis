@@ -268,7 +268,11 @@ public static class ResLinkRules
             return InvalidAnchorKindCode;
         }
 
-        if (AnchorPayloadProblem(member.AnchorKind, member.Anchor) is not null)
+        // A stored pixel is asserted only by the place-pin writer, which knows the frame it is
+        // measured in; through any other door it would be a pixel nothing keeps in step with the
+        // fraction beside it, and it would make the payload pass for a phone's pin.
+        if (AnchorPayloadProblem(member.AnchorKind, member.Anchor) is not null
+            || PlacePointAnchor.CarriesStoredPixel(member.Anchor))
         {
             return InvalidAnchorCode;
         }
@@ -458,6 +462,35 @@ public static class ResLinkRules
             DegradationShown: pinSuperseded);
     }
 
+    // ---- places pinned on a phone's map --------------------------------------------
+
+    /// <summary>Whether a relation code is the place pin's.</summary>
+    public static bool IsPlacePoint(string? relationCode) =>
+        relationCode == ResLinkRelationTypeSeeds.MapPlacePointCode;
+
+    /// <summary>
+    /// Whether a place pinned on a picture is shown to one caller — whole, or not at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A point on a map of the cave beside the name of a place is that place's position. So the pin
+    /// is shown only to a caller who may read the picture, may read the place, and may see the
+    /// place's exact position; to everyone else it is not there — no point, no name, not counted.
+    /// </para>
+    /// <para>
+    /// Stricter than the rule every other link's members answer to, in exactly the cases where that
+    /// rule would leave a position next to a place: it shows a protected place's member when the
+    /// installation reveals protected associations and no sibling carries a geotag; it shows the
+    /// member of a place the caller may not read, bare, when the place is under no protection; and
+    /// it shows the place's row to somebody who may not open the picture. The installation's reveal
+    /// setting never opens this one. A pin missing either end is hidden, which is what a place
+    /// removed for good leaves behind. This is the phone's own rule: the rasters stream hands a pin
+    /// only when it hands its place.
+    /// </para>
+    /// </remarks>
+    public static bool PlacePointShown(bool pictureReadable, bool placeReadable, bool placeExactView) =>
+        pictureReadable && placeReadable && placeExactView;
+
     // ---- payload field helpers ----------------------------------------------------
 
     private static string? TextRangeProblem(JsonElement root)
@@ -537,7 +570,7 @@ public static class ResLinkRules
         // reads on screen as a shape somebody drew rather than as nothing at all.
         return root.GetProperty("shape").GetString() switch
         {
-            "point" => FractionProblem(root, "x") ?? FractionProblem(root, "y"),
+            "point" => PointProblem(root),
             "rect" => FractionProblem(root, "x") ?? FractionProblem(root, "y")
                 ?? PositiveFractionProblem(root, "w") ?? PositiveFractionProblem(root, "h"),
             "circle" => FractionProblem(root, "cx") ?? FractionProblem(root, "cy")
@@ -545,6 +578,53 @@ public static class ResLinkRules
             "polygon" => PolygonProblem(root),
             _ => "'shape' must be one of: point, rect, circle, polygon",
         };
+    }
+
+    /// <summary>
+    /// A point, in fractions — and, for a place pinned on a phone's map, the stored-frame pixel the
+    /// phone measured, as integers <c>px</c>/<c>py</c>, both or neither. A point carrying the pixel
+    /// may leave the fractions out, both together: that is a pixel which does not fall on the
+    /// picture as it is drawn, or one on a picture whose size is not known, and nothing draws it.
+    /// </summary>
+    private static string? PointProblem(JsonElement root)
+    {
+        var hasPx = root.TryGetProperty(PlacePointAnchor.PixelX, out _);
+        var hasPy = root.TryGetProperty(PlacePointAnchor.PixelY, out _);
+        if (hasPx != hasPy)
+        {
+            return "'px' and 'py' come together";
+        }
+
+        if (hasPx)
+        {
+            var pixel = PixelProblem(root, PlacePointAnchor.PixelX) ?? PixelProblem(root, PlacePointAnchor.PixelY);
+            if (pixel is not null)
+            {
+                return pixel;
+            }
+
+            var hasX = root.TryGetProperty("x", out _);
+            if (hasX != root.TryGetProperty("y", out _))
+            {
+                return "'x' and 'y' come together";
+            }
+
+            if (!hasX)
+            {
+                return null;
+            }
+        }
+
+        return FractionProblem(root, "x") ?? FractionProblem(root, "y");
+    }
+
+    private static string? PixelProblem(JsonElement root, string name)
+    {
+        var element = root.GetProperty(name);
+        return element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out var value)
+            && value >= 0 && value <= PlacePointAnchor.PixelMax
+            ? null
+            : $"'{name}' must be a whole pixel between 0 and {PlacePointAnchor.PixelMax}";
     }
 
     /// <summary>A coordinate or extent within the picture: 0 to 1 inclusive.</summary>

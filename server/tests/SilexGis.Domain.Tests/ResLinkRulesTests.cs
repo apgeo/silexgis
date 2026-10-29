@@ -316,6 +316,14 @@ public class ResLinkRulesTests
     [InlineData("""{"shape": "polygon"}""", false)]
     [InlineData("""{"shape": "oval", "x": 0.1, "y": 0.1}""", false)]
     [InlineData("""{"x": 0.1, "y": 0.1}""", false)] // shape is required
+    [InlineData("""{"shape": "point", "x": 0.1, "y": 0.2, "px": 10, "py": 20}""", true)] // a phone's pin
+    [InlineData("""{"shape": "point", "px": 10, "py": 20}""", true)] // off the picture, or frame unknown
+    [InlineData("""{"shape": "point", "x": 0.1, "px": 10, "py": 20}""", false)] // fractions come together
+    [InlineData("""{"shape": "point", "x": 0.1, "y": 0.2, "px": 10}""", false)] // so do pixels
+    [InlineData("""{"shape": "point", "px": 10.5, "py": 20}""", false)] // whole pixels
+    [InlineData("""{"shape": "point", "px": -1, "py": 20}""", false)]
+    [InlineData("""{"shape": "point", "px": 1000001, "py": 20}""", false)]
+    [InlineData("""{"shape": "point", "x": 1.5, "y": 0.2, "px": 10, "py": 20}""", false)]
     public void Image_regions_validate_per_shape(string payload, bool valid) =>
         (AnchorPayloadProblem(AnchorKind.ImageRegion, payload) is null).ShouldBe(valid);
 
@@ -733,4 +741,29 @@ public class ResLinkRulesTests
             .ShouldBe(new AnchorPresentation(
                 PayloadShown: true, PinShown: false, DegradationShown: true));
     }
+
+    // ---- places pinned on a phone's map --------------------------------------------
+
+    [Fact]
+    public void A_stored_pixel_is_refused_through_the_generic_member_rules()
+    {
+        // Only the place-pin writer, which knows the frame, may assert one.
+        MemberProblem(new MemberShape(
+                null, AttachedEntityType.Document, SomeId, AnchorKind.ImageRegion,
+                """{"shape":"point","x":0.1,"y":0.2,"px":10,"py":20}""", SomeId))
+            .ShouldBe(InvalidAnchorCode);
+        MemberProblem(new MemberShape(
+                null, AttachedEntityType.Document, SomeId, AnchorKind.ImageRegion,
+                """{"shape":"point","x":0.1,"y":0.2}""", SomeId))
+            .ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData(true, true, true, true)]
+    [InlineData(false, true, true, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(true, true, false, false)]
+    [InlineData(false, false, false, false)]
+    public void A_place_pin_is_shown_only_whole(bool picture, bool place, bool exact, bool shown) =>
+        PlacePointShown(picture, place, exact).ShouldBe(shown);
 }

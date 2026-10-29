@@ -10,10 +10,11 @@ public class ResLinkRelationTypeSeedsTests
     public void The_map_vocabulary_is_seeded_directed_and_appended_at_the_end()
     {
         // Appended, never inserted: a row's sort order is its position in the list, so these
-        // four must be the last four — a middle insert would renumber everything after it on a
+        // five must be the last five — a middle insert would renumber everything after it on a
         // fresh install only, and nothing on screen would say why two installs disagree.
-        string[] expectedTail = ["map-plan-of", "map-profile-of", "map-other-of", "map-station-point"];
-        var tail = ResLinkRelationTypeSeeds.All.Skip(ResLinkRelationTypeSeeds.All.Count - 4).ToList();
+        string[] expectedTail =
+            ["map-plan-of", "map-profile-of", "map-other-of", "map-station-point", "map-place-point"];
+        var tail = ResLinkRelationTypeSeeds.All.Skip(ResLinkRelationTypeSeeds.All.Count - 5).ToList();
         tail.Select(s => s.Code).ShouldBe(expectedTail);
 
         foreach (var seed in tail)
@@ -53,5 +54,16 @@ public class ResLinkRelationTypeSeedsTests
         ResLinkRelationTypeSeeds.IsSeeded(ResLinkRelationTypeSeeds.MapStationPointCode).ShouldBeTrue();
         ResLinkRelationTypeSeeds.MapViewCodes
             .ShouldNotContain(ResLinkRelationTypeSeeds.MapStationPointCode);
+    }
+
+    [Fact]
+    public void The_place_pin_code_is_seeded_and_never_joins_the_view_codes()
+    {
+        ResLinkRelationTypeSeeds.MapPlacePointCode.ShouldBe("map-place-point");
+        ResLinkRelationTypeSeeds.IsSeeded(ResLinkRelationTypeSeeds.MapPlacePointCode).ShouldBeTrue();
+        ResLinkRelationTypeSeeds.MapViewCodes.ShouldNotContain(ResLinkRelationTypeSeeds.MapPlacePointCode);
+        ResLinkRules.IsPlacePoint(ResLinkRelationTypeSeeds.MapPlacePointCode).ShouldBeTrue();
+        ResLinkRules.IsPlacePoint(ResLinkRelationTypeSeeds.MapStationPointCode).ShouldBeFalse();
+        ResLinkRules.IsPlacePoint(null).ShouldBeFalse();
     }
 }

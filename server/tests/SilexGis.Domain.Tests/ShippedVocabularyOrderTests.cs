@@ -44,7 +44,7 @@ public class ShippedVocabularyOrderTests
                 "duplicate-of", "needs-clarification", "trip-work-area", "trip-objective", "trip-visited",
                 "trip-surveyed", "trip-discovered", "trip-dug", "trip-photographed",
                 "trip-searched-not-found", "trip-lead", "trip-follows-on-from", "text-of", "map-plan-of",
-                "map-profile-of", "map-other-of", "map-station-point"],
+                "map-profile-of", "map-other-of", "map-station-point", "map-place-point"],
             [.. ResLinkRelationTypeSeeds.All.Select(s => s.Code)]
         },
         {
