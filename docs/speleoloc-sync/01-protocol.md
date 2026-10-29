@@ -1601,6 +1601,15 @@ no georeference.
 A map is as visible as its cave: it is on a phone's page exactly when the feature stream hands that
 phone the cave. Who may write a map is whoever may change the cave.
 
+*On the server (provisional — the pin, marker and map sync as a whole is to be analysed again).* A
+pin is kept as a resource link between the map's picture, at the pixel, and the place, under the pin's
+own identifier; its revision is that link's. The browser shows such a link only to a reader who may read
+the picture, read the place and see the place exactly. Nothing in this section changes for a device:
+the same sections, identifiers, pixels, revisions and tombstones. What is new is ordinary: a pin
+**moved or removed in the browser** comes as an update under its identifier or as a `pinTombstones`
+entry, and a pin **added in the browser** comes with an ordinary new identifier, one per place on the
+map as for an upload, which the device writes like any of its own.
+
 ### 15.1 Reading maps
 
 ```
@@ -1670,7 +1679,9 @@ Authorization: Bearer <token>
   (4000 − 1 − 120, 3000 − 1 − 80) = (3879, 2919), in a 1200 × 900 rendition at (1163.7, 875.7).
 
   Pins stay in the stored frame whatever the turn: a pin sent up is still `x`/`y` in the picture as
-  stored. A device that keeps renditions keeps the `pictureMirrored`/`pictureTurn` it fetched them
+  stored, and a turn moves no pin's `revision`. A new picture of the same stored size keeps its pins
+  measured on it; a picture of another size leaves them measured on the earlier one, and they go on
+  being sent as they are. A pixel outside the picture is kept and sent back as it was. A device that keeps renditions keeps the `pictureMirrored`/`pictureTurn` it fetched them
   under, and fetches them again when the map comes with different ones.
 - **Tombstones** name maps removed after the cursor, in caves the set hands this account. A removed
   map takes its pins with it; they are not named again.

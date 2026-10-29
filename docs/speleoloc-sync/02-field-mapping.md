@@ -355,8 +355,10 @@ the document count is zero.
 ## 10. Raster maps and their pins
 
 A phone's raster map is kept on the server **as a map**, under the phone's identifier, with its picture
-as a document hung on the cave as a map. Its pins are kept as **pins on the map**, one per place. The
-protocol document's section on raster maps says how they are read and sent.
+as a document hung on the cave as a map. Its pins are kept as **place-pin links** between the map's
+picture, at the pixel, and the place — one per place on the map, under the pin's own identifier
+(provisional: the pin, marker and map sync is to be analysed again). The protocol document's section on
+raster maps says how they are read and sent.
 
 | On the phone | In a `rasterMaps` item / a stream map | On the server |
 |---|---|---|
@@ -380,11 +382,11 @@ protocol document's section on raster maps says how they are read and sent.
 
 | On the phone | In a `rasterPins` item / a stream pin | On the server |
 |---|---|---|
-| `cave_place_to_raster_map_definitions` row id | `id` | The pin's identifier, adopted verbatim |
-| The map's `uuid` | `rasterMapId` (upload only) | The map it is on, for good |
-| `cave_place_uuid` | `placeId` | The place pinned, inside the map's cave |
-| `x`, `y` | `x`, `y` | Whole pixels from the left and top edge of the picture |
-| — | `revision` | The server's revision of the pin |
+| `cave_place_to_raster_map_definitions` row id | `id` | The pin's identifier, adopted verbatim as the link's |
+| The map's `uuid` | `rasterMapId` (upload only) | The map it is on, for good: the map whose picture the link names |
+| `cave_place_uuid` | `placeId` | The place pinned, inside the map's cave: the link's place member |
+| `x`, `y` | `x`, `y` | Whole pixels from the left and top edge of the picture as stored, kept verbatim in the picture member's anchor beside the fraction the browser draws it at |
+| — | `revision` | The server's revision of the pin: the link's own write time |
 
 The app's raster images are always named `.jpg` whatever their format; the server types the file by its
 content, and refuses a picture that is not an image (`sync.raster_not_an_image`).
