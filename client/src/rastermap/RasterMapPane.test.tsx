@@ -40,6 +40,12 @@ vi.mock('../api/hooks.ts', () => ({
   }),
 }));
 
+// The places phones pinned on the same picture, read beside the model's links.
+let placeLinks: ResLink[] = [];
+vi.mock('../api/hooks/placePoints.ts', () => ({
+  usePlacePointLinks: () => ({ data: placeLinks }),
+}));
+
 // The real view is an OpenLayers map; the pane's responsibility toward it is exactly the
 // click contract, so the fake is that contract with buttons on it.
 vi.mock('./RasterMapView.tsx', () => ({
@@ -59,12 +65,12 @@ vi.mock('./RasterMapView.tsx', () => ({
           <div key={(marker as unknown as { key: string }).key}>
             {/* A press inside the marker's halo: the click's own point rides along… */}
             <button
-              data-testid={`fake-marker-${marker.station}`}
+              data-testid={`fake-marker-${marker.station ?? (marker as unknown as { label: string }).label}`}
               onClick={() => onMarkerClick?.(marker, { x: 0.31, y: 0.62 })}
             />
             {/* …and its twin where the click sat in the halo but outside the picture. */}
             <button
-              data-testid={`fake-marker-outside-${marker.station}`}
+              data-testid={`fake-marker-outside-${marker.station ?? (marker as unknown as { label: string }).label}`}
               onClick={() => onMarkerClick?.(marker, null)}
             />
           </div>
@@ -400,5 +406,54 @@ describe('the superseded work list', () => {
 
     expect(screen.getByTestId('rastermap-superseded')).toBeInTheDocument();
     expect(screen.queryByTestId('rastermap-superseded-list')).not.toBeInTheDocument();
+  });
+});
+
+describe('places a phone pinned on the same picture', () => {
+  const placeLink = (overrides: Partial<{ fileId: string; name: string }> = {}): ResLink =>
+    ({
+      id: 'place-link',
+      shortCode: 'PLACE123',
+      relationType: { id: 9, code: 'map-place-point', name: 'x', directed: true, inverseName: 'x' },
+      description: null,
+      createdAt: '2026-09-01T10:00:00Z',
+      updatedAt: '2026-09-01T10:00:00Z',
+      mayEdit: true,
+      members: [
+        member({
+          id: 'place-point',
+          isMain: true,
+          anchorKind: 'imageRegion',
+          anchor: { shape: 'point', x: 0.4, y: 0.6, px: 10, py: 20 } as unknown as ResLinkMember['anchor'],
+          anchorFileId: overrides.fileId ?? FILE,
+        }),
+        member({
+          id: 'place-member',
+          targetType: 'feature',
+          targetId: 'place-1',
+          display: { title: overrides.name ?? 'Sala Mare', subtitle: null, route: null, thumbnailUrl: null },
+        }),
+      ],
+    }) as unknown as ResLink;
+
+  afterEach(() => {
+    placeLinks = [];
+  });
+
+  it('draws them beside the stations, named for the place, and corrects nothing from here', async () => {
+    placeLinks = [placeLink()];
+    show([pinLink('cave.upper.2')], authoring());
+    expect(screen.getByTestId('fake-marker-cave.upper.2')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('fake-marker-Sala Mare'));
+    // A press on a place opens no station correction, and writes nothing.
+    await waitFor(() => expect(screen.queryByTestId('rastermap-move-pin')).not.toBeInTheDocument());
+    expect(createLink).not.toHaveBeenCalled();
+    expect(deleteLink).not.toHaveBeenCalled();
+  });
+
+  it('leaves out a place measured on another picture', () => {
+    placeLinks = [placeLink({ fileId: 'file-old' })];
+    show([]);
+    expect(screen.queryByTestId('fake-marker-Sala Mare')).not.toBeInTheDocument();
   });
 });

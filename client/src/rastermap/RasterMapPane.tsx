@@ -33,8 +33,11 @@ import {
   type MapPin,
   type MapStationMarker,
 } from './mapPoints.ts';
+import { placeMarkers, placePinsFromLinks, type PlaceMarker } from './placePoints.ts';
+import { usePlacePointLinks } from '../api/hooks/placePoints.ts';
 import type { RasterMapDeclaration } from './rasterMaps.ts';
 import RasterMapView from './RasterMapView.tsx';
+import type { SheetMarker } from './coordinates.ts';
 import { MAP_STATION_POINT_CODE } from './vocabulary.ts';
 
 /**
@@ -111,9 +114,23 @@ export default function RasterMapPane({
     () => mapPinsFromLinks(links, surveyModelId, declaration.documentId),
     [links, surveyModelId, declaration.documentId],
   );
-  const markers = useMemo(
+  const stations = useMemo(
     () => (file === undefined ? [] : stationSheetMarkers(stationMarkers(pins, file.id))),
     [pins, file],
+  );
+  // The places phones pinned on the same picture, drawn beside the stations in their own colour —
+  // the survey's map and a phone's map of the cave are then one sheet. Read-only here: they are
+  // moved and removed on the picture's own map screen.
+  const { data: placeLinks } = usePlacePointLinks(declaration.documentId);
+  const unnamed = t('placeMap.unnamedPlace');
+  const markers = useMemo<readonly ((MapStationMarker & SheetMarker) | PlaceMarker)[]>(
+    () => [
+      ...stations,
+      ...(file === undefined
+        ? []
+        : placeMarkers(placePinsFromLinks(placeLinks ?? [], declaration.documentId), file.id, unnamed)),
+    ],
+    [stations, placeLinks, declaration.documentId, file, unnamed],
   );
   const superseded = file === undefined ? 0 : supersededPointCount(pins, file.id);
   const supersededPins = useMemo(
@@ -180,7 +197,15 @@ export default function RasterMapPane({
     void writePin(at, authoring.armed.station, plan.kind === 'replace' ? plan.oldLinkId : null);
   };
 
-  const markerPressed = (marker: MapStationMarker, at: FractionPoint | null) => {
+  const markerPressed = (marker: (MapStationMarker & SheetMarker) | PlaceMarker, at: FractionPoint | null) => {
+    if (marker.place === true) {
+      // A phone's place is no station: an armed click there means the spot pressed, and with
+      // nothing armed it offers nothing to correct on this surface.
+      if (authoring?.armed != null && at !== null) {
+        placeAt(at);
+      }
+      return;
+    }
     if (authoring?.armed != null) {
       if (authoring.armed.station === marker.station) {
         // Clicking the armed station's OWN marker means "put it exactly here" — the
