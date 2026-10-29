@@ -5257,7 +5257,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Hard-deletes a link and its members, audited (creator, admin, or a writer of the main member). */
+        /** Hard-deletes a link and its members, audited (creator, admin, or a writer of the main member); a place pinned on a phone's map is removed for the phones instead, by whoever may change its cave. */
         delete: operations["resLinkDelete"];
         options?: never;
         head?: never;
@@ -5298,6 +5298,40 @@ export interface paths {
         head?: never;
         /** Edits isMain/sortOrder/note; anchors are replace-only — delete and re-add. */
         patch: operations["resLinkUpdateMember"];
+        trace?: never;
+    };
+    "/api/v1/reslinks/place-points": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pins a place on a phone's map at a point of its current picture (whoever may change the map's cave). */
+        post: operations["placePointCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reslinks/{id}/place-point": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Moves a place pinned on a phone's map to a point of its current picture; the phones receive it under the same identifier. */
+        put: operations["placePointMove"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/reslinks/relation-types": {
@@ -13230,6 +13264,26 @@ export interface components {
             name: string;
             /** Format: date-time */
             createdAt: string;
+        };
+        PlacePointCreateRequest: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            placeId: string;
+            /** Format: uuid */
+            fileId: string;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+        };
+        PlacePointMoveRequest: {
+            /** Format: uuid */
+            fileId: string;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
         };
         PointPatternDto: {
             /** Format: int32 */
@@ -31268,6 +31322,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResLinkMemberDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    placePointCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlacePointCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResLinkDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    placePointMove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlacePointMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResLinkDto"];
                 };
             };
             /** @description Bad Request */
