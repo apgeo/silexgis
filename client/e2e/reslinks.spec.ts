@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Locator, type Page } from '@playwright/test';
 import { ownContext, test } from './consoleGuard.ts';
+import { asPerson, editorOfItsOwn, tryAsPerson } from './arrange.ts';
 import { deleteFeature, login, paletteEntry } from './helpers.ts';
 import { bearerToken, uploadMapPng } from './rastermapApi.ts';
 
@@ -16,6 +17,20 @@ import { bearerToken, uploadMapPng } from './rastermapApi.ts';
  * something it did not do. The seeded public features are used only as the *other* end of a
  * link, which reads them and never edits them.
  */
+
+/**
+ * The stamp a run puts on the names of what it makes: the moment it started, and which of the
+ * parallel workers it runs on.
+ *
+ * The moment alone is not unique. Two copies of one flow started together — a repeated run puts
+ * them on neighbouring workers — can read the same millisecond, make two subjects with the same
+ * name, and then each find both when they narrow the registry down to "theirs". The worker's slot
+ * is unique among the flows running at any one time, and written at a fixed width so that one
+ * stamp is never the beginning of another, which a search by name would also match.
+ */
+function runStamp(): string {
+  return `${Date.now()}${String(test.info().parallelIndex).padStart(2, '0')}`;
+}
 
 /**
  * Waits for the confirmation an action was accepted, and for the slate to be clean again.
@@ -197,7 +212,7 @@ test('a link is recorded from a feature page and reached again by its own addres
   page,
   context,
 }) => {
-  const stamp = Date.now();
+  const stamp = runStamp();
   const anchorName = `E2E Link Anchor ${stamp}`;
   const note = `E2E link ${stamp}`;
   // The address is offered for copying in two places, and both put it on the real clipboard.
@@ -282,12 +297,48 @@ test('a link is recorded from a feature page and reached again by its own addres
 
 test('a link can name a spot that had no record yet, with a height, and says who will see it', async ({
   page,
+  browser,
 }) => {
-  const stamp = Date.now();
+  const stamp = runStamp();
   const anchorName = `E2E Point Anchor ${stamp}`;
   const pointName = `E2E point ${stamp}`;
-  await login(page);
+  const clubName = `E2E Point Club ${stamp}`;
 
+  // An account of this run's own, in exactly one club of its own. The audience a new point gets
+  // by default follows from how many clubs its maker belongs to, so the maker cannot be the shared
+  // administrator: any flow beside this one that starts a club as the administrator makes them a
+  // member of it until the club is taken down again, and a promise read before that and a record
+  // made after it then name two different audiences — an outcome of the timing, not of the app.
+  // The account starts the club itself, which is what puts it on the roster; a club made for it by
+  // the administrator would put the administrator there too.
+  const editor = await editorOfItsOwn(browser, page.request, 'point-audience');
+  let clubId: string | null = null;
+  try {
+    await login(page, editor.account.email, editor.account.password);
+    clubId = (
+      await asPerson<{ id: string }>(page, 'POST', '/api/v1/caving-groups', {
+        name: clubName,
+        type: 'cavingClub',
+        description: null,
+        website: null,
+      })
+    ).id;
+    await linkAroundANewPoint(page, anchorName, pointName, { id: clubId, name: clubName });
+  } finally {
+    if (clubId) {
+      await tryAsPerson(editor.admin, 'DELETE', `/api/v1/caving-groups/${clubId}`);
+    }
+    await editor.release();
+  }
+});
+
+/** The flow of the test above, as the account of its own whose one club is `club`. */
+async function linkAroundANewPoint(
+  page: Page,
+  anchorName: string,
+  pointName: string,
+  club: { id: string; name: string },
+) {
   await createPointFeature(page, anchorName);
   const featureUrl = await openFeature(page, anchorName);
 
@@ -303,16 +354,12 @@ test('a link can name a spot that had no record yet, with a height, and says who
 
   // Who will see the point is named before it is made, not discovered afterwards — and it is
   // the audience this account will actually get, resolved for them, rather than both halves
-  // of a rule the reader would have to apply to themselves. Which of the two it resolves to
-  // follows from the clubs the signed-in account belongs to, which this flow does not own;
-  // what it holds the app to is that the promise made here is the audience the record ends up
-  // with, and that neither of them is the open web.
-  const promise = dialog.getByText(/^By default this point will be visible to /);
-  await expect(promise).toBeVisible();
-  const promised = (await promise.textContent()) ?? '';
-  const promisedAudience = promised.includes('everyone signed in')
-    ? 'Authenticated users'
-    : 'Caving group';
+  // of a rule the reader would have to apply to themselves: a maker in exactly one club is told
+  // that club, by name. What the flow holds the app to is that the promise made here is the
+  // audience the record ends up with, and that neither of them is the open web.
+  await expect(
+    dialog.getByText(`By default this point will be visible to members of ${club.name}.`, { exact: false }),
+  ).toBeVisible({ timeout: 15_000 });
 
   await dialog.getByRole('button', { name: 'Pick on the map' }).click();
   const picker = page.getByRole('dialog').filter({ hasText: 'Pick a point' });
@@ -348,20 +395,29 @@ test('a link can name a spot that had no record yet, with a height, and says who
   // public web, which no default may reach. Read from the record's own property table:
   // "Caving group" is also the start of a menu entry in the chrome around it.
   const properties = page.locator('.ant-descriptions');
-  await expect(properties.getByText(promisedAudience, { exact: true })).toBeVisible();
+  await expect(properties.getByText('Caving group', { exact: true })).toBeVisible();
   await expect(properties.getByText('Public', { exact: true })).toHaveCount(0);
+  // And the club it is visible to is the one the promise named. The page states the audience
+  // and not the club, so the club is read from the record itself.
+  const pointId = new URL(page.url()).pathname.split('/').pop();
+  const stored = await asPerson<{ feature: { visibility: string; cavingGroupId: string | null } }>(
+    page,
+    'GET',
+    `/api/v1/features/${pointId}`,
+  );
+  expect(stored.feature).toMatchObject({ visibility: 'cavingGroup', cavingGroupId: club.id });
 
   // Clean up: the link first, because the point cannot go while it is a member.
   await page.goto(featureUrl);
   await deleteLinkRow(page, pointName);
   await deleteFeature(page, pointName);
   await deleteFeature(page, anchorName);
-});
+}
 
 test('a one-way link made around a new point can later be made to read both ways', async ({
   page,
 }) => {
-  const stamp = Date.now();
+  const stamp = runStamp();
   const anchorName = `E2E Direction Anchor ${stamp}`;
   const pointName = `E2E marker ${stamp}`;
   await login(page);
@@ -417,7 +473,7 @@ test('a one-way link made around a new point can later be made to read both ways
 test('the map dock links the entrance that was clicked, not the cave it belongs to', async ({
   page,
 }) => {
-  const stamp = Date.now();
+  const stamp = runStamp();
   const pointName = `E2E entrance point ${stamp}`;
   await login(page);
 
@@ -494,7 +550,7 @@ test('the map dock links the entrance that was clicked, not the cave it belongs 
 });
 
 test('a trip log takes part in links from its own page', async ({ page }) => {
-  const stamp = Date.now();
+  const stamp = runStamp();
   const title = `E2E Trip Link ${stamp}`;
   await login(page);
 
@@ -559,7 +615,7 @@ test('an administrator adds a relation, a link records it, and it will not go wh
   page,
   consoleErrors,
 }) => {
-  const stamp = Date.now();
+  const stamp = runStamp();
   const anchorName = `E2E Vocab Anchor ${stamp}`;
   const relationName = `E2E Feeds ${stamp}`;
   const inverseName = `E2E Fed by ${stamp}`;
@@ -640,7 +696,7 @@ test('an administrator adds a relation, a link records it, and it will not go wh
 });
 
 test('an administrator may edit a link somebody else recorded', async ({ page, browser, request }) => {
-  const stamp = Date.now();
+  const stamp = runStamp();
   const otherEmail = `e2e-author-${stamp}@dev.local`;
   const otherPassword = 'e2e-author-pass-1';
   const otherName = `E2E Author ${stamp}`;
@@ -771,7 +827,7 @@ test('an administrator may edit a link somebody else recorded', async ({ page, b
 test('the Romanian interface renders link wording with its numbers and names in place', async ({
   page,
 }) => {
-  const stamp = Date.now();
+  const stamp = runStamp();
   const anchorName = `E2E RO Anchor ${stamp}`;
   await login(page);
 
@@ -829,7 +885,7 @@ test('the Romanian interface renders link wording with its numbers and names in 
  * a document with real text in it is not something a browser test can conjure.
  */
 test('a link is anchored at a passage selected in a document', async ({ page }) => {
-  const stamp = Date.now();
+  const stamp = runStamp();
   const anchorName = `E2E Quote Anchor ${stamp}`;
   const note = `E2E quote ${stamp}`;
   await login(page);
@@ -907,7 +963,7 @@ test('a link is anchored at a passage selected in a document', async ({ page }) 
  * read back. The picture is generated noise uploaded by this run.
  */
 test('a region of a picture is drawn from the keyboard in the record-a-link dialog', async ({ page }) => {
-  const stamp = Date.now();
+  const stamp = runStamp();
   const anchorName = `E2E Region Anchor ${stamp}`;
   const pictureName = `E2E region drawn ${stamp}`;
   await login(page);
