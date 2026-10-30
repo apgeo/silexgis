@@ -157,16 +157,6 @@ public sealed record PhotoPositionRequest(
     IReadOnlyList<double>? Position,
     bool ReplaceRecordedFix);
 
-/// <summary>Where a picture is now, and where it came from.</summary>
-public sealed record PhotoPositionDto(
-    Guid FileId,
-    GeoJsonGeometry? Geom,
-    PhotoPositionSource PositionSource,
-    double? AltitudeMeters,
-    double? DirectionDegrees,
-    bool DirectionIsMagnetic,
-    double? Dop,
-    PositionConfidenceBand Confidence);
 
 /// <summary>Moves an object to the position one of its pictures records.</summary>
 public sealed record FeaturePositionFromPhotoRequest(Guid FileId);

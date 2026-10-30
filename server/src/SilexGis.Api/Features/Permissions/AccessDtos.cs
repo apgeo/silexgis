@@ -51,60 +51,6 @@ public sealed record PermissionGroupMemberDto(
 
 public sealed record PermissionGroupMemberWriteRequest(AccessSubjectKind MemberKind, Guid MemberId);
 
-public sealed record FeatureSetDto(Guid Id, string Name, string Slug, string? Description, int MemberCount);
-
-/// <summary>A member the caller may read, named so the membership editor can show it.</summary>
-/// <param name="TypeName">
-/// The member's feature type, when it has one — the more particular word, and the one a member
-/// just picked in the editor is shown with too. Null for rows that carry only a kind.
-/// </param>
-public sealed record FeatureSetMemberDto(Guid Id, string? Name, FeatureKind Kind, string? TypeName);
-
-public sealed record FeatureSetWriteRequest(string Name, string? Description);
-
-public sealed record FeatureSetMemberReplaceRequest(IReadOnlyList<Guid> FeatureIds);
-
-/// <summary>
-/// What the caller may do in each domain, with no particular row in view — the shape UI
-/// gating needs. Row-level answers come from the per-object access routes instead.
-/// </summary>
-/// <param name="IsFullAdmin">
-/// Whether the caller holds the installation-wide role, which a handful of decisions turn on
-/// directly rather than through a domain right — publishing a photograph to the public gallery
-/// is one. Stated rather than inferred: a client guessing it from an unrelated domain would
-/// offer the control to the wrong people, and hide it from the right ones.
-/// </param>
-/// <param name="CreateInCavingGroups">
-/// For each domain whose rows can belong to a caving group, the caller's own caving groups in
-/// which they may create a row bound to that group. A second answer beside the map, and not a
-/// correction to it: the map is decided with no row in view, so a right held only at one caving
-/// group's scope is absent from it by construction — a member whose club lets them record the
-/// club's trips holds no <c>create</c> there, though a trip bound to the club is accepted. This
-/// says where such a right does reach, by the rule the create itself is decided by, so a deny or
-/// a ruleset edit moves this answer and the write together. It is read to offer a create door
-/// and to bound the groups a create form offers, and it speaks of creating only: writing,
-/// deleting or sharing under a right held at a group's scope stay questions about a row.
-/// Every such domain is a key, with an empty list where the caller may create in none of their
-/// groups, so an absent key always means a domain that has no group binding at all.
-/// <para>
-/// One place where the answer runs ahead of the routes, stated so that nobody draws a door from
-/// it there: a vector file and a raster map are created by uploading a file, and neither upload
-/// takes a group — each asks for the right with none named and the row is bound afterwards by an
-/// edit. A group listed under those two domains is one the rules would admit a bound create in,
-/// and no route can make one yet.
-/// </para>
-/// </param>
-public sealed record CapabilitiesDto(
-    IReadOnlyDictionary<string, AccessAction> Domains,
-    bool IsFullAdmin,
-    IReadOnlyDictionary<string, IReadOnlyList<CreatableCavingGroupDto>> CreateInCavingGroups);
-
-/// <summary>
-/// One of the caller's own caving groups, named so a form can say which group a new row will
-/// belong to rather than calling it "your group".
-/// </summary>
-public sealed record CreatableCavingGroupDto(Guid Id, string Name);
-
 /// <summary>The valid vocabulary, generated from the rule that validates writes.</summary>
 public sealed record AccessCatalogDto(
     IReadOnlyList<AccessCatalogDomainDto> Domains,
@@ -199,21 +145,6 @@ public sealed class PermissionGroupMemberWriteRequestValidator
         RuleFor(x => x.MemberKind).IsInEnum();
         RuleFor(x => x.MemberId).NotEmpty();
     }
-}
-
-public sealed class FeatureSetWriteRequestValidator : AbstractValidator<FeatureSetWriteRequest>
-{
-    public FeatureSetWriteRequestValidator()
-    {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Description).MaximumLength(1000);
-    }
-}
-
-public sealed class FeatureSetMemberReplaceRequestValidator
-    : AbstractValidator<FeatureSetMemberReplaceRequest>
-{
-    public FeatureSetMemberReplaceRequestValidator() => RuleFor(x => x.FeatureIds).NotNull();
 }
 
 public sealed class AccessPreviewRequestValidator : AbstractValidator<AccessPreviewRequest>

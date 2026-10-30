@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using SilexGis.Api.Common;
 using SilexGis.Api.Features.Permissions;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
@@ -478,7 +479,7 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<
         createIn.EnumerateObject().Select(p => p.Name).ShouldBe(
             Enum.GetValues<AccessDomain>()
                 .Where(AccessEntryRules.IsTrioDomain)
-                .Select(AccessCatalog.Name),
+                .Select(DomainRights.Name),
             ignoreOrder: true);
         createIn.TryGetProperty("taxonomies", out _).ShouldBeFalse();
 
