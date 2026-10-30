@@ -13,8 +13,8 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// The operator's count and repair of stored hierarchy state, and the count of uploaded
-/// centrelines whose stored length is not their passage's. Every defect here is written straight
+/// The operator's count and repair of stored hierarchy state, and the count and in-place repair of
+/// uploaded centrelines whose stored length is not their passage's. Every defect here is written straight
 /// to the database, because it reproduces rows an earlier faulty version stored: a test that went
 /// through the write service could never produce them.
 /// </summary>
@@ -184,6 +184,70 @@ public sealed class FeatureDerivedStateRepairTests : IAsyncLifetime, IDisposable
         (after.Examined - before.Examined).ShouldBe(2);
     }
 
+    /// <summary>
+    /// The repair rewrites exactly the stored lengths the count calls different, and nothing else:
+    /// a dry run leaves them as they were, an apply stores the passage's own figure, a figure that
+    /// already agrees, a missing figure and a centreline read out of a survey model are not written,
+    /// no row is added or removed, the line feature's last-changed time is not touched, and a second
+    /// run finds nothing to do.
+    /// </summary>
+    [Fact]
+    public async Task Stored_lengths_that_differ_from_their_passage_are_rewritten_in_place_and_only_those()
+    {
+        var passage = await ExecuteReturningAsync(db =>
+            CenterlineSql.GeodesicLengthMetersAsync(db, CenterlineSkeleton.Build3D(Line(0)), CancellationToken.None));
+        passage.ShouldBeGreaterThan(1m);
+
+        var inflated = await SeedCaveWithCenterlineAsync(lengthM: passage * 15m, offset: 11);
+        var shorter = await SeedCaveWithCenterlineAsync(lengthM: passage / 4m, offset: 12);
+        var agreeing = await SeedCaveWithCenterlineAsync(lengthM: passage, offset: 13);
+        var missing = await SeedCaveWithCenterlineAsync(lengthM: null, offset: 14);
+        var extracted = await SeedCaveWithCenterlineAsync(lengthM: passage * 15m, offset: 15, source: CenterlineSource.Extracted);
+        var seeded = new[] { inflated, shorter, agreeing, missing, extracted };
+
+        var rowsBefore = await ExecuteReturningAsync(db => db.Centerlines.IgnoreQueryFilters().CountAsync());
+        var changedBefore = await ExecuteReturningAsync(db => db.Features.IgnoreQueryFilters()
+            .Where(f => f.Id == inflated.CenterlineId).Select(f => f.UpdatedAt).SingleAsync());
+        var countBefore = await LengthCountAsync();
+
+        // A dry run reports the rewrite and leaves every figure where it was.
+        var dry = await RepairLengthsAsync(apply: false);
+        dry.Applied.ShouldBeFalse();
+        dry.Updated.ShouldBeGreaterThanOrEqualTo(2);
+        dry.Before.Inflated.ShouldBe(countBefore.Inflated);
+        dry.Before.Shorter.ShouldBe(countBefore.Shorter);
+        dry.After.Inflated.ShouldBe(0);
+        dry.After.Shorter.ShouldBe(0);
+        (await LengthsAsync(seeded)).ShouldBe([passage * 15m, passage / 4m, passage, null, passage * 15m]);
+        (await LengthCountAsync()).Inflated.ShouldBe(countBefore.Inflated);
+
+        // Apply stores the passage's own figure for the two that differed, and only for them.
+        var applied = await RepairLengthsAsync(apply: true);
+        applied.Applied.ShouldBeTrue();
+        applied.Updated.ShouldBe(applied.Before.Inflated + applied.Before.Shorter);
+        var lengths = await LengthsAsync(seeded);
+        lengths[0].ShouldNotBeNull().ShouldBe(passage, tolerance: 0.05m);
+        lengths[1].ShouldNotBeNull().ShouldBe(passage, tolerance: 0.05m);
+        lengths[2].ShouldBe(passage);
+        lengths[3].ShouldBeNull();
+        lengths[4].ShouldBe(passage * 15m);
+
+        (await ExecuteReturningAsync(db => db.Centerlines.IgnoreQueryFilters().CountAsync())).ShouldBe(rowsBefore);
+        (await ExecuteReturningAsync(db => db.Features.IgnoreQueryFilters()
+            .Where(f => f.Id == inflated.CenterlineId).Select(f => f.UpdatedAt).SingleAsync())).ShouldBe(changedBefore);
+        var countAfter = await LengthCountAsync();
+        countAfter.Inflated.ShouldBe(0);
+        countAfter.Shorter.ShouldBe(0);
+        countAfter.NotMeasurable.ShouldBe(countBefore.NotMeasurable);
+
+        // Run again: nothing differs, nothing is written, and the run still commits.
+        var again = await RepairLengthsAsync(apply: true);
+        again.Updated.ShouldBe(0);
+        again.Applied.ShouldBeTrue();
+        again.Before.Inflated.ShouldBe(0);
+        again.Before.Shorter.ShouldBe(0);
+    }
+
     // ---------- helpers ----------
 
     private static MultiLineString Line(int offset) =>
@@ -238,6 +302,24 @@ public sealed class FeatureDerivedStateRepairTests : IAsyncLifetime, IDisposable
     {
         using var scope = factory.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<CenterlineLengthAudit>().CountAsync();
+    }
+
+    private async Task<CenterlineLengthRepairResult> RepairLengthsAsync(bool apply)
+    {
+        using var scope = factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<CenterlineLengthRepair>().RepairAsync(apply);
+    }
+
+    private async Task<List<decimal?>> LengthsAsync(params (Guid CaveId, Guid CenterlineId)[] rows)
+    {
+        var result = new List<decimal?>();
+        foreach (var row in rows)
+        {
+            result.Add(await ExecuteReturningAsync(db => db.Centerlines.IgnoreQueryFilters().AsNoTracking()
+                .Where(c => c.Id == row.CenterlineId).Select(c => c.LengthM).SingleAsync()));
+        }
+
+        return result;
     }
 
     private async Task<IReadOnlyList<IntegrityProblem>> VerifyAsync()

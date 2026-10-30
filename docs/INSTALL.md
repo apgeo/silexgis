@@ -1951,10 +1951,20 @@ sh scripts/ancestry-count.sh              # should now say 0 wrong
   changes nothing and exits 1.
 - `sh scripts/centerline-length-count.sh` counts uploaded centrelines whose stored length is longer
   than the passage they trace (an earlier version measured every wall shot of a survey export). It
-  changes nothing; uploading such a centreline again stores the right length.
+  changes nothing.
+- `sh scripts/centerline-length-repair.sh [--apply]` rewrites those stored lengths in place, each
+  measured the way an upload now measures the passage. Only the length column of the centrelines
+  the count calls longer or shorter is written: no row is added, removed or moved, centrelines read
+  out of a survey model and ones with no stored length are left as they are, and a second run finds
+  nothing to do. Without `--apply` it is a dry run in a transaction that is rolled back. Suggested
+  order: count, back up (`sh scripts/backup.sh`), dry run, `--apply`, count again (all figures in
+  *longer* and *shorter* should be zero). If somebody uploads a centreline while it runs, the commit
+  fails rather than overwriting their figure — run it again; it exits 1 when `--apply` committed
+  nothing.
 - An installation without Docker runs the same commands as arguments to the API, from its install
   directory and with its configuration: `dotnet SilexGis.Api.dll ancestry-count`,
-  `… ancestry-repair [--apply]`, `… centerline-length-count`.
+  `… ancestry-repair [--apply]`, `… centerline-length-count`,
+  `… centerline-length-repair [--apply]`.
 
 ## External login providers
 

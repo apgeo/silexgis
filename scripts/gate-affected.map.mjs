@@ -151,7 +151,7 @@ export const groups = {
     // The restore routes and the rule they keep live in the feature slice itself.
     'FeatureRestoreTests',
     'SelectionMaxConfigurationTests',
-    // The operator's count and repair of stored ancestry, and the centreline length count.
+    // The operator's count and repair of stored ancestry, and the centreline length count and repair.
     'FeatureDerivedStateRepairTests',
   ],
   featureSets: ['FeatureIntegrityTests', 'FeatureTests'],

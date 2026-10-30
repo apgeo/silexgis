@@ -111,6 +111,7 @@ public static class DependencyInjection
         services.AddScoped<Features.FeatureIntegrityVerifier>();
         services.AddScoped<Features.FeatureDerivedStateRepair>();
         services.AddScoped<Features.CenterlineLengthAudit>();
+        services.AddScoped<Features.CenterlineLengthRepair>();
         services.AddScoped<Permissions.AccessOrphanSweep>();
         services.AddScoped<Import.TermRuleSetStore>();
         services.AddScoped<Import.VisibleProximitySearch>();

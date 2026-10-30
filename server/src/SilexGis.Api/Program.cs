@@ -805,6 +805,34 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
         return;
     }
 
+    // `centerline-length-repair [--apply]`: rewrite, in place, the stored length of each uploaded
+    // centreline the count above calls longer or shorter than its passage, then exit. Only the length
+    // column of those rows is written; nothing is added or removed. A dry run unless `--apply` is
+    // given, and either way one transaction. Numbers only — this runs against real installations.
+    if (args.Contains("centerline-length-repair"))
+    {
+        using var scope = app.Services.CreateScope();
+        var apply = args.Contains("--apply");
+        var result = await scope.ServiceProvider
+            .GetRequiredService<SilexGis.Infrastructure.Features.CenterlineLengthRepair>().RepairAsync(apply);
+        Log.Information(
+            "Centreline length repair ({Mode}): {Examined} uploaded centreline(s) measured, {Wrong} differing before "
+            + "({Inflated} longer, {Shorter} shorter); {Updated} length(s) rewritten; {WrongAfter} differing after; {Outcome}",
+            apply ? "apply" : "dry run",
+            result.Before.Examined, result.Before.Inflated + result.Before.Shorter,
+            result.Before.Inflated, result.Before.Shorter, result.Updated,
+            result.After.Inflated + result.After.Shorter,
+            result.Applied ? "committed"
+                : apply ? "ROLLED BACK: some length still differed afterwards, nothing was changed"
+                : "rolled back, nothing was changed (run again with --apply to commit)");
+        if (apply && !result.Applied)
+        {
+            Environment.ExitCode = 1;
+        }
+
+        return;
+    }
+
     // `centerline-length-count`: count uploaded centrelines whose stored length is not the length of
     // the passage they trace (measured over every wall shot by an earlier version), then exit.
     // Changes nothing; numbers only.
