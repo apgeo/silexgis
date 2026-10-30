@@ -693,6 +693,47 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
     }
 
     [Fact]
+    public async Task A_trip_date_condition_reaches_a_stay_that_crossed_the_period_exactly_as_the_list_does()
+    {
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
+        // A stay from the end of February into March, and a single-day trip well inside March.
+        await SeedTripsAsync(ownerId, Visibility.Public, 1, ActivityState.Published,
+            tripDate: new DateOnly(2026, 2, 27), tripDateEnd: new DateOnly(2026, 3, 2));
+        await SeedTripsAsync(ownerId, Visibility.Public, 1, ActivityState.Published,
+            tripDate: new DateOnly(2026, 3, 20));
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-tripstay");
+
+        static InstantValue Day(int month, int day) =>
+            new(new DateTimeOffset(2026, month, day, 0, 0, 0, TimeSpan.Zero));
+
+        async Task<int> CountAsync(FilterOp op, params InstantValue[] bounds)
+        {
+            var body = await QueryAsync(client, About("tripLog", new AllOfNode(
+            [
+                new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]),
+                new ConditionNode(TripLogFilterFields.TripDate, op, [.. bounds]),
+            ])));
+            return body.Worlds[0].Total.ShouldNotBeNull();
+        }
+
+        // March: the stay reached it on the 1st and 2nd, the single day is in it.
+        (await CountAsync(FilterOp.Between, Day(3, 1), Day(3, 31))).ShouldBe(2, "the stay overlaps March");
+        (await CountAsync(FilterOp.GreaterOrEqual, Day(3, 1))).ShouldBe(2, "the stay had not finished before the 1st");
+        // February: the stay began in it; the single day did not.
+        (await CountAsync(FilterOp.Between, Day(2, 1), Day(2, 28))).ShouldBe(1, "only the stay overlaps February");
+        (await CountAsync(FilterOp.LessOrEqual, Day(2, 28))).ShouldBe(1);
+        // The stay's own days, in the middle and past its end.
+        (await CountAsync(FilterOp.Between, Day(3, 1), Day(3, 1))).ShouldBe(1, "a day inside the stay is a day of the stay");
+        (await CountAsync(FilterOp.Between, Day(3, 3), Day(3, 3))).ShouldBe(0, "the day after the stay is not");
+        // Strict bounds: after the 2nd leaves the stay out, before the 28th leaves the single day out.
+        (await CountAsync(FilterOp.GreaterThan, Day(3, 2))).ShouldBe(1, "the stay ended on the 2nd");
+        (await CountAsync(FilterOp.GreaterThan, Day(3, 1))).ShouldBe(2, "the stay was still going on the 2nd");
+        (await CountAsync(FilterOp.LessThan, Day(2, 27))).ShouldBe(0, "nothing began before the 27th");
+        (await CountAsync(FilterOp.LessThan, Day(2, 28))).ShouldBe(1, "the stay began on the 27th");
+        (await CountAsync(FilterOp.IsNotEmpty)).ShouldBe(2);
+    }
+
+    [Fact]
     public async Task A_timestamp_bound_written_east_or_west_of_utc_is_the_moment_it_names()
     {
         // A creation time compared against a bound with a non-zero offset: the same moment as its
@@ -967,7 +1008,8 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         int count,
         ActivityState state = ActivityState.Draft,
         bool hadIncident = false,
-        DateOnly? tripDate = null)
+        DateOnly? tripDate = null,
+        DateOnly? tripDateEnd = null)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -976,8 +1018,9 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         {
             db.TripLogs.Add(new TripLog
             {
-                Title = $"Trip {i} {state} {hadIncident} {tripDate} {tag}",
+                Title = $"Trip {i} {state} {hadIncident} {tripDate} {tripDateEnd} {tag}",
                 TripDate = tripDate ?? new DateOnly(2026, 5, 3),
+                TripDateEnd = tripDateEnd,
                 OwnerUserId = ownerId,
                 Visibility = visibility,
                 State = state,

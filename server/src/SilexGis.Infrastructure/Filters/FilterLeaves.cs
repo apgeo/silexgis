@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using SilexGis.Domain;
 using SilexGis.Domain.Filters;
 
 namespace SilexGis.Infrastructure.Filters;
@@ -177,6 +178,49 @@ internal static class FilterLeaves
         };
 
         return Expression.Lambda<Func<T, bool>>(body, selector.Parameters);
+    }
+
+    /// <summary>
+    /// A span of calendar days — a trip's stay — compared the way the listings and the map compare
+    /// it, so a saved filter finds the rows the list finds.
+    /// </summary>
+    /// <remarks>
+    /// A span with no stored end lasted a single day. The bounds mean what a reader means by them
+    /// of something that went on for several days: "on or after the 1st" and "before the 31st" take
+    /// in a stay that reached the 1st or that began before the 31st, "between" and "on" take in any
+    /// stay that overlapped the days named. Reading only the first day would lose a stay that ran
+    /// from the end of February into March from every filter for March, while the list and the map
+    /// both show it. The overlap rule itself has one home, in the domain.
+    /// </remarks>
+    public static Expression<Func<T, bool>> DateSpan<T>(
+        ConditionNode condition,
+        Expression<Func<T, DateOnly>> firstDay,
+        Expression<Func<T, DateOnly?>> lastDay)
+    {
+        if (condition.Op is FilterOp.IsEmpty)
+        {
+            return _ => false;
+        }
+
+        if (condition.Op is FilterOp.IsNotEmpty)
+        {
+            return _ => true;
+        }
+
+        var days = condition.Values.OfType<InstantValue>().Select(DayNamed).ToList();
+
+        return condition.Op switch
+        {
+            FilterOp.LessThan => DayRangeQueryExtensions.BeganBefore(firstDay, days[0]),
+            FilterOp.GreaterThan => DayRangeQueryExtensions.RanAfter(firstDay, lastDay, days[0]),
+            FilterOp.LessOrEqual => DayRangeQueryExtensions.BeganOnOrBefore(firstDay, days[0]),
+            FilterOp.GreaterOrEqual => DayRangeQueryExtensions.RanOnOrAfter(firstDay, lastDay, days[0]),
+            FilterOp.Between => DayRangeQueryExtensions.RanOnOrAfter(firstDay, lastDay, days[0])
+                .And(DayRangeQueryExtensions.BeganOnOrBefore(firstDay, days[1])),
+            FilterOp.Equals => DayRangeQueryExtensions.RanOnOrAfter(firstDay, lastDay, days[0])
+                .And(DayRangeQueryExtensions.BeganOnOrBefore(firstDay, days[0])),
+            _ => throw Unsupported(condition),
+        };
     }
 
     /// <summary>

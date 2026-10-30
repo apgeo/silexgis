@@ -69,7 +69,11 @@ public static class DayRangeQueryExtensions
     }
 
     /// <summary>The span had not finished before <paramref name="day"/>.</summary>
-    private static Expression<Func<T, bool>> RanOnOrAfter<T>(
+    /// <remarks>
+    /// Public so a predicate built from a saved filter's condition asks the same question the
+    /// listings do, instead of a second copy of it.
+    /// </remarks>
+    public static Expression<Func<T, bool>> RanOnOrAfter<T>(
         Expression<Func<T, DateOnly>> firstDay,
         Expression<Func<T, DateOnly?>> lastDay,
         DateOnly day)
@@ -90,13 +94,39 @@ public static class DayRangeQueryExtensions
     }
 
     /// <summary>The span had begun by <paramref name="day"/>.</summary>
-    private static Expression<Func<T, bool>> BeganOnOrBefore<T>(
+    public static Expression<Func<T, bool>> BeganOnOrBefore<T>(
         Expression<Func<T, DateOnly>> firstDay,
         DateOnly day)
     {
         Expression<Func<DateOnly, bool>> beganOnOrBefore = start => start <= day;
         return Expression.Lambda<Func<T, bool>>(
             Replace(beganOnOrBefore.Body, beganOnOrBefore.Parameters[0], firstDay.Body),
+            firstDay.Parameters[0]);
+    }
+
+    /// <summary>The span was still going on after <paramref name="day"/> had ended.</summary>
+    public static Expression<Func<T, bool>> RanAfter<T>(
+        Expression<Func<T, DateOnly>> firstDay,
+        Expression<Func<T, DateOnly?>> lastDay,
+        DateOnly day)
+    {
+        var row = firstDay.Parameters[0];
+        var storedEnd = Replace(lastDay.Body, lastDay.Parameters[0], row);
+        Expression<Func<DateOnly, DateOnly?, bool>> ranAfter = (start, end) => (end ?? start) > day;
+
+        var body = Replace(ranAfter.Body, ranAfter.Parameters[0], firstDay.Body);
+        body = Replace(body, ranAfter.Parameters[1], storedEnd);
+        return Expression.Lambda<Func<T, bool>>(body, row);
+    }
+
+    /// <summary>The span began before <paramref name="day"/>.</summary>
+    public static Expression<Func<T, bool>> BeganBefore<T>(
+        Expression<Func<T, DateOnly>> firstDay,
+        DateOnly day)
+    {
+        Expression<Func<DateOnly, bool>> beganBefore = start => start < day;
+        return Expression.Lambda<Func<T, bool>>(
+            Replace(beganBefore.Body, beganBefore.Parameters[0], firstDay.Body),
             firstDay.Parameters[0]);
     }
 

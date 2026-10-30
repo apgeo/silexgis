@@ -127,7 +127,7 @@ public sealed class TripLogFilterWorld(
         TripLogFilterFields.Type => FilterLeaves.Longs<TripLog>(condition, t => t.TripTypeId),
         TripLogFilterFields.State =>
             FilterLeaves.EnumField<TripLog, ActivityState>(condition, t => t.State),
-        TripLogFilterFields.TripDate => FilterLeaves.Date<TripLog>(condition, t => t.TripDate),
+        TripLogFilterFields.TripDate => FilterLeaves.DateSpan<TripLog>(condition, t => t.TripDate, t => t.TripDateEnd),
         TripLogFilterFields.HadIncident => FilterLeaves.Boolean<TripLog>(condition, t => t.HadIncident),
         TripLogFilterFields.OwnerId => FilterLeaves.Guids<TripLog>(condition, t => t.OwnerUserId),
         TripLogFilterFields.CavingGroupId => FilterLeaves.Guids<TripLog>(condition, t => t.CavingGroupId),
