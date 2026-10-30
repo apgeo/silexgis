@@ -506,6 +506,7 @@ public static class EventEndpoints
         }
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.Events, row.Id, ct);
+        await EventSeriesEndpoints.EmitSeriesVersionAsync(http, db, access, ctx, row, ct);
         return TypedResults.Ok(Map(row));
     }
 

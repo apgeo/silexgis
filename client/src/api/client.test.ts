@@ -5,6 +5,7 @@ import {
   ApiError,
   isSettledRefusal,
   lastReadETag,
+  lastReadRunVersion,
   onServerAnswered,
   RETRY_AFTER_CEILING_MS,
   retryAfterOf,
@@ -116,6 +117,21 @@ describe('the version an answer carries', () => {
     threadsVersions.onRequest({ request });
     return request.headers.get('If-Match');
   }
+
+  it('keeps the version of a whole run beside the row tag, and lets go of it when a read no longer has one', () => {
+    answered('GET', '/api/v1/events/e-run', {
+      status: 200,
+      headers: { ETag: '"9"', 'X-Series-Version': '"abc123"' },
+    });
+    expect(lastReadETag('/api/v1/events/e-run')).toBe('"9"');
+    expect(lastReadRunVersion('/api/v1/events/e-run')).toBe('"abc123"');
+    // The replay on an ordinary update stays the row's own tag.
+    expect(carriedOn('PUT', '/api/v1/events/e-run')).toBe('"9"');
+
+    // The event left its series: a later read has no run version, and the old one is not replayed.
+    answered('GET', '/api/v1/events/e-run', { status: 200, headers: { ETag: '"10"' } });
+    expect(lastReadRunVersion('/api/v1/events/e-run')).toBeUndefined();
+  });
 
   it("is filed under what was read and replayed on that resource's next full update or delete", () => {
     answered('GET', '/api/v1/trip-logs/t-read', { status: 200, headers: { ETag: '"4"' } });

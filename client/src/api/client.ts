@@ -218,6 +218,11 @@ api.use(sendsTheReadingLanguage);
 // (last-write-wins).
 const etags = new Map<string, string>();
 
+// The version of a run of rows a resource stands at the head of — a repeating event's occurrence
+// and every later one — which the server answers with beside the ordinary tag. A write that
+// reaches the whole run sends this one: the ordinary tag speaks for one row only.
+const runVersions = new Map<string, string>();
+
 function resourcePath(url: string): string {
   try {
     return new URL(url, window.location.origin).pathname;
@@ -280,10 +285,20 @@ export const threadsVersions = {
   },
   onResponse({ request, response }: { request: Request; response: Response }) {
     const etag = response.headers.get('ETag');
-    if (etag) {
+    const runVersion = response.headers.get('X-Series-Version');
+    if (etag || runVersion) {
       const resource = versionedResource(request, response);
       if (resource) {
-        etags.set(resource, etag);
+        if (etag) {
+          etags.set(resource, etag);
+        }
+        if (runVersion) {
+          runVersions.set(resource, runVersion);
+        } else if (request.method === 'GET') {
+          // A read that no longer answers with one (the event left its series) must not leave the
+          // last one standing to be replayed.
+          runVersions.delete(resource);
+        }
       }
     }
     return response;
@@ -343,6 +358,14 @@ api.use(tellsWhenTheServerAnswered);
  */
 export function lastReadETag(path: string): string | undefined {
   return etags.get(path);
+}
+
+/**
+ * The version of the run last read for a resource — a repeating event's occurrence and every later
+ * one — for a write that changes all of them. Absent when the resource is part of no run.
+ */
+export function lastReadRunVersion(path: string): string | undefined {
+  return runVersions.get(path);
 }
 
 // What the application asked the server, kept as part of the trail attached to an error report.

@@ -142,6 +142,143 @@ public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
+    /// The precondition on an edit of "this and the following" speaks for every occurrence the
+    /// edit writes: a later occurrence changed after the caller read the run makes the edit stale,
+    /// and a stale edit writes nothing.
+    /// </summary>
+    [Fact]
+    public async Task An_edit_of_the_rest_of_a_run_is_refused_when_a_later_occurrence_changed_since_it_was_read()
+    {
+        var start = new DateOnly(2057, 3, 4);
+        var (seriesId, ids) = await SeriesAsync("Stale run", start, count: 4);
+
+        // What the author's screen holds: the anchor's own tag and the run's version.
+        var read = await owner.GetAsync($"/api/v1/events/{ids[1]}");
+        read.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var anchorTag = read.Headers.ETag!.Tag;
+        var runVersion = read.Headers.GetValues("X-Series-Version").Single();
+
+        // Somebody else retitles the last occurrence meanwhile. The anchor itself is untouched, so
+        // its own tag still matches: the old guard would have let the edit land over this one.
+        (await owner.PutWithIfMatchAsync(
+                $"/api/v1/events/{ids[3]}", Body("Retitled meanwhile", start.AddDays(21))))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.GetAsync($"/api/v1/events/{ids[1]}")).Headers.ETag!.Tag.ShouldBe(anchorTag);
+
+        var edit = Body("Whole run renamed", start.AddDays(7));
+        var stale = await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[1]}/series/following", edit, runVersion);
+        var payload = await stale.Content.ReadAsStringAsync();
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, payload);
+        payload.ShouldContain("concurrency.version_mismatch");
+
+        // The anchor's own tag speaks for one row only and is not the run's version.
+        (await owner.PutWithIfMatchAsync(
+                $"/api/v1/events/{ids[1]}/series/following", edit, anchorTag))
+            .StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+
+        // Nothing was written by either refusal.
+        var rows = await BySeriesAsync(owner, seriesId);
+        Title(rows, ids[1])!.ShouldNotContain("Whole run renamed");
+        Title(rows, ids[2])!.ShouldNotContain("Whole run renamed");
+        Title(rows, ids[3])!.ShouldContain("Retitled meanwhile");
+
+        // Read again, the run's version is the current one and the same edit is accepted whole.
+        var reread = await owner.GetAsync($"/api/v1/events/{ids[1]}");
+        var fresh = reread.Headers.GetValues("X-Series-Version").Single();
+        fresh.ShouldNotBe(runVersion);
+        var accepted = await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[1]}/series/following", edit, fresh);
+        accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await accepted.Content.ReadAsStringAsync());
+        Title(await BySeriesAsync(owner, seriesId), ids[3])!.ShouldContain("Whole run renamed");
+
+        // An occurrence before the anchor is not in the run the edit writes, so a change to it
+        // leaves the anchor's run version where it was.
+        var laterRead = await owner.GetAsync($"/api/v1/events/{ids[2]}");
+        var laterVersion = laterRead.Headers.GetValues("X-Series-Version").Single();
+        (await owner.PutWithIfMatchAsync(
+                $"/api/v1/events/{ids[0]}", Body("Earlier one retitled", start)))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.GetAsync($"/api/v1/events/{ids[2]}")).Headers.GetValues("X-Series-Version")
+            .Single().ShouldBe(laterVersion);
+
+        // No header at all is the missing precondition, not a free pass; and an event of no series
+        // carries no run version to send.
+        var missing = await owner.PutAsJsonAsync(
+            $"/api/v1/events/{ids[2]}/series/following", Body("No header", start.AddDays(14)));
+        missing.StatusCode.ShouldBe((HttpStatusCode)428);
+        var single = await CreateAsync(owner, Body("Alone", new DateOnly(2057, 6, 1)));
+        (await owner.GetAsync($"/api/v1/events/{single.GetProperty("id").GetGuid()}"))
+            .Headers.Contains("X-Series-Version").ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A change to a later occurrence that lands between the version check and the save is not
+    /// overwritten: events carry no token of their own, so the check has to hold the run while
+    /// the edit is written.
+    /// </summary>
+    /// <remarks>
+    /// The other writer retitles the last occurrence and holds its transaction while the edit is
+    /// already past its tag; the edit then waits on that row, and once the other commits it must
+    /// find the run changed and write nothing.
+    /// </remarks>
+    [Fact]
+    public async Task A_later_occurrence_changed_while_the_edit_was_being_written_is_not_overwritten()
+    {
+        var start = new DateOnly(2058, 3, 4);
+        var (seriesId, ids) = await SeriesAsync("Raced run", start, count: 4);
+        var read = await owner.GetAsync($"/api/v1/events/{ids[1]}");
+        var runVersion = read.Headers.GetValues("X-Series-Version").Single();
+
+        var raced = await AnotherWriterFirst.SendAsync(
+            factory,
+            $"UPDATE events SET title = 'Retitled by the other writer {suffix}' WHERE id = '{ids[3]}'",
+            () => owner.PutWithIfMatchAsync(
+                $"/api/v1/events/{ids[1]}/series/following", Body("Whole run renamed", start.AddDays(7)), runVersion));
+
+        var payload = await raced.Content.ReadAsStringAsync();
+        raced.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, payload);
+        payload.ShouldContain("concurrency.version_mismatch");
+
+        var rows = await BySeriesAsync(owner, seriesId);
+        Title(rows, ids[3]).ShouldBe($"Retitled by the other writer {suffix}");
+        Title(rows, ids[1])!.ShouldNotContain("Whole run renamed");
+        Title(rows, ids[2])!.ShouldNotContain("Whole run renamed");
+    }
+
+    /// <summary>
+    /// The run's version is handed only to a caller who could make the edit it guards. A reader of
+    /// one occurrence who may not write the later ones would otherwise watch it change whenever
+    /// somebody touched an occurrence they cannot see.
+    /// </summary>
+    [Fact]
+    public async Task The_run_version_is_given_only_to_a_caller_who_may_write_the_whole_run()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var first = await CreateAsync(owner, PrivateBody("Version for writers", today.AddDays(14)));
+        var ids = (await BySeriesAsync(owner, first.GetProperty("seriesId").GetGuid()))
+            .OrderBy(x => x.GetProperty("startDate").GetString())
+            .Select(Id)
+            .ToList();
+
+        await GrantAsync(ids[2], AccessAction.Read | AccessAction.Write);
+        await GrantAsync(ids[3], AccessAction.Read);
+
+        (await owner.GetAsync($"/api/v1/events/{ids[2]}")).Headers.Contains("X-Series-Version")
+            .ShouldBeTrue();
+
+        // May write this occurrence, may read but not write the one after it: the edit would be
+        // refused, so the figure that guards it is not handed out.
+        var partly = await clubmate.GetAsync($"/api/v1/events/{ids[2]}");
+        partly.StatusCode.ShouldBe(HttpStatusCode.OK);
+        partly.Headers.Contains("X-Series-Version").ShouldBeFalse();
+
+        await GrantAsync(ids[3], AccessAction.Write);
+        var whole = await clubmate.GetAsync($"/api/v1/events/{ids[2]}");
+        whole.Headers.Contains("X-Series-Version").ShouldBeTrue();
+    }
+
+    /// <summary>
     /// A move so large that a later occurrence would fall off the end of the calendar is refused,
     /// and refused entire, rather than failing part-way through the run.
     /// </summary>

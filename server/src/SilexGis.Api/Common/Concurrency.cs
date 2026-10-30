@@ -89,6 +89,35 @@ public static class Concurrency
     }
 
     /// <summary>
+    /// Validates the If-Match precondition against a version this application computed from
+    /// more than one row, for a write that reaches more rows than the one it names. Same answers
+    /// as <see cref="CheckIfMatchAsync"/>: 428 without the header when it is required, 412 when it
+    /// does not name <paramref name="currentVersion"/>.
+    /// </summary>
+    public static ProblemHttpResult? CheckIfMatchVersion(
+        HttpContext http, string? currentVersion, bool required = false)
+    {
+        var header = http.Request.Headers.IfMatch;
+        if (header.Count == 0)
+        {
+            return required
+                ? ApiProblems.PreconditionRequired(
+                    "concurrency.if_match_required",
+                    "This resource requires an If-Match header carrying the version you last loaded.")
+                : null;
+        }
+
+        if (currentVersion is not null && Names(header, $"\"{currentVersion}\""))
+        {
+            return null;
+        }
+
+        return ApiProblems.PreconditionFailed(
+            "concurrency.version_mismatch",
+            "The resource changed since it was loaded. Reload and reapply your edits.");
+    }
+
+    /// <summary>
     /// A weak entity tag over a value this application computed: a validator for an answer that
     /// means the same as the last one without being the same bytes.
     /// </summary>

@@ -59,6 +59,43 @@ public static class EventSeriesEndpoints
     /// </summary>
     public const string SeriesMoveOutOfRangeCode = "event.series_move_out_of_range";
 
+    /// <summary>
+    /// The response header that carries the version of a series occurrence's run — itself and every
+    /// later occurrence — beside the ordinary entity tag, which speaks for the one row.
+    /// </summary>
+    public const string SeriesVersionHeader = "X-Series-Version";
+
+    /// <summary>
+    /// Sets <see cref="SeriesVersionHeader"/> when <paramref name="row"/> belongs to a series, so
+    /// that a client editing the rest of the run can send what it last saw of it.
+    /// </summary>
+    public static async Task EmitSeriesVersionAsync(
+        HttpContext http, SilexGisDbContext db, IAccessService access, AccessContext? ctx, Event row,
+        CancellationToken ct)
+    {
+        if (row.SeriesId is not { } seriesId)
+        {
+            return;
+        }
+
+        // Only a caller who could make the edit the version guards is given it. The run may hold
+        // occurrences this reader cannot see, and a figure that changes whenever one of those is
+        // edited, added or removed would tell them such occurrences exist.
+        var run = await db.Events.AsNoTracking()
+            .Where(x => x.SeriesId == seriesId && x.StartDate >= row.StartDate)
+            .ToListAsync(ct);
+        if (await RefuseUnlessAllPermittedAsync(access, ctx, run, AccessAction.Write, ct) is not null)
+        {
+            return;
+        }
+
+        var version = await ConcurrencySql.EventSeriesFollowingVersionAsync(db, seriesId, row.StartDate, ct);
+        if (version is not null)
+        {
+            http.Response.Headers[SeriesVersionHeader] = $"\"{version}\"";
+        }
+    }
+
     public static RouteGroupBuilder MapEventSeriesEndpoints(this RouteGroupBuilder api)
     {
         var events = api.MapGroup("/events").WithTags("Events");
@@ -67,7 +104,8 @@ public static class EventSeriesEndpoints
             .WithValidation<EventWriteRequest>()
             .WithSummary(
                 "Applies one edit to this occurrence and every later one of its series (Write "
-                + "permission on all of them, settled before anything is written). The days keep "
+                + "permission on all of them, settled before anything is written; If-Match carries the "
+                + "series version the event's read answered with in X-Series-Version). The days keep "
                 + "the spacing they had: moving this occurrence moves the rest by the same "
                 + "number of days. Answers with how many occurrences were changed.");
         events.MapDelete("/{id:guid}/series/following", DeleteFollowingAsync)
@@ -93,11 +131,11 @@ public static class EventSeriesEndpoints
     /// the edit, because "this and following" means the later ones become this one.
     /// </para>
     /// <para>
-    /// The precondition is over the occurrence the caller addressed and is required, exactly as it
-    /// is on the edit of one event. It is honestly less than it looks: one version token cannot
-    /// speak for a set, so it says that the occurrence on the screen has not moved underneath the
-    /// author, and says nothing about the later ones. Requiring it anyway is the stronger of the
-    /// two available answers — the alternative is a bulk edit with no precondition at all.
+    /// The precondition is over the whole run the edit writes — the occurrence the caller
+    /// addressed and every later one — and is required, as it is on the edit of one event. The
+    /// version to send is the one the event's own read carries in <see cref="SeriesVersionHeader"/>,
+    /// which is not the event's entity tag: that one speaks for one row and would let an edit land
+    /// over a later occurrence somebody else had changed in the meantime.
     /// </para>
     /// <para>
     /// Unlike the delete beside it, this reaches back over occurrences that have already happened
@@ -147,8 +185,17 @@ public static class EventSeriesEndpoints
                 + "the occurrences.");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(
-                http, db, VersionedTable.Events, anchor.Id, ct, required: true) is { } stale)
+        // The version spoken for is the whole run this edit writes, not the occurrence alone: the
+        // token the caller read with the event is the series version, and it changes when any
+        // later occurrence is edited, added or removed. An edit made over a run somebody else has
+        // since touched is refused whole, and nothing is written.
+        // Taken inside a transaction that locks the run's rows, so a writer arriving between this
+        // check and the save waits for it instead of being overwritten (events carry no token of
+        // their own), and one that finished first changes the version and fails the check.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var runVersion = await ConcurrencySql.EventSeriesFollowingVersionAsync(
+            db, seriesId, anchor.StartDate, ct, lockRows: true);
+        if (Concurrency.CheckIfMatchVersion(http, runVersion, required: true) is { } stale)
         {
             return stale;
         }
@@ -258,6 +305,7 @@ public static class EventSeriesEndpoints
         // One save for the whole set, so the change is one act in the trail as it is to the person
         // who asked for it, and a failure anywhere in it leaves the series exactly as it was.
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return TypedResults.Ok(new EventSeriesEditResultDto
         {

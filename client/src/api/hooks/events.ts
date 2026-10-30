@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, lastReadETag } from '../client.ts';
+import { api, lastReadETag, lastReadRunVersion } from '../client.ts';
 import type { components } from '../schema';
 import { invalidateAfterDelete, unwrap, unwrapVoid, useInvalidateHistory } from './shared.ts';
 import type { ActivityState, EventListParams } from './types.ts';
@@ -259,19 +259,20 @@ export type EventSeriesDeleteResult = components['schemas']['EventSeriesDeleteRe
  * The precondition is set here by hand rather than left to the replay that threads it onto an
  * ordinary update. That replay is keyed by the path a version was read under, and this write is
  * addressed to a sub-path of the event rather than to the event itself, so nothing would be sent
- * and a server that requires one would refuse every edit. It is honestly a precondition over the
- * occurrence on the screen alone — one token cannot speak for a set — and it is still worth
- * carrying: it says the evening the author was looking at has not moved underneath them.
+ * and a server that requires one would refuse every edit. What is sent is the version of the whole
+ * run the event's own read answered with, not the event's entity tag: the tag speaks for one row,
+ * and an edit of the rest of the run has to be refused when any later occurrence has changed since
+ * it was read.
  */
 export function useEditEventSeriesFollowing() {
   const invalidate = useInvalidateEvents();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: EventWrite }) => {
-      const etag = lastReadETag(`/api/v1/events/${id}`);
+      const runVersion = lastReadRunVersion(`/api/v1/events/${id}`);
       return unwrap(
         api.PUT('/api/v1/events/{id}/series/following', {
           params: { path: { id } },
-          headers: etag ? { 'If-Match': etag } : undefined,
+          headers: runVersion ? { 'If-Match': runVersion } : undefined,
           body,
         }),
       );
