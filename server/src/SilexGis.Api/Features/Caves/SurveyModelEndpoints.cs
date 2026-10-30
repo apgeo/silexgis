@@ -385,6 +385,7 @@ public static class SurveyModelEndpoints
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         IAccessService access,
+        FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -396,6 +397,19 @@ public static class SurveyModelEndpoints
 
         var cave = await CaveFeatureAsync(db, caveId, ct);
         if (cave is null || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed)
+        {
+            return ApiProblems.NotFound("cave.not_found");
+        }
+
+        // A cave's survey models are its location, so a caller who may not place the cave may
+        // not add one either — and is told so in exactly the words an unreadable cave gets.
+        // Answering anything else would say that the cave exists, is readable and is guarded.
+        // The order is the point: this comes before the write check, whose 403 would otherwise
+        // tell a guarded cave apart from a missing one for every caller without write, and before
+        // the checks on the file, whose 400s would tell it apart for everyone else. Asking for
+        // the new model to become the cave's current one changes nothing here: it rides on the
+        // same upload and is refused with it.
+        if (await WithheldAsync(protection, ctx, caveId, ct))
         {
             return ApiProblems.NotFound("cave.not_found");
         }

@@ -383,6 +383,119 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable, IClassFixtur
             .ShouldBe(HttpStatusCode.NotFound);
     }
 
+    /// <summary>
+    /// Adding a model is adding the cave's location, so a writer who may not place the cave is
+    /// refused — in the very answer a cave they cannot read gets, so the refusal says nothing
+    /// about whether the cave exists or is guarded. Every refusal here is paired with the same
+    /// upload succeeding once the one missing right is granted, over the same cave.
+    /// </summary>
+    [Fact]
+    public async Task Uploading_to_a_cave_the_caller_may_not_place_reads_exactly_like_a_cave_they_cannot_read()
+    {
+        var guarded = await CreateCaveAsync(visibility: "authenticated", locationProtected: true);
+        var unreadable = await CreateCaveAsync(visibility: "private", locationProtected: false);
+        var open = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+
+        // Fixture proof: the reader reads the guarded cave but may not place it, and cannot read
+        // the private one at all.
+        var seen = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{guarded}");
+        seen.GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
+        (await reader.GetAsync($"/api/v1/caves/{unreadable}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // Anonymous: refused before anything is looked up.
+        using (var anonymous = factory.CreateClient())
+        using (var form = BuildForm("anon.lox", FakeLox()))
+        {
+            (await anonymous.PostAsync($"/api/v1/caves/{guarded}/survey-models", form)).StatusCode
+                .ShouldBe(HttpStatusCode.Unauthorized);
+        }
+
+        // An open cave without write: the ordinary 403, because there is nothing to hide there.
+        (await ReaderUploadAsync(open, "open.lox")).Status.ShouldBe(HttpStatusCode.Forbidden);
+
+        // Write on the guarded cave, but no exact-location right. Before the gate this was a 201.
+        await GrantReaderAsync(guarded, "read, write");
+        var missing = await ReaderUploadAsync(unreadable, "missing.lox");
+        var withheld = await ReaderUploadAsync(guarded, "withheld.lox", makeCurrent: true);
+        missing.Status.ShouldBe(HttpStatusCode.NotFound);
+        withheld.Status.ShouldBe(missing.Status);
+        withheld.Body.ShouldBe(missing.Body, "a guarded cave must read exactly like one the caller cannot read");
+        withheld.Body.ShouldContain("cave.not_found");
+
+        // Nor does a malformed file tell them apart: the format check answers only past the gate.
+        var badFile = await ReaderUploadAsync(guarded, "withheld.zip");
+        badFile.Status.ShouldBe(HttpStatusCode.NotFound);
+        badFile.Body.ShouldBe(missing.Body);
+
+        // Nothing was stored for the guarded cave by any of that.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.SurveyModels.CountAsync(m => m.CaveFeatureId == guarded)).ShouldBe(0);
+        }
+
+        // Moving the current mark onto a model of the guarded cave reads like a model that does
+        // not exist, for the same writer.
+        var ownersModel = await UploadAsync(guarded, "owners.lox");
+        var moveWithheld = await reader.PutAsync($"/api/v1/survey-models/{ownersModel}/current", null);
+        var moveMissing = await reader.PutAsync($"/api/v1/survey-models/{Guid.NewGuid()}/current", null);
+        moveWithheld.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ProblemBodyAsync(moveWithheld)).ShouldBe(await ProblemBodyAsync(moveMissing));
+
+        // The positive half: the same writer, the same cave, once they may place it.
+        await GrantReaderAsync(guarded, "read, write, viewExactLocation");
+        (await ReaderUploadAsync(guarded, "granted.lox", makeCurrent: true)).Status
+            .ShouldBe(HttpStatusCode.Created);
+    }
+
+    /// <summary>An upload as the reader: its status, and its problem body without the per-request trace.</summary>
+    private async Task<(HttpStatusCode Status, string Body)> ReaderUploadAsync(
+        Guid caveId, string fileName, bool makeCurrent = false)
+    {
+        using var form = BuildForm(fileName, FakeLox());
+        if (makeCurrent)
+        {
+            form.Add(new StringContent("true"), "makeCurrent");
+        }
+
+        var response = await reader.PostAsync($"/api/v1/caves/{caveId}/survey-models", form);
+        return (response.StatusCode, await ProblemBodyAsync(response));
+    }
+
+    private static async Task<string> ProblemBodyAsync(HttpResponseMessage response)
+    {
+        var payload = await response.Content.ReadAsStringAsync();
+        if (string.IsNullOrEmpty(payload) || response.IsSuccessStatusCode)
+        {
+            return payload;
+        }
+
+        var node = System.Text.Json.Nodes.JsonNode.Parse(payload)!.AsObject();
+        node.Remove("traceId");
+        node.Remove("instance");
+        return node.ToJsonString();
+    }
+
+    /// <summary>Replaces the reader's entries on one feature with a single allow of these actions.</summary>
+    private async Task GrantReaderAsync(Guid featureId, string actions)
+    {
+        var grant = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/access", new
+        {
+            entries = new[]
+            {
+                new
+                {
+                    subjectKind = "user",
+                    subjectId = readerId,
+                    effect = "allow",
+                    actions,
+                    scopeKind = "object",
+                },
+            },
+        });
+        grant.StatusCode.ShouldBe(HttpStatusCode.OK, await grant.Content.ReadAsStringAsync());
+    }
+
     /// <summary>Each model of the cave and whether it carries the current mark.</summary>
     private async Task<Dictionary<Guid, bool>> ListAsync(Guid caveId)
     {
