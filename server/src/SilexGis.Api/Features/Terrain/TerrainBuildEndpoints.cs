@@ -17,6 +17,10 @@ using SilexGis.Infrastructure.Terrain;
 namespace SilexGis.Api.Features.Terrain;
 
 /// <summary>One raster a build was made from, and the credit the data it holds requires.</summary>
+/// <param name="Reference">
+/// What names the raster: an upload's reference, the dataset's name, or a server directory's
+/// path — the last left blank for a reader who may not see the server's directory layout.
+/// </param>
 /// <param name="Inherited">
 /// True when the raster came with the pyramid this build extends rather than being one this
 /// build obtained and meshed itself. Its credit is this build's all the same.
@@ -738,11 +742,24 @@ public static class TerrainBuildEndpoints
             .OrderBy(s => s.Id)
             .ToListAsync(ct);
 
+        // A server directory is named by its resolved path, which is a fact about the machine's
+        // own layout. The list of directories a build may read from is held to Execute plus the
+        // right to read the server's disk, so the path a build read from is held to the same bar
+        // here: anyone else who may read the build sees that it came from a server directory, and
+        // whose data it is, but not where on the disk it lives.
+        var mayReadPaths = AccessEvaluator.Decide(ctx, AccessDomain.Terrain, AccessAction.Execute, null).Allowed
+            && ServerImportPaths.MayReadServerDisk(ctx);
+
         return TypedResults.Ok(new TerrainBuildDetailDto(
             ToDto(build),
             build.LogTail,
             [.. sources.Select(s => new TerrainBuildSourceDto(
-                s.Id, s.Kind, s.Reference, s.Attribution, s.Licence, s.Inherited))]));
+                s.Id,
+                s.Kind,
+                s.Kind == TerrainBuildSourceKind.ServerDirectory && !mayReadPaths ? string.Empty : s.Reference,
+                s.Attribution,
+                s.Licence,
+                s.Inherited))]));
     }
 
     /// <summary>

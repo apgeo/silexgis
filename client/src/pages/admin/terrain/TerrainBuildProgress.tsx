@@ -162,8 +162,11 @@ export default function TerrainBuildProgress({ buildId }: Props) {
             ) : (
               <Flex vertical gap={2}>
                 {sources.map((source: TerrainBuildSource) => (
+                  // A server directory's path comes back blank to a reader who may not see the
+                  // machine's directory layout, so the separator goes with it.
                   <Typography.Text key={source.id}>
-                    {t(`terrain.sourceKinds.${source.kind}`)} · {source.reference} ·{' '}
+                    {t(`terrain.sourceKinds.${source.kind}`)} ·{' '}
+                    {source.reference ? `${source.reference} · ` : ''}
                     {source.attribution}
                   </Typography.Text>
                 ))}

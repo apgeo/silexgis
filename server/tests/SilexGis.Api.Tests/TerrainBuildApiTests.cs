@@ -140,6 +140,40 @@ public sealed class TerrainBuildApiTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
+    /// A server directory is named by its path on the machine, and the list of directories a build
+    /// may read is held to the right to read the server's disk. The path a build read from is held
+    /// to the same bar: a reader with the terrain right alone sees that the raster came from a server
+    /// directory, and whose data it is, but not where it lives; an administrator sees the path. The
+    /// fetched source beside it keeps its name either way, so the blank is about the path.
+    /// </summary>
+    [Fact]
+    public async Task A_server_directory_path_reaches_only_a_reader_who_may_read_the_server_disk()
+    {
+        var id = await SeedBuildAsync("built from a directory", TerrainBuildStatus.Succeeded, sources: true);
+
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"tb-adm-{suffix}@t.local");
+        var admin = await AuthHelper.BearerClientAsync(factory, $"tb-adm-{suffix}@t.local");
+
+        static Dictionary<string, string?> ReferencesOf(string body) =>
+            JsonDocument.Parse(body).RootElement.GetProperty("sources").EnumerateArray()
+                .ToDictionary(s => s.GetProperty("kind").GetString()!, s => s.GetProperty("reference").GetString());
+
+        var seen = await holder.GetAsync($"/api/v1/terrain/builds/{id}");
+        var seenBody = await seen.Content.ReadAsStringAsync();
+        seen.StatusCode.ShouldBe(HttpStatusCode.OK, seenBody);
+        var held = ReferencesOf(seenBody);
+        held["serverDirectory"].ShouldBe(string.Empty);
+        held["fetched"].ShouldBe("copernicus/N46E022");
+        seenBody.ShouldNotContain("/srv/rasters/laki");
+
+        var full = await admin.GetAsync($"/api/v1/terrain/builds/{id}");
+        var fullBody = await full.Content.ReadAsStringAsync();
+        full.StatusCode.ShouldBe(HttpStatusCode.OK, fullBody);
+        ReferencesOf(fullBody)["serverDirectory"].ShouldBe("/srv/rasters/laki");
+    }
+
+    /// <summary>
     /// Paging is a total order, not a hint. Builds submitted in the same instant are ordered by
     /// their key as well as their timestamp, so walking the pages sees every row exactly once —
     /// without the tie-break, two rows sharing a timestamp can sort differently between one query
