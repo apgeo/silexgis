@@ -179,7 +179,7 @@ export const groups = {
     // Bytes a phone stages through the same transfer routes, the sweep and the quota over them.
     'SyncStagedUploadTests',
   ],
-  geofiles: ['GeofileTests'],
+  geofiles: ['GeofileTests', 'JobFailureRecordingTests', 'PagedListOrderTests'],
   georeferencedMaps: ['GeoreferencedMapTests', 'FilterWorldConformanceTests', 'FilterWorldListParityTests'],
   history: ['AccessHistoryTests', 'ChangeAttributionTests', 'HistoryRestoreTests', 'HistoryTests', 'SyncUndoTests'],
   imports: [
@@ -301,7 +301,7 @@ export const groups = {
   ],
   // With the smoke test because it asks the same kind of question one step earlier: not whether
   // the application answers, but whether each test was given the application its mode promises.
-  about: ['ApiSmokeTests', 'TestClassDisposalTests', 'TestModeTests'],
+  about: ['ApiSmokeTests', 'ResponseCompressionTests', 'TestClassDisposalTests', 'TestModeTests'],
   // How a database the old migration chain built is moved onto the baseline; a change to
   // persistence or the migrations selects the whole suite anyway, so this group only names it.
   migrationBaseline: ['MigrationBaselineTests', 'RasterPinsAsLinksMigrationTests'],
