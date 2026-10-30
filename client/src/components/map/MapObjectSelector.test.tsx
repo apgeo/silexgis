@@ -18,6 +18,7 @@ const setSearchParams = vi.fn();
 const setSelection = vi.fn();
 const fitGeoJsonGeometry = vi.fn();
 const fetchFeature = vi.fn();
+let storeSelection: unknown = null;
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigate,
@@ -29,7 +30,7 @@ vi.mock('../../map/mapContext.ts', () => ({
 }));
 
 vi.mock('../../stores/workspaceStore.ts', () => ({
-  useWorkspaceStore: (selector: (s: unknown) => unknown) => selector({ setSelection }),
+  useWorkspaceStore: (selector: (s: unknown) => unknown) => selector({ setSelection, selection: storeSelection }),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
@@ -46,10 +47,12 @@ vi.mock('../../api/hooks/savedFilters.ts', async (importOriginal) => ({
  * The selector stands in for itself: this file is about what happens *after* a pick, and driving
  * the real control would mean re-testing the search box to get at the callback.
  */
+let lastAnchor: unknown;
 let lastOnPick: ((hit: unknown) => void) | undefined;
 vi.mock('../selector/ObjectSelector.tsx', () => ({
-  default: (props: { onPick?: (hit: unknown) => void }) => {
+  default: (props: { onPick?: (hit: unknown) => void; anchor?: unknown }) => {
     lastOnPick = props.onPick;
+    lastAnchor = props.anchor;
     return <div data-testid="stand-in" />;
   },
 }));
@@ -61,6 +64,8 @@ beforeEach(() => {
   cleanup();
   vi.clearAllMocks();
   lastOnPick = undefined;
+  lastAnchor = undefined;
+  storeSelection = null;
 });
 
 function pick(world: string, id: string) {
@@ -177,5 +182,20 @@ describe('picking from the map selector', () => {
 
     await waitFor(() => expect(navigate).not.toHaveBeenCalled());
     expect(fitGeoJsonGeometry).not.toHaveBeenCalled();
+  });
+});
+
+describe('nearest first on the map selector', () => {
+  const show = () => render(<App><MapObjectSelector /></App>);
+
+  it('measures from the feature selected on the map', () => {
+    storeSelection = { kind: 'feature', featureId: 'cave-1' };
+    show();
+    expect(lastAnchor).toEqual({ anchor: 'object', world: 'feature', id: 'cave-1' });
+  });
+
+  it('has nothing to measure from while nothing is selected', () => {
+    show();
+    expect(lastAnchor).toBeNull();
   });
 });

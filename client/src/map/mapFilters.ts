@@ -122,16 +122,6 @@ export function tagOfMapFilter(filter: MapFilter | null): string | null {
 }
 
 /**
- * Fields the map's condition editor does not offer for a new row. The spatial condition is left
- * out until the map has inputs of its own for it (the view, a drawn outline, the selection): a
- * typed point or a pasted outline is something a saved view refuses to store, and the editor's
- * generic place inputs would offer exactly those. Everything else the feature world declares is
- * offered, the type condition and the typed properties beside it included — on the map, which
- * draws every kind of feature, they can match.
- */
-export const MAP_HIDDEN_FIELDS: readonly string[] = ['position'];
-
-/**
  * The document the map's condition editor opens on: the map's one world and its conditions, and
  * nothing else of the document it was read from. Another world's conditions, a sort and an anchor
  * mean nothing to the map's layers, so they are not carried into a filter the map then sends.

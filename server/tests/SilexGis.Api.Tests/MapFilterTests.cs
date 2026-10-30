@@ -309,6 +309,109 @@ public sealed class MapFilterTests : IAsyncLifetime, IDisposable, IClassFixture<
         (await CountAsync(author, eastOutside, zoom, filter)).ShouldBe(0);
     }
 
+    // ---------- the map's own places: its view, a drawn outline, the selected object ----------
+
+    /// <summary>
+    /// What the map's "in view" and "drawn outline" inputs send is an ordinary outline value, so the
+    /// layers decide it on the shown position like any other: an edge of the outline crossing a
+    /// protected entrance's true position, inside one protection cell, changes nothing for a reader
+    /// who may not place it — in the clusters' counts, the points and the feature layer alike — and
+    /// moves exactly when it crosses the point they are shown. The owner, who places it exactly, is
+    /// the control.
+    /// </summary>
+    [Theory]
+    [InlineData(6, 26.5, 45.7)]
+    [InlineData(14, 27.5, 46.3)]
+    public async Task An_outline_drawn_on_the_map_is_decided_on_the_shown_position_of_a_protected_entrance(
+        int zoom, double nearLon, double nearLat)
+    {
+        var snappedLon = Math.Round(nearLon / Cell, MidpointRounding.AwayFromZero) * Cell;
+        var snappedLat = Math.Round(nearLat / Cell, MidpointRounding.AwayFromZero) * Cell;
+        var lon = snappedLon - (0.3 * Cell);
+        var lat = snappedLat + (0.1 * Cell);
+        var name = Name($"outlined {zoom}");
+        var (_, entranceId) = await CreateCaveAsync(name, "Bihor", lon, lat, locationProtected: true);
+
+        string Inside(double centreLon, double centreLat, double half) => $"&filter={Token(NamedCavesInside(name, centreLon, centreLat, half))}";
+        var aroundTrue = Inside(lon, lat, 0.1 * Cell);
+        var aroundShown = Inside(snappedLon, snappedLat, 0.1 * Cell);
+        var window = Window(snappedLon - 0.4, snappedLat - 0.4, snappedLon + 0.4, snappedLat + 0.4);
+
+        // The reader who may not place it: the outline around the true position finds nothing, the
+        // one around the point they are shown finds the cave.
+        (await CountAsync(clubmate, window, zoom, aroundTrue)).ShouldBe(0, "an outline around the true position only");
+        (await CountAsync(clubmate, window, zoom, aroundShown)).ShouldBe(1, "an outline around the shown point");
+
+        // The control: the owner is shown the true position.
+        (await CountAsync(author, window, zoom, aroundTrue)).ShouldBe(1);
+        (await CountAsync(author, window, zoom, aroundShown)).ShouldBe(0);
+
+        // The feature layer, asked for entrances, says the same.
+        Ids(await FeaturesAsync(clubmate, window, $"&kinds=caveEntrance{aroundTrue}")).ShouldBeEmpty();
+        Ids(await FeaturesAsync(clubmate, window, $"&kinds=caveEntrance{aroundShown}")).ShouldBe([entranceId]);
+        Ids(await FeaturesAsync(author, window, $"&kinds=caveEntrance{aroundTrue}")).ShouldBe([entranceId]);
+    }
+
+    /// <summary>
+    /// "Nearest to the selection" is an object anchor, looked up under the runner's own access: an
+    /// entrance the runner may not place exactly is refused as a missing one is, on every layer,
+    /// rather than measured from — and the same selection works for a reader who may place it.
+    /// </summary>
+    [Fact]
+    public async Task A_condition_measured_from_the_selected_object_is_refused_when_the_reader_may_not_place_it()
+    {
+        var guardedName = Name("selected guarded");
+        var openName = Name("selected open");
+        var (_, guarded) = await CreateCaveAsync(guardedName, "Bihor", BaseLon - 0.05, BaseLat, locationProtected: true);
+        var (openCave, open) = await CreateCaveAsync(openName, "Bihor", BaseLon + 0.05, BaseLat);
+        var window = Window(BaseLon - 0.2, BaseLat - 0.2, BaseLon + 0.2, BaseLat + 0.2);
+
+        foreach (var zoom in new[] { 6, 14 })
+        {
+            // The positive case in the same breath: an open selection is measured from, the cave
+            // beside it is found, and the radius reaches nothing else.
+            (await CountAsync(clubmate, window, zoom, $"&filter={Token(NearSelection(openName, 500, open))}")).ShouldBe(1);
+
+            // The withheld selection: refused exactly as an object that does not exist is.
+            var withheld = await clubmate.GetAsync(
+                $"/api/v1/map/cave-entrances?bbox={window}&zoom={zoom}&filter={Token(NearSelection(guardedName, 500, guarded))}");
+            var missing = await clubmate.GetAsync(
+                $"/api/v1/map/cave-entrances?bbox={window}&zoom={zoom}&filter={Token(NearSelection(guardedName, 500, Guid.NewGuid()))}");
+            await ShouldRefuseAsync(withheld, HttpStatusCode.BadRequest, "filter.anchor_not_found");
+            await ShouldRefuseAsync(missing, HttpStatusCode.BadRequest, "filter.anchor_not_found");
+
+            // The control: the owner places it exactly, so it is theirs to measure from.
+            (await CountAsync(author, window, zoom, $"&filter={Token(NearSelection(guardedName, 500, guarded))}")).ShouldBe(1);
+        }
+
+        await ShouldRefuseAsync(
+            await clubmate.GetAsync($"/api/v1/map/features?bbox={window}&kinds=caveEntrance&filter={Token(NearSelection(guardedName, 500, guarded))}"),
+            HttpStatusCode.BadRequest,
+            "filter.anchor_not_found");
+        openCave.ShouldNotBe(Guid.Empty);
+    }
+
+    /// <summary>An outline that crosses itself is refused on the map's routes, not run.</summary>
+    [Fact]
+    public async Task An_outline_that_is_not_a_valid_polygon_is_refused_on_the_map_routes()
+    {
+        var window = FixtureWindow;
+        var bowtie = new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope("feature", new ConditionNode(
+                    FeatureFilterFields.Position,
+                    FilterOp.Inside,
+                    [new PolygonValue([[[BaseLon, BaseLat], [BaseLon + 0.01, BaseLat + 0.01], [BaseLon + 0.01, BaseLat], [BaseLon, BaseLat + 0.01], [BaseLon, BaseLat]]])])),
+            ],
+        };
+
+        var response = await clubmate.GetAsync($"/api/v1/map/cave-entrances?bbox={window}&zoom=14&filter={Token(bowtie)}");
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+        (await response.Content.ReadAsStringAsync()).ShouldContain("filter.");
+    }
+
     // ---------- fixture ----------
 
     private static string FixtureWindow => Window(BaseLon - 0.1, BaseLat - 0.1, BaseLon + 0.1, BaseLat + 0.1);
@@ -344,6 +447,40 @@ public sealed class MapFilterTests : IAsyncLifetime, IDisposable, IClassFixture<
         ],
     };
 
+    /// <summary>Caves of this name whose position is inside a square drawn on the map.</summary>
+    private static FilterDocument NamedCavesInside(string name, double lon, double lat, double half) => new()
+    {
+        Scope =
+        [
+            new WorldScope("feature", new AllOfNode(
+            [
+                new ConditionNode(FeatureFilterFields.Kind, FilterOp.Equals, [new IdValue("cave")]),
+                new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(name)]),
+                new ConditionNode(
+                    FeatureFilterFields.Position,
+                    FilterOp.Inside,
+                    [new PolygonValue([[[lon - half, lat - half], [lon + half, lat - half], [lon + half, lat + half], [lon - half, lat + half], [lon - half, lat - half]]])]),
+            ])),
+        ],
+    };
+
+    /// <summary>What the map writes for "nearest the selection": caves of a name within a radius of the selected object.</summary>
+    private static FilterDocument NearSelection(string name, double radius, Guid selected) => new()
+    {
+        Scope =
+        [
+            new WorldScope("feature", new AllOfNode(
+            [
+                new ConditionNode(FeatureFilterFields.Kind, FilterOp.Equals, [new IdValue("cave")]),
+                new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(name)]),
+                new ConditionNode(
+                    FeatureFilterFields.Position,
+                    FilterOp.Within,
+                    [new NumberValue(radius), new ObjectValue("feature", selected)]),
+            ])),
+        ],
+    };
+
     private async Task SeedCavesAsync()
     {
         await CreateCaveAsync(Name("match"), "Bihor Nord", BaseLon, BaseLat);
@@ -351,7 +488,7 @@ public sealed class MapFilterTests : IAsyncLifetime, IDisposable, IClassFixture<
         await CreateCaveAsync(Name("private"), "Munții Bihor", BaseLon - 0.003, BaseLat, visibility: "private");
     }
 
-    private async Task CreateCaveAsync(
+    private async Task<(Guid CaveId, Guid EntranceId)> CreateCaveAsync(
         string name,
         string region,
         double lon,
@@ -382,7 +519,9 @@ public sealed class MapFilterTests : IAsyncLifetime, IDisposable, IClassFixture<
             geom = new { type = "Point", coordinates = new[] { lon, lat } },
             positionQuality = "Gps",
         });
-        entrance.StatusCode.ShouldBe(HttpStatusCode.Created, await entrance.Content.ReadAsStringAsync());
+        var entrancePayload = await entrance.Content.ReadAsStringAsync();
+        entrance.StatusCode.ShouldBe(HttpStatusCode.Created, entrancePayload);
+        return (id, JsonDocument.Parse(entrancePayload).RootElement.GetProperty("id").GetGuid());
     }
 
     private async Task<Guid> CreateAreaAsync(string name, double lon, double lat)

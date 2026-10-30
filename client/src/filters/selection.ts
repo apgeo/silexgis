@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { condition, emptyDocument, fromGroups, withSort, withWhere } from './document.ts';
-import type { FilterDocument, FilterHit, SortKey, WorldVocabulary } from './types.ts';
+import type { FilterAnchor, FilterDocument, FilterHit, SortKey, WorldVocabulary } from './types.ts';
 
 /**
  * Everything the object selector does, with nothing mounted.
@@ -92,6 +92,7 @@ export function documentFor(
   available: readonly SelectorScope[],
   state: SelectorState,
   textFieldOf: (world: string) => string | null,
+  anchor: FilterAnchor | null = null,
 ): FilterDocument {
   const { scope: prefixed, query } = readPrefix(available, state.query);
   const scopes = prefixed ? [prefixed] : scopesInPlay(available, state);
@@ -133,7 +134,9 @@ export function documentFor(
     document = withWhere(document, world, fromGroups(groups));
   }
 
-  return withSort(document, state.sort, state.descending);
+  const sorted = withSort(document, state.sort, state.descending);
+  // The anchor rides only a nearest-first request: the server refuses one it was not asked to use.
+  return state.sort === 'proximity' && anchor !== null ? { ...sorted, anchor } : sorted;
 }
 
 /**

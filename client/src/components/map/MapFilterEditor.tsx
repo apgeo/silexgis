@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FilterOutlined, SaveOutlined } from '@ant-design/icons';
-import { App, Drawer, Flex, Form, Input, Modal, Select } from 'antd';
+import { App, Drawer, Flex, Form, Input, Modal, Select, Tooltip } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { appliesTo, documentOf, useCreateSavedFilter, useSavedFilters } from '../../api/hooks/savedFilters.ts';
+import { holdsPosition } from '../../filters/spatial.ts';
+import { SpatialSourcesContext, type SpatialSources } from '../../filters/spatialSources.ts';
 import { audienceFields, type SavedFilterAudience } from '../../filters/savedFilterAudience.ts';
 import {
   MAP_FILTER_WORLD,
-  MAP_HIDDEN_FIELDS,
   mapEditorDocument,
   mapFilterOfEditor,
   tagOfMapFilter,
   type MapFilter,
 } from '../../map/mapFilters.ts';
+import { drawFilterOutline, viewOutline } from '../../map/filterOutline.ts';
+import { getWorkspaceMap, mapLonLatExtent } from '../../map/mapContext.ts';
+import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import Button from '../Button.tsx';
 import FilterEditor from '../filters/FilterEditor.tsx';
 import SavedFilterAudienceField from '../filters/SavedFilterAudienceField.tsx';
@@ -34,6 +38,12 @@ interface Props {
  * (the map then follows the filter by id, as for the pinned chips), and the conditions on screen
  * can be saved as a new one.
  *
+ * The spatial condition is offered with the map's own places: the ground on screen, an outline
+ * drawn on the map, and the selected object to measure from. Each is written as the plain value
+ * every other surface would hold (a ring of positions, an object), and the map's routes run it
+ * under the caller's access like any other; a filter holding a view or a drawn outline is not
+ * storable, so Save is off for it and says why.
+ *
  * Nothing about protection is decided here: the map's routes answer a document under the caller's
  * own access, exactly as for the same filter typed anywhere else.
  */
@@ -51,7 +61,26 @@ export default function MapFilterEditor({ filter, onChange }: Props) {
   const seed = mapEditorDocument(filter, savedInForce ? documentOf(savedInForce) : null);
   // A tag-only filter is what the layer panel's tag chooser writes; it is not "advanced" use.
   const onMark = filter !== null && tagOfMapFilter(filter) === null;
-  const savable = filter?.kind === 'document';
+  // A view, a drawn outline or a typed point is the question of the moment, not something to store.
+  const savable = filter?.kind === 'document' && !holdsPosition(filter.document);
+  const selection = useWorkspaceStore((s) => s.selection);
+  const selectedFeatureId = selection?.kind === 'feature' ? selection.featureId : null;
+  // While an outline is being drawn the editor steps aside (kept mounted, so the row that asked
+  // receives the outline) and the map is the whole screen.
+  const [drawing, setDrawing] = useState(false);
+  const sources = useMemo<SpatialSources>(() => ({
+    currentView: () => viewOutline(mapLonLatExtent()),
+    selectedFeatureId,
+    drawOutline: async () => {
+      setDrawing(true);
+      message.info(t('mapFilter.drawHint'));
+      try {
+        return await drawFilterOutline(getWorkspaceMap());
+      } finally {
+        setDrawing(false);
+      }
+    },
+  }), [selectedFeatureId, message, t]);
 
   const save = async () => {
     if (filter?.kind !== 'document') {
@@ -88,10 +117,10 @@ export default function MapFilterEditor({ filter, onChange }: Props) {
         {t('mapFilter.edit')}
       </Button>
       <Drawer
-        open={open}
+        open={open && !drawing}
         title={t('mapFilter.editTitle')}
         size="large"
-        destroyOnHidden
+        destroyOnHidden={!drawing}
         onClose={() => setOpen(false)}
       >
         <Flex vertical gap={16}>
@@ -118,29 +147,34 @@ export default function MapFilterEditor({ filter, onChange }: Props) {
                 }
               }}
             />
-            <Button
-              icon={<SaveOutlined />}
-              disabled={!savable}
-              onClick={() => setSaving(true)}
-              data-testid="map-filter-save"
-            >
-              {t('mapFilter.saveAs')}
-            </Button>
+            <Tooltip title={filter?.kind === 'document' && !savable ? t('filters.editor.spatial.notSaved') : undefined}>
+              <span>
+                <Button
+                  icon={<SaveOutlined />}
+                  disabled={!savable}
+                  onClick={() => setSaving(true)}
+                  data-testid="map-filter-save"
+                >
+                  {t('mapFilter.saveAs')}
+                </Button>
+              </span>
+            </Tooltip>
           </Flex>
           {/* Keyed by what it opens on, so a filter that moves while it is open (a link followed, a
               view applied) re-seeds it instead of leaving a draft of an older question to be applied
               over the newer one. */}
-          <FilterEditor
-            key={JSON.stringify(seed)}
-            world={MAP_FILTER_WORLD}
-            document={seed}
-            hiddenFields={MAP_HIDDEN_FIELDS}
-            onCancel={() => setOpen(false)}
-            onApply={(edited) => {
-              onChange(mapFilterOfEditor(edited));
-              setOpen(false);
-            }}
-          />
+          <SpatialSourcesContext.Provider value={sources}>
+            <FilterEditor
+              key={JSON.stringify(seed)}
+              world={MAP_FILTER_WORLD}
+              document={seed}
+              onCancel={() => setOpen(false)}
+              onApply={(edited) => {
+                onChange(mapFilterOfEditor(edited));
+                setOpen(false);
+              }}
+            />
+          </SpatialSourcesContext.Provider>
         </Flex>
       </Drawer>
       <Modal

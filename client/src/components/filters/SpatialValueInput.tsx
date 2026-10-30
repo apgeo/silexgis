@@ -17,6 +17,8 @@ import {
   type WithinAnchorKind,
 } from '../../filters/spatial.ts';
 import type { FilterLimits, FilterOp, FilterValue } from '../../filters/types.ts';
+import { useSpatialSources } from '../../filters/spatialSources.ts';
+import Button from '../Button.tsx';
 import ObjectSelector from '../selector/ObjectSelector.tsx';
 
 /**
@@ -69,8 +71,17 @@ function WithinInput({ values, onChange, testId }: SpatialValueInputProps) {
   const maxRadius = useMaxRadius();
   const radiusValue = values[0]?.type === 'number' && typeof values[0].value === 'number' ? values[0].value : null;
   const anchor = values[1];
+  const sources = useSpatialSources();
+  const selectedId = sources?.selectedFeatureId ?? null;
   const [kind, setKind] = useState<WithinAnchorKind>(
-    anchor?.type === 'point' || anchor?.type === 'savedFilter' ? anchor.type : 'object');
+    anchor?.type === 'point' || anchor?.type === 'savedFilter'
+      ? anchor.type
+      : anchor?.type === 'object' && selectedId !== null && anchor.id === selectedId
+        ? 'selection'
+        : 'object');
+  const anchorKinds: WithinAnchorKind[] = sources === null
+    ? ['object', 'point', 'savedFilter']
+    : ['selection', 'object', 'point', 'savedFilter'];
 
   const put = (radius: number | null, next: FilterValue | undefined) => {
     const r: FilterValue = radius === null ? BLANK_RADIUS : { type: 'number', value: radius };
@@ -97,14 +108,24 @@ function WithinInput({ values, onChange, testId }: SpatialValueInputProps) {
         value={kind}
         onChange={(next: WithinAnchorKind) => {
           setKind(next);
-          put(radiusValue, undefined);
+          // The selected object is already known, so choosing it finishes the anchor.
+          put(radiusValue, next === 'selection' && selectedId !== null
+            ? { type: 'object', world: ANCHOR_WORLD, id: selectedId }
+            : undefined);
         }}
-        options={(['object', 'point', 'savedFilter'] as const).map((k) => ({
+        options={anchorKinds.map((k) => ({
           value: k,
           label: t(`filters.editor.spatial.anchorKinds.${k}`),
+          // Nothing selected on the map: there is nothing to measure from yet.
+          disabled: k === 'selection' && selectedId === null,
         }))}
         style={{ width: 170 }}
       />
+      {kind === 'selection' && (
+        <Typography.Text type={selectedId === null ? 'secondary' : undefined} data-testid={`${testId}-selection`}>
+          {t(selectedId === null ? 'filters.editor.spatial.noSelection' : 'filters.editor.spatial.selectionNamed')}
+        </Typography.Text>
+      )}
       {kind === 'point' && (
         <PointInput
           value={anchor?.type === 'point' ? anchor : null}
@@ -138,7 +159,30 @@ function WithinInput({ values, onChange, testId }: SpatialValueInputProps) {
 function InsideInput({ values, onChange, testId }: SpatialValueInputProps) {
   const { t } = useTranslation();
   const outline = values[0];
+  const sources = useSpatialSources();
   const [kind, setKind] = useState<InsideOutlineKind>(outline?.type === 'polygon' ? 'polygon' : 'area');
+  const [drawing, setDrawing] = useState(false);
+  const outlineKinds: InsideOutlineKind[] = sources === null
+    ? ['area', 'polygon']
+    : ['view', 'draw', 'area', 'polygon'];
+
+  const takeView = () => {
+    const rings = sources?.currentView() ?? null;
+    onChange(rings === null ? [] : [{ type: 'polygon', coordinates: rings }]);
+  };
+  const draw = () => {
+    if (sources === null) {
+      return;
+    }
+    setDrawing(true);
+    // A drawing given up leaves the row as it was: the person may have meant to keep the old one.
+    void sources.drawOutline().then((rings) => {
+      if (rings !== null) {
+        onChange([{ type: 'polygon', coordinates: rings }]);
+      }
+    }).finally(() => setDrawing(false));
+  };
+  const corners = outline?.type === 'polygon' ? Math.max(0, (outline.coordinates[0]?.length ?? 1) - 1) : 0;
 
   return (
     <Flex gap={8} wrap align="center">
@@ -149,8 +193,12 @@ function InsideInput({ values, onChange, testId }: SpatialValueInputProps) {
         onChange={(next: InsideOutlineKind) => {
           setKind(next);
           onChange([]);
+          if (next === 'view') {
+            // Choosing the view is asking for it: take it now, and again on the button.
+            takeView();
+          }
         }}
-        options={(['area', 'polygon'] as const).map((k) => ({
+        options={outlineKinds.map((k) => ({
           value: k,
           label: t(`filters.editor.spatial.outlineKinds.${k}`),
         }))}
@@ -166,6 +214,25 @@ function InsideInput({ values, onChange, testId }: SpatialValueInputProps) {
           aria-label={t('filters.editor.spatial.area')}
           data-testid={`${testId}-area`}
         />
+      )}
+      {(kind === 'view' || kind === 'draw') && (
+        <Flex gap={8} align="center" wrap>
+          <Button
+            size="small"
+            loading={drawing}
+            onClick={kind === 'view' ? takeView : draw}
+            data-testid={`${testId}-${kind === 'view' ? 'take-view' : 'draw'}`}
+          >
+            {t(kind === 'view' ? 'filters.editor.spatial.takeViewAgain' : outline?.type === 'polygon'
+              ? 'filters.editor.spatial.drawAgain'
+              : 'filters.editor.spatial.draw')}
+          </Button>
+          {corners > 0 && (
+            <Typography.Text type="secondary" data-testid={`${testId}-outline-set`}>
+              {t('filters.editor.spatial.outlineSet', { count: corners })}
+            </Typography.Text>
+          )}
+        </Flex>
       )}
       {kind === 'polygon' && (
         <PolygonInput

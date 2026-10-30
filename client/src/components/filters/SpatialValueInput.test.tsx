@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import type { FilterValue } from '../../filters/types.ts';
+import { SpatialSourcesContext, type SpatialSources } from '../../filters/spatialSources.ts';
 import SpatialValueInput from './SpatialValueInput.tsx';
 
 /**
@@ -150,6 +151,78 @@ describe('inside an outline', () => {
     fireEvent.change(inputOf('v-polygon'), { target: { value: JSON.stringify({ type: 'Polygon', coordinates: [ring] }) } });
     expect(screen.queryByTestId('v-polygon-problem')).toBeNull();
     expect(seen.at(-1)).toEqual([{ type: 'polygon', coordinates: [ring] }]);
+  });
+});
+
+describe('on a surface that hands over places of its own', () => {
+  const VIEW = [[[24, 45], [25, 45], [25, 46], [24, 46], [24, 45]]];
+  const DRAWN = [[[24.1, 45.1], [24.2, 45.1], [24.2, 45.2], [24.1, 45.1]]];
+  let sources: SpatialSources;
+
+  function showOnMap(op: 'within' | 'inside', values: FilterValue[] = []) {
+    seen.length = 0;
+    render(
+      <SpatialSourcesContext.Provider value={sources}>
+        <SpatialValueInput world="feature" op={op} values={values}
+          onChange={(next) => seen.push(next)} testId="v" />
+      </SpatialSourcesContext.Provider>,
+    );
+  }
+
+  beforeEach(() => {
+    sources = {
+      currentView: () => VIEW,
+      drawOutline: () => Promise.resolve(DRAWN),
+      selectedFeatureId: CAVE,
+    };
+  });
+
+  it('writes the ground on screen as a polygon the moment the view is chosen', () => {
+    showOnMap('inside');
+    pick('v-outline-kind', 'the map view');
+    expect(seen.at(-1)).toEqual([{ type: 'polygon', coordinates: VIEW }]);
+  });
+
+  it('writes a drawn outline once it is finished, and leaves the row alone when it is given up', async () => {
+    showOnMap('inside');
+    pick('v-outline-kind', 'an outline drawn on the map');
+    fireEvent.click(screen.getByTestId('v-draw'));
+    await vi.waitFor(() => expect(seen.at(-1)).toEqual([{ type: 'polygon', coordinates: DRAWN }]));
+
+    cleanup();
+    seen.length = 0;
+    sources = { ...sources, drawOutline: () => Promise.resolve(null) };
+    showOnMap('inside');
+    pick('v-outline-kind', 'an outline drawn on the map');
+    seen.length = 0;
+    fireEvent.click(screen.getByTestId('v-draw'));
+    await vi.waitFor(() => expect(screen.getByTestId('v-draw')).not.toHaveClass('ant-btn-loading'));
+    expect(seen).toEqual([]);
+  });
+
+  it('measures from the selected object as an ordinary object anchor', () => {
+    showOnMap('within', [{ type: 'number', value: 800 }]);
+    pick('v-anchor-kind', 'the selected object');
+    expect(seen.at(-1)).toEqual([{ type: 'number', value: 800 }, { type: 'object', world: 'feature', id: CAVE }]);
+  });
+
+  it('shows an anchor equal to the selection as the selection', () => {
+    showOnMap('within', [{ type: 'number', value: 800 }, { type: 'object', world: 'feature', id: CAVE }]);
+    expect(screen.getByTestId('v-selection')).toBeInTheDocument();
+  });
+
+  it('cannot measure from a selection when nothing is selected', () => {
+    sources = { ...sources, selectedFeatureId: null };
+    showOnMap('within', [{ type: 'number', value: 800 }]);
+    fireEvent.mouseDown(within(screen.getByTestId('v-anchor-kind')).getByRole('combobox'));
+    const option = screen.getAllByText('the selected object').at(-1)!.closest('.ant-select-item');
+    expect(option?.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('offers none of this on a surface without a map', () => {
+    show('inside');
+    fireEvent.mouseDown(within(screen.getByTestId('v-outline-kind')).getByRole('combobox'));
+    expect(screen.queryByText('the map view')).toBeNull();
   });
 });
 

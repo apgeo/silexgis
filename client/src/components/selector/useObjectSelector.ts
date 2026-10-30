@@ -13,7 +13,7 @@ import {
   type SelectorScope,
   type SelectorState,
 } from '../../filters/selection.ts';
-import type { FilterHit, SortKey, WorldVocabulary } from '../../filters/types.ts';
+import type { FilterAnchor, FilterHit, SortKey, WorldVocabulary } from '../../filters/types.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
@@ -36,6 +36,11 @@ export interface UseObjectSelectorOptions {
   exclude: readonly string[];
   /** Restricts the sort buttons further; omitted offers everything the worlds in play share. */
   sorts?: readonly SortKey[];
+  /**
+   * A place to measure nearest-first from. Without one the nearest-first button is not offered,
+   * because the server refuses that order when it has nothing to measure from.
+   */
+  anchor?: FilterAnchor | null;
   /** The chosen ids. Owned by the caller: a form owns its value, and a copy here would drift. */
   value: readonly string[];
   /**
@@ -116,9 +121,9 @@ export function useObjectSelector(options: UseObjectSelectorOptions) {
     [vocabulary.data],
   );
   const availableSorts = useMemo(() => {
-    const shared = sortsOffered(vocabularies, worlds);
+    const shared = sortsOffered(vocabularies, worlds, (options.anchor ?? null) !== null);
     return options.sorts ? shared.filter((s) => options.sorts!.includes(s)) : shared;
-  }, [vocabularies, worlds, options.sorts]);
+  }, [vocabularies, worlds, options.sorts, options.anchor]);
 
   // Asked with the order the buttons show. A starting or remembered order this control does not
   // offer is replaced by the first it does, and the request has to follow that replacement —
@@ -128,8 +133,9 @@ export function useObjectSelector(options: UseObjectSelectorOptions) {
       options.scopes,
       effectiveState(askedEffective, offeredScopeIds, availableSorts),
       textFieldOf,
+      options.anchor ?? null,
     ),
-    [options.scopes, askedEffective, offeredScopeIds, availableSorts],
+    [options.scopes, askedEffective, offeredScopeIds, availableSorts, options.anchor],
   );
 
   const enabled = shouldAsk(options.scopes, asked, {

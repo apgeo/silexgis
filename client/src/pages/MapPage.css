@@ -99,6 +99,10 @@ html[data-theme='dark'] .map-workspace-panel {
   flex-wrap: wrap;
   gap: 8px;
   align-items: flex-start;
+  /* Stop short of the pop-out buttons pinned at the top right: when the map is narrow (docks
+     open) the selector wraps under search instead of running on beneath those buttons, which
+     then took every press meant for it. */
+  max-width: calc(100% - 44px - 300px);
 }
 
 /* Phone: search is the primary action and takes the strip, clearing the corner toggle on the
@@ -108,6 +112,7 @@ html[data-theme='dark'] .map-workspace-panel {
    could press neither. */
 .map-search-overlay-mobile {
   right: 56px;
+  max-width: none;
 }
 
 /* The quick-filter chips take a row of their own under search and the selector, led by the

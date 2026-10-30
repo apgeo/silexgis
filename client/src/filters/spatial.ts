@@ -26,11 +26,19 @@ export const DEFAULT_MAX_RADIUS_METERS = 200_000;
 export const MAX_POLYGON_POSITIONS = 2_000;
 export const MAX_POLYGON_RINGS = 50;
 
-/** The kinds of anchor a `within` row can measure from, in the order the editor offers them. */
-export type WithinAnchorKind = 'point' | 'object' | 'savedFilter';
+/**
+ * The kinds of anchor a `within` row can measure from, in the order the editor offers them.
+ * `selection` is an object anchor too, the one selected on the surface; it is offered only where
+ * the surface has a selection to give.
+ */
+export type WithinAnchorKind = 'point' | 'object' | 'savedFilter' | 'selection';
 
-/** The kinds of outline an `inside` row can test against. */
-export type InsideOutlineKind = 'area' | 'polygon';
+/**
+ * The kinds of outline an `inside` row can test against. `view` and `draw` write a polygon like
+ * `polygon` does, from the ground on screen or a shape drawn on it; a surface without a map offers
+ * only the first two.
+ */
+export type InsideOutlineKind = 'area' | 'polygon' | 'view' | 'draw';
 
 export function isSpatialAnchor(value: FilterValue | undefined): value is SpatialAnchorValue {
   return value !== undefined

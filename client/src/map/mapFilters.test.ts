@@ -4,7 +4,6 @@ import { emptyDocument, withWhere } from '../filters/document.ts';
 import { decodeFilter, encodeFilter } from '../filters/url.ts';
 import {
   handleMapFilterError,
-  MAP_HIDDEN_FIELDS,
   mapEditorDocument,
   mapFilterOfEditor,
   mapFilterParams,
@@ -187,10 +186,5 @@ describe('the map filter as the condition editor holds it', () => {
     const read = readMapFilterAddress(writeMapFilterAddress(new URLSearchParams('zoom=7'), filter));
     expect(read.filter).toEqual(filter);
     expect(sameMapFilter(read.filter, filter)).toBe(true);
-  });
-
-  it('keeps the spatial condition out of new rows only', () => {
-    expect(MAP_HIDDEN_FIELDS).toEqual(['position']);
-    expect(MAP_HIDDEN_FIELDS).not.toContain('typeId');
   });
 });

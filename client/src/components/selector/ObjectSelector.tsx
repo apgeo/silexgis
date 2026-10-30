@@ -21,7 +21,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { choose, matchedLine, pressSort, toggleScope, type SelectorScope } from '../../filters/selection.ts';
-import type { FilterHit, SortKey } from '../../filters/types.ts';
+import type { FilterAnchor, FilterHit, SortKey } from '../../filters/types.ts';
 import Button from '../Button.tsx';
 import List from '../List.tsx';
 import { useObjectSelector } from './useObjectSelector.ts';
@@ -92,6 +92,8 @@ export interface ObjectSelectorProps {
   browseOnEmpty?: boolean;
 
   sorts?: readonly SortKey[];
+  /** Where nearest-first is measured from; the button appears only while there is one. */
+  anchor?: FilterAnchor | null;
   placeholder?: string;
   disabled?: boolean;
   autoFocus?: boolean;
@@ -114,6 +116,7 @@ export default function ObjectSelector({
   minChars = 2,
   browseOnEmpty = false,
   sorts,
+  anchor,
   placeholder,
   disabled = false,
   autoFocus = false,
@@ -166,6 +169,7 @@ export default function ObjectSelector({
     browseOnEmpty,
     exclude,
     sorts,
+    anchor,
     rememberAs,
     value: chosenIds,
   });

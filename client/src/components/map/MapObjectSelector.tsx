@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchFeature } from '../../api/hooks.ts';
 import { appliesTo, fetchSavedFilter } from '../../api/hooks/savedFilters.ts';
 import { MAP_FILTER_WORLD, writeMapFilterAddress } from '../../map/mapFilters.ts';
 import type { SelectorScope } from '../../filters/selection.ts';
-import type { FilterHit } from '../../filters/types.ts';
+import { ANCHOR_WORLD } from '../../filters/spatial.ts';
+import type { FilterAnchor, FilterHit } from '../../filters/types.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import ObjectSelector from '../selector/ObjectSelector.tsx';
@@ -66,6 +68,13 @@ export default function MapObjectSelector({ fullWidth = false }: MapObjectSelect
   const { message } = App.useApp();
   const [, setSearchParams] = useSearchParams();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
+  const selection = useWorkspaceStore((s) => s.selection);
+  // Nearest first is measured from the feature selected on the map; with none selected the
+  // button is not offered. The server still decides whether this reader may place it exactly.
+  const anchor = useMemo<FilterAnchor | null>(
+    () => (selection?.kind === 'feature' ? { anchor: 'object', world: ANCHOR_WORLD, id: selection.featureId } : null),
+    [selection],
+  );
 
   /**
    * Takes the map to a feature, or opens the page of something the map cannot draw.
@@ -156,6 +165,7 @@ export default function MapObjectSelector({ fullWidth = false }: MapObjectSelect
         placeholder={t('filters.selector.mapPlaceholder')}
         aria-label={t('filters.selector.mapPlaceholder')}
         data-testid="map-object-selector"
+        anchor={anchor}
         onPick={(hit) => void onPick(hit)}
       />
     </div>

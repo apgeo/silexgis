@@ -42,6 +42,17 @@ const TEXT_FIELD = (world: string) => (world === 'feature' ? 'name' : 'title');
 const hit = (id: string, title: string, world = 'feature'): FilterHit =>
   ({ world, id, title, subtitle: null, symbol: null, placeable: false });
 
+describe('nearest first from an anchor', () => {
+  const ANCHOR = { anchor: 'object', world: 'feature', id: 'cave-1' } as const;
+
+  it('writes the anchor only on a nearest-first request', () => {
+    const near = { ...initialState('proximity'), activeScopeIds: ['caves'] };
+    expect(documentFor(SCOPES, near, TEXT_FIELD, ANCHOR).anchor).toEqual(ANCHOR);
+    expect(documentFor(SCOPES, { ...near, sort: 'updated' }, TEXT_FIELD, ANCHOR).anchor ?? null).toBeNull();
+    expect(documentFor(SCOPES, near, TEXT_FIELD).anchor ?? null).toBeNull();
+  });
+});
+
 describe('which scopes are in play', () => {
   it('treats none switched on as everything', () => {
     // Not nothing. A control that answered nothing when somebody turned off the last button would
