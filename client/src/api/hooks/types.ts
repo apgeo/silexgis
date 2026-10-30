@@ -221,6 +221,10 @@ export interface GeofileListParams {
   page?: number;
   pageSize?: number;
   search?: string;
+  /** A filter document as a link token; the server refuses one it cannot read, never answers unfiltered. */
+  filter?: string;
+  /** A saved filter by id, instead of a token. */
+  savedFilterId?: string;
 }
 export type AttachmentInfo = components['schemas']['AttachmentDto'];
 
@@ -253,6 +257,10 @@ export interface RasterMapListParams {
   page?: number;
   pageSize?: number;
   caveFeatureId?: string;
+  /** A filter document as a link token. */
+  filter?: string;
+  /** A saved filter by id, instead of a token. */
+  savedFilterId?: string;
 }
 export type ActivityState = components['schemas']['ActivityState'];
 

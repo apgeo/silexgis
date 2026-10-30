@@ -175,6 +175,18 @@ export function featureExportUrl(
 }
 
 /**
+ * GET /api/v1/geofiles/export — the imported rows of every geofile the geodata list shows, as one
+ * layer. It takes the list's own question (its name search and its filter token), so the file holds
+ * the files the table lists.
+ */
+export function geofileListExportUrl(
+  format: string,
+  filters: { search?: string; filter?: string; savedFilterId?: string } = {},
+): string {
+  return buildUrl('/api/v1/geofiles/export', { format, ...filters });
+}
+
+/**
  * GET /api/v1/trip-logs/export — the narrowed trip listing as a spreadsheet.
  *
  * Every trip the filter leaves, not the page being looked at: the server takes the whole narrowed

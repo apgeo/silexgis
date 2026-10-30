@@ -30,6 +30,15 @@ Each raster map carries:
 A raster map can be **linked to a cave**, which is how a scanned survey sheet ends up beside
 the cave it draws.
 
+## Filtering the list
+
+On the **Raster maps** tab of the Geodata screen, **Conditions…** opens the condition editor on
+the georeferenced-map world — *Map kind*, name, owner, visibility, dates and *Position* — with
+**Apply a saved filter…** and **Save as filter…** beside it, exactly as for the geodata files and
+the gallery. The conditions are kept in the page's address, so a link carries them. A map linked to
+a cave whose position you may not see exactly is left out of the list and of its count, whatever
+the conditions say.
+
 A scanned cave plan or profile is drawn in the survey's own frame rather than on a map grid — a
 profile cannot be laid on the ground at all — so it is usually better shown **beside the 3D survey** than on the map: there it needs
 no georeferencing, only a few stations pointed out on it, and a tracked party is drawn on it too.

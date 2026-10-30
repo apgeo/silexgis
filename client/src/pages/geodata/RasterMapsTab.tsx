@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AimOutlined, DeleteOutlined, EditOutlined, InboxOutlined } from '@ant-design/icons';
 import {
   App,
@@ -17,7 +17,7 @@ import {
 } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useCan,
   useDeleteRasterMap,
@@ -26,6 +26,8 @@ import {
   useUploadRasterMap,
   type RasterMapInfo,
 } from '../../api/hooks.ts';
+import WorldFilterBar from '../../components/filters/WorldFilterBar.tsx';
+import { readWorldFilter, worldToken, writeWorldFilter } from '../../filters/worldList.ts';
 import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
 import type { SelectorScope } from '../../filters/selection.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
@@ -37,6 +39,9 @@ const statusColor: Record<string, string> = {
   ready: 'success',
   failed: 'error',
 };
+
+/** The filter world this list is about. */
+const RASTER_WORLD = 'georeferencedMap';
 
 /** A georeferenced map is linked to a cave, never to an entrance or any other feature. */
 const LINKED_CAVE_SCOPES: readonly SelectorScope[] = [
@@ -60,7 +65,14 @@ export default function RasterMapsTab() {
   const { message } = App.useApp();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const { data, isFetching } = useRasterMaps({ page, pageSize }, /* pollWhileProcessing */ true);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // The tab owns the conditions in the address while it is the active one (the page mounts it only
+  // then), so a link to this tab carries them.
+  const rasterFilter = useMemo(() => readWorldFilter(searchParams, RASTER_WORLD), [searchParams]);
+  const { data, isFetching, isError } = useRasterMaps(
+    { page, pageSize, filter: worldToken(RASTER_WORLD, rasterFilter.where) },
+    /* pollWhileProcessing */ true,
+  );
   const upload = useUploadRasterMap();
   const update = useUpdateRasterMap();
   const remove = useDeleteRasterMap();
@@ -158,6 +170,20 @@ export default function RasterMapsTab() {
           <p className="ant-upload-hint">{t('geodata.rasterUploadHint')}</p>
         </Upload.Dragger>
       )}
+
+      <WorldFilterBar
+        world={RASTER_WORLD}
+        testIdPrefix="raster"
+        titleKey="worldFilter.rasterTitle"
+        where={rasterFilter.where}
+        savedFilterId={rasterFilter.savedFilterId}
+        unreadableLink={rasterFilter.unreadableLink}
+        refused={isError}
+        onChange={(where, savedFilterId) => {
+          setSearchParams(writeWorldFilter(searchParams, RASTER_WORLD, { where, savedFilterId }), { replace: true });
+          setPage(1);
+        }}
+      />
 
       <Table<RasterMapInfo>
         scroll={{ x: 'max-content' }}

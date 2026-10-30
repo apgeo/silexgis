@@ -85,18 +85,24 @@ export const specs = {
     'object-selector-pickers.spec.ts',
     'saved-filter-audience.spec.ts',
     'map-filter-layers.spec.ts',
+    // The map's own filter written in the condition editor.
+    'map-filter-editor.spec.ts',
+    // The geodata and map-sheet lists' conditions and saved filters.
+    'geodata-filters.spec.ts',
   ],
   geoFeatures: [
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
     'photo-import.spec.ts', 'feature-restore.spec.ts', 'table-map.spec.ts',
     'feature-sets.spec.ts',
   ],
-  geofiles: ['vector-import.spec.ts'],
+  geofiles: ['vector-import.spec.ts', 'geodata-filters.spec.ts'],
   georeferencedMaps: [
     'rastermap.spec.ts', 'rastermap-authoring.spec.ts', 'rastermap-public.spec.ts',
     'rastermap-tracking.spec.ts', 'rastermap-mobile.spec.ts',
     // A phone's map of a cave opened as a map, and its places on a survey's map tab.
     'place-map.spec.ts',
+    // The map-sheet list's conditions and saved filters.
+    'geodata-filters.spec.ts',
   ],
   history: ['panel.spec.ts', 'map-editing.spec.ts'],
   imports: ['vector-import.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts', 'import-batch-undo.spec.ts'],
@@ -112,6 +118,7 @@ export const specs = {
     'map-workspace.spec.ts', 'map-workspace-mobile.spec.ts',
     // GeoTIFF and vector backgrounds drawn from catalogue entries.
     'map-background-kinds.spec.ts',
+    'map-filter-editor.spec.ts',
   ],
   // A shared view opened with no account: its background and the public data its link draws.
   mapViews: ['shared-view.spec.ts', 'karst-layers.spec.ts', 'map-filters.spec.ts'],

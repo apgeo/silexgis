@@ -30,6 +30,15 @@ Fiecare hartă raster poartă:
 O hartă raster poate fi **legată de o peșteră**, așa ajungând o topografie scanată lângă peștera
 pe care o desenează.
 
+## Filtrarea listei
+
+Pe fila **Hărți raster** a ecranului Geodata, **Condiții…** deschide editorul de condiții pe lumea
+hărților georeferențiate — *Tipul hărții*, numele, proprietarul, vizibilitatea, datele și
+*Poziția* — cu **Aplică un filtru salvat…** și **Salvează ca filtru…** alături, exact ca la
+fișierele geodata și la galerie. Condițiile sunt păstrate în adresa paginii, așa că linkul le
+poartă. O hartă legată de o peșteră a cărei poziție nu ai voie s-o vezi exact este lăsată afară
+din listă și din numărătoarea ei, oricare ar fi condițiile.
+
 Un plan sau un profil scanat al unei peșteri este desenat în cadrul propriu al topografiei, nu pe
 un caroiaj de hartă — un profil nici nu poate fi așezat pe teren — așa că de obicei este mai bine arătat **lângă
 topografia 3D** decât pe hartă: acolo nu are nevoie de georeferențiere, ci doar de câteva stații
