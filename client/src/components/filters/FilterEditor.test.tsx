@@ -281,6 +281,30 @@ describe('the condition editor', () => {
   });
 });
 
+describe('a surface that narrows the fields it offers', () => {
+  it('leaves a hidden field out of new rows, keeps the type and its properties, and still shows a row that names it', async () => {
+    render(
+      <FilterEditor
+        world="feature"
+        hiddenFields={['position', 'surveyedAt']}
+        document={doc({ node: 'allOf', of: [c('typeId', 'equals', [{ type: 'id', value: '7' }]), c('surveyedAt', 'isEmpty', [])] })}
+        onApply={vi.fn()}
+      />,
+    );
+
+    // The row that already names a hidden field keeps its field, not the "unavailable" stand-in.
+    expect(within(screen.getByTestId('filter-editor-field-1')).queryByText(en.filters.editor.unavailableField)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('filter-editor-add-row-root'));
+    fireEvent.mouseDown(within(screen.getByTestId('filter-editor-field-2')).getByRole('combobox'));
+    expect(await screen.findByText('Property: Sinkhole depth (m)')).toBeInTheDocument();
+    expect(screen.getByText('Surveyed length (m)')).toBeInTheDocument();
+    expect(screen.queryByText(en.filters.fields.position)).not.toBeInTheDocument();
+    // The hidden field is the row's own choice, so it is the one place it still appears.
+    expect(screen.getAllByText(en.filters.fields.surveyedAt).length).toBe(1);
+  });
+});
+
 describe('a comparison typed with signs', () => {
   const length = (op: FilterOp, value: number) => c('surveyedLength', op, [{ type: 'number', value }]);
 

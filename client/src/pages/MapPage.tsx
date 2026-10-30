@@ -59,6 +59,7 @@ import { drawShapeForType } from '../components/map/featureTypeGroups.ts';
 import LayerPanel from '../components/map/LayerPanel.tsx';
 import MapContextMenu from '../components/map/MapContextMenu.tsx';
 import ViewsPanel from '../components/map/ViewsPanel.tsx';
+import MapFilterEditor from '../components/map/MapFilterEditor.tsx';
 import MapFilterNotice from '../components/map/MapFilterNotice.tsx';
 import CenterlineWithheldNotice from '../components/map/CenterlineWithheldNotice.tsx';
 import { MAP_CANVAS_ID } from '../components/mapCanvasId.ts';
@@ -1898,6 +1899,7 @@ export default function MapPage() {
                   every press meant for it. */}
               <div className="map-filter-row">
                 <MapListInViewButton filter={mapFilter} />
+                <MapFilterEditor filter={mapFilter} onChange={(next) => adoptMapFilter(next)} />
                 {/* The account's pinned saved filters: one click narrows the main entrance and
                     feature layers to one of them, a second click lifts it again. */}
                 <QuickFilterChips

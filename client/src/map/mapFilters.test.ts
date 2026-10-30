@@ -4,6 +4,9 @@ import { emptyDocument, withWhere } from '../filters/document.ts';
 import { decodeFilter, encodeFilter } from '../filters/url.ts';
 import {
   handleMapFilterError,
+  MAP_HIDDEN_FIELDS,
+  mapEditorDocument,
+  mapFilterOfEditor,
   mapFilterParams,
   onMapFilterChange,
   onMapFilterRefusal,
@@ -154,5 +157,40 @@ describe('loaders following the filter', () => {
     setMapFilter({ kind: 'saved', savedFilterId });
     expect(listener).toHaveBeenCalledTimes(3);
     setMapFilter(null);
+  });
+});
+
+describe('the map filter as the condition editor holds it', () => {
+  it('opens on the map world alone and gives back a document filter, or none when no condition is left', () => {
+    const wide = {
+      ...withWhere(emptyDocument(['feature', 'cave']), 'cave', lengthDocument.scope[0].where),
+      sort: 'title' as const,
+    };
+    // Another world's conditions, the sort and the rest of the document are not the map's.
+    expect(mapEditorDocument({ kind: 'document', document: wide })).toEqual(emptyDocument(['feature']));
+    expect(mapEditorDocument(null)).toEqual(emptyDocument(['feature']));
+
+    const written = mapEditorDocument({ kind: 'document', document: lengthDocument });
+    expect(written).toEqual(lengthDocument);
+    expect(mapFilterOfEditor(written)).toEqual({ kind: 'document', document: lengthDocument });
+    expect(mapFilterOfEditor(emptyDocument(['feature']))).toBeNull();
+  });
+
+  it('seeds a saved filter from a copy of its stored document, and from nothing while that is unread', () => {
+    const saved: MapFilter = { kind: 'saved', savedFilterId };
+    expect(mapEditorDocument(saved, lengthDocument)).toEqual(lengthDocument);
+    expect(mapEditorDocument(saved, null)).toEqual(emptyDocument(['feature']));
+  });
+
+  it('survives the address: what the editor wrote is what a link opens on', () => {
+    const filter = mapFilterOfEditor(lengthDocument)!;
+    const read = readMapFilterAddress(writeMapFilterAddress(new URLSearchParams('zoom=7'), filter));
+    expect(read.filter).toEqual(filter);
+    expect(sameMapFilter(read.filter, filter)).toBe(true);
+  });
+
+  it('keeps the spatial condition out of new rows only', () => {
+    expect(MAP_HIDDEN_FIELDS).toEqual(['position']);
+    expect(MAP_HIDDEN_FIELDS).not.toContain('typeId');
   });
 });
