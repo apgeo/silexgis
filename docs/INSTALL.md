@@ -26,7 +26,8 @@ are a database password, an admin account, and the public URL.
   PostgreSQL itself) and its `psql` and `pg_dump` client tools; the .NET 10 SDK (current LTS — it
   publishes the API and includes the runtime that runs it); **Node.js 24**, which builds the web
   application and runs the install scripts; and nginx. Linux with systemd is the first-class
-  target; Windows is covered apart from the web server, and is not yet proved end to end.
+  target; Windows is covered apart from the web server, and is proved end to end only as far as a hosted
+  runner can take it (see [Windows](#windows)).
 
 No system GDAL is required on any path — vector import/export and raster conversion run
 in-process.
@@ -2267,8 +2268,17 @@ otherwise) and `--web-server none`. What that covers, and what it does not:
 - **File permissions** are set as described above in `windows-service` mode only; in `process` mode
   the directories inherit ProgramData's, which every local account can read — restrict `config\`
   to Administrators yourself.
-- **Not proved end to end.** The Linux path is installed, updated, backed up and restored on a
-  fresh machine every week; the Windows path is not.
+- **What is proved, and what is not.** The Linux path is installed, updated, backed up and restored
+  on a fresh machine every week. The Windows path has a weekly job of its own (and runs when the
+  installer changes) on a hosted Windows runner: it installs the API as the service, checks that it
+  is running and answering its health check, takes a backup, updates, restores the backup and
+  compares row counts, stops the service through the service manager within thirty seconds and
+  starts it again. Because the installer puts no web server in front on Windows, the checks that
+  need one (the web application and its module scripts) are reported as skipped and the API is
+  asked on its own port. **Not proved:** a web server in front (nginx for Windows or IIS), a
+  machine that already runs other software, the service starting by itself after a reboot, and a
+  database installed the way an operator would install it — the job initialises a cluster with the
+  runner's PostgreSQL and a PostGIS bundle copied onto it.
 
 ## Configuration reference
 

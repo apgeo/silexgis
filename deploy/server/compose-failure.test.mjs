@@ -25,6 +25,14 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
+// The scripts under test are bash scripts for the Linux server, and the stand-in `docker` is an
+// extensionless bash script found through a `:`-separated PATH. A Windows runner has no POSIX
+// shell it can rely on (the bash on its PATH may be the WSL launcher, and a drive-letter path
+// breaks a `:`-separated list), so these two describes are skipped there and only there. The rest
+// of the deployment-script suite still runs on Windows.
+const SKIP_ON_WINDOWS =
+  process.platform === 'win32' && 'the server scripts are bash and need a POSIX shell, which a Windows runner does not provide';
+
 /** An installation directory and a `docker` that answers `compose ps` the given way. */
 function sandbox(composePs) {
   const root = mkdtempSync(join(tmpdir(), 'silexgis-ops-'));
@@ -62,7 +70,7 @@ function run(script, args, box) {
 const BROKEN = `echo "unknown flag: --status" >&2; exit 125`;
 const NO_DB = `printf 'api\\nweb\\n'; exit 0`;
 
-describe('reset.sh', () => {
+describe('reset.sh', { skip: SKIP_ON_WINDOWS }, () => {
   it('says compose could not run, with compose’s own error, rather than blaming the database', () => {
     const box = sandbox(BROKEN);
     try {
@@ -108,7 +116,7 @@ function behindOrigin(box) {
   writeFileSync(join(box.app, 'deploy', '.env'), 'SILEXGIS_PUBLIC_URL=http://127.0.0.1:9\n');
 }
 
-describe('update.sh', () => {
+describe('update.sh', { skip: SKIP_ON_WINDOWS }, () => {
   it('refuses to update without a backup when compose cannot run', () => {
     const box = sandbox(BROKEN);
     try {

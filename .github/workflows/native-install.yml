@@ -188,3 +188,163 @@ jobs:
         run: |
           sudo journalctl -u silexgis-api -n 200 --no-pager || true
           sudo tail -n 50 /var/log/nginx/error.log || true
+
+  # The Windows path, as far as a hosted runner can take it: PostgreSQL with PostGIS, the installer
+  # run from an elevated prompt (which is what makes it register the API as a Windows service),
+  # the service answering its health check, stopping and starting through the service manager, an
+  # update, and a backup restored with the same row counts.
+  #
+  # What this job cannot prove, and INSTALL says so: a web server in front (the installer installs
+  # none on Windows, so the checks that need one are skipped and the API is asked on its own port),
+  # IIS, an installation on a machine that already has other software, and a reboot (the service
+  # starting by itself after one). The database here is a cluster the job initialises with the
+  # runner's PostgreSQL and a PostGIS bundle copied onto it, not an installer-managed one.
+  install-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PUBLIC_URL: http://localhost:8080
+      ADMIN_URL: postgres://postgres:ci@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The runner image carries PostgreSQL (PGROOT) with its service stopped, and no PostGIS. The
+      # PostGIS project publishes a bundle per PostgreSQL major; its files are copied onto the
+      # PostgreSQL directory without replacing any file already there (a bundled copy of a library
+      # PostgreSQL ships itself must not displace the one it was built with). The cluster is the
+      # job's own, with trust authentication on the loopback, as the Linux job's peer access is.
+      - name: PostgreSQL and PostGIS
+        run: |
+          $pgRoot = if ($env:PGROOT) { $env:PGROOT } elseif ($env:PGBIN) { Split-Path $env:PGBIN } else { '' }
+          if (-not $pgRoot -or -not (Test-Path "$pgRoot\bin\postgres.exe")) { throw "This runner image has no PostgreSQL (PGROOT='$env:PGROOT', PGBIN='$env:PGBIN')" }
+          $bin = Join-Path $pgRoot 'bin'
+          $major = [regex]::Match((& "$bin\postgres.exe" --version), '(\d+)').Groups[1].Value
+          Write-Host "PostgreSQL $major at $pgRoot"
+
+          $base = "https://download.osgeo.org/postgis/windows/pg$major/"
+          $zip = (Invoke-WebRequest -UseBasicParsing $base).Links.href |
+            Where-Object { $_ -match "^postgis-bundle-pg$major-[\d.]+x64\.zip$" } |
+            Sort-Object { [version][regex]::Match($_, "pg$major-([\d.]+)x64").Groups[1].Value } |
+            Select-Object -Last 1
+          if (-not $zip) { throw "No PostGIS bundle for PostgreSQL $major at $base" }
+          Write-Host "PostGIS bundle $zip"
+          $archive = Join-Path $env:RUNNER_TEMP $zip
+          Invoke-WebRequest -UseBasicParsing "$base$zip" -OutFile $archive
+          $unpacked = Join-Path $env:RUNNER_TEMP 'postgis-bundle'
+          Expand-Archive $archive -DestinationPath $unpacked
+          $source = (Get-ChildItem $unpacked -Directory | Select-Object -First 1).FullName
+          foreach ($part in 'bin', 'lib', 'share') {
+            robocopy (Join-Path $source $part) (Join-Path $pgRoot $part) /E /XC /XN /XO /NFL /NDL /NJH /NJS /NP | Out-Null
+            if ($LASTEXITCODE -ge 8) { throw "robocopy of $part failed ($LASTEXITCODE)" }
+          }
+          $global:LASTEXITCODE = 0
+
+          $data = Join-Path $env:RUNNER_TEMP 'pgdata'
+          & "$bin\initdb.exe" -D $data -U postgres -A trust -E UTF8 --locale=C
+          if ($LASTEXITCODE -ne 0) { throw 'initdb failed' }
+          & "$bin\pg_ctl.exe" -D $data -l (Join-Path $env:RUNNER_TEMP 'postgres.log') -w start
+          if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL did not start' }
+          & "$bin\psql.exe" -h 127.0.0.1 -U postgres -tAc 'select version()'
+          Add-Content $env:GITHUB_PATH $bin
+          Add-Content $env:GITHUB_ENV "PG_BIN=$bin"
+
+      # Elevated, as an operator's prompt would be: the installer then registers the API as the
+      # service silexgis-api under its own virtual account. It reaches PostgreSQL through
+      # --db-admin-url, since there is no local postgres account to become on Windows.
+      - name: Install
+        run: >-
+          node deploy/native/install.mjs
+          --service windows-service --public-url $env:PUBLIC_URL --http-port 8080
+          --admin-email admin@native-ci.example --seed-demo
+          --db-admin-url $env:ADMIN_URL --pg-bin "$env:PG_BIN"
+
+      - name: The service is registered and running
+        run: |
+          sc.exe query silexgis-api
+          sc.exe qc silexgis-api
+          if ((sc.exe query silexgis-api | Out-String) -notmatch 'RUNNING') { throw 'silexgis-api is not running' }
+          node deploy/native/check.mjs
+
+      # Written to files, so that no shell has to carry a query with quotes in it.
+      - name: Queries
+        run: |
+          Set-Content (Join-Path $env:RUNNER_TEMP 'count.sql') 'select (select count(*) from caves) || ''/'' || (select count(*) from features) || ''/'' || (select count(*) from "__EFMigrationsHistory")'
+          Set-Content (Join-Path $env:RUNNER_TEMP 'pending.sql') 'select count(*) from processing_jobs where status in (0, 1)'
+
+      - name: Let the background work finish
+        run: |
+          $sql = Join-Path $env:RUNNER_TEMP 'pending.sql'
+          for ($i = 0; $i -lt 100; $i++) {
+            $pending = (psql -h 127.0.0.1 -U postgres -d silexgis -tA -f $sql | Out-String).Trim()
+            if ($pending -eq '0') { exit 0 }
+            Start-Sleep -Seconds 3
+          }
+          throw "background jobs still pending after 5 minutes: $pending"
+
+      - name: Back up
+        run: |
+          $backup = Join-Path $env:RUNNER_TEMP 'backup'
+          psql -h 127.0.0.1 -U postgres -d silexgis -tA -f (Join-Path $env:RUNNER_TEMP 'count.sql') | Tee-Object (Join-Path $env:RUNNER_TEMP 'before.txt')
+          node deploy/native/backup.mjs $backup
+          if ($LASTEXITCODE -ne 0) { throw 'backup failed' }
+          foreach ($f in 'db.sql.gz', 'files.tar.gz') {
+            if (-not (Test-Path (Join-Path $backup $f)) -or (Get-Item (Join-Path $backup $f)).Length -eq 0) { throw "$f is missing or empty" }
+          }
+
+      - name: Update (rebuild the same tree and switch to it)
+        run: node deploy/native/update.mjs --no-pull --force
+
+      - name: Restore the backup
+        run: |
+          node deploy/native/restore.mjs (Join-Path $env:RUNNER_TEMP 'backup') --yes
+          if ($LASTEXITCODE -ne 0) { throw 'restore failed' }
+          $sql = Join-Path $env:RUNNER_TEMP 'pending.sql'
+          for ($i = 0; $i -lt 100; $i++) {
+            if (((psql -h 127.0.0.1 -U postgres -d silexgis -tA -f $sql | Out-String).Trim()) -eq '0') { break }
+            Start-Sleep -Seconds 3
+          }
+          $before = (Get-Content (Join-Path $env:RUNNER_TEMP 'before.txt') | Out-String).Trim()
+          $after = (psql -h 127.0.0.1 -U postgres -d silexgis -tA -f (Join-Path $env:RUNNER_TEMP 'count.sql') | Out-String).Trim()
+          Write-Host "before $before, after $after"
+          if ($before -ne $after) { throw 'row counts differ after the restore' }
+
+      - name: Check after the restore
+        run: node deploy/native/check.mjs
+
+      # Stopping through the service manager has to finish by itself: a stop that waits for the
+      # manager's timeout would make every update slower, and one that never finishes would hang it.
+      - name: The service stops promptly and starts again
+        run: |
+          $watch = [Diagnostics.Stopwatch]::StartNew()
+          sc.exe stop silexgis-api
+          for ($i = 0; $i -lt 30; $i++) {
+            if ((sc.exe query silexgis-api | Out-String) -match 'STOPPED') { break }
+            Start-Sleep -Seconds 1
+          }
+          Write-Host "stopped in $([int]$watch.Elapsed.TotalSeconds)s"
+          if ((sc.exe query silexgis-api | Out-String) -notmatch 'STOPPED') { throw 'silexgis-api did not stop within 30 seconds' }
+          sc.exe start silexgis-api
+          $up = $false
+          for ($i = 0; $i -lt 60 -and -not $up; $i++) {
+            try { $up = (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5080/health/ready).StatusCode -eq 200 } catch { Start-Sleep -Seconds 3 }
+          }
+          if (-not $up) { throw 'the API did not answer its health check after the restart' }
+          node deploy/native/check.mjs
+
+      - name: Logs, when something did not pass
+        if: failure()
+        run: |
+          Get-ChildItem 'C:\ProgramData\SilexGIS\logs' -ErrorAction SilentlyContinue | Format-Table Name, Length
+          Get-ChildItem 'C:\ProgramData\SilexGIS\logs\api*.log' -ErrorAction SilentlyContinue | Select-Object -Last 1 | ForEach-Object { Get-Content $_.FullName -Tail 200 }
+          Get-Content (Join-Path $env:RUNNER_TEMP 'postgres.log') -Tail 50 -ErrorAction SilentlyContinue

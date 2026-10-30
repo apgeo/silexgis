@@ -31,4 +31,14 @@ describe('the workflow that keeps proving it', () => {
       assert.ok(workflow.includes(`deploy/native/${script}`), `the workflow runs ${script}`);
     }
   });
+
+  it('has a Windows job that installs the service and proves it starts, answers and stops', () => {
+    const job = workflow.slice(workflow.indexOf('  install-windows:'));
+    assert.ok(job.length > 0, 'the workflow has a install-windows job');
+    assert.match(job, /runs-on: windows-latest/);
+    assert.match(job, /deploy\/native\/install\.mjs[^]*--service windows-service/);
+    for (const step of ['check.mjs', 'backup.mjs', 'update.mjs', 'restore.mjs', 'sc.exe stop silexgis-api']) {
+      assert.ok(job.includes(step), `the Windows job runs ${step}`);
+    }
+  });
 });

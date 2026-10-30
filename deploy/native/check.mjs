@@ -140,6 +140,16 @@ function writableAs(dir, user) {
   }
 }
 
+/** Whether anything accepts a connection at this address (any HTTP answer counts). */
+export async function answers(address) {
+  try {
+    await httpGet(`${address.replace(/\/+$/, '')}/health/ready`, { timeoutMs: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Runs every check against an installation. Returns `{ ok, failed }`, `failed` being the names
  * of the checks that did not pass, and prints one line per check as it goes.
@@ -147,8 +157,20 @@ function writableAs(dir, user) {
 export async function runChecks({ layout, db }, { url } = {}) {
   if (!layout.publicUrl) return { ok: false, failed: ['configuration'] };
   const publicOrigin = new URL(layout.publicUrl).origin;
-  const base = (url ?? layout.publicUrl).replace(/\/+$/, '');
-  const hostHeader = url ? new URL(layout.publicUrl).host : undefined;
+  // With no web server installed (--web-server none: the Windows default) the public address may
+  // have nothing behind it at all. Then the API is asked directly on its own loopback port, as the
+  // installation's own site, and the two checks that exist to prove the web server serves the built
+  // web application are reported as skipped rather than failed for a server nobody installed. An
+  // operator who runs a web server of their own is not affected: whatever answers on the public
+  // address is checked as before.
+  let through = url;
+  let apiOnly = false;
+  if (!url && layout.webServer === 'none' && !(await answers(layout.publicUrl))) {
+    through = layout.apiUrl;
+    apiOnly = true;
+  }
+  const base = (through ?? layout.publicUrl).replace(/\/+$/, '');
+  const hostHeader = through ? new URL(layout.publicUrl).host : undefined;
   const get = (route) => httpGet(`${base}${route}`, { hostHeader });
   const failed = [];
 
@@ -170,6 +192,7 @@ export async function runChecks({ layout, db }, { url } = {}) {
     }
   };
 
+  const skipped = (name, reason) => console.log(`  skip  ${name}: ${reason}`);
   console.log(`Checking ${base}${hostHeader ? ` as ${hostHeader}` : ''}`);
 
   await check('api-health', async () => {
@@ -177,7 +200,8 @@ export async function runChecks({ layout, db }, { url } = {}) {
     return judgeHealth(res.status, res.body.toString('utf8'));
   });
 
-  await check('web-app', async () => {
+  if (apiOnly) skipped('web-app', 'no web server is installed; the API was asked on its own port');
+  else await check('web-app', async () => {
     const res = await get('/');
     const html = res.body.toString('utf8');
     const problem = judgeWebApp(res.status, mediaType(res.headers), html);
@@ -190,7 +214,8 @@ export async function runChecks({ layout, db }, { url } = {}) {
     return undefined;
   });
 
-  await check('module-scripts', async () => {
+  if (apiOnly) skipped('module-scripts', 'no web server is installed; the API was asked on its own port');
+  else await check('module-scripts', async () => {
     const files = filesWithExtension(layout.webRoot, '.mjs');
     for (const file of files) {
       const route = `/${file.split(path.sep).join('/')}`;
@@ -208,7 +233,7 @@ export async function runChecks({ layout, db }, { url } = {}) {
 
   await check('sign-in-discovery', async () => {
     const res = await get('/.well-known/openid-configuration');
-    return judgeDiscovery(res.status, mediaType(res.headers), res.body.toString('utf8'), url ? undefined : publicOrigin);
+    return judgeDiscovery(res.status, mediaType(res.headers), res.body.toString('utf8'), through ? undefined : publicOrigin);
   });
 
   await check('migrations', async () => {
