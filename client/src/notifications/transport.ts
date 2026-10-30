@@ -3,13 +3,12 @@
 /**
  * How the header's unread count learns that it has changed.
  *
- * The installation chooses it, not this client: the server answers with the transport it has been
- * configured for, and the header follows. One value is implemented — `poll`, the count asked for
- * again on a timer. The name of a pushed stream exists alongside it so that a live transport
- * arrives as a second arm here and at the one hook that reads this, rather than as a rewrite of
- * the header.
+ * The server answers with the transport its build supports, and the header follows. One value is
+ * implemented — `poll`, the count asked for again on a timer. A live transport would arrive as a
+ * second member of this union and one arm at the hook that reads it, so every place that has to
+ * decide what to do about it fails to compile until it does.
  */
-export type InboxTransport = 'poll' | 'sse';
+export type InboxTransport = 'poll';
 
 /**
  * What the header does before the server has told it anything, and what an installation that has
@@ -20,7 +19,7 @@ export const defaultInboxTransport: InboxTransport = 'poll';
 
 /** Whether a transport the server named is one this client can act on. */
 export function isInboxTransport(value: unknown): value is InboxTransport {
-  return value === 'poll' || value === 'sse';
+  return value === 'poll';
 }
 
 /**

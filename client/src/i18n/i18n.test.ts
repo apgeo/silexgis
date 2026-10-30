@@ -174,6 +174,7 @@ const notificationCategories: Record<NotificationCategoryName, true> = {
   commentReply: true,
   commentOnMine: true,
   groupAnnouncement: true,
+  expeditionUpdate: true,
 };
 
 /**

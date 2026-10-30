@@ -33,6 +33,7 @@ const everyCategory: Record<NotificationCategoryName, true> = {
   commentReply: true,
   commentOnMine: true,
   groupAnnouncement: true,
+  expeditionUpdate: true,
 };
 const filterableCategories = Object.keys(everyCategory) as NotificationCategoryName[];
 

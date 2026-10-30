@@ -5,10 +5,10 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The header's unread count is kept current by whichever transport the installation was
- * configured for, and that choice reaches this client from the server rather than being compiled
- * into it. What is worth proving is the case where an operator has chosen something other than the
- * default: a client that ignores the setting still passes every test written around `poll`.
+ * The header's unread count is kept current by the transport the server says its build supports,
+ * and that answer reaches this client from the server rather than being compiled into it. What is
+ * worth proving is the case where the answer is something this client has no timer for: it must
+ * still poll, because a count that stops moving reads as a bug.
  */
 
 const get = vi.fn();
@@ -73,21 +73,21 @@ afterEach(() => {
 });
 
 describe('the transport the unread count follows', () => {
-  it('asks again on a timer when the installation has chosen polling', async () => {
+  it('asks again on a timer when the server says to poll', async () => {
     serving('poll');
     await watching();
 
     expect(await askedAgainOver(inboxPollIntervalMs * 2 + 1000)).toBeGreaterThanOrEqual(2);
   });
 
-  it('runs no timer when the installation has chosen a stream to be pushed on', async () => {
-    // The non-default value, and the reason the setting exists: a page told that the server will
-    // push must not also be asking every minute. A client that ignored the setting would pass
-    // every test written around the default and fail only here.
+  it('polls when the server names a transport this client does not know', async () => {
+    // An older server accepted an operator's choice of a pushed stream that was never built. A
+    // client that took the name at its word would run no timer at all, and the count would move
+    // only on a click.
     serving('sse');
     await watching();
 
-    expect(await askedAgainOver(inboxPollIntervalMs * 5)).toBe(0);
+    expect(await askedAgainOver(inboxPollIntervalMs * 2 + 1000)).toBeGreaterThanOrEqual(2);
   });
 
   it('polls when it is never told, because a count that stops moving reads as a bug', async () => {

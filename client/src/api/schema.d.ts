@@ -2362,7 +2362,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** How this installation expects a page to keep its unread count current. */
+        /** How a page keeps its unread count current: the transport this build supports. */
         get: operations["notificationConfigConfig"];
         put?: never;
         post?: never;
@@ -12274,7 +12274,7 @@ export interface components {
             isProtected: boolean;
         };
         /** @enum {unknown} */
-        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | "tripPublished" | "tripNeedsAttention" | "uploadAwaitingReview" | "uploadReviewed";
+        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | "tripPublished" | "tripNeedsAttention" | "uploadAwaitingReview" | "uploadReviewed" | "expeditionUpdate";
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
             reachesNobody: boolean;
