@@ -193,9 +193,9 @@ public static class PhotoLibraryEndpoints
         // Parsed the way every other viewport route in this application parses one, rather than
         // through a validator: no map layer route here validates its rectangle any other way, and
         // being the only one that did would make this slice the odd one out for no gain.
-        if (!Bbox.TryParse(bbox, out var box))
+        if (WindowProblems.Required(bbox, out var box) is { } windowProblem)
         {
-            return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
+            return windowProblem;
         }
 
         if (!gate.Runs(which))

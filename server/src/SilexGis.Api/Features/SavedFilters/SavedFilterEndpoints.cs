@@ -365,7 +365,9 @@ public static class SavedFilterEndpoints
         foreach (var reading in readings)
         {
             // Only a row the author rule already admits pays for the permission read; everybody
-            // else's answer is "no" without one.
+            // else's answer is "no" without one. For a saved filter that read is a pure in-memory
+            // evaluation (its facts are the row's own columns, with no ancestor chain, membership or
+            // filing to query), so a long list costs no extra round trips per row.
             var effective = SavedFilterRules.MayChange(ctx, reading.Row)
                 ? await access.EffectiveAsync(ctx, reading.Row, ct)
                 : AccessAction.None;

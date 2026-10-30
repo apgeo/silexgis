@@ -105,9 +105,9 @@ public static class CaveMeshMapEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!Bbox.TryParse(bbox, out var box))
+        if (WindowProblems.Required(bbox, out var box) is { } windowProblem)
         {
-            return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
+            return windowProblem;
         }
 
         var narrowing = await surfaceFilters.ForAsync<Feature>(

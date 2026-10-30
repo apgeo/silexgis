@@ -173,9 +173,9 @@ public static class PhotoLibraryFeatureEndpoints
             return ApiProblems.NotFound(PhotoLibraryEndpoints.NotFoundCode);
         }
 
-        if (!Bbox.TryParse(bbox, out var box))
+        if (WindowProblems.Required(bbox, out var box) is { } windowProblem)
         {
-            return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
+            return windowProblem;
         }
 
         // Whether this installation is talking to that library at all, asked before any right is

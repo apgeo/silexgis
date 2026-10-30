@@ -436,7 +436,7 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
         (await anonymous.GetAsync($"/api/v1/map/cave-meshes?bbox={spot.Box}"))
             .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
-        foreach (var malformed in new[] { "not-a-box", "8.0,40.0", "8.0,40.0,east,41.0" })
+        foreach (var malformed in new[] { "not-a-box", "8.0,40.0", "8.0,40.0,east,41.0", "9,41,8,40", "-181,40,-179,41", "8,-91,9,-89" })
         {
             var refused = await owner.GetAsync($"/api/v1/map/cave-meshes?bbox={malformed}");
             refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);

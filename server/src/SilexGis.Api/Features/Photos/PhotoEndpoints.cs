@@ -110,13 +110,13 @@ public static class PhotoEndpoints
             .Narrow(db, ctx, query);
         var extentCutShort = false;
 
-        if (!string.IsNullOrWhiteSpace(query.Bbox))
+        if (WindowProblems.Optional(query.Bbox, out var window) is { } windowProblem)
         {
-            if (!Bbox.TryParse(query.Bbox, out var box))
-            {
-                return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
-            }
+            return windowProblem;
+        }
 
+        if (window is { } box)
+        {
             var inExtent = await PhotoQueries.InExtentAsync(
                 db, ctx, disclosure, photographs, box.ToPolygon(), ct);
             var documentIds = inExtent.DocumentIds;

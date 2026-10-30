@@ -327,6 +327,31 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
         library.Calls.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task A_window_that_is_reversed_or_past_the_world_is_refused_on_the_map_and_on_the_feature_route()
+    {
+        // Four well-formed numbers are not a window when west is not left of east, south is not
+        // below north, or the box leaves the WGS84 limits; PostGIS would take any of them.
+        foreach (var window in new[] { "24.25,45.125,21.5,46.75", "21.5,46.75,24.25,45.125", "-181,45,-179,46", "21.5,-91,24.25,-89" })
+        {
+            var map = await admin.GetAsync($"{MapUrl}?bbox={window}");
+            var mapBody = await map.Content.ReadAsStringAsync();
+            map.StatusCode.ShouldBe(HttpStatusCode.BadRequest, mapBody);
+            CodeOf(mapBody).ShouldBe("map.invalid_bbox");
+
+            var feature = await PostAsync(
+                admin,
+                $"/api/v1/photo-libraries/photoprism/photographs/aa11bb22cc33/feature?bbox={window}",
+                new { kind = "cave", name = "Should not exist" });
+            feature.Status.ShouldBe(HttpStatusCode.BadRequest, feature.Body);
+            CodeOf(feature.Body).ShouldBe("map.invalid_bbox");
+        }
+
+        // The same box, the right way round, is a real window and is not refused for its shape.
+        (await admin.GetAsync($"{MapUrl}?bbox={Bbox}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        library.Calls.ShouldNotBeEmpty();
+    }
+
     // ------------------------------------------------------------------------ what comes back out
 
     /// <summary>

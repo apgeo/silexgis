@@ -581,6 +581,22 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable, IClassFixtu
         return image.ToByteArray(MagickFormat.Png);
     }
 
+    [Fact]
+    public async Task A_gallery_window_that_is_not_a_window_is_refused_and_a_real_one_is_not()
+    {
+        foreach (var window in new[] { "not-a-box", "8,40,9", "9,41,8,40", "-181,40,-179,41", "8,-91,9,-89" })
+        {
+            var refused = await owner.GetAsync($"/api/v1/photos?bbox={window}");
+            var body = await refused.Content.ReadAsStringAsync();
+            refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+            JsonDocument.Parse(body).RootElement.GetProperty("code").GetString().ShouldBe("map.invalid_bbox");
+        }
+
+        // A blank window is no window; a well-formed one is read.
+        (await owner.GetAsync("/api/v1/photos?bbox=")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.GetAsync("/api/v1/photos?bbox=-180,-90,180,90")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     private static async Task<List<JsonElement>> GalleryAsync(HttpClient client, string? query = null)
     {
         var url = query is null ? "/api/v1/photos?pageSize=100" : $"/api/v1/photos?pageSize=100&{query}";
