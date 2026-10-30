@@ -895,6 +895,33 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
         (await reauthenticated.GetAsync("/api/v1/me")).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    // A preferences write moves the account row's concurrency stamp. Written while the password
+    // change is between loading the account and saving it (the window is the time spent hashing,
+    // tens of milliseconds), that used to refuse a valid change as "me.password_invalid". The
+    // interleaving cannot be forced from outside, so a few writes, as the client's debounce would
+    // make them, are spread across the change: before the retry this failed on most runs.
+    [Fact]
+    public async Task Password_change_survives_preference_writes_landing_around_it()
+    {
+        var writer = Task.Run(async () =>
+        {
+            for (var n = 0; n < 5; n++)
+            {
+                _ = await PatchPreferencesAsync(new { appearance = new { theme = $"w-{n}" } });
+                await Task.Delay(40);
+            }
+        });
+
+        var changed = await me.PutAsJsonAsync("/api/v1/me/password", new
+        {
+            currentPassword = AuthHelper.Password,
+            newPassword = "a-new-long-password-1",
+        });
+        await writer;
+
+        changed.StatusCode.ShouldBe(HttpStatusCode.NoContent, await changed.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public async Task Password_change_verifies_the_current_one_and_then_replaces_it()
     {

@@ -146,6 +146,29 @@ public static class MeCredentialEndpoints
             new Dictionary<string, string>());
 
         var result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+
+        // The account row's concurrency stamp moves on every write to the account, and the client
+        // writes interface preferences on a timer, so one can land between loading the user above
+        // and saving the new hash. Identity reports that as a concurrency failure, which would
+        // reach the caller as a refused password change although nothing about it was wrong. So
+        // the change is tried again from a freshly loaded user (and a freshly queued alert, as the
+        // cleared tracker drops the first) a few times before a failure is believed.
+        for (var retry = 0; retry < 4 && result.Has("ConcurrencyFailure"); retry++)
+        {
+            db.ChangeTracker.Clear();
+            user = await userManager.GetUserAsync(principal);
+            if (user is null)
+            {
+                return TypedResults.Unauthorized();
+            }
+
+            NotificationQueue.Enqueue(
+                db, user.Id, NotificationCategory.SecurityAlerts,
+                MessageTemplateCatalog.NotifySecurityPasswordChanged,
+                new Dictionary<string, string>());
+            result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        }
+
         if (!result.Succeeded)
         {
             return result.Has("PasswordMismatch")
