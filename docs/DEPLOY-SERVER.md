@@ -209,8 +209,9 @@ describes.
 ## Backups
 
 `silexgis-backup.timer` runs nightly at 03:20 UTC and keeps the last 14, plus one before every
-update. Each backup is a directory containing `db.sql.gz` (a `pg_dump`) and `files.tar.gz` (the
-uploads volume).
+update. Each backup is a directory containing `db.sql.gz` (a `pg_dump`), `files.tar.gz` (the
+uploads volume) and, when anybody has uploaded a terrain raster through the browser,
+`terrain-uploads.tar.gz` (those rasters only).
 
 ```bash
 systemctl list-timers silexgis-\*        # when it last ran and next runs
@@ -218,15 +219,16 @@ journalctl -u silexgis-backup --since -7d
 ls -lh /var/backups/silexgis
 ```
 
-Three things are deliberately *not* in a backup, and all three are recoverable without one:
+Four things are deliberately *not* in a backup: three are recoverable without one, and the fourth is another product's to back up:
 
 - **Data-protection keys and token certificates.** Losing them invalidates outstanding file
   links and signs everyone out (new certificates are made at the next start). It does not touch
   stored data.
-- **Baked terrain.** Derived data whose recipe is in the database. Rebuild it. The exception is
-  a raster **uploaded through the browser**, which has exactly one copy under the build root and
-  none in the file store — an installation fed that way should add `silexgis-terrain` to its
-  backups.
+- **Baked terrain.** Derived data whose recipe is in the database. Rebuild it. The exception, a
+  raster **uploaded through the browser**, has exactly one copy under the build root, so it is the
+  one part of the terrain volume that *is* in the backup (`terrain-uploads.tar.gz`).
+- **Photo libraries** (Immich, PhotoPrism) keep their own databases and settings, which are the
+  club's to back up with each product's own tool; see INSTALL.md, "Photo libraries".
 - **`.env`.** It holds the database password. Keep a copy somewhere off the machine, or a
   restore will meet a database it cannot open.
 
@@ -410,7 +412,7 @@ Check that `silexgis-keys` is mounted and owned by the container's `app` user.
 **Uploads fail at a certain size.** Three ceilings must agree: `SILEXGIS__Files__MaxUploadBytes`
 (and, for a survey sent from a field device, `SILEXGIS__SurveyUploads__MaxFileBytes`),
 Kestrel's limits (derived from them automatically), and the proxy's `client_max_body_size`, which
-is baked into the `web` image at build time. INSTALL.md, "Upload sizes", has the detail.
+the `web` container reads from `SILEXGIS_MAX_BODY_SIZE` at start (default `1024m`). INSTALL.md, "Upload sizes", has the detail.
 
 **Disk filling.** `docker system df`. Image layers live under `/var/lib/docker` and old build
 caches accumulate; `docker system prune -a` reclaims them, at the cost of a slower next build.

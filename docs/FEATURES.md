@@ -767,7 +767,8 @@ feature and walkthroughs of whole jobs.
   settings, which signs them out everywhere too.
 - **Email and SMS that an operator controls** — any SMTP server, any SMS gateway that speaks
   HTTP, and the wording of every message editable per language from the admin pages. Configure
-  nothing and the app still runs: links and codes go to the server log instead.
+  nothing and the app still runs, but nothing is delivered: the log records only the recipient and
+  which message it was, never a link or a code, and an invitation link is shown to the administrator.
 - **You can see whether the mail is actually going out** — a page for whoever runs the installation
   shows how many messages are waiting, held for a summary or given up on, and — the number that
   matters — how long the oldest one that has not left has been waiting. Below it, the ones worth
