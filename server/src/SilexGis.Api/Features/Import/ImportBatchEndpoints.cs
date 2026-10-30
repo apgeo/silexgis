@@ -79,6 +79,7 @@ public static class ImportBatchEndpoints
         var total = await query.CountAsync(ct);
         var rows = await query
             .OrderByDescending(b => b.CreatedAt)
+            .ThenByDescending(b => b.Id)
             .Skip((p - 1) * size)
             .Take(size)
             .ToListAsync(ct);

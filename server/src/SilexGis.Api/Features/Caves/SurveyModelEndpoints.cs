@@ -639,6 +639,7 @@ public static class SurveyModelEndpoints
 
         return TypedResults.Ok(await stations
             .OrderBy(s => s.Name)
+            .ThenBy(s => s.Id)
             .ToPagedAsync(paging.Page, paging.PageSize, s => ToDto(s, model), ct));
     }
 

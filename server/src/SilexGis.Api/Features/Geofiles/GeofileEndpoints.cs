@@ -189,7 +189,7 @@ public static class GeofileEndpoints
         }
 
         var (p, size) = Paging.Normalize(page, pageSize);
-        var result = await query.OrderByDescending(g => g.UpdatedAt).ToPagedAsync(p, size, g => g.ToDto(), ct);
+        var result = await query.OrderByDescending(g => g.UpdatedAt).ThenByDescending(g => g.Id).ToPagedAsync(p, size, g => g.ToDto(), ct);
         return TypedResults.Ok(result);
     }
 
