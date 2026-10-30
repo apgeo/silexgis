@@ -39,6 +39,7 @@ const codes = [
   'terrain_build.base_datum_differs',
   'terrain_build.being_extended',
   'terrain_derivative.build_not_found',
+  'terrain_derivative.build_not_finished',
   'terrain_derivative.not_found',
   'terrain_derivative.not_ready',
 ];

@@ -138,8 +138,20 @@ public static class TerrainDerivativeEndpoints
     public const string NotFoundCode = "terrain_derivative.not_found";
     public const string ForbiddenCode = "access.forbidden";
 
-    /// <summary>The build asked for does not exist, or has nothing to draw the ground from.</summary>
+    /// <summary>The build asked for does not exist.</summary>
     public const string BuildNotFoundCode = "terrain_derivative.build_not_found";
+
+    /// <summary>
+    /// The build exists but never finished — it is waiting, running or stopped — so it prepared no
+    /// elevation to draw the ground from.
+    /// </summary>
+    /// <remarks>
+    /// A picture is computed from the rasters a build prepares, not from the pyramid it publishes,
+    /// so what is asked of the build is that it finished, not that it is still being served.
+    /// Accepting the request anyway would queue a run that can only fail, and say so only later,
+    /// on a row nobody is looking at.
+    /// </remarks>
+    public const string BuildNotFinishedCode = "terrain_derivative.build_not_finished";
 
     /// <summary>The picture is not finished, so there is nothing to fetch yet.</summary>
     public const string NotReadyCode = "terrain_derivative.not_ready";
@@ -250,6 +262,14 @@ public static class TerrainDerivativeEndpoints
             return ApiProblems.NotFound(BuildNotFoundCode);
         }
 
+        if (build.Status != TerrainBuildStatus.Succeeded)
+        {
+            return ApiProblems.Conflict(
+                BuildNotFinishedCode,
+                "That build has not finished, so it has prepared no elevation to draw the ground "
+                + "from. Ask for the picture once the build has succeeded.");
+        }
+
         var settings = TerrainDerivativeRegistry.Normalise(request.ToSettings());
         var hash = TerrainDerivativeRegistry.Fingerprint(settings);
 
@@ -260,6 +280,7 @@ public static class TerrainDerivativeEndpoints
                     && l.SettingsHash == hash,
                 ct);
 
+        var fresh = existing is null;
         if (existing is null)
         {
             existing = new TerrainDerivativeLayer
@@ -289,8 +310,7 @@ public static class TerrainDerivativeEndpoints
         }
         else
         {
-            var stored = await catalogue.FindAsync(existing.Id, ct);
-            return TypedResults.Ok(ToDto(stored!, await RastersOfAsync(db, existing.Id, ct), tokens));
+            return await AnswerAsync(existing.Id, hasRasters: true);
         }
 
         // The row and the run it needs commit together: a row with no job is a picture that never
@@ -322,12 +342,19 @@ public static class TerrainDerivativeEndpoints
                     && l.SettingsHash == hash,
                 ct);
 
-            var won = await catalogue.FindAsync(raced.Id, ct);
-            return TypedResults.Ok(ToDto(won!, await RastersOfAsync(db, raced.Id, ct), tokens));
+            return await AnswerAsync(raced.Id, hasRasters: true);
         }
 
-        var view = await catalogue.FindAsync(existing.Id, ct);
-        return TypedResults.Ok(ToDto(view!, await RastersOfAsync(db, existing.Id, ct), tokens));
+        // A row written just now has drawn nothing yet; one queued again keeps the rasters of its
+        // last run on disk until the next run replaces them, so those are still listed.
+        return await AnswerAsync(existing.Id, hasRasters: !fresh);
+
+        async Task<Ok<TerrainDerivativeLayerDto>> AnswerAsync(Guid layerId, bool hasRasters)
+        {
+            var view = await catalogue.FindAsync(layerId, ct);
+            List<TerrainDerivativeRaster> rasters = hasRasters ? await RastersOfAsync(db, layerId, ct) : [];
+            return TypedResults.Ok(ToDto(view!, rasters, tokens));
+        }
     }
 
     /// <summary>The index that holds one request for one picture of one build.</summary>

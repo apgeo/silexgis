@@ -215,6 +215,7 @@
       "notRetryable": "Doar o generare oprită poate fi rulată din nou. Aceasta este încă la coadă sau în curs, ori s-a încheiat.",
       "bakeStopping": "Generarea a fost anulată în timp ce i se făceau dalele, iar unealta care face dalele nu a confirmat încă oprirea. Răspunde imediat ce serviciul de relief rulează; rulează generarea din nou după aceea.",
       "derivativeBuildNotFound": "Generarea nu mai există sau nu are din ce desena terenul.",
+      "derivativeBuildNotFinished": "Generarea nu s-a încheiat, deci nu există încă relieful din care să se deseneze terenul.",
       "derivativeNotFound": "Imaginea nu mai există.",
       "derivativeNotReady": "Imaginea nu este încă gata, așa că nu este nimic de adus.",
       "baseNotFound": "Generarea de extins nu mai există.",

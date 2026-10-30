@@ -415,6 +415,45 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
+    /// A picture is computed from the elevation a build prepared, so a build that is waiting,
+    /// running or stopped has nothing to draw it from. The request is refused there and then,
+    /// with nothing written and nothing queued, rather than accepted into a run that can only
+    /// fail later on a row nobody is watching. The finished build beside it is the control.
+    /// </summary>
+    [Theory]
+    [InlineData(TerrainBuildStatus.Queued)]
+    [InlineData(TerrainBuildStatus.Running)]
+    [InlineData(TerrainBuildStatus.Failed)]
+    public async Task A_picture_of_a_build_that_never_finished_is_refused_and_nothing_is_queued(
+        TerrainBuildStatus status)
+    {
+        var unfinished = await SeedBuildAsync(status: status);
+        var refused = await holder.PostAsJsonAsync("/api/v1/terrain/derivatives", new
+        {
+            terrainBuildId = unfinished,
+            derivative = "slope",
+            name = "steepness of nothing",
+        });
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString()
+            .ShouldBe("terrain_derivative.build_not_finished");
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TerrainDerivativeLayers.CountAsync(l => l.TerrainBuildId == unfinished)).ShouldBe(0);
+        }
+
+        var finished = await SeedBuildAsync();
+        (await holder.PostAsJsonAsync("/api/v1/terrain/derivatives", new
+        {
+            terrainBuildId = finished,
+            derivative = "slope",
+            name = "steepness",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
     /// A spacing that cannot be drawn is refused when it is asked for, with the code every refused
     /// request body carries and a sentence naming the bounds.
     /// </summary>
@@ -553,7 +592,8 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
         await db.SaveChangesAsync();
     }
 
-    private async Task<Guid> SeedBuildAsync(bool active = false)
+    private async Task<Guid> SeedBuildAsync(
+        bool active = false, TerrainBuildStatus status = TerrainBuildStatus.Succeeded)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -570,8 +610,8 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
         {
             Extent = Rectangle(25.0, 46.0, 25.1, 46.1),
             RequestedMaxDepth = 13,
-            Status = TerrainBuildStatus.Succeeded,
-            Phase = TerrainBuildPhase.Publish,
+            Status = status,
+            Phase = status == TerrainBuildStatus.Succeeded ? TerrainBuildPhase.Publish : TerrainBuildPhase.Bake,
             IsActive = active,
         };
 

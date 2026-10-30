@@ -215,6 +215,7 @@
       "notRetryable": "Only a build that has stopped can be run again. This one is still queued or running, or it finished.",
       "bakeStopping": "That build was called off while its tiles were being made, and the tile maker has not yet said it stopped. It answers as soon as the terrain worker is running; run the build again after that.",
       "derivativeBuildNotFound": "That build is no longer here, or has nothing to draw the ground from.",
+      "derivativeBuildNotFinished": "That build has not finished, so there is no elevation to draw the ground from yet.",
       "derivativeNotFound": "That picture is no longer here.",
       "derivativeNotReady": "That picture is not finished yet, so there is nothing to fetch.",
       "baseNotFound": "The build to extend no longer exists.",
