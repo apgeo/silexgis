@@ -359,7 +359,7 @@ public static class TerrainBuildEndpoints
     /// national lidar tile set is tens of gigabytes and belongs in a directory the operator names,
     /// which is why that way in exists at all.
     /// </remarks>
-    private const long MaxRasterUploadBytes = 512L * 1024 * 1024;
+    private const long MaxRasterUploadBytes = RasterUploadLimits.MaxRasterBytes;
 
     public static RouteGroupBuilder MapTerrainBuildEndpoints(this RouteGroupBuilder api)
     {
@@ -375,7 +375,7 @@ public static class TerrainBuildEndpoints
             .WithSummary("Starts a terrain build over a rectangle; requires Execute on the Terrain domain.");
         api.MapPost("/terrain/rasters", UploadRasterAsync)
             .DisableAntiforgery() // a bearer-token API; there is no cookie form to forge
-            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxRasterUploadBytes))
+            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(RasterUploadLimits.MaxRequestBytes))
             .WithTags("Terrain")
             .WithSummary("Sends one raster for a build to be made from; requires Execute on the Terrain domain.");
         api.MapGet("/terrain/source-directories", SourceDirectoriesAsync)

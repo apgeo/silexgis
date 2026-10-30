@@ -69,7 +69,7 @@ public sealed class GeoreferencedMapUpdateRequestValidator : AbstractValidator<G
 public static class GeoreferencedMapEndpoints
 {
     /// <summary>Rasters are big; scanned map sheets regularly exceed the default body limit.</summary>
-    private const long MaxUploadBytes = 512L * 1024 * 1024;
+    private const long MaxUploadBytes = RasterUploadLimits.MaxRasterBytes;
 
     public static RouteGroupBuilder MapGeoreferencedMapEndpoints(this RouteGroupBuilder api)
     {
@@ -77,7 +77,7 @@ public static class GeoreferencedMapEndpoints
 
         maps.MapPost("/", UploadAsync)
             .DisableAntiforgery()
-            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxUploadBytes))
+            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(RasterUploadLimits.MaxRequestBytes))
             .WithSummary("Uploads a georeferenced raster (GeoTIFF) and queues COG normalization.");
         maps.MapGet("/", ListAsync)
             .ProducesProblem(StatusCodes.Status400BadRequest)

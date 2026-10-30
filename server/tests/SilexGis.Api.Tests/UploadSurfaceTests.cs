@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Shouldly;
+using SilexGis.Api.Common;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Infrastructure.Files;
@@ -441,8 +442,12 @@ public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable, IClassFixt
             // the assertion below is the ceiling holding independently and not both numbers
             // simply staying where they started.
             files.MaxRequestBodyBytes.ShouldBeLessThan(rasterUpload);
+
+            // The raster routes' request limit already carries the form's envelope on top of the
+            // raster ceiling, so the multipart ceiling has to reach it, not pass it.
             scope.ServiceProvider.GetRequiredService<IOptions<FormOptions>>()
-                .Value.MultipartBodyLengthLimit.ShouldBeGreaterThan(rasterUpload);
+                .Value.MultipartBodyLengthLimit.ShouldBeGreaterThanOrEqualTo(rasterUpload);
+            rasterUpload.ShouldBeGreaterThan(RasterUploadLimits.MaxRasterBytes);
         }
         finally
         {
@@ -451,6 +456,31 @@ public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable, IClassFixt
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    /// <summary>
+    /// A raster of exactly the advertised size travels inside a multipart form, so the request
+    /// carrying it is larger than the raster. Both raster routes leave room for the envelope; set
+    /// to the raster ceiling itself, a legal raster of that size died as a bare 413 naming no limit.
+    /// </summary>
+    [Fact]
+    public void A_raster_of_the_advertised_size_fits_the_request_that_carries_it()
+    {
+        var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints;
+        foreach (var route in new[] { "/api/v1/terrain/rasters", "/api/v1/georeferenced-maps" })
+        {
+            var upload = endpoints.OfType<RouteEndpoint>().Single(e =>
+                e.RoutePattern.RawText?.TrimEnd('/') == route
+                && e.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains("POST") == true);
+
+            upload.Metadata.GetMetadata<IRequestSizeLimitMetadata>()
+                .ShouldNotBeNull($"{route} accepts a raster with no request-size limit of its own.")
+                .MaxRequestBodySize.ShouldBe(
+                    RasterUploadLimits.MaxRasterBytes + FilesOptions.MultipartEnvelopeBytes, route);
+        }
+
+        factory.Services.GetRequiredService<IOptions<FormOptions>>()
+            .Value.MultipartBodyLengthLimit.ShouldBeGreaterThanOrEqualTo(RasterUploadLimits.MaxRequestBytes);
     }
 
     [Fact]

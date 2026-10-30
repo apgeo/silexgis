@@ -165,14 +165,11 @@ try
     var filesOptions = builder.Configuration.GetSection(SilexGis.Infrastructure.Files.FilesOptions.SectionName)
         .Get<SilexGis.Infrastructure.Files.FilesOptions>() ?? new SilexGis.Infrastructure.Files.FilesOptions();
     // The multipart ceiling is process-wide, so it has to clear the largest upload any route
-    // accepts — not only the configurable one. Georeferenced rasters accept a fixed 512 MB,
-    // and lowering the configurable limit must not silently cut those off at a size no
-    // message anywhere names. Whichever is larger wins; raise this if a route ever accepts
-    // more than 512 MB on its own.
-    const long largestFixedUploadBytes = 512L * 1024 * 1024;
+    // accepts — not only the configurable one. The raster routes accept a fixed ceiling of
+    // their own, and lowering the configurable limit must not silently cut those off at a
+    // size no message anywhere names. Whichever is larger wins.
     var multipartBodyLengthLimit = Math.Max(
-        filesOptions.MaxRequestBodyBytes,
-        largestFixedUploadBytes + SilexGis.Infrastructure.Files.FilesOptions.MultipartEnvelopeBytes);
+        filesOptions.MaxRequestBodyBytes, SilexGis.Api.Common.RasterUploadLimits.MaxRequestBytes);
     builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(
         options => options.MultipartBodyLengthLimit = multipartBodyLengthLimit);
 
