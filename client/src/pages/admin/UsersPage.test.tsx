@@ -333,6 +333,18 @@ describe('UsersPage', () => {
     expect(await within(dialog).findByText('An account with this address already exists.')).toBeInTheDocument();
   });
 
+  it('says which kinds of record keep an account from being deleted, with their counts, in both languages', () => {
+    const refusal = new ApiError(409, 'user.delete_blocked', undefined, {
+      code: 'user.delete_blocked',
+      blocking: [{ kind: 'trips', count: 3 }, { kind: 'albums', count: 1 }],
+    });
+    expect(userAdminProblem(refusal, i18n.getFixedT('en'))).toContain('trips (3), photo albums (1)');
+    expect(userAdminProblem(refusal, i18n.getFixedT('ro'))).toContain('ieșiri (3), albume foto (1)');
+    // Without the list the refusal is still a refusal, not a blank.
+    const bare = new ApiError(409, 'user.delete_blocked');
+    expect(userAdminProblem(bare, i18n.getFixedT('en'))).toBe(i18n.getFixedT('en')('common.saveFailed'));
+  });
+
   it('has words for every refusal it names, in both languages', async () => {
     const t = i18n.getFixedT('ro');
     const codes = [

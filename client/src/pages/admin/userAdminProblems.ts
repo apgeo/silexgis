@@ -3,6 +3,74 @@ import type { TFunction } from 'i18next';
 import { ApiError } from '../../api/client.ts';
 
 /**
+ * The kinds of record that can keep an account from being deleted, in words.
+ *
+ * Literal keys, one per kind the server can name: the translation guard reads the keys it can see.
+ * A server test requires every kind the server names to have a label in both languages; the bare
+ * name below is only a last resort for a client older than its server.
+ */
+function blockingLabel(kind: string, t: TFunction): string {
+  switch (kind) {
+    case 'albums':
+      return t('admin.users.problems.deleteBlockedKinds.albums');
+    case 'cave_level_bands':
+      return t('admin.users.problems.deleteBlockedKinds.cave_level_bands');
+    case 'cave_qr_publications':
+      return t('admin.users.problems.deleteBlockedKinds.cave_qr_publications');
+    case 'checklists':
+      return t('admin.users.problems.deleteBlockedKinds.checklists');
+    case 'documents':
+      return t('admin.users.problems.deleteBlockedKinds.documents');
+    case 'events':
+      return t('admin.users.problems.deleteBlockedKinds.events');
+    case 'expeditions':
+      return t('admin.users.problems.deleteBlockedKinds.expeditions');
+    case 'features':
+      return t('admin.users.problems.deleteBlockedKinds.features');
+    case 'feature_shares':
+      return t('admin.users.problems.deleteBlockedKinds.feature_shares');
+    case 'geofiles':
+      return t('admin.users.problems.deleteBlockedKinds.geofiles');
+    case 'georeferenced_maps':
+      return t('admin.users.problems.deleteBlockedKinds.georeferenced_maps');
+    case 'import_batches':
+      return t('admin.users.problems.deleteBlockedKinds.import_batches');
+    case 'raster_maps':
+      return t('admin.users.problems.deleteBlockedKinds.raster_maps');
+    case 'survey_uploads':
+      return t('admin.users.problems.deleteBlockedKinds.survey_uploads');
+    case 'survey_upload_public_links':
+      return t('admin.users.problems.deleteBlockedKinds.survey_upload_public_links');
+    case 'trips':
+      return t('admin.users.problems.deleteBlockedKinds.trips');
+    case 'trip_recordings':
+      return t('admin.users.problems.deleteBlockedKinds.trip_recordings');
+    case 'trip_tracking_shares':
+      return t('admin.users.problems.deleteBlockedKinds.trip_tracking_shares');
+    case 'upload_batches':
+      return t('admin.users.problems.deleteBlockedKinds.upload_batches');
+    default:
+      return kind;
+  }
+}
+
+/** "trips (3), albums (1)" from the refusal's `blocking` member, or undefined when it has none. */
+function blockingList(error: ApiError, t: TFunction): string | undefined {
+  const blocking = error.problem?.blocking;
+  if (!Array.isArray(blocking)) {
+    return undefined;
+  }
+
+  const parts = blocking.flatMap((entry: unknown) => {
+    const { kind, count } = (entry ?? {}) as { kind?: unknown; count?: unknown };
+    return typeof kind === 'string' && typeof count === 'number'
+      ? [`${blockingLabel(kind, t)} (${count})`]
+      : [];
+  });
+  return parts.length > 0 ? parts.join(', ') : undefined;
+}
+
+/**
  * The refusals an operator can act on, each in words that say what to do about it.
  *
  * Literal keys on purpose: the translation guard reads the keys it can see in the source, and a
@@ -21,6 +89,12 @@ export function userAdminProblem(error: unknown, t: TFunction): string {
       return t('admin.users.problems.cannotLockSelf');
     case 'user.cannot_delete_self':
       return t('admin.users.problems.cannotDeleteSelf');
+    case 'user.delete_blocked': {
+      const owned = blockingList(error, t);
+      return owned
+        ? t('admin.users.problems.deleteBlocked', { owned })
+        : t('common.saveFailed');
+    }
     case 'user.email_taken':
       return t('admin.users.problems.emailTaken');
     case 'user.already_enterable':
