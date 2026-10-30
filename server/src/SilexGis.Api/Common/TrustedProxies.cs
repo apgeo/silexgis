@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Globalization;
 using Microsoft.AspNetCore.HttpOverrides;
 
 namespace SilexGis.Api.Common;
@@ -62,12 +63,36 @@ public static class TrustedProxies
     public static ForwardedHeadersOptions Read(IConfiguration configuration)
     {
         var hops = configuration.GetValue(HopsKey, DefaultHops);
-        var networks = configuration.GetSection(NetworksKey).Get<string[]>() is { Length: > 0 } named
-            ? named
-            : DefaultNetworks;
+        // Blank entries are dropped before choosing: a list holding only blanks (a variable passed
+        // through empty) is an unset list, and keeping it would replace the defaults with nothing
+        // — which the middleware reads as "trust every sender".
+        var named = (configuration.GetSection(NetworksKey).Get<string[]>() ?? [])
+            .Where(entry => !string.IsNullOrWhiteSpace(entry))
+            .ToArray();
+        var networks = named.Length > 0 ? named : DefaultNetworks;
         return Options(hops, networks);
     }
 
+    /// <summary>Stable code at the front of the start-up failure for a network that is not a CIDR block.</summary>
+    public const string MalformedNetworkCode = "proxy.trusted_network_malformed";
+
+    /// <summary>
+    /// The middleware options for a hop count and a list of networks.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// A network is not a CIDR block. The start-up failure begins with
+    /// <see cref="MalformedNetworkCode"/> and names the setting and the entry.
+    /// </exception>
+    /// <remarks>
+    /// A malformed block refuses the start rather than being skipped. Skipping it reads as "that is
+    /// not a proxy", which looks safe and is not: the typo is in a list whose whole purpose is to
+    /// say where the real proxy speaks from, so dropping it silently makes every caller key on the
+    /// proxy's own address — one shared rate-limit budget for the installation — with nothing in
+    /// the log to say why. The opposite reading, trusting everything, is worse. Neither guess is
+    /// the operator's intention, so the process says what it could not read and does not start.
+    /// A blank entry is not a typo but an unset value (a variable passed through empty), and is
+    /// ignored.
+    /// </remarks>
     public static ForwardedHeadersOptions Options(int hops, IEnumerable<string> networks)
     {
         var options = new ForwardedHeadersOptions
@@ -79,16 +104,27 @@ public static class TrustedProxies
         };
         options.KnownProxies.Clear();
         options.KnownIPNetworks.Clear();
+        var index = 0;
         foreach (var network in networks)
         {
-            // A malformed block is an operator's typo, and the safe reading of it is "not a
-            // proxy": the caller then keys on the proxy's address, which is visible in the
-            // limiter's behaviour, rather than on an address of their own choosing.
-            if (!string.IsNullOrWhiteSpace(network)
-                && System.Net.IPNetwork.TryParse(network.Trim(), out var parsed))
+            if (!string.IsNullOrWhiteSpace(network))
             {
+                if (!System.Net.IPNetwork.TryParse(network.Trim(), out var parsed))
+                {
+                    throw new InvalidOperationException(
+                        $"{MalformedNetworkCode}: {NetworksKey} "
+                        + $"(SILEXGIS__Proxy__TrustedNetworks__{index.ToString(CultureInfo.InvariantCulture)}) "
+                        + $"holds '{network.Trim()}', which is not a network in CIDR notation such as "
+                        + "203.0.113.0/24 or 2001:db8::/32. The list says where this installation's own "
+                        + "reverse proxies speak from, and an entry that cannot be read would leave one "
+                        + "of them untrusted (every caller then shares the proxy's address) or, if guessed "
+                        + "at, trust the wrong ones. Correct or remove the entry.");
+                }
+
                 options.KnownIPNetworks.Add(parsed);
             }
+
+            index++;
         }
 
         return options;
