@@ -390,6 +390,13 @@ export default function ObjectSelector({
     ? t('filters.selector.nothingChosen')
     : selector.describedChoices.map((h) => h.title).join(', ')
       || t('filters.selector.restricted', { count: chosenIds.length });
+  const chosenTag = chosenIds.length > 1 ? t('filters.selector.chosen', { count: chosenIds.length }) : null;
+  // The accessible name has to contain what the button shows (a speech user says what they see),
+  // so it is the purpose followed by the visible text, not the purpose alone.
+  const accessibleName = [
+    ariaLabel ?? t('filters.selector.placeholder'),
+    [chosenTag, summary].filter(Boolean).join(' '),
+  ].join(': ');
 
   return (
     <Popover
@@ -405,13 +412,11 @@ export default function ObjectSelector({
         block
         size={size}
         disabled={disabled}
-        aria-label={ariaLabel ?? t('filters.selector.placeholder')}
+        aria-label={accessibleName}
         data-testid={testId}
         style={{ textAlign: 'left' }}
       >
-        {chosenIds.length > 1
-          ? <Tag>{t('filters.selector.chosen', { count: chosenIds.length })}</Tag>
-          : null}
+        {chosenTag ? <Tag>{chosenTag}</Tag> : null}
         {summary}
       </Button>
     </Popover>
