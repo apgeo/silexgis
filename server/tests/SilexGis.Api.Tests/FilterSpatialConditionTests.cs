@@ -210,6 +210,66 @@ public sealed class FilterSpatialConditionTests : IAsyncLifetime, IDisposable, I
         (await IdsAsync(owner, Within(10_000, new ObjectValue("feature", guarded)))).ShouldContain(open);
     }
 
+    /// <summary>
+    /// Reading the same as a missing anchor is only half of being indistinguishable from one: a
+    /// refusal that took visibly longer for a withheld anchor would say the object exists by its
+    /// timing. Both refusals leave from the one placement gate before any spatial statement runs,
+    /// and this pins that — a build that measured from the anchor first and refused afterwards, or
+    /// refused a withheld anchor after reading its position, would take a whole statement longer.
+    /// </summary>
+    /// <remarks>
+    /// The bound is generous on purpose (twice the missing refusal's median plus 25 ms): the gate
+    /// asks one more question for a readable anchor than for a missing one, about a millisecond,
+    /// and the test must not fail on a loaded machine for that. Interleaving the two kinds of
+    /// request and comparing medians keeps background load out of the comparison; a red verdict
+    /// taken under heavy load is re-run alone before it is believed.
+    /// </remarks>
+    [Fact]
+    public async Task A_withheld_anchor_is_refused_as_fast_as_a_missing_one()
+    {
+        var spot = Spot.Pick();
+        var (guardedCave, guarded) = await CaveWithEntranceAsync("Timing guarded", spot.TrueLon, spot.TrueLat, locationProtected: true);
+        await AssertSnappedForViewerAsync(guardedCave, spot.TrueLon);
+        var withheldAsk = Within(1000, new ObjectValue("feature", guarded));
+
+        // The control: the same question answers for the owner, so the refusal below is the gate's.
+        (await IdsAsync(owner, Within(10, new ObjectValue("feature", guarded)))).ShouldContain(guarded);
+
+        async Task<double> TimedRefusalAsync(FilterNode where)
+        {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var refusal = await RefusalAsync(viewer, where);
+            stopwatch.Stop();
+            refusal.Code.ShouldBe(SpatialConditions.AnchorNotFoundCode);
+            return stopwatch.Elapsed.TotalMilliseconds;
+        }
+
+        for (var i = 0; i < 5; i++)
+        {
+            await TimedRefusalAsync(withheldAsk);
+            await TimedRefusalAsync(Within(1000, new ObjectValue("feature", Guid.NewGuid())));
+        }
+
+        var withheld = new List<double>();
+        var missing = new List<double>();
+        for (var i = 0; i < 30; i++)
+        {
+            withheld.Add(await TimedRefusalAsync(withheldAsk));
+            missing.Add(await TimedRefusalAsync(Within(1000, new ObjectValue("feature", Guid.NewGuid()))));
+        }
+
+        static double Median(List<double> values)
+        {
+            var sorted = values.Order().ToList();
+            return (sorted[(sorted.Count - 1) / 2] + sorted[sorted.Count / 2]) / 2;
+        }
+
+        var (withheldMedian, missingMedian) = (Median(withheld), Median(missing));
+        withheldMedian.ShouldBeLessThanOrEqualTo(
+            (missingMedian * 2) + 25,
+            $"a withheld anchor took {withheldMedian:F1} ms at the median, a missing one {missingMedian:F1} ms");
+    }
+
     [Fact]
     public async Task Another_saved_filter_is_run_under_the_runner_access_and_nested_only_once()
     {
