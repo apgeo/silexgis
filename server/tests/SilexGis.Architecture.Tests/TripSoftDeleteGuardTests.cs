@@ -227,6 +227,9 @@ public class TripSoftDeleteGuardTests
             ["server/src/SilexGis.Api/Features/TripTracking/PublishedLinksAdminEndpoints.cs"] =
                 (1, "withdrawing every published link takes a deleted trip's links too, so that restoring "
                     + "the trip reopens no address an administrator was told had been taken back"),
+            ["server/src/SilexGis.Api/Features/Users/UserDeleteBlockers.cs"] =
+                (1, "a deleted trip still holds its owner by the foreign key, so it keeps the account from "
+                    + "being deleted and has to be counted among what is in the way"),
         };
 
     [Fact]
