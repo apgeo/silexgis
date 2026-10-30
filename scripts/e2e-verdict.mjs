@@ -63,6 +63,13 @@ export function outcomesOf(report) {
           line: spec.line,
           title: [...path, spec.title].join(' › '),
           failed: test.status === 'unexpected',
+          // Playwright counts an interrupted test as skipped, so the test's own status hides it;
+          // the attempts say.
+          interrupted: (test.results ?? []).some((result) => result.status === 'interrupted'),
+          flaky: test.status === 'flaky',
+          // Only a test that ran and met its expectation counts as having passed; a skipped or
+          // interrupted one has not been judged at all.
+          passed: test.status === 'expected' || test.status === 'flaky',
           cutOff: marks.some((mark) => mark.type === NETWORK_CHANGED),
         });
       }
@@ -92,11 +99,18 @@ export const describe = (outcome) =>
  * could not be loaded. Those are never anybody's network.
  */
 export function sortFailures(report) {
-  const failed = outcomesOf(report).filter((outcome) => outcome.failed);
+  const outcomes = outcomesOf(report);
+  const failed = outcomes.filter((outcome) => outcome.failed);
+  // The report's own tally against the tests found in it: a failure the walk above cannot place
+  // (a suite shape it does not know) must still turn the run red, not vanish from the count.
+  const unaccounted = Math.max(0, (report?.stats?.unexpected ?? 0) - failed.length);
   return {
     standing: failed.filter((outcome) => !outcome.cutOff),
     cutOff: failed.filter((outcome) => outcome.cutOff),
+    interrupted: outcomes.filter((outcome) => outcome.interrupted),
+    flaky: outcomes.filter((outcome) => outcome.flaky),
     outside: report?.errors?.length ?? 0,
+    unaccounted,
   };
 }
 
@@ -115,7 +129,8 @@ export function sortSecondRun(pending, report) {
   for (const test of pending) {
     const now = seen.get(keyOf(test));
     if (!now) cutOff.push(test);
-    else if (!now.failed) passed.push(test);
+    else if (now.passed) passed.push(test);
+    else if (!now.failed) cutOff.push(test);
     else if (now.cutOff) cutOff.push(test);
     else standing.push(test);
   }
@@ -181,7 +196,16 @@ export function canBeJudged(argv) {
 }
 
 /** The last word on a run: its exit code, and what to say about it. */
-export function verdict({ excused, standing, unjudged, outside }) {
+export function verdict({
+  excused,
+  standing,
+  unjudged,
+  outside,
+  interrupted = [],
+  flaky = [],
+  unaccounted = 0,
+  unexplained = false,
+}) {
   const lines = [];
   const list = (tests) => tests.map((test) => `    ${describe(test)}`);
   if (excused.length > 0) {
@@ -201,9 +225,93 @@ export function verdict({ excused, standing, unjudged, outside }) {
   if (standing.length > 0) {
     lines.push(`${standing.length} failure(s) stand:`, ...list(standing));
   }
+  if (interrupted.length > 0) {
+    lines.push(`${interrupted.length} test(s) were interrupted before they finished:`, ...list(interrupted));
+  }
+  if (flaky.length > 0) {
+    lines.push(
+      `${flaky.length} test(s) failed and then passed on a retry. A retry is not a pass here:`,
+      ...list(flaky),
+    );
+  }
+  if (unaccounted > 0) {
+    lines.push(`The report counts ${unaccounted} more failing test(s) than it lists; see the run's output above.`);
+  }
   if (outside > 0) {
     lines.push(`The run also reported ${outside} error(s) outside any test; see its output above.`);
   }
-  const failed = standing.length > 0 || unjudged.length > 0 || outside > 0;
+  if (unexplained) {
+    lines.push('Playwright ended the run with a failing status, and its report names nothing that explains it.');
+  }
+  const failed = standing.length > 0 || unjudged.length > 0 || interrupted.length > 0
+    || flaky.length > 0 || unaccounted > 0 || outside > 0 || unexplained;
   return { exitCode: failed ? 1 : 0, lines };
+}
+
+/**
+ * The exit code of a browser run, given what Playwright said about it and a way to run its
+ * network-cut failures again.
+ *
+ * The only thing that turns a failing run into a passing one is a failure the browser blamed on
+ * the network changing, which then passed when run again on its own. Everything else Playwright
+ * reports stands: a failing test with no such mark, an interrupted one, a retried one, an error
+ * outside any test, and a failing status that the report does not explain at all. That last case
+ * is what an earlier form of this function missed: with one cut-off failure that passed the
+ * second time and some other cause of the first run's failing status, the second run's good
+ * result was taken for the whole run's.
+ *
+ * `rerun(project, places, attempt)` runs the given places in one project and returns
+ * `{ status, report }`; it is the only part that touches a browser. `announce` is told what is
+ * about to run again.
+ */
+export function judgeRun({ status, report, judgeable = true, rerun, announce = () => {} }) {
+  const sorted = sortFailures(report);
+  const { cutOff, interrupted, flaky, unaccounted } = sorted;
+  const standing = [...sorted.standing];
+  let outside = sorted.outside;
+  const reported = standing.length + cutOff.length + interrupted.length + flaky.length
+    + outside + unaccounted;
+  if (status === 0 && reported === 0) return { exitCode: 0, lines: [] };
+
+  const excused = [];
+  let pending = [];
+  if (judgeable) {
+    pending = cutOff;
+  } else {
+    // A run that stopped early, repeated tests or was steered by hand: a second result for one
+    // failure does not mean what it would in a whole run, so the failure stands as it fell.
+    standing.push(...cutOff);
+  }
+
+  for (let attempt = 1; attempt <= ATTEMPTS && pending.length > 0; attempt += 1) {
+    announce(attempt, pending);
+    const stillCutOff = [];
+    for (const [project, places] of selectorsByProject(pending)) {
+      const second = rerun(project, places, attempt);
+      outside += second.report?.errors?.length ?? 0;
+      const sortedAgain = sortSecondRun(pending.filter((test) => test.project === project), second.report);
+      if (second.status !== 0) {
+        // A re-run that exited non-zero while its report names no failure was cut short or went
+        // wrong in a way the report does not place; its passes do not excuse anything.
+        const again = sortFailures(second.report);
+        const explained = again.standing.length + again.cutOff.length + again.interrupted.length
+          + again.flaky.length + again.outside + again.unaccounted;
+        if (explained === 0) {
+          stillCutOff.push(...sortedAgain.passed, ...sortedAgain.standing, ...sortedAgain.cutOff);
+          continue;
+        }
+      }
+      excused.push(...sortedAgain.passed);
+      standing.push(...sortedAgain.standing);
+      stillCutOff.push(...sortedAgain.cutOff);
+    }
+    pending = stillCutOff;
+  }
+
+  const unexplained = status !== 0 && reported === 0;
+  const last = verdict({
+    excused, standing, unjudged: pending, outside, interrupted, flaky, unaccounted, unexplained,
+  });
+  // Playwright's own code when it failed, so that what a caller sees is what Playwright said.
+  return { exitCode: last.exitCode === 0 ? 0 : (status || 1), lines: last.lines };
 }
