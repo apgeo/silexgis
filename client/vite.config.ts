@@ -343,6 +343,11 @@ function framingPolicy(): Plugin {
       // are all answered under the policy rather than only whatever happens to reach the end.
       server.middlewares.use((request, response, next) => {
         const path = (request.url ?? '/').split('?')[0];
+        // The two answers that are the same everywhere, so the browser suite sees what the packaged
+        // web server sends: a response is never reinterpreted as another type, and a link followed
+        // from here shares the origin but not the full address with another site.
+        response.setHeader('X-Content-Type-Options', 'nosniff');
+        response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
         if (PUBLIC_TRIP_PATH.test(path)) {
           response.setHeader('Content-Security-Policy', embeddable);
           response.setHeader('X-Robots-Tag', 'noindex, nofollow');
