@@ -17,7 +17,8 @@ public class LinkKind : TaxonomyBase
 /// <summary>
 /// A typed association between two features (NOT containment — that is the hierarchy).
 /// Replaces the hardcoded per-relation FK columns; both endpoints are real FKs. Trip
-/// logs deliberately do not participate (they keep their own cave relation).
+/// logs deliberately do not participate: what a trip is about is a resource link
+/// carrying a trip role, with the trip as its main member.
 /// </summary>
 public class FeatureLink : ITimestamped, IAuditable
 {
