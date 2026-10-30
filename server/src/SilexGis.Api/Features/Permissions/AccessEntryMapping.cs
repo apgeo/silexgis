@@ -5,6 +5,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Permissions;
@@ -182,14 +183,12 @@ public static class AccessEntryMapping
                 .ToListAsync(ct);
             Guid[] cabinetIds = [.. filedUnder.SelectMany(ids => ids).Distinct()];
 
-            // Read past the soft-delete filter, as the feature anchor above is: a rule the
-            // author carries over a document that has been sent to the bin still binds
-            // them, and reading nothing there would quietly turn that rule off.
-            var documentColumns = await AccessColumnsAsync(
-                db.Documents.IgnoreQueryFilters(), documentId, ct);
-            return documentColumns is null
-                ? new AccessTargetFacts { ObjectId = documentId, CabinetIds = cabinetIds }
-                : AccessTargetFacts.Of(documentColumns) with { CabinetIds = cabinetIds };
+            // The row's own columns come from the same reader every other object anchor uses —
+            // a document is read past the soft-delete filter there, as the feature anchor above
+            // is, because a rule the author carries over a document sent to the bin still binds
+            // them. An album is governed as a document, so a rule in this domain may name one;
+            // albums are never filed in a cabinet, so for them the cabinet list is empty.
+            return await ObjectFactsAsync(db, entry, documentId, ct) with { CabinetIds = cabinetIds };
         }
 
         if (entry.ScopeKind == AccessScopeKind.Object && entry.ScopeId is { } objectId)
@@ -202,28 +201,9 @@ public static class AccessEntryMapping
             // trip one step after the guard deciding whether they may manage it at all had
             // let them through on exactly that ownership. The remaining kinds a rule may be
             // anchored on here — a stored file, a club, a ruleset, a feature set — carry no
-            // owner and no audience column, so an id really is all there is to say.
-            //
-            // A trip is read past the filter that hides deleted ones, as a document is above and
-            // for the same reason: deleting a trip leaves every rule on it standing, so that
-            // putting it back is exact, and whoever wrote such a rule has to be able to take it
-            // back before the trip returns with it. Reading nothing here would hide the trip's
-            // owner from this check and refuse them their own rule.
-            var columns = entry.Domain switch
-            {
-                AccessDomain.TripLogs => await AccessColumnsAsync(db.TripLogs.IgnoreQueryFilters(), objectId, ct),
-                AccessDomain.Geofiles => await AccessColumnsAsync(db.Geofiles, objectId, ct),
-                AccessDomain.GeoreferencedMaps => await AccessColumnsAsync(db.GeoreferencedMaps, objectId, ct),
-                AccessDomain.MapViews => await AccessColumnsAsync(db.MapViews, objectId, ct),
-                AccessDomain.Expeditions => await AccessColumnsAsync(db.Expeditions, objectId, ct),
-                AccessDomain.Checklists => await AccessColumnsAsync(db.Checklists, objectId, ct),
-                AccessDomain.Events => await AccessColumnsAsync(db.Events, objectId, ct),
-                _ => null,
-            };
-
-            return columns is null
-                ? new AccessTargetFacts { ObjectId = objectId }
-                : AccessTargetFacts.Of(columns);
+            // owner and no audience column, so an id really is all there is to say. Which
+            // tables a domain's rule may name, and how each is read, is the one table below.
+            return await ObjectFactsAsync(db, entry, objectId, ct);
         }
 
         return entry.ScopeKind switch
@@ -293,30 +273,129 @@ public static class AccessEntryMapping
             return true;
         }
 
-        return entry.ScopeKind switch
+        // The scope-validity table has already refused an id on a scope that takes none, so
+        // a rule reaching here names a row; which tables that row may live in is the anchor
+        // list's to say. A scope or domain the list does not know names nothing that can be
+        // found — refused, rather than admitted as the open default this once was, under
+        // which a kind added later was let through unchecked without anything failing.
+        if (AnchorArmOf(entry) is not { } arm)
         {
-            AccessScopeKind.CavingGroup => await db.CavingGroups.AnyAsync(g => g.Id == scopeId, ct),
-            AccessScopeKind.FeatureSet => await db.FeatureSets.AnyAsync(s => s.Id == scopeId, ct),
-            AccessScopeKind.Cabinet => await db.Cabinets.AnyAsync(c => c.Id == scopeId, ct),
-            AccessScopeKind.Object => entry.Domain switch
+            return false;
+        }
+
+        foreach (var target in arm.Targets)
+        {
+            if (await AnchorReaders[target].ExistsAsync(db, scopeId, ct))
             {
-                AccessDomain.TripLogs => await db.TripLogs.AnyAsync(x => x.Id == scopeId, ct),
-                AccessDomain.Geofiles => await db.Geofiles.AnyAsync(x => x.Id == scopeId, ct),
-                AccessDomain.GeoreferencedMaps => await db.GeoreferencedMaps.AnyAsync(x => x.Id == scopeId, ct),
-                AccessDomain.MapViews => await db.MapViews.AnyAsync(x => x.Id == scopeId, ct),
-                AccessDomain.Files => await db.StoredFiles.AnyAsync(x => x.Id == scopeId, ct),
-                AccessDomain.Documents => await db.Documents.AnyAsync(x => x.Id == scopeId, ct),
-                AccessDomain.Expeditions => await db.Expeditions.AnyAsync(x => x.Id == scopeId, ct),
-                AccessDomain.Checklists => await db.Checklists.AnyAsync(x => x.Id == scopeId, ct),
-                AccessDomain.Events => await db.Events.AnyAsync(x => x.Id == scopeId, ct),
-                AccessDomain.CavingGroups => await db.CavingGroups.AnyAsync(x => x.Id == scopeId, ct),
-                AccessDomain.PermissionGroups => await db.PermissionGroups.AnyAsync(x => x.Id == scopeId, ct),
-                AccessDomain.FeatureSets => await db.FeatureSets.AnyAsync(x => x.Id == scopeId, ct),
-                _ => true,
-            },
-            _ => true,
-        };
+                return true;
+            }
+        }
+
+        return false;
     }
+
+    /// <summary>
+    /// The facts of an object a rule is anchored on: the access columns of whichever of its
+    /// domain's tables holds the id, or the id alone when none does or the table carries no
+    /// access columns.
+    /// </summary>
+    private static async Task<AccessTargetFacts> ObjectFactsAsync(
+        SilexGisDbContext db, AccessEntry entry, Guid objectId, CancellationToken ct)
+    {
+        if (AnchorArmOf(entry) is { } arm)
+        {
+            foreach (var target in arm.Targets)
+            {
+                if (AnchorReaders[target].ColumnsAsync is { } read
+                    && await read(db, objectId, ct) is { } columns)
+                {
+                    return AccessTargetFacts.Of(columns);
+                }
+            }
+        }
+
+        return new AccessTargetFacts { ObjectId = objectId };
+    }
+
+    /// <summary>The anchor-list arm whose column an entry's id is stored in, if any.</summary>
+    private static AccessAnchorArm? AnchorArmOf(AccessEntry entry) =>
+        AccessAnchors.Arms.FirstOrDefault(a => entry.ScopeKind == AccessScopeKind.Object
+            ? a.Column == AccessReferenceColumn.ObjectScope && a.Domain == entry.Domain
+            : a.Column == AccessReferenceColumn.ScopeId && a.ScopeKind == entry.ScopeKind);
+
+    /// <summary>
+    /// How the write-time gate reads each table a rule can be anchored on through its id
+    /// column: whether the row exists, and — for a table that carries an owner, a club and an
+    /// audience — those columns.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The anchor list in Infrastructure says which tables a domain's object rule, or a scope
+    /// kind's rule, may name; the evaluator honours such a rule on every one of them and the
+    /// orphan sweep keeps it alive while any of them holds the id. This table is the gate's half
+    /// of the same knowledge, and an architecture test fails when a table on that list has no
+    /// entry here — or carries access columns and has no reader for them. Before it existed the
+    /// gate kept its own two switches: a rule on an album, a saved filter or a trip's phone
+    /// recording was refused as naming nothing (only the first table of each domain was looked
+    /// in), and a kind added to the list later was admitted by an open default without a check.
+    /// </para>
+    /// <para>
+    /// Existence is asked through the ordinary filters, so a rule cannot be newly anchored on a
+    /// trip or a recording in the bin. The columns are read past them: deleting a trip or a
+    /// recording, or sending a document to the bin, leaves every rule on it standing so that
+    /// putting it back is exact, and whoever wrote such a rule has to be able to take it back
+    /// before the row returns with it — reading nothing would hide the owner and refuse them
+    /// their own rule.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyDictionary<Type, AccessAnchorReader> AnchorReaders { get; } =
+        new Dictionary<Type, AccessAnchorReader>
+        {
+            [typeof(TripLog)] = Protected(
+                (db, id, ct) => db.TripLogs.AnyAsync(x => x.Id == id, ct),
+                db => db.TripLogs.IgnoreQueryFilters()),
+            [typeof(TripRecording)] = Protected(
+                (db, id, ct) => db.TripRecordings.AnyAsync(x => x.Id == id, ct),
+                db => db.TripRecordings.IgnoreQueryFilters()),
+            [typeof(Geofile)] = Protected(
+                (db, id, ct) => db.Geofiles.AnyAsync(x => x.Id == id, ct),
+                db => db.Geofiles),
+            [typeof(GeoreferencedMap)] = Protected(
+                (db, id, ct) => db.GeoreferencedMaps.AnyAsync(x => x.Id == id, ct),
+                db => db.GeoreferencedMaps),
+            [typeof(MapView)] = Protected(
+                (db, id, ct) => db.MapViews.AnyAsync(x => x.Id == id, ct),
+                db => db.MapViews),
+            [typeof(SavedFilter)] = Protected(
+                (db, id, ct) => db.SavedFilters.AnyAsync(x => x.Id == id, ct),
+                db => db.SavedFilters),
+            [typeof(Document)] = Protected(
+                (db, id, ct) => db.Documents.AnyAsync(x => x.Id == id, ct),
+                db => db.Documents.IgnoreQueryFilters()),
+            [typeof(Album)] = Protected(
+                (db, id, ct) => db.Albums.AnyAsync(x => x.Id == id, ct),
+                db => db.Albums),
+            [typeof(Expedition)] = Protected(
+                (db, id, ct) => db.Expeditions.AnyAsync(x => x.Id == id, ct),
+                db => db.Expeditions),
+            [typeof(Checklist)] = Protected(
+                (db, id, ct) => db.Checklists.AnyAsync(x => x.Id == id, ct),
+                db => db.Checklists),
+            [typeof(Event)] = Protected(
+                (db, id, ct) => db.Events.AnyAsync(x => x.Id == id, ct),
+                db => db.Events),
+            [typeof(StoredFile)] = new((db, id, ct) => db.StoredFiles.AnyAsync(x => x.Id == id, ct), null),
+            [typeof(CavingGroup)] = new((db, id, ct) => db.CavingGroups.AnyAsync(x => x.Id == id, ct), null),
+            [typeof(PermissionGroup)] = new((db, id, ct) => db.PermissionGroups.AnyAsync(x => x.Id == id, ct), null),
+            [typeof(FeatureSet)] = new((db, id, ct) => db.FeatureSets.AnyAsync(x => x.Id == id, ct), null),
+            [typeof(Cabinet)] = new((db, id, ct) => db.Cabinets.AnyAsync(x => x.Id == id, ct), null),
+        };
+
+    private static AccessAnchorReader Protected<TRow>(
+        Func<SilexGisDbContext, Guid, CancellationToken, Task<bool>> exists,
+        Func<SilexGisDbContext, IQueryable<TRow>> columnsFrom)
+        where TRow : class, IProtectedEntity =>
+        new(exists, async (db, id, ct) => await AccessColumnsAsync(columnsFrom(db), id, ct));
 
     /// <summary>
     /// Projects rules for display, naming each anchor where the caller may read it. The
@@ -380,3 +459,12 @@ public static class AccessEntryMapping
         ];
     }
 }
+
+/// <summary>
+/// How the write-time gate reads one table a rule can be anchored on: whether a row with the
+/// id exists, and — null for a table with no owner, club or audience column — the row's
+/// access columns.
+/// </summary>
+public sealed record AccessAnchorReader(
+    Func<SilexGisDbContext, Guid, CancellationToken, Task<bool>> ExistsAsync,
+    Func<SilexGisDbContext, Guid, CancellationToken, Task<IProtectedEntity?>>? ColumnsAsync);

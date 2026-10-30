@@ -240,4 +240,59 @@ public class AccessAnchorCoverageTests
             + "AccessAnchorCleanup and save before the statement and list the file here: "
             + string.Join("; ", offenders));
     }
+
+    /// <summary>
+    /// The write-time gate asks, before a rule is saved, whether its anchor exists and what the
+    /// author holds over it. Both answers must cover every table the anchor list says a rule may
+    /// name: a table the gate does not look in refuses a legitimate rule as naming nothing, and a
+    /// gate that admits what it does not know lets a rule on a missing row through.
+    /// </summary>
+    [Fact]
+    public void Every_table_a_rule_names_by_id_has_a_reader_in_the_write_gate()
+    {
+        var targets = AccessAnchors.Arms
+            .Where(a => a.Column is AccessReferenceColumn.ObjectScope or AccessReferenceColumn.ScopeId)
+            .SelectMany(a => a.Targets)
+            .Distinct()
+            .ToList();
+
+        // The fixture half: the second tables of three domains, which the gate once never looked
+        // in, and a scope kind's table.
+        targets.ShouldContain(typeof(Album));
+        targets.ShouldContain(typeof(SavedFilter));
+        targets.ShouldContain(typeof(TripRecording));
+        targets.ShouldContain(typeof(Cabinet));
+
+        var readers = SilexGis.Api.Features.Permissions.AccessEntryMapping.AnchorReaders;
+        var unread = targets.Where(t => !readers.ContainsKey(t)).Select(t => t.Name).ToList();
+        unread.ShouldBeEmpty(
+            "a rule may be anchored on these tables, but the write gate cannot tell whether such a row "
+            + "exists, so the rule is refused as naming nothing. Add a reader to AccessEntryMapping.AnchorReaders: "
+            + string.Join(", ", unread));
+        readers.Keys.Except(targets).Select(t => t.Name).ShouldBeEmpty(
+            "a reader for a table no arm of the anchor list names");
+    }
+
+    [Fact]
+    public void Every_anchor_table_with_access_columns_has_them_read_by_the_write_gate()
+    {
+        var readers = SilexGis.Api.Features.Permissions.AccessEntryMapping.AnchorReaders;
+
+        // The fixture half: one table of each shape.
+        readers.Keys.ShouldContain(typeof(Album));
+        readers.Keys.ShouldContain(typeof(StoredFile));
+
+        var unreadColumns = readers
+            .Where(r => typeof(IProtectedEntity).IsAssignableFrom(r.Key) && r.Value.ColumnsAsync is null)
+            .Select(r => r.Key.Name)
+            .ToList();
+        unreadColumns.ShouldBeEmpty(
+            "these rows carry an owner, a club and an audience, and an author's right to write a rule on "
+            + "one is largely made of them; facts naming only the id refuse the row's own owner: "
+            + string.Join(", ", unreadColumns));
+        readers
+            .Where(r => !typeof(IProtectedEntity).IsAssignableFrom(r.Key) && r.Value.ColumnsAsync is not null)
+            .Select(r => r.Key.Name)
+            .ShouldBeEmpty("a column reader for a table that has no access columns");
+    }
 }

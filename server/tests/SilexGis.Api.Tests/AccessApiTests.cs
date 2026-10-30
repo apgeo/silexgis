@@ -177,6 +177,99 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<
         current.EnumerateArray().Count().ShouldBe(1);
     }
 
+    /// <summary>
+    /// One domain can govern more than one table — an album is governed as a document, a saved
+    /// filter as a map view — and a rule in that domain may name a row of any of them. The write
+    /// gate once looked only in each domain's first table and refused such a rule as naming
+    /// nothing, while the evaluator would have honoured it and the orphan sweep kept it.
+    /// </summary>
+    [Fact]
+    public async Task A_rule_may_name_an_album_or_a_saved_filter_and_still_not_a_missing_row()
+    {
+        var (albumId, filterId) = await SeedAlbumAndSavedFilterAsync();
+        var groupId = await CreatePermissionGroupAsync($"Second Tables {suffix}");
+
+        var ok = await admin.PutAsJsonAsync($"/api/v1/permission-groups/{groupId}/entries", new
+        {
+            entries = new[]
+            {
+                new { effect = "allow", domain = "documents", actions = "read", scopeKind = "object", scopeId = albumId },
+                new { effect = "deny", domain = "mapViews", actions = "read", scopeKind = "object", scopeId = filterId },
+            },
+        });
+        ok.StatusCode.ShouldBe(HttpStatusCode.OK, await ok.Content.ReadAsStringAsync());
+
+        // The negative half: the same domains still refuse an id no table of theirs holds.
+        var dangling = await admin.PutAsJsonAsync($"/api/v1/permission-groups/{groupId}/entries", new
+        {
+            entries = new[]
+            {
+                new { effect = "deny", domain = "documents", actions = "read", scopeKind = "object", scopeId = Guid.NewGuid() },
+            },
+        });
+        dangling.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await dangling.Content.ReadAsStringAsync()).ShouldContain("access_entry.anchor_not_found");
+    }
+
+    /// <summary>
+    /// What an author holds over an anchored row is largely its owner and audience columns; read
+    /// from the wrong table, they come back empty and the row's own owner is refused the rule.
+    /// </summary>
+    [Fact]
+    public async Task The_facts_of_an_album_or_a_saved_filter_carry_its_owner()
+    {
+        var (albumId, filterId) = await SeedAlbumAndSavedFilterAsync();
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        var album = await AccessEntryMapping.AnchorFactsAsync(db, new AccessEntry
+        {
+            Effect = AccessEffect.Allow, Domain = AccessDomain.Documents, Actions = AccessAction.Read,
+            ScopeKind = AccessScopeKind.Object, ScopeId = albumId,
+        }, TestContext.Current.CancellationToken);
+        album.ShouldNotBeNull();
+        album.ObjectId.ShouldBe(albumId);
+        album.OwnerUserId.ShouldBe(editorId);
+        album.VisibilityChain.ShouldBe([new VisibilityFact(Visibility.Authenticated, null)]);
+
+        var filter = await AccessEntryMapping.AnchorFactsAsync(db, new AccessEntry
+        {
+            Effect = AccessEffect.Allow, Domain = AccessDomain.MapViews, Actions = AccessAction.Read,
+            ScopeKind = AccessScopeKind.Object, ScopeId = filterId,
+        }, TestContext.Current.CancellationToken);
+        filter.ShouldNotBeNull();
+        filter.OwnerUserId.ShouldBe(editorId);
+
+        // The negative half: an id nothing holds gives the id alone, which can only refuse.
+        var missing = await AccessEntryMapping.AnchorFactsAsync(db, new AccessEntry
+        {
+            Effect = AccessEffect.Allow, Domain = AccessDomain.Documents, Actions = AccessAction.Read,
+            ScopeKind = AccessScopeKind.Object, ScopeId = Guid.NewGuid(),
+        }, TestContext.Current.CancellationToken);
+        missing.ShouldNotBeNull();
+        missing.OwnerUserId.ShouldBeNull();
+    }
+
+    private async Task<(Guid AlbumId, Guid FilterId)> SeedAlbumAndSavedFilterAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var now = DateTimeOffset.UtcNow;
+        var album = new Album
+        {
+            Title = $"Anchor album {suffix}", OwnerUserId = editorId, Visibility = Visibility.Authenticated,
+            CreatedAt = now, UpdatedAt = now,
+        };
+        var filter = new SavedFilter
+        {
+            Name = $"Anchor filter {suffix} {Guid.NewGuid():N}", OwnerUserId = editorId, CreatedAt = now, UpdatedAt = now,
+        };
+        db.Albums.Add(album);
+        db.SavedFilters.Add(filter);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return (album.Id, filter.Id);
+    }
+
     [Fact]
     public async Task The_protected_groups_keep_their_shape()
     {
