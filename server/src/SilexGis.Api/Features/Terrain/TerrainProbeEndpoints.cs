@@ -258,21 +258,16 @@ public static class TerrainProbeEndpoints
 
         var asked = request.FeatureIds.Distinct().ToList();
 
-        // Resolved by code rather than by a stored number, so that renaming the shipped kind fails
-        // the build instead of quietly making every sinkhole unprobeable.
-        var sinkholeTypeId = await db.FeatureTypes.AsNoTracking()
-            .Where(t => t.Code == FeatureTypeSeeds.Sinkhole)
-            .Select(t => (long?)t.Id)
-            .FirstOrDefaultAsync(ct);
-
         var visible = db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers);
 
+        // The sinkhole kind is matched by its code rather than by a stored number, so that renaming
+        // the shipped kind fails the build instead of quietly making every sinkhole unprobeable —
+        // and inside the one statement, so the kind costs no round trip of its own.
         var rows = await visible
             .Where(f => asked.Contains(f.Id) && f.Geom != null)
             .Where(f => f.Kind == FeatureKind.CaveEntrance
                 || (f.Kind == FeatureKind.Generic
-                    && sinkholeTypeId != null
-                    && f.FeatureTypeId == sinkholeTypeId))
+                    && db.FeatureTypes.Any(t => t.Id == f.FeatureTypeId && t.Code == FeatureTypeSeeds.Sinkhole)))
             .Select(f => new Row(f.Id, f.IsProtectedEffective, f.Geom!))
             .ToListAsync(ct);
 
