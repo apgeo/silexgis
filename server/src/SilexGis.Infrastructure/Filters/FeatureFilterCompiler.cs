@@ -17,7 +17,7 @@ namespace SilexGis.Infrastructure.Filters;
 /// safe to negate: for a row the caller cannot place, the condition answers the same way whatever
 /// the row's true geometry is, so <c>not near</c> cannot be turned into a measurement.
 /// </remarks>
-public sealed record ResolvedSpatial(IReadOnlyCollection<Guid> Ids);
+public sealed record ResolvedSpatial(IQueryable<Guid>? Rows);
 
 /// <summary>
 /// Turns a validated filter tree into one expression a database can run.
@@ -78,8 +78,8 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
         if (condition.Field == FeatureFilterFields.Position)
         {
             // Resolved elsewhere; here it is only ever a set membership.
-            var ids = spatial.TryGetValue(condition, out var resolved) ? resolved.Ids : [];
-            return ids.Count == 0 ? _ => false : f => ids.Contains(f.Id);
+            var rows = spatial.TryGetValue(condition, out var resolved) ? resolved.Rows : null;
+            return rows is null ? _ => false : f => rows.Contains(f.Id);
         }
 
         if (FeatureFilterFields.TryReadProperty(condition.Field, out var typeCode, out var key))

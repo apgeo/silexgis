@@ -94,6 +94,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
 
     /// <summary>The ordinary reader's caving group, removed by the cleanup with its grant.</summary>
     private Guid? readerGroupId;
+    private Guid? federationGroupId;
 
     public PerformanceTests(PostgresFixture postgres, ITestOutputHelper output)
     {
@@ -151,6 +152,63 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         return (userId, email);
     }
 
+    /// <summary>
+    /// Country-wide clusters for a member whose caving group holds many subtree grants — the shape
+    /// of a regional federation's roster — timed with the budget of the other map requests. The
+    /// grants are read per request, so their number is a cost of its own.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> TimeManyGrantClustersAsync()
+    {
+        const int Grants = 40;
+        var email = $"perf-grants-{Guid.NewGuid():N}@t.local";
+        var userId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, email);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var caves = await db.Features.AsNoTracking()
+                .Where(f => f.Kind == FeatureKind.Cave && f.OwnerUserId == seededOwnerId)
+                .OrderBy(f => f.Id)
+                .Select(f => f.Id)
+                .Take(Grants)
+                .ToListAsync();
+            caves.Count.ShouldBe(Grants);
+            var stamp = Guid.NewGuid().ToString("N")[..8];
+            var group = new CavingGroup { Name = $"Perf federation {stamp}", Slug = $"perf-federation-{stamp}" };
+            var caverId = await db.Cavers.Where(c => c.UserId == userId).Select(c => c.Id).SingleAsync();
+            db.CavingGroups.Add(group);
+            db.CavingGroupMemberships.Add(new CavingGroupMembership { CaverId = caverId, CavingGroupId = group.Id });
+            foreach (var cave in caves)
+            {
+                db.AccessEntries.Add(new AccessEntry
+                {
+                    SubjectKind = AccessSubjectKind.CavingGroup,
+                    SubjectId = group.Id,
+                    Effect = AccessEffect.Allow,
+                    Domain = AccessDomain.Features,
+                    Actions = AccessAction.Read,
+                    ScopeKind = AccessScopeKind.Subtree,
+                    ScopeFeatureId = cave,
+                });
+            }
+
+            await db.SaveChangesAsync();
+            federationGroupId = group.Id;
+        }
+
+        using var http = await AuthHelper.BearerClientAsync(factory, email);
+        const string url = "/api/v1/map/cave-entrances?bbox=19.9,43.5,29.1,48.1&zoom=7";
+        (await http.GetAsync(url)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var stopwatch = Stopwatch.StartNew();
+        var response = await http.GetAsync(url);
+        stopwatch.Stop();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var measuredAt = LoadReading();
+        output.WriteLine($"clusters z7 (country), member with {Grants} subtree grants: {stopwatch.ElapsedMilliseconds} ms ({measuredAt})");
+        return stopwatch.ElapsedMilliseconds >= BudgetMs
+            ? [$"clusters z7 (country), member with {Grants} subtree grants: {stopwatch.ElapsedMilliseconds} ms ({measuredAt})"]
+            : [];
+    }
+
     [Fact]
     public async Task Endpoints_stay_responsive_with_100k_entrance_features()
     {
@@ -194,6 +252,11 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             ("features list p1", "/api/v1/features?pageSize=50"),
             ("features list (country bbox)", "/api/v1/features?pageSize=50&bbox=19.9,43.5,29.1,48.1"),
             ("search 'perf'", "/api/v1/search?q=perf"),
+            // The photograph routes cut to a window: the map's own layer and the gallery's extent.
+            // The seeded rows carry no pictures, so this pins the cost of deciding the window and
+            // the visibility walk, which is what grows with the installation.
+            ("photo map layer (country)", "/api/v1/map/photos?bbox=19.9,43.5,29.1,48.1"),
+            ("photo gallery extent (country)", "/api/v1/photos?pageSize=50&bbox=19.9,43.5,29.1,48.1"),
         };
 
         // Every request twice over: as the rows' owner, and as an ordinary member who owns none of
@@ -228,6 +291,8 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         {
             slow.AddRange(await TimeUnnarrowedFeatureWorldAsync(http, caller));
         }
+
+        slow.AddRange(await TimeManyGrantClustersAsync());
 
         await AssertEntranceLayerPlansAsync(ownerId, strangerId);
         await AssertReaderPlansAsync(memberId);
@@ -1585,7 +1650,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         db.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
 
-        if (readerGroupId is { } groupId)
+        foreach (var groupId in new[] { readerGroupId, federationGroupId }.OfType<Guid>())
         {
             await db.Database.ExecuteSqlAsync(
                 $"DELETE FROM access_entries WHERE subject_kind = {(short)AccessSubjectKind.CavingGroup} AND subject_id = {groupId};");

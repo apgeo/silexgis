@@ -117,6 +117,53 @@ public static class SpatialConditionSql
         return [.. ids];
     }
 
+    /// <summary>
+    /// The same answer as a query to compose into a larger statement, so the database joins on it
+    /// instead of receiving every matching id back as a parameter array. A map window or a wide
+    /// radius over a large installation matches a great many rows, and shipping that set out and
+    /// in again on every request is the cost this avoids.
+    /// </summary>
+    /// <param name="ordinal">
+    /// Which spatial condition of the statement this is. Each condition's parameters carry its
+    /// ordinal in their names, because two conditions composed into one statement would otherwise
+    /// both define the same names with different values.
+    /// </param>
+    public static IQueryable<Guid> Matching(
+        SilexGisDbContext db, AccessContext ctx, SpatialAsk ask, double protectionGridMeters, int ordinal)
+    {
+        var (sql, parameters) = Build(ctx, ask, protectionGridMeters);
+        var prefix = $"c{ordinal}_";
+        var composed = new List<object>();
+        foreach (var name in parameters.ParameterNames)
+        {
+            // Whole names only, so "sc_radius" is never found inside a longer one.
+            sql = System.Text.RegularExpressions.Regex.Replace(
+                sql, "@" + System.Text.RegularExpressions.Regex.Escape(name) + @"\b", "@" + prefix + name);
+            composed.Add(ParameterOf(prefix + name, parameters.Get<object?>(name)));
+        }
+
+        return db.Database.SqlQueryRaw<Guid>(sql, [.. composed]);
+    }
+
+    /// <summary>
+    /// One Dapper parameter value as a database parameter of the given name. The access fragments
+    /// pass id sets as custom parameters that know their own array type; those write themselves
+    /// into a command, so a scratch command receives the parameter and hands it over.
+    /// </summary>
+    private static Npgsql.NpgsqlParameter ParameterOf(string name, object? value)
+    {
+        if (value is SqlMapper.ICustomQueryParameter custom)
+        {
+            using var scratch = new Npgsql.NpgsqlCommand();
+            custom.AddParameter(scratch, name);
+            var written = scratch.Parameters[0];
+            scratch.Parameters.Clear();
+            return written;
+        }
+
+        return new Npgsql.NpgsqlParameter(name, value ?? DBNull.Value);
+    }
+
     /// <summary>The statement and its parameters, exposed so a test can pin its shape.</summary>
     public static (string Sql, DynamicParameters Parameters) Build(
         AccessContext ctx, SpatialAsk ask, double protectionGridMeters)
@@ -138,7 +185,7 @@ public static class SpatialConditionSql
                   AND {visibleSql}
                   AND {membership}
             )
-            SELECT hit.id FROM hit
+            SELECT hit.id AS "Value" FROM hit
             UNION
             SELECT ce.cave_feature_id FROM cave_entrances ce JOIN hit ON hit.id = ce.id
             """;

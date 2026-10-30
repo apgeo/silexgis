@@ -150,7 +150,7 @@ public sealed class FeatureFilterWorld(
 
             var ask = await AskAsync(caller, condition, mayNest, ct);
             resolved[condition] = new ResolvedSpatial(
-                ask is null ? [] : await SpatialConditionSql.MatchingAsync(db, caller, ask, grid.Meters, ct));
+                ask is null ? null : SpatialConditionSql.Matching(db, caller, ask, grid.Meters, resolved.Count));
         }
 
         return resolved;
