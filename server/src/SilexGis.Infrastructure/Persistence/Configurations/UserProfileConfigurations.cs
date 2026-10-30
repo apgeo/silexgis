@@ -168,6 +168,12 @@ public sealed class NotificationDeliveryConfiguration : IEntityTypeConfiguration
         // path itself: a message too long to store would fail the save that records the failure.
         builder.Property(x => x.Error).HasMaxLength(1000);
 
+        // Stamped by the database when a writer leaves it unset. Every index below that matters keys
+        // on this instant, and a row left at year one is outside every retention window and outside
+        // the day's spending count on a charging channel, silently; a producer that forgets cannot
+        // be allowed to cost that.
+        builder.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+
         builder.HasOne<Notification>().WithMany().HasForeignKey(x => x.NotificationId)
             .OnDelete(DeleteBehavior.Cascade);
 

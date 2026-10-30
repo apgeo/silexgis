@@ -4676,8 +4676,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnName("channel");
 
                     b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
 
                     b.Property<string>("Error")
                         .HasMaxLength(1000)
