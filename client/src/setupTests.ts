@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { afterEach } from 'vitest';
+import { afterAll, afterEach, vi } from 'vitest';
 
 // Testing Library registers its own automatic unmount only when the runner exposes its hooks
 // as globals, and this project keeps them as explicit imports. Without that unmount, every
@@ -12,6 +12,23 @@ import { afterEach } from 'vitest';
 // last, which is why it moved between runs and never pointed at the file that caused it.
 // Unmounting after each test drains that work while the environment still exists.
 afterEach(cleanup);
+
+// Work that the last test's unmount itself queued (an effect cleanup that sets state, a timer a
+// library re-arms, a query settling) is posted to the macrotask queue by the very call above, so
+// it is still waiting when the file's last test ends. Letting two turns of that queue run here, in
+// a hook that belongs to the file, delivers those callbacks while `window` still exists instead of
+// leaving them to wake after the environment is disposed. A file that left fake timers installed
+// would never see its turn arrive, so the real ones are put back first.
+//
+// This is hardening against a suspected mechanism, not a diagnosed fix: the crash it targets (the
+// run exits 1 over a green summary) was not reproduced in the runs made, so it has not been shown
+// to cure it. If the exit code goes red again with a green summary, the cause is still open.
+afterAll(async () => {
+  vi.useRealTimers();
+  for (let turn = 0; turn < 2; turn += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+});
 import i18n from './i18n';
 import { forgetSurveyFiles } from './caveview/surveyFileDownload.ts';
 
