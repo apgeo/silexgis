@@ -16,10 +16,12 @@ namespace SilexGis.Infrastructure.Permissions;
 /// asks <see cref="FeatureProtection"/> the exact-view question once for the whole batch.
 /// </summary>
 /// <remarks>
-/// Five reads serve any number of photos: the attachments, the locating links of whatever
-/// features those name, the member trips of whatever camps they name, the caves of every trip
-/// that turned up either way, and the exact-view pass over the lot. Everything downstream of
-/// that is in memory, so authorising a page of photos costs what authorising one does.
+/// A fixed handful of reads serve any number of photos: the attachments, the locating links of
+/// whatever features those name, the member trips of whatever camps they name, the caves of
+/// every trip that turned up either way, the guarded features when any photo is filed under an
+/// object that names no place, one round per level of files filed under files, and the
+/// exact-view pass over the lot. Everything downstream of that is in
+/// memory, so authorising a page of photos costs what authorising one does.
 /// </remarks>
 public sealed class PhotoPositionDisclosure(
     SilexGisDbContext db, FeatureProtection protection, IAppSettingsService settings)
@@ -40,6 +42,48 @@ public sealed class PhotoPositionDisclosure(
     /// </summary>
     public async Task<PhotoReach> ForUploaderAsync(Guid fileId, CancellationToken ct = default) =>
         new(new HashSet<Guid> { fileId }, await settings.GetProtectionAsync(ct));
+
+    /// <summary>
+    /// What places a photograph filed under a non-feature object of the given kind — the one
+    /// table this rule keeps of the attachment vocabulary. A kind it does not name is placed by
+    /// every guarded feature, so a kind appended later is withheld rather than disclosed until
+    /// somebody decides otherwise.
+    /// </summary>
+    public static PhotoChainSource ChainSourceOf(AttachedEntityType type) =>
+        TryChainSourceOf(type, out var source) ? source : PhotoChainSource.EveryGuardedFeature;
+
+    /// <summary>
+    /// The explicit answer for a kind, or false for one nobody has placed yet. Kept apart from
+    /// <see cref="ChainSourceOf"/> so a structural test can insist every kind is named here
+    /// while a kind that slips through still fails closed.
+    /// </summary>
+    /// <remarks>
+    /// Kinds with no position of their own and no cave they name — a club, a calendar event, a
+    /// geodata file, a scanned sheet, a saved map view — say nothing about where the camera
+    /// stood, so they are placed by every guarded feature. So are the kinds no attachment
+    /// surface accepts today (a document, a survey model, a roster caver, a cabinet, an album,
+    /// a checklist, the reserved comment): should one start accepting them, the photographs
+    /// filed there are withheld until somebody gives the kind an arm of its own.
+    /// </remarks>
+    public static bool TryChainSourceOf(AttachedEntityType type, out PhotoChainSource source)
+    {
+        source = type switch
+        {
+            AttachedEntityType.TripLog => PhotoChainSource.Trip,
+            AttachedEntityType.Expedition => PhotoChainSource.Camp,
+            AttachedEntityType.TripRecording => PhotoChainSource.Recording,
+            AttachedEntityType.TripRecordingPoint => PhotoChainSource.Scan,
+            AttachedEntityType.StoredFile => PhotoChainSource.ParentFile,
+            AttachedEntityType.CavingGroup or AttachedEntityType.Event or AttachedEntityType.Geofile
+                or AttachedEntityType.GeoreferencedMap or AttachedEntityType.MapView
+                or AttachedEntityType.Document or AttachedEntityType.SurveyModel
+                or AttachedEntityType.Caver or AttachedEntityType.Cabinet or AttachedEntityType.Album
+                or AttachedEntityType.Checklist or AttachedEntityType.Comment
+                => PhotoChainSource.EveryGuardedFeature,
+            _ => (PhotoChainSource)(-1),
+        };
+        return Enum.IsDefined(source);
+    }
 
     /// <summary>
     /// Of the given files, those whose own recorded position may be disclosed to the caller.
@@ -90,10 +134,26 @@ public sealed class PhotoPositionDisclosure(
             return chains;
         }
 
-        var links = await db.Attachments.AsNoTracking()
-            .Where(a => ids.Contains(a.FileId))
-            .Select(a => new { a.FileId, a.FeatureId, a.EntityType, a.EntityId })
-            .ToListAsync(ct);
+        // A file can be filed under another file, and that one under a third: a photograph
+        // attached to a survey report is placed by whatever places the report. So the files
+        // asked about are widened to every file they are filed under, in whole rounds, before
+        // anything is resolved; each file enters once, which is also what lets two files filed
+        // under each other settle instead of looping.
+        var closure = new HashSet<Guid>(ids);
+        var links = new List<ChainLink>();
+        var frontier = ids;
+        while (frontier.Count > 0)
+        {
+            var round = await db.Attachments.AsNoTracking()
+                .Where(a => frontier.Contains(a.FileId))
+                .Select(a => new ChainLink(a.FileId, a.FeatureId, a.EntityType, a.EntityId))
+                .ToListAsync(ct);
+            links.AddRange(round);
+            frontier = [.. round
+                .Where(l => l.EntityType == AttachedEntityType.StoredFile && closure.Add(l.EntityId!.Value))
+                .Select(l => l.EntityId!.Value)];
+        }
+
         if (links.Count == 0)
         {
             return chains;
@@ -158,6 +218,29 @@ public sealed class PhotoPositionDisclosure(
             p => new[] { recordingCaves.GetValueOrDefault(p.RecordingId), p.PlaceFeatureId ?? Guid.Empty }
                 .Where(id => id != Guid.Empty).ToList());
 
+        // A caving group has no position and names no place: nothing about a photograph filed
+        // under one says which cave the camera stood at, and a club's members photograph caves
+        // the club does not own as readily as ones it does. So the chain is every guarded
+        // feature in the installation — the position reaches only a caller who may place every
+        // one of them, and for anyone else the picture comes without it. Fail-closed, for the
+        // reason every member trip of a camp counts: anything narrower (the club's own caves,
+        // the caves its trips name) would hand over the position of a guarded cave whenever the
+        // photograph happened to be taken somewhere the narrowing did not reach. Deleted rows
+        // count, as everywhere in this rule, because a deletion can be taken back. Read once,
+        // and only when a photo in the batch is filed this way.
+        //
+        // Every other object a photograph can be filed under that has no arm of its own — a
+        // calendar event, a geodata file, a scanned sheet, a saved map view, and any kind added
+        // later — is answered the same way, for the same reason: it says nothing about where the
+        // camera stood, and a chain left empty would read as "nothing guards this position".
+        var guardedFeatureIds = !links.Any(l => l.EntityType is { } type
+                && ChainSourceOf(type) == PhotoChainSource.EveryGuardedFeature)
+            ? []
+            : await db.Features.AsNoTracking().IgnoreQueryFilters()
+                .Where(f => f.LocationProtected || f.IsProtectedEffective)
+                .Select(f => f.Id)
+                .ToListAsync(ct);
+
         // A link whose kind places its endpoints discloses the other end's position by
         // proximity, in either direction, so both ends join the chain — fail-closed.
         var locatingLinks = attachedFeatureIds.Count == 0
@@ -185,51 +268,109 @@ public sealed class PhotoPositionDisclosure(
         var tripToCaves = tripFeatures.GroupBy(x => x.TripId)
             .ToDictionary(g => g.Key, g => g.Select(x => x.FeatureId).ToList());
 
+        // What each file is placed by through its own links; a file filed under another file is
+        // noted here and given that file's chain afterwards.
+        var own = new Dictionary<Guid, List<Guid>>();
+        var parents = new Dictionary<Guid, List<Guid>>();
         foreach (var link in links)
         {
             if (link.FeatureId is { } featureId)
             {
-                Chain(link.FileId).Add(featureId);
+                Own(link.FileId).Add(featureId);
                 if (partners.TryGetValue(featureId, out var reached))
                 {
-                    Chain(link.FileId).AddRange(reached);
+                    Own(link.FileId).AddRange(reached);
                 }
+
+                continue;
             }
-            else if (link.EntityType == AttachedEntityType.TripLog
-                && tripToCaves.TryGetValue(link.EntityId!.Value, out var caveIds))
+
+            var entityId = link.EntityId!.Value;
+            switch (ChainSourceOf(link.EntityType!.Value))
             {
-                Chain(link.FileId).AddRange(caveIds);
-            }
-            else if (link.EntityType == AttachedEntityType.TripRecording
-                && recordingCaves.TryGetValue(link.EntityId!.Value, out var recordingCave))
-            {
-                Chain(link.FileId).Add(recordingCave);
-            }
-            else if (link.EntityType == AttachedEntityType.TripRecordingPoint
-                && scanFeatures.TryGetValue(link.EntityId!.Value, out var scanChain))
-            {
-                Chain(link.FileId).AddRange(scanChain);
-            }
-            else if (link.EntityType == AttachedEntityType.Expedition
-                && campToTrips.TryGetValue(link.EntityId!.Value, out var memberTripIds))
-            {
-                foreach (var tripId in memberTripIds)
-                {
-                    if (tripToCaves.TryGetValue(tripId, out var campCaveIds))
+                case PhotoChainSource.Trip:
+                    if (tripToCaves.TryGetValue(entityId, out var caveIds))
                     {
-                        Chain(link.FileId).AddRange(campCaveIds);
+                        Own(link.FileId).AddRange(caveIds);
+                    }
+
+                    break;
+                case PhotoChainSource.Recording:
+                    if (recordingCaves.TryGetValue(entityId, out var recordingCave))
+                    {
+                        Own(link.FileId).Add(recordingCave);
+                    }
+
+                    break;
+                case PhotoChainSource.Scan:
+                    if (scanFeatures.TryGetValue(entityId, out var scanChain))
+                    {
+                        Own(link.FileId).AddRange(scanChain);
+                    }
+
+                    break;
+                case PhotoChainSource.Camp:
+                    if (campToTrips.TryGetValue(entityId, out var memberTripIds))
+                    {
+                        foreach (var tripId in memberTripIds)
+                        {
+                            if (tripToCaves.TryGetValue(tripId, out var campCaveIds))
+                            {
+                                Own(link.FileId).AddRange(campCaveIds);
+                            }
+                        }
+                    }
+
+                    break;
+                case PhotoChainSource.ParentFile:
+                    if (!parents.TryGetValue(link.FileId, out var list))
+                    {
+                        parents[link.FileId] = list = [];
+                    }
+
+                    list.Add(entityId);
+                    break;
+                default:
+                    Own(link.FileId).AddRange(guardedFeatureIds);
+                    break;
+            }
+        }
+
+        // Each file asked about carries its own chain and that of every file above it.
+        foreach (var id in ids)
+        {
+            var seen = new HashSet<Guid> { id };
+            var pending = new Stack<Guid>([id]);
+            var chain = new List<Guid>();
+            while (pending.TryPop(out var current))
+            {
+                if (own.TryGetValue(current, out var direct))
+                {
+                    chain.AddRange(direct);
+                }
+
+                foreach (var parent in parents.GetValueOrDefault(current) ?? [])
+                {
+                    if (seen.Add(parent))
+                    {
+                        pending.Push(parent);
                     }
                 }
+            }
+
+            if (chain.Count > 0)
+            {
+                chains[id] = chain;
             }
         }
 
         return chains;
 
-        List<Guid> Chain(Guid fileId)
+        List<Guid> Own(Guid fileId)
         {
-            if (!chains.TryGetValue(fileId, out var chain))
+            if (!own.TryGetValue(fileId, out var chain))
             {
-                chains[fileId] = chain = [];
+                own[fileId] = chain = [];
             }
 
             return chain;
@@ -246,6 +387,30 @@ public sealed class PhotoPositionDisclosure(
         }
     }
 }
+
+/// <summary>What places a photograph filed under a non-feature object of a given kind.</summary>
+public enum PhotoChainSource
+{
+    /// <summary>Every place the trip names, whatever its role.</summary>
+    Trip,
+
+    /// <summary>Every place any member trip of the camp names, deleted members included.</summary>
+    Camp,
+
+    /// <summary>The cave the recording was made in.</summary>
+    Recording,
+
+    /// <summary>The scan's place and its recording's cave.</summary>
+    Scan,
+
+    /// <summary>Whatever places the file it is filed under, all the way up.</summary>
+    ParentFile,
+
+    /// <summary>Every guarded feature of the installation: the object says nothing of a place.</summary>
+    EveryGuardedFeature,
+}
+
+internal sealed record ChainLink(Guid FileId, Guid? FeatureId, AttachedEntityType? EntityType, Guid? EntityId);
 
 /// <summary>
 /// A resolved answer about a batch of files: whose recorded position this caller may be given,

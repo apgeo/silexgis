@@ -213,6 +213,185 @@ public sealed class PhotoBytesProtectionTests : IAsyncLifetime, IDisposable, ICl
             .RootElement.GetArrayLength().ShouldBe(1);
     }
 
+    /// <summary>
+    /// A caving group has no position and names no cave, so a photograph filed under one says
+    /// nothing about which guarded cave its camera may have stood at. Its position therefore
+    /// reaches only a caller who may place every guarded feature; a member who may read the
+    /// club's files but not place a guarded cave gets the picture without it. Before this rule a
+    /// club-filed photograph matched no arm of the cave-disclosure chain and was handed out whole.
+    /// </summary>
+    [Fact]
+    public async Task A_photo_filed_under_a_caving_group_keeps_its_position_from_a_member_who_may_not_place_a_guarded_cave()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var memberId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"pb-mem-{suffix}@t.local");
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"pb-out-{suffix}@t.local");
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"pb-adm-{suffix}@t.local");
+        var member = await AuthHelper.BearerClientAsync(factory, $"pb-mem-{suffix}@t.local");
+        var outsider = await AuthHelper.BearerClientAsync(factory, $"pb-out-{suffix}@t.local");
+        var admin = await AuthHelper.BearerClientAsync(factory, $"pb-adm-{suffix}@t.local");
+
+        // A guarded cave exists in the installation; the photograph is not attached to it.
+        var guardedCaveId = await CreateCaveAsync(locationProtected: true);
+        (await ReadJsonAsync(await member.GetAsync($"/api/v1/caves/{guardedCaveId}")))
+            .GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
+
+        Guid groupId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var group = new CavingGroup { Name = $"Photo club {suffix}", Slug = $"photo-club-{suffix}" };
+            db.CavingGroups.Add(group);
+            await db.SaveChangesAsync();
+            groupId = group.Id;
+            await RosterHelper.AddMemberAsync(db, groupId, memberId);
+        }
+
+        var uploaded = PlacedJpeg(45.61, 25.61, 240, 180);
+        var content = new ByteArrayContent(uploaded);
+        content.Headers.ContentType = new("image/jpeg");
+        using (var form = new MultipartFormDataContent { { content, "file", "club.jpg" } })
+        {
+            var upload = await admin.PostAsync("/api/v1/files/?allowDuplicate=true", form);
+            upload.StatusCode.ShouldBe(HttpStatusCode.Created, await upload.Content.ReadAsStringAsync());
+            var fileId = JsonDocument.Parse(await upload.Content.ReadAsStringAsync())
+                .RootElement.GetProperty("id").GetGuid();
+
+            var attach = await admin.PostAsJsonAsync("/api/v1/attachments/", new
+            {
+                fileId,
+                entityType = "cavingGroup",
+                entityId = groupId,
+                role = "photoSurface",
+                sortOrder = 0,
+            });
+            attach.StatusCode.ShouldBe(HttpStatusCode.Created, await attach.Content.ReadAsStringAsync());
+
+            // Unreadable state: someone outside the club cannot read the file at all.
+            (await outsider.GetAsync($"/api/v1/files/{fileId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+            // The member reads it — membership is what opens a club's files — but is not told
+            // where it was taken, and is handed the location-free copy rather than the stored file.
+            var seen = await ReadJsonAsync(await member.GetAsync($"/api/v1/files/{fileId}"));
+            seen.GetProperty("position").ValueKind.ShouldBe(JsonValueKind.Null);
+            seen.GetProperty("locationRemoved").GetBoolean().ShouldBeTrue();
+            ShouldBeLocationFreeCopyOf(await ContentBytesAsync(member, seen), uploaded);
+
+            // The positive half, same file: a caller who may place every guarded feature is told
+            // the position and served the stored bytes.
+            var held = await ReadJsonAsync(await admin.GetAsync($"/api/v1/files/{fileId}"));
+            held.GetProperty("position").ValueKind.ShouldBe(JsonValueKind.Object);
+            Sha(await ContentBytesAsync(admin, held)).ShouldBe(Sha(uploaded));
+        }
+    }
+
+    /// <summary>
+    /// A calendar event, like a club, has no position and names no cave, and every signed-in
+    /// account may read one published to them all. A geotagged picture filed under it is placed by
+    /// every guarded feature: a reader who may not place a guarded cave gets the picture without
+    /// its position, a full administrator gets both. Before the fail-closed default an event-filed
+    /// photograph matched no arm and its position went to every reader of the event.
+    /// </summary>
+    [Fact]
+    public async Task A_photo_filed_under_a_calendar_event_keeps_its_position_from_a_reader_who_may_not_place_a_guarded_cave()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"pb-evadm-{suffix}@t.local");
+        var admin = await AuthHelper.BearerClientAsync(factory, $"pb-evadm-{suffix}@t.local");
+
+        var guardedCaveId = await CreateCaveAsync(locationProtected: true);
+        (await ReadJsonAsync(await reader.GetAsync($"/api/v1/caves/{guardedCaveId}")))
+            .GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
+
+        var created = await admin.PostAsJsonAsync("/api/v1/events", new
+        {
+            title = $"Evening {suffix}",
+            kind = "clubMeeting",
+            startDate = "2054-10-05",
+            endDate = (string?)null,
+            place = (string?)null,
+            visibility = "authenticated",
+            cavingGroupId = (Guid?)null,
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var eventId = JsonDocument.Parse(await created.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("id").GetGuid();
+
+        var uploaded = PlacedJpeg(45.62, 25.62, 240, 180);
+        var content = new ByteArrayContent(uploaded);
+        content.Headers.ContentType = new("image/jpeg");
+        using var form = new MultipartFormDataContent { { content, "file", "evening.jpg" } };
+        var upload = await admin.PostAsync("/api/v1/files/?allowDuplicate=true", form);
+        upload.StatusCode.ShouldBe(HttpStatusCode.Created, await upload.Content.ReadAsStringAsync());
+        var fileId = JsonDocument.Parse(await upload.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("id").GetGuid();
+        var attach = await admin.PostAsJsonAsync("/api/v1/attachments/", new
+        {
+            fileId,
+            entityType = "event",
+            entityId = eventId,
+            role = "document",
+            sortOrder = 0,
+        });
+        attach.StatusCode.ShouldBe(HttpStatusCode.Created, await attach.Content.ReadAsStringAsync());
+
+        // The reader may read the file — the event is published to every account — but is not
+        // told where it was taken, and is handed the location-free copy.
+        var seen = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{fileId}"));
+        seen.GetProperty("position").ValueKind.ShouldBe(JsonValueKind.Null);
+        seen.GetProperty("locationRemoved").GetBoolean().ShouldBeTrue();
+        ShouldBeLocationFreeCopyOf(await ContentBytesAsync(reader, seen), uploaded);
+
+        // The positive half, same file.
+        var held = await ReadJsonAsync(await admin.GetAsync($"/api/v1/files/{fileId}"));
+        held.GetProperty("position").ValueKind.ShouldBe(JsonValueKind.Object);
+        Sha(await ContentBytesAsync(admin, held)).ShouldBe(Sha(uploaded));
+    }
+
+    /// <summary>
+    /// A photograph filed under another file is placed by whatever places that file: a picture
+    /// attached to a write-up that hangs on a guarded cave is as placed as one hanging on the cave.
+    /// The owner, who may place the cave, is told the position; a reader who may read the cave but
+    /// not place it reads the picture without it. Before, the file-under-file link matched no arm
+    /// and the position went to everyone who could read the write-up.
+    /// </summary>
+    /// <remarks>
+    /// The attachment route refuses a file as a target today, so the link is written straight into
+    /// storage: the read side still honours rows of this shape (file access walks them), and the
+    /// position rule must not be the one place that treats them as placing nothing.
+    /// </remarks>
+    [Fact]
+    public async Task A_photo_filed_under_a_file_on_a_guarded_cave_is_placed_by_that_cave()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: true);
+        var writeUpId = await UploadAsync(
+            "write-up.txt", System.Text.Encoding.UTF8.GetBytes($"notes {Guid.NewGuid():N}"), "text/plain");
+        await AttachAsync(writeUpId, caveId);
+
+        var uploaded = PlacedJpeg(45.63, 25.63, 240, 180);
+        var photoId = await UploadAsync("figure.jpg", uploaded, "image/jpeg");
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.Attachments.Add(new Attachment
+            {
+                FileId = photoId,
+                EntityType = AttachedEntityType.StoredFile,
+                EntityId = writeUpId,
+                Role = AttachmentRole.Document,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var seen = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{photoId}"));
+        seen.GetProperty("position").ValueKind.ShouldBe(JsonValueKind.Null);
+        seen.GetProperty("locationRemoved").GetBoolean().ShouldBeTrue();
+
+        var held = await ReadJsonAsync(await owner.GetAsync($"/api/v1/files/{photoId}"));
+        held.GetProperty("position").ValueKind.ShouldBe(JsonValueKind.Object);
+        Sha(await ContentBytesAsync(owner, held)).ShouldBe(Sha(uploaded));
+    }
+
     [Fact]
     public async Task With_the_switch_off_the_caller_who_may_place_the_photo_gets_the_location_free_copy_too()
     {
