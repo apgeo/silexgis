@@ -2,6 +2,11 @@
 # graph, the server's NuGet graph, the actions these workflows run, and the images the
 # deployment pins. Minor and patch updates are grouped into one pull request per ecosystem so
 # the noise stays readable; a major update and a security update each get their own.
+#
+# Node is deliberately held at the major the client declares in its engines field (24): the
+# `node` image and the typings follow that major, and moving it is a decision made by hand,
+# together with the engines field, both workflows' node-version and the local toolchain.
+# Minor and patch releases of either still arrive.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -11,6 +16,25 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # oxlint 1.79 and later switch on the React Compiler rules by default: about two hundred
+      # warnings appear where 1.78 reports five. Patch releases of 1.78 still arrive; moving past
+      # it is a decision about those rules (adopt, or turn them off in the lint configuration).
+      # ol 10.10 and later type getGeometry(), getViewport() and similar as possibly null or
+      # undefined; the map code has about twenty-five places that rely on the older typings.
+      # Patch releases of 10.9 still arrive; moving on needs those places guarded first.
+      - dependency-name: "ol"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      # antd 6.5.3 and later change the event dialog: after the start date is typed and Enter is
+      # pressed, the first click on the dialog's OK only closes the range picker's open panel and
+      # does not save. Their select inputs also clear on click rather than on mouse-down. 6.5.2 is
+      # held until the dialog is made to submit from that state and the clear tests are moved over.
+      - dependency-name: "antd"
+        versions: [">=6.5.3"]
+      - dependency-name: "oxlint"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
   - package-ecosystem: nuget
     directory: /server
     schedule:
@@ -30,6 +54,9 @@ updates:
     directory: /client
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /server
     schedule:
