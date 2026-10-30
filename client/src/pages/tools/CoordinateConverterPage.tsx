@@ -29,6 +29,7 @@ import {
 import { FORMAT_IDS, isFormatId, readPosition, writePosition, type FormatId } from '../../geo/formats/registry.ts';
 import type { ParsedPosition } from '../../geo/formats/types.ts';
 import { formatMapHash } from '../../map/urlHash.ts';
+import { MARK_PARAM, formatMarkParam } from '../../map/temporaryMarker.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
 type FormatChoice = 'any' | FormatId;
@@ -180,7 +181,9 @@ function SingleConverter() {
               <Button icon={<EnvironmentOutlined />} onClick={() => setOnMap((value) => !value)} aria-pressed={onMap}>
                 {onMap ? t('coordinates.converter.hideMap') : t('coordinates.converter.showOnMap')}
               </Button>
-              <Link to={`/map${formatMapHash({ lon: position.lon, lat: position.lat, zoom: 15 })}`}>
+              <Link
+                to={`/map?${MARK_PARAM}=${formatMarkParam({ lat: position.lat, lon: position.lon })}${formatMapHash({ lon: position.lon, lat: position.lat, zoom: 15 })}`}
+              >
                 {t('coordinates.converter.openMainMap')}
               </Link>
             </Flex>

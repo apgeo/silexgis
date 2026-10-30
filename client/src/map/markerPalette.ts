@@ -46,6 +46,15 @@ export const closestApproachPalette = {
 } as const;
 
 /**
+ * The mark a link from the coordinate converter puts on the main map: a ring in the converter's
+ * own marker colour, so the mark on the big map is recognisably the one from the small one.
+ */
+export const temporaryMarkerPalette = {
+  fill: '#146262',
+  casing: '#ffffff',
+} as const;
+
+/**
  * The one reading on an overburden curve a reader pressed, marked where it was taken.
  *
  * A bright red is chosen against everything else drawn near it: the survey line under it is a dark

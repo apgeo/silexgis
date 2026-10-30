@@ -690,6 +690,8 @@
     "nothingToSave": "Nu există nicio condiție de salvat — stabilește mai întâi cel puțin una.",
     "asks": "Caută",
     "cannotShow": "Nu poate fi afișat",
+    "photographFilter": "Fotografii",
+    "noScreenToOpen": "Acest ecran nu are o listă în care să deschidă acest fel de filtru. Aplică-l din ecranul pe care a fost făcut.",
     "audience": "Cine îl poate folosi",
     "private": "Doar eu",
     "someGroup": "Un grup de speologie",
@@ -5995,6 +5997,10 @@
       }
     },
     "editor": {
+      "wholeRefusal": {
+        "malformed": "Filtrul nu a putut fi citit. Reîncarcă pagina sau reconstruiește condiția și aplic-o din nou.",
+        "unreadable": "Filtrul salvat nu poate fi citit cu accesul tău, deci nu a fost aplicat."
+      },
       "sort": "Ordine",
       "descending": "Descrescător",
       "ascending": "Crescător",
@@ -6004,15 +6010,24 @@
         "of": "de",
         "anchorKind": "Măsurat de la",
         "anchorKinds": {
+          "selection": "obiectul selectat",
           "object": "un obiect",
           "point": "un punct",
           "savedFilter": "rezultatele unui filtru salvat"
         },
+        "selectionNamed": "Se măsoară de la obiectul selectat pe hartă.",
+        "noSelection": "Selectează mai întâi un obiect pe hartă.",
         "outlineKind": "Contur",
         "outlineKinds": {
+          "view": "vederea hărții",
+          "draw": "un contur desenat pe hartă",
           "area": "o zonă numită",
           "polygon": "un poligon lipit"
         },
+        "draw": "Desenează pe hartă…",
+        "drawAgain": "Desenează din nou…",
+        "takeViewAgain": "Ia din nou vederea",
+        "outlineSet": "Contur stabilit: {{count}} colțuri.",
         "object": "Obiectul de la care se măsoară",
         "area": "Zonă",
         "areas": "Zone",
@@ -6035,7 +6050,7 @@
           "nested": "Un filtru salvat de la care se măsoară nu poate măsura el însuși de la un filtru salvat.",
           "tooLarge": "Filtrul salvat găsește prea multe obiecte pentru a măsura de la ele."
         },
-        "notSaved": "Un punct introdus, un poligon lipit sau locul de la care se ordonează „cel mai apropiat” nu se salvează niciodată. Folosește în schimb un obiect sau o zonă numită."
+        "notSaved": "Un punct introdus, o vedere a hărții, un contur desenat sau lipit ori locul de la care se ordonează „cel mai apropiat” nu se salvează niciodată. Folosește în schimb un obiect sau o zonă numită."
       },
       "apply": "Aplică",
       "count": "Rezultate: {{count}}",
@@ -8197,7 +8212,8 @@
     "noSaved": "Încă nu există filtre salvate",
     "saveAs": "Salvează ca filtru…",
     "saveTitle": "Salvează aceste condiții ca filtru",
-    "saved": "„{{name}}” a fost salvat — harta îl urmează acum"
+    "saved": "„{{name}}” a fost salvat — harta îl urmează acum",
+    "drawHint": "Apasă pentru a pune colțurile, dublu clic pentru a termina. Apasă Escape pentru a renunța."
   },
   "worldFilter": {
     "advanced": "Condiții…",

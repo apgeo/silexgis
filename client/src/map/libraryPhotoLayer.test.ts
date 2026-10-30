@@ -46,11 +46,11 @@ const collection = (overrides: Record<string, unknown> = {}) => ({
  * The map the loader listens to, reduced to what it actually uses. A real map needs a rendered
  * target before it will report a size, and none of what is under test here is about rendering.
  */
-function stubMap() {
+function stubMap(extent: number[] = [1000, 2000, 3000, 4000]) {
   const handlers = new Set<() => void>();
   const map = {
     getSize: () => [800, 600],
-    getView: () => ({ calculateExtent: () => [1000, 2000, 3000, 4000] }),
+    getView: () => ({ calculateExtent: () => extent }),
     on: (_type: string, handler: () => void) => handlers.add(handler),
     un: (_type: string, handler: () => void) => handlers.delete(handler),
   };
@@ -202,7 +202,49 @@ describe('libraryPhotoLayer loading', () => {
     moveEnd();
     await vi.advanceTimersByTimeAsync(300);
     expect(fetchLibraryPhotoFeatures).toHaveBeenCalledTimes(1);
-    expect(fetchLibraryPhotoFeatures).toHaveBeenCalledWith('photoprism', expect.any(String));
+    expect(fetchLibraryPhotoFeatures).toHaveBeenCalledWith('photoprism', expect.any(String), expect.any(AbortSignal));
+  });
+
+  it('aborts the request a newer window supersedes and never draws its late answer', async () => {
+    const signals: AbortSignal[] = [];
+    let release: (value: unknown) => void = () => undefined;
+    fetchLibraryPhotoFeatures.mockImplementationOnce((_source: string, _bbox: string, signal: AbortSignal) => {
+      signals.push(signal);
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    });
+    const layer = createLibraryPhotoLayer('photoprism');
+    setLibraryPhotosEnabled('photoprism', true);
+    await vi.waitFor(() => expect(signals).toHaveLength(1));
+    expect(signals[0].aborted).toBe(false);
+
+    fetchLibraryPhotoFeatures.mockResolvedValue(collection({ features: [] }));
+    moveEnd();
+    await vi.advanceTimersByTimeAsync(300);
+    await vi.waitFor(() => expect(getLibraryPhotoLoadState('photoprism').reach).toBe('ok'));
+    expect(signals[0].aborted).toBe(true);
+
+    // The slow answer for the window already left lands last and must change nothing.
+    release(collection());
+    await vi.advanceTimersByTimeAsync(10);
+    expect(layer.getSource()?.getFeatures()).toHaveLength(0);
+    expect(getLibraryPhotoLoadState('photoprism').shownCount).toBe(0);
+  });
+
+  it('asks for a window inside the world even when the map reports one past it', async () => {
+    detach();
+    detach = attachLibraryPhotoLoader(stubMap([-30_000_000, -30_000_000, 30_000_000, 30_000_000]).map);
+    fetchLibraryPhotoFeatures.mockResolvedValue(collection());
+    createLibraryPhotoLayer('photoprism');
+    setLibraryPhotosEnabled('photoprism', true);
+    await vi.waitFor(() => expect(fetchLibraryPhotoFeatures).toHaveBeenCalled());
+    const bbox = (fetchLibraryPhotoFeatures.mock.calls[0] as [string, string])[1].split(',').map(Number);
+    expect(bbox[0]).toBeGreaterThanOrEqual(-180);
+    expect(bbox[2]).toBeLessThanOrEqual(180);
+    expect(bbox[1]).toBeGreaterThanOrEqual(-90);
+    expect(bbox[3]).toBeLessThanOrEqual(90);
+    expect(bbox[0]).toBe(-180);
   });
 
   it('asks the library nothing while its overlay is switched off', async () => {

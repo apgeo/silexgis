@@ -3,10 +3,11 @@ import type Map from 'ol/Map';
 import type { FeatureLike } from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import VectorLayer from 'ol/layer/Vector';
-import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Icon, Style } from 'ol/style';
 import { fetchLibraryPhotoFeatures, type LibraryPhotoSource } from '../api/hooks.ts';
+import { clampToWorld } from './densityCells.ts';
+import { attachWindowLoader, type WindowLoader } from './windowLoader.ts';
 import {
   libraryPictureFailed,
   libraryPictureUrl,
@@ -54,8 +55,6 @@ interface SourceState {
   /** The OL source. Module-level: OpenLayers objects never live in React state. */
   readonly features: VectorSource;
   enabled: boolean;
-  /** Monotonic per library, so a slow answer for one cannot discard the other's. */
-  requestSeq: number;
   /** Whether the reader asked to see the photographs themselves rather than pins. */
   pictures: boolean;
 }
@@ -67,7 +66,7 @@ const states = new globalThis.Map<LibraryPhotoSource, SourceState>();
 function stateOf(source: LibraryPhotoSource): SourceState {
   let state = states.get(source);
   if (!state) {
-    state = { features: new VectorSource(), enabled: false, requestSeq: 0, pictures: false };
+    state = { features: new VectorSource(), enabled: false, pictures: false };
     states.set(source, state);
   }
   return state;
@@ -349,9 +348,8 @@ export function setLibraryPhotosEnabled(source: LibraryPhotoSource, value: boole
   if (value) {
     activeReload?.();
   } else {
-    // A request already in flight must not land on a cleared source: bumping the counter is what
-    // makes its answer stale, the same way a newer request does.
-    state.requestSeq += 1;
+    // A request already in flight must not land on a cleared source: the window loader drops an
+    // answer that arrives for a layer that is no longer enabled.
     state.features.clear(true);
     publish(source, IDLE);
   }
@@ -384,76 +382,87 @@ export function getLibraryPhotoPictures(source: LibraryPhotoSource): boolean {
   return stateOf(source).pictures;
 }
 
-/** Bbox loading on moveend (debounced), stale answers discarded — one request per library. */
+/**
+ * Loads each enabled library's pins for the map's window, one window loader per library.
+ *
+ * Per library, never joined: the libraries are separate installations with separate uptime, so
+ * each has its own request in flight, aborted by the next window for that library alone.
+ */
 export function attachLibraryPhotoLoader(map: Map): () => void {
-  let timer: number | undefined;
+  const loaders = new globalThis.Map<LibraryPhotoSource, WindowLoader>();
 
-  const loadOne = async (source: LibraryPhotoSource, bbox: string) => {
-    const state = stateOf(source);
-    const seq = ++state.requestSeq;
-    publish(source, { ...getLibraryPhotoLoadState(source), reach: 'loading' });
-    try {
-      const collection = await fetchLibraryPhotoFeatures(source, bbox);
-      if (seq !== state.requestSeq) {
-        return; // a newer request, or the layer being switched off, superseded this one
-      }
-      state.features.clear(true);
-      state.features.addFeatures(
-        format.readFeatures(collection, { featureProjection: 'EPSG:3857' }),
-      );
-      publish(source, {
-        libraryName: collection.libraryName,
-        shownCount: collection.features.length,
-        truncated: collection.truncated,
-        omittedCount: collection.omittedCount,
-        readAt: collection.readAt,
-        bbox,
-        pictureUrlTemplate: collection.pictureUrlTemplate,
-        pictures: state.pictures,
-        picturesSuppressed:
-          state.pictures && collection.features.length > LIBRARY_PHOTO_PICTURE_LIMIT,
-        reach: 'ok',
+  const loaderFor = (source: LibraryPhotoSource): WindowLoader => {
+    let loader = loaders.get(source);
+    if (!loader) {
+      const state = stateOf(source);
+      loader = attachWindowLoader(map, {
+        isEnabled: () => state.enabled,
+        onStart: () => publish(source, { ...getLibraryPhotoLoadState(source), reach: 'loading' }),
+        // Clamped to the world because the server refuses a window past it, and a map zoomed far
+        // out reports one.
+        fetch: (window, _view, signal) => {
+          const bbox = clampToWorld(window)
+            .map((n) => n.toFixed(5))
+            .join(',');
+          return fetchLibraryPhotoFeatures(source, bbox, signal).then((collection) => ({
+            collection,
+            bbox,
+          }));
+        },
+        onAnswer: ({ collection, bbox }) => {
+          state.features.clear(true);
+          state.features.addFeatures(
+            format.readFeatures(collection, { featureProjection: 'EPSG:3857' }),
+          );
+          publish(source, {
+            libraryName: collection.libraryName,
+            shownCount: collection.features.length,
+            truncated: collection.truncated,
+            omittedCount: collection.omittedCount,
+            readAt: collection.readAt,
+            bbox,
+            pictureUrlTemplate: collection.pictureUrlTemplate,
+            pictures: state.pictures,
+            picturesSuppressed:
+              state.pictures && collection.features.length > LIBRARY_PHOTO_PICTURE_LIMIT,
+            reach: 'ok',
+          });
+        },
+        // The pins already drawn stay where they are. They are the last positions this library
+        // gave, and a map that empties itself when one request fails is making the claim "there
+        // is nothing here", which is a different and false answer. The surface says the library
+        // did not answer, and the next moveend tries again — there is no retry loop of its own,
+        // because a library that is down should not be hammered by a map nobody is panning.
+        onError: () =>
+          publish(source, { ...getLibraryPhotoLoadState(source), reach: 'unreachable' }),
       });
-    } catch {
-      if (seq !== state.requestSeq) {
-        return;
-      }
-      // The pins already drawn stay where they are. They are the last positions this library gave,
-      // and a map that empties itself when one request fails is making the claim "there is nothing
-      // here", which is a different and false answer. The surface says the library did not answer,
-      // and the next moveend tries again — there is no retry loop of its own, because a library
-      // that is down should not be hammered by a map nobody is panning.
-      publish(source, { ...getLibraryPhotoLoadState(source), reach: 'unreachable' });
+      loaders.set(source, loader);
     }
+    return loader;
   };
 
-  const load = () => {
-    const size = map.getSize();
-    if (!size) {
-      return;
-    }
-    const extent = transformExtent(map.getView().calculateExtent(size), 'EPSG:3857', 'EPSG:4326');
-    const bbox = extent.map((n) => n.toFixed(5)).join(',');
-    // One request per enabled library, never one request for both: they are separate
-    // installations with separate uptime, and a joined request is as slow as the slower of them
-    // and as broken as the more broken one.
+  // A library that is switched on after the map was attached has no loader yet; this makes one
+  // for every library the layer knows of and asks each enabled one for the window on screen.
+  const reload = () => {
     for (const [source, state] of states) {
+      const loader = loaderFor(source);
       if (state.enabled) {
-        void loadOne(source, bbox);
+        loader.reload();
       }
     }
   };
 
-  const onMoveEnd = () => {
-    window.clearTimeout(timer);
-    timer = window.setTimeout(load, 250);
-  };
-
-  map.on('moveend', onMoveEnd);
-  activeReload = load;
+  // Loaders for the libraries already known listen to the map from now on; one made later by
+  // `reload` starts listening when it is made, which is when its library is first switched on.
+  for (const source of states.keys()) {
+    loaderFor(source);
+  }
+  activeReload = reload;
   return () => {
-    map.un('moveend', onMoveEnd);
-    window.clearTimeout(timer);
+    for (const loader of loaders.values()) {
+      loader.detach();
+    }
+    loaders.clear();
     activeReload = undefined;
   };
 }

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import i18n from '../../i18n';
 import { caveRegistryDocument, readCaveRegistryAddress } from '../../filters/caveRegistry.ts';
+import { galleryDocument, galleryWhere, readGalleryFilter } from '../../filters/gallery.ts';
 import type { SavedFilter } from '../../api/hooks/savedFilters.ts';
 
 const { filters, updateSpy, deleteSpy } = vi.hoisted(() => ({
@@ -226,5 +227,29 @@ describe('the saved filters screen', () => {
     const state = readCaveRegistryAddress(new URLSearchParams(address.slice('/caves?'.length)));
     expect(state.controls).toEqual({ caveTypeId: 3, tag: 'bats', region: 'Bihor' });
     expect(state.savedFilterId).toBe('f-1');
+  });
+
+  it('opens a photograph filter in the gallery, and says plainly when no screen here can open a filter', () => {
+    const photographs = galleryDocument(galleryWhere({ search: 'doline' }))!;
+    const trips = { ...photographs, scope: [{ world: 'trip', where: null }] };
+    filters.current = [
+      filter({ id: 'f-photo', name: 'Doline pictures', document: photographs as unknown as SavedFilter['document'] }),
+      filter({ id: 'f-trip', name: 'Some trips', document: trips as unknown as SavedFilter['document'] }),
+    ];
+    show();
+
+    // Not worded as an access problem: the reader can read it, this screen has nowhere to put it.
+    expect(screen.getByTestId('saved-filter-world-f-photo')).toHaveTextContent('Photographs');
+    expect(screen.getByTestId('saved-filter-open-f-trip')).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('saved-filter-open-f-photo'));
+
+    const address = screen.getByTestId('address').textContent!;
+    expect(address.startsWith('/gallery?')).toBe(true);
+    const opened = readGalleryFilter(new URLSearchParams(address.slice('/gallery?'.length)));
+    expect(opened.savedFilterId).toBe('f-photo');
+    expect(opened.unreadableLink).toBe(false);
+    expect(opened.where).not.toBeNull();
+    expect(screen.queryByText(/cannot be read with your access/i)).not.toBeInTheDocument();
   });
 });

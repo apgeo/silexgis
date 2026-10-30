@@ -139,10 +139,12 @@ export function usePhotoLibraries({ watchingHealth = true }: PhotoLibraryStatusU
 export async function fetchLibraryPhotoFeatures(
   source: LibraryPhotoSource,
   bbox: string,
+  signal?: AbortSignal,
 ): Promise<LibraryPhotoCollection> {
   return unwrap(
     api.GET('/api/v1/photo-libraries/{source}/map', {
       params: { path: { source }, query: { bbox } },
+      signal,
     }),
   );
 }

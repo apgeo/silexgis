@@ -14,6 +14,7 @@ import {
   type SavedFilter,
 } from '../../api/hooks/savedFilters.ts';
 import { readCaveRegistry, writeCaveRegistryAddress } from '../../filters/caveRegistry.ts';
+import { readGalleryDocument, writeGalleryFilter } from '../../filters/gallery.ts';
 import { describeCaveRegistry, type ConditionPart } from '../../filters/describe.ts';
 import { MAX_PINNED_FILTERS, useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import { describeComparison } from '../../filters/typedComparison.ts';
@@ -33,6 +34,30 @@ function audienceOf(filter: SavedFilter): SavedFilterAudience {
     return { visibility: 'cavingGroup', cavingGroupId: filter.cavingGroupId };
   }
   return filter.visibility === 'authenticated' ? { visibility: 'authenticated' } : { visibility: 'private' };
+}
+
+/** Where a saved filter opens: the screen that owns its world, or nowhere when none here does. */
+type OpenTarget =
+  | { screen: 'caves'; reading: NonNullable<ReturnType<typeof readCaveRegistry>> }
+  | { screen: 'gallery'; where: NonNullable<ReturnType<typeof readGalleryDocument>> | null }
+  | null;
+
+/**
+ * Which screen can open this filter. A filter this account cannot read opens nowhere, and so does
+ * one about a kind of record this screen has no list for — that is a statement about the screen,
+ * not about the reader's access, and the two must not be worded alike.
+ */
+function openTargetOf(filter: SavedFilter): OpenTarget {
+  const document = documentOf(filter);
+  if (filter.state === 'unreadable' || document === null) {
+    return null;
+  }
+  const reading = readCaveRegistry(document);
+  if (reading !== null) {
+    return { screen: 'caves', reading };
+  }
+  const where = readGalleryDocument(document);
+  return where === undefined ? null : { screen: 'gallery', where };
 }
 
 /**
@@ -71,13 +96,21 @@ export default function SavedFiltersPage() {
     cavingGroups?.find((group) => group.id === id)?.name ?? t('savedFilters.someGroup');
 
   const open = (filter: SavedFilter) => {
-    const document = documentOf(filter);
-    const reading = document === null ? null : readCaveRegistry(document);
-    if (filter.state === 'unreadable' || reading === null) {
+    const target = openTargetOf(filter);
+    if (filter.state === 'unreadable') {
       message.warning(t('caveRegistry.savedUnreadable'));
       return;
     }
-    const params = writeCaveRegistryAddress({ ...reading, savedFilterId: filter.id, page: 1, pageSize: 20 });
+    if (target === null) {
+      message.info(t('savedFilters.noScreenToOpen'));
+      return;
+    }
+    if (target.screen === 'gallery') {
+      const params = writeGalleryFilter(new URLSearchParams(), { where: target.where, savedFilterId: filter.id });
+      navigate(`/gallery?${params.toString()}`);
+      return;
+    }
+    const params = writeCaveRegistryAddress({ ...target.reading, savedFilterId: filter.id, page: 1, pageSize: 20 });
     navigate(`/caves?${params.toString()}`);
   };
 
@@ -169,6 +202,9 @@ export default function SavedFiltersPage() {
               const parts = filter.state === 'unreadable' || document === null
                 ? null
                 : describeCaveRegistry(document);
+              if (parts === null && openTargetOf(filter)?.screen === 'gallery') {
+                return <Tag data-testid={`saved-filter-world-${filter.id}`}>{t('savedFilters.photographFilter')}</Tag>;
+              }
               return parts === null ? (
                 <Typography.Text type="secondary">{t('savedFilters.cannotShow')}</Typography.Text>
               ) : (
@@ -241,13 +277,13 @@ export default function SavedFiltersPage() {
                       onClick={() => togglePinnedFilter(filter.id)}
                     />
                   </Tooltip>
-                  <Tooltip title={t('savedFilters.open')}>
+                  <Tooltip title={filter.state !== 'unreadable' && openTargetOf(filter) === null ? t('savedFilters.noScreenToOpen') : t('savedFilters.open')}>
                     <Button
                       size="small"
                       icon={<SearchOutlined />}
                       aria-label={t('savedFilters.open')}
                       data-testid={`saved-filter-open-${filter.id}`}
-                      disabled={filter.state === 'unreadable'}
+                      disabled={filter.state === 'unreadable' || openTargetOf(filter) === null}
                       onClick={() => open(filter)}
                     />
                   </Tooltip>

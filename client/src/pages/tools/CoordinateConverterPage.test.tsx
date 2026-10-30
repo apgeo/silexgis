@@ -56,9 +56,9 @@ it('writes a pasted DMS position in every format, a grid with no reference here 
   expect(screen.getByTestId('converter-result-utm').textContent).toMatch(/^35T \d{6} E \d{7} N$/);
   expect(screen.getByTestId('converter-result-stereo70').textContent).toMatch(/^E \d{6} N \d{6}$/);
   expect(screen.getByTestId('converter-result-lv95').textContent).toBe('Not available here');
-  // The main map is offered at the place, and nothing is saved by looking.
+  // The main map is offered at the place, with a temporary mark on it, and nothing is saved by looking.
   expect(screen.getByRole('link', { name: 'Open this place on the main map' }).getAttribute('href')).toMatch(
-    /^\/map#15\.00\/45\.5994\d\/24\.7361\d$/,
+    /^\/map\?mark=45\.5994\d+,24\.7361\d+#15\.00\/45\.5994\d\/24\.7361\d$/,
   );
 });
 

@@ -690,6 +690,8 @@
     "nothingToSave": "There are no conditions to save — set at least one first.",
     "asks": "Asks for",
     "cannotShow": "Cannot be shown",
+    "photographFilter": "Photographs",
+    "noScreenToOpen": "This screen has no list to open that kind of filter in. Apply it from the screen it was made on.",
     "audience": "Who can use it",
     "private": "Only me",
     "someGroup": "A caving group",
@@ -5982,6 +5984,10 @@
       }
     },
     "editor": {
+      "wholeRefusal": {
+        "malformed": "The filter could not be read. Reload the page, or rebuild the condition and apply it again.",
+        "unreadable": "That saved filter cannot be read with your access, so it was not applied."
+      },
       "sort": "Order",
       "descending": "Descending",
       "ascending": "Ascending",
@@ -5991,15 +5997,24 @@
         "of": "of",
         "anchorKind": "Measured from",
         "anchorKinds": {
+          "selection": "the selected object",
           "object": "an object",
           "point": "a point",
           "savedFilter": "a saved filter's results"
         },
+        "selectionNamed": "Measured from the object selected on the map.",
+        "noSelection": "Select an object on the map first.",
         "outlineKind": "Outline",
         "outlineKinds": {
+          "view": "the map view",
+          "draw": "an outline drawn on the map",
           "area": "a named area",
           "polygon": "a pasted polygon"
         },
+        "draw": "Draw on the map…",
+        "drawAgain": "Draw again…",
+        "takeViewAgain": "Take the view again",
+        "outlineSet": "Outline set: {{count}} corners.",
         "object": "Object to measure from",
         "area": "Area",
         "areas": "Areas",
@@ -6022,7 +6037,7 @@
           "nested": "A saved filter measured from cannot itself measure from a saved filter.",
           "tooLarge": "That saved filter finds too many objects to measure from."
         },
-        "notSaved": "A typed point, a pasted polygon or a place to measure nearest first from is never saved. Use an object or a named area instead."
+        "notSaved": "A typed point, a map view, a drawn or pasted outline or a place to measure nearest first from is never saved. Use an object or a named area instead."
       },
       "apply": "Apply",
       "count": "Matches: {{count}}",
@@ -8184,7 +8199,8 @@
     "noSaved": "No saved filters yet",
     "saveAs": "Save as filter…",
     "saveTitle": "Save these conditions as a filter",
-    "saved": "Saved “{{name}}” — the map now follows it"
+    "saved": "Saved “{{name}}” — the map now follows it",
+    "drawHint": "Click to place the corners, double-click to finish. Press Escape to give up."
   },
   "worldFilter": {
     "advanced": "Conditions…",

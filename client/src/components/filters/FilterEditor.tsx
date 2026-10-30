@@ -99,6 +99,20 @@ const ANCHOR_REFUSALS: Record<string, string> = {
   'filter.anchor_too_large': 'filters.editor.spatial.refused.tooLarge',
 };
 
+/**
+ * Refusals of the filter as a whole, which name no row and carry no problem list: a body the
+ * server could not read at all, and a saved filter this reader's access cannot read. Worded from
+ * the code, like every other refusal here.
+ */
+const WHOLE_REFUSALS: Record<string, string> = {
+  'filter.malformed': 'filters.editor.wholeRefusal.malformed',
+  'saved_filter.unreadable': 'filters.editor.wholeRefusal.unreadable',
+};
+
+function wholeRefusalKey(error: unknown): string | null {
+  return error instanceof ApiError && error.code !== undefined ? (WHOLE_REFUSALS[error.code] ?? null) : null;
+}
+
 function anchorRefusalKey(error: unknown): string | null {
   return error instanceof ApiError && error.code !== undefined ? (ANCHOR_REFUSALS[error.code] ?? null) : null;
 }
@@ -129,7 +143,7 @@ interface EditorContext {
  * sentence is never shown. A code this client does not know yet reads as the general sentence.
  */
 function problemText(t: TFunction, problem: FilterProblem): string {
-  const anchorKey = ANCHOR_REFUSALS[problem.code];
+  const anchorKey = ANCHOR_REFUSALS[problem.code] ?? WHOLE_REFUSALS[problem.code];
   if (anchorKey !== undefined) {
     return t(anchorKey);
   }
@@ -222,7 +236,9 @@ export default function FilterEditor({
         : { byPath: new Map<string, FilterProblem[]>(), unplaced: [] }
       : anchorRefusalKey(countQuery.error) !== null
         ? placeAnchorRefusal({ code: countQuery.error.code ?? '', path: '' }, root)
-        : null;
+        : wholeRefusalKey(countQuery.error) !== null
+          ? { byPath: new Map<string, FilterProblem[]>(), unplaced: [{ code: countQuery.error.code ?? '', path: '' }] }
+          : null;
   const total = countQuery.data?.counted
     ? countQuery.data.worlds.find((w) => w.world === world)?.total ?? null
     : null;

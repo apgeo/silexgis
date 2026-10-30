@@ -108,6 +108,7 @@ import {
   createRowHighlightLayer,
   ROW_HIGHLIGHT_LAYER_ID,
 } from '../map/rowHighlightLayer.ts';
+import { attachTemporaryMarker } from '../map/temporaryMarker.ts';
 import MapListInViewButton from '../components/map/MapListInViewButton.tsx';
 import { ENTRANCE_HEATMAP_LAYER_ID, createEntranceHeatmapLayer } from '../map/heatmapLayer.ts';
 import {
@@ -571,6 +572,8 @@ export default function MapPage() {
     );
     const detachHover = attachHoverTooltip(map);
     const detachUrlHash = attachUrlHash(map);
+    // A link from the coordinate converter asks for one throwaway mark on a place.
+    const detachTemporaryMarker = attachTemporaryMarker(map);
     const detachContextMenu = attachContextMenu(map, setContextTarget);
     // Panning/zooming away invalidates the menu's anchor point.
     const moveKey = map.on('movestart', () => setContextTarget(null));
@@ -604,6 +607,7 @@ export default function MapPage() {
       detachSelection();
       detachHover();
       detachUrlHash();
+      detachTemporaryMarker();
       detachContextMenu();
       unByKey(moveKey);
       map.setTarget(undefined);

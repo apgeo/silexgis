@@ -466,6 +466,25 @@ describe('a spatial row', () => {
   });
 });
 
+describe('refusals of the whole filter', () => {
+  it.each([
+    ['filter.malformed', 'malformed'],
+    ['saved_filter.unreadable', 'unreadable'],
+  ] as const)('words %s in the reader language, never in the server English, and will not apply', async (code, key) => {
+    queryAnswer = { error: new ApiError(400, code, 'The server English sentence.') };
+    show({ node: 'allOf', of: [c('name', 'contains', [{ type: 'text', value: 'urs' }])] });
+
+    expect(screen.getByTestId('filter-editor-refusal-problems')).toHaveTextContent(en.filters.editor.wholeRefusal[key]);
+    expect(screen.getByTestId('filter-editor')).not.toHaveTextContent('server English');
+    expect(screen.getByTestId('filter-editor-apply')).toBeDisabled();
+
+    cleanup();
+    await i18n.changeLanguage('ro');
+    show({ node: 'allOf', of: [c('name', 'contains', [{ type: 'text', value: 'urs' }])] });
+    expect(screen.getByTestId('filter-editor-refusal-problems')).toHaveTextContent(ro.filters.editor.wholeRefusal[key]);
+  });
+});
+
 describe('nearest first', () => {
   function showSortable() {
     const onApply = vi.fn();
