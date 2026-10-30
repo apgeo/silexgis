@@ -156,6 +156,7 @@ const preview: TripImportPreview = {
     newAreaCount: 0,
     ambiguousPersonCount: 1,
     uncreatablePersonCount: 1,
+    leftOffPersonCount: 1,
     ambiguousPlaceCount: 0,
   },
 };
@@ -295,6 +296,23 @@ describe('TripImportPage', () => {
     const uncreatable = within(warning).getByTestId('trip-import-people-uncreatable');
     expect(uncreatable.textContent).toContain('Ion A.');
     expect(uncreatable.textContent).not.toContain('Vasile Necunoscut');
+  });
+
+  it('names the people left off their trips because the create switch is off', async () => {
+    show();
+
+    // The standing alert for the other half of the dropped people: the full name that missed the
+    // roster is not a decision, but with the switch off it is silently left off its trip, and a
+    // screen that said nothing needed attention would be wrong about it.
+    const leftOff = await screen.findByTestId('trip-import-people-left-off');
+    const names = within(leftOff).getByTestId('trip-import-people-left-off-names');
+    expect(names.textContent).toContain('Vasile Necunoscut');
+    // The positive and negative halves together: the bare initial is the uncreatable list's, and
+    // the ambiguous name is the settler's, so neither is repeated here.
+    expect(names.textContent).not.toContain('Ion A.');
+    expect(names.textContent).not.toContain('Ioana Campioana');
+    expect(leftOff.textContent).toContain('Create cavers the roster lacks');
+    expect(within(leftOff).getByText(/: 1$/)).toBeTruthy();
   });
 
   it('lets the reviewer say which caver an ambiguous name meant', async () => {

@@ -80,6 +80,12 @@ test.describe('trip import', () => {
     // class of lie the count itself exists to remove.
     await expect(page.getByTestId('trip-import-people-uncreatable')).not.toContainText(creatable);
 
+    // And the name the warning above leaves out is not silently dropped either: with the create
+    // switch off it is said to be left off its trip, by name, in an alert of its own.
+    const leftOff = page.getByTestId('trip-import-people-left-off');
+    await expect(leftOff).toContainText(creatable);
+    await expect(leftOff).not.toContainText(initialled);
+
     // Nothing is written yet. What confirming would add is a count, and it starts at nothing
     // because no switch has been asked for — a figure rendered at zero rather than absent.
     const newCavers = page.getByTestId('trip-import-summary').locator('.ant-statistic', {
@@ -97,6 +103,8 @@ test.describe('trip import', () => {
     // warning above still standing.
     await page.getByTestId('trip-import-create-cavers').click();
     await expect(newCavers).toContainText('1', { timeout: 30_000 });
+    // Turning the switch on creates the person, so nobody is left off any more.
+    await expect(leftOff).toHaveCount(0);
     await expect(warning).toContainText('2 cannot be created');
 
     await page.getByTestId('trip-import-commit').click();

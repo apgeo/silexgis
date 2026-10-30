@@ -7305,6 +7305,9 @@
     "placesNeedingADecision": "Locuri care cer o decizie",
     "peopleWarningTitle": "{{ambiguous}} nume se potrivesc cu mai mulți speologi, iar {{uncreatable}} nu pot fi create",
     "peopleWarningBody": "Un nume care se potrivește cu mai multe persoane nu este niciodată ghicit — spune care este cel potrivit. Un nume prea scurt ca să identifice pe cineva, o inițială singură sau un singur prenume, nu creează pe nimeni decât dacă îl permiți la ce poate fi creat: o persoană inventată astfel nu ar mai putea fi legată cu certitudine de speologul potrivit. Lăsate așa, aceste nume rămân în textul turei, iar oamenii nu apar pe lista turelor la care au fost.",
+    "peopleLeftOff": "Persoane lăsate pe dinafară",
+    "leftOffTitle": "Persoane pe care lista nu le are și care vor lipsi din turele lor: {{count}}",
+    "leftOffBody": "Cât timp „Creează speologii pe care lista nu îi are” este oprit, nu se creează nimeni: aceste nume rămân în textul turei, iar oamenii nu apar pe lista turelor la care au fost. Pornește opțiunea la ce poate fi creat ca să fie adăugați.",
     "placesWarningTitle": "{{count}} nume de locuri se potrivesc cu mai multe înregistrări",
     "columns": {
       "take": "Ia",

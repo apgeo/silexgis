@@ -7292,6 +7292,9 @@
     "placesNeedingADecision": "Places needing a decision",
     "peopleWarningTitle": "{{ambiguous}} names match more than one caver, and {{uncreatable}} cannot be created",
     "peopleWarningBody": "A name matching several people is never guessed at — say which one is meant. A name too short to place, a bare initial or a lone given name, creates nobody unless you allow it under what may be created: a person invented from one of those could never be confidently joined to the right caver later. Left as they are, these names are kept in the trip’s own text and the people are not on the roster of the trips they went on.",
+    "peopleLeftOff": "People left off their trips",
+    "leftOffTitle": "People the roster lacks who will be left off their trips: {{count}}",
+    "leftOffBody": "Nothing is created while “Create cavers the roster lacks” is off, so these names stay in the trip’s own text and the people are not on the roster of the trips they went on. Turn it on under what may be created to add them.",
     "placesWarningTitle": "{{count}} place names match more than one record",
     "columns": {
       "take": "Take",

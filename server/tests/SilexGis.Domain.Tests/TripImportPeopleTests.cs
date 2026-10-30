@@ -105,6 +105,41 @@ public class TripImportPeopleTests
     }
 
     [Fact]
+    public void With_the_roster_switch_off_the_names_it_would_have_made_are_counted_as_left_off()
+    {
+        var options = new TripImportOptions { CreateMissingCavers = false };
+
+        var people = Resolve(options);
+        var counts = TripImportPeople.Count(people);
+
+        // The one name a person may be made from is dropped, because nothing is created, and it
+        // is said so: it is in no other count.
+        counts.WillCreate.ShouldBe(0);
+        counts.LeftOff.ShouldBe(1);
+        counts.Uncreatable.ShouldBe(3);
+        counts.Ambiguous.ShouldBe(0);
+
+        // Every name on the sheet is accounted for by exactly one figure.
+        (counts.WillCreate + counts.Ambiguous + counts.Uncreatable + counts.LeftOff)
+            .ShouldBe(Sheet.Length);
+
+        // The positive twin: switching the roster on moves the name out of the dropped count.
+        var on = TripImportPeople.Count(Resolve(new TripImportOptions { CreateMissingCavers = true }));
+        on.LeftOff.ShouldBe(0);
+        on.WillCreate.ShouldBe(1);
+    }
+
+    [Fact]
+    public void Widening_the_choice_without_the_roster_switch_leaves_every_name_off_and_says_so()
+    {
+        var counts = TripImportPeople.Count(
+            Resolve(new TripImportOptions { CreateAbbreviatedCavers = true }));
+
+        counts.LeftOff.ShouldBe(Sheet.Length);
+        counts.Uncreatable.ShouldBe(0);
+    }
+
+    [Fact]
     public void A_name_two_people_already_answer_to_stays_unresolved_however_the_choice_stands()
     {
         // Short is not the same as ambiguous. Two real people hold this name, and which of them

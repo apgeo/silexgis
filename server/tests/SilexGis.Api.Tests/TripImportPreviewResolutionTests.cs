@@ -209,6 +209,11 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
         // only way a reviewer can tell it from a figure nobody worked out.
         off.GetProperty("uncreatablePersonCount").GetInt32().ShouldBe(0);
         on.GetProperty("uncreatablePersonCount").GetInt32().ShouldBe(0);
+
+        // Nobody on this sheet is dropped for the roster switch either: the two names are
+        // answered by the roster, one of them ambiguously, so there is no one to leave off.
+        off.GetProperty("leftOffPersonCount").GetInt32().ShouldBe(0);
+        on.GetProperty("leftOffPersonCount").GetInt32().ShouldBe(0);
     }
 
     /// <summary>
@@ -260,6 +265,13 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
         off.GetProperty("uncreatablePersonCount").GetInt32().ShouldBe(2);
         off.GetProperty("ambiguousPersonCount").GetInt32().ShouldBe(1);
         off.GetProperty("newCaverCount").GetInt32().ShouldBe(0);
+
+        // The third kind, and the one a default sheet is full of: with the switch off the one
+        // name a person can be made from is left off its trip, and the response says so instead
+        // of leaving it to be inferred from the zero beside "new cavers". On, there is nobody
+        // left off — the same name became a person.
+        off.GetProperty("leftOffPersonCount").GetInt32().ShouldBe(1);
+        on.GetProperty("leftOffPersonCount").GetInt32().ShouldBe(0);
 
         // The two facts pulled apart, on the setting where they look alike. With the switch off
         // nothing is created, so "will not be created" is true of every name that missed — the
@@ -335,6 +347,11 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
             .GetProperty("proposals");
         withoutTheSwitch.GetProperty("newCaverCount").GetInt32().ShouldBe(0);
         withoutTheSwitch.GetProperty("uncreatablePersonCount").GetInt32().ShouldBe(0);
+
+        // But they are not silent either: nobody is created, so the three names a person could
+        // now be made from are exactly the three that are left off.
+        withoutTheSwitch.GetProperty("leftOffPersonCount").GetInt32().ShouldBe(3);
+        on.GetProperty("leftOffPersonCount").GetInt32().ShouldBe(0);
         withoutTheSwitch.GetProperty("ambiguousPersonCount").GetInt32().ShouldBe(1);
     }
 

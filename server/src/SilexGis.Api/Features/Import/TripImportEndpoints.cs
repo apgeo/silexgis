@@ -356,6 +356,7 @@ public static class TripImportEndpoints
             resolution.NewAreas.Count,
             people.Ambiguous,
             people.Uncreatable,
+            people.LeftOff,
             resolution.Caves.Concat(resolution.Areas).Count(f => f.State == TripImportMatchState.Ambiguous));
     }
 

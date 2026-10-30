@@ -27,6 +27,11 @@ interface Props {
 function needingADecision(people: readonly TripImportPersonMatch[]) {
   return {
     uncreatable: people.filter((p) => p.state === 'unmatched' && !p.mayCreate),
+    // The mirror of the above: a person could be made from the name, and the create switch being
+    // off is the only reason nobody is. Told apart from the uncreatable ones because the remedy
+    // is a different one, and listed at all because with the switch off — the setting a review
+    // opens in — every full name the roster lacks is silently left off its trip.
+    leftOff: people.filter((p) => p.state === 'unmatched' && p.mayCreate && !p.willCreate),
   };
 }
 
@@ -57,7 +62,7 @@ export default function TripImportSummary({ proposals, options, onChange }: Prop
   const caverChoices = options.caverChoices ?? {};
   const featureChoices = options.featureChoices ?? {};
 
-  const { uncreatable } = needingADecision(proposals.people);
+  const { uncreatable, leftOff } = needingADecision(proposals.people);
   const places = [...proposals.caves, ...proposals.areas];
   const undecidedPeople = proposals.ambiguousPersonCount + proposals.uncreatablePersonCount;
 
@@ -125,6 +130,14 @@ export default function TripImportSummary({ proposals, options, onChange }: Prop
           styles={undecidedPeople > 0 ? { content: { color: token.colorError } } : undefined}
         />
         <Statistic
+          title={t('tripImport.peopleLeftOff')}
+          value={proposals.leftOffPersonCount}
+          styles={
+            proposals.leftOffPersonCount > 0 ? { content: { color: token.colorWarning } } : undefined
+          }
+          data-testid="trip-import-people-left-off-count"
+        />
+        <Statistic
           title={t('tripImport.placesNeedingADecision')}
           value={proposals.ambiguousPlaceCount}
           styles={
@@ -173,6 +186,35 @@ export default function TripImportSummary({ proposals, options, onChange }: Prop
               {peopleToSettle.length > 20 && (
                 <Typography.Text type="secondary">
                   {t('tripImport.andMoreNames', { count: peopleToSettle.length - 20 })}
+                </Typography.Text>
+              )}
+            </>
+          }
+        />
+      )}
+
+      {proposals.leftOffPersonCount > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginTop: 12 }}
+          data-testid="trip-import-people-left-off"
+          title={t('tripImport.leftOffTitle', { count: proposals.leftOffPersonCount })}
+          description={
+            <>
+              <Typography.Paragraph style={{ marginBottom: 8 }}>
+                {t('tripImport.leftOffBody')}
+              </Typography.Paragraph>
+              <div data-testid="trip-import-people-left-off-names">
+                {leftOff.slice(0, 20).map((person) => (
+                  <Tag key={person.source} color="orange">
+                    {person.source}
+                  </Tag>
+                ))}
+              </div>
+              {leftOff.length > 20 && (
+                <Typography.Text type="secondary">
+                  {t('tripImport.andMoreNames', { count: leftOff.length - 20 })}
                 </Typography.Text>
               )}
             </>

@@ -15,7 +15,16 @@ namespace SilexGis.Domain.Import;
 /// they become no link whatever the roster switch says, so they are counted without reference
 /// to it.
 /// </param>
-public readonly record struct TripImportPeopleCounts(int WillCreate, int Ambiguous, int Uncreatable);
+/// <param name="LeftOff">
+/// Distinct names nothing answered to that a person could be made from, but that the choices in
+/// force do not make one of — the roster switch is off. They are the mirror of
+/// <paramref name="Uncreatable"/>: one switch would save them, and until it is thrown they become
+/// no roster link, so the trip arrives without them. Counted apart because the remedy is
+/// different, and counted at all because a sheet whose every name was dropped this way used to
+/// read exactly like a sheet nobody was dropped from.
+/// </param>
+public readonly record struct TripImportPeopleCounts(
+    int WillCreate, int Ambiguous, int Uncreatable, int LeftOff);
 
 /// <summary>
 /// What a name written on a trip becomes, and how a screenful of those names adds up.
@@ -129,6 +138,7 @@ public static class TripImportPeople
         var willCreate = 0;
         var ambiguous = 0;
         var uncreatable = 0;
+        var leftOff = 0;
         foreach (var person in people)
         {
             if (person.WillCreate)
@@ -144,8 +154,12 @@ public static class TripImportPeople
             {
                 uncreatable++;
             }
+            else if (person.State == TripImportMatchState.Unmatched && person.MayCreate && !person.WillCreate)
+            {
+                leftOff++;
+            }
         }
 
-        return new TripImportPeopleCounts(willCreate, ambiguous, uncreatable);
+        return new TripImportPeopleCounts(willCreate, ambiguous, uncreatable, leftOff);
     }
 }

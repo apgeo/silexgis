@@ -80,6 +80,13 @@ public sealed record TripImportRowDto(
 /// needs attention while people are being dropped, nor the reverse.
 /// </para>
 /// <para>
+/// The third kind is <c>leftOffPersonCount</c>: names nothing answers to that a person could be
+/// made from, left off because the roster switch is off. These are the people the first two
+/// counts did not cover, and the ones a default sheet is full of — with the switch off nothing
+/// is created, so every full name that missed the roster is dropped from its trip. The remedy is
+/// the switch itself, which is why they are counted apart from the uncreatable ones.
+/// </para>
+/// <para>
 /// Every count is present even at zero. A number that disappears when it is nothing reads exactly
 /// like a number that was never worked out.
 /// </para>
@@ -95,6 +102,7 @@ public sealed record TripImportProposalsDto(
     int NewAreaCount,
     int AmbiguousPersonCount,
     int UncreatablePersonCount,
+    int LeftOffPersonCount,
     int AmbiguousPlaceCount);
 
 /// <summary>

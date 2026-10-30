@@ -6539,7 +6539,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Applies one edit to this occurrence and every later one of its series (Write permission on all of them, settled before anything is written). The days keep the spacing they had: moving this occurrence moves the rest by the same number of days. Answers with how many occurrences were changed. */
+        /** Applies one edit to this occurrence and every later one of its series (Write permission on all of them, settled before anything is written; If-Match carries the series version the event's read answered with in X-Series-Version). The days keep the spacing they had: moving this occurrence moves the rest by the same number of days. Answers with how many occurrences were changed. */
         put: operations["eventSeriesEditFollowing"];
         post?: never;
         /** Calls off the rest of a repeating event: this occurrence and every later one, except any that has already begun. Answers with how many were removed and how many were kept. */
@@ -16641,6 +16641,8 @@ export interface components {
             ambiguousPersonCount: number;
             /** Format: int32 */
             uncreatablePersonCount: number;
+            /** Format: int32 */
+            leftOffPersonCount: number;
             /** Format: int32 */
             ambiguousPlaceCount: number;
         };
