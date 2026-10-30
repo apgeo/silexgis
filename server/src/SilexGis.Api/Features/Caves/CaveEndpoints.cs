@@ -135,17 +135,12 @@ public static class CaveEndpoints
 
         if (!string.IsNullOrWhiteSpace(region))
         {
-            query = query.Where(f => f.Cave!.Region != null && EF.Functions.ILike(f.Cave!.Region, $"%{region}%"));
+            query = query.Where(CaveListText.RegionContains(region));
         }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search}%";
-            query = query.Where(f =>
-                (f.Name != null
-                    && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern)))
-                || (f.Cave!.OtherToponyms != null
-                    && EF.Functions.ILike(EF.Functions.Unaccent(f.Cave!.OtherToponyms), EF.Functions.Unaccent(pattern))));
+            query = query.Where(CaveListText.NameOrToponymContains(search));
         }
 
         if (minLength is not null)

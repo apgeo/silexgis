@@ -273,6 +273,53 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
         exported.ShouldBe(listed, ignoreOrder: true);
     }
 
+    /// <summary>
+    /// The bare <c>region</c> and <c>search</c> parameters are one rule on all three routes: a
+    /// fragment of the text, without regard to case or diacritics. The vector export once matched
+    /// the whole region exactly, so "bihor" listed four caves and exported none; the list and the
+    /// interchange export did not fold diacritics, so "muntii" found nothing anywhere.
+    /// </summary>
+    [Theory]
+    [InlineData("bihor", new[] { "match", "at-the-minimum", "short", "untagged" })]
+    [InlineData("MUNTII", new[] { "at-the-minimum" })]
+    public async Task The_bare_region_parameter_finds_the_same_caves_on_the_list_and_on_both_exports(
+        string region, string[] expected)
+    {
+        await SeedAsync();
+        // The search narrows to this class's caves (the suite shares one database) through the
+        // same parameter on every route, so it is checked alongside.
+        var query = $"region={Uri.EscapeDataString(region)}&search={tag}";
+        var wanted = expected.Select(Name).ToList();
+
+        // The private cave is in Bihor too; the reader is a Viewer, so it is in none of the answers.
+        var listed = Names(await ListAsync(reader, null, $"&{query}&pageSize=100"));
+        listed.ShouldBe(wanted, ignoreOrder: true);
+
+        var vector = await reader.GetAsync($"/api/v1/export/caves?format=geojson&{query}");
+        vector.StatusCode.ShouldBe(HttpStatusCode.OK, await vector.Content.ReadAsStringAsync());
+        JsonDocument.Parse(await vector.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("features").EnumerateArray()
+            .Select(f => f.GetProperty("properties").GetProperty("name").GetString())
+            .ToList()
+            .ShouldBe(wanted, ignoreOrder: true);
+
+        var body = new { region, search = tag, treatmentForAll = "grid_position" };
+        var preview = await reader.PostAsJsonAsync("/api/v1/export/caves/karstlink/preview", body);
+        preview.StatusCode.ShouldBe(HttpStatusCode.OK, await preview.Content.ReadAsStringAsync());
+        (await preview.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("caveCount").GetInt32()
+            .ShouldBe(wanted.Count);
+
+        var interchange = await reader.PostAsJsonAsync("/api/v1/export/caves/karstlink", body);
+        interchange.StatusCode.ShouldBe(HttpStatusCode.OK, await interchange.Content.ReadAsStringAsync());
+        JsonDocument.Parse(await interchange.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("@graph").EnumerateArray()
+            .Where(n => n.TryGetProperty("name", out _))
+            .Select(n => n.GetProperty("name").GetString())
+            .Where(n => n!.EndsWith(tag, StringComparison.Ordinal))
+            .ToList()
+            .ShouldBe(wanted, ignoreOrder: true);
+    }
+
     [Fact]
     public async Task Every_export_refuses_a_filter_it_cannot_read_or_find_rather_than_writing_the_whole_registry()
     {
@@ -472,6 +519,41 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
         // The same filter with a well-formed window, and with none, is answered.
         (await InViewAsync(token, ExactLon - 0.01, ExactLat - 0.01, ExactLon + 0.01, ExactLat + 0.01)).ShouldBe(1);
         (await ListAsync(reader, token)).GetProperty("totalItems").GetInt32().ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The interchange export and its preview refuse a box that is not a box with the list's own
+    /// code. They used to drop it silently, so a file asked for as one part of the map held every
+    /// cave the filter found, while the preview counted the same unbounded set.
+    /// </summary>
+    [Fact]
+    public async Task The_interchange_export_refuses_a_window_that_is_not_a_box_rather_than_dropping_it()
+    {
+        await CreateCaveAsync(Name("windowless"), "Bihor", 100, tagged: false);
+        var token = Token(NamedExactly(Name("windowless")));
+
+        foreach (var bbox in new[] { "1,2,3", "a,b,c,d", "23,46,22,47", "-200,46,22,47" })
+        {
+            var body = new { filter = token, bbox, treatmentForAll = "grid_position" };
+            await ShouldRefuseAsync(
+                await reader.PostAsJsonAsync("/api/v1/export/caves/karstlink/preview", body),
+                HttpStatusCode.BadRequest,
+                "map.invalid_bbox");
+            await ShouldRefuseAsync(
+                await reader.PostAsJsonAsync("/api/v1/export/caves/karstlink", body),
+                HttpStatusCode.BadRequest,
+                "map.invalid_bbox");
+        }
+
+        // A real box around the cave, and no box at all, are answered with the cave.
+        foreach (var bbox in new[] { Box(ExactLon, ExactLat), null })
+        {
+            var preview = await reader.PostAsJsonAsync(
+                "/api/v1/export/caves/karstlink/preview", new { filter = token, bbox });
+            preview.StatusCode.ShouldBe(HttpStatusCode.OK, await preview.Content.ReadAsStringAsync());
+            (await preview.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("caveCount").GetInt32()
+                .ShouldBe(1);
+        }
     }
 
     /// <summary>The map's filter as it would hand it over: a feature-world document naming one cave.</summary>

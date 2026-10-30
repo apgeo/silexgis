@@ -240,8 +240,7 @@ public static class KarstLinkExportEndpoints
 
         if (!string.IsNullOrWhiteSpace(request.Region))
         {
-            var region = $"%{request.Region}%";
-            query = query.Where(f => f.Cave!.Region != null && EF.Functions.ILike(f.Cave!.Region, region));
+            query = query.Where(CaveListText.RegionContains(request.Region));
         }
 
         if (!string.IsNullOrWhiteSpace(request.Search))
@@ -251,15 +250,11 @@ public static class KarstLinkExportEndpoints
             // here would quietly drop caves the person could see on the screen while the file
             // still declared that nothing had been left out of it — true statements adding up
             // to a false impression, which is the one thing this format is built not to do.
-            var pattern = $"%{request.Search}%";
-            query = query.Where(f =>
-                (f.Name != null
-                    && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern)))
-                || (f.Cave!.OtherToponyms != null
-                    && EF.Functions.ILike(
-                        EF.Functions.Unaccent(f.Cave!.OtherToponyms), EF.Functions.Unaccent(pattern))));
+            query = query.Where(CaveListText.NameOrToponymContains(request.Search));
         }
 
+        // Both callers have already refused a box that is present but not a window, so a box
+        // that does not parse here can only be an absent one.
         if (Bbox.TryParse(request.Bbox, out var box))
         {
             var polygon = box.ToPolygon();
@@ -312,27 +307,29 @@ public static class KarstLinkExportEndpoints
             return TypedResults.Unauthorized();
         }
 
+        if (WindowProblems.Optional(request.Bbox, out _) is { } windowProblem)
+        {
+            return windowProblem;
+        }
+
         var (query, refusal) = await SelectedAsync(db, ctx, protection, surfaceFilters, request, ct);
         if (refusal is not null)
         {
             return refusal.ToProblem();
         }
-        var flags = await query!
-            .Select(f => f.IsProtectedEffective)
-            .Take(MaxExportedCaves + 1)
-            .ToListAsync(ct);
 
-        if (flags.Count > MaxExportedCaves)
+        // Two counts in the database rather than every flag brought back to be counted here: the
+        // total first, because over the ceiling the protected share is not reported at all —
+        // "more than you may export, by this much" is the whole answer then.
+        var total = await query!.CountAsync(ct);
+        if (total > MaxExportedCaves)
         {
-            // The full count is worth one more cheap query — "more than you may export" is a
-            // less useful thing to be told than by how much.
-            var total = await query!.CountAsync(ct);
             return TypedResults.Ok(new KarstLinkExportPreview(total, null, true, MaxExportedCaves));
         }
 
-        var protectedCount = flags.Count(isProtected => isProtected);
+        var protectedCount = await query!.CountAsync(f => f.IsProtectedEffective, ct);
         return TypedResults.Ok(
-            new KarstLinkExportPreview(flags.Count, protectedCount, false, MaxExportedCaves));
+            new KarstLinkExportPreview(total, protectedCount, false, MaxExportedCaves));
     }
 
     private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> ExportAsync(
@@ -351,6 +348,13 @@ public static class KarstLinkExportEndpoints
         if (ctx is null)
         {
             return TypedResults.Unauthorized();
+        }
+
+        // A box that is not a window is refused rather than read as "no window", which would
+        // write every cave the filter finds into a file asked for as one part of the map.
+        if (WindowProblems.Optional(request.Bbox, out _) is { } windowProblem)
+        {
+            return windowProblem;
         }
 
         // Read gate first and on its own. Which caves the caller may read is a different

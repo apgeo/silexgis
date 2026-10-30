@@ -138,14 +138,12 @@ public static class ExportEndpoints
 
         if (!string.IsNullOrWhiteSpace(region))
         {
-            query = query.Where(f => f.Cave!.Region == region);
+            query = query.Where(CaveListText.RegionContains(region));
         }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search}%";
-            query = query.Where(f =>
-                f.Name != null && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern)));
+            query = query.Where(CaveListText.NameOrToponymContains(search));
         }
 
         // The list's own window rule, so the file holds the caves the windowed list shows: a cave
