@@ -46,6 +46,19 @@ public class CredentialUrlScrubberTests
         scrubbed.ShouldBe($"/api/v1/public/trips/[token:{Handle(Token)}]");
     }
 
+    [Theory]
+    [InlineData("/shared/view/")]
+    [InlineData("/shared/features/")]
+    [InlineData("/shared/albums/")]
+    [InlineData("/shared/trips/")]
+    public void A_share_page_address_in_the_browser_loses_its_token(string prefix)
+    {
+        var scrubbed = CredentialUrlScrubber.Scrub($"https://caves.example.test{prefix}{Token}")!;
+
+        scrubbed.ShouldNotContain(Token);
+        scrubbed.ShouldContain(prefix);
+    }
+
     [Fact]
     public void The_handle_is_a_prefix_of_what_the_share_row_stores()
     {

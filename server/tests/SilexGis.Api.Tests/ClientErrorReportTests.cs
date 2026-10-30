@@ -90,6 +90,40 @@ public sealed class ClientErrorReportTests : IAsyncLifetime, IDisposable, IClass
     }
 
     [Fact]
+    public async Task A_credential_in_the_address_path_message_or_trail_never_reaches_the_log()
+    {
+        var fingerprint = Guid.NewGuid().ToString("N")[..12];
+        // A followed trip's address *is* its token, so it is in the path and not only the query; a
+        // failed request quotes the address it made; the trail records where the browser went.
+        var error = new
+        {
+            fingerprint,
+            kind = "uncaught",
+            name = "TypeError",
+            message = "failed to fetch /api/v1/public/trips/PATH-SECRET/embed",
+            frame = "src/pages/MapPage.tsx:120:7",
+            stack = (string?)null,
+            pageUrl = "https://club.example/shared/trips/PATH-SECRET",
+            at = "2026-10-17T10:00:00.000Z",
+            breadcrumbs = new[] { "route opened /reset-password?email=a%40b.test&token=QUERY-SECRET" },
+            componentStack = (string?)null,
+            userAgent = "Mozilla/5.0",
+            viewport = "1280x800",
+        };
+
+        (await person.PostAsJsonAsync("/api/v1/diagnostics/client-errors", new { errors = new[] { error } }))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var logged = logs.Events.Single(e => e.RenderMessage().Contains(fingerprint, StringComparison.Ordinal));
+        // The positive half: the line still says which page and what failed.
+        logged.RenderMessage().ShouldContain("/shared/trips/[token:");
+        logged.RenderMessage().ShouldContain("failed to fetch /api/v1/public/trips/[token:");
+        var everything = logged.RenderMessage() + " " + string.Join(" ", logged.Properties.Values.Select(v => v.ToString()));
+        everything.ShouldNotContain("PATH-SECRET");
+        everything.ShouldNotContain("QUERY-SECRET");
+    }
+
+    [Fact]
     public async Task Nobody_without_an_account_can_write_to_the_log()
     {
         var fingerprint = Guid.NewGuid().ToString("N")[..12];

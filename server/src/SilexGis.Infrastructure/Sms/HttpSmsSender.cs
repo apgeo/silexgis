@@ -43,7 +43,7 @@ public sealed partial class HttpSmsSender(
         var sms = await settings.GetSmsAsync(ct);
         if (!sms.IsUsable)
         {
-            LogUnsent(logger, to, text);
+            LogUnsent(logger, to);
             return;
         }
 
@@ -152,6 +152,6 @@ public sealed partial class HttpSmsSender(
     }
 
     [LoggerMessage(Level = LogLevel.Information,
-        Message = "SMS gateway not configured — message not sent. To: {To} | Text: {Text}")]
-    private static partial void LogUnsent(ILogger logger, string to, string text);
+        Message = "SMS gateway not configured — message not sent (the text is never logged). To: {To}")]
+    private static partial void LogUnsent(ILogger logger, string to);
 }
