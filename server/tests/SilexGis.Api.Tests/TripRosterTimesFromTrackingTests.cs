@@ -377,6 +377,39 @@ public sealed class TripRosterTimesFromTrackingTests : IAsyncLifetime, IDisposab
     }
 
     /// <summary>
+    /// Two roster saves that overlap in time rather than in sequence: the version is compared
+    /// again once the trip's row is held, so the save that reaches its write second is refused
+    /// and changes nothing, even though it passed the first comparison.
+    /// </summary>
+    [Fact]
+    public async Task A_roster_save_that_reaches_its_write_after_another_has_landed_is_refused()
+    {
+        var (trip, cavers) = await CreateTripAsync("Overlapping saves", guests: 2);
+        var second = cavers[1];
+        (await PutRosterAsync(trip, cavers.Select(id => Row(id)))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var opened = await TripVersionAsync(trip);
+
+        // The other save has moved the trip's row and not yet committed when this one's first
+        // comparison is made, so that comparison cannot tell.
+        var raced = await AnotherWriterFirst.SendAsync(
+            factory,
+            $"UPDATE trip_logs SET updated_at = updated_at + interval '1 second' WHERE id = '{trip}'",
+            () => PutRosterAsync(trip, cavers.Select(id => id == second
+                ? Row(id, entry: "09:00:00", exit: "17:00:00")
+                : Row(id)), opened));
+
+        raced.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, await raced.Content.ReadAsStringAsync());
+        (await RosterRowsAsync(trip)).Single(r => r.Caver == second)
+            .ShouldBe(new RosterRow(second, null, null));
+
+        // Read again, the same save is accepted.
+        (await PutRosterAsync(trip, cavers.Select(id => id == second
+                ? Row(id, entry: "09:00:00", exit: "17:00:00")
+                : Row(id)), await TripVersionAsync(trip)))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
     /// A time typed on the trip's form after the review, and saved with nothing else changed, is
     /// not replaced by a write that was never shown it. The form's save moved the trip's version,
     /// so the write as reviewed is refused as stale before it is looked at. And a writer who has

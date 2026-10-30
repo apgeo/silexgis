@@ -962,7 +962,10 @@ public static class TripLogEndpoints
         {
             if (outcome.RosterChanged)
             {
-                await SaveAndMoveTheVersionAsync(db, trip, ct);
+                if (await SaveAndMoveTheVersionAsync(http, db, trip, ct) is { } raced)
+                {
+                    return raced;
+                }
             }
             else
             {
@@ -1006,9 +1009,21 @@ public static class TripLogEndpoints
     /// prevent. A save that changed no roster row does not come here and moves nothing.
     /// </para>
     /// </remarks>
-    private static async Task SaveAndMoveTheVersionAsync(SilexGisDbContext db, TripLog trip, CancellationToken ct)
+    private static async Task<ProblemHttpResult?> SaveAndMoveTheVersionAsync(
+        HttpContext http, SilexGisDbContext db, TripLog trip, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // The precondition was compared earlier with nothing held, and the roster this write
+        // diffed against was read then too. Taking the trip's row lock and comparing again closes
+        // that gap: a roster write that committed since is a changed version and this one is
+        // refused, and one still in flight makes this wait for it and then see what it left.
+        var held = await ConcurrencySql.LockLiveTripLogVersionAsync(db, trip.Id, ct);
+        if (Concurrency.CheckIfMatchVersion(http, held?.ToString(), required: true) is { } stale)
+        {
+            return stale;
+        }
+
         await db.SaveChangesAsync(ct);
 
         var stamped = DateTimeOffset.UtcNow;
@@ -1023,6 +1038,7 @@ public static class TripLogEndpoints
         var updatedAt = db.Entry(trip).Property(x => x.UpdatedAt);
         updatedAt.CurrentValue = stamped;
         updatedAt.IsModified = false;
+        return null;
     }
 
     /// <summary>
