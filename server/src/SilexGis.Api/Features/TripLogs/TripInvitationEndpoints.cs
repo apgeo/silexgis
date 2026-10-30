@@ -458,7 +458,14 @@ public static class TripInvitationEndpoints
         // a flag beside a date: one column cannot disagree with itself about whether somebody was
         // picked and when.
         invitation.SelectedAt = selected ? DateTimeOffset.UtcNow : null;
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (IsSameAnswerRace(e))
+        {
+            return SameAnswerRaceRefusal();
+        }
 
         var account = await db.Cavers.AsNoTracking()
             .Where(c => c.Id == caverId)
@@ -528,7 +535,14 @@ public static class TripInvitationEndpoints
         // Removed through the change tracker rather than deleted in one statement, so what was
         // taken off the list and by whom reaches the trip's history.
         db.TripInvitations.Remove(invitation);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (IsSameAnswerRace(e))
+        {
+            return SameAnswerRaceRefusal();
+        }
 
         return TypedResults.NoContent();
     }
@@ -727,12 +741,17 @@ public static class TripInvitationEndpoints
     /// and it is refused as a conflict with a name rather than escaping as an unhandled fault.
     /// </summary>
     private static bool IsSameAnswerRace(Exception e) =>
-        e is DbUpdateException
-        && e.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.UniqueViolation,
-            ConstraintName: InvitationUniqueIndex,
-        };
+        // The second half: two writers each read the standing answer and each changed it. The row
+        // carries its last-change time as a concurrency token, so the one that saves second finds
+        // the row no longer as it read it and is refused, instead of silently overwriting an answer
+        // it never saw.
+        e is DbUpdateConcurrencyException
+        || (e is DbUpdateException
+            && e.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: InvitationUniqueIndex,
+            });
 
     private static ProblemHttpResult SameAnswerRaceRefusal() =>
         ApiProblems.Conflict(

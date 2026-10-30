@@ -433,6 +433,30 @@ public sealed class EventInvitationTests : IAsyncLifetime, IDisposable, IClassFi
             .Single(x => x.GetProperty("caverId").GetGuid() == caverId)
             .GetProperty("invitedAt").GetString();
 
+    /// <summary>
+    /// The event twin of the trip's two-writers case: the second save to one answer is refused as
+    /// a conflict with the event's own code, and the first answer stands.
+    /// </summary>
+    [Fact]
+    public async Task A_second_writer_to_one_answer_about_an_event_is_refused()
+    {
+        var evening = await CreateEventAsync("Two writers");
+        await GrantReadAsync(evening, memberId);
+        (await AnswerAsync(member, evening, memberCaver, "maybe")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var raced = await AnotherWriterFirst.SendAsync(
+            factory,
+            $"UPDATE trip_invitations SET response = 2, updated_at = updated_at + interval '1 second' "
+            + $"WHERE event_id = '{evening}' AND caver_id = '{memberCaver}'",
+            () => AnswerAsync(member, evening, memberCaver, "yes"));
+
+        raced.StatusCode.ShouldBe(HttpStatusCode.Conflict, await raced.Content.ReadAsStringAsync());
+        (await raced.Content.ReadAsStringAsync()).ShouldContain("event_invitation.concurrent_answer");
+
+        (await AnswerAsync(member, evening, memberCaver, "yes")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await AnswerAsync(member, evening, strangerCaver, "yes")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
     private string Group(Guid eventId) => $"/api/v1/events/{eventId}/invitations/";
 
     private string Person(Guid eventId, Guid caverId, string? verb = null) =>

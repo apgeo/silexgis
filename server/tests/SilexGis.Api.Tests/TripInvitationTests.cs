@@ -213,6 +213,69 @@ public sealed class TripInvitationTests : IAsyncLifetime, IDisposable, IClassFix
     }
 
     /// <summary>
+    /// Two people write about the same person at the same moment — the person themselves and the
+    /// organiser writing down a telephone call — and the second to save must not silently
+    /// overwrite an answer it never read.
+    /// </summary>
+    /// <remarks>
+    /// The other writer's change is made first and held open while the request reads and then
+    /// waits to write, so this is the collision itself and not a sequence of two requests that
+    /// merely look alike. The refusal is a conflict with a name and the first answer stands;
+    /// repeating the request afterwards, now reading the row as it is, is accepted.
+    /// </remarks>
+    [Fact]
+    public async Task A_second_writer_to_one_answer_is_refused_and_the_first_answer_stands()
+    {
+        var trip = await CreatePlanAsync("Two writers");
+        await GrantReadAsync(trip, mateId);
+        (await AnswerAsync(mate, trip, mateCaver, "maybe")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var raced = await AnotherWriterFirst.SendAsync(
+            factory,
+            $"UPDATE trip_invitations SET response = 2, updated_at = updated_at + interval '1 second' "
+            + $"WHERE trip_log_id = '{trip}' AND caver_id = '{mateCaver}'",
+            () => AnswerAsync(mate, trip, mateCaver, "yes"));
+
+        raced.StatusCode.ShouldBe(HttpStatusCode.Conflict, await raced.Content.ReadAsStringAsync());
+        (await raced.Content.ReadAsStringAsync()).ShouldContain("trip_invitation.concurrent_answer");
+
+        // The answer that landed first is the one that stands, and the loser changed nothing.
+        var standing = (await ListAsync(mate, trip)).Single(x => x.GetProperty("caverId").GetGuid() == mateCaver);
+        standing.GetProperty("response").GetString().ShouldBe("no");
+
+        // The same request repeated after reading the list again is accepted.
+        (await AnswerAsync(mate, trip, mateCaver, "yes")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A reader who cannot write the trip is refused as before; the race code is not a way round
+        // the answer-for-nobody-else rule.
+        (await AnswerAsync(mate, trip, strangerCaver, "yes")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>
+    /// The pick and the removal are writes on the same row and carry the same protection: a pick
+    /// made against an answer that has been changed since it was read is refused, not applied to
+    /// an answer the organiser never saw.
+    /// </summary>
+    [Fact]
+    public async Task A_pick_made_against_an_answer_that_changed_meanwhile_is_refused()
+    {
+        var trip = await CreatePlanAsync("Pick race");
+        await GrantReadAsync(trip, mateId);
+        (await AnswerAsync(mate, trip, mateCaver, "yes")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var raced = await AnotherWriterFirst.SendAsync(
+            factory,
+            $"UPDATE trip_invitations SET response = 2, updated_at = updated_at + interval '1 second' "
+            + $"WHERE trip_log_id = '{trip}' AND caver_id = '{mateCaver}'",
+            () => organiser.PutAsJsonAsync(
+                $"/api/v1/trip-logs/{trip}/invitations/{mateCaver}/selection", new { selected = true }));
+        raced.StatusCode.ShouldBe(HttpStatusCode.Conflict, await raced.Content.ReadAsStringAsync());
+
+        var standing = (await ListAsync(organiser, trip)).Single(x => x.GetProperty("caverId").GetGuid() == mateCaver);
+        standing.GetProperty("response").GetString().ShouldBe("no");
+    }
+
+    /// <summary>
     /// Being asked and answering are facts about the trip, so they surface on the trip's own
     /// timeline rather than in a history of their own that nobody would think to open — and the
     /// person who cannot read the trip is shown neither.

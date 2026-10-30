@@ -579,6 +579,9 @@ public static class CaverEndpoints
         return TypedResults.Ok(projected[0]);
     }
 
+    /// <summary>A merge found an answer or other row changed under it and wrote nothing.</summary>
+    public const string MergeRacedCode = "caver.merge_raced";
+
     private static async Task<Results<Ok<CaverDto>, UnauthorizedHttpResult, ProblemHttpResult>> MergeAsync(
         Guid id,
         CaverMergeRequest request,
@@ -847,11 +850,27 @@ public static class CaverEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
         // Cleared first: the account link is unique, and both rows exist until the save.
-        source.UserId = null;
-        await db.SaveChangesAsync(ct);
+        // The fold rewrites and removes answers about coming, which carry a last-change token: a
+        // person answering while their entry is being merged away leaves the fold holding a row
+        // that is no longer as it was read, and the merge is refused whole instead of overwriting
+        // an answer it never saw.
+        try
+        {
+            source.UserId = null;
+            await db.SaveChangesAsync(ct);
 
-        db.Cavers.Remove(source);
-        await db.SaveChangesAsync(ct);
+            db.Cavers.Remove(source);
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync(ct);
+            return ApiProblems.Conflict(
+                MergeRacedCode,
+                "Something about one of these entries changed while they were being merged, so "
+                + "nothing was merged. Open the entry again and repeat the merge.");
+        }
+
         if (!await fullAdminGuard.AnyLiveFullAdminAsync(ct))
         {
             await transaction.RollbackAsync(ct);

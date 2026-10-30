@@ -160,6 +160,12 @@ public sealed class TripInvitationConfiguration : IEntityTypeConfiguration<TripI
         // Stored as its number, which is what makes "invited and silent" a value with a column
         // behind it rather than a null standing in for two different facts.
         builder.Property(x => x.Response).HasConversion<short>();
+        // The answer's version. Two people can write about the same person at once — the person
+        // and whoever runs the trip — and each reads the row, changes it and saves. Without a
+        // token the second save lands over the first and the first answer is gone without either
+        // of them being told; with it, the save made against a reading that has since changed
+        // fails and is reported as a conflict.
+        builder.Property(x => x.UpdatedAt).IsConcurrencyToken();
         builder.HasOne(x => x.TripLog).WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
         // An answer about a deleted trip is hidden with the trip, for the reason its roster is.
         // An answer about a club event names no trip and is never hidden by this.

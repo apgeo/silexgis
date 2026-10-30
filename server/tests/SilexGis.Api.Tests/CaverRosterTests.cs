@@ -710,6 +710,65 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable, IClassFixtur
         }
     }
 
+    /// <summary>
+    /// An answer written while its author's entry is being merged away makes the merge refuse as a
+    /// named conflict and write nothing, instead of failing as an unhandled error.
+    /// </summary>
+    [Fact]
+    public async Task A_merge_that_meets_a_changed_answer_is_refused_by_name_and_writes_nothing()
+    {
+        var survivorId = await CreateCaverAsync($"Race Survivor {suffix}");
+        var duplicateId = await CreateCaverAsync($"Race Duplicate {suffix}");
+
+        Guid tripId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var ownerUserId = await db.Users.Select(u => u.Id).FirstAsync();
+            var trip = new TripLog
+            {
+                Title = $"Race trip {suffix}",
+                TripDate = new DateOnly(2026, 6, 1),
+                OwnerUserId = ownerUserId,
+            };
+            db.TripLogs.Add(trip);
+            await db.SaveChangesAsync();
+            tripId = trip.Id;
+            db.TripInvitations.Add(new TripInvitation
+            {
+                TripLogId = tripId,
+                CaverId = duplicateId,
+                Response = TripInvitationResponse.Maybe,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var raced = await AnotherWriterFirst.SendAsync(
+            factory,
+            $"UPDATE trip_invitations SET response = 2, updated_at = updated_at + interval '1 second' "
+            + $"WHERE trip_log_id = '{tripId}' AND caver_id = '{duplicateId}'",
+            () => keeper.PostAsJsonAsync($"/api/v1/cavers/{survivorId}/merge", new
+            {
+                sourceCaverId = duplicateId,
+            }));
+
+        var payload = await raced.Content.ReadAsStringAsync();
+        raced.StatusCode.ShouldBe(HttpStatusCode.Conflict, payload);
+        payload.ShouldContain("caver.merge_raced");
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Cavers.AnyAsync(c => c.Id == duplicateId)).ShouldBeTrue();
+            var answer = await db.TripInvitations.AsNoTracking().SingleAsync(x => x.TripLogId == tripId);
+            answer.CaverId.ShouldBe(duplicateId);
+        }
+
+        // Repeated now that nothing is in flight, the merge goes through.
+        (await keeper.PostAsJsonAsync($"/api/v1/cavers/{survivorId}/merge", new { sourceCaverId = duplicateId }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     [Fact]
     public async Task Two_accounts_are_two_people_and_refuse_to_merge()
     {
