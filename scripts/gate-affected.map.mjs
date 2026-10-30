@@ -258,6 +258,7 @@ export const groups = {
     'MfaAndRateLimitTests', 'PerMinuteLimitTests', 'ProfileVisibilityTests', 'ProxyHopsCheckTests',
     'StartupSettingsTests', 'TestLoginTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
     'UserAdministrationLastAdministratorTests', 'UserAdministrationTests', 'UserTwoFactorResetTests',
+    'UserDeleteBlockedTests', 'LoggedMessageSecretsTests',
     // The account mark that holds an account's uploads and file imports for review.
     'SyncUploadHoldTests', 'FileImportReviewHoldTests', 'TripImportCommitTests', 'SpeleolocTripImportTests',
     'TripRecordingConversionTests',
@@ -625,7 +626,7 @@ export const crossCutting = {
     'TripTrackingTests', 'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
     'UploadReviewCurrentStateTests', 'UploadReviewDecisionTests',
     'UserAdministrationLastAdministratorTests', 'UserAdministrationTests',
-    'UserTwoFactorResetTests',
+    'UserDeleteBlockedTests', 'UserTwoFactorResetTests',
   ],
   locationClasses: [
     'AccessAnchorCleanupTests', 'AccessHistoryTests', 'AclAndCavingGroupTests',

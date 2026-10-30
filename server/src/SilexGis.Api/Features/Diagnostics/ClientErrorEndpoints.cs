@@ -3,6 +3,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using SilexGis.Api.Common;
+using SilexGis.Api.Diagnostics;
 using SilexGis.Domain;
 
 namespace SilexGis.Api.Features.Diagnostics;
@@ -129,7 +130,7 @@ public static class ClientErrorEndpoints
             {
                 ["ClientStack"] = error.Stack,
                 ["ClientComponentStack"] = error.ComponentStack,
-                ["ClientBreadcrumbs"] = error.Breadcrumbs,
+                ["ClientBreadcrumbs"] = error.Breadcrumbs?.Select(CredentialUrlScrubber.Scrub).ToList(),
                 ["ClientUserAgent"] = error.UserAgent,
                 ["ClientViewport"] = error.Viewport,
                 ["ClientAt"] = error.At,
@@ -137,7 +138,8 @@ public static class ClientErrorEndpoints
             {
                 log.LogWarning(
                     "Browser error {Fingerprint} ({Kind}) {Name}: {Message} at {Frame} on {Page} for user {UserId}",
-                    error.Fingerprint, error.Kind, error.Name ?? "", error.Message, error.Frame ?? "",
+                    error.Fingerprint, error.Kind, error.Name ?? "", CredentialUrlScrubber.Scrub(error.Message),
+                    CredentialUrlScrubber.Scrub(error.Frame) ?? "",
                     PathOf(error.PageUrl), userId);
             }
         }
@@ -147,8 +149,11 @@ public static class ClientErrorEndpoints
 
     /// <summary>
     /// The page's path without its query: an address can carry a share token or a search somebody
-    /// typed, and neither belongs in a log line written for counting faults.
+    /// typed, and neither belongs in a log line written for counting faults. A path can carry one
+    /// too (a followed trip's address is its token), so what is left is scrubbed as well.
     /// </summary>
     private static string PathOf(string? pageUrl) =>
-        Uri.TryCreate(pageUrl, UriKind.Absolute, out var uri) ? uri.AbsolutePath : "";
+        Uri.TryCreate(pageUrl, UriKind.Absolute, out var uri)
+            ? CredentialUrlScrubber.Scrub(uri.AbsolutePath)!
+            : "";
 }

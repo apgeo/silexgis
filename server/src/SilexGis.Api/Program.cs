@@ -477,6 +477,25 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // address a request is counted under is decided above and is the same with or without it.
     app.UseMiddleware<ProxyHopsCheck>(proxies);
 
+    // Two answers every response gives, whatever produced it: it is never to be reinterpreted as
+    // another type (an uploaded file served back must not be run as a script or a page), and a link
+    // followed from here shares the origin, not the full address, with another site. Set when the
+    // response starts so that it holds for error pages and for responses a handler wrote itself;
+    // assigned rather than appended, so a handler that states its own value keeps the last word.
+    // Framing is deliberately not here: who may frame what is the web server's rule, since the
+    // published-trip pages are the one exception and only it knows the operator's list.
+    app.Use(static (context, next) =>
+    {
+        context.Response.OnStarting(static state =>
+        {
+            var headers = ((HttpContext)state).Response.Headers;
+            headers["X-Content-Type-Options"] = "nosniff";
+            headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+            return Task.CompletedTask;
+        }, context);
+        return next(context);
+    });
+
     app.UseExceptionHandler();
     app.UseStatusCodePages();
     // The completion line names the address the request was made to, and on this application some

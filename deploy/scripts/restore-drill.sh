@@ -7,18 +7,22 @@
 #
 # A backup nobody has restored is a hope, not a backup. This loads the database dump into a
 # throwaway database container of the same image -- no network, no volume, removed afterwards --
-# reads the uploads archive end to end, and compares what came back with the running
+# reads the uploads archives end to end, and compares what came back with the running
 # installation. The running installation is only ever READ, and only for counts: nothing here
 # stops a service, drops a schema or writes to a volume of the installation.
 #
 # What it prints is numbers and schema names only -- how many rows each table holds on each
-# side, how many files and bytes -- never a row's contents, so its output can be pasted into a
-# report about an installation that holds real data.
+# side, a checksum of each table's contents (a number, computed inside the database and compared
+# by this script; never printed per row), how many files and bytes -- never a row's
+# contents, so its output can be pasted into a report about an installation that holds real data.
+# The checksums read every row of the running installation once, so run the drill at a quiet hour
+# on a large installation.
 #
 # Compared against a fresh backup the two sides should agree exactly on a quiet installation;
 # against an older one, tables written since the backup differ, which is expected and reported.
-# The verdict is PASS when the dump loads with no error, every table's count agrees and the
-# uploads archive reads back with the files the installation holds.
+# The verdict is PASS when the dump loads with no error, every table's count and checksum agree,
+# the uploads archive reads back with the files the installation holds, and so does the archive of
+# browser-uploaded terrain rasters (absent from a backup of an installation that has none).
 set -eu
 
 say() { printf '\n==> %s\n' "$*"; }
@@ -58,6 +62,15 @@ fi
 
 # Exact row count of every table outside the system schemas: one "schema.table|count" per line.
 CENSUS="select n.nspname||'.'||c.relname||'|'||(xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', n.nspname, c.relname), false, true, '')))[1]::text
+from pg_class c join pg_namespace n on n.oid = c.relnamespace
+where c.relkind in ('r','p') and n.nspname not in ('pg_catalog','information_schema') and n.nspname not like 'pg_toast%'
+order by 1;"
+
+# A number per table that changes when any row's contents change: the sum of the first 64 bits of
+# each row's md5, so it does not depend on the order rows are read in (the restored copy has no
+# reason to return them in the order the running one does). Row text includes every column, geometry
+# as hex, so a column that loaded as something else shows up here and a count cannot see it.
+CHECKSUMS="select n.nspname||'.'||c.relname||'|'||(xpath('/row/c/text()', query_to_xml(format('select coalesce(sum((''x''||left(md5(t::text),16))::bit(64)::bigint),0) as c from %I.%I t', n.nspname, c.relname), false, true, '')))[1]::text
 from pg_class c join pg_namespace n on n.oid = c.relnamespace
 where c.relkind in ('r','p') and n.nspname not in ('pg_catalog','information_schema') and n.nspname not like 'pg_toast%'
 order by 1;"
@@ -118,6 +131,30 @@ PY
 grep -v '^RESULT' "$WORK/census.txt"
 census=$(sed -n 's/^RESULT //p' "$WORK/census.txt")
 
+say "Comparing a checksum of every table's contents with the running installation"
+docker exec "$DRILL" psql -U silexgis -d silexgis -tAc "$CHECKSUMS" > "$WORK/drill-sums.txt"
+docker compose exec -T db psql -U silexgis -d silexgis -tAc "$CHECKSUMS" > "$WORK/live-sums.txt"
+python3 - "$WORK/live-sums.txt" "$WORK/drill-sums.txt" > "$WORK/checksums.txt" <<'PY'
+import sys
+def read(path):
+    out = {}
+    for line in open(path):
+        line = line.strip()
+        if line:
+            name, _, total = line.rpartition('|')
+            out[name] = total
+    return out
+live, drill = read(sys.argv[1]), read(sys.argv[2])
+names = sorted(set(live) | set(drill))
+differ = [n for n in names if live.get(n) != drill.get(n)]
+print(f"    tables: {len(names)}   checksums agree: {len(names) - len(differ)}   differ: {len(differ)}")
+for n in differ:
+    print(f"      {n}: contents differ")
+print("RESULT", "agree" if not differ else "differ")
+PY
+grep -v '^RESULT' "$WORK/checksums.txt"
+checksums=$(sed -n 's/^RESULT //p' "$WORK/checksums.txt")
+
 say "Reading the uploads archive end to end"
 archived=$(docker run --rm -v "$SRC_ABS":/backup:ro alpine \
 	sh -c 'tar tzvf /backup/files.tar.gz | awk '\''$1 ~ /^-/ { n++; b += $3 } END { print n + 0, b + 0 }'\''')
@@ -127,11 +164,29 @@ set -- $archived; a_files=$1; a_bytes=$2
 set -- $running; r_files=$1; r_bytes=$2
 echo "    archive: $a_files files, $a_bytes bytes   running: $r_files files, $r_bytes bytes"
 
+say "Reading the browser-uploaded terrain rasters"
+# The archive exists only when there were uploaded rasters to put in it, and a backup made before
+# they were archived never has one -- so what is compared is "what the archive holds" (nothing, if
+# absent) against what the running volume holds under the uploads folder.
+if [ -f "$SRC_ABS/terrain-uploads.tar.gz" ]; then
+	t_archived=$(docker run --rm -v "$SRC_ABS":/backup:ro alpine \
+		sh -c 'tar tzvf /backup/terrain-uploads.tar.gz | awk '\''$1 ~ /^-/ { n++; b += $3 } END { print n + 0, b + 0 }'\''')
+else
+	t_archived="0 0"
+fi
+t_running=$(docker run --rm -v "${PROJECT}_silexgis-terrain":/data:ro alpine \
+	sh -c 'if [ -d /data/builds/uploads ]; then find /data/builds/uploads -type f -exec stat -c %s {} + | awk '\''{ n++; b += $1 } END { print n + 0, b + 0 }'\''; else echo "0 0"; fi')
+set -- $t_archived; t_a_files=$1; t_a_bytes=$2
+set -- $t_running; t_r_files=$1; t_r_bytes=$2
+echo "    archive: $t_a_files files, $t_a_bytes bytes   running: $t_r_files files, $t_r_bytes bytes"
+
 say "Verdict"
 verdict=PASS
 [ "$errors" -eq 0 ] || verdict=FAIL
 [ "$census" = agree ] || verdict=FAIL
+[ "$checksums" = agree ] || verdict=FAIL
 [ "$a_files" = "$r_files" ] || verdict=FAIL
+[ "$t_a_files" = "$t_r_files" ] || verdict=FAIL
 if [ "$verdict" = FAIL ] && [ "$FRESH" = no ]; then
 	echo "    FAIL against an older backup: differences may be what was written since it was taken."
 	echo "    Run with no argument to rehearse a fresh one, where everything should agree."

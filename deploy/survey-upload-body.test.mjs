@@ -28,7 +28,9 @@ const directives = (config) =>
   config
     .split('\n')
     .filter((line) => !line.trimStart().startsWith('#'))
-    .join('\n');
+    .join('\n')
+    // A placeholder's braces are not a block's; keep them from being counted as one.
+    .replace(/\$\{(\w+)\}/g, '@@$1@@');
 
 /** One block, from its opening line to the brace that closes it, counted by depth. */
 function blockOf(text, opening) {
@@ -63,16 +65,29 @@ function bytesOf(size) {
   return Number(match[1]) * unit;
 }
 
+/**
+ * A limit as the configuration writes it. The packaged image takes its limit from a variable the web
+ * container expands at start-up, so what applies when nobody sets one is the default the image
+ * declares for it.
+ */
+function resolved(value) {
+  const variable = /^@@(SILEXGIS__Web__\w+)@@$/.exec(value) ?? /^\$\{(SILEXGIS__Web__\w+)\}$/.exec(value);
+  if (!variable) return value;
+  const declared = new RegExp(`^ENV\\s+${variable[1]}="([^"]*)"\\s*$`, 'm').exec(read('client', 'Dockerfile'));
+  assert.ok(declared, `client/Dockerfile declares no default for ${variable[1]}`);
+  return declared[1];
+}
+
 /** The body limit a request to the API meets: the API location's own, else the server's. */
 function apiBodyLimit(config) {
   const text = directives(config);
   const api = blockOf(text, 'location ~ ^/(api|connect|health|openapi)(/|$) {');
   const pattern = /^\s*client_max_body_size\s+(\S+);/m;
   const own = pattern.exec(ownDirectives(api));
-  if (own) return bytesOf(own[1]);
+  if (own) return bytesOf(resolved(own[1]));
   const server = pattern.exec(ownDirectives(blockOf(text, 'server {')));
   assert.ok(server, 'neither the API location nor the server sets client_max_body_size');
-  return bytesOf(server[1]);
+  return bytesOf(resolved(server[1]));
 }
 
 /** The per-file cap the deployment template documents, which is the API's own default. */
@@ -100,4 +115,22 @@ describe('one file of a survey sent from a field device', () => {
       assert.match(api, /^\s*proxy_request_buffering\s+off;/m);
     });
   }
+});
+
+describe("the packaged image's body limit", () => {
+  it('is an environment setting whose default is the 1 GB the image always had', () => {
+    assert.equal(bytesOf(resolved('${SILEXGIS__Web__MaxBodySize}')), 1024 ** 3);
+  });
+
+  it('is reachable from the compose file and survives the template filter', () => {
+    const compose = read('deploy', 'docker-compose.yml');
+    assert.match(compose, /^\s*SILEXGIS__Web__MaxBodySize:\s*\$\{SILEXGIS_MAX_BODY_SIZE:-1024m\}\s*$/m);
+    // Only variables with this prefix are expanded; any other would be left in the file verbatim.
+    assert.match(read('client', 'Dockerfile'), /^ENV NGINX_ENVSUBST_FILTER="\^SILEXGIS__Web__"/m);
+  });
+
+  it('is documented where an operator looks', () => {
+    assert.match(read('deploy', '.env.example'), /^# SILEXGIS_MAX_BODY_SIZE=1024m$/m);
+    assert.match(read('docs', 'INSTALL.md'), /`SILEXGIS_MAX_BODY_SIZE`/);
+  });
 });

@@ -29,6 +29,13 @@ name: silexgis
 
 services:
   convert:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     image: ${SILEXGIS_CONVERT_IMAGE:-gotenberg/gotenberg:8}
     restart: unless-stopped
     # No published ports on purpose — see the note above.

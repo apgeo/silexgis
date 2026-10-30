@@ -30,6 +30,13 @@ services:
       SILEXGIS__Basemap__SelfHosted: "true"
 
   martin:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     # Pinned to a released version that had been out for more than two weeks when it was chosen.
     image: ghcr.io/maplibre/martin:1.16.1
     # The directory, given on the command line, is watched: an extract that appears is served, one

@@ -156,6 +156,9 @@ const credentialPrefixes = [
   ['/api/v1/shared/features/', 'a feature share link somebody chose to hand out'],
   ['/api/v1/shared/views/', 'a map view share link somebody chose to hand out'],
   ['/api/v1/public/albums/', 'a published album link somebody chose to hand out'],
+  ['/shared/view/', "a map view share as the visitor's own address"],
+  ['/shared/features/', "a feature share as the visitor's own address"],
+  ['/shared/albums/', "an album share as the visitor's own address"],
   ['/p/survey/', "the page behind a survey upload's public link, which is the whole of the holder's claim"],
   ['/api/v1/public/survey-uploads/', 'the envelope that page reads'],
 ];
@@ -240,6 +243,40 @@ const cases = [
     why: 'a password reset, which is worth an account rather than a page',
     uri: '/reset-password?email=someone@example.org&token=CREDENTIAL18',
     uriLogged: '/reset-password?[redacted]',
+  },
+  {
+    why: 'an address-change confirmation link, whose token is a single-page-app route only this server sees',
+    uri: '/settings/emails?confirm=CREDENTIAL30',
+    uriLogged: '/settings/emails?[redacted]',
+  },
+  {
+    why: 'the same link as the Referer of every call the confirmation page then makes',
+    uri: '/api/v1/users/me/emails',
+    referer: 'https://caves.example.org/settings/emails?confirm=CREDENTIAL31',
+    uriLogged: '/api/v1/users/me/emails',
+    refererLogged: 'https://caves.example.org/settings/emails?[redacted]',
+  },
+  {
+    why: '`confirm` on any other page is an ordinary parameter and is kept',
+    uri: '/api/v1/caves?confirm=yes',
+    uriLogged: '/api/v1/caves?confirm=yes',
+  },
+  {
+    why: 'a map view share opened in the browser',
+    uri: '/shared/view/CREDENTIAL32',
+    uriLogged: '/shared/view/[redacted]',
+  },
+  {
+    why: 'a feature share opened in the browser, seen again as a Referer',
+    uri: '/shared/features/CREDENTIAL33',
+    referer: 'https://caves.example.org/shared/features/CREDENTIAL34',
+    uriLogged: '/shared/features/[redacted]',
+    refererLogged: 'https://caves.example.org/shared/features/[redacted]',
+  },
+  {
+    why: 'an album share opened in the browser',
+    uri: '/shared/albums/CREDENTIAL35',
+    uriLogged: '/shared/albums/[redacted]',
   },
   {
     why: 'a parameter that merely ends in the credential’s name is not one',

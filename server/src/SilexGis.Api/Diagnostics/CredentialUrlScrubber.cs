@@ -78,6 +78,12 @@ public static class CredentialUrlScrubber
         "/api/v1/shared/features/",
         "/api/v1/shared/views/",
         "/api/v1/public/albums/",
+        // The same three shares as the visitor's browser address, which is what a browser-error
+        // report and a Referer carry; the single-page application spells them differently from the
+        // endpoints they read.
+        "/shared/view/",
+        "/shared/features/",
+        "/shared/albums/",
         // An account's calendar subscription, polled by calendar services for as long as the
         // address lives — the one of these a phone writes into its own logs too.
         "/api/v1/calendar/feed/",
@@ -88,6 +94,15 @@ public static class CredentialUrlScrubber
     /// and each published photograph on a followed page among them.
     /// </summary>
     private const string CredentialQueryParameter = "token";
+
+    /// <summary>
+    /// The page an address-confirmation link opens, and the parameter that link carries its
+    /// confirmation token in. The parameter is named <c>confirm</c> only here; anywhere else it
+    /// could be a plain flag, so it is redacted on this page's address and nowhere else.
+    /// </summary>
+    private const string ConfirmPage = "/settings/emails";
+
+    private const string ConfirmQueryParameter = "confirm";
 
     /// <summary>What replaces a credential when there is nothing useful to say about it.</summary>
     private const string Redacted = "[redacted]";
@@ -194,7 +209,9 @@ public static class CredentialUrlScrubber
 
         // Nothing to do, and said before any allocation: most addresses that carry a query carry
         // no credential in it, and this runs on every logged request.
-        if (url.IndexOf(CredentialQueryParameter + "=", query, StringComparison.Ordinal) < 0)
+        var confirmPage = url.Contains(ConfirmPage, StringComparison.Ordinal);
+        if (url.IndexOf(CredentialQueryParameter + "=", query, StringComparison.Ordinal) < 0
+            && !(confirmPage && url.IndexOf(ConfirmQueryParameter + "=", query, StringComparison.Ordinal) >= 0))
         {
             return url;
         }
@@ -211,13 +228,14 @@ public static class CredentialUrlScrubber
 
             var equals = pair.IndexOf('=', StringComparison.Ordinal);
             if (equals >= 0
-                && string.Equals(pair[..equals], CredentialQueryParameter, StringComparison.Ordinal)
+                && (string.Equals(pair[..equals], CredentialQueryParameter, StringComparison.Ordinal)
+                    || (confirmPage && string.Equals(pair[..equals], ConfirmQueryParameter, StringComparison.Ordinal)))
                 // Same reason as the path above: a value that is already the marker is left as it
                 // is, so an address that passes through both scrubbing points comes out identical
                 // to one that passed through either.
                 && !string.Equals(pair[(equals + 1)..], Redacted, StringComparison.Ordinal))
             {
-                builder.Append(CredentialQueryParameter).Append('=').Append(Redacted);
+                builder.Append(pair[..equals]).Append('=').Append(Redacted);
                 replaced = true;
             }
             else

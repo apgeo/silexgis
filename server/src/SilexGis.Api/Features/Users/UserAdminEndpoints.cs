@@ -641,6 +641,19 @@ public static class UserAdminEndpoints
             return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
         }
 
+        // Rows the account owns have no new owner chosen for them, so deletion is refused with
+        // what is in the way rather than left to the database's own refusal. Handing the rows
+        // over (or deleting them) is a separate act for somebody who can see what they are.
+        var blockers = await UserDeleteBlockers.FindAsync(db, user.Id, ct);
+        if (blockers.Count > 0)
+        {
+            return ApiProblems.Conflict(
+                UserDeleteBlockers.Code,
+                "This account still owns records and cannot be deleted until they are handed over or removed.",
+                "blocking",
+                blockers);
+        }
+
         // The person and the account are separate rows on purpose: a club's roster outlives the
         // logins attached to it, and somebody who leaves takes their account with them while the
         // trips they were on keep naming them. So the caver is unlinked rather than removed, and

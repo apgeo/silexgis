@@ -68,6 +68,15 @@ public sealed class MessageDispatcher(
                     throw new NotSupportedException(UnknownChannel(definition.Channel));
             }
 
+            if (!configured)
+            {
+                // Which template went nowhere, beside the recipient and subject the logging sender
+                // writes. Never the values or the text: they hold the links and codes.
+                logger.LogInformation(
+                    "Message {TemplateKey} on {Channel} was not delivered: the channel is not configured",
+                    templateKey, definition.Channel);
+            }
+
             return configured ? MessageResult.Delivered(segments) : MessageResult.LoggedOnly(segments);
         }
         catch (NotSupportedException)

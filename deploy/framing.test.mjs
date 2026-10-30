@@ -240,3 +240,77 @@ describe('the development server states the same policy', () => {
     assert.match(devServer, /process\.env\.SILEXGIS__Web__FrameAncestors/);
   });
 });
+
+/**
+ * Every block that sets a header of its own, with the text of those directives.
+ *
+ * Needed for the one thing `add_header` does that nobody expects: a location with any `add_header`
+ * stops inheriting the server's, so a header stated once at the top silently vanishes from every
+ * location that sets a Cache-Control. A placeholder's braces are hidden first so `${...}` is not
+ * counted as a block.
+ */
+function blocksWithHeaders(config) {
+  const text = directives(config).replace(/\$\{(\w+)\}/g, '@@$1@@');
+  const found = [];
+  const stack = [];
+  let own = '';
+  let head = '';
+  for (const ch of text) {
+    if (ch === '{') {
+      stack.push({ head: head.trim().split('\n').pop().trim(), own: '' });
+      head = '';
+    } else if (ch === '}') {
+      const done = stack.pop();
+      if (done && /add_header/.test(done.own)) found.push(done);
+      head = '';
+    } else if (stack.length > 0) {
+      stack[stack.length - 1].own += ch;
+      head += ch;
+    } else {
+      head += ch;
+    }
+    if (ch === ';' || ch === '\n') head = '';
+  }
+  return found;
+}
+
+describe('every response carries the type and referrer headers', () => {
+  const nosniff = /add_header X-Content-Type-Options "nosniff" always;/;
+  const referrer = /add_header Referrer-Policy "strict-origin-when-cross-origin" always;/;
+
+  for (const [name, config] of [
+    ['packaged', packaged],
+    ['standalone', standalone],
+  ]) {
+    it(`is stated in every location of the ${name} configuration that sets a header of its own`, () => {
+      const blocks = blocksWithHeaders(config);
+      // The server block plus the API, the assets, the shell and the published trip, at the least:
+      // a count this low means the parser lost the structure, not that the file got simpler.
+      assert.ok(blocks.length >= 8, `only ${blocks.length} blocks with headers were found`);
+      for (const block of blocks) {
+        assert.match(block.own, nosniff, `${block.head} sends no X-Content-Type-Options`);
+        assert.match(block.own, referrer, `${block.head} sends no Referrer-Policy`);
+      }
+    });
+  }
+
+  it('leaves the published trip framable: the allow-list stays and no X-Frame-Options joins it', () => {
+    for (const config of [packaged, standalone]) {
+      const block = embedBlock(config);
+      assert.match(block, /frame-ancestors 'self'/);
+      assert.ok(!block.includes('X-Frame-Options'));
+      assert.match(block, /X-Content-Type-Options/);
+    }
+  });
+
+  it('is sent by the development server too, so the browser suite drives the real policy', () => {
+    assert.match(devServer, /setHeader\('X-Content-Type-Options', 'nosniff'\)/);
+    assert.match(devServer, /setHeader\('Referrer-Policy', 'strict-origin-when-cross-origin'\)/);
+  });
+
+  it('is sent by the API on every response, errors included', () => {
+    const program = read('server', 'src', 'SilexGis.Api', 'Program.cs');
+    assert.match(program, /X-Content-Type-Options/);
+    assert.match(program, /Referrer-Policy/);
+  });
+});

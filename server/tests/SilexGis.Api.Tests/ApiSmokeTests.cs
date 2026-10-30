@@ -2,6 +2,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 
@@ -28,6 +31,43 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await response.Content.ReadAsStringAsync()).ShouldBe("Healthy");
+    }
+
+    // A success, a refusal by authentication and an address nothing answers are produced by three
+    // different parts of the pipeline; the headers have to hold for all of them, not just the
+    // handlers that run to the end.
+    [Theory]
+    [InlineData("/health/live", HttpStatusCode.OK)]
+    [InlineData("/api/v1/users", HttpStatusCode.Unauthorized)]
+    [InlineData("/api/v1/no-such-route", HttpStatusCode.NotFound)]
+    public async Task Every_response_forbids_type_sniffing_and_limits_the_referrer(string path, HttpStatusCode expected)
+    {
+        var response = await factory.CreateClient().GetAsync(path);
+
+        response.StatusCode.ShouldBe(expected);
+        response.Headers.GetValues("X-Content-Type-Options").ShouldBe(["nosniff"]);
+        response.Headers.GetValues("Referrer-Policy").ShouldBe(["strict-origin-when-cross-origin"]);
+        // Framing is the web server's rule, because only it knows which pages an operator opened to
+        // embedding; the API must not state a second, conflicting one.
+        response.Headers.Contains("X-Frame-Options").ShouldBeFalse();
+    }
+
+    // At Information EF Core writes every SQL command it runs, which in a deployment is the log's
+    // bulk and puts query text (and, near a failure, parameter shapes) where operators ship logs.
+    // Checked through the same reader the application uses for its logging settings, so a key the
+    // reader would ignore cannot pass for the setting.
+    [Fact]
+    public void Sql_command_logging_is_off_by_default_and_application_logging_is_not()
+    {
+        var configuration = factory.Services.GetRequiredService<IConfiguration>();
+        using var logger = new LoggerConfiguration().ReadFrom.Configuration(configuration).CreateLogger();
+
+        var sql = logger.ForContext("SourceContext", "Microsoft.EntityFrameworkCore.Database.Command");
+        sql.IsEnabled(Serilog.Events.LogEventLevel.Information).ShouldBeFalse();
+        sql.IsEnabled(Serilog.Events.LogEventLevel.Warning).ShouldBeTrue();
+
+        var own = logger.ForContext("SourceContext", "SilexGis.Api.Program");
+        own.IsEnabled(Serilog.Events.LogEventLevel.Information).ShouldBeTrue();
     }
 
     [Fact]

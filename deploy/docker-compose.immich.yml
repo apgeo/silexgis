@@ -116,6 +116,13 @@ name: silexgis
 
 services:
   immich-server:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     image: ghcr.io/immich-app/immich-server:${SILEXGIS_IMMICH_VERSION:?pin an Immich release in .env, on the v3 line}
     restart: unless-stopped
     environment:
@@ -256,12 +263,26 @@ services:
   # ------------------------------------------------------------------------------------------
 
   immich-redis:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     image: docker.io/valkey/valkey:9
     restart: unless-stopped
     healthcheck:
       test: redis-cli ping | grep -q PONG || exit 1
 
   immich-db:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     # The extensions and the server version have to agree, which is why the vendor pins this by
     # digest in their own file. Take the exact reference from the Immich release pinned above
     # rather than from here.

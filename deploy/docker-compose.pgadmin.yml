@@ -19,6 +19,13 @@ name: silexgis
 
 services:
   pgadmin:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     image: dpage/pgadmin4:9.17
     depends_on:
       - db

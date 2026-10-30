@@ -81,6 +81,13 @@ name: silexgis
 
 services:
   photoprism:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     image: photoprism/photoprism:${SILEXGIS_PHOTOPRISM_VERSION:?pin a PhotoPrism build tag in .env — dated, never `latest`}
     restart: unless-stopped
     stop_grace_period: 15s

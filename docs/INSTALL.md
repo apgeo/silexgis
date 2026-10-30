@@ -217,7 +217,9 @@ bundled nginx are two hops, and the API walks `X-Forwarded-For` back exactly tha
 the caller's address, which its per-address rate limits key on. Left at the default of one,
 every caller would count as your proxy and share one budget. A proxy that speaks from a public
 address (a CDN, a proxy on another machine) must also be named under
-`SILEXGIS__Proxy__TrustedNetworks__0=<cidr>` — and naming any network replaces the built-in list of
+`SILEXGIS__Proxy__TrustedNetworks__0=<cidr>` (an entry that is not a CIDR block, such as a bare
+address or a typo, **stops the start** with a line beginning `proxy.trusted_network_malformed` that
+names the entry; a blank entry is ignored) — and naming any network replaces the built-in list of
 private ranges rather than adding to it, so name the range your Docker network speaks from as well
 (usually inside `172.16.0.0/12` — `docker network inspect` says which — for example
 `SILEXGIS__Proxy__TrustedNetworks__1=172.16.0.0/12`). The bundled Caddy
@@ -289,11 +291,16 @@ on being written out in full beside it, once a minute per follower. Both halves 
 request line and in the `Referer` header:
 
 - **the one path segment after** `/shared/trips/`, `/api/v1/public/trips/`,
-  `/api/v1/shared/features/`, `/api/v1/shared/views/`, `/api/v1/public/albums/`, `/p/survey/` or
-  `/api/v1/public/survey-uploads/` — up to the next
+  `/api/v1/shared/features/`, `/api/v1/shared/views/`, `/api/v1/public/albums/`, `/p/survey/`,
+  `/api/v1/public/survey-uploads/`, and the visitor's own addresses of the three shares,
+  `/shared/view/`, `/shared/features/` and `/shared/albums/` — up to the next
   `/`, `?` or `#` and no further, so that a trailing slash and a sub-path such as
   `…/<token>/cover` are covered too; keeping what follows is what leaves the line useful.
 - **the value of every `token=` parameter** in the query — every one, not the first.
+- **the value of `confirm=` on the `/settings/emails` page** — the link that confirms a changed
+  e-mail address. It is a page of the web application, so only the web server's own log sees it, and
+  it comes back again as the `Referer` of every call that page makes. `confirm` on other pages is
+  an ordinary parameter and stays.
 
 In nginx that is a `log_format` of your own: copy the `map` blocks out of
 `deploy/nginx/silexgis.conf`, which are written to be lifted. In Caddy one filter does both halves,
@@ -304,8 +311,8 @@ log {
     format filter {
         wrap console
         fields {
-            request>uri regexp "(/(?:shared/trips|api/v1/public/trips|api/v1/shared/features|api/v1/shared/views|api/v1/public/albums|p/survey|api/v1/public/survey-uploads)/)[^/?#]+|([?&]token=)[^&]*" "$1$2[redacted]"
-            request>headers>Referer regexp "(/(?:shared/trips|api/v1/public/trips|api/v1/shared/features|api/v1/shared/views|api/v1/public/albums|p/survey|api/v1/public/survey-uploads)/)[^/?#]+|([?&]token=)[^&]*" "$1$2[redacted]"
+            request>uri regexp "(/(?:shared/trips|api/v1/public/trips|api/v1/shared/features|api/v1/shared/views|api/v1/public/albums|shared/view|shared/features|shared/albums|p/survey|api/v1/public/survey-uploads)/)[^/?#]+|([?&]token=)[^&]*|(/settings/emails\?(?:[^#&]*&)*confirm=)[^&]*" "$1$2$3[redacted]"
+            request>headers>Referer regexp "(/(?:shared/trips|api/v1/public/trips|api/v1/shared/features|api/v1/shared/views|api/v1/public/albums|shared/view|shared/features|shared/albums|p/survey|api/v1/public/survey-uploads)/)[^/?#]+|([?&]token=)[^&]*|(/settings/emails\?(?:[^#&]*&)*confirm=)[^&]*" "$1$2$3[redacted]"
         }
     }
 }
@@ -366,8 +373,8 @@ the database, the uploads and the keys in one step:
   than the bundled volume, that mount is the thing to encrypt, and the database volume still
   needs covering separately.
 
-**2. Encrypt the backups.** `deploy/scripts/backup.sh` writes plain `db.sql.gz` and
-`files.tar.gz`. A backup is the copy most likely to end up somewhere you do not control, so
+**2. Encrypt the backups.** `deploy/scripts/backup.sh` writes plain `db.sql.gz`, `files.tar.gz` and,
+when browser-uploaded terrain rasters exist, `terrain-uploads.tar.gz`. A backup is the copy most likely to end up somewhere you do not control, so
 encrypt it before it leaves the host and keep the passphrase somewhere other than the backup
 medium:
 
@@ -376,10 +383,12 @@ cd deploy
 sh scripts/backup.sh
 age -r age1yourrecipientkey... -o backups/<timestamp>/db.sql.gz.age    backups/<timestamp>/db.sql.gz
 age -r age1yourrecipientkey... -o backups/<timestamp>/files.tar.gz.age backups/<timestamp>/files.tar.gz
-shred -u backups/<timestamp>/db.sql.gz backups/<timestamp>/files.tar.gz
+# only when the backup has one:
+age -r age1yourrecipientkey... -o backups/<timestamp>/terrain-uploads.tar.gz.age backups/<timestamp>/terrain-uploads.tar.gz
+shred -u backups/<timestamp>/db.sql.gz backups/<timestamp>/files.tar.gz backups/<timestamp>/terrain-uploads.tar.gz
 ```
 
-`gpg --encrypt --recipient …` works the same way. To restore, decrypt back to the original two
+`gpg --encrypt --recipient …` works the same way. To restore, decrypt back to the original
 file names first — `scripts/restore.sh` expects them.
 
 **3. Turn on HTTPS.** Encryption at rest does nothing for data crossing the network, and TLS is
@@ -1189,8 +1198,8 @@ having granted anything, and it is worth knowing which:
   permission domain except permission groups, feature sets and installation secrets, and terrain is
   not one of those exceptions. So adding somebody to Administrators does convey terrain: they can
   start builds, which spends the machine's disk and its bandwidth, choose what the 3D view draws,
-  and delete a build — which, as the backups section below says, destroys the only copy of any
-  raster that was uploaded through the browser. Remove the terrain rule from that group if that is
+  and delete a build — which, as the backups section below says, releases the only copy of any
+  raster that was uploaded through the browser to be removed (the nightly backup keeps one). Remove the terrain rule from that group if that is
   not what you want.
 - On an installation whose groups were seeded **before** this feature existed, nobody but a Full
   Administrator holds it: the seeded rules were written when the right did not exist to be given,
@@ -1440,16 +1449,30 @@ build in `.env`, then `docker compose pull <service>` and `docker compose up -d`
 first suspend the library from the installation settings, so nothing in SilexGIS asks it for anything
 while it is down.
 
-**Backing one up is yours too.** `deploy/scripts/backup.sh` covers SilexGIS's own database and files, not
-these products' databases, albums, faces or settings. Use each product's own backup procedure.
+**Backing one up is yours too.** `deploy/scripts/backup.sh` covers SilexGIS's own database, files and
+browser-uploaded terrain rasters, and deliberately not these products' databases, albums, faces or
+settings: their state is theirs, their formats change at their releases, and a copy this project made
+could not be restored by them. Use each product's own backup procedure; what there is to protect:
+
+- **Immich:** its database (the `immich-db-data` volume — Immich's own documentation describes the
+  database dump it writes and the one to take yourself) and its `immich-data` volume, which holds the
+  thumbnails and, when photographs were imported into it rather than read from your disks, the
+  photographs themselves. Photographs read from your own disks are as safe as that disk is.
+- **PhotoPrism:** the `photoprism-storage` volume (its database, sidecar files and cache) and, if you
+  import into it, the originals volume. Photographs read from your own disks are as safe as that disk.
+
+The thing in each library that cannot be rebuilt is the photograph, wherever you keep it; the rest
+can be re-indexed, slowly. Whatever you do, do it with the product stopped or with its own tool, not
+by copying a running database's directory.
 
 ## Backups
 
-`deploy/scripts/backup.sh` dumps the database and the uploaded-files volume:
+`deploy/scripts/backup.sh` dumps the database, the uploaded-files volume and the rasters uploaded
+through the terrain page:
 
 ```bash
 cd deploy
-sh scripts/backup.sh                 # → ./backups/<timestamp>/{db.sql.gz,files.tar.gz}
+sh scripts/backup.sh                 # → ./backups/<timestamp>/{db.sql.gz,files.tar.gz[,terrain-uploads.tar.gz]}
 ```
 
 Restore into a stopped stack:
@@ -1460,11 +1483,14 @@ sh scripts/restore.sh ./backups/<timestamp>
 docker compose up -d
 ```
 
+A backup without `terrain-uploads.tar.gz` — one made before it existed, or by an installation that
+never uploaded a raster — restores as before and leaves the terrain volume as it is.
+
 ### Rehearsing a restore
 
 A backup that has never been restored is a hope. `restore-drill.sh` loads one into a throwaway
 database container of the same image — no network, no volume, removed afterwards — reads the
-uploads archive end to end, and compares both with the running installation, which it only reads:
+uploads archives end to end, and compares all of it with the running installation, which it only reads:
 
 ```bash
 cd deploy
@@ -1472,10 +1498,13 @@ sh scripts/restore-drill.sh                       # back up now, then rehearse t
 sh scripts/restore-drill.sh ./backups/<timestamp> # rehearse an existing one
 ```
 
-It prints counts only — rows per table on each side, files and bytes — never a row's contents,
-and ends `PASS` when the dump loads without an error, every table's count agrees and the archive
-holds the files the installation does. Against an older backup, tables written since then differ;
-the script says so. Run it after the first backup of a new installation, after an upgrade that
+It prints numbers only — rows per table on each side, a checksum of each table's contents, files
+and bytes — never a row's contents, and ends `PASS` when the dump loads without an error, every
+table's count and checksum agree and the archives hold the files the installation does. The
+checksum is what a count cannot be: a column that came back as something else, or a value that
+changed, with the same number of rows. It reads every row of the running installation once, so on a
+large one run it at a quiet hour. Against an older backup, tables written since then differ; the
+script says so. Run it after the first backup of a new installation, after an upgrade that
 changed the schema, and from time to time.
 
 A cron example that keeps nightly backups:
@@ -1484,16 +1513,20 @@ A cron example that keeps nightly backups:
 15 3 * * *  cd /opt/silexgis/deploy && sh scripts/backup.sh >> /var/log/silexgis-backup.log 2>&1
 ```
 
-An installation without Docker backs up with `deploy/native/backup.mjs` instead, into the same two
+An installation without Docker backs up with `deploy/native/backup.mjs` instead, into the same
 files — see [Backups and restoring](#backups-and-restoring) under Non-Docker install.
 
 Both outputs are unencrypted. If a copy leaves the host — offsite, object storage, a USB disk —
 encrypt it first; see [Encryption at rest](#encryption-at-rest).
 
-**Terrain is deliberately not backed up.** The script covers the database and the uploaded-files
-volume and nothing else; the terrain volume — baked pyramids, the rasters each build was given,
-the reprojected copies it made of them, and rasters uploaded but not yet built — is left out on
-purpose, and this is the reasoning so that you can disagree with it knowingly:
+**Terrain: only the rasters uploaded through the browser are backed up.** A raster somebody
+uploaded on the terrain page has exactly one copy — in the `builds/uploads` folder of the terrain
+volume, with no copy in the file store — and a build keeps the ones it names there until somebody
+deletes the build (one no build names is removed after a day; see
+`SILEXGIS__Terrain__UploadRetentionHours`). So `backup.sh` archives that folder, and only that, as
+`terrain-uploads.tar.gz`; an installation that never uploaded one gets no such file. Everything else
+on the volume is left out on purpose, and this is the reasoning so that you can disagree with it
+knowingly:
 
 - **It is derived data with a recipe that survives.** The database is backed up, and the database
   is where a build's rectangle, its detail, its sources and which build the scene was drawing all
@@ -1502,24 +1535,83 @@ purpose, and this is the reasoning so that you can disagree with it knowingly:
   downloaded or was sent beside its tiles, so the volume is dominated by copies of data that came
   from somewhere else — forty times the size of the tiles themselves, in the measured case. (A
   directory on the server is read in place and never copied onto this volume.) Nightly-copying tens of
-  gigabytes of regenerable raster to protect a pyramid that rebakes in minutes is a poor trade,
-  and it is the trade an operator would silently be making.
+  gigabytes of regenerable raster to protect a pyramid that rebakes in minutes is a poor trade.
 - **Nothing waits on it.** Losing the volume costs the 3D view its ground until a build is run
   again: the smooth globe comes back, the application says so on screen, and everything else works
   exactly as before. No cave record, no document, no photo and no survey depends on a terrain tile.
 
-What that leaves you responsible for, if it matters to you: **rasters that exist nowhere else.**
-Elevation data downloaded from Copernicus can always be downloaded again, and a directory on the
-server you filled yourself is yours and is presumably already in whatever backs that machine up —
-but a raster somebody uploaded through the browser has exactly one copy, on this volume, and no
-copy in the file store. (One that no build names is deleted after a day — see
-`SILEXGIS__Terrain__UploadRetentionHours` — so the ones worth keeping are the ones a build names.)
-If your installation is fed that way, add the volume:
+What remains yours: elevation data downloaded from Copernicus can always be downloaded again, and a
+directory on the server you filled yourself is presumably already in whatever backs that machine up.
+If you would rather have the whole terrain volume in the backup anyway:
 
 ```bash
 docker run --rm -v silexgis_silexgis-terrain:/data:ro -v "$PWD/backups":/backup \
   alpine tar czf /backup/terrain.tar.gz -C /data .
 ```
+
+(`restore.sh` does not read that file; unpack it into the volume by hand.) The restore replaces only
+the volume's `builds/uploads` folder, so builds and pyramids beside it are not touched by it.
+
+### Restoring a backup from before the migration baseline
+
+A dump taken before the release that replaced the migration history with one baseline (see
+[Upgrading across the release that replaces the migration history with one
+baseline](#upgrading-across-the-release-that-replaces-the-migration-history-with-one-baseline)) restores
+into a current build only if its database stood at one of the three steps that release moves forward
+by itself. For any other, the current API refuses to start on it and logs one line beginning
+`migrations.before_baseline`. The way through is to restore into a build that still has the old
+chain, let that build bring the database forward, and then update:
+
+1. **Find out where the dump stands**, without loading it. The newest migration it records is the
+   largest name of this shape (a migration name is code, not data):
+
+   ```bash
+   gunzip -c backups/<timestamp>/db.sql.gz | grep -aE '^[0-9]{14}_[A-Za-z0-9]+[[:space:]]' | cut -f1 | sort | tail -1
+   ```
+
+   If that is `20261016125428_MapLayerOnSharedLinks`, `20261016090838_SavedFilters` or
+   `20261016021043_JobRetryAndProgress`, skip the rest: restore as usual into the current build.
+2. **Stop the API and check out the last revision that still has the old chain**, exactly as in the
+   upgrade procedure above (`git checkout "$(git log -1 --format=%H -- server/src/SilexGis.Infrastructure/Migrations/20261016125428_MapLayerOnSharedLinks.cs)^"`), then build it:
+   `docker compose build api`.
+3. **Restore into it**: `docker compose stop api && sh scripts/restore.sh ./backups/<timestamp> && docker compose up -d`.
+   The old build migrates the restored database forward as it starts; wait until
+   `/health/ready` answers.
+4. **Return to the current revision** (`git checkout <your branch>`), rebuild and start; the
+   current build then moves the history onto the baseline by itself.
+
+The files archive and `terrain-uploads.tar.gz` do not depend on the schema and restore the same way
+whichever build is running. The restore rehearsal (`restore-drill.sh`) loads a dump into a throwaway
+database that has no application on it, so it works on a pre-baseline dump too — it compares
+tables with the running installation, which has since moved on, and says so.
+
+## Logs, health and response headers
+
+**Container logs are bounded.** Every service the compose files start keeps at most five log files of
+20 MB each (`docker logs` shows what is kept; older output is dropped). Docker's default driver never
+rotates, so a container left running for a year used to be able to fill the disk with its own output.
+If you ship logs elsewhere, ship them from the container's output as before; the bound only limits
+what stays on the host.
+
+**The SQL the application runs is not logged by default.** The database library's per-command log
+lines are set to `Warning`, so a normal log holds requests, warnings and errors and not a line per
+query. To see every command while chasing a problem, set
+`SILEXGIS__Serilog__MinimumLevel__Override__Microsoft.EntityFrameworkCore.Database.Command=Information`
+in `.env` and `docker compose up -d api`; take it out again afterwards, because the log grows quickly.
+
+**Health.** `docker compose ps` shows `healthy` for `api` once the application answers
+`/health/ready` (the database is reachable and the start-up migration has finished) and for `web` once
+the web server answers its front page. `web` is started only after `api` is healthy, so a front that
+comes up always has an application behind it; a first start that has to run migrations can take a
+minute or two before it says so. `/health/live` and `/health/ready` are also reachable through the
+web server for an external monitor.
+
+**Response headers.** Every response carries `X-Content-Type-Options: nosniff` (a browser does not
+reinterpret a file as another type) and `Referrer-Policy: strict-origin-when-cross-origin` (a link
+followed from here tells another site the origin, not the full address). Who may frame a page is a
+separate rule and is unchanged: nothing, except published trips for the sites named in
+`SILEXGIS_FRAME_ANCESTORS`. If you put your own proxy in front, let these headers through; a hand-
+installed nginx takes them from `deploy/nginx/silexgis.conf`.
 
 ## Browsing the database
 
@@ -1900,10 +1992,15 @@ See `deploy/.env.example` for GitHub and generic-OIDC examples.
 
 ## Email and SMS
 
-SilexGIS runs perfectly well with neither configured — confirmation links and sign-in codes are
-written to the API log for you to read, which is the intended mode for a small installation. To
-have them actually delivered, configure one or both. Everything below is also editable in the app
-under **Messaging** (administrators only); what you save there replaces the values here.
+SilexGIS starts and runs with neither configured, but then **nothing is delivered**: confirmation
+links, password-reset links and sign-in codes go nowhere. The API log says that a message was due —
+the recipient and which message it was — and **never what it said, subject included**, because the text
+holds the link or the code and a log is copied into support threads and bundles. The one thing an
+installation without mail can still do is open an account: **Invite someone** in the account
+register shows the invitation link to the administrator once, to hand over in person. For
+everything else (a forgotten password, an address to confirm, a sign-in code), configure one or
+both. Everything below is also editable in the app under **Messaging** (administrators only); what
+you save there replaces the values here.
 
 **Email (SMTP).**
 
@@ -2229,10 +2326,12 @@ sudo node deploy/native/backup.mjs /path/out       # → /path/out/
 sudo node deploy/native/backup.mjs --keep 14       # and delete all but the newest 14
 ```
 
-It writes **the same two files the Docker path's `backup.sh` writes**: `db.sql.gz` (a plain
-`pg_dump`, made with this machine's `pg_dump` as the application's role) and `files.tar.gz` (the
-uploads directory). The keys and baked terrain are left out for the reasons given under
-[Backups](#backups). The installer's nightly timer runs this command; see it with
+It writes **the same files the Docker path's `backup.sh` writes**: `db.sql.gz` (a plain
+`pg_dump`, made with this machine's `pg_dump` as the application's role), `files.tar.gz` (the
+uploads directory) and, when rasters were uploaded through the terrain page,
+`terrain-uploads.tar.gz` (the terrain directory's `builds/uploads` folder, the same member path as on
+the Docker path, so either path restores the other's). The keys and the rest of the terrain are left
+out for the reasons given under [Backups](#backups). The installer's nightly timer runs this command; see it with
 `systemctl list-timers silexgis-backup.timer`.
 
 ```bash
@@ -2336,7 +2435,7 @@ the reasoning beside each one.
 | `SILEXGIS__Auth__RateLimitPerMinute` | `60` | sign-in, password-reset and token requests one IP address may make per minute. Raise it for an installation whose users share an outbound address |
 | `SILEXGIS__Qr__RateLimitPerMinute` | `60` | requests to the printed-cave-code landing address one IP address may make per minute. Its own window rather than the sign-in one, so that a group scanning labels at a cave entrance from behind a single connection cannot spend everyone else's sign-in allowance. **This is abuse and cost control, not a confidentiality control** — a printed code is short and reproducible outside this server, so its space is exhaustible at any rate a person would tolerate; what makes that pointless is that a code which resolves discloses only this installation's own name |
 | `SILEXGIS__Proxy__Hops` | `1` | how many reverse proxies stand between a caller and the application, **exactly**. The three per-address limits above and below find the caller by walking `X-Forwarded-For` back this many hops. The packaged stack has one (its web front); the HTTPS overlay has two and sets `2` itself; your own proxy in front of the web service makes two, and you set it — see "Your own proxy" under [Enabling HTTPS](#enabling-https). Too low, and every caller counts as your proxy and shares one allowance; too high, and a caller can write an address of their own into the header |
-| `SILEXGIS__Proxy__TrustedNetworks__0`, `__1`, … | loopback and the private ranges | the networks those proxies speak from, in CIDR notation, one per index. Only needed for a proxy on a public address (a CDN, a proxy on another machine). **Naming any replaces the built-in list** rather than adding to it, so name the private range your own services speak from too |
+| `SILEXGIS__Proxy__TrustedNetworks__0`, `__1`, … | loopback and the private ranges | the networks those proxies speak from, in CIDR notation, one per index. Only needed for a proxy on a public address (a CDN, a proxy on another machine). An entry that is not a CIDR block **stops the start** (`proxy.trusted_network_malformed`, naming the index and the entry). **Naming any replaces the built-in list** rather than adding to it, so name the private range your own services speak from too |
 | `SILEXGIS__Auth__SpeleoLocRefreshTokenDays` | `45` | how long the SpeleoLoc mobile app may stay offline before a caver has to sign in on it again. The clock restarts at every successful sync, not at sign-in. Values outside 1 to 365 days are brought back inside that range |
 | `SILEXGIS__Auth__AccessKeyMaxDays` | `365` | the longest a personal access key may be made to last. A caver makes a key under *Settings › Access keys* and pastes it into a field device (TopoDroid) to send surveys; the form offers 30, 90 and 365 days, capped by this figure, and there is no "never". A key opens only the survey-upload routes, the caver's own profile and the cave search — every other route refuses it — and locking the account, or an administrator's reset of the second factor, stops every key at once; changing or resetting the password stops them only when *Also revoke my access keys* is ticked, and otherwise leaves them working. Values outside 1 to 3650 days are brought back inside that range |
 | `SILEXGIS__Auth__SigningCertificatePath` | *(unset)* | a PKCS#12 (`.pfx`) file, private key included, to sign sign-in tokens with. Unset, the API makes one on first start and keeps it in the keys directory as `token-signing.pfx` (owner-readable only), renewing it by itself thirty days before its five years run out and keeping the outgoing one so nobody is signed out. A file of your own is never renewed: the log warns at every start in its last thirty days, and replacing it signs everybody out once |
@@ -2507,7 +2606,8 @@ the reasoning beside each one.
 | `SILEXGIS__Import__PhotoProximityRadiusMeters` | `80` | how far a photograph looks for objects already in the registry — wider than for a vector file, because a picture is taken from where the photographer stood |
 | `SILEXGIS__Import__PhotoClusterRadiusMeters` | `25` | how far apart two photographs can be and still be proposed as one place. These five are also editable under **Administration → Messaging → Vector import**, which replaces them once saved |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
-| `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB) |
+| `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB unless `SILEXGIS_MAX_BODY_SIZE` raises it) |
+| `SILEXGIS_MAX_BODY_SIZE` | `1024m` | the largest request body the bundled web service's proxy passes to the API, as an nginx size (`1024m`, `2g`). It answers before the application, so it must stay above `SILEXGIS__Files__MaxUploadBytes`, the raster limit and `SILEXGIS__SurveyUploads__MaxFileBytes`. Read when the web container starts: `docker compose up -d web`. The container receives it as `SILEXGIS__Web__MaxBodySize`. Not read by a hand-installed nginx, where it is `client_max_body_size` in the nginx file |
 | `SILEXGIS__Files__DefaultUserQuotaBytes` | `0` (no limit) | how much stored content one account may own, unless the account is given a figure of its own. Not an allocation: nothing is reserved, and the sum of everybody's quotas may exceed the disk. The packaged stack sets it from `SILEXGIS_USER_QUOTA_BYTES` in `.env` |
 | `SILEXGIS__Files__MaxTotalStoreBytes` | `0` (no limit) | how much the whole installation may hold — the limit that actually protects the disk. The packaged stack sets it from `SILEXGIS_MAX_TOTAL_STORE_BYTES` |
 | `SILEXGIS__Files__AcceptedExtensions__0`, `__1`, … | *(none: everything is accepted)* | the only file extensions an upload may have, one per index, with or without the leading dot |

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog.Core;
 using Serilog.Events;
 using Shouldly;
+using SilexGis.Api.Common;
 using SilexGis.Api.Tests.Support;
 
 namespace SilexGis.Api.Tests;
@@ -252,5 +254,69 @@ public sealed class TrustedProxyTests : IClassFixture<PostgresFixture>
         (await ReadAsAsync(client, "192.168.1.20, 203.0.113.10")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         ProxyNotices(logs).ShouldBeEmpty();
+    }
+
+    /// <summary>The failure for a start refused, with everything that caused it.</summary>
+    private static string Said(Exception? failure)
+    {
+        var said = new List<string>();
+        for (; failure is not null; failure = failure.InnerException)
+        {
+            said.Add(failure.Message);
+        }
+
+        return string.Join(" | ", said);
+    }
+
+    [Theory]
+    [InlineData("203.0.113.0")]
+    [InlineData("203.0.113.0/33")]
+    [InlineData("not-a-network")]
+    [InlineData("10.0.0.0/8 and more")]
+    public async Task A_network_that_is_not_a_cidr_block_refuses_the_start_with_a_code_and_names_the_entry(string malformed)
+    {
+        // The second entry is the malformed one, so the message has to say which, not just that.
+        // Written as a bare address, "203.0.113.0" reads as a host; the list wants a block, and
+        // guessing "/32" for the operator is a decision the process does not make.
+        using (var broken = Factory(network: "203.0.113.0/24", secondNetwork: malformed))
+        {
+            var said = Said(Should.Throw<Exception>(() => broken.CreateClient()));
+
+            said.ShouldContain(TrustedProxies.MalformedNetworkCode);
+            said.ShouldContain("SILEXGIS__Proxy__TrustedNetworks__1");
+            said.ShouldContain(malformed);
+        }
+
+        // The same application with the entry corrected starts, so the refusal above is the
+        // setting's and not some unrelated failure of the host.
+        using var working = Factory(network: "203.0.113.0/24", secondNetwork: "198.51.100.0/24");
+        using var client = working.CreateClient();
+        (await client.GetAsync("/health/live")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public void A_malformed_block_is_neither_skipped_nor_widened_into_trusting_everyone()
+    {
+        Should.Throw<InvalidOperationException>(() => TrustedProxies.Options(1, ["10.0.0.0/8", "garbage"]))
+            .Message.ShouldStartWith(TrustedProxies.MalformedNetworkCode);
+
+        // Readable blocks are all kept, in order; a blank entry is an unset value and is ignored.
+        var options = TrustedProxies.Options(1, ["10.0.0.0/8", " ", "2001:db8::/32"]);
+        options.KnownIPNetworks.Count.ShouldBe(2);
+        options.KnownIPNetworks.ShouldNotContain(n => n.PrefixLength == 0);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void A_list_of_only_blank_entries_falls_back_to_the_defaults_and_never_trusts_everyone(string blank)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Proxy:TrustedNetworks:0"] = blank })
+            .Build();
+
+        var options = TrustedProxies.Read(configuration);
+
+        options.KnownIPNetworks.Count.ShouldBe(TrustedProxies.DefaultNetworks.Count);
     }
 }

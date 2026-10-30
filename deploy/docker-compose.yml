@@ -4,6 +4,13 @@ name: silexgis
 
 services:
   db:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     image: postgis/postgis:17-3.5
     environment:
       POSTGRES_DB: silexgis
@@ -19,6 +26,13 @@ services:
     restart: unless-stopped
 
   api:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     build: ../server
     # Any SILEXGIS__* line added to .env (e.g. external login providers) flows through here;
     # the explicit mappings below still take precedence for the common settings.
@@ -60,9 +74,9 @@ services:
       SILEXGIS__Announcements__PaidChannelsEnabled: ${SILEXGIS_ANNOUNCEMENTS_PAID_CHANNELS_ENABLED:-false}
       SILEXGIS__Announcements__DailyPaidMessageCap: ${SILEXGIS_ANNOUNCEMENTS_DAILY_PAID_MESSAGE_CAP:-100}
       SILEXGIS__Files__Root: /data/files
-      # Largest accepted upload. The web service's proxy allows 1 GB, so anything up to that
-      # works without touching it; going higher means editing client/nginx.conf and
-      # rebuilding the web image, because that value is baked in at build time.
+      # Largest accepted upload. The web service's proxy allows 1 GB by default, so anything up to
+      # that works without touching it; going higher means raising SILEXGIS_MAX_BODY_SIZE as well
+      # (web service below), because the proxy answers first and refuses what exceeds its own limit.
       SILEXGIS__Files__MaxUploadBytes: ${SILEXGIS_MAX_UPLOAD_BYTES:-536870912}
       # How much may be stored. Both default to 0, meaning no limit — neither is an allocation,
       # so nothing is reserved and the sum of everybody's quota may exceed the disk. The second
@@ -113,12 +127,37 @@ services:
       # Mounted whether or not the overlay runs, so an extract survives taking the overlay off
       # and putting it back.
       - silexgis-basemap:/data/basemap
+    # Answers "is the application up and its database reachable", which is what the web service
+    # waits for below. The runtime image carries bash but neither curl nor wget, and installing a
+    # tool only for this would grow the image, so the probe is a plain HTTP/1.0 request written to
+    # a TCP socket by bash. start_period gives the start-up migration time to finish: failures
+    # inside it are not counted, so a slow first start is not reported as unhealthy.
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080 &&
+          printf 'GET /health/ready HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 &&
+          head -n 1 <&3 | grep -q ' 200 '
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
 
   web:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     build: ../client
     environment:
       # Which websites may put a published trip inside a frame on their own pages. Nothing else in
@@ -132,6 +171,11 @@ services:
       # Read into the web server's configuration when the container starts, so changing it is
       # `docker compose up -d web` rather than a rebuild.
       SILEXGIS__Web__FrameAncestors: ${SILEXGIS_FRAME_ANCESTORS:-}
+      # Largest request body the web service's proxy passes to the API, as an nginx size (1024m,
+      # 2g, 4096m). It answers before the application does, so it has to stay above
+      # SILEXGIS_MAX_UPLOAD_BYTES (and the raster and survey-file limits). The default is the value
+      # this image always had. Read when the container starts: `docker compose up -d web`.
+      SILEXGIS__Web__MaxBodySize: ${SILEXGIS_MAX_BODY_SIZE:-1024m}
     ports:
       - "${SILEXGIS_HTTP_PORT:-8080}:80"
     volumes:
@@ -150,8 +194,19 @@ services:
       # first because of the dependency below, so a volume created fresh takes its ownership
       # rather than root's.
       - silexgis-terrain:/srv/terrain:ro
+    # The proxy answering a request for its own front page: nothing here depends on the API, so a
+    # web service reported healthy means nginx is serving, and one reported unhealthy means it is
+    # not, whatever the API is doing. 127.0.0.1 rather than localhost, because the server listens
+    # on IPv4 only and busybox wget tries ::1 first.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
