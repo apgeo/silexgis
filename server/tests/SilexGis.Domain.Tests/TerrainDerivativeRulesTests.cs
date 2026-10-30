@@ -101,6 +101,21 @@ public sealed class TerrainDerivativeRulesTests
     }
 
     [Fact]
+    public void A_colour_ramp_carries_no_more_stops_than_the_ceiling()
+    {
+        static TerrainDerivativeSettings RampOf(int stops) => new()
+        {
+            Derivative = TerrainDerivative.ColourRelief,
+            ColourRamp = [.. Enumerable.Range(0, stops).Select(i => new TerrainColourStop(i * 10d, 1, 2, 3))],
+        };
+
+        TerrainDerivativeRules.Problem(RampOf(TerrainDerivativeRules.MaxColourStops)).ShouldBeNull();
+        TerrainDerivativeRules.Problem(RampOf(TerrainDerivativeRules.MaxColourStops + 1))
+            .ShouldBe($"A colour ramp has at most {TerrainDerivativeRules.MaxColourStops} stops.");
+        TerrainDerivativeRules.Problem(RampOf(100_000)).ShouldNotBeNull();
+    }
+
+    [Fact]
     public void A_ramp_given_to_a_picture_that_paints_nothing_is_refused()
         // Silently ignoring it would leave a stored setting that says the raster was coloured and a
         // raster that was not.

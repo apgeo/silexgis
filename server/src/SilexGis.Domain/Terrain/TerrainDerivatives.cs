@@ -200,6 +200,15 @@ public static class TerrainDerivativeRules
     /// </remarks>
     private const double MaxZFactor = 100d;
 
+    /// <summary>The most stops a colour ramp may carry.</summary>
+    /// <remarks>
+    /// Far more than any relief needs — a ramp is a handful of heights a person picked — and few
+    /// enough that a ramp stays a small setting. Without a ceiling a ramp of any size would be
+    /// fingerprinted, stored on the picture, sent to every reader of the listing and handed to the
+    /// raster worker as its colour table.
+    /// </remarks>
+    public const int MaxColourStops = 64;
+
     /// <summary>Why these settings cannot be computed, or null when they can.</summary>
     public static string? Problem(TerrainDerivativeSettings settings)
     {
@@ -236,6 +245,11 @@ public static class TerrainDerivativeRules
             if (settings.ColourRamp.Count < 2)
             {
                 return "A colour relief needs at least two heights to put colours between.";
+            }
+
+            if (settings.ColourRamp.Count > MaxColourStops)
+            {
+                return $"A colour ramp has at most {MaxColourStops} stops.";
             }
 
             if (settings.ColourRamp.Any(stop => !double.IsFinite(stop.Elevation)))
