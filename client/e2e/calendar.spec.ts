@@ -936,6 +936,11 @@ test('the record groups its rows under headings that count them, fold away, and 
     // A row under a heading still opens its own record.
     await record.locator('tbody tr.calendar-row-entry').filter({ hasText: course.title }).click();
     await page.waitForURL((url) => url.pathname === `/events/${course.id}`, { timeout: 60_000 });
+    // The record's own reads are still in flight when the address changes. The cleanup below
+    // deletes the event, and a read answered after that is a 404 in the console that the guard
+    // reports against a flow that did nothing wrong, so the page is let to finish loading first.
+    await expect(page.getByTestId('event-title')).toHaveText(course.title, { timeout: 15_000 });
+    await page.waitForLoadState('networkidle');
   } finally {
     await removeEvents(page, written);
     if (tripId) {
