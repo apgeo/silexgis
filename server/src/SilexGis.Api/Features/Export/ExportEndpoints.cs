@@ -106,6 +106,7 @@ public static class ExportEndpoints
         SurfaceFilters surfaceFilters,
         IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> access,
+        ICurrentUser currentUser,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -184,6 +185,8 @@ public static class ExportEndpoints
         var exactIds = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(r => r.Id)], ct);
 
         var features = new List<VectorFeature>(rows.Count);
+        var snapped = new List<Guid>();
+        var withheld = new List<Guid>();
         foreach (var row in rows)
         {
             var exact = exactIds.Contains(row.Id);
@@ -198,14 +201,19 @@ public static class ExportEndpoints
                 // than degraded.
                 if (geom is not Point point)
                 {
+                    withheld.Add(row.Id);
                     continue;
                 }
 
                 geom = LocationProtection.Snap(point, gridMeters);
+                snapped.Add(row.Id);
             }
 
             features.Add(new VectorFeature(geom, new Dictionary<string, object?>
             {
+                // First, so it is the column a consumer joins on; the record's own id, which is
+                // not a position and says nothing the caller could not read from the list.
+                ["id"] = row.Id.ToString(),
                 ["name"] = row.Name,
                 ["code"] = row.IdentificationCode,
                 ["cave_type"] = caveTypes.GetValueOrDefault(row.CaveTypeId),
@@ -222,6 +230,10 @@ public static class ExportEndpoints
                 ["approximate"] = exact ? null : "yes",
             }));
         }
+
+        await VectorExportAudit.RecordAsync(
+            db, currentUser, "caves", format, features.Count, snapped, withheld,
+            savedFilterId, !string.IsNullOrWhiteSpace(filter), null, ct);
 
         return WriteFile(vectorIO, target, "caves", features);
     }
@@ -274,6 +286,7 @@ public static class ExportEndpoints
         SurfaceFilters surfaceFilters,
         IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> access,
+        ICurrentUser currentUser,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -335,6 +348,8 @@ public static class ExportEndpoints
         var exactIds = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(r => r.Id)], ct);
 
         var features = new List<VectorFeature>(rows.Count);
+        var snapped = new List<Guid>();
+        var withheld = new List<Guid>();
         foreach (var row in rows)
         {
             var type = row.FeatureTypeId is null ? null : featureTypes.GetValueOrDefault(row.FeatureTypeId.Value);
@@ -351,14 +366,17 @@ public static class ExportEndpoints
                 if (FeatureDisplay.PolicyOf(row.Kind, type?.ProtectedDisplay) == ProtectedDisplay.Withhold
                     || geom is not Point point)
                 {
+                    withheld.Add(row.Id);
                     continue;
                 }
 
                 geom = LocationProtection.Snap(point, gridMeters);
+                snapped.Add(row.Id);
             }
 
             var properties = new Dictionary<string, object?>
             {
+                ["id"] = row.Id.ToString(),
                 ["name"] = row.Name,
                 ["kind"] = KindCode(row.Kind),
                 ["feature_type"] = type?.Code,
@@ -378,11 +396,16 @@ public static class ExportEndpoints
             }
 
             // Assigned after the flattening so a typed property of the same name can never
-            // shadow the protection flag.
+            // shadow the protection flag, nor the id a consumer joins the file back on.
+            properties["id"] = row.Id.ToString();
             properties["approximate"] = exact ? null : "yes";
 
             features.Add(new VectorFeature(geom, properties));
         }
+
+        await VectorExportAudit.RecordAsync(
+            db, currentUser, "features", format, features.Count, snapped, withheld,
+            savedFilterId, !string.IsNullOrWhiteSpace(filter), null, ct);
 
         return WriteFile(vectorIO, target, "features", features);
     }
@@ -411,6 +434,7 @@ public static class ExportEndpoints
         IVectorIO vectorIO,
         SurfaceFilters surfaceFilters,
         IAccessContextAccessor accessAccessor,
+        ICurrentUser currentUser,
         CancellationToken ct,
         string? filter = null,
         Guid? savedFilterId = null)
@@ -481,6 +505,17 @@ public static class ExportEndpoints
             }
         }
 
+        // Imported rows carry no protected position, so the audit lists the files taken (ids, in
+        // the order the file names them) rather than treatments.
+        await VectorExportAudit.RecordAsync(
+            db, currentUser, "geofiles", format, features.Count, [], [],
+            savedFilterId, !string.IsNullOrWhiteSpace(filter),
+            new Dictionary<string, object?>
+            {
+                ["geofileIds"] = chosen.Select(g => g.Id.ToString()).ToList(),
+            },
+            ct);
+
         return WriteFile(vectorIO, target, "geofiles", features);
     }
 
@@ -491,6 +526,7 @@ public static class ExportEndpoints
         IVectorIO vectorIO,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
+        ICurrentUser currentUser,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -528,6 +564,11 @@ public static class ExportEndpoints
                 }));
             return new VectorFeature(row.Geom, converted);
         }).ToList();
+
+        await VectorExportAudit.RecordAsync(
+            db, currentUser, "geofile", format, features.Count, [], [], null, false,
+            new Dictionary<string, object?> { ["geofileIds"] = new[] { geofile.Id.ToString() } },
+            ct);
 
         var layerName = string.Concat(geofile.Name.Where(char.IsLetterOrDigit)).ToLowerInvariant();
         return WriteFile(vectorIO, target, layerName.Length == 0 ? "geofile" : layerName, features);

@@ -31,6 +31,7 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable, IClassFixture<Po
     private HttpClient outsider = null!; // Viewer (regular user), unrelated — Editors read everything now
     private HttpClient viewer = null!;
     private Guid editorId;
+    private Guid viewerId;
 
     /// <summary>
     /// Token woven into every name this instance seeds. The whole suite shares one
@@ -53,7 +54,7 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         tag = Guid.NewGuid().ToString("N")[..8];
         editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"gf-editor-{tag}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"gf-out-{tag}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"gf-view-{tag}@t.local");
+        viewerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"gf-view-{tag}@t.local");
         editor = await AuthHelper.BearerClientAsync(factory, $"gf-editor-{tag}@t.local");
         outsider = await AuthHelper.BearerClientAsync(factory, $"gf-out-{tag}@t.local");
         viewer = await AuthHelper.BearerClientAsync(factory, $"gf-view-{tag}@t.local");
@@ -402,6 +403,200 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         var content = new ByteArrayContent(bytes);
         content.Headers.ContentType = new("application/octet-stream");
         return new MultipartFormDataContent { { content, "file", fileName } };
+    }
+
+    /// <summary>
+    /// The vector exports name the record each row came from, so a file can be joined back to the
+    /// installation it left. Read in every format that has a column to put it in, and beside a
+    /// row whose position was snapped, since that is the row somebody would most want to find
+    /// again.
+    /// </summary>
+    [Fact]
+    public async Task Cave_and_feature_exports_carry_the_id_of_the_record_in_every_format_with_columns()
+    {
+        var caveTypeId = await CaveTypeIdAsync();
+        var entranceTypeId = await EntranceTypeIdAsync();
+        var openCave = await CreateCaveAsync($"Id Open Cave {tag}", caveTypeId, locationProtected: false);
+        var protectedCave = await CreateCaveAsync($"Id Protected Cave {tag}", caveTypeId, locationProtected: true);
+        foreach (var caveId in new[] { openCave, protectedCave })
+        {
+            await CreateEntranceAsync(caveId, entranceTypeId, 25.44721, 45.53127);
+        }
+
+        var sinkholeTypeId = await FeatureTypeIdAsync("sinkhole");
+        var point = await CreateFeatureAsync(
+            $"Id Point {tag}", sinkholeTypeId, new { type = "Point", coordinates = new[] { 25.61233, 45.61377 } });
+
+        var cavesJson = JsonDocument.Parse(await (await viewer.GetAsync(
+            $"/api/v1/export/caves?format=geojson&search={tag}")).Content.ReadAsStringAsync()).RootElement;
+        cavesJson.GetProperty("features").EnumerateArray()
+            .Select(f => f.GetProperty("properties").GetProperty("id").GetString())
+            .ShouldBe([openCave.ToString(), protectedCave.ToString()], ignoreOrder: true);
+
+        var featuresJson = JsonDocument.Parse(await (await viewer.GetAsync(
+            $"/api/v1/export/features?format=geojson&search={tag}")).Content.ReadAsStringAsync()).RootElement;
+        featuresJson.GetProperty("features").EnumerateArray()
+            .Single(f => f.GetProperty("properties").GetProperty("name").GetString() == $"Id Point {tag}")
+            .GetProperty("properties").GetProperty("id").GetString().ShouldBe(point.ToString());
+
+        // Spreadsheets get the same column, and it is the first one: the one a join is made on.
+        var csv = await (await viewer.GetAsync($"/api/v1/export/caves?format=csv&search={tag}"))
+            .Content.ReadAsStringAsync();
+        csv.Split('\n')[0].ShouldContain("id");
+        csv.ShouldContain(openCave.ToString());
+        csv.ShouldContain(protectedCave.ToString());
+
+        // A zipped shapefile keeps it through a round trip: the id comes back as an attribute of
+        // the imported rows.
+        var zip = await (await viewer.GetAsync($"/api/v1/export/features?format=shapefile&search={tag}"))
+            .Content.ReadAsByteArrayAsync();
+        var geofile = await UploadAsync(editor, "ids.zip", zip);
+        var geofileId = geofile.GetProperty("id").GetGuid();
+        (await WaitForImportAsync(editor, geofileId)).GetProperty("importStatus").GetString().ShouldBe("imported");
+        // Read back through the geofile's own export: the map layer stamps its own row id over a
+        // property of that name, so it cannot show what the file held.
+        var imported = await GetJsonAsync(editor, $"/api/v1/geofiles/{geofileId}/export?format=geojson");
+        imported.GetProperty("features").EnumerateArray()
+            .Select(f => f.GetProperty("properties").GetProperty("id").GetString())
+            .ShouldContain(point.ToString());
+    }
+
+    /// <summary>
+    /// A file outlives every permission check that produced it, so each vector export is
+    /// recorded: who took it, how many rows, and exactly which rows left at the protection grid
+    /// and which were kept out of the file. Paired with the rows that did not need a treatment,
+    /// which must not be listed, and with a refusal, which must leave no record of a file.
+    /// </summary>
+    [Fact]
+    public async Task Each_vector_export_leaves_an_audit_row_naming_the_rows_it_snapped_or_withheld()
+    {
+        var caveTypeId = await CaveTypeIdAsync();
+        var entranceTypeId = await EntranceTypeIdAsync();
+        var openCave = await CreateCaveAsync($"Audit Open Cave {tag}", caveTypeId, locationProtected: false);
+        var protectedCave = await CreateCaveAsync($"Audit Protected Cave {tag}", caveTypeId, locationProtected: true);
+        const double exactLon = 25.44721;
+        const double exactLat = 45.53127;
+        foreach (var caveId in new[] { openCave, protectedCave })
+        {
+            await CreateEntranceAsync(caveId, entranceTypeId, exactLon, exactLat);
+        }
+
+        var sinkholeTypeId = await FeatureTypeIdAsync("sinkhole");
+        var lineTypeId = await FeatureTypeIdAsync("fracture_line");
+        var openPoint = await CreateFeatureAsync(
+            $"Audit Open Point {tag}", sinkholeTypeId, new { type = "Point", coordinates = new[] { 25.61233, 45.61377 } });
+        var protectedPoint = await CreateFeatureAsync(
+            $"Audit Protected Point {tag}",
+            sinkholeTypeId,
+            new { type = "Point", coordinates = new[] { 25.61233, 45.61377 } },
+            locationProtected: true);
+        var protectedLine = await CreateFeatureAsync(
+            $"Audit Protected Line {tag}",
+            lineTypeId,
+            new { type = "LineString", coordinates = new[] { new[] { 25.62, 45.62 }, new[] { 25.63, 45.63 } } },
+            locationProtected: true);
+
+        (await ExportAuditRowsAsync()).ShouldBeEmpty("nothing has been exported yet");
+
+        // Caves.
+        (await viewer.GetAsync($"/api/v1/export/caves?format=geojson&search={tag}"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var caves = (await ExportAuditRowsAsync()).Single();
+        caves.GetProperty("layer").GetString().ShouldBe("caves");
+        caves.GetProperty("format").GetString().ShouldBe("geojson");
+        caves.GetProperty("exportedCount").GetInt32().ShouldBe(2);
+        caves.GetProperty("snappedIds").EnumerateArray().Select(i => i.GetString())
+            .ShouldBe([protectedCave.ToString()]);
+        caves.GetProperty("withheldCount").GetInt32().ShouldBe(0);
+
+        // Features: the snapped point and the withheld line are each named, the open one is not.
+        // The search matches the two caves too (a cave is a feature), so the protected cave is
+        // snapped here as well and there are four rows in the file.
+        (await viewer.GetAsync($"/api/v1/export/features?format=csv&search={tag}"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var features = (await ExportAuditRowsAsync()).Single(r => r.GetProperty("layer").GetString() == "features");
+        features.GetProperty("format").GetString().ShouldBe("csv");
+        features.GetProperty("exportedCount").GetInt32().ShouldBe(4);
+        features.GetProperty("snappedIds").EnumerateArray().Select(i => i.GetString())
+            .ShouldBe([protectedCave.ToString(), protectedPoint.ToString()], ignoreOrder: true);
+        features.GetProperty("withheldIds").EnumerateArray().Select(i => i.GetString())
+            .ShouldBe([protectedLine.ToString()]);
+        features.ToString().ShouldNotContain(openPoint.ToString());
+        features.ToString().ShouldNotContain(openCave.ToString());
+
+        // The owner places everything exactly, so nothing of theirs is snapped or withheld.
+        (await editor.GetAsync($"/api/v1/export/features?format=geojson&search={tag}"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var ownerRow = (await ExportAuditRowsAsync(editorId)).Single();
+        ownerRow.GetProperty("exportedCount").GetInt32().ShouldBe(5);
+        ownerRow.GetProperty("snappedCount").GetInt32().ShouldBe(0);
+        ownerRow.GetProperty("withheldCount").GetInt32().ShouldBe(0);
+
+        // The record holds identifiers and counts, never a position.
+        foreach (var row in await ExportAuditRowsAsync())
+        {
+            var text = row.ToString();
+            text.ShouldNotContain(exactLon.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            text.ShouldNotContain(exactLat.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        // Geofiles, as a list and one at a time.
+        var geofile = await UploadAsync(editor, "audit.wkt", Encoding.UTF8.GetBytes("POINT (25.9 45.9)\nPOINT (25.91 45.91)"));
+        var geofileId = geofile.GetProperty("id").GetGuid();
+        (await WaitForImportAsync(editor, geofileId)).GetProperty("featureCount").GetInt32().ShouldBe(2);
+
+        // Private to its owner: the viewer is refused, and a refusal is not an export.
+        var before = (await ExportAuditRowsAsync()).Count;
+        (await viewer.GetAsync($"/api/v1/geofiles/{geofileId}/export?format=geojson"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await viewer.GetAsync("/api/v1/export/caves?format=dwg")).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ExportAuditRowsAsync()).Count.ShouldBe(before);
+        using (var anonymous = factory.CreateClient())
+        {
+            (await anonymous.GetAsync($"/api/v1/geofiles/{geofileId}/export?format=geojson"))
+                .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+            (await anonymous.GetAsync("/api/v1/export/caves?format=geojson"))
+                .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        }
+
+        (await ExportAuditRowsAsync()).Count.ShouldBe(before);
+
+        (await editor.PutAsJsonAsync($"/api/v1/geofiles/{geofileId}", new
+        {
+            name = $"Audit Geofile {tag}",
+            description = (string?)null,
+            style = new { stroke = "#ff0000" },
+            cavingGroupId = (Guid?)null,
+            visibility = "authenticated",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await viewer.GetAsync($"/api/v1/geofiles/export?format=geojson&search={tag}"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var list = (await ExportAuditRowsAsync()).Single(r => r.GetProperty("layer").GetString() == "geofiles");
+        list.GetProperty("exportedCount").GetInt32().ShouldBe(2);
+        list.GetProperty("geofileIds").EnumerateArray().Select(i => i.GetString())
+            .ShouldBe([geofileId.ToString()]);
+
+        (await viewer.GetAsync($"/api/v1/geofiles/{geofileId}/export?format=geojson"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var single = (await ExportAuditRowsAsync()).Single(r => r.GetProperty("layer").GetString() == "geofile");
+        single.GetProperty("exportedCount").GetInt32().ShouldBe(2);
+        single.GetProperty("geofileIds").EnumerateArray().Select(i => i.GetString())
+            .ShouldBe([geofileId.ToString()]);
+    }
+
+    /// <summary>The detail of every vector-export audit row a user wrote, oldest first.</summary>
+    private async Task<List<JsonElement>> ExportAuditRowsAsync(Guid? userId = null)
+    {
+        using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var user = userId ?? viewerId;
+        var changes = await db.AuditEntries.AsNoTracking()
+            .Where(e => e.Action == AuditActions.Exported && e.EntityType == "VectorExport" && e.UserId == user)
+            .OrderBy(e => e.Id)
+            .Select(e => e.Changes)
+            .ToListAsync();
+        return [.. changes.Select(c => JsonDocument.Parse(c!).RootElement.Clone())];
     }
 
     private async Task<JsonElement> UploadAsync(HttpClient client, string fileName, byte[] bytes)
