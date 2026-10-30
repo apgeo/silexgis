@@ -242,6 +242,11 @@ public static class EventInvitationEndpoints
 
         var invitation = existing ?? new TripInvitation { EventId = eventId, CaverId = request.CaverId };
 
+        // Asked before the stamps below fill it in. A row can exist without ever having been
+        // asked — somebody who saw the evening and answered it on their own — and the first time
+        // they are actually asked is still the first asking.
+        var firstAsking = invitation.InvitedAt is null;
+
         // First asked wins on both stamps: asking a second time is a reminder, and a record of
         // when somebody was asked that moved every time they were nudged would answer the wrong
         // question about how long they have had to reply.
@@ -251,6 +256,11 @@ public static class EventInvitationEndpoints
         if (existing is null)
         {
             db.TripInvitations.Add(invitation);
+        }
+
+        if (firstAsking)
+        {
+            await EventInvitationNotifier.InvitedAsync(db, access, user, row, caver.UserId, ct);
         }
 
         try

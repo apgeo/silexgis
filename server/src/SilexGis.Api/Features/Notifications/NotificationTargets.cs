@@ -183,7 +183,7 @@ public static class NotificationTargets
             // One query per kind rather than a visibility-filtered listing, because there is no
             // single listing to filter: a page can name several worlds at once.
             protectedRows.AddRange(
-                (await LoadAsync(db, group.Key, ids, ct)).Select(row => (group.Key, row)));
+                ((await LoadAsync(db, group.Key, ids, ct)) ?? []).Select(row => (group.Key, row)));
         }
 
         if (protectedRows.Count == 0)
@@ -270,11 +270,13 @@ public static class NotificationTargets
             new AccessTargetFacts { ObjectId = id }).Allowed;
 
     /// <summary>
-    /// The rows one kind names. A kind with no arm here loads nothing and is therefore never
-    /// readable, which is the safe direction for a value the vocabulary gains later and this has
-    /// not been taught yet.
+    /// The rows one kind names, or null for a kind with no arm here. Such a kind is never readable
+    /// — the safe direction for a value the vocabulary gains later and this has not been taught
+    /// yet — and null rather than an empty list is what lets a test tell "no arm" from "no such
+    /// rows". Caving groups and documents are read through their own walks in
+    /// <see cref="ReadableAsync"/> and have no arm here by design.
     /// </summary>
-    private static async Task<List<IProtectedEntity>> LoadAsync(
+    public static async Task<List<IProtectedEntity>?> LoadAsync(
         SilexGisDbContext db, NotificationTargetKind kind, List<Guid> ids, CancellationToken ct) =>
         kind switch
         {
@@ -292,6 +294,6 @@ public static class NotificationTargets
                 [.. await db.Expeditions.AsNoTracking().Where(x => ids.Contains(x.Id)).ToListAsync(ct)],
             NotificationTargetKind.Event =>
                 [.. await db.Events.AsNoTracking().Where(x => ids.Contains(x.Id)).ToListAsync(ct)],
-            _ => [],
+            _ => null,
         };
 }

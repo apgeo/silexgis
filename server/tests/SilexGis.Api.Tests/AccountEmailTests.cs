@@ -71,6 +71,20 @@ public sealed class AccountEmailTests : IAsyncLifetime, IDisposable, IClassFixtu
     }
 
     [Fact]
+    public async Task The_warning_to_the_old_address_carries_the_installation_address()
+    {
+        // The warning is sent straight through the dispatcher rather than queued, and only the
+        // queue's sender used to supply the installation address, so this link rendered empty.
+        await RequestChangeAsync(TargetEmail);
+        (await me.PostAsJsonAsync("/api/v1/me/email/confirm", new { token = await ChangeTokenAsync(TargetEmail) }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var warning = factory.Messages.LastTo(StartingEmail);
+        warning.Body.ShouldContain(TargetEmail);
+        warning.Body.ShouldContain("http://localhost");
+    }
+
+    [Fact]
     public async Task Confirming_moves_the_user_name_only_when_it_was_the_old_address()
     {
         // Accounts are created with the address as the user name, so leaving it behind would make

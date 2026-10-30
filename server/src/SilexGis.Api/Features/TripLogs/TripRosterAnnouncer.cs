@@ -81,7 +81,11 @@ public sealed class TripRosterAnnouncer(
                     ["tripTitle"] = trip.Title,
                     ["tripDate"] = trip.TripDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     ["url"] = $"/trip-logs/{trip.Id}",
-                });
+                },
+                // The trip, so that the reader's right to open what this names is decided again
+                // when they read it rather than trusted from the moment it was queued.
+                NotificationTargetKind.TripLog,
+                trip.Id);
         }
     }
 }

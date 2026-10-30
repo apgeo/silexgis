@@ -59,9 +59,6 @@ services:
       SILEXGIS__Notifications__QuietHoursFrom: ${SILEXGIS_NOTIFICATIONS_QUIET_HOURS_FROM:-}
       SILEXGIS__Notifications__QuietHoursTo: ${SILEXGIS_NOTIFICATIONS_QUIET_HOURS_TO:-}
       SILEXGIS__Notifications__TimeZone: ${SILEXGIS_NOTIFICATIONS_TIME_ZONE:-UTC}
-      # How the header's unread count learns it has changed. Only 'poll' is implemented;
-      # 'sse' is reserved for a server-pushed stream that does not exist yet.
-      SILEXGIS__Notifications__BadgeTransport: ${SILEXGIS_NOTIFICATIONS_BADGE_TRANSPORT:-poll}
       # How many members an announcement to a caving group may be written to inside the request
       # that sends it. A larger roster is recorded once and handed out by a background pass
       # instead, so a big club does not turn one click into a slow request holding a write

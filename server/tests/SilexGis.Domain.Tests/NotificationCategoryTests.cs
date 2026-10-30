@@ -215,6 +215,7 @@ public class NotificationCategoryTests
         ((short)NotificationCategory.CommentReply).ShouldBe((short)7);
         ((short)NotificationCategory.CommentOnMine).ShouldBe((short)8);
         ((short)NotificationCategory.GroupAnnouncement).ShouldBe((short)9);
+        ((short)NotificationCategory.ExpeditionUpdate).ShouldBe((short)14);
 
         ((short)NotificationChannelKind.InApp).ShouldBe((short)1);
         ((short)NotificationChannelKind.Email).ShouldBe((short)2);

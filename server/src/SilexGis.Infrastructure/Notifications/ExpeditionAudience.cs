@@ -30,6 +30,23 @@ namespace SilexGis.Infrastructure.Notifications;
 /// </remarks>
 public static class ExpeditionAudience
 {
+    /// <summary>
+    /// The accounts a camp's roster names, with no duplicates removed — the caller narrows to
+    /// whoever may read the camp, the way it does for a trip.
+    /// </summary>
+    /// <remarks>
+    /// Most people on a roster have no account, and they are simply absent here: there is nowhere
+    /// to tell them, and the camp's own page is where whoever runs it sees who will have to be
+    /// reached another way.
+    /// </remarks>
+    public static Task<List<Guid>> PeopleConcernedAsync(
+        SilexGisDbContext db, Guid expeditionId, CancellationToken ct = default) =>
+        (from stay in db.ExpeditionRoster.AsNoTracking()
+         join caver in db.Cavers.AsNoTracking() on stay.CaverId equals caver.Id
+         where stay.ExpeditionId == expeditionId && caver.UserId != null
+         select caver.UserId!.Value)
+        .ToListAsync(ct);
+
     /// <summary>The camps one account is on, as a query rather than an answer.</summary>
     public static IQueryable<Guid> ExpeditionIdsTheAccountIsOn(SilexGisDbContext db, Guid userId) =>
         (from stay in db.ExpeditionRoster.AsNoTracking()

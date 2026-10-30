@@ -171,6 +171,32 @@ public sealed class JobRetryAndProgressTests : IAsyncLifetime, IDisposable, ICla
         JobRetry.MayRetry(JobRetry.MaxAttempts, new TimeoutException()).ShouldBeFalse();
     }
 
+    [Fact]
+    public void A_job_notice_names_the_geofile_or_map_the_job_is_about_and_nothing_for_other_kinds()
+    {
+        var geofile = Guid.NewGuid();
+        var map = Guid.NewGuid();
+
+        ProcessingJobWorkerBase.ProtectedSubjectOf(new ProcessingJob
+        {
+            Kind = ProcessingJobKinds.GeofileImport,
+            Payload = JsonSerializer.Serialize(new GeofileImportPayload(geofile), JsonSerializerOptions.Web),
+        }).ShouldBe((NotificationTargetKind.Geofile, geofile));
+
+        ProcessingJobWorkerBase.ProtectedSubjectOf(new ProcessingJob
+        {
+            Kind = ProcessingJobKinds.RasterCog,
+            Payload = JsonSerializer.Serialize(new RasterCogPayload(map), JsonSerializerOptions.Web),
+        }).ShouldBe((NotificationTargetKind.GeoreferencedMap, map));
+
+        // A kind with no protected subject, and a payload that does not parse, name nothing: the
+        // notice is still sent, to the same one account.
+        ProcessingJobWorkerBase.ProtectedSubjectOf(
+            new ProcessingJob { Kind = ProcessingJobKinds.AccountDataExport }).ShouldBeNull();
+        ProcessingJobWorkerBase.ProtectedSubjectOf(
+            new ProcessingJob { Kind = ProcessingJobKinds.GeofileImport, Payload = "not json" }).ShouldBeNull();
+    }
+
     public ValueTask DisposeAsync()
     {
         Dispose();

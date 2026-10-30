@@ -170,6 +170,41 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
+    /// Each of the three plan notices names the trip it is about, so the inbox draws a link to it
+    /// and decides the reader's access again on every read. The reader who is shut out gets no
+    /// notice at all, which is the audience rule the target is added beside and does not widen.
+    /// </summary>
+    [Fact]
+    public async Task Every_plan_notice_names_the_trip_and_still_reaches_only_those_who_may_read_it()
+    {
+        var trip = await CreatePlanAsync("Named in the inbox");
+        await ProposeAsync(trip);
+        await GrantReadAsync(trip, mateId);
+        (await InviteAsync(organiser, trip, mateCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await InviteAsync(organiser, trip, strangerCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        await EditAsync(trip, "Named in the inbox, edited");
+        await TransitionAsync(trip, "cancelled");
+
+        foreach (var template in new[]
+        {
+            MessageTemplateCatalog.NotifyTripPlanInvitation,
+            MessageTemplateCatalog.NotifyTripPlanChanged,
+            MessageTemplateCatalog.NotifyTripPlanCancelled,
+        })
+        {
+            var mine = await NoticesForAsync(mateId, template);
+            mine.Count.ShouldBeGreaterThan(0, template);
+            foreach (var notice in mine)
+            {
+                notice.TargetKind.ShouldBe(NotificationTargetKind.TripLog, template);
+                notice.TargetId.ShouldBe(trip, template);
+            }
+
+            (await NoticesForAsync(strangerId, template)).ShouldBeEmpty(template);
+        }
+    }
+
+    /// <summary>
     /// A plan people are expecting to go on changes under them, and they are told — but a draft
     /// changing tells nobody, because telling somebody a draft changed would be telling them it
     /// exists, which is the one thing a draft does not do.

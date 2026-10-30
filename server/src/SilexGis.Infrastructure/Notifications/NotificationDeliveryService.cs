@@ -202,7 +202,8 @@ public sealed class NotificationDeliveryService(
                     result.Error,
                     NotificationDeliveryStatus.Deferred,
                     notifications[delivery.NotificationId].Category,
-                    user);
+                    user,
+                    result.Permanent);
             }
         }
 
@@ -490,7 +491,7 @@ public sealed class NotificationDeliveryService(
             return;
         }
 
-        Fail(delivery, result.Error, NotificationDeliveryStatus.Pending, row.Category, user);
+        Fail(delivery, result.Error, NotificationDeliveryStatus.Pending, row.Category, user, result.Permanent);
     }
 
     /// <summary>
@@ -747,16 +748,23 @@ public sealed class NotificationDeliveryService(
     /// that promised nothing leaves in the small hours must keep that promise on the second
     /// attempt as much as on the first. Every instant a delivery becomes due is therefore computed
     /// in one place rather than only the one routing computes.
+    /// <para>
+    /// A <paramref name="permanent"/> failure — the far side said the address does not exist —
+    /// settles the row as dead on the spot, with the reason it gave. Five attempts over hours
+    /// against a mailbox that will never exist only delay the moment the operator's failed-delivery
+    /// list shows it, and each one is another connection to somebody's relay.
+    /// </para>
     /// </remarks>
     private void Fail(
         NotificationDelivery delivery,
         string? error,
         NotificationDeliveryStatus retryStatus,
         NotificationCategory category,
-        SilexGisUser user)
+        SilexGisUser user,
+        bool permanent = false)
     {
         delivery.Error = Truncate(error);
-        if (delivery.Attempts >= NotificationRouting.MaxAttempts)
+        if (permanent || delivery.Attempts >= NotificationRouting.MaxAttempts)
         {
             delivery.Status = NotificationDeliveryStatus.Dead;
             return;

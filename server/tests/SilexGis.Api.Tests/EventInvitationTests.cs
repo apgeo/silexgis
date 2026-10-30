@@ -10,6 +10,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Messaging;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -425,6 +426,74 @@ public sealed class EventInvitationTests : IAsyncLifetime, IDisposable, IClassFi
             afterInvitations.Replace("{caverId:guid}", string.Empty, StringComparison.Ordinal)
                 .ShouldNotContain("{", customMessage: pattern);
         }
+    }
+
+    /// <summary>
+    /// The person asked is told, and only they: the notice names the event it is about, so the
+    /// reader's right to open it is decided again when they read it, and the person who asked and
+    /// the people merely on the list hear nothing.
+    /// </summary>
+    [Fact]
+    public async Task Asking_somebody_to_an_event_tells_them_and_nobody_else()
+    {
+        var evening = await CreateEventAsync("Club night");
+        await GrantReadAsync(evening, memberId);
+        await GrantReadAsync(evening, strangerId);
+
+        (await InviteAsync(secretary, evening, memberCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var told = (await NoticesForAsync(memberId, MessageTemplateCatalog.NotifyEventInvitation))
+            .ShouldHaveSingleItem();
+        told.Category.ShouldBe(NotificationCategory.TripPlanning);
+        told.TargetKind.ShouldBe(NotificationTargetKind.Event);
+        told.TargetId.ShouldBe(evening);
+
+        // Beside the person who was asked: another person who can read the event, and the person
+        // who did the asking, are told nothing.
+        (await NoticesForAsync(strangerId, MessageTemplateCatalog.NotifyEventInvitation)).ShouldBeEmpty();
+        (await NoticesForAsync(secretaryId, MessageTemplateCatalog.NotifyEventInvitation)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Asking_again_sends_once_and_asking_somebody_who_already_answered_unasked_sends_the_first_time()
+    {
+        var evening = await CreateEventAsync("Club night");
+        await GrantReadAsync(evening, memberId);
+
+        // The member answers an evening nobody asked them to, which writes the row without ever
+        // having asked. The first asking afterwards is still the first.
+        (await AnswerAsync(member, evening, memberCaver, "yes", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await NoticesForAsync(memberId, MessageTemplateCatalog.NotifyEventInvitation)).ShouldBeEmpty();
+
+        (await InviteAsync(secretary, evening, memberCaver)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await InviteAsync(secretary, evening, memberCaver)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await NoticesForAsync(memberId, MessageTemplateCatalog.NotifyEventInvitation)).Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Somebody_who_may_not_read_the_event_is_not_told_they_were_asked_to_it()
+    {
+        var evening = await CreateEventAsync("Club night");
+        await GrantReadAsync(evening, memberId);
+
+        // The stranger holds nothing on the event; the member holds the read and nothing else.
+        (await InviteAsync(secretary, evening, memberCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await InviteAsync(secretary, evening, strangerCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await InviteAsync(secretary, evening, accountlessCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        (await NoticesForAsync(memberId, MessageTemplateCatalog.NotifyEventInvitation)).Count.ShouldBe(1);
+        (await NoticesForAsync(strangerId, MessageTemplateCatalog.NotifyEventInvitation)).ShouldBeEmpty();
+    }
+
+    private async Task<List<Notification>> NoticesForAsync(Guid userId, string templateKey)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Notifications.AsNoTracking()
+            .Where(x => x.RecipientUserId == userId && x.TemplateKey == templateKey)
+            .OrderBy(x => x.Id)
+            .ToListAsync();
     }
 
     /// <summary>When one person on the list was asked, as the stored row answers it.</summary>

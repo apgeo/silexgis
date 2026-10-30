@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SilexGis.Domain;
 using SilexGis.Domain.Messaging;
+using SilexGis.Infrastructure.Notifications;
 
 namespace SilexGis.Infrastructure.Messaging;
 
@@ -84,6 +85,13 @@ public sealed class MessageDispatcher(
             // Never softened into a MessageResult: see above.
             throw;
         }
+        catch (PermanentDeliveryException ex)
+        {
+            logger.LogWarning(
+                "Could not send {TemplateKey} on {Channel}: refused for good ({Reason})",
+                templateKey, definition.Channel, ex.Message);
+            return MessageResult.FailedPermanently(ex.Message, segments);
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Could not send {TemplateKey} on {Channel}", templateKey, definition.Channel);
@@ -142,11 +150,19 @@ public sealed class MessageDispatcher(
 
         var text = await templates.ResolveAsync(definition, locale, ct);
 
-        // Every template may name the installation without each caller having to pass it.
+        // Every template may name the installation, and give its address, without each caller
+        // having to pass them. The address matters most for a message sent straight through
+        // rather than queued, such as the warning to a previous email address: only the queue's
+        // sender used to supply it, so such a message rendered its link as nothing. A value a
+        // caller did pass wins; the queue's sender reads the same setting, so the two agree.
         var withBranding = new Dictionary<string, string>(values, StringComparer.Ordinal)
         {
             ["appName"] = InstanceName,
         };
+        if (!withBranding.TryGetValue("siteUrl", out var siteUrl) || string.IsNullOrEmpty(siteUrl))
+        {
+            withBranding["siteUrl"] = NotificationLinks.SiteUrl(configuration);
+        }
 
         return (
             definition,

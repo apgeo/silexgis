@@ -61,7 +61,8 @@ export const groups = {
     'ExpeditionDeleteCleanupTests',
     'ExpeditionDiscoveryTests', 'ExpeditionEntityTests', 'ExpeditionLeadsTests',
     'ExpeditionListFilterTests', 'ExpeditionMapTests', 'ExpeditionMembershipTests',
-    'ExpeditionPhotographTests', 'ExpeditionPolymorphicTests', 'ExpeditionReportTests',
+    'ExpeditionNoticeTests', 'ExpeditionPhotographTests', 'ExpeditionPolymorphicTests',
+    'ExpeditionReportTests',
     'ExpeditionRosterEntityTests',
     'ExpeditionRosterRoleVocabularyTests', 'ExpeditionRosterTests',
     'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
@@ -105,7 +106,7 @@ export const groups = {
   notifications: [
     'AccountEmailTests', 'AdminMessagingTests', 'CavingGroupAnnouncementPaidCapTests',
     'EmailVerificationTests', 'NotificationConfigTests', 'NotificationDeliveryTests',
-    'NotificationInboxTests', 'NotificationQuietHoursTests', 'SmsNotificationChannelTests',
+    'NotificationInboxTests', 'NotificationQuietHoursTests', 'NotificationTargetKindCoverageTests', 'SmsNotificationChannelTests',
     'TripPlanNotificationTests',
     // Who is told that an upload waits for review, and that it was decided; and who looks after
     // what phones send.

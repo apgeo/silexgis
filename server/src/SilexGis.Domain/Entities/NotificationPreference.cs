@@ -122,6 +122,18 @@ public enum NotificationCategory : short
     /// </summary>
     /// <remarks>Sent to the account that uploaded, once per decision on a batch.</remarks>
     UploadReviewed = 13,
+
+    /// <summary>
+    /// An expedition this person is on the roster of was changed, or called off, while people
+    /// were expecting it to go ahead.
+    /// </summary>
+    /// <remarks>
+    /// A category of its own rather than a second use of <see cref="TripPlanning"/>: a camp is a
+    /// fortnight with a roster of its own, and somebody who has muted the traffic of single trips
+    /// has said nothing about the one thing that moves their whole summer. Mutable like the other
+    /// planning notices — the camp's page keeps the change whether or not the message is read.
+    /// </remarks>
+    ExpeditionUpdate = 14,
 }
 
 /// <summary>
@@ -276,6 +288,7 @@ public static class NotificationCategories
         NotificationCategory.JobCompleted => InboxAndMail,
         NotificationCategory.SecurityAlerts => InboxAndMail,
         NotificationCategory.TripPlanning => InboxAndMail,
+        NotificationCategory.ExpeditionUpdate => InboxAndMail,
         // An overdue party, and the one message with a safety argument for reaching a phone:
         // whoever is going to drive to a cave entrance is standing outside with no data, where a
         // text arrives and a mailbox does not. Naming the channel here makes it permissible and

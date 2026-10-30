@@ -209,6 +209,7 @@ public static class ExpeditionEndpoints
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -235,6 +236,17 @@ public static class ExpeditionEndpoints
         }
 
         Apply(expedition, request);
+
+        // Asked before the notice is queued, because queueing it is itself a change to the
+        // context and would answer the question for it: a request that carries back exactly what
+        // it was given moves no column, and telling a roster about a change that provably did not
+        // happen is how a category earns being muted along with the messages that matter.
+        var changed = db.ChangeTracker.HasChanges();
+        if (changed && await userAccessor.GetAsync(ct) is { } user)
+        {
+            await ExpeditionNotifier.ChangedAsync(db, access, user, expedition, expedition.State, ct);
+        }
+
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(Map(expedition));
     }
@@ -327,6 +339,7 @@ public static class ExpeditionEndpoints
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -362,12 +375,29 @@ public static class ExpeditionEndpoints
                 $"An expedition does not move from {expedition.State} to {target}.");
         }
 
+        var stateBefore = expedition.State;
         expedition.State = target;
         if (target == ActivityState.Published)
         {
             // Stamped the first time only: de-announcing and announcing again does not rewrite
             // the day the camp was first made known.
             expedition.PublishedAt ??= DateTimeOffset.UtcNow;
+        }
+
+        // The roster is told what happened to the camp the way a trip's people are: being called
+        // off is the one move they must hear about, and any other move out of a state people were
+        // expecting to go ahead from is a change to the plan. Moving to published is an
+        // announcement of a write-up, which the camp's page makes and no message needs to repeat.
+        if (await userAccessor.GetAsync(ct) is { } actor)
+        {
+            if (target == ActivityState.Cancelled)
+            {
+                await ExpeditionNotifier.CancelledAsync(db, access, actor, expedition, stateBefore, ct);
+            }
+            else if (target != ActivityState.Published)
+            {
+                await ExpeditionNotifier.ChangedAsync(db, access, actor, expedition, stateBefore, ct);
+            }
         }
 
         await db.SaveChangesAsync(ct);

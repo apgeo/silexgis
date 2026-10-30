@@ -205,6 +205,26 @@ public static class MessageTemplateCatalog
     /// </remarks>
     public const string NotifyEventReminder = "notify.event-reminder";
 
+    /// <summary>Someone was asked whether they are coming to a club event.</summary>
+    /// <remarks>
+    /// Names the event, its date and who asked, and nothing else — the way the trip invitation
+    /// does, and for the same reason. Sent to the invited person only: an invitation has no other
+    /// audience.
+    /// </remarks>
+    public const string NotifyEventInvitation = "notify.event-invitation";
+
+    // An expedition people are on the roster of. Like the trip messages, both name the camp and
+    // who acted and nothing of what changed: the fields of a camp include the area it works in.
+
+    /// <summary>An expedition somebody is on the roster of was changed.</summary>
+    public const string NotifyExpeditionUpdate = "notify.expedition-update";
+
+    /// <summary>An expedition somebody is on the roster of was called off.</summary>
+    public const string NotifyExpeditionCancelled = "notify.expedition-cancelled";
+
+    /// <summary>Somebody was put on the roster of an expedition.</summary>
+    public const string NotifyExpeditionParticipation = "notify.expedition-participation";
+
     // Somebody said something where this person can hear it. Both name the document and link to
     // it, and neither carries a word of what was said: a comment body is free text a person
     // typed, and a message leaves the installation entirely — once it is in a mailbox it obeys
@@ -1124,6 +1144,130 @@ public static class MessageTemplateCatalog
                     Bună ziua {displayName},
 
                     {eventTitle} are loc în data de {eventDate}. Ce s-a stabilit pentru el găsești aici:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyEventInvitation,
+            MessageChannel.Email,
+            "Someone was asked whether they are coming to a club event.",
+            [AppName, DisplayName, ActorName, "eventTitle", "eventDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "You were invited to {eventTitle}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} invited you to {eventTitle} on {eventDate}. You can answer here:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Ai fost invitat la {eventTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} te-a invitat la {eventTitle} în data de {eventDate}. Poți răspunde aici:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyExpeditionUpdate,
+            MessageChannel.Email,
+            "An expedition someone is on the roster of was changed.",
+            [AppName, DisplayName, ActorName, "expeditionName", "expeditionDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{expeditionName} was changed",
+                    """
+                    Hello {displayName},
+
+                    {actorName} changed {expeditionName}, which starts on {expeditionDate}. What it says now is here:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{expeditionName} a fost modificată",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a modificat {expeditionName}, care începe în data de {expeditionDate}. Ce scrie acum găsești aici:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyExpeditionCancelled,
+            MessageChannel.Email,
+            "An expedition someone is on the roster of was called off.",
+            [AppName, DisplayName, ActorName, "expeditionName", "expeditionDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{expeditionName} was called off",
+                    """
+                    Hello {displayName},
+
+                    {actorName} called off {expeditionName}, which was due to start on {expeditionDate}. Its page is here:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{expeditionName} a fost anulată",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a anulat {expeditionName}, care urma să înceapă în data de {expeditionDate}. Pagina ei este aici:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyExpeditionParticipation,
+            MessageChannel.Email,
+            "Someone was put on the roster of an expedition.",
+            [AppName, DisplayName, ActorName, "expeditionName", "expeditionDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "You were put on the roster of {expeditionName}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} put you on the roster of {expeditionName}, which starts on {expeditionDate}:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Ai fost trecut pe lista expediției {expeditionName}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} te-a trecut pe lista expediției {expeditionName}, care începe în data de {expeditionDate}:
 
                     {url}
 

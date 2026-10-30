@@ -336,6 +336,39 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
     }
 
     [Fact]
+    public async Task A_send_the_far_side_refuses_for_good_is_dead_at_once_with_its_reason_and_is_not_retried()
+    {
+        await AddToCavingGroupAsync();
+        factory.Messages.Clear();
+
+        clock.Now = DateTimeOffset.UtcNow;
+        try
+        {
+            factory.Messages.RefuseSendsTo = RecipientEmail;
+            await DrainAsync();
+        }
+        finally
+        {
+            factory.Messages.RefuseSendsTo = null;
+        }
+
+        // One attempt, and no ladder: the row is where an operator looks for what failed, with
+        // the refusal that was given, instead of being tried four more times over the next hours.
+        var refused = (await DeliveriesAsync()).ShouldHaveSingleItem();
+        refused.Status.ShouldBe(NotificationDeliveryStatus.Dead);
+        refused.Attempts.ShouldBe(1);
+        refused.Error.ShouldNotBeNullOrWhiteSpace();
+        refused.Error.ShouldContain("refus");
+
+        // Nothing is waiting to be sent: a later pass, with the mail server accepting everything
+        // again, still leaves the message unsent — only an operator's retry re-queues a dead row.
+        await MakeDueAsync();
+        await DrainAsync();
+        MineSent().ShouldBeEmpty();
+        (await DeliveriesAsync()).ShouldHaveSingleItem().Status.ShouldBe(NotificationDeliveryStatus.Dead);
+    }
+
+    [Fact]
     public async Task A_row_naming_a_template_that_does_not_exist_dies_without_taking_the_batch_with_it()
     {
         await AddToCavingGroupAsync();
@@ -845,6 +878,69 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
+    /// A delivery written by something that never thought about its creation instant is stamped by
+    /// the database and not left at year one, where it would sit outside every retention window and
+    /// outside the day's spending count. An instant a writer does set is kept exactly.
+    /// </summary>
+    [Fact]
+    public async Task A_delivery_written_without_a_creation_instant_is_stamped_by_the_database()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        var row = new Notification
+        {
+            RecipientUserId = recipientId,
+            Category = NotificationCategory.CavingGroupMembership,
+            TemplateKey = MessageTemplateCatalog.NotifyCavingGroupJoined,
+        };
+        db.Notifications.Add(row);
+        await db.SaveChangesAsync();
+
+        var unstamped = new NotificationDelivery
+        {
+            NotificationId = row.Id,
+            RecipientUserId = recipientId,
+            Channel = NotificationChannel.Email,
+            Status = NotificationDeliveryStatus.Sent,
+            NotBefore = DateTimeOffset.UtcNow.AddYears(1),
+        };
+        db.NotificationDeliveries.Add(unstamped);
+        await db.SaveChangesAsync();
+
+        db.ChangeTracker.Clear();
+        var stored = await db.NotificationDeliveries.AsNoTracking().SingleAsync(d => d.Id == unstamped.Id);
+        stored.CreatedAt.ShouldBeGreaterThan(DateTimeOffset.UtcNow.AddMinutes(-5));
+        stored.CreatedAt.ShouldBeLessThan(DateTimeOffset.UtcNow.AddMinutes(5));
+
+        // The positive counterpart: an instant the writer chose is not overwritten by the default.
+        var chosen = DateTimeOffset.UtcNow.AddDays(-40);
+        var other = new Notification
+        {
+            RecipientUserId = recipientId,
+            Category = NotificationCategory.CavingGroupMembership,
+            TemplateKey = MessageTemplateCatalog.NotifyCavingGroupJoined,
+        };
+        db.Notifications.Add(other);
+        await db.SaveChangesAsync();
+        var stamped = new NotificationDelivery
+        {
+            NotificationId = other.Id,
+            RecipientUserId = recipientId,
+            Channel = NotificationChannel.Email,
+            Status = NotificationDeliveryStatus.Sent,
+            CreatedAt = chosen,
+            NotBefore = DateTimeOffset.UtcNow.AddYears(1),
+        };
+        db.NotificationDeliveries.Add(stamped);
+        await db.SaveChangesAsync();
+
+        db.ChangeTracker.Clear();
+        var kept = await db.NotificationDeliveries.AsNoTracking().SingleAsync(d => d.Id == stamped.Id);
+        kept.CreatedAt.ShouldBe(chosen, TimeSpan.FromSeconds(1));
+    }
+
+    /// <summary>
     /// One notification of a given age, with one settled delivery hanging off it. Written straight
     /// to the tables because no producer can queue a row that is already old, and because the
     /// window is keyed on the notification's own age rather than on anything a drain would set.
@@ -1110,6 +1206,19 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
             .OrderBy(d => d.Id)
             .ToListAsync();
     }
+
+    [Theory]
+    [InlineData(550, "5.1.1 <a@b.test>: Recipient address rejected: User unknown", true)]
+    [InlineData(553, "5.1.3 Bad recipient address syntax", true)]
+    [InlineData(550, "Mailbox unavailable", true)]
+    [InlineData(550, "5.7.1 Relaying denied", false)]
+    [InlineData(554, "5.7.1 Service unavailable; client host blocked", false)]
+    [InlineData(550, "Relay access denied", false)]
+    [InlineData(552, "5.2.2 Mailbox full", false)]
+    [InlineData(450, "4.2.0 Greylisted", false)]
+    public void Only_a_refusal_that_is_about_the_address_settles_a_delivery_for_good(
+        int status, string text, bool permanent) =>
+        SilexGis.Infrastructure.Email.SmtpEmailSender.IsAddressRefusal(status, text).ShouldBe(permanent);
 
     public async ValueTask DisposeAsync()
     {

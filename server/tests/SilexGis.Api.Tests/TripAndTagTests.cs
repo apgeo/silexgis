@@ -830,6 +830,16 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable, IClassFixture
         publish.StatusCode.ShouldBe(HttpStatusCode.OK, await publish.Content.ReadAsStringAsync());
         (await TripNotificationsForAsync(outsiderId)).ShouldBe(1);
 
+        // The notice names the trip, so the inbox decides the reader's access to it again on every read.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var notice = await db.Notifications.AsNoTracking().SingleAsync(n =>
+                n.RecipientUserId == outsiderId && n.Category == NotificationCategory.TripParticipation);
+            notice.TargetKind.ShouldBe(NotificationTargetKind.TripLog);
+            notice.TargetId.ShouldBe(tripId);
+        }
+
         // Nobody tells the author about the trip they just wrote, and a guest with no account has
         // nowhere to be told.
         (await TripNotificationsForAsync(ownerId)).ShouldBe(0);

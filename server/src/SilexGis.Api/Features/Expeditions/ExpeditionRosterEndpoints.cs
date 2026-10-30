@@ -185,7 +185,21 @@ public static class ExpeditionRosterEndpoints
 
         var entry = new ExpeditionRosterEntry { ExpeditionId = expeditionId };
         Apply(entry, request, await PersonOfAsync(db, request, ct));
+
+        // Only somebody not already on the camp is news; a second role or stay for the same person
+        // is not.
+        var alreadyOn = await db.ExpeditionRoster.AsNoTracking()
+            .AnyAsync(x => x.ExpeditionId == expeditionId && x.CaverId == entry.CaverId, ct);
         db.ExpeditionRoster.Add(entry);
+        if (!alreadyOn && user is not null)
+        {
+            var account = await db.Cavers.AsNoTracking()
+                .Where(c => c.Id == entry.CaverId).Select(c => c.UserId).FirstOrDefaultAsync(ct);
+            if (account is { } accountId)
+            {
+                await ExpeditionNotifier.AddedAsync(db, access, user, expedition, accountId, ct);
+            }
+        }
 
         // One save for the stay and for anybody its name added to the directory, so the two
         // land together or not at all.

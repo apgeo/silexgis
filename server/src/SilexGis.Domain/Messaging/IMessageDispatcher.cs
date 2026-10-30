@@ -20,13 +20,24 @@ namespace SilexGis.Domain.Messaging;
 /// wording to say. Zero when nothing was handed over that is billed this way, which includes
 /// every channel that is not, so a caller can tell "nothing to charge" from any real amount.
 /// </param>
-public readonly record struct MessageResult(bool Sent, bool ChannelConfigured, string? Error, int Segments = 0)
+/// <param name="Permanent">
+/// True when the far side refused for a reason no retry can change — an address that does not
+/// exist, or is not an address at all. Only meaningful beside a failure; a caller that retries
+/// on a schedule stops retrying a permanent one, because every further attempt is the same
+/// refusal and the schedule only delays the moment somebody is told.
+/// </param>
+public readonly record struct MessageResult(
+    bool Sent, bool ChannelConfigured, string? Error, int Segments = 0, bool Permanent = false)
 {
     public static MessageResult Delivered(int segments = 0) => new(true, true, null, segments);
 
     public static MessageResult LoggedOnly(int segments = 0) => new(true, false, null, segments);
 
     public static MessageResult Failed(string error, int segments = 0) => new(false, true, error, segments);
+
+    /// <summary>A failure that repeating the send cannot cure.</summary>
+    public static MessageResult FailedPermanently(string error, int segments = 0) =>
+        new(false, true, error, segments, Permanent: true);
 }
 
 /// <summary>

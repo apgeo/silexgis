@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
@@ -201,6 +202,7 @@ public abstract class ProcessingJobWorkerBase(
         }
 
         var failed = job.Status == ProcessingJobStatus.Failed;
+        var subject = ProtectedSubjectOf(job);
         NotificationQueue.Enqueue(
             db,
             requester,
@@ -208,7 +210,45 @@ public abstract class ProcessingJobWorkerBase(
             failed ? MessageTemplateCatalog.NotifyJobFailed : MessageTemplateCatalog.NotifyJobCompleted,
             failed
                 ? new Dictionary<string, string> { ["error"] = job.Error ?? string.Empty }
-                : new Dictionary<string, string>());
+                : new Dictionary<string, string>(),
+            subject?.Kind,
+            subject?.Id);
+    }
+
+    /// <summary>
+    /// The protected row a job is about, for the kinds whose subject is one: a geofile import
+    /// names its geofile and a raster conversion its map. Every other kind (a terrain build, an
+    /// account export, a basemap extract…) has no protected row, so its notice stays untargeted.
+    /// </summary>
+    /// <remarks>
+    /// Read from the payload rather than a column of the job, so no schema change and no
+    /// enqueuer has to remember to say it. A payload that does not parse simply yields no
+    /// subject: the notice is still sent, to the same single account, as it was before.
+    /// </remarks>
+    public static (NotificationTargetKind Kind, Guid Id)? ProtectedSubjectOf(ProcessingJob job)
+    {
+        try
+        {
+            switch (job.Kind)
+            {
+                case ProcessingJobKinds.GeofileImport:
+                    return JsonSerializer.Deserialize<GeofileImportPayload>(job.Payload, JsonSerializerOptions.Web) is { } g
+                        && g.GeofileId != Guid.Empty
+                        ? (NotificationTargetKind.Geofile, g.GeofileId)
+                        : null;
+                case ProcessingJobKinds.RasterCog:
+                    return JsonSerializer.Deserialize<RasterCogPayload>(job.Payload, JsonSerializerOptions.Web) is { } r
+                        && r.GeoreferencedMapId != Guid.Empty
+                        ? (NotificationTargetKind.GeoreferencedMap, r.GeoreferencedMapId)
+                        : null;
+                default:
+                    return null;
+            }
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private async Task WaitForQueueAsync(CancellationToken ct)

@@ -49,22 +49,17 @@ public static class NotificationTargetPolicy
             [MessageTemplateCatalog.NotifySecurityTwoFactorDisabled] =
                 "About the account itself: there is no object with a page to open.",
             [MessageTemplateCatalog.NotifyJobCompleted] =
-                "Temporary. The worker knows a job's kind but not its subject, which is inside the "
-                + "job's own payload, so there is nothing it could name yet.",
+                "Temporary. A geofile import and a raster conversion name their geofile or map, but "
+                + "the other kinds of job (a terrain build, an account export, a basemap extract, "
+                + "a survey reading) have no protected row recorded as their subject, so the notice "
+                + "for those still names nothing. The audience is unchanged: the one account that "
+                + "asked for the job.",
             [MessageTemplateCatalog.NotifyJobFailed] =
-                "Temporary. Same as the completion notice: the subject is inside the payload.",
+                "Temporary. Same as the completion notice: targeted for a geofile import and a "
+                + "raster conversion, untargeted for the kinds with no protected subject.",
             [MessageTemplateCatalog.NotifyDigest] =
                 "Not queued by any producer. A daily summary is composed at send time out of the "
                 + "notifications it collects, each of which carries its own target.",
-            [MessageTemplateCatalog.NotifyTripParticipation] =
-                "Temporary. Its producer belongs to work in progress elsewhere and is not editable "
-                + "from here; the target is a trip and should be filled in when that work lands.",
-            [MessageTemplateCatalog.NotifyTripPlanInvitation] =
-                "Temporary. Its producer belongs to work in progress elsewhere; the target is a trip.",
-            [MessageTemplateCatalog.NotifyTripPlanChanged] =
-                "Temporary. Its producer belongs to work in progress elsewhere; the target is a trip.",
-            [MessageTemplateCatalog.NotifyTripPlanCancelled] =
-                "Temporary. Its producer belongs to work in progress elsewhere; the target is a trip.",
             [MessageTemplateCatalog.NotifyUploadAwaitingReview] =
                 "Temporary. About a held import batch, and there is no target kind for one yet: its "
                 + "read rule (the uploader, or the right to read the review queue) has no home among "

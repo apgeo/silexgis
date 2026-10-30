@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.RegularExpressions;
+using SilexGis.Domain.Messaging;
 
 namespace SilexGis.Api.Tests.Support;
 
@@ -54,6 +55,13 @@ public sealed class MessageCapture
     /// </remarks>
     public string? FailSendsTo { get; set; }
 
+    /// <summary>
+    /// An address every send to which is refused for good, until it is cleared — standing in for
+    /// a mail server answering "no such mailbox". Aimed by address for the same reason as
+    /// <see cref="FailSendsTo"/>.
+    /// </summary>
+    public string? RefuseSendsTo { get; set; }
+
     public IReadOnlyList<SentMessage> Messages
     {
         get
@@ -98,6 +106,11 @@ public sealed class MessageCapture
 
     internal void Record(string channel, string recipient, string? subject, string body)
     {
+        if (RefuseSendsTo is { } refused && string.Equals(recipient, refused, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new PermanentDeliveryException("Simulated permanent refusal.");
+        }
+
         if (FailSendsTo is { } address && string.Equals(recipient, address, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("Simulated delivery failure.");

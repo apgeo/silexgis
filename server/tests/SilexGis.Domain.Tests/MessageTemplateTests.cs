@@ -155,6 +155,19 @@ public class MessageTemplateTests
             ["appName", "displayName", "eventTitle", "eventDate", "url", "unsubscribeUrl"],
             ignoreOrder: true);
 
+        // The invitation and the two camp messages are held to the same rule for the same reason:
+        // they name the event or the camp, its date and who acted, and the declared list is what
+        // keeps a cave or an area out of a message that leaves the installation.
+        MessageTemplateCatalog.Find(MessageTemplateCatalog.NotifyEventInvitation)!.Placeholders.ShouldBe(
+            ["appName", "displayName", "actorName", "eventTitle", "eventDate", "url", "unsubscribeUrl"],
+            ignoreOrder: true);
+        foreach (var key in new[] { MessageTemplateCatalog.NotifyExpeditionUpdate, MessageTemplateCatalog.NotifyExpeditionCancelled })
+        {
+            MessageTemplateCatalog.Find(key)!.Placeholders.ShouldBe(
+                ["appName", "displayName", "actorName", "expeditionName", "expeditionDate", "url", "unsubscribeUrl"],
+                ignoreOrder: true);
+        }
+
         var overdue = MessageTemplateCatalog.Find(MessageTemplateCatalog.NotifyTripCalloutOverdue)!;
 
         // The overdue one carries no opt-out line, the way the account-security messages do not:
