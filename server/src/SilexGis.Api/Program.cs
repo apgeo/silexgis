@@ -463,6 +463,23 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // by AddSilexGisPersistence — they live in Infrastructure since the supertype cutover.
     builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
+    // JSON bodies are compressed by the API itself, so the development path (the Vite proxy talking
+    // straight to Kestrel) and a deployment whose front server does not compress carry the same
+    // bytes as one that does. Only the two JSON types are listed on purpose: an image, a derived
+    // file, a spreadsheet or a terrain tile is either compressed already or must reach the client
+    // byte for byte, and a streamed response must not be buffered into a compressor. Not enabled
+    // for HTTPS: a response that mixes a secret with text the caller chose is readable by its
+    // compressed length, and behind a TLS-terminating proxy the forwarded scheme is https, so
+    // that proxy keeps compressing as it always did. A response that already carries a
+    // Content-Encoding is left alone by the middleware, so the two never stack.
+    builder.Services.AddResponseCompression(options =>
+    {
+        options.EnableForHttps = false;
+        options.MimeTypes = ["application/json", "application/problem+json"];
+        options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+        options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+    });
+
     var app = builder.Build();
 
     // The API always sits behind a reverse proxy (nginx `web` service / Vite dev proxy); honor
@@ -496,6 +513,9 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
         return next(context);
     });
 
+    // Outside the exception handler and the status pages so that the problem documents they write
+    // are compressed like any other JSON answer.
+    app.UseResponseCompression();
     app.UseExceptionHandler();
     app.UseStatusCodePages();
     // The completion line names the address the request was made to, and on this application some
