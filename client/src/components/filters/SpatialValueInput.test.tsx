@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import type { FilterValue } from '../../filters/types.ts';
-import { SpatialSourcesContext, type SpatialSources } from '../../filters/spatialSources.ts';
+import { SpatialSourcesContext, type SpatialSources } from './spatialSources.ts';
 import SpatialValueInput from './SpatialValueInput.tsx';
 
 /**

@@ -17,7 +17,7 @@ import {
   type WithinAnchorKind,
 } from '../../filters/spatial.ts';
 import type { FilterLimits, FilterOp, FilterValue } from '../../filters/types.ts';
-import { useSpatialSources } from '../../filters/spatialSources.ts';
+import { useSpatialSources } from './spatialSources.ts';
 import Button from '../Button.tsx';
 import ObjectSelector from '../selector/ObjectSelector.tsx';
 

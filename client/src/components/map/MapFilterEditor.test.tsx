@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { emptyDocument, withWhere } from '../../filters/document.ts';
 import type { FilterDocument } from '../../filters/types.ts';
-import type { SpatialSources } from '../../filters/spatialSources.ts';
+import type { SpatialSources } from '../filters/spatialSources.ts';
 import type { MapFilter } from '../../map/mapFilters.ts';
 
 const savedFilterId = '0e6f2c4a-5b1d-4c39-9b7e-2f8a1d3c4e5f';
@@ -29,7 +29,7 @@ vi.mock('../../api/hooks/savedFilters.ts', () => ({
 let editorProps: { document: FilterDocument; hiddenFields?: readonly string[]; world: string } | null = null;
 let sourcesSeen: SpatialSources | null = null;
 vi.mock('../filters/FilterEditor.tsx', async () => {
-  const { useSpatialSources } = await import('../../filters/spatialSources.ts');
+  const { useSpatialSources } = await import('../filters/spatialSources.ts');
   return { default: function StubEditor(props: {
     document: FilterDocument; hiddenFields?: readonly string[]; world: string;
     onApply: (d: FilterDocument) => void;

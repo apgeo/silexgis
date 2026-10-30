@@ -5,7 +5,7 @@ import { App, Drawer, Flex, Form, Input, Modal, Select, Tooltip } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { appliesTo, documentOf, useCreateSavedFilter, useSavedFilters } from '../../api/hooks/savedFilters.ts';
 import { holdsPosition } from '../../filters/spatial.ts';
-import { SpatialSourcesContext, type SpatialSources } from '../../filters/spatialSources.ts';
+import { SpatialSourcesContext, type SpatialSources } from '../filters/spatialSources.ts';
 import { audienceFields, type SavedFilterAudience } from '../../filters/savedFilterAudience.ts';
 import {
   MAP_FILTER_WORLD,
