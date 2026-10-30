@@ -7,6 +7,8 @@ using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
+using NPOI.XSSF.Extractor;
+using NPOI.XSSF.UserModel;
 using Shouldly;
 using SilexGis.Api.Features.Filters;
 using SilexGis.Api.Tests.Support;
@@ -14,6 +16,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
 using SilexGis.Domain.Geo;
+using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -235,6 +238,202 @@ public sealed class FilterKindPositionTests : IAsyncLifetime, IDisposable, IClas
         }
 
         (await IdsAsync(viewer, Models(Titled("surveyModel"), Within(100, new ObjectValue("feature", open))))).ShouldBe([ofOpen]);
+    }
+
+
+    // ---------- exports on the filter ----------
+
+    [Fact]
+    public async Task The_exports_answer_an_anchor_on_a_withheld_cave_exactly_as_for_one_that_does_not_exist()
+    {
+        var spot = Spot.Pick();
+        var (guarded, _) = await CaveWithEntranceAsync("Export anchor guarded", spot.TrueLon, spot.TrueLat, locationProtected: true);
+        var (open, _) = await CaveWithEntranceAsync("Export anchor open", spot.TrueLon + (3 * Cell), spot.TrueLat, locationProtected: false);
+
+        foreach (var path in new[] { "/api/v1/geofiles/export?format=geojson&", "/api/v1/trip-logs/export?" })
+        {
+            FilterDocument Doc(Guid anchor) => path.Contains("geofiles")
+                ? About("geofile", Titled("geofile"), Within(500, new ObjectValue("feature", anchor)))
+                : Trips(Titled("tripLog"), Within(500, new ObjectValue("feature", anchor)));
+
+            async Task<(HttpStatusCode, string?)> AskAsync(HttpClient client, Guid anchor)
+            {
+                var response = await client.GetAsync($"{path}filter={FilterToken.Encode(Doc(anchor))}");
+                var body = await response.Content.ReadAsStringAsync();
+                return (response.StatusCode, response.StatusCode == HttpStatusCode.BadRequest
+                    ? JsonNode.Parse(body)!["code"]?.GetValue<string>() : null);
+            }
+
+            var missing = await AskAsync(viewer, Guid.NewGuid());
+            missing.Item1.ShouldBe(HttpStatusCode.BadRequest);
+            missing.Item2.ShouldBe(SpatialConditions.AnchorNotFoundCode);
+            (await AskAsync(viewer, guarded)).ShouldBe(missing);
+
+            // The twins: the owner places the guarded cave, and the viewer places the open one.
+            (await AskAsync(owner, guarded)).Item1.ShouldBe(HttpStatusCode.OK);
+            (await AskAsync(viewer, open)).Item1.ShouldBe(HttpStatusCode.OK);
+        }
+    }
+
+
+    [Fact]
+    public async Task The_trip_export_decides_a_position_condition_through_the_caves_the_trip_list_shows_its_reader()
+    {
+        var spot = Spot.Pick();
+        var (open, _) = await CaveWithEntranceAsync("Exported open", spot.TrueLon, spot.TrueLat, locationProtected: false);
+        var guardedLon = spot.TrueLon + (2 * Cell);
+        var (guarded, _) = await CaveWithEntranceAsync("Exported guarded", guardedLon, spot.TrueLat, locationProtected: true);
+        await TripAsync("to open", open);
+        await TripAsync("to guarded", guarded);
+
+        var atOpen = new PointValue(spot.TrueLon, spot.TrueLat);
+        var atGuarded = new PointValue(guardedLon, spot.TrueLat);
+        var toOpen = $"Trip to open {tag}";
+        var toGuarded = $"Trip to guarded {tag}";
+
+        // The controls: the owner places the guarded cave exactly, and the viewer places the open one.
+        (await TripSheetAsync(owner, Trips(Titled("tripLog"), Within(300, atGuarded)))).ShouldContain(toGuarded);
+        var viewerAtOpen = await TripSheetAsync(viewer, Trips(Titled("tripLog"), Within(300, atOpen)));
+        viewerAtOpen.ShouldContain(toOpen);
+        viewerAtOpen.ShouldNotContain(toGuarded);
+
+        // The viewer reads the guarded trip, so the file holds it without a condition; no radius
+        // around the guarded cave's true position, small or large, makes it match, and the negation
+        // does not move either.
+        (await TripSheetAsync(viewer, Trips(Titled("tripLog")))).ShouldContain(toGuarded);
+        foreach (var radius in new[] { 300d, 3_000d, 20_000d })
+        {
+            (await TripSheetAsync(viewer, Trips(Titled("tripLog"), Within(radius, atGuarded)))).ShouldNotContain(toGuarded);
+            (await TripSheetAsync(viewer, Trips(Titled("tripLog"), new NotNode(Within(radius, atGuarded))))).ShouldContain(toGuarded);
+        }
+    }
+
+    [Fact]
+    public async Task The_geofile_list_export_holds_the_rows_of_the_files_the_filter_leaves_and_the_reader_may_read()
+    {
+        var spot = Spot.Pick();
+        var (_, shown) = await FootprintsAsync(spot.TrueLon, spot.TrueLat, half: 0.01);
+        Guid hidden;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var shownFile = await db.Geofiles.SingleAsync(g => g.Id == shown);
+            var secret = GeofileWorldFixture.Add(db, $"Hidden geodata {tag}", ownerId, Visibility.Private);
+            secret.Bbox = shownFile.Bbox;
+            secret.FeatureCount = 1;
+            shownFile.FeatureCount = 1;
+            hidden = secret.Id;
+            var geometries = new GeometryFactory(new PrecisionModel(), 4326);
+            foreach (var (file, label) in new[] { (shown, "row-shown"), (hidden, "row-hidden") })
+            {
+                db.GeofileFeatures.Add(new GeofileFeature
+                {
+                    GeofileId = file,
+                    Geom = geometries.CreatePoint(new Coordinate(spot.TrueLon, spot.TrueLat)),
+                    Properties = $"{{\"label\":\"{label}\"}}",
+                });
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        var centre = new PointValue(spot.TrueLon, spot.TrueLat);
+        var far = new PointValue(spot.TrueLon + 1, spot.TrueLat);
+
+        // The owner reads both files, so the viewer's smaller answer is the audience walk and not a
+        // fixture that wrote one file.
+        var ownerFile = await GeofileExportAsync(owner, About("geofile", Titled("geofile"), Within(100, centre)));
+        ownerFile.ShouldContain("row-shown");
+        ownerFile.ShouldContain("row-hidden");
+        ownerFile.ShouldContain($"Hidden geodata {tag}");
+
+        var viewerFile = await GeofileExportAsync(viewer, About("geofile", Titled("geofile"), Within(100, centre)));
+        viewerFile.ShouldContain("row-shown");
+        viewerFile.ShouldContain($"Geodata {tag}");
+        viewerFile.ShouldNotContain("row-hidden");
+        viewerFile.ShouldNotContain($"Hidden geodata {tag}");
+
+        // A footprint nowhere near the question leaves an empty file, not an unfiltered one.
+        (await GeofileExportAsync(owner, About("geofile", Titled("geofile"), Within(100, far)))).ShouldNotContain("row-shown");
+    }
+
+    [Fact]
+    public async Task The_list_exports_refuse_a_filter_they_cannot_run_and_never_answer_it_as_everything()
+    {
+        var readable = FilterToken.Encode(About("geofile", Titled("geofile")));
+        var aboutPhotographs = FilterToken.Encode(About("photograph", Titled()));
+        var tripsReadable = FilterToken.Encode(Trips(Titled("tripLog")));
+
+        var cases = new (string Path, string Query, HttpStatusCode Status, string Code)[]
+        {
+            ("/api/v1/geofiles/export?format=geojson", "filter=eyJ2ZXJzaW9uIjox", HttpStatusCode.BadRequest, SurfaceFilters.MalformedCode),
+            ("/api/v1/geofiles/export?format=geojson", $"filter={aboutPhotographs}", HttpStatusCode.BadRequest, SurfaceFilters.WrongWorldCode),
+            ("/api/v1/geofiles/export?format=geojson", $"filter={readable}&savedFilterId={Guid.NewGuid()}", HttpStatusCode.BadRequest, SurfaceFilters.AmbiguousCode),
+            ("/api/v1/geofiles/export?format=geojson", $"savedFilterId={Guid.NewGuid()}", HttpStatusCode.NotFound, SurfaceFilters.SavedNotFoundCode),
+            ("/api/v1/geofiles/export?format=nope", "", HttpStatusCode.BadRequest, "export.format_unsupported"),
+            ("/api/v1/trip-logs/export?", "filter=eyJ2ZXJzaW9uIjox", HttpStatusCode.BadRequest, SurfaceFilters.MalformedCode),
+            ("/api/v1/trip-logs/export?", $"filter={readable}", HttpStatusCode.BadRequest, SurfaceFilters.WrongWorldCode),
+            ("/api/v1/trip-logs/export?", $"filter={tripsReadable}&savedFilterId={Guid.NewGuid()}", HttpStatusCode.BadRequest, SurfaceFilters.AmbiguousCode),
+            ("/api/v1/trip-logs/export?", $"savedFilterId={Guid.NewGuid()}", HttpStatusCode.NotFound, SurfaceFilters.SavedNotFoundCode),
+        };
+        foreach (var (path, query, status, code) in cases)
+        {
+            var response = await viewer.GetAsync($"{path}&{query}");
+            response.StatusCode.ShouldBe(status, $"{path} {query}");
+            (await response.Content.ReadAsStringAsync()).ShouldContain(code, customMessage: $"{path} {query}");
+        }
+
+        // A saved filter its author keeps private is the same refusal as one that is not there; the
+        // author's own export is the positive twin.
+        var saved = await owner.PostAsJsonAsync("/api/v1/saved-filters", new
+        {
+            name = $"Private trips {tag}",
+            document = Trips(Titled("tripLog")),
+            visibility = "private",
+        }, Wire);
+        saved.StatusCode.ShouldBe(HttpStatusCode.Created, await saved.Content.ReadAsStringAsync());
+        var id = (await saved.Content.ReadFromJsonAsync<JsonNode>())!["id"]!.GetValue<Guid>();
+        (await owner.GetAsync($"/api/v1/trip-logs/export?savedFilterId={id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.GetAsync($"/api/v1/trip-logs/export?savedFilterId={id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        (await owner.GetAsync($"/api/v1/geofiles/export?format=geojson&filter={readable}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync($"/api/v1/geofiles/export?format=geojson&filter={readable}")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.GetAsync($"/api/v1/trip-logs/export?filter={tripsReadable}")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task A_geofile_list_export_past_the_row_cap_is_refused_rather_than_cut_short()
+    {
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var big = GeofileWorldFixture.Add(db, $"Huge {tag}", ownerId, Visibility.Authenticated);
+            big.FeatureCount = 300_000;
+            await db.SaveChangesAsync();
+        }
+
+        var token = FilterToken.Encode(About("geofile", Titled("geofile")));
+        var response = await viewer.GetAsync($"/api/v1/geofiles/export?format=geojson&filter={token}");
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("export.too_many_geofiles");
+    }
+
+    private static async Task<string> GeofileExportAsync(HttpClient client, FilterDocument document)
+    {
+        var response = await client.GetAsync($"/api/v1/geofiles/export?format=geojson&filter={FilterToken.Encode(document)}");
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        return body;
+    }
+
+    private static async Task<string> TripSheetAsync(HttpClient client, FilterDocument document)
+    {
+        var response = await client.GetAsync($"/api/v1/trip-logs/export?filter={FilterToken.Encode(document)}");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        using var stream = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var workbook = new XSSFWorkbook(stream);
+        return new XSSFExcelExtractor(workbook).Text;
     }
 
     // ---------- the radius ceiling ----------

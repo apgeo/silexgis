@@ -42,6 +42,16 @@ public static class ExportEndpoints
                 "Features of any kind as GeoJSON/GPX/KML/CSV/zipped shapefile. Takes the feature "
                 + "list's `filter` or `savedFilterId` (and its `search` and `bbox`), so the file holds "
                 + "the rows the list shows that have a position the caller may be given.");
+        api.MapGet("/geofiles/export", ExportGeofileListAsync)
+            .WithTags("Export")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary(
+                "The imported rows of every geofile the geodata list shows, as one GeoJSON/GPX/KML/CSV/"
+                + "zipped shapefile layer, each row naming the file it came from in a `geofile` "
+                + "attribute. Takes the list's `filter` or `savedFilterId` and its `search`, so the file "
+                + "holds the files the list shows. Refused, not cut short, when the selection is larger "
+                + "than one file may hold.");
         api.MapGet("/geofiles/{id:guid}/export", ExportGeofileAsync)
             .WithTags("Export")
             .WithSummary("Imported geofile rows re-exported in the requested format.");
@@ -377,6 +387,103 @@ public static class ExportEndpoints
         }
 
         return WriteFile(vectorIO, target, "features", features);
+    }
+
+    /// <summary>Most geofiles one list export may name; a larger selection is refused, never truncated.</summary>
+    public const int MaxExportedGeofiles = 200;
+
+    /// <summary>Most imported rows one list export may hold, summed over the selected files.</summary>
+    public const int MaxExportedGeofileRows = 200_000;
+
+    public const string TooManyGeofilesCode = "export.too_many_geofiles";
+
+    /// <summary>
+    /// The geodata list as a file: the imported rows of the geofiles the list's own filter leaves.
+    /// </summary>
+    /// <remarks>
+    /// The files are chosen exactly as the list chooses them — the visibility walk first, then the
+    /// geofile world's narrowing, then the name search — so a file the list withholds from this
+    /// caller can neither appear nor be counted. The rows of a chosen file are then exported as the
+    /// single-file route exports them, which asks for nothing beyond reading the file.
+    /// </remarks>
+    private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> ExportGeofileListAsync(
+        string format,
+        string? search,
+        SilexGisDbContext db,
+        IVectorIO vectorIO,
+        SurfaceFilters surfaceFilters,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct,
+        string? filter = null,
+        Guid? savedFilterId = null)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!Formats.TryGetValue(format, out var target))
+        {
+            return UnsupportedFormat(format);
+        }
+
+        var narrowing = await surfaceFilters.ForAsync<Geofile>(ctx, GeofileFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return refusal.ToProblem();
+        }
+
+        var files = narrowing.Narrowing!.Apply(db.Geofiles.AsNoTracking().VisibleTo(ctx, AccessDomain.Geofiles));
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var pattern = $"%{search}%";
+            files = files.Where(g => EF.Functions.ILike(EF.Functions.Unaccent(g.Name), EF.Functions.Unaccent(pattern)));
+        }
+
+        var chosen = await files
+            .OrderBy(g => g.Name).ThenBy(g => g.Id)
+            .Select(g => new { g.Id, g.Name, g.FeatureCount })
+            .Take(MaxExportedGeofiles + 1)
+            .ToListAsync(ct);
+        if (chosen.Count > MaxExportedGeofiles || chosen.Sum(g => (long)g.FeatureCount) > MaxExportedGeofileRows)
+        {
+            return ApiProblems.BadRequest(
+                TooManyGeofilesCode,
+                "This request selects more geofile rows than one file may hold. Narrow it and export "
+                + "in parts; a file that silently stopped at a limit would disagree with the list for "
+                + "a reason nothing in it explains.",
+                "limit",
+                MaxExportedGeofiles);
+        }
+
+        var features = new List<VectorFeature>();
+        foreach (var file in chosen)
+        {
+            var rows = await db.GeofileFeatures.AsNoTracking()
+                .Where(f => f.GeofileId == file.Id)
+                .OrderBy(f => f.Id)
+                .ToListAsync(ct);
+            foreach (var row in rows)
+            {
+                var properties = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(row.Properties) ?? [];
+                var converted = properties.ToDictionary(
+                    p => p.Key,
+                    p => (object?)(p.Value.ValueKind switch
+                    {
+                        JsonValueKind.Number => p.Value.GetDouble(),
+                        JsonValueKind.String => p.Value.GetString(),
+                        _ => p.Value.ToString(),
+                    }));
+
+                // Assigned after the flattening so a column of the same name in the source file can
+                // never shadow which file a row came from.
+                converted["geofile"] = file.Name;
+                features.Add(new VectorFeature(row.Geom, converted));
+            }
+        }
+
+        return WriteFile(vectorIO, target, "geofiles", features);
     }
 
     private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> ExportGeofileAsync(

@@ -10,6 +10,8 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Filters;
+using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -235,6 +237,70 @@ public sealed class TripListGroupingTests : IAsyncLifetime, IDisposable, IClassF
 
         using var anonymous = factory.CreateClient();
         (await anonymous.GetAsync("/api/v1/trip-logs/export")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    /// <summary>
+    /// The export takes the trip world's filter beside the list's own narrowings: a trip must
+    /// satisfy both, and the filter never widens what the caller may read.
+    /// </summary>
+    [Fact]
+    public async Task The_export_takes_the_trip_filter_together_with_the_list_narrowings_and_the_audience_walk()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        await CreateTripAsync($"Open survey alpha {marker}", surveyTypeId, "authenticated");
+        await CreateTripAsync($"Open survey beta {marker}", surveyTypeId, "authenticated");
+        await CreateTripAsync($"Open dig alpha {marker}", explorationTypeId, "authenticated");
+        await CreateTripAsync($"Shut survey alpha {marker}", surveyTypeId, "private");
+
+        string Alpha() => FilterToken.Encode(new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope(
+                    "tripLog",
+                    new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue("alpha")])),
+            ],
+        });
+
+        // The filter alone: what it names, from what the caller may read.
+        var readerAlpha = await SheetTextAsync(reader, $"search={marker}&filter={Alpha()}");
+        readerAlpha.ShouldContain($"Open survey alpha {marker}");
+        readerAlpha.ShouldContain($"Open dig alpha {marker}");
+        readerAlpha.ShouldNotContain($"Open survey beta {marker}");
+        // The owner's file proves the withheld trip exists and matches the same filter.
+        var ownerAlpha = await SheetTextAsync(owner, $"search={marker}&filter={Alpha()}");
+        ownerAlpha.ShouldContain($"Shut survey alpha {marker}");
+        readerAlpha.ShouldNotContain($"Shut survey alpha {marker}");
+
+        // Together with the list's own narrowing: a trip must satisfy both.
+        var both = await SheetTextAsync(reader, $"search={marker}&types={surveyTypeId}&filter={Alpha()}");
+        both.ShouldContain($"Open survey alpha {marker}");
+        both.ShouldNotContain($"Open dig alpha {marker}");
+        both.ShouldNotContain($"Open survey beta {marker}");
+
+        // A saved filter reads the same way as the inline one.
+        var saved = await owner.PostAsJsonAsync("/api/v1/saved-filters", new
+        {
+            name = $"Alpha trips {marker}",
+            document = new FilterDocument
+            {
+                Scope =
+                [
+                    new WorldScope(
+                        "tripLog",
+                        new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue("alpha")])),
+                ],
+            },
+            visibility = "authenticated",
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+        });
+        saved.StatusCode.ShouldBe(HttpStatusCode.Created, await saved.Content.ReadAsStringAsync());
+        var savedId = JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement.GetProperty("id").GetGuid();
+        var bySaved = await SheetTextAsync(reader, $"search={marker}&savedFilterId={savedId}");
+        bySaved.ShouldContain($"Open survey alpha {marker}");
+        bySaved.ShouldNotContain($"Open survey beta {marker}");
     }
 
     // ---- helpers ----
