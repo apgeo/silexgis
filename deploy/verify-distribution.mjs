@@ -235,8 +235,8 @@ async function checkProxyBodyLimit(stack) {
   if (allowed.includes(' 413')) {
     console.log('refused');
     throw new Error(
-      `the proxy refused a ${megabytes(stack.maxUploadBytes)} MB body — raise client_max_body_size in ` +
-        'client/nginx.conf above SILEXGIS__Files__MaxUploadBytes and rebuild the web image',
+      `the proxy refused a ${megabytes(stack.maxUploadBytes)} MB body — raise ` +
+        'SILEXGIS_MAX_BODY_SIZE above SILEXGIS__Files__MaxUploadBytes (docker compose up -d web)',
     );
   }
   console.log(`ok (${allowed})`);

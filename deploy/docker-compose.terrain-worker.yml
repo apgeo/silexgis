@@ -48,6 +48,13 @@ services:
       SILEXGIS__Terrain__BakeEnabled: ${SILEXGIS__Terrain__BakeEnabled:?set SILEXGIS__Terrain__BakeEnabled=true in .env so the application hands its bakes to the worker}
 
   terrain-worker:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     build:
       context: ./terrain-worker
     restart: unless-stopped

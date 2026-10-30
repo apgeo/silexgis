@@ -26,6 +26,10 @@ ENV NGINX_ENVSUBST_FILTER="^SILEXGIS__Web__"
 # Declared empty so the expansion has something to put in. A variable that is not set at all is
 # left in the file verbatim, and the header would then go out quoting its own placeholder.
 ENV SILEXGIS__Web__FrameAncestors=""
+# The largest request body the proxy lets through to the API, as an nginx size. Declared with
+# today's value so an installation that sets nothing behaves exactly as before; it has to stay above
+# every upload cap the application is configured with, since this limit answers first.
+ENV SILEXGIS__Web__MaxBodySize="1024m"
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
