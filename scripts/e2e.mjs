@@ -36,7 +36,12 @@
 //
 // A failure during which the browser reported the machine's network changing under it is run
 // again on its own, and that second result is its verdict; every other failure stands as it
-// fell. Why, and exactly which failures, is in e2e-verdict.mjs.
+// fell. Why, and exactly which failures, is in e2e-verdict.mjs. The exit code is non-zero
+// whenever Playwright's report holds a failing, interrupted or retried test, an error outside any
+// test, or a failing status it does not explain — whatever a second run of the cut-off ones said.
+//
+// Exit codes: 0 green; 1 anything red; 10 an --affected selection wider than the map; 11 a port the
+// run needs is already listening (or is not a usable port number), so nothing was started.
 //
 // Cross-platform: no shell-isms, paths joined rather than concatenated, and every child
 // process spawned with an argument array rather than a command line.
@@ -49,15 +54,13 @@ import process from 'node:process';
 import { pruneDependencyCaches } from './dependency-caches.mjs';
 import { selectionFor } from './e2e-affected.mjs';
 import { describeFast, fastRun, modeOf, suiteOf } from './e2e-mode.mjs';
+import { REFUSED_EXIT_CODE, portRefusal } from './e2e-ports.mjs';
 import {
   ATTEMPTS,
   canBeJudged,
   describe,
+  judgeRun,
   readReport,
-  selectorsByProject,
-  sortFailures,
-  sortSecondRun,
-  verdict,
   withReport,
 } from './e2e-verdict.mjs';
 
@@ -108,16 +111,6 @@ function killPreviousApi() {
     }
   }
   rmSync(PID_FILE, { force: true });
-}
-
-/** True when something is already answering on the API port. */
-async function portAnswering() {
-  try {
-    await fetch(`http://localhost:${API_PORT}/openapi/v1.json`);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 const args = process.argv.slice(2);
@@ -276,52 +269,63 @@ function browserRun(argv, outputDir) {
 }
 
 /**
- * The exit code of a run that failed, after its failures have been told apart.
+ * The exit code of a run, after its failures have been told apart (see judgeRun).
  *
  * The failures the browser put down to a network change are run again, one worker, each in the
  * project it failed in, against the stack that is still standing. Their artifacts go to a
  * directory of their own per attempt and project: Playwright empties the directory it is given
  * before it starts, and the first run's traces are the evidence for every failure that stands.
  */
-function judged(first) {
-  const { standing, cutOff, outside } = sortFailures(first.report);
-  if (cutOff.length === 0) {
-    // Nothing the browser blamed on the network, so Playwright's own word stands — whatever it
-    // was, including a run that failed without any test failing and one that wrote no report.
-    return first.status;
-  }
-
+function judged(first, judgeable) {
   const againRoot = 'test-results-again';
-  rmSync(join(clientDir, againRoot), { recursive: true, force: true });
-  const excused = [];
-  let pending = cutOff;
-  for (let attempt = 1; attempt <= ATTEMPTS && pending.length > 0; attempt += 1) {
-    step(`${pending.length} failure(s) were cut off by a network change; `
-      + `running them again on their own (${attempt} of ${ATTEMPTS})`);
-    for (const test of pending) console.log(`  ${describe(test)}`);
-
-    const stillCutOff = [];
-    for (const [project, places] of selectorsByProject(pending)) {
+  const result = judgeRun({
+    status: first.status,
+    report: first.report,
+    judgeable,
+    announce: (attempt, pending) => {
+      // Only a run that has something to run again leaves this directory behind, and it starts empty.
+      if (attempt === 1) rmSync(join(clientDir, againRoot), { recursive: true, force: true });
+      step(`${pending.length} failure(s) were cut off by a network change; `
+        + `running them again on their own (${attempt} of ${ATTEMPTS})`);
+      for (const test of pending) console.log(`  ${describe(test)}`);
+    },
+    rerun: (project, places, attempt) => {
       const outputDir = join(againRoot, String(attempt), project);
-      const { report } = browserRun(
+      return browserRun(
         [...places, `--project=${project}`, '--workers=1', `--output=${outputDir}`], outputDir);
-      const second = sortSecondRun(pending.filter((test) => test.project === project), report);
-      excused.push(...second.passed);
-      standing.push(...second.standing);
-      stillCutOff.push(...second.cutOff);
-    }
-    pending = stillCutOff;
+    },
+  });
+  if (result.lines.length > 0) {
+    step('What the failures were');
+    for (const line of result.lines) console.log(line);
   }
-
-  const last = verdict({ excused, standing, unjudged: pending, outside });
-  step('What the failures were');
-  for (const line of last.lines) console.log(line);
-  return last.exitCode;
+  return result.exitCode;
 }
 
 let api;
 let exitCode = 1;
 try {
+  if (!reuse) {
+    killPreviousApi();
+    // Whatever else is listening on a port this run needs is not ours to stop. Refusing is the only
+    // honest option — running anyway would test whatever is there and call the result ours. The API
+    // and development-server ports are asked first, before anything is removed: a live run of
+    // another checkout on the same ports owns a database container of the same name, and removing
+    // that container before refusing would destroy the very run the refusal protects.
+    const refuse = (refusal) => {
+      console.error(`e2e: ${refusal.message}`);
+      process.exit(REFUSED_EXIT_CODE);
+    };
+    const ports = { db: DB_PORT, api: API_PORT, dev: DEV_PORT };
+    const early = await portRefusal(ports, undefined, ['api', 'dev']);
+    if (early) refuse(early);
+    // With those two free no live run of ours is behind the container of this port, so it is debris
+    // of an earlier --keep or a killed run, named after the port; it would otherwise hold the
+    // database port and make the check below refuse for something the run itself left.
+    spawnSync('docker', ['rm', '-f', DB_NAME], { stdio: 'ignore' });
+    const late = await portRefusal(ports, undefined, ['db']);
+    if (late) refuse(late);
+  }
   if (!existsSync(join(clientDir, 'node_modules'))) {
     console.error('client/node_modules is missing — run `npm ci` in client/ first.');
     process.exit(1);
@@ -333,20 +337,7 @@ try {
   }
 
   if (!reuse) {
-    killPreviousApi();
-    if (await portAnswering()) {
-      // Not reused, and not killed either: this is something the script did not start and has no
-      // business ending. Refusing is the only honest option — running anyway would test whatever
-      // is there and call the result ours.
-      console.error(
-        `Something is already answering on :${API_PORT} that this script did not start.\n`
-        + `Stop it, or set SILEXGIS_E2E_API_PORT to a free port, or SILEXGIS_E2E_REUSE=1 to `
-        + `deliberately run against it.`);
-      process.exit(1);
-    }
-
     step(`Database on :${DB_PORT}`);
-    spawnSync('docker', ['rm', '-f', DB_NAME], { stdio: 'ignore' });
     if (run('docker', [
       'run', '-d', '--name', DB_NAME,
       // Loopback only: a published port bypasses the host firewall's input chain, so a bare
@@ -398,10 +389,9 @@ try {
   step('Running the browser leg');
   if (fastLeftOut) console.log(describeFast(fastLeftOut));
   const first = browserRun(passthrough, 'test-results');
-  exitCode = first.status;
-  if (first.status !== 0 && canBeJudged(passthrough)) {
-    exitCode = judged(first);
-  }
+  // Always judged, a run that exited 0 included: the exit code is Playwright's report read through
+  // judgeRun, never Playwright's status alone and never a re-run's result alone.
+  exitCode = judged(first, canBeJudged(passthrough));
   // Last, where a verdict is read: a pass in this form is not the suite's.
   if (fastLeftOut) console.log(`\n${describeFast(fastLeftOut)}`);
 } catch (error) {

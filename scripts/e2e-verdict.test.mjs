@@ -9,6 +9,7 @@ import {
   ATTEMPTS,
   NETWORK_CHANGED,
   canBeJudged,
+  judgeRun,
   outcomesOf,
   selectorsByProject,
   sortFailures,
@@ -223,7 +224,9 @@ test('what the run reported outside any test is never set aside', () => {
 
 test('a report that was never written sorts to nothing rather than to green', () => {
   assert.deepEqual(outcomesOf(null), []);
-  assert.deepEqual(sortFailures(null), { standing: [], cutOff: [], outside: 0 });
+  assert.deepEqual(sortFailures(null), {
+    standing: [], cutOff: [], interrupted: [], flaky: [], outside: 0, unaccounted: 0,
+  });
 });
 
 test('the guard marks a test with the word this reads', () => {
@@ -235,4 +238,198 @@ test('the guard marks a test with the word this reads', () => {
   says(new RegExp(`const NETWORK_CHANGED = '${NETWORK_CHANGED}';`), `names the mark '${NETWORK_CHANGED}'`);
   says(/type: NETWORK_CHANGED\b/, 'marks the test with it');
   says(/'net::ERR_NETWORK_CHANGED'/, 'reads the browser\'s own word for a network change');
+});
+
+// ---- the exit code of a whole run ------------------------------------------------------------
+//
+// judgeRun is what e2e.mjs asks for its exit code. These are the paths a run can take; each one
+// is a different way for a red run to be called green, which is what the function is there to stop.
+
+/** A report of one file with the given specs and a tally in the shape Playwright writes. */
+function runReport(specs, { errors = [], unexpected } = {}) {
+  const report = reportOf('a.spec.ts', specs, { errors });
+  report.stats = { unexpected: unexpected ?? specs.filter((s) => s.tests[0].status === 'unexpected').length };
+  return report;
+}
+
+/** A rerun that must not be called; used where nothing is cut off. */
+const noRerun = () => assert.fail('nothing was cut off, so nothing should have been run again');
+
+const passing = [reported({ title: 'passes', line: 1 })];
+const standingFailure = reported({ title: 'fails on its own', line: 20, status: 'unexpected' });
+const cutOffFailure = reported({ title: 'was cut off', line: 30, status: 'unexpected', marks: cutOffMark });
+
+test('a run that passed is green and runs nothing again', () => {
+  const result = judgeRun({ status: 0, report: runReport(passing), rerun: noRerun });
+  assert.equal(result.exitCode, 0);
+  assert.deepEqual(result.lines, []);
+});
+
+test('a run with a failure of its own is red, and keeps Playwright\'s status', () => {
+  const result = judgeRun({
+    status: 1, report: runReport([...passing, standingFailure]), rerun: noRerun });
+  assert.equal(result.exitCode, 1);
+  assert.match(result.lines.join('\n'), /1 failure\(s\) stand:/);
+});
+
+test('a failure that was cut off and then passed is the only thing that may be forgiven', () => {
+  const asked = [];
+  const result = judgeRun({
+    status: 1,
+    report: runReport([...passing, cutOffFailure]),
+    rerun: (project, places, attempt) => {
+      asked.push({ project, places, attempt });
+      return { status: 0, report: runReport([{ ...reported({ title: 'was cut off', line: 30 }) }]) };
+    },
+  });
+  assert.equal(result.exitCode, 0);
+  assert.deepEqual(asked, [{ project: 'desktop', places: ['/a.spec.ts:30'], attempt: 1 }]);
+  assert.match(result.lines.join('\n'), /passed when run again on their own/);
+});
+
+test('a cut-off failure that passes does not excuse a second, ordinary failure beside it', () => {
+  const result = judgeRun({
+    status: 1,
+    report: runReport([standingFailure, cutOffFailure]),
+    rerun: () => ({ status: 0, report: runReport([reported({ title: 'was cut off', line: 30 })]) }),
+  });
+  assert.equal(result.exitCode, 1);
+  const said = result.lines.join('\n');
+  assert.match(said, /passed when run again/);
+  assert.match(said, /1 failure\(s\) stand:/);
+  assert.match(said, /fails on its own/);
+});
+
+test('a cut-off failure that passes does not excuse an interrupted test or an error outside any test', () => {
+  const interrupted = reported({ title: 'was stopped', line: 40 });
+  interrupted.tests[0].status = 'skipped';
+  interrupted.tests[0].results = [{ status: 'interrupted', annotations: [] }];
+  const again = () => ({ status: 0, report: runReport([reported({ title: 'was cut off', line: 30 })]) });
+
+  const stopped = judgeRun({
+    status: 1, report: runReport([cutOffFailure, interrupted]), rerun: again });
+  assert.equal(stopped.exitCode, 1);
+  assert.match(stopped.lines.join('\n'), /1 test\(s\) were interrupted/);
+
+  const crashed = judgeRun({
+    status: 1,
+    report: runReport([cutOffFailure], { errors: [{ message: 'worker process exited unexpectedly' }] }),
+    rerun: again,
+  });
+  assert.equal(crashed.exitCode, 1);
+  assert.match(crashed.lines.join('\n'), /1 error\(s\) outside any test/);
+});
+
+test('a re-run that is interrupted or skips the test does not excuse it, and exits non-zero', () => {
+  const stopped = reported({ title: 'was cut off', line: 30 });
+  stopped.tests[0].status = 'skipped';
+  stopped.tests[0].results = [{ status: 'interrupted', annotations: [] }];
+  const interruptedAgain = judgeRun({
+    status: 1, report: runReport([cutOffFailure]),
+    rerun: () => ({ status: 130, report: runReport([stopped]) }),
+  });
+  assert.notEqual(interruptedAgain.exitCode, 0);
+  assert.doesNotMatch(interruptedAgain.lines.join('\n'), /passed when run again/);
+
+  const skipped = reported({ title: 'was cut off', line: 30 });
+  skipped.tests[0].status = 'skipped';
+  skipped.tests[0].results = [{ status: 'skipped', annotations: [] }];
+  const skippedAgain = judgeRun({
+    status: 1, report: runReport([cutOffFailure]),
+    rerun: () => ({ status: 0, report: runReport([skipped]) }),
+  });
+  assert.notEqual(skippedAgain.exitCode, 0);
+
+  const silentFailure = judgeRun({
+    status: 1, report: runReport([cutOffFailure]),
+    rerun: () => ({ status: 1, report: runReport([reported({ title: 'was cut off', line: 30 })]) }),
+  });
+  assert.notEqual(silentFailure.exitCode, 0);
+});
+
+test('a failing test that was cut off and fails again, ordinarily, stands', () => {
+  const result = judgeRun({
+    status: 1,
+    report: runReport([cutOffFailure]),
+    rerun: () => ({ status: 1, report: runReport([reported({ title: 'was cut off', line: 30, status: 'unexpected' })]) }),
+  });
+  assert.equal(result.exitCode, 1);
+  assert.match(result.lines.join('\n'), /1 failure\(s\) stand:/);
+});
+
+test('a test cut off in every attempt is unjudged, and a rerun that left no report proves nothing', () => {
+  let runs = 0;
+  const cutAgain = judgeRun({
+    status: 1,
+    report: runReport([cutOffFailure]),
+    rerun: () => {
+      runs += 1;
+      return { status: 1, report: runReport([reported({ title: 'was cut off', line: 30, status: 'unexpected', marks: cutOffMark })]) };
+    },
+  });
+  assert.equal(cutAgain.exitCode, 1);
+  assert.equal(runs, ATTEMPTS);
+  assert.match(cutAgain.lines.join('\n'), /could not be judged/);
+
+  const none = judgeRun({ status: 1, report: runReport([cutOffFailure]), rerun: () => ({ status: 1, report: null }) });
+  assert.equal(none.exitCode, 1);
+});
+
+test('errors the second run reports outside any test turn a forgiven run red', () => {
+  const result = judgeRun({
+    status: 1,
+    report: runReport([cutOffFailure]),
+    rerun: () => ({
+      status: 1,
+      report: runReport([reported({ title: 'was cut off', line: 30 })], { errors: [{ message: 'boom' }] }),
+    }),
+  });
+  assert.equal(result.exitCode, 1);
+});
+
+test('an interrupted run is red even though Playwright counts its tests as skipped', () => {
+  const interrupted = reported({ title: 'was stopped', line: 40 });
+  interrupted.tests[0].status = 'skipped';
+  interrupted.tests[0].results = [{ status: 'interrupted', annotations: [] }];
+  // Status zero as well: the report alone is enough.
+  for (const status of [130, 1, 0]) {
+    const result = judgeRun({ status, report: runReport([...passing, interrupted]), rerun: noRerun });
+    assert.notEqual(result.exitCode, 0, `status ${status}`);
+  }
+});
+
+test('a test that failed and then passed on a retry is red', () => {
+  const flaky = reported({ title: 'passed on retry', line: 50 });
+  flaky.tests[0].status = 'flaky';
+  const result = judgeRun({ status: 0, report: runReport([flaky]), rerun: noRerun });
+  assert.equal(result.exitCode, 1);
+  assert.match(result.lines.join('\n'), /A retry is not a pass here/);
+});
+
+test('a failing status with a report that explains nothing, or no report, is red', () => {
+  assert.equal(judgeRun({ status: 1, report: runReport(passing), rerun: noRerun }).exitCode, 1);
+  assert.equal(judgeRun({ status: 2, report: null, rerun: noRerun }).exitCode, 2);
+  assert.match(
+    judgeRun({ status: 1, report: null, rerun: noRerun }).lines.join('\n'), /names nothing that explains it/);
+});
+
+test('a failure the tally counts and the walk cannot place still turns the run red', () => {
+  const report = runReport(passing, { unexpected: 1 });
+  const result = judgeRun({ status: 1, report, rerun: noRerun });
+  assert.equal(result.exitCode, 1);
+  assert.match(result.lines.join('\n'), /counts 1 more failing test/);
+});
+
+test('a run that cannot be judged keeps its cut-off failures as failures, without running them again', () => {
+  const result = judgeRun({
+    status: 1, report: runReport([cutOffFailure]), judgeable: false, rerun: noRerun });
+  assert.equal(result.exitCode, 1);
+  assert.match(result.lines.join('\n'), /1 failure\(s\) stand:/);
+});
+
+test('the runner takes its exit code from judgeRun for every run, a passing one included', () => {
+  const runner = readFileSync(join(repoRoot, 'scripts', 'e2e.mjs'), 'utf8');
+  assert.match(runner, /exitCode = judged\(first, canBeJudged\(passthrough\)\);/);
+  // The shape that let a second run's good result stand for the first run's failing status.
+  assert.doesNotMatch(runner, /exitCode = first\.status;/);
 });

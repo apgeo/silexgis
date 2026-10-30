@@ -22,7 +22,7 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { judgeApiProxy, judgeDiscovery, judgeHealth, judgeScriptType, judgeWebApp, moduleScripts } from './check.mjs';
+import { answers, judgeApiProxy, judgeDiscovery, judgeHealth, judgeScriptType, judgeWebApp, moduleScripts } from './check.mjs';
 import { resolveDatabase } from './install.mjs';
 import {
   Failure,
@@ -576,4 +576,22 @@ it('reads a process state from its stat line, whatever its name holds', async ()
   assert.equal(procStatState('9089 (dotnet) Z 1 9089 9089 0 -1'), 'Z');
   assert.equal(procStatState('42 (a (strange) name) S 1 42 42'), 'S');
   assert.equal(procStatState('garbage'), undefined);
+});
+
+describe('whether the public address has anything behind it', () => {
+  it('is yes for any HTTP answer, even an error, and no for a port nothing listens on', async () => {
+    const { createServer } = await import('node:http');
+    const server = createServer((req, res) => {
+      res.statusCode = 503;
+      res.end('down');
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address();
+    try {
+      assert.equal(await answers(`http://127.0.0.1:${port}/`), true);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+    assert.equal(await answers(`http://127.0.0.1:${port}`), false);
+  });
 });

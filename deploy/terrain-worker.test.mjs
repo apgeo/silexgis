@@ -148,7 +148,7 @@ describe('the overlay', () => {
   });
 });
 
-describe('a bake that is called off', { skip: process.platform === 'win32' }, () => {
+describe('a bake that is called off', { skip: process.platform === 'win32' && 'bake-worker.sh is a POSIX sh script and the stand-in java is a shell script; a Windows runner has no POSIX shell to run them' }, () => {
   // Run for real rather than read as text: what matters here is that a pre-baker which is running
   // stops, and that the answer the application waits for is written only once it has. A stand-in
   // for `java` on the path plays the pre-baker — it either finishes at once or waits to be killed,
