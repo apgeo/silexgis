@@ -136,6 +136,15 @@ intrările de peșteri, fenomenele de suprafață, liniile de topografie și —
 vederea 3D — pereții peșterilor. Un filtru despre peșteri păstrează intrările acelor peșteri; un
 filtru despre intrări păstrează acele intrări. Nu face decât să scoată din ce poți vedea deja.
 
+- **Scrie-ți propriul filtru: Condiții…** Butonul din rândul de filtre al hărții deschide același
+  editor de condiții ca registrul peșterilor și lista de obiecte, pe lumea obiectelor: orice câmp
+  al unei peșteri sau al unui obiect, inclusiv tipul și — lângă o condiție de tip — proprietățile
+  proprii ale acelui tip. Câmpul spațial *Poziție* nu este oferit deocamdată pe hartă.
+  **Aplică** filtrează harta cu ce ai scris; redeschis, editorul arată condițiile în vigoare.
+  Când harta este desenată printr-un filtru salvat, editorul se deschide pe o copie a condițiilor
+  lui, iar aplicarea transformă filtrul hărții în condițiile editate, fără să schimbe filtrul
+  salvat. În editor poți alege și un filtru salvat după nume sau **Salvează ca filtru…**
+  condițiile în vigoare — harta urmărește apoi filtrul salvat după id-ul lui.
 - **În adresă.** Adresa hărții poartă filtrul ei la fel ca adresa registrului de peșteri, așa că
   o hartă filtrată este un link pe care îl poți trimite. Un link al cărui filtru nu poate fi
   citit — sau pe care cel care îl deschide nu îl poate rula, de pildă filtrul tău salvat

@@ -81,6 +81,15 @@ export interface FilterEditorProps {
    * sorts otherwise.
    */
   sorts?: readonly SortKey[];
+  /**
+   * Fields of the world this surface does not offer for new rows — the map keeps its spatial
+   * conditions out until it has inputs of its own for them. Only the choice of a field for a row is
+   * narrowed: a row already in the document keeps showing, and keeps being counted and checked,
+   * under its own name, so a link that carries one is not shown as an "unavailable" field. A typed
+   * property is never hidden this way (its field key is not a fixed name), and the type condition it
+   * needs stays offered unless a surface names it here on purpose.
+   */
+  hiddenFields?: readonly string[];
 }
 
 const ANCHOR_REFUSALS: Record<string, string> = {
@@ -109,6 +118,7 @@ interface EditorContext {
   world: string;
   root: FilterNode;
   fields: FilterField[];
+  hiddenFields: readonly string[];
   limits: FilterLimits;
   problems: Map<string, FilterProblem[]>;
   update: (root: FilterNode) => void;
@@ -130,7 +140,7 @@ function problemText(t: TFunction, problem: FilterProblem): string {
 }
 
 export default function FilterEditor({
-  world, document, onApply, onCancel, fixed, sortable = false, sorts,
+  world, document, onApply, onCancel, fixed, sortable = false, sorts, hiddenFields = [],
 }: FilterEditorProps) {
   const { t } = useTranslation();
   const vocabularyQuery = useFilterVocabulary();
@@ -229,6 +239,7 @@ export default function FilterEditor({
     world,
     root,
     fields: vocabulary.fields.filter((f) => isEditableKind(f.kind)),
+    hiddenFields,
     limits,
     problems: refusal?.byPath ?? new Map(),
     update: setRoot,
@@ -406,7 +417,9 @@ function ConditionFields({ context, path, rowKey, negation }: {
   const { t } = useTranslation();
   const condition = nodeAt(context.root, path) as Extract<FilterNode, { node: 'condition' }>;
   const field = context.fields.find((f) => f.key === condition.field);
-  const offered = context.fields.filter((f) => f.key === condition.field || requirementMet(context.root, path, f));
+  const offered = context.fields.filter(
+    (f) => f.key === condition.field || (!context.hiddenFields.includes(f.key) && requirementMet(context.root, path, f)),
+  );
   const set = (next: FilterNode) => context.update(replaceAt(context.root, path, next));
   // A type's own property is named by its schema, which may well reuse the name of a field every
   // feature has ("Depth (m)"), so it is marked as a property where the two would sit side by side.

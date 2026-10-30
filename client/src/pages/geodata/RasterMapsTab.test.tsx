@@ -5,10 +5,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { RasterMapInfo } from '../../api/hooks.ts';
+import { worldToken } from '../../filters/worldList.ts';
+import type { FilterNode } from '../../filters/types.ts';
 
-const { queryCalls, updateSpy } = vi.hoisted(() => ({
+const { queryCalls, updateSpy, listCalls } = vi.hoisted(() => ({
   queryCalls: [] as { body: unknown; enabled: boolean }[],
   updateSpy: vi.fn(),
+  listCalls: [] as Record<string, unknown>[],
 }));
 
 const hit = (id: string, title: string) =>
@@ -40,7 +43,7 @@ let rows: RasterMapInfo[] = [];
 
 vi.mock('../../api/hooks.ts', () => ({
   useCan: () => true,
-  useRasterMaps: () => ({ data: { items: rows, page: 1, pageSize: 20, totalItems: rows.length }, isFetching: false }),
+  useRasterMaps: (params: Record<string, unknown>) => (listCalls.push(params), { data: { items: rows, page: 1, pageSize: 20, totalItems: rows.length }, isFetching: false, isError: false }),
   useUploadRasterMap: () => ({ mutateAsync: vi.fn() }),
   useDeleteRasterMap: () => ({ mutateAsync: vi.fn() }),
   useUpdateRasterMap: () => ({ mutateAsync: updateSpy, isPending: false }),
@@ -61,6 +64,13 @@ vi.mock('../../api/hooks.ts', () => ({
   useFilterResolve: (_world: string, ids: readonly string[]) => ({
     data: ids.filter((id) => id === 'cave-1').map((id) => hit(id, 'Peștera 1')),
   }),
+}));
+
+// The condition editor and saved filters have their own tests; here only what the tab asks of the list.
+vi.mock('../../components/filters/WorldFilterBar.tsx', () => ({
+  default: ({ world, where }: { world: string; where: unknown }) => (
+    <div data-testid="world-filter-bar" data-world={world} data-on={where === null ? 'no' : 'yes'} />
+  ),
 }));
 
 const { default: RasterMapsTab } = await import('./RasterMapsTab.tsx');
@@ -86,6 +96,7 @@ function sentBody() {
 afterEach(cleanup);
 beforeEach(() => {
   queryCalls.length = 0;
+  listCalls.length = 0;
   updateSpy.mockReset();
   updateSpy.mockResolvedValue({});
 });
@@ -128,5 +139,42 @@ describe('RasterMapsTab — the linked cave', () => {
     fireEvent.click(screen.getByRole('button', { name: /OK/i }));
     await waitFor(() => expect(updateSpy).toHaveBeenCalled());
     expect(sentBody().caveFeatureId).toBeNull();
+  });
+});
+
+describe('RasterMapsTab — the list filter', () => {
+  const kindIs = (value: string): FilterNode => ({
+    node: 'condition', field: 'mapKind', op: 'equals', values: [{ type: 'id', value }],
+  });
+
+  function mountAt(search: string) {
+    rows = [raster(null)];
+    render(
+      <MemoryRouter initialEntries={[`/geodata?tab=raster${search}`]}>
+        <App>
+          <RasterMapsTab />
+        </App>
+      </MemoryRouter>,
+    );
+  }
+
+  it('asks the list with no filter when the address holds none', () => {
+    mountAt('');
+    expect(listCalls.at(-1)?.filter).toBeUndefined();
+    expect(screen.getByTestId('world-filter-bar').dataset.world).toBe('georeferencedMap');
+    expect(screen.getByTestId('world-filter-bar').dataset.on).toBe('no');
+  });
+
+  it('asks the list with the conditions a link carries', () => {
+    const token = worldToken('georeferencedMap', kindIs('caveMap'))!;
+    mountAt(`&filter=${token}`);
+    expect(listCalls.at(-1)?.filter).toBe(token);
+    expect(screen.getByTestId('world-filter-bar').dataset.on).toBe('yes');
+  });
+
+  it('does not take a filter about geodata files as its own', () => {
+    const wrongWorld = worldToken('geofile', kindIs('gpx'))!;
+    mountAt(`&filter=${wrongWorld}`);
+    expect(listCalls.at(-1)?.filter).toBeUndefined();
   });
 });

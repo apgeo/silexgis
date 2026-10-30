@@ -121,6 +121,37 @@ export function tagOfMapFilter(filter: MapFilter | null): string | null {
   return null;
 }
 
+/**
+ * Fields the map's condition editor does not offer for a new row. The spatial condition is left
+ * out until the map has inputs of its own for it (the view, a drawn outline, the selection): a
+ * typed point or a pasted outline is something a saved view refuses to store, and the editor's
+ * generic place inputs would offer exactly those. Everything else the feature world declares is
+ * offered, the type condition and the typed properties beside it included — on the map, which
+ * draws every kind of feature, they can match.
+ */
+export const MAP_HIDDEN_FIELDS: readonly string[] = ['position'];
+
+/**
+ * The document the map's condition editor opens on: the map's one world and its conditions, and
+ * nothing else of the document it was read from. Another world's conditions, a sort and an anchor
+ * mean nothing to the map's layers, so they are not carried into a filter the map then sends.
+ *
+ * `saved` is the stored document of the saved filter the map draws through, when it does; the
+ * editor starts from a copy of it, and applying turns the filter into a document of its own.
+ */
+export function mapEditorDocument(filter: MapFilter | null, saved?: FilterDocument | null): FilterDocument {
+  const source = filter?.kind === 'document' ? filter.document : filter?.kind === 'saved' ? saved ?? null : null;
+  return withWhere(emptyDocument([MAP_FILTER_WORLD]), MAP_FILTER_WORLD, source === null ? null : whereOf(source, MAP_FILTER_WORLD));
+}
+
+/** What the editor handed back, as the map's filter: null when it has no condition left. */
+export function mapFilterOfEditor(edited: FilterDocument): MapFilter | null {
+  const where = whereOf(edited, MAP_FILTER_WORLD);
+  return where === null
+    ? null
+    : { kind: 'document', document: withWhere(emptyDocument([MAP_FILTER_WORLD]), MAP_FILTER_WORLD, where) };
+}
+
 /** The map's filter as its address holds it. */
 export interface MapFilterAddress {
   filter: MapFilter | null;

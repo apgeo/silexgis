@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AimOutlined,
   CameraOutlined,
@@ -28,7 +28,7 @@ import {
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { downloadFile } from '../../api/download.ts';
+import { downloadFile, geofileListExportUrl } from '../../api/download.ts';
 import {
   useCan,
   useDeleteGeofile,
@@ -40,8 +40,13 @@ import {
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
+import WorldFilterBar from '../../components/filters/WorldFilterBar.tsx';
+import { readWorldFilter, worldToken, writeWorldFilter, type WorldFilter } from '../../filters/worldList.ts';
 import ImportBatchesTab from './ImportBatchesTab.tsx';
 import RasterMapsTab from './RasterMapsTab.tsx';
+
+/** The filter world the vector list is about. */
+const GEOFILE_WORLD = 'geofile';
 
 const exportFormats = ['geojson', 'gpx', 'kml', 'csv', 'shapefile'] as const;
 
@@ -68,8 +73,20 @@ export default function GeodataPage() {
   const [pageSize, setPageSize] = useState(20);
   const [searchInput, setSearchInput] = useState('');
   const search = useDebouncedValue(searchInput);
-  const { data, isFetching } = useGeofiles(
-    { page, pageSize, search: search || undefined },
+  // The conditions live in the address, as the gallery's do, so a link carries them. They belong to
+  // the vector tab: the other tabs read none, and switching tabs leaves them behind.
+  const tab = searchParams.get('tab') ?? 'vector';
+  const geofileFilter = useMemo(
+    (): WorldFilter => (tab === 'vector' ? readWorldFilter(searchParams, GEOFILE_WORLD) : { where: null, unreadableLink: false }),
+    [searchParams, tab],
+  );
+  const { data, isFetching, isError } = useGeofiles(
+    {
+      page,
+      pageSize,
+      search: search || undefined,
+      filter: worldToken(GEOFILE_WORLD, geofileFilter.where),
+    },
     /* pollWhileImporting */ true,
   );
   const upload = useUploadGeofile();
@@ -142,6 +159,15 @@ export default function GeodataPage() {
     );
   };
 
+  const onExportList = (format: string) => {
+    downloadFile(
+      geofileListExportUrl(format, {
+        search: search || undefined,
+        filter: worldToken(GEOFILE_WORLD, geofileFilter.where),
+      }),
+    ).catch(() => message.error(t('geodata.exportListFailed')));
+  };
+
   const vectorTab = (
     <>
       {canUpload && (
@@ -171,6 +197,20 @@ export default function GeodataPage() {
         </Upload.Dragger>
       )}
 
+      <WorldFilterBar
+        world={GEOFILE_WORLD}
+        testIdPrefix="geodata"
+        titleKey="worldFilter.geofileTitle"
+        where={geofileFilter.where}
+        savedFilterId={geofileFilter.savedFilterId}
+        unreadableLink={geofileFilter.unreadableLink}
+        refused={isError}
+        onChange={(where, savedFilterId) => {
+          setSearchParams(writeWorldFilter(searchParams, GEOFILE_WORLD, { where, savedFilterId }), { replace: true });
+          setPage(1);
+        }}
+      />
+
       <Flex gap={8} style={{ marginBottom: 12 }}>
         <Input.Search
           placeholder={t('geodata.searchPlaceholder')}
@@ -178,6 +218,19 @@ export default function GeodataPage() {
           style={{ maxWidth: 320 }}
           onChange={(e) => setSearchInput(e.target.value)}
         />
+        <Dropdown
+          menu={{
+            items: exportFormats.map((format) => ({
+              key: format,
+              label: format.toUpperCase(),
+              onClick: () => onExportList(format),
+            })),
+          }}
+        >
+          <Button icon={<DownloadOutlined />} data-testid="geodata-export-list">
+            {t('geodata.exportList')}
+          </Button>
+        </Dropdown>
       </Flex>
 
       <Table<GeofileInfo>
@@ -338,11 +391,11 @@ export default function GeodataPage() {
       <Tabs
         // The tab is in the address so a confirmation can send the importer straight to the
         // list of what it did — and so that list is a place somebody can link to.
-        activeKey={searchParams.get('tab') ?? 'vector'}
+        activeKey={tab}
         onChange={(key) => setSearchParams(key === 'vector' ? {} : { tab: key }, { replace: true })}
         items={[
           { key: 'vector', label: t('geodata.tabVector'), children: vectorTab },
-          { key: 'raster', label: t('geodata.tabRaster'), children: <RasterMapsTab /> },
+          { key: 'raster', label: t('geodata.tabRaster'), children: tab === 'raster' ? <RasterMapsTab /> : null },
           { key: 'batches', label: t('geodata.tabImports'), children: <ImportBatchesTab /> },
         ]}
       />

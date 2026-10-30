@@ -1024,6 +1024,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/geofiles/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The imported rows of every geofile the geodata list shows, as one GeoJSON/GPX/KML/CSV/zipped shapefile layer, each row naming the file it came from in a `geofile` attribute. Takes the list's `filter` or `savedFilterId` and its `search`, so the file holds the files the list shows. Refused, not cut short, when the selection is larger than one file may hold. */
+        get: operations["exportExportGeofileList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/geofiles/{id}/export": {
         parameters: {
             query?: never;
@@ -5449,7 +5466,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The narrowed listing as a spreadsheet — every trip the filter leaves and not only the page being looked at, visibility-filtered exactly as the page is. Bounded, and the file says so in its own first lines when the bound was reached. */
+        /** The narrowed listing as a spreadsheet — every trip the filter leaves and not only the page being looked at, visibility-filtered exactly as the page is. Besides the list's own narrowings it takes a `filter` (a filter document as a link token) or a `savedFilterId` about the trip world, applied together with them; one that cannot be read is refused, never answered as everything. Bounded, and the file says so in its own first lines when the bound was reached. */
         get: operations["tripLogExport"];
         put?: never;
         post?: never;
@@ -19840,6 +19857,49 @@ export interface operations {
             };
         };
     };
+    exportExportGeofileList: {
+        parameters: {
+            query: {
+                format: string;
+                search?: string;
+                filter?: string;
+                savedFilterId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     exportExportGeofile: {
         parameters: {
             query: {
@@ -31908,6 +31968,8 @@ export interface operations {
                 hadIncident?: boolean;
                 search?: string;
                 sort?: string;
+                filter?: string;
+                savedFilterId?: string;
             };
             header?: never;
             path?: never;
@@ -31915,8 +31977,26 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

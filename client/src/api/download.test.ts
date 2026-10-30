@@ -8,6 +8,7 @@ const {
   downloadFile,
   downloadFileForm,
   expeditionReportUrl,
+  geofileListExportUrl,
   reportPdfRefusal,
   saveBlob,
   tripReportDownloadUrl,
@@ -168,5 +169,14 @@ describe('reportPdfRefusal', () => {
     // The write-up itself refused, or something that is not a refusal at all: not this one's to word.
     expect(reportPdfRefusal(new DownloadError(404, { code: 'trip_log.not_found' }))).toBeUndefined();
     expect(reportPdfRefusal(new Error('offline'))).toBeUndefined();
+  });
+});
+
+describe('geofileListExportUrl', () => {
+  it('carries the list question and leaves out what is empty', () => {
+    expect(geofileListExportUrl('geojson', { search: 'cave', filter: 'abc' })).toBe(
+      '/api/v1/geofiles/export?format=geojson&search=cave&filter=abc',
+    );
+    expect(geofileListExportUrl('csv', { search: '', filter: undefined })).toBe('/api/v1/geofiles/export?format=csv');
   });
 });

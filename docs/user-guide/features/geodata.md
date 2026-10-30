@@ -40,6 +40,19 @@ habits. That is a whole workflow of its own:
 Search by name, edit a geofile's details, delete it — which deletes its imported features
 with it, and the confirmation says so.
 
+### Filtering the list
+
+Beside the search box, **Conditions…** opens the same condition editor as the gallery, on the
+geodata-file world: the *File format*, the name, the owner, the visibility, the dates and the
+*Position* of a file's footprint. **Apply** narrows the list and puts the conditions in the page's
+address, so the link carries them. **Apply a saved filter…** picks one by name (only filters about
+geodata files can be chosen), **Save as filter…** keeps the conditions on screen under a name you
+choose and for the audience you choose, and the tag beside the buttons says which saved filter the
+conditions came from and whether you have changed them since. The list is always asked under your
+own access: a filter somebody shared shows exactly the files you could have found by writing the
+same conditions, and a file you may not read is never counted. Switching to another tab leaves
+the conditions behind.
+
 ---
 
 ## Raster maps
@@ -113,6 +126,18 @@ An export from the cave registry or the feature list holds **everything the list
 not only the page on screen — see [Search and filters](search-and-filters.md#filtering-on-list-pages).
 Caves can also be exported for interchange as
 [KarstLink](caves-and-entrances.md#sharing-caves-in-the-interchange-format).
+
+On the **Geodata** page, **Export the listed files** writes the imported rows of **every file the
+list shows** — its name search and its conditions both apply — as one layer, each row carrying the
+name of its file in a `geofile` column. A file you may not read is not in it, whoever sends the
+link. A selection of more than 200 files, or of more than 200,000 rows, is **refused** with a
+message to narrow the filter and export in parts, rather than cut short. The export button beside a
+single row still exports that one file.
+
+The trip list keeps its own controls, and its spreadsheet export follows them. The export route
+also accepts a trip filter (a link's condition or a saved filter) for programs that call it: a trip
+must satisfy both, and a filter that cannot be read is refused instead of exporting every trip. No
+trip-list screen sends one yet. Trips you may not read are never in the file.
 
 An export carries only what you may read, with the same location protection as the screen.
 

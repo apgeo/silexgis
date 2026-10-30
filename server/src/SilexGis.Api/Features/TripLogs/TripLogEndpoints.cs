@@ -9,6 +9,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Trips;
+using SilexGis.Infrastructure.Filters;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Permissions;
@@ -53,9 +54,14 @@ public static class TripLogEndpoints
                 + "different numbers for the same option and both are right \u2014 these are "
                 + "counts of what that caller may read.");
         trips.MapGet("/export", ExportAsync)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(
                 "The narrowed listing as a spreadsheet \u2014 every trip the filter leaves and "
                 + "not only the page being looked at, visibility-filtered exactly as the page is. "
+                + "Besides the list's own narrowings it takes a `filter` (a filter document as a link "
+                + "token) or a `savedFilterId` about the trip world, applied together with them; one "
+                + "that cannot be read is refused, never answered as everything. "
                 + "Bounded, and the file says so in its own first lines when the bound was "
                 + "reached.");
         trips.MapGet("/grouping", GroupingAsync)
@@ -422,7 +428,10 @@ public static class TripLogEndpoints
     /// file holds what the screen would have shown and nothing the screen would have withheld.
     /// A filter naming something this caller may not read exports an empty sheet rather than
     /// refusing, for the reason the page answers empty: an id that answers differently from one
-    /// that does not exist is an id anybody can go looking for.
+    /// that does not exist is an id anybody can go looking for. A <c>filter</c> or saved filter of
+    /// the trip world is a different thing — a document that cannot be read or run is refused with
+    /// its code, because answering it as no filter would hand over every trip as though it were a
+    /// selection.
     /// </remarks>
     private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> ExportAsync(
         SilexGisDbContext db,
@@ -432,6 +441,7 @@ public static class TripLogEndpoints
         FeatureProtection protection,
         ISpreadsheetWriter sheets,
         IOptions<TripListOptions> listOptions,
+        SurfaceFilters surfaceFilters,
         DateOnly? from,
         DateOnly? to,
         Guid? caveId,
@@ -444,7 +454,9 @@ public static class TripLogEndpoints
         bool? hadIncident,
         string? search,
         string? sort,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? filter = null,
+        Guid? savedFilterId = null)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var user = await userAccessor.GetAsync(ct);
@@ -456,17 +468,26 @@ public static class TripLogEndpoints
         if (!TripListQuery.TryParse(
                 from, to, caveId, expeditionId, participantIds, areaIds,
                 types, states, visibilities, hadIncident, search, sort,
-                out var filter, out var problem))
+                out var listFilter, out var problem))
         {
             return problem!;
         }
 
-        var listing = await TripLogListing.ResolveAsync(db, protection, ctx, filter, ct);
+        // The trip world's own filter, beside the list's grammar rather than instead of it: the
+        // two are asked together and a trip must satisfy both. Read before anything is queried so
+        // a filter that cannot be read is a refusal and never a file of everything.
+        var narrowing = await surfaceFilters.ForAsync<TripLog>(ctx, TripLogFilterWorld.Key, filter, savedFilterId, ct);
+        if (narrowing.Refusal is { } refusal)
+        {
+            return refusal.ToProblem();
+        }
+
+        var listing = await TripLogListing.ResolveAsync(db, protection, ctx, listFilter, ct);
 
         var limit = listOptions.Value.MaxExportedTrips;
         var rows = listing.Blocked
             ? []
-            : await listing.Ordered(listing.Narrowed()).Take(limit + 1).ToListAsync(ct);
+            : await listing.Ordered(narrowing.Narrowing!.Apply(listing.Narrowed())).Take(limit + 1).ToListAsync(ct);
         var truncated = rows.Count > limit;
         if (truncated)
         {

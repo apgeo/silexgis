@@ -40,6 +40,19 @@ denumire ale clubului. Acesta este un flux întreg:
 Caută după nume, editează detaliile unui fișier, șterge-l — ceea ce îi șterge și obiectele
 importate, iar confirmarea o spune.
 
+### Filtrarea listei
+
+Lângă caseta de căutare, **Condiții…** deschide același editor de condiții ca galeria, pe lumea
+fișierelor geodata: *Formatul fișierului*, numele, proprietarul, vizibilitatea, datele și *Poziția*
+amprentei fișierului. **Aplică** restrânge lista și pune condițiile în adresa paginii, așa că
+linkul le poartă. **Aplică un filtru salvat…** alege unul după nume (pot fi alese doar filtrele
+despre fișiere geodata), **Salvează ca filtru…** păstrează condițiile de pe ecran sub un nume și
+pentru publicul alese de tine, iar eticheta de lângă butoane spune din ce filtru salvat vin
+condițiile și dacă le-ai schimbat între timp. Lista este mereu cerută cu accesul tău: un filtru
+partajat de altcineva arată exact fișierele pe care le-ai fi găsit scriind aceleași condiții, iar
+un fișier pe care nu ai voie să-l citești nu este niciodată numărat. Trecerea la altă filă lasă
+condițiile în urmă.
+
 ---
 
 ## Hărți raster
@@ -113,6 +126,20 @@ listei**, nu doar pagina de pe ecran — vezi
 [Căutare și filtre](search-and-filters.md#filtrarea-pe-paginile-de-listă). Peșterile se pot
 exporta și pentru interschimb, ca
 [KarstLink](caves-and-entrances.md#partajarea-peșterilor-în-formatul-de-interschimb).
+
+Pe pagina **Geodate**, **Exportă fișierele din listă** scrie rândurile importate ale **tuturor
+fișierelor pe care le arată lista** — se aplică atât căutarea după denumire, cât și condițiile — ca un
+singur strat, fiecare rând purtând numele fișierului său într-o coloană `geofile`. Un fișier pe care
+nu ai voie să-l citești nu apare în el, oricine ar trimite legătura. O selecție de peste 200 de
+fișiere sau de peste 200.000 de rânduri este **refuzată**, cu îndemnul de a restrânge filtrul și de a
+exporta pe părți, în loc să fie tăiată. Butonul de export de pe un rând exportă în continuare doar
+acel fișier.
+
+Lista de ture își păstrează controalele proprii, iar exportul ei în foaie de calcul le urmează.
+Ruta de export acceptă și un filtru de ture (condiția dintr-o legătură sau un filtru salvat) pentru
+programele care o apelează: o tură trebuie să le îndeplinească pe amândouă, iar un filtru care nu
+poate fi citit este refuzat în loc să exporte toate turele. Deocamdată nicio pagină a listei de ture
+nu trimite un astfel de filtru. Turele pe care nu ai voie să le citești nu ajung niciodată în fișier.
 
 Un export poartă doar ce ai voie să citești, cu aceeași protecție a locațiilor ca ecranul.
 

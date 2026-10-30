@@ -130,6 +130,15 @@ entrances, surface features, survey lines and — in the 3D view — the cave wa
 A filter about caves keeps those caves' entrances; a filter about entrances keeps those entrances.
 It only ever takes away from what you can already see.
 
+- **Write your own: Conditions…** The button in the map's filter row opens the same condition
+  editor as the cave registry and the feature list, on the feature world: any field of a cave or
+  a feature, the type and — beside a type condition — that type's own properties included. The
+  spatial *Position* field is not offered on the map for now. **Apply** filters the map with what
+  you wrote; reopening the editor shows the conditions in force. When the map is drawn through a
+  saved filter, the editor opens on a copy of its conditions, and applying turns the map's filter
+  into the edited conditions without changing the saved filter. Inside the editor you can also
+  pick a saved filter by name, or **Save as filter…** the conditions in force — the map then
+  follows the saved filter by its id.
 - **In the address.** The map's address carries its filter as the cave registry's does, so a
   filtered map is a link you can send. A link whose filter cannot be read — or which the person
   opening it cannot run, such as your private saved filter — opens the map unfiltered and says
