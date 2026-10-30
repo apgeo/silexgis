@@ -71,6 +71,11 @@ public static class KarstAreaStatisticsSql
     private static readonly string InArea =
         "f.deleted_at IS NULL\n          AND " + ContainmentSql.StrictlyUnder("ka_area_id");
 
+    /// <summary>
+    /// The area's totals, read through the karst index's own totals statement run over this one
+    /// area — one SQL text for what an area adds up to, so the figures an area's statistics show
+    /// and the index the map paints for it cannot drift apart.
+    /// </summary>
     public static async Task<KarstAreaTotalsRow> TotalsAsync(
         SilexGisDbContext db,
         AccessContext ctx,
@@ -78,70 +83,26 @@ public static class KarstAreaStatisticsSql
         long depressionTypeId,
         CancellationToken ct)
     {
-        var (sql, parameters) = BuildTotals(ctx, areaFeatureId, depressionTypeId);
-        var row = await db.Database.GetDbConnection().QuerySingleAsync<KarstAreaTotalsRow>(
-            new CommandDefinition(sql, parameters, cancellationToken: ct));
+        // The outline is drawn by the map, not here; the tolerance is irrelevant to every figure,
+        // which is measured on the stored outline.
+        var rows = await KarstIndexWindowSql.TotalsAsync(
+            db, ctx, [areaFeatureId], depressionTypeId, toleranceDegrees: 0d, ct, countEntrances: true);
 
-        return row;
+        // No row only when the area row is deleted, which the route has refused before asking;
+        // answered as adding up to nothing rather than faulting.
+        return rows.Count == 0
+            ? new KarstAreaTotalsRow(null, 0, 0, null, 0, 0, null)
+            : ToAreaTotals(rows[0]);
     }
 
-    /// <summary>
-    /// The totals statement and its parameters, exposed so the access path and the declared-
-    /// containment walk can be pinned by a test rather than assumed.
-    /// </summary>
-    public static (string Sql, DynamicParameters Parameters) BuildTotals(
-        AccessContext ctx, Guid areaFeatureId, long depressionTypeId)
-    {
-        var (visibleSql, _, parameters) = AccessSql.FeatureLayerFragments(ctx, "f");
-        parameters.Add("ka_area_id", areaFeatureId);
-        parameters.Add("ka_depression_type_id", depressionTypeId);
-
-        // The outline's own area is read without a visibility fragment: the caller was already
-        // checked able to read the area before this ran, and a second fragment cannot share the
-        // first one's parameter set.
-        var sql = $"""
-            WITH area AS (
-                SELECT ST_Area(a.geom::geography) AS area_m2
-                FROM features a
-                WHERE a.id = @ka_area_id AND a.deleted_at IS NULL AND a.geom IS NOT NULL
-            ),
-            caves AS (
-                SELECT f.id, c.surveyed_length
-                FROM features f
-                JOIN caves c ON c.id = f.id
-                WHERE f.kind = {(short)FeatureKind.Cave}
-                  AND {InArea}
-                  AND {visibleSql}
-            ),
-            entrances AS (
-                SELECT COUNT(*)::int AS n
-                FROM features f
-                WHERE f.kind = {(short)FeatureKind.CaveEntrance}
-                  AND {InArea}
-                  AND {visibleSql}
-            ),
-            depressions AS (
-                SELECT COUNT(*)::int AS n,
-                       SUM(ST_Area(f.geom::geography)) AS area_m2
-                FROM features f
-                WHERE f.feature_type_id = @ka_depression_type_id
-                  AND f.geom IS NOT NULL
-                  AND ST_Dimension(f.geom) = 2
-                  AND {InArea}
-                  AND {visibleSql}
-            )
-            SELECT (SELECT area_m2 FROM area) AS "AreaM2",
-                   (SELECT COUNT(*)::int FROM caves) AS "CaveCount",
-                   (SELECT n FROM entrances) AS "EntranceCount",
-                   (SELECT SUM(surveyed_length)::double precision FROM caves) AS "SurveyedLengthM",
-                   (SELECT COUNT(*)::int FROM caves WHERE surveyed_length IS NOT NULL)
-                       AS "SurveyedCaveCount",
-                   (SELECT n FROM depressions) AS "DepressionCount",
-                   (SELECT area_m2 FROM depressions) AS "DepressionAreaM2"
-            """;
-
-        return (sql, parameters);
-    }
+    private static KarstAreaTotalsRow ToAreaTotals(KarstIndexTotalsRow row) => new(
+        row.AreaM2,
+        row.CaveCount,
+        row.EntranceCount,
+        row.SurveyedLengthM,
+        row.SurveyedCaveCount,
+        row.DepressionCount,
+        row.DepressionAreaM2);
 
     /// <summary>
     /// The caves at one end of a range — the deepest, or the longest — as a short ordered list.

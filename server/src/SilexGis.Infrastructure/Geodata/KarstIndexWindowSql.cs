@@ -12,11 +12,16 @@ namespace SilexGis.Infrastructure.Geodata;
 /// <summary>An area in a map window, before the caller's placement of it has been checked.</summary>
 public sealed record KarstIndexAreaRow(Guid Id, string? Name, bool IsProtected);
 
-/// <summary>What one area adds up to for its karstification index, with its outline to draw.</summary>
+/// <summary>What one area adds up to, with its outline to draw.</summary>
 /// <param name="AreaId">The area.</param>
-/// <param name="AreaM2">The outline's ground area on the spheroid, from the stored outline.</param>
+/// <param name="AreaM2">The outline's ground area on the spheroid, from the stored outline; null
+/// when the area row carries no outline.</param>
 /// <param name="OutlineGeoJson">The outline simplified for the zoom, as a GeoJSON geometry.</param>
-/// <param name="CaveCount">Caves declared under the area, as the area's own statistics count them.</param>
+/// <param name="CaveCount">Caves declared under the area, at any depth of the containment chain.</param>
+/// <param name="EntranceCount">Entrances declared under it — not the same number: caves have several.
+/// Counted only when the statement is asked to; zero otherwise.</param>
+/// <param name="SurveyedLengthM">Surveyed passage summed over the caves that record one.</param>
+/// <param name="SurveyedCaveCount">How many of the caves contributed a surveyed length.</param>
 /// <param name="DepressionCount">Depression outlines declared under it.</param>
 /// <param name="DepressionAreaM2">Ground under those outlines, summed; null when there are none.</param>
 public sealed record KarstIndexTotalsRow(
@@ -24,6 +29,9 @@ public sealed record KarstIndexTotalsRow(
     double? AreaM2,
     string? OutlineGeoJson,
     int CaveCount,
+    int EntranceCount,
+    double? SurveyedLengthM,
+    int SurveyedCaveCount,
     int DepressionCount,
     double? DepressionAreaM2);
 
@@ -44,8 +52,9 @@ public sealed record KarstIndexTotalsRow(
 /// <b>What each area adds up to</b> is counted exactly as one area's own statistics count it: caves
 /// and depressions under the area by the declared containment chain — never by being inside the
 /// outline, which would make every protected cave's true position a probe — over only what the
-/// caller may read, and the area itself excluded. Only the half of those statistics the index is
-/// built from is computed here.
+/// caller may read, and the area itself excluded. It is in fact the same statement: one area's
+/// statistics run it with that one id (adding only the entrance count, which the index does not
+/// use), so the two answers cannot drift apart however either is later changed.
 /// </para>
 /// <para>
 /// <b>The ids passed to the totals statement must already be gated.</b> The area rows are read there
@@ -125,31 +134,46 @@ public static class KarstIndexWindowSql
     /// </summary>
     /// <param name="toleranceDegrees">How far the drawn outline may be simplified; the ground area
     /// is always measured on the stored outline.</param>
+    /// <param name="countEntrances">Whether to count the entrances under each area as well; when
+    /// false <see cref="KarstIndexTotalsRow.EntranceCount"/> is zero.</param>
     public static async Task<IReadOnlyList<KarstIndexTotalsRow>> TotalsAsync(
         SilexGisDbContext db,
         AccessContext ctx,
         IReadOnlyCollection<Guid> gatedAreaIds,
         long depressionTypeId,
         double toleranceDegrees,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool countEntrances = false)
     {
         if (gatedAreaIds.Count == 0)
         {
             return [];
         }
 
-        var (sql, parameters) = BuildTotals(ctx, gatedAreaIds, depressionTypeId, toleranceDegrees);
+        var (sql, parameters) = BuildTotals(
+            ctx, gatedAreaIds, depressionTypeId, toleranceDegrees, countEntrances);
         var rows = await db.Database.GetDbConnection().QueryAsync<KarstIndexTotalsRow>(
             new CommandDefinition(sql, parameters, cancellationToken: ct));
         return [.. rows];
     }
 
-    /// <summary>The totals statement and its parameters, exposed so a test can plan it.</summary>
+    /// <summary>
+    /// The totals statement and its parameters, exposed so a test can plan it. The single text for
+    /// what a karst area adds up to: the map's index runs it over every area in the window, and one
+    /// area's statistics run it over that area alone.
+    /// </summary>
+    /// <remarks>
+    /// The entrance count is the one figure the index does not use, and the only one whose cost
+    /// grows with the entrance register rather than with the caves: a window over a large region
+    /// would walk every entrance under every area for a number it throws away. So it is asked for
+    /// only by one area's statistics; every other part of the text is the same for both.
+    /// </remarks>
     public static (string Sql, DynamicParameters Parameters) BuildTotals(
         AccessContext ctx,
         IReadOnlyCollection<Guid> gatedAreaIds,
         long depressionTypeId,
-        double toleranceDegrees)
+        double toleranceDegrees,
+        bool countEntrances = false)
     {
         var (visibleSql, _, parameters) = AccessSql.FeatureLayerFragments(ctx, "f");
         parameters.Add("kw_area_ids", gatedAreaIds.ToArray());
@@ -158,16 +182,37 @@ public static class KarstIndexWindowSql
 
         var under = "f.deleted_at IS NULL\n          AND " + ContainmentSql.StrictlyUnderColumn("area.id");
 
+        // Ends with a line break and the indentation of the CTE that follows it.
+        var entrancesCte = countEntrances
+            ? $"""
+                entrances AS (
+                    SELECT area.id AS area_id, COUNT(*)::int AS n
+                    FROM area
+                    JOIN features f ON {under}
+                    WHERE f.kind = {((short)FeatureKind.CaveEntrance).ToString(CultureInfo.InvariantCulture)}
+                      AND {visibleSql}
+                    GROUP BY area.id
+                ),
+                """ + "\n            "
+            : "";
+        var entranceCount = countEntrances ? "COALESCE(entrances.n, 0)" : "0";
+        var entrancesJoin = countEntrances
+            ? "LEFT JOIN entrances ON entrances.area_id = area.id\n            "
+            : "";
+
         var sql = $"""
             WITH area AS (
                 SELECT a.id,
                        ST_Area(a.geom::geography) AS area_m2,
                        ST_AsGeoJSON(ST_SimplifyPreserveTopology(a.geom, @kw_tolerance), 7) AS outline
                 FROM features a
-                WHERE a.id = ANY(@kw_area_ids) AND a.deleted_at IS NULL AND a.geom IS NOT NULL
+                WHERE a.id = ANY(@kw_area_ids) AND a.deleted_at IS NULL
             ),
             caves AS (
-                SELECT area.id AS area_id, COUNT(*)::int AS n
+                SELECT area.id AS area_id,
+                       COUNT(*)::int AS n,
+                       SUM(c.surveyed_length)::double precision AS surveyed_m,
+                       COUNT(c.surveyed_length)::int AS surveyed_n
                 FROM area
                 JOIN features f ON {under}
                 JOIN caves c ON c.id = f.id
@@ -175,7 +220,7 @@ public static class KarstIndexWindowSql
                   AND {visibleSql}
                 GROUP BY area.id
             ),
-            depressions AS (
+            {entrancesCte}depressions AS (
                 SELECT area.id AS area_id,
                        COUNT(*)::int AS n,
                        SUM(ST_Area(f.geom::geography)) AS area_m2
@@ -191,11 +236,14 @@ public static class KarstIndexWindowSql
                    area.area_m2 AS "AreaM2",
                    area.outline AS "OutlineGeoJson",
                    COALESCE(caves.n, 0) AS "CaveCount",
+                   {entranceCount} AS "EntranceCount",
+                   caves.surveyed_m AS "SurveyedLengthM",
+                   COALESCE(caves.surveyed_n, 0) AS "SurveyedCaveCount",
                    COALESCE(depressions.n, 0) AS "DepressionCount",
                    depressions.area_m2 AS "DepressionAreaM2"
             FROM area
             LEFT JOIN caves ON caves.area_id = area.id
-            LEFT JOIN depressions ON depressions.area_id = area.id
+            {entrancesJoin}LEFT JOIN depressions ON depressions.area_id = area.id
             ORDER BY area.id
             """;
 
