@@ -54,9 +54,11 @@ public sealed class SurveyCompilationHandler(
 
     public string Kind => ProcessingJobKinds.SurveyCompilation;
 
-    // Not retried by the queue although a second run would do nothing twice: a failure is recorded
-    // on what this reads before it is rethrown, so the screens watching it would stop at a failure
-    // the next attempt might undo. Recording it only on the last attempt is the step before opting in.
+    // A second run does nothing twice: it replaces the loops and figures of the earlier reading
+    // inside one transaction. The log is marked unreadable only when the queue will not try again
+    // (see JobRetry.WillBeRetried), so a reader does not see "unreadable" under an attempt that
+    // is about to be repeated.
+    public bool RetriesPassingFailures => true;
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
@@ -124,7 +126,10 @@ public sealed class SurveyCompilationHandler(
             // something about, so that reason is kept. Anything else is ours and is not described
             // to them.
             var reason = e is SurveySourceException ? e.Message : UnreadableReason;
-            await RecordFailureAsync(record.Id, reason);
+            if (!JobRetry.WillBeRetried(job, e, ct))
+            {
+                await RecordFailureAsync(record.Id, reason);
+            }
 
             // Rethrown carrying the same reason the record carries, never the original message:
             // the failure travels on to the job's requester in a notification, so an internal
@@ -136,7 +141,7 @@ public sealed class SurveyCompilationHandler(
                 throw;
             }
 
-            throw new InvalidOperationException(reason, e);
+            throw new JobFailedException(reason, e);
         }
     }
 

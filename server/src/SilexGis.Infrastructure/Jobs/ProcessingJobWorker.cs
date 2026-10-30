@@ -131,9 +131,7 @@ public abstract class ProcessingJobWorkerBase(
             job.Status = ProcessingJobStatus.Succeeded;
             job.Error = null;
         }
-        catch (Exception e) when (!ct.IsCancellationRequested
-            && handler.RetriesPassingFailures
-            && JobRetry.MayRetry(job.Attempts, e))
+        catch (Exception e) when (handler.RetriesPassingFailures && JobRetry.WillBeRetried(job, e, ct))
         {
             // Put back through a context of its own: this one may hold the attempt's half-done
             // changes, and they must not be saved on the way out. Nothing is told to the requester

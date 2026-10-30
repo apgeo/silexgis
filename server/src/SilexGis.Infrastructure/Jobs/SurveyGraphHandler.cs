@@ -66,9 +66,11 @@ public sealed class SurveyGraphHandler(
 
     public string Kind => ProcessingJobKinds.SurveyGraph;
 
-    // Not retried by the queue although a second run would do nothing twice: a failure is recorded
-    // on what this reads before it is rethrown, so the screens watching it would stop at a failure
-    // the next attempt might undo. Recording it only on the last attempt is the step before opting in.
+    // A second run does nothing twice: it clears the earlier reading and writes the new one in one
+    // transaction. The model is marked failed only when the queue will not try again (see
+    // JobRetry.WillBeRetried), so the screens watching it keep showing "processing" while another
+    // attempt is due.
+    public bool RetriesPassingFailures => true;
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
@@ -232,10 +234,14 @@ public sealed class SurveyGraphHandler(
             // name says, a coordinate system nobody here knows, a file in plain metres with no
             // position given for its zero point — so that reason is kept. Anything else is ours
             // and is not described to them.
-            await RecordFailureAsync(
-                payload.SurveyModelId,
-                e is SurveySourceException ? e.Message : "The survey could not be read.",
-                holdsAReading);
+            if (!JobRetry.WillBeRetried(job, e, ct))
+            {
+                await RecordFailureAsync(
+                    payload.SurveyModelId,
+                    e is SurveySourceException ? e.Message : "The survey could not be read.",
+                    holdsAReading);
+            }
+
             throw;
         }
     }

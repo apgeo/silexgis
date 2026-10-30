@@ -2,6 +2,7 @@
 using System.Net.Sockets;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using SilexGis.Domain.Entities;
 
 namespace SilexGis.Infrastructure.Jobs;
 
@@ -30,6 +31,22 @@ public static class JobRetry
     /// <paramref name="failure"/> may be tried again.</summary>
     public static bool MayRetry(int attempts, Exception failure) =>
         attempts < MaxAttempts && IsPassing(failure);
+
+    /// <summary>
+    /// Whether the queue will run <paramref name="job"/> again after it failed with
+    /// <paramref name="failure"/> — for a handler that opted in with
+    /// <see cref="IProcessingJobHandler.RetriesPassingFailures"/>. The worker decides with exactly
+    /// this, so a handler that asks it before recording a failure on what it works on knows whether
+    /// that failure is the last word or only this attempt's.
+    /// </summary>
+    /// <remarks>
+    /// The point of asking: the screens watching a record stop at "failed", and a record marked so
+    /// by an attempt the queue is about to repeat tells a reader the work is lost when the next
+    /// attempt may well succeed. A handler therefore records its failure only when this is false,
+    /// and leaves the record in its working state when it is true.
+    /// </remarks>
+    public static bool WillBeRetried(ProcessingJob job, Exception failure, CancellationToken ct) =>
+        !ct.IsCancellationRequested && MayRetry(job.Attempts, failure);
 
     /// <summary>
     /// Whether a failure is of the surroundings rather than of the work: a transient database
@@ -63,10 +80,24 @@ public static class JobRetry
                 return failure.GetType() == typeof(IOException) || failure.InnerException is SocketException;
             case DbUpdateConcurrencyException:
                 return false;
-            case DbUpdateException or AggregateException or TaskCanceledException when failure.InnerException is { } inner:
+            case DbUpdateException or AggregateException or TaskCanceledException or JobFailedException
+                when failure.InnerException is { } inner:
                 return IsPassing(inner);
             default:
                 return false;
         }
     }
 }
+
+/// <summary>
+/// A job's failure carrying a message that is fit to be shown to whoever asked for the job, with
+/// the real cause kept as the inner exception for the log.
+/// </summary>
+/// <remarks>
+/// A handler that must not let an internal message (a storage path, a database constraint) reach
+/// the requester replaces the exception it caught with one of these. Unlike a plain
+/// <see cref="InvalidOperationException"/> around the cause, it does not hide the cause from
+/// <see cref="JobRetry.IsPassing"/>: a timeout under the replacement is still a timeout, so a kind
+/// that retries passing failures retries it.
+/// </remarks>
+public sealed class JobFailedException(string message, Exception cause) : Exception(message, cause);

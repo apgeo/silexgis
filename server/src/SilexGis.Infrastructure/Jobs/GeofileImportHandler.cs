@@ -25,9 +25,10 @@ public sealed class GeofileImportHandler(
 {
     public string Kind => ProcessingJobKinds.GeofileImport;
 
-    // Not retried by the queue although a second run would do nothing twice: a failure is recorded
-    // on what this reads before it is rethrown, so the screens watching it would stop at a failure
-    // the next attempt might undo. Recording it only on the last attempt is the step before opting in.
+    // A second run does nothing twice: it replaces the file's features whole. The failure is
+    // recorded on the geofile only when the queue will not try again (see JobRetry.WillBeRetried),
+    // so the screens watching the import keep showing "importing" while another attempt is due.
+    public bool RetriesPassingFailures => true;
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
@@ -65,9 +66,13 @@ public sealed class GeofileImportHandler(
         }
         catch (Exception e)
         {
-            geofile.ImportStatus = GeofileImportStatus.Failed;
-            geofile.ImportError = e is VectorIOException ? e.Message : "Import failed unexpectedly.";
-            await db.SaveChangesAsync(CancellationToken.None);
+            if (!JobRetry.WillBeRetried(job, e, ct))
+            {
+                geofile.ImportStatus = GeofileImportStatus.Failed;
+                geofile.ImportError = e is VectorIOException ? e.Message : "Import failed unexpectedly.";
+                await db.SaveChangesAsync(CancellationToken.None);
+            }
+
             throw;
         }
     }

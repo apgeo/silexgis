@@ -44,9 +44,11 @@ public sealed class TextExtractionHandler(
 {
     public string Kind => ProcessingJobKinds.TextExtraction;
 
-    // Not retried by the queue although a second run would do nothing twice: a failure is recorded
-    // on what this reads before it is rethrown, so the screens watching it would stop at a failure
-    // the next attempt might undo. Recording it only on the last attempt is the step before opting in.
+    // A second run does nothing twice: a file already read by this reader at this version is
+    // skipped, and the page text of an unfinished one is replaced. The file is marked failed only
+    // when the queue will not try again (see JobRetry.WillBeRetried), so a reader does not see
+    // "failed" under an attempt that is about to be repeated.
+    public bool RetriesPassingFailures => true;
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
@@ -125,11 +127,15 @@ public sealed class TextExtractionHandler(
             // The message is bounded and generic on purpose: it is shown to whoever has to
             // explain a document that will not open, and a parser's internal complaint about a
             // byte offset tells them nothing while being long enough to overflow the column.
-            await documents.RecordTextExtractionOutcomeAsync(
-                file.Id,
-                TextExtractionState.Failed,
-                "The file could not be read: its content does not match the format it was stored as, or it is damaged or protected.",
-                CancellationToken.None);
+            if (!JobRetry.WillBeRetried(job, e, ct))
+            {
+                await documents.RecordTextExtractionOutcomeAsync(
+                    file.Id,
+                    TextExtractionState.Failed,
+                    "The file could not be read: its content does not match the format it was stored as, or it is damaged or protected.",
+                    CancellationToken.None);
+            }
+
             throw;
         }
     }

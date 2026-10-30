@@ -47,9 +47,11 @@ public sealed class SurveyMeshHandler(
 {
     public string Kind => ProcessingJobKinds.SurveyMesh;
 
-    // Not retried by the queue although a second run would do nothing twice: a failure is recorded
-    // on what this reads before it is rethrown, so the screens watching it would stop at a failure
-    // the next attempt might undo. Recording it only on the last attempt is the step before opting in.
+    // A second run does nothing twice: it converts the upload again and swaps the derived mesh in
+    // one transaction. The model is marked failed only when the queue will not try again (see
+    // JobRetry.WillBeRetried), so the screens watching it keep showing "processing" while another
+    // attempt is due.
+    public bool RetriesPassingFailures => true;
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
@@ -174,6 +176,13 @@ public sealed class SurveyMeshHandler(
             // and the model would say it was being converted for ever — as would the job, whose
             // own outcome is saved through this context after this returns.
             ForgetPendingChanges();
+
+            if (JobRetry.WillBeRetried(job, e, ct))
+            {
+                // The queue runs this conversion again, so the model keeps saying it is being
+                // converted (or ready, if it holds a mesh) rather than that it failed.
+                throw;
+            }
 
             if (holdsAMesh)
             {

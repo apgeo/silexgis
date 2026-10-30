@@ -50,9 +50,11 @@ public sealed class TerrainDerivativeHandler(
 
     public string Kind => ProcessingJobKinds.TerrainDerivative;
 
-    // Not retried by the queue although a second run would do nothing twice: a failure is recorded
-    // on what this reads before it is rethrown, so the screens watching it would stop at a failure
-    // the next attempt might undo. Recording it only on the last attempt is the step before opting in.
+    // A second run does nothing twice: each attempt writes into a version directory of its own and
+    // only a successful commit moves the picture to it. The picture is marked failed only when the
+    // queue will not try again (see JobRetry.WillBeRetried), so a reader keeps seeing "computing"
+    // while another attempt is due.
+    public bool RetriesPassingFailures => true;
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
@@ -171,20 +173,23 @@ public sealed class TerrainDerivativeHandler(
                 }
             }
 
-            layer.Status = TerrainDerivativeStatus.Failed;
-            layer.ErrorCode = e is TerrainBuildException failed
-                ? failed.Code
-                : TerrainBuildFailures.DerivativeFailed;
+            if (!JobRetry.WillBeRetried(job, e, ct))
+            {
+                layer.Status = TerrainDerivativeStatus.Failed;
+                layer.ErrorCode = e is TerrainBuildException failed
+                    ? failed.Code
+                    : TerrainBuildFailures.DerivativeFailed;
 
-            // Only a reason this application wrote is shown. Anything else is a native message or a
-            // stack, which says nothing to the person reading and can quote a path off the server.
-            layer.Message = e is TerrainBuildException named
-                ? named.Message
-                : "The ground could not be pictured from that elevation.";
+                // Only a reason this application wrote is shown. Anything else is a native message or a
+                // stack, which says nothing to the person reading and can quote a path off the server.
+                layer.Message = e is TerrainBuildException named
+                    ? named.Message
+                    : "The ground could not be pictured from that elevation.";
 
-            // Uncancelled on purpose: a run stopped part way must still leave a row that says so,
-            // and one left reading "computing" is indistinguishable from one still running.
-            await db.SaveChangesAsync(CancellationToken.None);
+                // Uncancelled on purpose: a run stopped part way must still leave a row that says so,
+                // and one left reading "computing" is indistinguishable from one still running.
+                await db.SaveChangesAsync(CancellationToken.None);
+            }
 
             Discard(directory);
             throw;
