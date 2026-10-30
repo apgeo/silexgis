@@ -270,9 +270,7 @@ public static class RegistryStatisticsEndpoints
         var fit = await RegistryStatisticsQuery.CorrelationAsync(
             db, ctx, scope, x, y, logarithmic, ct);
 
-        var basis = scope.IsSpatiallyScoped
-            ? RegistryStatisticsQuery.AreaBasis
-            : RegistryStatisticsQuery.ReadableBasis;
+        var basis = RegistryStatisticsQuery.MeasurementBasis(scope);
 
         return new Answer<RegistryCorrelationDto>(
             false,
@@ -423,9 +421,7 @@ public static class RegistryStatisticsEndpoints
         // the same predicate the total was: a request naming an area takes the unplaceable cave out
         // of the total as well, and saying otherwise would invite a reader to check the rows against
         // the total, find them reconciled, and read that as proof nothing was left out.
-        var basis = scope.IsSpatiallyScoped
-            ? RegistryStatisticsQuery.AreaBasis
-            : RegistryStatisticsQuery.PlaceableBasis;
+        var basis = RegistryStatisticsQuery.PlacementBasis(scope);
 
         return new Answer<RegistryRegionBreakdownDto>(
             false, null, new RegistryRegionBreakdownDto(caveCount, regions, basis));

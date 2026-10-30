@@ -296,8 +296,7 @@ public static class RegistryStatisticsSql
                    regr_slope({yExpression}, {xExpression}) AS "Slope",
                    regr_intercept({yExpression}, {xExpression}) AS "Intercept",
                    regr_r2({yExpression}, {xExpression}) AS "RSquared",
-                   corr({yExpression}, {xExpression}) AS "Correlation",
-                   {(logarithmic ? "true" : "false")} AS "Logarithmic"
+                   corr({yExpression}, {xExpression}) AS "Correlation"
             FROM features f
             JOIN caves c ON c.id = f.id
             WHERE {where}

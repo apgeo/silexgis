@@ -62,6 +62,27 @@ public static class RegistryStatisticsQuery
         + "included, because a count inside a named area would say it is there.";
 
     /// <summary>
+    /// The basis sentence for an answer about measurements over the given scope: the readable
+    /// caves, or the readable and placeable ones inside the area the scope names.
+    /// </summary>
+    public static string MeasurementBasis(RegistryStatisticsScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        return scope.IsSpatiallyScoped ? AreaBasis : ReadableBasis;
+    }
+
+    /// <summary>
+    /// The basis sentence for an answer broken down by place over the given scope. Narrowing to an
+    /// area takes an unplaceable cave out of the total as well as out of the rows, so the area
+    /// sentence replaces the one that says such a cave is counted in the totals.
+    /// </summary>
+    public static string PlacementBasis(RegistryStatisticsScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        return scope.IsSpatiallyScoped ? AreaBasis : PlaceableBasis;
+    }
+
+    /// <summary>
     /// A measure summarised over a scope: its extent, its histogram, its quantiles and the two
     /// distribution fits, in one pass.
     /// </summary>
@@ -81,7 +102,7 @@ public static class RegistryStatisticsQuery
         ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(scope);
 
-        var basis = scope.IsSpatiallyScoped ? AreaBasis : ReadableBasis;
+        var basis = MeasurementBasis(scope);
         var connection = db.Database.GetDbConnection();
 
         var (boundsSql, boundsParameters) = RegistryStatisticsSql.BuildBounds(ctx, scope, measure);
@@ -157,8 +178,12 @@ public static class RegistryStatisticsQuery
 
         var (sql, parameters) = RegistryStatisticsSql.BuildCorrelation(ctx, scope, x, y, logarithmic);
 
-        return await db.Database.GetDbConnection().QuerySingleAsync<RegistryCorrelationRow>(
+        // Which axes were asked for is the caller's own choice, not something the database knows,
+        // so it is put on the answer here rather than echoed back through the statement.
+        var fit = await db.Database.GetDbConnection().QuerySingleAsync<CorrelationFitRow>(
             new CommandDefinition(sql, parameters, cancellationToken: ct));
+        return new RegistryCorrelationRow(
+            fit.Count, fit.Slope, fit.Intercept, fit.RSquared, fit.Correlation, logarithmic);
     }
 
     /// <summary>
@@ -206,10 +231,13 @@ public static class RegistryStatisticsQuery
             .ToList();
 
         return new RegistryCategoryComparison(
-            measure, category, floor, groups, scope.IsSpatiallyScoped ? AreaBasis : ReadableBasis);
+            measure, category, floor, groups, MeasurementBasis(scope));
     }
 
     /// <summary>One group as the statement returns it, before the floor is applied.</summary>
+    private sealed record CorrelationFitRow(
+        int Count, double? Slope, double? Intercept, double? RSquared, double? Correlation);
+
     private sealed record RegistryCategoryGroupRow(
         long? CategoryId,
         int CaveCount,
@@ -311,7 +339,7 @@ public static class RegistryStatisticsQuery
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(measures);
 
-        var basis = scope.IsSpatiallyScoped ? AreaBasis : ReadableBasis;
+        var basis = MeasurementBasis(scope);
         var connection = db.Database.GetDbConnection();
 
         // One more than the cap, so a scope that is merely at the cap is answered and one past it
