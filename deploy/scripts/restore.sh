@@ -4,7 +4,8 @@
 # Usage (from the deploy/ directory):
 #   sh scripts/restore.sh ./backups/<timestamp>
 #
-# WARNING: this overwrites the current database and files volume. Stop the api service first
+# WARNING: this overwrites the current database and files volume (and, when the backup holds
+# them, the browser-uploaded terrain rasters). Stop the api service first
 # so nothing is writing during the restore:
 #   docker compose stop api
 #   sh scripts/restore.sh ./backups/<timestamp>
@@ -46,5 +47,18 @@ docker run --rm \
 	-v "${PROJECT}_silexgis-files":/data \
 	-v "$SRC_ABS":/backup:ro \
 	alpine sh -c 'rm -rf /data/* && tar xzf /backup/files.tar.gz -C /data'
+
+# Only present when the backup holds browser-uploaded rasters (and absent from backups made before
+# they were archived), so its absence is not an error and leaves the terrain volume exactly as it is.
+# The uploads folder alone is replaced; builds, pyramids and queued work beside it are not touched.
+if [ -f "$SRC_ABS/terrain-uploads.tar.gz" ]; then
+	echo "==> Restoring uploaded terrain rasters from $SRC_ABS/terrain-uploads.tar.gz"
+	docker run --rm \
+		-v "${PROJECT}_silexgis-terrain":/data \
+		-v "$SRC_ABS":/backup:ro \
+		alpine sh -c 'rm -rf /data/builds/uploads && mkdir -p /data/builds && tar xzf /backup/terrain-uploads.tar.gz -C /data'
+else
+	echo "==> No terrain-uploads.tar.gz in this backup -- the terrain volume is left as it is"
+fi
 
 echo "==> Done. Start the stack: docker compose up -d"
