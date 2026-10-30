@@ -2,7 +2,7 @@
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { asPerson, registerAccount, signedInElsewhere } from './arrange.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, confirmOk } from './helpers.ts';
 
 // The theme is kept with the account, so it is chosen as an account of its own: a dark theme set
 // for the administrator paints every other test signing in as the administrator dark while this
@@ -99,7 +99,7 @@ test.describe('settings', () => {
 
     // Clean up, so a re-run starts from the same state this one did.
     await card.getByLabel('Remove address').click();
-    await page.getByRole('button', { name: 'OK' }).click();
+    await confirmOk(page);
     await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
   });
 
@@ -300,7 +300,17 @@ test.describe('settings, on an account of its own', () => {
     await page.getByLabel('Current password').fill(account.password);
     await page.getByLabel('New password').fill(newPassword);
     await page.getByLabel('Repeat password').fill(newPassword);
+    const answered = page.waitForResponse(
+      (r) => r.url().endsWith('/api/v1/me/password') && r.request().method() === 'PUT',
+    );
     await page.getByRole('button', { name: 'Change password' }).click();
+    // The server's own answer, with its reason: a refusal shows on the page only as a message under
+    // a field, and the console guard names the address but not the problem's code, so a change that
+    // is refused in a busy run would otherwise be reported as a sign-out that never happened.
+    const response = await answered;
+    // Its body is read only when it is a refusal: a success is answered with none, and the page
+    // navigates away at once, after which the browser no longer holds any response body to read.
+    expect(response.status(), response.status() === 204 ? '' : `answered with: ${await response.text()}`).toBe(204);
 
     // Not a silent renewal: the session this browser held was ended with every other, so the
     // reader lands on the sign-in form, told why.

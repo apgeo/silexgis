@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type Response } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { editorOfItsOwn, type Account } from './arrange.ts';
 import {
@@ -10,6 +10,8 @@ import {
   openCaveFromRegistry,
   registryRow,
   paletteEntry,
+  confirmOk,
+  ownMapPoint,
 } from './helpers.ts';
 
 // Working on the map by hand: picking a cluster, placing a cave, drawing, describing and
@@ -96,7 +98,7 @@ test('cave add on map: place a new cave with its entrance by clicking the canvas
   // features", which a button found by the word "Delete" also matches until the cave's page
   // has replaced it.
   await page.getByTestId('cave-delete').click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await page.waitForURL(/\/caves$/);
   // Counted rather than "not visible": the detail page stays mounted for a tick after the
   // URL changes, and its heading and its history timeline both carry the name. Two matches
@@ -105,7 +107,8 @@ test('cave add on map: place a new cave with its entrance by clicking the canvas
   await expect(page.getByText(caveName)).toHaveCount(0);
 });
 
-test('surface feature draw, attributes, selection and table round-trip', async ({ page }) => {
+test('surface feature draw, attributes, selection and table round-trip', async ({ page }, testInfo) => {
+  const spot = ownMapPoint(testInfo.parallelIndex);
   const featureName = `E2E Sinkhole ${Date.now()}`;
   await login(page);
 
@@ -120,7 +123,7 @@ test('surface feature draw, attributes, selection and table round-trip', async (
   // Draw a point by clicking the map canvas.
   await toolbar.getByRole('button', { name: 'Draw', exact: true }).click();
   const canvas = page.locator('.map-canvas');
-  await canvas.click({ position: { x: 420, y: 260 } });
+  await canvas.click({ position: spot });
 
   // Attribute modal opens for the freshly drawn feature; schema fields render.
   const modal = page.getByRole('dialog');
@@ -137,7 +140,7 @@ test('surface feature draw, attributes, selection and table round-trip', async (
 
   // Click the same spot: the saved feature is selected and the detail card
   // shows the schema-labeled property.
-  await canvas.click({ position: { x: 420, y: 260 } });
+  await canvas.click({ position: spot });
   await expect(page.getByRole('heading', { name: featureName })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('Depth (m)')).toBeVisible();
   // Scoped to the property table: the panel's history timeline logs the same value.
@@ -147,10 +150,32 @@ test('surface feature draw, attributes, selection and table round-trip', async (
   const row = await registryRow(page, featureName);
   await expect(row).toBeVisible({ timeout: 15_000 });
   await expect(row.getByText('Sinkhole / Doline')).toBeVisible();
+  // The row can only be expected to be gone once the registry has been read again after the
+  // delete, so that read is waited for as an event rather than guessed at with a longer time. Both
+  // watchers are in place before the confirmation is pressed: the delete's answer is noted first
+  // (listeners run in the order they were added), and the list read is the first one answered after.
+  let deleteAnswered = false;
+  const noteDelete = (r: Response) => {
+    if (r.request().method() === 'DELETE' && /^\/api\/v1\/features\/[^/]+$/.test(new URL(r.url()).pathname)) {
+      deleteAnswered = true;
+    }
+  };
+  page.on('response', noteDelete);
+  const listReadAfterDelete = page.waitForResponse(
+    (r) =>
+      deleteAnswered &&
+      r.request().method() === 'GET' &&
+      new URL(r.url()).pathname === '/api/v1/features' &&
+      r.ok(),
+  );
   await row.getByRole('button', { name: 'delete' }).click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(featureName)).not.toBeVisible();
+  await listReadAfterDelete;
+  page.off('response', noteDelete);
+  // Counted rather than looked up by name: the name is also on the selected feature's panel and
+  // its history timeline, which stay mounted until the list has moved on.
+  await expect(row).toHaveCount(0);
 });
 
 // As an editor of its own: pinned types are kept with the account, and a shortcut pinned for the
@@ -291,7 +316,7 @@ test('dialog placement flip: cave-add continues as a side panel with values inta
   // features", which a button found by the word "Delete" also matches until the cave's page
   // has replaced it.
   await page.getByTestId('cave-delete').click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await page.waitForURL(/\/caves$/);
   // Counted rather than "not visible": the detail page stays mounted for a tick after the
   // URL changes, and its heading and its history timeline both carry the name. Two matches
@@ -304,7 +329,8 @@ test('dialog placement flip: cave-add continues as a side panel with values inta
 // arrangement is kept with the account — opened for the administrator, it is open on the screen of
 // every other test signing in as the administrator while this one runs. The administrator, in a
 // browser of their own, removes what is drawn here, which an editor may not.
-test('surface feature history records edits and restores in the map panel', async ({ page, browser }) => {
+test('surface feature history records edits and restores in the map panel', async ({ page, browser }, testInfo) => {
+  const spot = ownMapPoint(testInfo.parallelIndex);
   const featureName = `E2E Hist Feat ${Date.now()}`;
   const editor = await editorOfItsOwn(browser, page.request, 'history');
   try {
@@ -314,7 +340,7 @@ test('surface feature history records edits and restores in the map panel', asyn
     // stamped E2E takes live subjects out from under whatever else is running beside this.
     await deleteFeatureRows(editor.admin, /E2E (Hist Feat|Sinkhole) /);
     await login(page, editor.account.email, editor.account.password);
-    await historyRecordsAndRestores(page, featureName);
+    await historyRecordsAndRestores(page, featureName, spot);
   } finally {
     await deleteFeatureRows(editor.admin, new RegExp(featureName)).catch(() => {
       // Left behind, stamped with its run: the purge above removes it on the next run.
@@ -323,7 +349,7 @@ test('surface feature history records edits and restores in the map panel', asyn
   }
 });
 
-async function historyRecordsAndRestores(page: Page, featureName: string) {
+async function historyRecordsAndRestores(page: Page, featureName: string, spot: { x: number; y: number }) {
   // The map by its own address, and waited for: a hard navigation signs in again before anything
   // is drawn, which under load outlasts the five seconds an unqualified expectation allows, and
   // the root address is whatever the account's landing preference says — which another test of
@@ -338,7 +364,7 @@ async function historyRecordsAndRestores(page: Page, featureName: string) {
   // Draw and save a point feature.
   await toolbar.getByRole('button', { name: 'Draw', exact: true }).click();
   const canvas = page.locator('.map-canvas');
-  await canvas.click({ position: { x: 420, y: 260 } });
+  await canvas.click({ position: spot });
   const modal = page.getByRole('dialog');
   await expect(modal.getByText('New feature')).toBeVisible();
   await modal.getByLabel('Name').fill(featureName);
@@ -349,7 +375,7 @@ async function historyRecordsAndRestores(page: Page, featureName: string) {
   await reloaded;
 
   // Select it; edit the description twice so the newest event carries an old→new pair.
-  await canvas.click({ position: { x: 420, y: 260 } });
+  await canvas.click({ position: spot });
   await expect(page.getByRole('heading', { name: featureName })).toBeVisible({ timeout: 15_000 });
   await editFeatureDescription(page, 'Desc One');
   await editFeatureDescription(page, 'Desc Two');
@@ -384,7 +410,7 @@ async function deleteFeatureRows(page: Page, pattern: RegExp) {
   const rows = page.getByRole('row', { name: pattern });
   for (let remaining = await rows.count(); remaining > 0; remaining--) {
     await rows.first().getByRole('button', { name: 'delete' }).click();
-    await page.getByRole('button', { name: 'OK', exact: true }).click();
+    await confirmOk(page, { exact: true });
     await expect(rows).toHaveCount(remaining - 1, { timeout: 15_000 });
   }
 }

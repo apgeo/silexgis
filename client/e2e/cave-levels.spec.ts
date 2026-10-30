@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, confirmOk } from './helpers.ts';
 
 const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -85,7 +85,7 @@ test('a cave at two heights proposes two levels and a confirmed reading survives
   // And it can be withdrawn, so a reading recorded by mistake is not permanent.
   await reloaded.getByTestId('hypsometry-clear').click();
   // Exactly "OK": the page also offers "Look this cave up in Grottocenter", whose name contains it.
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await expect(reloaded.getByTestId('hypsometry-saved')).toHaveText(
     /No reading has been recorded yet/,
     { timeout: 15_000 },

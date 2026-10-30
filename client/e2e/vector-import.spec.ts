@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, confirmOk } from './helpers.ts';
 
 /**
  * A GPX from the field becomes caves and features in the registry — reviewed, not blindly
@@ -72,7 +72,7 @@ test.describe('vector import', () => {
     const batch = page.getByRole('row', { name: new RegExp(`e2e-${stamp}`) });
     await expect(batch).toBeVisible({ timeout: 20_000 });
     await batch.getByRole('button', { name: 'Undo' }).click();
-    await page.getByRole('button', { name: 'OK' }).click();
+    await confirmOk(page);
     await expect(page.getByText('The import was undone.')).toBeVisible({ timeout: 20_000 });
 
     await page.goto('/features');
@@ -88,7 +88,7 @@ test.describe('vector import', () => {
     await expect(uploads.first()).toBeVisible({ timeout: 20_000 });
     for (let remaining = await uploads.count(); remaining > 0; remaining--) {
       await uploads.first().getByRole('button', { name: 'delete' }).click();
-      await page.getByRole('button', { name: 'OK' }).click();
+      await confirmOk(page);
       await expect(uploads).toHaveCount(remaining - 1, { timeout: 20_000 });
     }
   });

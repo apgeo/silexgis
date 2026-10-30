@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, confirmOk } from './helpers.ts';
 import { uniquePng } from './png.ts';
 import { settledScreenshot } from './settled.ts';
 
@@ -218,8 +218,8 @@ test('a declared map is a tab beside the 3D view, and switching never remounts t
   await expect(dialog).not.toBeVisible();
   await page.locator('.ant-card', { hasText: '3D survey models' })
     .getByRole('button', { name: 'delete' }).click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await expect(page.getByText('No 3D models yet')).toBeVisible({ timeout: 15_000 });
   await page.locator('button', { hasText: 'Delete' }).click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
 });

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, confirmOk } from './helpers.ts';
 
 /**
  * The two human surfaces a printed cave code has: the page a visitor with no account reaches by
@@ -81,14 +81,14 @@ test.describe('printed cave codes', () => {
     await dialog.getByRole('button', { name: 'Stop publishing' }).click();
     // Exact: the cave page behind the dialog offers "Look this cave up in Grottocenter", whose name
     // holds "ok" too.
-    await page.getByRole('button', { name: 'OK', exact: true }).click();
+    await confirmOk(page, { exact: true });
     await expect(dialog.getByTestId('qr-state-unpublished')).toBeVisible({ timeout: 15_000 });
 
     // Clean up: the cave this run made.
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     await page.locator('button', { hasText: 'Delete' }).click();
-    await page.getByRole('button', { name: 'OK', exact: true }).click();
+    await confirmOk(page, { exact: true });
     await page.waitForURL(/\/caves$/);
   });
 });

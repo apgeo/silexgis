@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { expect } from '@playwright/test';
 import { tryAsPerson } from './arrange.ts';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, confirmOk } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
 
 const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -69,7 +69,7 @@ test('a compiled survey is read in the background and the list follows it there'
       /\/api\/v1\/survey-models\/[0-9a-f-]+\/reading$/.test(new URL(response.url()).pathname),
   );
   await models.getByRole('button', { name: 'Read again' }).click();
-  await page.locator('.ant-popconfirm:visible').getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page, { scope: page.locator('.ant-popconfirm:visible') });
   const answer = await asked;
   expect(answer.status()).toBe(200);
   const queued = (await answer.json()) as { id: string; status: string; readingAgain: boolean };

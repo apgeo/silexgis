@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, confirmOk } from './helpers.ts';
 import { uniquePng } from './png.ts';
 
 /**
@@ -133,6 +133,6 @@ test('the gallery keeps its conditions in the address and saves them as a filter
   const row = page.getByRole('row').filter({ hasText: filterName });
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.getByRole('button', { name: 'Delete' }).click();
-  await page.locator('.ant-popconfirm').getByRole('button', { name: 'Delete' }).click();
+  await confirmOk(page, { scope: page.locator('.ant-popconfirm'), name: 'Delete' });
   await expect(page.getByRole('row').filter({ hasText: filterName })).toHaveCount(0);
 });

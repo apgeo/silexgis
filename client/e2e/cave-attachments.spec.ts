@@ -2,7 +2,7 @@
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { uniquePng } from './png.ts';
-import { login, openCaveFromRegistry } from './helpers.ts';
+import { login, openCaveFromRegistry, confirmOk } from './helpers.ts';
 
 // The pictures and documents attached to a cave: uploaded, shown, corrected by a new version,
 // described, and taken away again.
@@ -50,7 +50,7 @@ test('cave photo attachment round-trip', async ({ page }) => {
   const figures = page.locator('figure').filter({ hasText: 'e2e-photo' });
   for (let remaining = await figures.count(); remaining > 0; remaining--) {
     await figures.first().getByRole('button', { name: 'delete' }).click();
-    await page.getByRole('button', { name: 'OK', exact: true }).click();
+    await confirmOk(page, { exact: true });
     await expect(figures).toHaveCount(remaining - 1, { timeout: 15_000 });
   }
   await expect(page.getByText('e2e-photo.png')).not.toBeVisible();
@@ -140,7 +140,7 @@ async function deletePhotoFigures(page: Page) {
   const figures = page.locator('figure').filter({ hasText: 'e2e-photo' });
   for (let remaining = await figures.count(); remaining > 0; remaining--) {
     await figures.first().getByRole('button', { name: 'delete' }).click();
-    await page.getByRole('button', { name: 'OK', exact: true }).click();
+    await confirmOk(page, { exact: true });
     await expect(figures).toHaveCount(remaining - 1, { timeout: 15_000 });
   }
 }

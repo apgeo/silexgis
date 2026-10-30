@@ -4,7 +4,7 @@ import { expect, type Page } from '@playwright/test';
 // errors, unhandled rejections and console errors across the whole browser context.
 import { test } from './consoleGuard.ts';
 import { asPerson } from './arrange.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, confirmOk } from './helpers.ts';
 
 /**
  * Taking a phone's upload back from the imports tab.
@@ -81,7 +81,7 @@ const cave = (page: Page, id: string) =>
   asPerson<{ name: string; description: string | null }>(page, 'GET', `/api/v1/caves/${id}`);
 
 async function confirmPopover(page: Page) {
-  await page.locator('.ant-popover:visible').getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { scope: page.locator('.ant-popover:visible'), exact: true });
 }
 
 test('an upload is undone, and a field a later upload changed is left and said', async ({ page }) => {

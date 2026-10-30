@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login, openedDialog } from './helpers.ts';
+import { gotoRoute, login, openedDialog, confirmOk } from './helpers.ts';
 
 /**
  * A position condition written in the cave registry's advanced filter: "within a distance of an
@@ -140,7 +140,7 @@ test('a distance from a picked cave narrows the registry, and is saved and appli
   await expect(page).toHaveURL(/\/saved-filters$/);
   const saved = page.getByRole('row').filter({ hasText: filterName });
   await saved.getByRole('button', { name: 'Delete' }).click();
-  await page.locator('.ant-popconfirm').getByRole('button', { name: 'Delete' }).click();
+  await confirmOk(page, { scope: page.locator('.ant-popconfirm'), name: 'Delete' });
   await expect(page.getByRole('row').filter({ hasText: filterName })).toHaveCount(0);
 });
 

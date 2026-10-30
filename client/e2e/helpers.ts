@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { expect, type CDPSession, type Page } from '@playwright/test';
+import { expect, type CDPSession, type Locator, type Page } from '@playwright/test';
 
 // Demo credentials/data: `dotnet run -- seed-demo` with the dev admin bootstrap.
 // The full OIDC code+PKCE flow runs in the real browser.
@@ -21,6 +21,47 @@ export async function openedDialog(page: Page) {
   await expect(dialog).toBeVisible();
   await expect(dialog).not.toHaveClass(/ant-zoom-(appear|enter)/, { timeout: 15_000 });
   return dialog;
+}
+
+/**
+ * Presses the OK of a confirmation — a Popconfirm beside the button that asked, or a modal — once
+ * every overlay on the page has finished opening.
+ *
+ * A Popconfirm opens with the same zoom a dialog does: its root is put on the page transparent at
+ * full size, and the scale animation from nothing starts a frame later, many frames later on a busy
+ * machine. Playwright finds the OK button visible and still during that wait, so a click made then
+ * is a press on the button and a release on whatever the shrinking popup left under the pointer —
+ * and the browser delivers that click to neither. The page stays as it was, no request is sent and
+ * nothing says why. So the button is waited for first (the overlay is then on the page), the
+ * opening motion of every overlay is waited out, and only then is the button pressed.
+ *
+ * The check is page-wide on purpose: the same race applies to any confirmation, and an overlay that
+ * is still opening is never what a test wants to press into. `scope` narrows which button is pressed
+ * when more than one is on the page, the way a plain locator would; it does not narrow the wait.
+ * `name` is for a confirmation whose button says something other than OK.
+ */
+export async function confirmOk(
+  page: Page,
+  options: { scope?: Page | Locator; exact?: boolean; name?: string } = {},
+) {
+  const ok = (options.scope ?? page).getByRole('button', {
+    name: options.name ?? 'OK',
+    ...(options.exact ? { exact: true } : {}),
+  });
+  await expect(ok).toBeVisible({ timeout: 15_000 });
+  await expect(
+    page.locator(
+      [
+        '[class*="ant-zoom-appear"]',
+        '[class*="ant-zoom-enter"]',
+        '[class*="ant-zoom-big-appear"]',
+        '[class*="ant-zoom-big-enter"]',
+        '[class*="ant-zoom-big-fast-appear"]',
+        '[class*="ant-zoom-big-fast-enter"]',
+      ].join(', '),
+    ),
+  ).toHaveCount(0, { timeout: 15_000 });
+  await ok.click();
 }
 
 /**
@@ -76,6 +117,19 @@ export function paletteEntry(page: Page, typeName: string) {
   return page.getByRole('button', { name: typeName }).and(page.locator('.feature-palette-item'));
 }
 
+/**
+ * A spot on the workspace map that no other worker is using.
+ *
+ * Features are drawn on the shared demonstration map and selected again by clicking where they were
+ * drawn, so two tests that save a feature at the same pixel at the same time select each other's:
+ * the panel then names a feature the test never made. Tests that run at once are on different
+ * workers, so the worker's index is what separates them — a grid thirty pixels apart, wider than a
+ * point's hit area, inside the part of the map no dock or toolbar covers.
+ */
+export function ownMapPoint(parallelIndex: number): { x: number; y: number } {
+  return { x: 330 + (parallelIndex % 8) * 30, y: 230 + (Math.floor(parallelIndex / 8) % 3) * 30 };
+}
+
 /** A named overlay row in the layer composer tree (left dock). */
 export function overlayTreeNode(page: Page, name: string) {
   return page.locator('.layer-composer .ant-tree-treenode').filter({ hasText: name });
@@ -101,7 +155,7 @@ export async function deleteFeature(page: Page, featureName: string) {
   const row = page.getByRole('row', { name: new RegExp(featureName) });
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole('button', { name: 'delete' }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
 }
 

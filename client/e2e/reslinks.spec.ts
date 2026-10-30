@@ -2,7 +2,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { ownContext, test } from './consoleGuard.ts';
 import { asPerson, editorOfItsOwn, tryAsPerson } from './arrange.ts';
-import { deleteFeature, login, paletteEntry } from './helpers.ts';
+import { deleteFeature, login, paletteEntry, confirmOk } from './helpers.ts';
 import { bearerToken, uploadMapPng } from './rastermapApi.ts';
 
 /**
@@ -567,7 +567,7 @@ test('a trip log takes part in links from its own page', async ({ page }) => {
     .getByRole('dialog', { name: 'New trip log' })
     .getByRole('textbox', { name: /^\*?\s*Title$/ })
     .fill(title);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
 
   // A trip keeps its links behind their own tab, unlike a feature page where the dock carries
@@ -607,7 +607,7 @@ test('a trip log takes part in links from its own page', async ({ page }) => {
   // that matches any button named for deleting presses that one instead.
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   await page.getByTestId('trip-delete').click();
-  await page.getByRole('tooltip').getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page, { scope: page.getByRole('tooltip') });
   await accepted(page, 'Deleted.');
 });
 
@@ -676,7 +676,7 @@ test('an administrator adds a relation, a link records it, and it will not go wh
   // nothing, so the page says why instead of failing quietly or breaking the link.
   await page.goto('/admin/relation-types');
   await customRow.getByRole('button', { name: 'Delete' }).click();
-  await page.locator('.ant-popconfirm:visible').getByRole('button', { name: 'Delete' }).click();
+  await confirmOk(page, { scope: page.locator('.ant-popconfirm:visible'), name: 'Delete' });
   await expect(
     page.getByText('Links already record this relation, so it cannot be changed that way or deleted.'),
   ).toBeVisible({ timeout: 15_000 });
@@ -688,7 +688,7 @@ test('an administrator adds a relation, a link records it, and it will not go wh
   await deleteLinkRow(page, 'Falia Demo');
   await page.goto('/admin/relation-types');
   await customRow.getByRole('button', { name: 'Delete' }).click();
-  await page.locator('.ant-popconfirm:visible').getByRole('button', { name: 'Delete' }).click();
+  await confirmOk(page, { scope: page.locator('.ant-popconfirm:visible'), name: 'Delete' });
   await accepted(page, 'Deleted.');
   await expect(customRow).toHaveCount(0, { timeout: 15_000 });
 
@@ -816,7 +816,7 @@ test('an administrator may edit a link somebody else recorded', async ({ page, b
         .getByRole('button')
         .last()
         .click();
-      await page.locator('.ant-popconfirm:visible').getByRole('button', { name: 'OK' }).click();
+      await confirmOk(page, { scope: page.locator('.ant-popconfirm:visible') });
       await expect(pane.locator('.silex-list-item').filter({ hasText: otherName })).toHaveCount(0, {
         timeout: 15_000,
       });

@@ -14,7 +14,7 @@ import {
   tryAsPerson,
   type PlannedPurpose,
 } from './arrange.ts';
-import { chooseOption, gotoRoute, login } from './helpers.ts';
+import { chooseOption, gotoRoute, login, confirmOk } from './helpers.ts';
 
 /**
  * The lists a party works through before it sets off: written on a page of their own, ticked on
@@ -136,7 +136,7 @@ test('a list is written with its lines, reworded and lengthened, and deleted', a
   );
   await listCard(page, title).getByRole('button', { name: 'Delete this checklist' }).click();
   await expect(page.getByText('Delete this checklist? Trips lose the confirmations')).toBeVisible();
-  await page.getByRole('tooltip').getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page, { scope: page.getByRole('tooltip') });
   expect((await removed).ok()).toBeTruthy();
   await expect(listCard(page, title)).toHaveCount(0, { timeout: 15_000 });
 });
@@ -296,7 +296,7 @@ test('a list kept to its author is not shown to anybody else, on the lists or on
     // The reader's own list is theirs to remove.
     await gotoRoute(page, '/checklists');
     await listCard(page, ownList).getByRole('button', { name: 'Delete this checklist' }).click();
-    await page.getByRole('tooltip').getByRole('button', { name: 'OK' }).click();
+    await confirmOk(page, { scope: page.getByRole('tooltip') });
     await expect(listCard(page, ownList)).toHaveCount(0, { timeout: 15_000 });
   } finally {
     if (tripId) {

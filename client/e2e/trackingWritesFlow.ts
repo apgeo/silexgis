@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { readFileSync } from 'node:fs';
 import { expect, type Page } from '@playwright/test';
-import { chooseOption, gotoRoute, login } from './helpers.ts';
+import { chooseOption, gotoRoute, login, confirmOk } from './helpers.ts';
 import { apiJson, bearerToken, uploadMapPng } from './rastermapApi.ts';
 
 /**
@@ -504,7 +504,7 @@ export async function correctImportAndReportByPlace(page: Page) {
     // The confirmation says where the report goes, and no longer that it is gone for good.
     await expect(asked).toContainText('can be put back');
     await expect(asked).not.toContainText('for good');
-    await asked.getByRole('button', { name: 'OK' }).click();
+    await confirmOk(page, { scope: asked });
     // Gone from the log on the screen, from the log as the server answers it, and from the fold of
     // the watch: Ion is no longer placed by a report that is not there.
     await expect(binOf).toHaveCount(0, { timeout: 15_000 });
@@ -902,7 +902,7 @@ export async function correctImportAndReportByPlace(page: Page) {
   // running one does. Closed here the way a coordinator closes it, from the card, so the tab under
   // test is the one a closed watch actually draws rather than one that was told so by the API.
   await page.getByTestId('trip-tracking-close').click();
-  await page.locator('.ant-popconfirm:visible').getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page, { scope: page.locator('.ant-popconfirm:visible') });
   await expect(page.getByTestId('trip-tracking-state')).toContainText('Tracking closed', {
     timeout: 15_000,
   });

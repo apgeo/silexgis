@@ -4,7 +4,7 @@ import { expect, type Page } from '@playwright/test';
 // errors, unhandled rejections and console errors across the whole browser context.
 import { test } from './consoleGuard.ts';
 import { asPerson, tryAsPerson } from './arrange.ts';
-import { gotoRoute, login, mapAddress } from './helpers.ts';
+import { gotoRoute, login, mapAddress, confirmOk } from './helpers.ts';
 
 /**
  * Deleting a cave and taking it back, as the person who deleted it sees both.
@@ -153,7 +153,7 @@ test('a deleted cave leaves the list and the map with its entrance, and is resto
     const confirmation = page.getByRole('tooltip');
     await expect(confirmation).toContainText('Delete this cave?');
     await expect(confirmation).toContainText('it can be restored, with them, from Deleted caves and features');
-    await confirmation.getByRole('button', { name: 'OK' }).click();
+    await confirmOk(page, { scope: confirmation });
 
     // Gone from the list…
     await expect(page).toHaveURL(/\/caves(\?.*)?$/, { timeout: 30_000 });

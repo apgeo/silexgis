@@ -4,7 +4,7 @@ import { expect, type Page } from '@playwright/test';
 // errors, unhandled rejections and console errors across the whole browser context.
 import { test } from './consoleGuard.ts';
 import { asPerson } from './arrange.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, confirmOk } from './helpers.ts';
 
 /**
  * The calendar subscription feed, from the two screens that govern it: the administrator's switch
@@ -96,7 +96,7 @@ test.describe('the calendar feed', () => {
       const row = page.getByTestId('calendar-feed-row').filter({ hasText: `E2E phone ${stamp}` });
       await row.getByRole('button', { name: 'Revoke' }).click();
       // Exact, because the default name match is a substring and "Revoke" contains "ok".
-      await page.getByRole('button', { name: 'OK', exact: true }).click();
+      await confirmOk(page, { exact: true });
       await expect(page.getByText('Address revoked.')).toBeVisible({ timeout: 15_000 });
       await expect(row.getByText('Revoked')).toBeVisible();
       await expect(row.getByRole('button', { name: 'Revoke' })).toHaveCount(0);

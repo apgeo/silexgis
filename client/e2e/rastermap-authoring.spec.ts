@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Locator, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, confirmOk } from './helpers.ts';
 import {
   bearerToken,
   expectPinCount,
@@ -200,8 +200,8 @@ test('a pin is authored, moved, deleted and re-placed, and every write lands as 
   await expect(viewer).not.toBeVisible();
   await page.locator('.ant-card', { hasText: '3D survey models' })
     .getByRole('button', { name: 'delete' }).click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await expect(page.getByText('No 3D models yet')).toBeVisible({ timeout: 15_000 });
   await page.locator('button', { hasText: 'Delete' }).click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
 });

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, confirmOk } from './helpers.ts';
 
 // The terrain builder page, driven the way an operator drives it: a rectangle drawn on a map
 // becomes an area, and a build started against it walks its phases and says where it got to.
@@ -98,7 +98,7 @@ async function removeExistingBuilds(page: Page) {
     await expect(row).not.toContainText(/Queued|Running/, { timeout: 240_000 });
 
     await page.getByTestId(`terrain-delete-${id}`).click();
-    await page.getByRole('button', { name: 'OK' }).click();
+    await confirmOk(page);
     await expect(page.getByText('Deleted')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('Deleted')).toBeHidden({ timeout: 30_000 });
   }

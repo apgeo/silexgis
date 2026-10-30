@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, confirmOk } from './helpers.ts';
 
 /**
  * A club's spreadsheet of past trips becomes trips in the archive, through one review screen
@@ -144,7 +144,7 @@ test.describe('trip import', () => {
     await page.keyboard.press('Escape');
 
     await batch.getByRole('button', { name: 'Undo' }).click();
-    await page.getByRole('button', { name: 'OK' }).click();
+    await confirmOk(page);
     await expect(page.getByText('The import was undone.')).toBeVisible({ timeout: 20_000 });
 
     await page.goto('/trip-logs');

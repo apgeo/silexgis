@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, type Locator, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { asPerson, registerAccount, tryAsPerson } from './arrange.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, confirmOk } from './helpers.ts';
 
 /** Picks the option of a select whose text is as given, from the keyboard — see `chooseOption`. */
 async function choose(page: Page, select: Locator, text: string) {
@@ -109,7 +109,7 @@ test('a Stereo 70 reference typed into the entrance editor stores its WGS84 poin
     await expect(dialog.getByTestId('position-text-feedback')).toContainText('Read as Stereo 70 (Romania)');
     await dialog.getByRole('button', { name: 'Use', exact: true }).click();
     await expect(dialog.getByLabel('Longitude')).toHaveValue(/^25\.4472/);
-    await page.getByRole('button', { name: 'OK', exact: true }).click();
+    await confirmOk(page, { exact: true });
     await expect(dialog).toBeHidden({ timeout: 15_000 });
 
     const entrances = await asPerson<{ geom: { coordinates: [number, number] } }[]>(

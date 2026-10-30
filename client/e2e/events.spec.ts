@@ -11,7 +11,7 @@ import {
   tryAsPerson,
   versionOf,
 } from './arrange.ts';
-import { chooseOption, gotoRoute, login } from './helpers.ts';
+import { chooseOption, gotoRoute, login, confirmOk } from './helpers.ts';
 
 /**
  * The dated things a club runs that are not trips and not camps: the list they are found on, the
@@ -88,7 +88,7 @@ async function move(page: Page, label: string, confirm = false) {
   );
   await page.getByRole('button', { name: new RegExp(`${label}$`) }).click();
   if (confirm) {
-    await page.getByRole('tooltip').getByRole('button', { name: 'OK' }).click();
+    await confirmOk(page, { scope: page.getByRole('tooltip') });
   }
   expect((await moved).ok()).toBeTruthy();
 }
@@ -159,7 +159,7 @@ test('an event is written with its day, its hours and its place, changed, taken 
   // An event standing on its own is deleted after a plain yes, and the list no longer has it.
   await page.getByTestId('event-delete').click();
   await expect(page.getByText('Delete this event?')).toBeVisible();
-  await page.getByRole('tooltip').getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page, { scope: page.getByRole('tooltip') });
   await page.waitForURL((url) => url.pathname === '/events', { timeout: 30_000 });
   await page.getByTestId('event-search').locator('input').fill(title);
   await expect(page.getByTestId('event-table').locator('.ant-empty')).toBeVisible({
@@ -412,7 +412,7 @@ test('who is coming fills the places in the order people answer, keeps the rest 
     // Taking somebody off the list is asked first, and takes their answer with them.
     await page.getByTestId(`event-invitation-remove-${ana}`).click();
     await expect(page.getByText('Take this person off the list entirely, answer and all?')).toBeVisible();
-    await page.getByRole('tooltip').getByRole('button', { name: 'OK' }).click();
+    await confirmOk(page, { scope: page.getByRole('tooltip') });
     await expect(row(ana)).toHaveCount(0, { timeout: 15_000 });
     await expect(limit).toHaveText('1 of 1 places taken, 0 waiting.');
   } finally {

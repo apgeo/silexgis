@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { ownContext, test } from './consoleGuard.ts';
-import { gotoRoute, login, openCaveFromRegistry, overlayTreeNode } from './helpers.ts';
+import { gotoRoute, login, openCaveFromRegistry, overlayTreeNode, confirmOk } from './helpers.ts';
 
 test('login, map workspace and cave registry work end to end', async ({ page }) => {
   await login(page);
@@ -52,7 +52,7 @@ test('cave and entrance create/edit round-trip', async ({ page }) => {
   await expect(lonInput).not.toHaveValue(initialLon);
   await lonInput.fill('25.123456');
   await page.getByLabel('Latitude').fill('45.654321');
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await expect(page.getByText('45.65432°N 25.12346°E')).toBeVisible({ timeout: 15_000 });
 
   // Edit the cave and verify the change lands on the detail page. Text filtering keeps
@@ -66,7 +66,7 @@ test('cave and entrance create/edit round-trip', async ({ page }) => {
 
   // Clean up: delete the cave (entrances cascade server-side).
   await page.locator('button', { hasText: 'Delete' }).click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await page.waitForURL(/\/caves$/);
   // Counted rather than "not visible": the detail page stays mounted for a tick after the
   // URL changes, and its heading and its history timeline both carry the name. Two matches
@@ -190,10 +190,10 @@ test('3D survey model: upload, embedded viewer and cross-window 3D panel', async
   // Clean up: delete the model, then the cave.
   await page.locator('.ant-card', { hasText: '3D survey models' })
     .getByRole('button', { name: 'delete' }).click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await expect(page.getByText('No 3D models yet')).toBeVisible({ timeout: 15_000 });
   await page.locator('button', { hasText: 'Delete' }).click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await page.waitForURL(/\/caves$/);
 });
 
@@ -232,10 +232,10 @@ test('cave centerline: upload, computed length and map overlay toggle', async ({
   // Clean up: delete the centerline, then the cave.
   await openCaveFromRegistry(page, caveName);
   await card.getByRole('button', { name: 'delete' }).click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await expect(card.getByText('No centerlines yet')).toBeVisible({ timeout: 15_000 });
   await page.locator('button', { hasText: 'Delete' }).click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await page.waitForURL(/\/caves$/);
 });
 
@@ -292,7 +292,7 @@ test('caving groups and per-object permission grants', async ({ page }) => {
   await page.goto('/caving-groups');
   await page.getByRole('button', { name: /New caving group/ }).click();
   await page.getByLabel('Name', { exact: true }).fill(cavingGroupName);
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
   const cavingGroupRow = page.getByRole('row', { name: new RegExp(cavingGroupName) });
   await expect(cavingGroupRow).toBeVisible();
@@ -349,7 +349,7 @@ test('trip log with participants, tags and the audit trail', async ({ page }) =>
   await page.getByPlaceholder('Participant name').fill('Guest Caver');
   await page.getByRole('button', { name: /Add proposer/ }).click();
   await page.getByPlaceholder('Proposer name').fill('Ana Proposer');
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   // Scope to the detail-page tags — the names also surface in the history timeline below.
   await expect(page.locator('.ant-tag', { hasText: 'Guest Caver' })).toBeVisible();
@@ -377,7 +377,7 @@ test('trip log with participants, tags and the audit trail', async ({ page }) =>
   // for a confirmation nobody asked.
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   await page.getByTestId('trip-delete').click();
-  await page.getByRole('tooltip').getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { scope: page.getByRole('tooltip'), exact: true });
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
   // Back on the list, the deleted trip's row is gone (scope to a table cell — the title also
   // lingered briefly in the detail heading/timeline during the post-delete navigation).
@@ -422,7 +422,7 @@ test('georeferenced raster upload, COG processing, map overlay and delete', asyn
   await expect(rows.first()).toBeVisible({ timeout: 15_000 });
   for (let remaining = await rows.count(); remaining > 0; remaining--) {
     await rows.first().getByRole('button', { name: 'delete' }).click();
-    await page.getByRole('button', { name: 'OK', exact: true }).click();
+    await confirmOk(page, { exact: true });
     await expect(rows).toHaveCount(remaining - 1, { timeout: 15_000 });
   }
 });
@@ -501,7 +501,7 @@ test('geofile upload, background import, map layer, export and delete', async ({
   await expect(rows.first()).toBeVisible({ timeout: 15_000 });
   for (let remaining = await rows.count(); remaining > 0; remaining--) {
     await rows.first().getByRole('button', { name: 'delete' }).click();
-    await page.getByRole('button', { name: 'OK', exact: true }).click();
+    await confirmOk(page, { exact: true });
     await expect(rows).toHaveCount(remaining - 1, { timeout: 15_000 });
   }
 });
@@ -571,7 +571,7 @@ test('cave history records edits and restores a previous value', async ({ page }
 
   // Cleanup.
   await page.locator('button', { hasText: 'Delete' }).click();
-  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await confirmOk(page, { exact: true });
   await page.waitForURL(/\/caves$/);
 });
 

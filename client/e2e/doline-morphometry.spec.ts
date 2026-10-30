@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login, registryRow, paletteEntry } from './helpers.ts';
+import { login, registryRow, paletteEntry, confirmOk } from './helpers.ts';
 
 /**
  * A doline drawn as an outline, and the outline measured.
@@ -79,6 +79,6 @@ test('a doline is drawn as an outline and its measured shape is shown', async ({
   // Cleanup, so a re-run of this file starts from the same map.
   const cleanup = await registryRow(page, featureName);
   await cleanup.getByRole('button', { name: 'delete' }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
 });

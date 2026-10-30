@@ -3,7 +3,7 @@ import { expect, type Page } from '@playwright/test';
 // Straight from Playwright this spec would run unwatched: the guard is what records uncaught
 // errors, unhandled rejections and console errors across the whole browser context.
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, confirmOk } from './helpers.ts';
 
 /**
  * A camp's own page, driven the way somebody arrives at one: by address.
@@ -227,7 +227,7 @@ test('a camp is made from the list, renamed, announced, opened for its permissio
   await page.getByTestId('expedition-form-name').fill(name);
   // The days default to today and the audience to the caving group: a camp entered without
   // touching either is a one-day camp today, which is all this flow needs of it.
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
 
   // Saving opens the camp, and a new camp is a draft that says so to whoever could announce it.
   await expect(page).toHaveURL(/\/expeditions\/[0-9a-f-]{36}$/, { timeout: 20_000 });
@@ -241,13 +241,13 @@ test('a camp is made from the list, renamed, announced, opened for its permissio
   await expect(nameBox).toHaveValue(name);
   const renamed = `${name} renamed`;
   await nameBox.fill(renamed);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByTestId('expedition-name')).toHaveText(renamed, { timeout: 15_000 });
 
   // Announced. Confirmed first, as a trip's is, in the camp's own words — nobody is notified —
   // and the move shows twice over: the draft notice goes, and the state tag reads the new state.
   await page.getByRole('button', { name: /Publish/ }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByText('Announced.')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('expedition-draft-notice')).toBeHidden({ timeout: 15_000 });
   await expect(page.locator('.ant-tag', { hasText: 'Published' }).first()).toBeVisible();
@@ -292,7 +292,7 @@ test('a camp is made from the list, renamed, announced, opened for its permissio
 
   // And gone: the camp goes, and the list is where that leaves the reader.
   await page.getByTestId('expedition-delete').click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page).toHaveURL(/\/expeditions$/, { timeout: 15_000 });
 });
 
@@ -324,7 +324,7 @@ test("a camp's note to its readers is written in its form, shown on its page and
   const note = 'E2E figures up to the last day.\nThe survey is still being drawn.';
   await page.getByTestId('expedition-form-name').fill(name);
   await page.getByTestId('expedition-form-public-note').fill(`  ${note}  `);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
 
   await expect(page).toHaveURL(/\/expeditions\/[0-9a-f-]{36}$/, { timeout: 20_000 });
   await expect(page.getByTestId('expedition-name')).toHaveText(name, { timeout: 15_000 });
@@ -342,14 +342,14 @@ test("a camp's note to its readers is written in its form, shown on its page and
   const field = page.getByTestId('expedition-form-public-note');
   await expect(field).toHaveValue(note);
   await field.fill('');
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(shown).toHaveCount(0, { timeout: 15_000 });
   expect(await stored(campId)).toBeNull();
   // The rest of the camp is as it was: the save that emptied the note carried the name with it.
   await expect(page.getByTestId('expedition-name')).toHaveText(name);
 
   await page.getByTestId('expedition-delete').click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page).toHaveURL(/\/expeditions$/, { timeout: 15_000 });
 });
 

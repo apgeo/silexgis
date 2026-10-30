@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { ownContext, test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, confirmOk } from './helpers.ts';
 
 /**
  * The account register, driven end to end: an administrator opens an account for somebody, the
@@ -78,7 +78,7 @@ test('an administrator invites somebody, who sets a password and signs in, then 
   await row.getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('tooltip').filter({ hasText: `Delete the account of ${name}?` });
   await expect(confirm).toBeVisible();
-  await confirm.getByRole('button', { name: 'Delete' }).click();
+  await confirmOk(page, { scope: confirm, name: 'Delete' });
   await expect(page.getByText(`The account of ${name} was deleted.`)).toBeVisible({ timeout: 15_000 });
   await expect(row).toHaveCount(0);
 });

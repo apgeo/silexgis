@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login, paletteEntry } from './helpers.ts';
+import { gotoRoute, login, paletteEntry, confirmOk } from './helpers.ts';
 
 /**
  * A feature set's members are named with what they are, the same word whether the member was
@@ -38,7 +38,7 @@ test('a feature set member is named by its type, picked or saved', async ({ page
   // Cleanup: an empty set with no rules deletes.
   await page.locator('.ant-drawer').getByRole('button', { name: 'Cancel' }).click();
   await row.locator('button.ant-btn-dangerous').click();
-  await page.locator('.ant-popconfirm').getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page, { scope: page.locator('.ant-popconfirm') });
   await expect(row).toHaveCount(0, { timeout: 15_000 });
 });
 

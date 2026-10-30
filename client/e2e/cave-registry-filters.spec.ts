@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, confirmOk } from './helpers.ts';
 
 /**
  * The cave registry's controls as one filter, kept in the address, carried by the export, and kept
@@ -120,7 +120,7 @@ test('the cave registry keeps its filter in the address, exports it and saves it
   await expect(row).toContainText('Region contains “Brașov”');
   await expect(row).toContainText('Surveyed length at least 1000 m');
   await row.getByRole('button', { name: 'Delete' }).click();
-  await page.locator('.ant-popconfirm').getByRole('button', { name: 'Delete' }).click();
+  await confirmOk(page, { scope: page.locator('.ant-popconfirm'), name: 'Delete' });
   await expect(page.getByRole('row').filter({ hasText: filterName })).toHaveCount(0);
 });
 

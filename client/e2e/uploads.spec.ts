@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, confirmOk } from './helpers.ts';
 
 /**
  * Dropping a batch of files into the archive, driven end to end in a real browser.
@@ -111,7 +111,7 @@ async function createCabinet(page: Page): Promise<string> {
   await expect(shelfLabel(page, 'Not filed')).toBeVisible({ timeout: 45_000 });
   await page.getByRole('button', { name: 'New', exact: true }).click();
   await page.getByLabel('Name').fill(name);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
 
   // The new shelf is open, which is what every test here goes on to upload into.

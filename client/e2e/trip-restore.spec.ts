@@ -4,7 +4,7 @@ import { expect, type Page } from '@playwright/test';
 // errors, unhandled rejections and console errors across the whole browser context.
 import { test } from './consoleGuard.ts';
 import { asPerson, localDay, tripBody, tryAsPerson } from './arrange.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, confirmOk } from './helpers.ts';
 
 /**
  * Deleting a trip and taking it back, as the person who deleted it sees both.
@@ -80,7 +80,7 @@ test('a deleted trip leaves the list and its own address, and is restored with i
     const confirmation = page.getByRole('tooltip');
     await expect(confirmation).toContainText('Delete this trip log?');
     await expect(confirmation).toContainText(/It can be restored from Deleted trips for \d+ days\./);
-    await confirmation.getByRole('button', { name: 'OK' }).click();
+    await confirmOk(page, { scope: confirmation });
 
     // Gone from the list…
     await expect(page).toHaveURL(/\/trip-logs(\?.*)?$/, { timeout: 30_000 });

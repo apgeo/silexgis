@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Locator, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, confirmOk } from './helpers.ts';
 
 /** Opens an antd select and picks the option with this label (options render in a portal). */
 async function pickOption(page: Page, select: Locator, label: string) {
@@ -35,14 +35,14 @@ test('permission-group editor round-trips a deny behind the preview gate', async
   await page.goto('/caving-groups');
   await page.getByRole('button', { name: 'New caving group' }).click();
   await page.getByLabel('Name', { exact: true }).fill(cavingGroupName);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
 
   // Create the permission group; the page drops straight into its editor.
   await page.goto('/admin/permission-groups');
   await page.getByRole('button', { name: 'New permission group' }).click();
   await page.getByLabel('Name', { exact: true }).fill(permissionGroupName);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   const drawer = page.locator('.ant-drawer-section');
   await expect(drawer.getByText(permissionGroupName).first()).toBeVisible({ timeout: 15_000 });
   // Tab panes stay mounted once visited, so everything below addresses the visible one.
@@ -112,6 +112,6 @@ test('permission-group editor round-trips a deny behind the preview gate', async
     .getByRole('row', { name: new RegExp(permissionGroupName) })
     .getByRole('button', { name: 'delete' })
     .click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
 });

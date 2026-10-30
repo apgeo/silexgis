@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Locator, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, confirmOk } from './helpers.ts';
 import { uniquePng } from './png.ts';
 
 /**
@@ -130,7 +130,7 @@ test('a trip records what it worked in, and the record survives a reload and can
     .getByRole('dialog')
     .getByRole('textbox', { name: /^\*?\s*Title$/ })
     .fill(title);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();
@@ -177,7 +177,7 @@ test('a trip records what it worked in, and the record survives a reload and can
   // the popover rather than removing it at once — so an unscoped click there resolves to this
   // button while it is detaching, and fails as unstable rather than confirming anything.
   const removeConfirm = page.locator('.ant-popover:visible');
-  await removeConfirm.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page, { scope: removeConfirm });
   await expect(page.locator('.ant-popover:visible')).toHaveCount(0, { timeout: 15_000 });
   await expect(reloaded.getByText('Falia Demo')).toHaveCount(0, { timeout: 15_000 });
   await expect(reloaded.getByText('Work areas')).toBeVisible();
@@ -199,7 +199,7 @@ test('a trip records what it worked in, and the record survives a reload and can
   await page.getByRole('button', { name: /Delete/ }).click();
   const confirm = page.locator('.ant-popover:visible');
   await expect(confirm.getByText('Delete this trip log?')).toBeVisible();
-  await confirm.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page, { scope: confirm });
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });
 
@@ -221,7 +221,7 @@ test('a trip spans several days, carries a shape of its own, and says the shape 
     .fill(title);
   await fillRange(page, start, end);
   await drawPoint(page);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();
@@ -245,7 +245,7 @@ test('a trip spans several days, carries a shape of its own, and says the shape 
   await expect(page.getByText(/discloses that entrance/)).toBeVisible();
 
   await page.getByRole('button', { name: /Delete/ }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });
 
@@ -265,7 +265,7 @@ test('a trip is written as a draft and stays one until it is published', async (
     .getByRole('dialog')
     .getByRole('textbox', { name: /^\*?\s*Title$/ })
     .fill(title);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();
@@ -275,7 +275,7 @@ test('a trip is written as a draft and stays one until it is published', async (
 
   // Publishing is confirmed first: it is the moment the people on the trip are told.
   await page.getByRole('button', { name: 'Publish', exact: true }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByTestId('trip-state')).toHaveText('Published', { timeout: 15_000 });
   await expect(page.getByTestId('trip-draft-notice')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Publish$/ })).toHaveCount(0);
@@ -297,7 +297,7 @@ test('a trip is written as a draft and stays one until it is published', async (
   await expect(page.getByTestId('trip-state')).toHaveText('Done', { timeout: 15_000 });
 
   await page.getByRole('button', { name: /Delete/ }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });
 
@@ -318,7 +318,7 @@ test('a trip logged without touching the date control is a day trip today', asyn
     .getByRole('dialog')
     .getByRole('textbox', { name: /^\*?\s*Title$/ })
     .fill(title);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('Date', { exact: true })).toBeVisible();
@@ -327,7 +327,7 @@ test('a trip logged without touching the date control is a day trip today', asyn
   await expect(page.getByTestId('trip-geometry-map')).toHaveCount(0);
 
   await page.getByRole('button', { name: /Delete/ }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });
 
@@ -352,7 +352,7 @@ test('a photograph attached to a trip appears in the trip’s own gallery, and t
   // "more than before", which would pass on a page that had stopped filtering entirely.
   await page.getByRole('button', { name: /Add participant/ }).click();
   await page.getByPlaceholder('Participant name').first().fill(person);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();
@@ -426,7 +426,7 @@ test('a photograph attached to a trip appears in the trip’s own gallery, and t
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: /Delete/ }).click();
   const confirm = page.locator('.ant-popover:visible');
-  await confirm.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page, { scope: confirm });
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });
 
@@ -453,7 +453,7 @@ test('what a trip measured and what it found are stored on it, not held by the p
   const purpose = page.getByTitle('Survey / mapping', { exact: true });
   await expect(purpose).toBeVisible({ timeout: 15_000 });
   await purpose.click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   // Checked here, where the answer is still on screen: the questions a section asks are the ones
   // the purpose carries, so a trip that lost its purpose on the way in fails much later and
@@ -482,7 +482,7 @@ test('what a trip measured and what it found are stored on it, not held by the p
   await expect(page.getByTestId('trip-section-field-instrument')).toHaveValue('DistoX2');
 
   await page.getByRole('button', { name: /Delete/ }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });
 
@@ -538,7 +538,7 @@ test('a trip records who was there, what one of them did, and when they came out
   // who cannot open this form at all — which is what the assertion after the reload checks.
   await details.getByPlaceholder('Note').fill('turned back at the pitch head');
 
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();
 
@@ -556,7 +556,7 @@ test('a trip records who was there, what one of them did, and when they came out
   await expect(page.getByTestId('roster-note')).toHaveText('turned back at the pitch head');
 
   await page.getByRole('button', { name: /Delete/ }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });
 
@@ -574,7 +574,7 @@ test('a trip is written up as a document, and the document is filed against the 
     .getByRole('dialog')
     .getByRole('textbox', { name: /^\*?\s*Title$/ })
     .fill(title);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();
@@ -605,6 +605,6 @@ test('a trip is written up as a document, and the document is filed against the 
   });
 
   await page.getByRole('button', { name: /Delete/ }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });

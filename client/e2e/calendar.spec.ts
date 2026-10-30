@@ -4,7 +4,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 // errors, unhandled rejections and console errors across the whole browser context.
 import { test } from './consoleGuard.ts';
 import { asPerson, localDay, tripBody, tryAsPerson, versionOf } from './arrange.ts';
-import { chooseOption, gotoRoute, login } from './helpers.ts';
+import { chooseOption, gotoRoute, login, confirmOk } from './helpers.ts';
 
 /**
  * The record of everything dated, driven the way somebody reads it.
@@ -167,7 +167,7 @@ test('an event says who is coming, and a deadline is not asked', async ({ page }
   // How many places it has. Left empty an event turns nobody away; a number is what makes the
   // people past it a waiting list, and what the line above the list counts up to.
   await page.getByTestId('event-max-participants').fill('2');
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
 
   await expect(page.getByTestId('event-title')).toHaveText(title, { timeout: 15_000 });
   await page.getByRole('tab', { name: 'Who is coming', exact: true }).click();
@@ -234,7 +234,7 @@ test('an event says who is coming, and a deadline is not asked', async ({ page }
   // Read back, so a lost choice fails here at its cause rather than downstream on the tab.
   await expect(kind).toContainText('Deadline');
   await fillDay(day);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
 
   await expect(page.getByTestId('event-title')).toHaveText(deadlineTitle, { timeout: 15_000 });
   await expect(page.getByRole('tab', { name: 'Who is coming', exact: true })).toHaveCount(0);
@@ -279,7 +279,7 @@ test('a repeating event is written as the evenings it is, and calling one off as
   // nothing parses it; the frequency beside it is stepped by once, now, and is not stored at all.
   await page.getByTestId('event-repeat-rule').fill('every week, while the season lasts');
   await page.getByTestId('event-repeat-count').fill('3');
-  await page.getByRole('button', { name: 'OK' }).click();
+  await confirmOk(page);
 
   // The create answers with the first occurrence, so the page that opens is an ordinary event page.
   await expect(page.getByTestId('event-title')).toHaveText(title, { timeout: 15_000 });
