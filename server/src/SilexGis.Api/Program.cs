@@ -726,6 +726,61 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
         Log.Warning("Terrain configuration: {Warning}", warning);
     }
 
+    // `ancestry-count` / `ancestry-repair [--apply]`: count, and on request rewrite, features whose
+    // stored ancestor list, closure rows or effective-protection flag disagree with the containment
+    // edges, then exit. For rows written by an earlier faulty version: the scheduled verifier finds
+    // them and deliberately never repairs. Numbers only — this runs against real installations.
+    // The repair is a dry run unless `--apply` is given, and either way runs in one transaction.
+    if (args.Contains("ancestry-count") || args.Contains("ancestry-repair"))
+    {
+        using var scope = app.Services.CreateScope();
+        var repair = scope.ServiceProvider.GetRequiredService<SilexGis.Infrastructure.Features.FeatureDerivedStateRepair>();
+        if (args.Contains("ancestry-count"))
+        {
+            var count = await repair.CountAsync();
+            Log.Information(
+                "Ancestry count: {Examined} feature(s) examined, {Wrong} wrong — ancestor list {AncestorIds}, "
+                + "closure rows {Closure}, protection flag {Protected} (of which shown as unprotected while "
+                + "a protected feature contains them: {Unprotected})",
+                count.FeaturesExamined, count.FeaturesWrong, count.AncestorIdsWrong, count.ClosureWrong,
+                count.ProtectedEffectiveWrong, count.ShownAsUnprotected);
+            return;
+        }
+
+        var apply = args.Contains("--apply");
+        var result = await repair.RepairAsync(apply);
+        Log.Information(
+            "Ancestry repair ({Mode}): {Wrong} feature(s) wrong before; {Updated} feature row(s) rewritten, "
+            + "{Added} closure row(s) added, {Removed} closure row(s) removed; {After} wrong after; {Outcome}",
+            apply ? "apply" : "dry run",
+            result.Before.FeaturesWrong, result.FeatureRowsUpdated, result.ClosureRowsAdded,
+            result.ClosureRowsRemoved, result.After.FeaturesWrong,
+            result.Applied ? "committed"
+                : apply ? "ROLLED BACK: the count after was not zero, nothing was changed"
+                : "rolled back, nothing was changed (run again with --apply to commit)");
+        if (apply && !result.Applied)
+        {
+            Environment.ExitCode = 1;
+        }
+
+        return;
+    }
+
+    // `centerline-length-count`: count uploaded centrelines whose stored length is not the length of
+    // the passage they trace (measured over every wall shot by an earlier version), then exit.
+    // Changes nothing; numbers only.
+    if (args.Contains("centerline-length-count"))
+    {
+        using var scope = app.Services.CreateScope();
+        var count = await scope.ServiceProvider
+            .GetRequiredService<SilexGis.Infrastructure.Features.CenterlineLengthAudit>().CountAsync();
+        Log.Information(
+            "Centreline length count: {Examined} uploaded centreline(s) measured — {Inflated} stored longer "
+            + "than the passage, {Shorter} shorter, {Agreeing} agreeing; {NotMeasurable} without a length or a line",
+            count.Examined, count.Inflated, count.Shorter, count.Agreeing, count.NotMeasurable);
+        return;
+    }
+
     // `dotnet run -- seed-demo`: load the demo dataset and exit.
     if (args.Contains("seed-demo"))
     {

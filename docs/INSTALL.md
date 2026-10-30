@@ -1829,6 +1829,40 @@ Three things follow from the same rule:
   migrations by another route instead would try to create every table again over a database that
   already has them.
 
+### After upgrading past the hierarchy-write fix: count, then repair, stored ancestry
+
+Every feature stores, beside its containment edges, the list of everything above it and a flag
+saying whether anything above it (or itself) is location-protected. Reads trust that flag. Before
+the release that fixed it, **naming a feature's parent again while editing its parents** stored the
+feature without that parent in its ancestry, so a feature under a protected cave or area could be
+stored as unprotected and shown at its exact position to accounts that may not see it. The fix stops
+new damage; rows written before it stay wrong until they are rewritten. The background integrity
+pass reports them in the log (`ancestor_ids`, `closure`, `protected_effective`) but deliberately
+repairs nothing. Three scripts do the counting and the repair. Each prints **numbers only**, and
+each runs from `deploy/` against the running stack:
+
+```bash
+sh scripts/ancestry-count.sh              # how many features are wrong, and in which stored fact; changes nothing
+sh scripts/backup.sh                      # before any repair
+sh scripts/ancestry-repair.sh             # dry run: does the repair in a transaction, prints, rolls back
+sh scripts/ancestry-repair.sh --apply     # commits, only if the count afterwards is zero
+sh scripts/ancestry-count.sh              # should now say 0 wrong
+```
+
+- The figure to read first is *shown as unprotected while a protected feature contains them*: those
+  are the rows that disclose a position. Any figure above zero is worth repairing.
+- The repair rewrites **only the features the count names**, from the containment edges by the same
+  rule every ordinary write uses, and of their closure rows only the missing and the extra ones. It
+  runs in one serialisable transaction: if somebody edits the hierarchy meanwhile, it fails rather
+  than overwriting their change — run it again. If the count afterwards is not zero it rolls back,
+  changes nothing and exits 1.
+- `sh scripts/centerline-length-count.sh` counts uploaded centrelines whose stored length is longer
+  than the passage they trace (an earlier version measured every wall shot of a survey export). It
+  changes nothing; uploading such a centreline again stores the right length.
+- An installation without Docker runs the same commands as arguments to the API, from its install
+  directory and with its configuration: `dotnet SilexGis.Api.dll ancestry-count`,
+  `… ancestry-repair [--apply]`, `… centerline-length-count`.
+
 ## External login providers
 
 Sign-in with Google, GitHub, or any OpenID Connect provider is optional and off by default —

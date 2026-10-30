@@ -109,6 +109,8 @@ public static class DependencyInjection
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.HistoryRestoreService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
+        services.AddScoped<Features.FeatureDerivedStateRepair>();
+        services.AddScoped<Features.CenterlineLengthAudit>();
         services.AddScoped<Permissions.AccessOrphanSweep>();
         services.AddScoped<Import.TermRuleSetStore>();
         services.AddScoped<Import.VisibleProximitySearch>();
