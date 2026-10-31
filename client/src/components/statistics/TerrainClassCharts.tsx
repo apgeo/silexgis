@@ -91,9 +91,9 @@ export function TerrainFacingRose({ measure, size = 260 }: { measure: TerrainMea
   if (rows.every((r) => r === undefined)) return null;
 
   const series = [
-    { key: 'background', color: palette.unclassified, fill: true, pick: (r?: ClassRow) => r?.backgroundShare },
-    { key: 'entrances', color: palette.series[0], fill: false, pick: (r?: ClassRow) => r?.entranceShare },
-    { key: 'sinkholes', color: palette.series[1], fill: false, pick: (r?: ClassRow) => r?.sinkholeShare },
+    { key: 'background', label: t('terrainStats.background'), color: palette.unclassified, fill: true, pick: (r?: ClassRow) => r?.backgroundShare },
+    { key: 'entrances', label: t('terrainStats.entrances'), color: palette.series[0], fill: false, pick: (r?: ClassRow) => r?.entranceShare },
+    { key: 'sinkholes', label: t('terrainStats.sinkholes'), color: palette.series[1], fill: false, pick: (r?: ClassRow) => r?.sinkholeShare },
   ] as const;
 
   const all = series.flatMap((s) => rows.map((r) => s.pick(r) ?? 0));
@@ -144,7 +144,7 @@ export function TerrainFacingRose({ measure, size = 260 }: { measure: TerrainMea
         {series.map((s, i) => (
           <g key={s.key} transform={`translate(4 ${VIEW - 38 + i * 12})`}>
             <rect width={8} height={8} fill={s.color} />
-            <text x={12} y={8}>{t(`terrainStats.${s.key}`)}</text>
+            <text x={12} y={8}>{s.label}</text>
           </g>
         ))}
       </g>

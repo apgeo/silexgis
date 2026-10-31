@@ -412,6 +412,30 @@ const closestApproachAbsences: Record<ClosestApproachAbsent, true> = {
 };
 
 /**
+ * What the altitude check can say about an entrance. The table labels each row by building the key
+ * from the verdict it was sent, so a verdict added on the server would show its own lookup key.
+ */
+const entranceAltitudeVerdicts: Record<components['schemas']['EntranceAltitudeVerdict'], true> = {
+  notRecorded: true,
+  notModelled: true,
+  agrees: true,
+  disagrees: true,
+};
+
+/**
+ * The terrain measures and their class codes, as the server's terrain statistics name them. Both
+ * cross the boundary as plain strings, so this is the only place they are closed: a class or a
+ * measure added there would reach the charts and tables as its own lookup key. Keep in step with
+ * the server's list of class codes per measure.
+ */
+const TERRAIN_STAT_MEASURES = ['slope', 'aspect', 'position'];
+const TERRAIN_STAT_CLASSES = [
+  ...['lt5', '5to15', '15to30', '30to45', 'gt45'],
+  ...['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'],
+  ...['hollow', 'level', 'rise'],
+];
+
+/**
  * The shapes a feature can be drawn as. The chooser that appears when a kind accepts more than
  * one of them names each by looking it up, so an unnamed shape is offered to the drawer as a raw
  * key on the button they are about to press.
@@ -982,6 +1006,19 @@ describe('i18n locales', () => {
    * code asks for. Only literal calls are checked; keys built from a template are covered by
    * the exhaustiveness tests above, which is why those exist.
    */
+  it('every altitude-check verdict is worded in both locales', () => {
+    const names = Object.keys(entranceAltitudeVerdicts).sort();
+    expect(Object.keys(en.altitudeCheck.verdict).sort()).toEqual(names);
+    expect(Object.keys(ro.altitudeCheck.verdict).sort()).toEqual(names);
+  });
+
+  it('every terrain measure and class is worded in both locales', () => {
+    for (const locale of [en, ro]) {
+      expect(Object.keys(locale.terrainStats.measure).sort()).toEqual([...TERRAIN_STAT_MEASURES].sort());
+      expect(Object.keys(locale.terrainStats.classes).sort()).toEqual([...TERRAIN_STAT_CLASSES].sort());
+    }
+  });
+
   it('every reason there is no closest approach is worded in both locales', () => {
     const names = Object.keys(closestApproachAbsences);
     const enNames: Record<string, string> = en.closestApproach.absence;
