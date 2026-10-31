@@ -52,6 +52,7 @@ import { transformExtent } from 'ol/proj';
 import { extentOf } from '../workareas/tree.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
+import TerrainProfileTool from '../components/map/TerrainProfileTool.tsx';
 import { useEditScope } from '../components/map/useEditScope.ts';
 import { useOverviewMap } from '../components/map/useOverviewMap.ts';
 import FeatureListPanel from '../components/map/FeatureListPanel.tsx';
@@ -2101,6 +2102,7 @@ export default function MapPage() {
                 </>
               )}
             </div>
+            {mayReadTerrain && <TerrainProfileTool />}
             {toolbarShown && editController && (
               <div className={`map-edit-overlay map-chrome${isMobile ? ' map-edit-overlay-mobile' : ''}`}>
                 <EditToolbar controller={editController} mayModify={mayReshapeSaved} rightsPending={rightsPending} />

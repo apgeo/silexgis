@@ -53,6 +53,7 @@ html[data-theme='dark'] .map-workspace-panel {
 /* One-button chrome hide: only dock toggles, the toggle itself and attribution stay. */
 .map-chrome-hidden .map-search-overlay,
 .map-chrome-hidden .map-edit-overlay,
+.map-chrome-hidden .terrain-profile-tool,
 .map-chrome-hidden .map-scale-overlay,
 .map-chrome-hidden .map-popout-overlay,
 .map-chrome-hidden .bg-layer-chooser {
@@ -961,4 +962,21 @@ html[data-theme='dark'] [data-workspace-pane].workspace-pane-maximised {
   box-shadow:
     inset 0 0 0 2px var(--ant-color-bg-container, #fff),
     inset 0 0 0 4px var(--ant-color-primary-border, #5c8783);
+}
+
+/* The terrain profile tool: a button at the left edge with its answer opening above it. */
+.terrain-profile-tool {
+  position: absolute;
+  left: 12px;
+  bottom: 96px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+}
+
+.terrain-profile-panel {
+  width: min(420px, calc(100vw - 24px));
 }

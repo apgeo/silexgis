@@ -63,6 +63,9 @@ export const temporaryMarkerPalette = {
  * when the reader presses elsewhere — which is why it is allowed to be the loudest thing on the
  * map for as long as it is there.
  */
+/** The dashed line drawn on the map to ask for a terrain profile. */
+export const terrainProfilePalette = { line: '#fa8c16' } as const;
+
 export const overburdenHighlightPalette = {
   mark: '#f5222d',
   /** Casing under the mark and halo behind its label, so both stay legible over any basemap. */
