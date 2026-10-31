@@ -25,6 +25,8 @@ import {
 } from '../../api/hooks.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../../components/features/FeatureEditModal.tsx';
+import AreaAltitudeDisagreementCard from '../../components/features/AreaAltitudeDisagreementCard.tsx';
+import AreaTerrainStatisticsCard from '../../components/features/AreaTerrainStatisticsCard.tsx';
 import AreaHypsometryCard from '../../components/features/AreaHypsometryCard.tsx';
 import AreaKarstStatisticsCard from '../../components/features/AreaKarstStatisticsCard.tsx';
 import AreaPointPatternCard from '../../components/features/AreaPointPatternCard.tsx';
@@ -344,6 +346,8 @@ export default function FeatureDetailPage() {
       {/* An area's two vertical and structural readings sit beside its measured shape: all three
           are asked of the same outline and answered over the same subtree. */}
       <AreaHypsometryCard featureId={id} geometryType={feature.geometry?.type ?? null} />
+      <AreaAltitudeDisagreementCard featureId={id} geometryType={feature.geometry?.type ?? null} />
+      <AreaTerrainStatisticsCard featureId={id} geometryType={feature.geometry?.type ?? null} />
       <AreaStructureCard featureId={id} geometryType={feature.geometry?.type ?? null} />
       <AreaKarstStatisticsCard featureId={id} featureTypeCode={feature.featureTypeCode ?? null} />
       <AreaPointPatternCard

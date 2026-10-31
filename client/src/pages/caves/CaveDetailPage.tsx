@@ -53,6 +53,9 @@ import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import CaveCrossSectionPanel from '../../components/statistics/CaveCrossSectionPanel.tsx';
 import CavePatternPanel from '../../components/statistics/CavePatternPanel.tsx';
 import CaveHypsometryPanel from '../../components/statistics/CaveHypsometryPanel.tsx';
+import CaveAltitudePanel from '../../components/statistics/CaveAltitudePanel.tsx';
+import CaveSystemFiguresPanel from '../../components/statistics/CaveSystemFiguresPanel.tsx';
+import CaveDepthProfilePanel from '../../components/statistics/CaveDepthProfilePanel.tsx';
 import CaveOverburdenPanel from '../../components/statistics/CaveOverburdenPanel.tsx';
 import CaveStructurePanel from '../../components/statistics/CaveStructurePanel.tsx';
 import CaveOrientationPanel from '../../components/statistics/CaveOrientationPanel.tsx';
@@ -513,6 +516,14 @@ export default function CaveDetailPage() {
           rock around them runs the same way are one reading, and separating them puts the two
           roses on different screens. */}
       {id && <CaveStructurePanel caveId={id} />}
+
+      {/* Before the heights of the passage: the entrances are where the cave's relief is measured
+          from, and the depth and height below are taken between them and the survey. */}
+      {id && <CaveSystemFiguresPanel caveId={id} />}
+
+      {id && <CaveDepthProfilePanel caveId={id} />}
+
+      {id && <CaveAltitudePanel caveId={id} canEdit={canEdit} />}
 
       {id && <CaveHypsometryPanel caveId={id} canEdit={canEdit} />}
 
