@@ -188,6 +188,25 @@ export default function TerrainBuildList({ canExecute, canDelete }: Props) {
               title: t('terrain.list.depth'),
               dataIndex: 'requestedMaxDepth',
               align: 'right',
+              // The depth the tiles really reach, once the pyramid has been checked. The tile maker
+              // stops where the sources run out of detail whatever was asked for, so the row shows
+              // what is there and, when it is less, what was asked for beside it.
+              render: (requested: number, build: TerrainBuild) => {
+                const achieved = build.achievedMaxDepth;
+                if (achieved === null || achieved === undefined || achieved === requested) {
+                  return requested;
+                }
+                return (
+                  <Tooltip title={t('terrain.list.depthShortfall', { achieved, requested })}>
+                    <span data-testid={`terrain-depth-short-${build.id}`}>
+                      {achieved}{' '}
+                      <Typography.Text type="secondary">
+                        ({t('terrain.list.depthAsked', { depth: requested })})
+                      </Typography.Text>
+                    </span>
+                  </Tooltip>
+                );
+              },
             },
             {
               // Submitted, not started: this is the moment the build was asked for, and terrain
@@ -215,7 +234,20 @@ export default function TerrainBuildList({ canExecute, canDelete }: Props) {
               ),
               dataIndex: 'sizeBytes',
               align: 'right',
-              render: (bytes: number | null) => formatBuildSize(bytes),
+              // The whole folder first, because that is what deleting the build gives back, and
+              // the tiles alone beneath it so the figure is never taken for the pyramid's.
+              render: (bytes: number | null, build: TerrainBuild) => (
+                <>
+                  {formatBuildSize(bytes)}
+                  {build.pyramidBytes !== null && build.pyramidBytes !== undefined && (
+                    <div>
+                      <Typography.Text type="secondary" data-testid={`terrain-pyramid-size-${build.id}`}>
+                        {t('terrain.list.sizePyramid', { size: formatBuildSize(build.pyramidBytes) })}
+                      </Typography.Text>
+                    </div>
+                  )}
+                </>
+              ),
             },
             {
               title: t('terrain.list.actions'),

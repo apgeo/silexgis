@@ -47,14 +47,39 @@ export function terrainDerivativeIdOf(layerId: string): string | undefined {
  * is uniformly black, which looks like missing data rather than a display choice.
  */
 const DISPLAY_RANGE: Partial<Record<TerrainDerivativeLayerInfo['derivative'], [number, number]>> = {
-  // Degrees from horizontal. A slope asked for as a percentage runs past this and saturates above
-  // 45 degrees; the unit is settled when the picture is asked for and is not carried on the layer.
+  // Degrees from horizontal. A slope asked for as a percentage is stretched across
+  // SLOPE_PERCENT_RANGE instead; see displayRangeOf.
   slope: [0, 90],
   aspect: [0, 360],
   ruggednessIndex: [0, 50],
   positionIndex: [-25, 25],
   roughness: [0, 100],
 };
+
+/**
+ * The span a steepness picture asked for as a percentage is stretched across.
+ *
+ * A percentage is rise over run, so 100 is a 45 degree slope and a vertical face is infinite:
+ * there is no natural top, and the end of the ramp is a display choice like the other ranges here.
+ * 200 (about 63 degrees) keeps the gentle and the steep ground of karst relief apart; the walls
+ * beyond it are drawn at the end of the ramp rather than wrongly. Drawn against the degree range
+ * instead, every slope past 90 per cent would be indistinguishable from a 45 degree one.
+ */
+const SLOPE_PERCENT_RANGE: [number, number] = [0, 200];
+
+/**
+ * The span one picture is stretched across, which for steepness depends on the unit the picture
+ * was asked for in. A picture with no unit stated is read as degrees, which is what it was before
+ * the unit was served.
+ */
+export function displayRangeOf(
+  derivative: Pick<TerrainDerivativeLayerInfo, 'derivative' | 'slopeUnit'>,
+): [number, number] | undefined {
+  if (derivative.derivative === 'slope' && derivative.slopeUnit === 'percent') {
+    return SLOPE_PERCENT_RANGE;
+  }
+  return DISPLAY_RANGE[derivative.derivative];
+}
 
 /** Dark where the value is low, pale where it is high. */
 const GREY_RAMP = [
@@ -111,7 +136,7 @@ function sourceFor(derivative: TerrainDerivativeLayerInfo, url: string): {
     return { source: new GeoTIFF({ sources: [{ url }] }) };
   }
 
-  const range = DISPLAY_RANGE[derivative.derivative];
+  const range = displayRangeOf(derivative);
   if (!range) {
     return { source: new GeoTIFF({ sources: [{ url }], convertToRGB: true }) };
   }

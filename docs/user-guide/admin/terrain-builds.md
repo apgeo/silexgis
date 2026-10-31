@@ -97,6 +97,13 @@ If you ask for more than your sources hold, the form says **"Nothing here can fi
 levels"** — deeper levels are neither refused nor silently dropped, they simply add disk for
 no detail.
 
+**What you got is reported afterwards.** The tile maker stops descending where the sources run out
+of detail, whatever depth was asked for — thirty-metre coverage gives out around level 13 even when
+16 was requested. Once a build has been checked, the **Depth** column of the Builds list shows the
+deepest level its tiles really reach, and when that is less than what you asked for the request is
+shown beside it (*13 (asked for 16)*). A build that has not been checked yet shows the depth asked
+for.
+
 ### 5. Heights
 
 **Heights are measured from:** *Above sea level* (orthometric) or *Above the ellipsoid*.
@@ -217,8 +224,11 @@ kept.
 ## Managing builds
 
 The **Builds** list shows state, which one is **being drawn**, area, depth, when it was
-submitted, and **size on disk** — *"everything the build left behind: the published tiles and
-the converted rasters kept beside them."*
+submitted, and **size on disk** — *"everything the build left behind on disk: the published tiles and
+the converted rasters kept beside them."* Beneath that figure the list gives the **tiles alone**
+(*1.1 MB of tiles*), which is all a viewer is served; the difference is what the converted rasters
+and working files cost, kept so that the build can be run again. Deleting the build gives back the
+whole size on disk, tiles included. Builds checked before the tiles-alone figure was recorded show only the larger one.
 
 | Action | |
 |---|---|
@@ -282,7 +292,9 @@ The settings, by kind:
   high. **Height exaggeration** multiplies every height first; past a few times a gentle landscape
   is a wall of saturated pixels, and the form refuses more than a hundred.
 - **Steepness** and **facing**: the slope arithmetic (Horn, for real and noisy elevation, or
-  Zevenbergen–Thorne, sharper on clean surfaces) and, for steepness, degrees or percent.
+  Zevenbergen–Thorne, sharper on clean surfaces) and, for steepness, degrees or percent. A steepness picture drawn as a percentage is coloured
+  across 0 to 200 per cent (100 per cent is a 45-degree slope; steeper ground is drawn at the end
+  of the ramp), and one drawn in degrees across 0 to 90.
 - **Ruggedness**: Riley's definition, which published ruggedness classes are stated against, or
   Wilson's, which gives different numbers — the two are never comparable.
 - **Coloured relief**: a colour at each height, in metres. At least two stops, no two at the same
@@ -351,6 +363,7 @@ that resembles them.
 | *An elevation tile says where it is only by what it is called* | An `.hgt` must be named like `N45E024.hgt` for the square whose corner is 45°N 24°E |
 | *That rectangle is not a rectangle on the Earth* | Draw it again |
 | *That build has no surface to draw* | Its tiles were never read back and found whole, or they are no longer where terrain is served from |
+| *Obtaining the elevation cell … failed: the connection … could not be made or was lost* (or *did not finish answering within the time allowed*) | The server could not reach the elevation data, or the link dropped or stalled. Check outbound access, then **Run again**; cells already fetched are kept |
 | *An extension is built to the depth of the build it extends* | Ask for the base's level, or start a fresh build |
 | *Another build that extends this one has not finished and still reads its tiles* | Wait for that build to stop, whichever way it stops, before deleting this one |
 | *That build has already stopped, so there is nothing to call off* | It finished or failed on its own first |

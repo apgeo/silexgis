@@ -24,6 +24,8 @@ function build(overrides: Partial<TerrainBuild>): TerrainBuild {
     message: null,
     errorCode: null,
     sizeBytes: 48 * 1024 * 1024,
+    pyramidBytes: null,
+    achievedMaxDepth: null,
     pyramidVersion: '1.2.3',
     heightDatum: 'orthometric',
     geoidHeightM: 0,
@@ -109,6 +111,26 @@ describe('TerrainBuildList', () => {
     expect(screen.getAllByText('On disk').length).toBeGreaterThan(0);
     expect(screen.getByTestId('terrain-active-b1')).toBeInTheDocument();
     expect(screen.queryByTestId('terrain-active-b2')).not.toBeInTheDocument();
+  });
+
+  it('says which size it shows, and the depth reached when it is less than the depth asked for', () => {
+    builds = [
+      build({ id: 'capped', requestedMaxDepth: 16, achievedMaxDepth: 13, pyramidBytes: 1.1 * 1024 * 1024 }),
+      build({ id: 'whole', requestedMaxDepth: 13, achievedMaxDepth: 13, pyramidBytes: 2 * 1024 * 1024 }),
+      build({ id: 'unchecked', requestedMaxDepth: 14, achievedMaxDepth: null, pyramidBytes: null }),
+    ];
+    show();
+
+    // The cap is shown on the row it happened to, with what was asked for beside it ...
+    expect(screen.getByTestId('terrain-depth-short-capped')).toHaveTextContent('13 (asked for 16)');
+    // ... and nowhere else: a build that reached its depth, or one not yet checked, shows one number.
+    expect(screen.queryByTestId('terrain-depth-short-whole')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('terrain-depth-short-unchecked')).not.toBeInTheDocument();
+
+    // The whole folder and the tiles alone are both on the row, each labelled as what it is.
+    expect(screen.getByTestId('terrain-pyramid-size-capped')).toHaveTextContent('1.1 MB of tiles');
+    expect(screen.getByTestId('terrain-pyramid-size-whole')).toHaveTextContent('2.0 MB of tiles');
+    expect(screen.queryByTestId('terrain-pyramid-size-unchecked')).not.toBeInTheDocument();
   });
 
   it('does not offer a build with no stamped version, and does offer one that has it', () => {

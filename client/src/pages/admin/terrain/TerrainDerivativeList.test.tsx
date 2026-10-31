@@ -25,6 +25,7 @@ function picture(overrides: Partial<TerrainDerivativeLayerInfo>): TerrainDerivat
     message: null,
     version: 1,
     sizeBytes: 12 * 1024 * 1024,
+    slopeUnit: null,
     stale: false,
     staleReason: null,
     computedAt: '2026-08-17T06:05:00Z',

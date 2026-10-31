@@ -99,6 +99,13 @@ Dacă ceri mai mult decât conțin sursele, formularul spune **„Nimic de aici 
 niveluri"** — nivelurile mai adânci nu sunt nici refuzate, nici eliminate tacit; pur și simplu
 adaugă spațiu pe disc fără detaliu.
 
+**Ce ai obținut se raportează după aceea.** Generatorul de dale se oprește acolo unde sursele
+rămân fără detaliu, indiferent ce adâncime ai cerut — acoperirea de treizeci de metri se termină
+în jurul nivelului 13 chiar dacă ai cerut 16. După ce o generare a fost verificată, coloana
+**Adâncime** din lista Generări arată cel mai adânc nivel pe care îl ating cu adevărat dalele, iar
+când acesta este mai mic decât cel cerut, cererea apare alături (*13 (cerut: 16)*). O generare
+care nu a fost încă verificată arată adâncimea cerută.
+
 ### 5. Înălțimile
 
 **Altitudinile sunt măsurate de la:** *Deasupra nivelului mării* (ortometrice) sau *Deasupra
@@ -220,8 +227,12 @@ se păstrează.
 ## Administrarea generărilor
 
 Lista **Generări** arată starea, care **Se desenează**, suprafața, adâncimea, când a fost
-trimisă și mărimea **Pe disc** — *„tot ce a lăsat în urmă generarea: dalele publicate și rasterele
-convertite păstrate lângă ele."*
+trimisă și mărimea **Pe disc** — *„tot ce a lăsat în urmă generarea pe disc: dalele publicate și
+rasterele convertite păstrate lângă ele."* Sub această cifră lista arată **doar dalele**
+(*1,1 MB de dale*), singurul lucru servit unui vizualizator; diferența este ce costă rasterele
+convertite și fișierele de lucru, păstrate ca generarea să poată fi rulată din nou. Ștergerea
+generării eliberează întreaga mărime de pe disc, dalele incluse. Generările verificate înainte ca
+mărimea doar a dalelor să fie înregistrată o arată doar pe cea mare.
 
 | Acțiune | |
 |---|---|
@@ -289,7 +300,9 @@ Setările, pe feluri:
   dincolo de câteva ori, un peisaj blând devine un perete de pixeli saturați, iar formularul refuză
   peste o sută.
 - **Pantă** și **orientare**: calculul pantei (Horn, pentru altitudini reale, cu zgomot, sau
-  Zevenbergen–Thorne, mai clar pe suprafețe curate) și, pentru pantă, grade sau procente.
+  Zevenbergen–Thorne, mai clar pe suprafețe curate) și, pentru pantă, grade sau procente. O pantă desenată în procente se colorează între 0 și 200
+la sută (100 la sută este o pantă de 45 de grade; terenul mai abrupt se desenează la capătul
+rampei), iar una desenată în grade, între 0 și 90.
 - **Asperitate**: definiția lui Riley, față de care sunt enunțate clasele de asperitate publicate,
   sau a lui Wilson, care dă alte numere — cele două nu sunt niciodată comparabile.
 - **Relief colorat**: o culoare la fiecare înălțime, în metri. Cel puțin două trepte, niciodată
@@ -362,6 +375,7 @@ ceva care le seamănă.
 | *O dală de altitudine spune unde se află doar prin numele ei* | Un `.hgt` trebuie numit ca `N45E024.hgt`, pentru pătratul al cărui colț este 45°N 24°E |
 | *Dreptunghiul acela nu este un dreptunghi pe Pământ.* | Trasează-l din nou |
 | *Generarea nu are nicio suprafață de desenat.* | Dalele ei nu au fost recitite și găsite întregi, sau nu mai sunt de unde se servește relieful |
+| *Obținerea celulei de altitudine … a eșuat: conexiunea … nu a putut fi făcută sau s-a pierdut* (sau *nu a terminat de răspuns în timpul îngăduit*) | Serverul nu a putut ajunge la datele de altitudine, ori legătura a căzut sau s-a blocat. Verifică accesul spre exterior, apoi **Rulează din nou**; celulele deja obținute se păstrează |
 | *O extensie se construiește la adâncimea generării pe care o extinde* | Cere nivelul bazei sau pornește o generare nouă |
 | *O altă generare care o extinde pe aceasta nu s-a terminat și încă îi citește dalele* | Așteaptă ca acea generare să se oprească, indiferent cum, înainte s-o ștergi pe aceasta |
 | *Generarea s-a oprit deja, așa că nu mai este nimic de anulat* | S-a încheiat sau a eșuat singură, mai înainte |

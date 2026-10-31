@@ -8,6 +8,7 @@ import { newCompilationContext } from 'ol/expr/gpu.js';
 import { ColorType } from 'ol/expr/expression.js';
 import {
   TERRAIN_DERIVATIVE_LAYER_PREFIX,
+  displayRangeOf,
   syncTerrainDerivativeLayers,
   terrainDerivativeIdOf,
   terrainDerivativeStyle,
@@ -42,6 +43,7 @@ function layerInfo(overrides: Partial<TerrainDerivativeLayerInfo> = {}): Terrain
     message: null,
     version: 1,
     sizeBytes: 1024,
+    slopeUnit: null,
     stale: false,
     staleReason: null,
     computedAt: null,
@@ -141,6 +143,35 @@ describe('computed terrain layers', () => {
     const options = sourceOptions(onlyLayer());
     expect(options.convertToRGB).toBeUndefined();
     expect(options.sources).toEqual([{ url: steepness.rasters[0].url, min: 0, max: 90 }]);
+  });
+
+  // A steepness picture asked for as a percentage runs past 90: a 45 degree slope is already 100.
+  // Stretched across the degree range it would be flat white above a 45 degree slope, which reads
+  // as terrain rather than as a clipped stretch.
+  it('stretches a steepness picture across the range of the unit it was asked for in', () => {
+    const percent = layerInfo({
+      id: '55555555-5555-5555-5555-555555555555',
+      derivative: 'slope',
+      slopeUnit: 'percent',
+    });
+    syncTerrainDerivativeLayers([percent], new Set([percent.id]), new Map());
+    expect(sourceOptions(onlyLayer()).sources).toEqual([
+      { url: percent.rasters[0].url, min: 0, max: 200 },
+    ]);
+    getOverlayGroup().getLayers().clear();
+
+    const degrees = layerInfo({
+      id: '66666666-6666-6666-6666-666666666666',
+      derivative: 'slope',
+      slopeUnit: 'degrees',
+    });
+    syncTerrainDerivativeLayers([degrees], new Set([degrees.id]), new Map());
+    expect(sourceOptions(onlyLayer()).sources).toEqual([
+      { url: degrees.rasters[0].url, min: 0, max: 90 },
+    ]);
+
+    // The unit means nothing to any other kind, whatever a row happens to say.
+    expect(displayRangeOf({ derivative: 'aspect', slopeUnit: 'percent' })).toEqual([0, 360]);
   });
 
   // Contour lines are four bands: three of colour and one saying where there is a line at all.
