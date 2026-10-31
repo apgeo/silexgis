@@ -224,6 +224,7 @@ export default function HierarchyCard({ featureId, kind, canEdit }: HierarchyCar
                   type="text"
                   danger
                   icon={<DeleteOutlined />}
+                  aria-label={t('iconButtons.delete')}
                   onClick={() => removeParent(record.parentId)}
                 />
               ),

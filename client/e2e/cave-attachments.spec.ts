@@ -74,7 +74,7 @@ test('cave attachment file versioning', async ({ page }) => {
   await expect(figure).toBeVisible({ timeout: 15_000 });
 
   // Open the versions popover and upload a corrected version onto the head.
-  await figure.getByRole('button', { name: 'history' }).click();
+  await figure.getByRole('button', { name: /versions/i }).click();
   const popover = page.locator('.ant-popover');
   await expect(popover.getByText('Upload new version')).toBeVisible();
   // Unique again, and doubly so here: a corrected version that is byte-identical to what it

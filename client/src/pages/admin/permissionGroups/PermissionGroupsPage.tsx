@@ -153,6 +153,7 @@ export default function PermissionGroupsPage() {
                     type="text"
                     danger
                     icon={<DeleteOutlined />}
+                    aria-label={t('iconButtons.delete')}
                     disabled={group.isProtected}
                   />
                 </Popconfirm>

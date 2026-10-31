@@ -30,6 +30,7 @@ afterAll(async () => {
   }
 });
 import i18n from './i18n';
+import { ICON_ONLY_UNLABELLED } from './components/Button.tsx';
 import { forgetSurveyFiles } from './caveview/surveyFileDownload.ts';
 
 // Survey files are kept for the life of a page, and a test file is one page: a model one test read
@@ -46,11 +47,16 @@ afterEach(forgetSurveyFiles);
 // test renders answers for itself. The library says each notice once per process, so it is the
 // first test in a file to render the old name that fails — which is enough to turn the file red.
 const antdDeprecations: string[] = [];
+// The same way, an icon-only button with no label of its own (see `components/Button.tsx`).
+const unlabelledIconButtons: string[] = [];
 const reportError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
   const line = args.map(String).join(' ');
   if (/\[antd: [^\]]+\].*deprecated/.test(line)) {
     antdDeprecations.push(line);
+  }
+  if (line.startsWith(ICON_ONLY_UNLABELLED)) {
+    unlabelledIconButtons.push(line);
   }
   reportError(...args);
 };
@@ -60,6 +66,10 @@ afterEach(() => {
     throw new Error(
       `this test rendered a component through a prop antd has deprecated:\n${seen.join('\n')}`,
     );
+  }
+  const unlabelled = unlabelledIconButtons.splice(0);
+  if (unlabelled.length > 0) {
+    throw new Error(`this test rendered a button with an icon and no label:\n${unlabelled.join('\n')}`);
   }
 });
 

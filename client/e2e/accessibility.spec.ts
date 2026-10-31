@@ -386,7 +386,7 @@ test('the feature editor and the share-links dialog keep focus inside, and give 
   // A surface feature selected on the map: the feature list's "show on map" selects what it frames.
   const row = await registryRow(page, 'Dolina Demo');
   await expect(row).toBeVisible({ timeout: 15_000 });
-  await row.getByRole('button', { name: 'aim' }).click();
+  await row.getByRole('button', { name: 'Show on map' }).click();
   await expect(page.getByRole('heading', { name: 'Dolina Demo' })).toBeVisible({ timeout: 15_000 });
   await expectFocusKeptAndReturned(page, page.getByRole('button', { name: 'Edit', exact: true }), 'Edit feature');
 

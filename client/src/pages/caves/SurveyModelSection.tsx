@@ -299,7 +299,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
                       }
                     }}
                   >
-                    <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                    <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
                   </Popconfirm>
                 )}
               </Flex>

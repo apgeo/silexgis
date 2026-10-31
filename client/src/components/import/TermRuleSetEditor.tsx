@@ -201,12 +201,13 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
             }
             extra={
               <Space.Compact>
-                <Button size="small" icon={<UpOutlined />} onClick={() => move(index, -1)} />
-                <Button size="small" icon={<DownOutlined />} onClick={() => move(index, 1)} />
+                <Button size="small" icon={<UpOutlined />} aria-label={t('iconButtons.moveUp')} onClick={() => move(index, -1)} />
+                <Button size="small" icon={<DownOutlined />} aria-label={t('iconButtons.moveDown')} onClick={() => move(index, 1)} />
                 <Button
                   size="small"
                   danger
                   icon={<DeleteOutlined />}
+                  aria-label={t('iconButtons.delete')}
                   onClick={() => setRules((current) => current.filter((_, i) => i !== index))}
                 />
               </Space.Compact>

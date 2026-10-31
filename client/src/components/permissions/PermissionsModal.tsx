@@ -497,6 +497,7 @@ export default function PermissionsModal({
                     type="text"
                     danger
                     icon={<DeleteOutlined />}
+                    aria-label={t('iconButtons.delete')}
                     disabled={entry.grantedViaExpeditionId !== null}
                     onClick={() => setEntries(entries.filter((_, i) => i !== index))}
                   />

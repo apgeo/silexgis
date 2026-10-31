@@ -138,7 +138,7 @@ export default function MembersTab({ group }: { group: PermissionGroup }) {
                     .catch((error: unknown) => message.error(describeRefusal(error)))
                 }
               >
-                <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
               </Popconfirm>,
             ]}
           >

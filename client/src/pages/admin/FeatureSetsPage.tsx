@@ -152,6 +152,7 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
                   type="text"
                   danger
                   icon={<DeleteOutlined />}
+                  aria-label={t('iconButtons.delete')}
                   onClick={() => setDrafts(drafts.filter((d) => d.id !== draft.id))}
                 />,
               ]}
@@ -286,7 +287,7 @@ export default function FeatureSetsPage() {
                 )}
                 {canDelete && (
                   <Popconfirm title={t('featureSets.deleteConfirm')} onConfirm={() => void onDelete(set)}>
-                    <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                    <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
                   </Popconfirm>
                 )}
               </Flex>

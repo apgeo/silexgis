@@ -729,7 +729,7 @@ describe('uploading a survey model', () => {
     show();
     await screen.findByText('Grind walls');
 
-    fireEvent.click(screen.getByRole('img', { name: 'delete' }).closest('button')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
 
     expect(await screen.findByText(/Digging weekend/)).toBeInTheDocument();
@@ -750,7 +750,7 @@ describe('uploading a survey model', () => {
     show();
     await screen.findByText('Grind walls');
 
-    fireEvent.click(screen.getByRole('img', { name: 'delete' }).closest('button')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
 
     expect(await screen.findByText(/administrator, who can read every trip/)).toBeInTheDocument();

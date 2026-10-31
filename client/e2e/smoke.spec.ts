@@ -399,7 +399,7 @@ test('georeferenced raster upload, COG processing, map overlay and delete', asyn
 
   // Show on map: the raster's catalog checkbox is on and its layer joins the
   // composer tree, where every active overlay row carries a transparency slider.
-  await row.getByRole('button', { name: 'aim' }).click();
+  await row.getByRole('button', { name: 'Show on map' }).click();
   await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('checkbox', { name: 'e2e-map' }).first()).toBeChecked();
   const treeRow = page
@@ -487,7 +487,7 @@ test('geofile upload, background import, map layer, export and delete', async ({
   // exact:true pins the catalog checkbox — the composer tree row for the same
   // geofile also exposes role=checkbox (labelled "holder e2e-track").
   const featuresLoaded = page.waitForResponse((r) => r.url().includes('/features?bbox=') && r.ok());
-  await row.getByRole('button', { name: 'aim' }).click();
+  await row.getByRole('button', { name: 'Show on map' }).click();
   await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('checkbox', { name: 'e2e-track', exact: true }).first()).toBeChecked();
   await expect(

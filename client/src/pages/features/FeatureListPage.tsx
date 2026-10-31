@@ -398,6 +398,7 @@ export default function FeatureListPage() {
                   <Button
                     size="small"
                     icon={<AimOutlined />}
+                    aria-label={t('features.showOnMap')}
                     disabled={!record.geometry}
                     onClick={() => showOnMap(record)}
                   />
@@ -406,6 +407,7 @@ export default function FeatureListPage() {
                   <Button
                     size="small"
                     icon={<EyeOutlined />}
+                    aria-label={t('features.open')}
                     onClick={() => navigate(`/features/${record.id}`)}
                   />
                 </Tooltip>
@@ -416,7 +418,7 @@ export default function FeatureListPage() {
                     onConfirm={() => void onDelete(record.id)}
                     okButtonProps={{ danger: true }}
                   >
-                    <Button size="small" icon={<DeleteOutlined />} danger />
+                    <Button size="small" icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} danger />
                   </Popconfirm>
                 )}
               </Flex>

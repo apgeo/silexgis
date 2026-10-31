@@ -241,6 +241,7 @@ export default function RasterMapsTab() {
                   <Button
                     size="small"
                     icon={<AimOutlined />}
+                    aria-label={t('geodata.showOnMap')}
                     disabled={record.status !== 'ready'}
                     onClick={() => showOnMap(record)}
                   />
@@ -248,14 +249,14 @@ export default function RasterMapsTab() {
                 {canEdit && (
                   <>
                     <Tooltip title={t('geodata.editRaster')}>
-                      <Button size="small" icon={<EditOutlined />} onClick={() => onEditOpen(record)} />
+                      <Button size="small" icon={<EditOutlined />} aria-label={t('geodata.editRaster')} onClick={() => onEditOpen(record)} />
                     </Tooltip>
                     <Popconfirm
                       title={t('geodata.deleteRasterConfirm')}
                       onConfirm={() => void onDelete(record.id)}
                       okButtonProps={{ danger: true }}
                     >
-                      <Button size="small" icon={<DeleteOutlined />} danger />
+                      <Button size="small" icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} danger />
                     </Popconfirm>
                   </>
                 )}

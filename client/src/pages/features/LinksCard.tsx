@@ -215,6 +215,7 @@ export default function LinksCard({ featureId, canEdit }: LinksCardProps) {
                   type="text"
                   danger
                   icon={<DeleteOutlined />}
+                  aria-label={t('iconButtons.delete')}
                   onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
                 />
               ),

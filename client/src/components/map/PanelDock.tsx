@@ -173,7 +173,7 @@ export default function PanelDock({ scope }: { scope: PanelScope }) {
                     onPressEnter={onSave}
                     style={{ width: 150 }}
                   />
-                  <Button size="small" icon={<SaveOutlined />} onClick={onSave} disabled={!name.trim()} />
+                  <Button size="small" icon={<SaveOutlined />} aria-label={t('common.save')} onClick={onSave} disabled={!name.trim()} />
                 </Flex>
               ),
             },

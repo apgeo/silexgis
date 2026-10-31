@@ -120,7 +120,7 @@ function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () 
                   remove.mutateAsync(member.caverId).catch(() => message.error(t('common.saveFailed')))
                 }
               >
-                <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
               </Popconfirm>,
             ]}
           >

@@ -167,6 +167,7 @@ export default function TermRulesPage() {
                   <Button
                     size="small"
                     icon={row.canEdit ? <EditOutlined /> : <CopyOutlined />}
+                    aria-label={row.canEdit ? t('termRules.edit') : t('termRules.editCopy')}
                     onClick={() => (row.canEdit ? setEditing(row.id) : void onCopy(row))}
                   />
                 </Tooltip>
@@ -174,6 +175,7 @@ export default function TermRulesPage() {
                   <Button
                     size="small"
                     icon={<DownloadOutlined />}
+                    aria-label={t('termRules.export')}
                     onClick={() =>
                       downloadFile(`/api/v1/term-rule-sets/${row.id}/export`).catch(() =>
                         message.error(t('common.saveFailed')),
@@ -194,7 +196,7 @@ export default function TermRulesPage() {
                     onConfirm={() => void onDelete(row.id)}
                     okButtonProps={{ danger: true }}
                   >
-                    <Button size="small" danger icon={<DeleteOutlined />} />
+                    <Button size="small" danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
                   </Popconfirm>
                 )}
               </Flex>

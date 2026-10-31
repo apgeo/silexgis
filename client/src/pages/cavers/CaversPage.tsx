@@ -288,6 +288,7 @@ export default function CaversPage() {
                       <Button
                         size="small"
                         icon={<MergeCellsOutlined />}
+                        aria-label={t('cavers.merge')}
                         onClick={() => setMerging(caver)}
                         title={t('cavers.merge')}
                       />
@@ -314,6 +315,7 @@ export default function CaversPage() {
                             type="text"
                             danger
                             icon={<DeleteOutlined />}
+                            aria-label={t('iconButtons.delete')}
                             data-testid={`caver-delete-${caver.id}`}
                           />
                         </Popconfirm>

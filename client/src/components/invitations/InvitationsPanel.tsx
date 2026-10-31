@@ -382,6 +382,7 @@ export default function InvitationsPanel({
                             size="small"
                             disabled={row.response !== 'yes'}
                             icon={row.selectedAt ? <StarFilled /> : <StarOutlined />}
+                            aria-label={row.selectedAt ? t(`${keys}.deselect`) : t(`${keys}.select`)}
                             onClick={() => void onSelect(row.caverId, !row.selectedAt)}
                             data-testid={`${idPrefix}-invitation-select-${row.caverId}`}
                           />
@@ -395,6 +396,7 @@ export default function InvitationsPanel({
                             size="small"
                             danger
                             icon={<DeleteOutlined />}
+                            aria-label={t('iconButtons.delete')}
                             data-testid={`${idPrefix}-invitation-remove-${row.caverId}`}
                           />
                         </Popconfirm>,

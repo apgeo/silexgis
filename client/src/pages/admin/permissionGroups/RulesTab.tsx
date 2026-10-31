@@ -335,6 +335,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
                 type="text"
                 danger
                 icon={<DeleteOutlined />}
+                aria-label={t('iconButtons.delete')}
                 onClick={() => {
                   setDrafts(drafts.filter((d) => d.key !== draft.key));
                   onRulesChanged();

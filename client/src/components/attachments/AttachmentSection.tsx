@@ -192,6 +192,7 @@ export default function AttachmentSection({
                         type="primary"
                         size="small"
                         icon={<DownloadOutlined />}
+                        aria-label={t('iconButtons.download')}
                         disabled={!attachment.file.mayDownloadOriginal}
                         href={attachment.file.mayDownloadOriginal ? attachment.file.contentUrl : undefined}
                         download={attachment.file.originalName}
@@ -205,7 +206,7 @@ export default function AttachmentSection({
                             onConfirm={() => void onDelete(attachment)}
                             okButtonProps={{ danger: true }}
                           >
-                            <Button size="small" danger type="text" icon={<DeleteOutlined />} />
+                            <Button size="small" danger type="text" icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
                           </Popconfirm>,
                         ]
                       : []),
@@ -346,7 +347,7 @@ export default function AttachmentSection({
                           onConfirm={() => void onDelete(attachment)}
                           okButtonProps={{ danger: true }}
                         >
-                          <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                          <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
                         </Popconfirm>
                       )}
                     </Flex>
@@ -387,6 +388,7 @@ export default function AttachmentSection({
                     <Button
                       size="small"
                       icon={<DownloadOutlined />}
+                      aria-label={t('iconButtons.download')}
                       disabled={!attachment.file.mayDownloadOriginal}
                       href={attachment.file.mayDownloadOriginal ? attachment.file.contentUrl : undefined}
                       download={attachment.file.originalName}
@@ -400,7 +402,7 @@ export default function AttachmentSection({
                           onConfirm={() => void onDelete(attachment)}
                           okButtonProps={{ danger: true }}
                         >
-                          <Button size="small" danger type="text" icon={<DeleteOutlined />} />
+                          <Button size="small" danger type="text" icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
                         </Popconfirm>,
                       ]
                     : []),

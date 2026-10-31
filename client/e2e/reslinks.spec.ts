@@ -481,7 +481,7 @@ test('the map dock links the entrance that was clicked, not the cave it belongs 
   // a click on the map itself would land on whichever of the two happened to be under the
   // cursor, and this flow is about which entity the dock then links.
   const caveRow = await featureRow(page, 'Peștera Demo Mare');
-  await caveRow.getByRole('button', { name: 'aim' }).click();
+  await caveRow.getByRole('button', { name: 'Show on map' }).click();
   await expect(page.locator('.map-canvas')).toBeVisible({ timeout: 15_000 });
 
   const dock = page.locator('.map-right-tabs');

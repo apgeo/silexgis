@@ -78,6 +78,7 @@ export default function FileVersions({
                 size="small"
                 type="text"
                 icon={<DownloadOutlined />}
+                aria-label={t('iconButtons.download')}
                 href={version.contentUrl}
                 download={version.originalName}
               />,
@@ -90,7 +91,7 @@ export default function FileVersions({
                       okButtonProps={{ danger: true }}
                       onConfirm={() => void onDelete(version.id)}
                     >
-                      <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                      <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
                     </Popconfirm>,
                   ]),
             ]}
@@ -116,7 +117,7 @@ export default function FileVersions({
 
   return (
     <Popover content={content} title={t('attachments.versions')} trigger="click" open={open} onOpenChange={setOpen}>
-      <Button size="small" type="text" icon={<HistoryOutlined />}>
+      <Button size="small" type="text" icon={<HistoryOutlined />} aria-label={t('attachments.versions')}>
         {versionNumber > 1 ? `v${versionNumber}` : null}
       </Button>
     </Popover>

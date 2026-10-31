@@ -28,7 +28,7 @@ test.describe('lateral panel', () => {
     const select = async () => {
       const row = await registryRow(page, 'Dolina Demo');
       await expect(row).toBeVisible({ timeout: 15_000 });
-      await row.getByRole('button', { name: 'aim' }).click();
+      await row.getByRole('button', { name: 'Show on map' }).click();
       await expect(page.getByRole('heading', { name: 'Dolina Demo' })).toBeVisible({ timeout: 15_000 });
     };
     await select();

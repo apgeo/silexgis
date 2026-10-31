@@ -548,7 +548,7 @@ export default function CabinetsPage() {
                   title={t('cabinets.deleteConfirm')}
                   onConfirm={() => void onDelete(current)}
                 >
-                  <Button danger icon={<DeleteOutlined />} />
+                  <Button danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
                 </Popconfirm>
               )}
             </Space>
@@ -668,7 +668,7 @@ export default function CabinetsPage() {
                             title={t('cabinets.unfileConfirm')}
                             onConfirm={() => void unfile(row)}
                           >
-                            <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                            <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
                           </Popconfirm>
                         </Flex>
                       ),

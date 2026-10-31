@@ -295,6 +295,7 @@ export default function GeodataPage() {
                   <Button
                     size="small"
                     icon={<AimOutlined />}
+                    aria-label={t('geodata.showOnMap')}
                     disabled={record.importStatus !== 'imported'}
                     onClick={() => showOnMap(record)}
                   />
@@ -324,19 +325,19 @@ export default function GeodataPage() {
                     })),
                   }}
                 >
-                  <Button size="small" icon={<DownloadOutlined />} />
+                  <Button size="small" icon={<DownloadOutlined />} aria-label={t('iconButtons.download')} />
                 </Dropdown>
                 {canEdit && (
                   <>
                     <Tooltip title={t('geodata.edit')}>
-                      <Button size="small" icon={<EditOutlined />} onClick={() => onEditOpen(record)} />
+                      <Button size="small" icon={<EditOutlined />} aria-label={t('geodata.edit')} onClick={() => onEditOpen(record)} />
                     </Tooltip>
                     <Popconfirm
                       title={t('geodata.deleteConfirm')}
                       onConfirm={() => void onDelete(record.id)}
                       okButtonProps={{ danger: true }}
                     >
-                      <Button size="small" icon={<DeleteOutlined />} danger />
+                      <Button size="small" icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} danger />
                     </Popconfirm>
                   </>
                 )}

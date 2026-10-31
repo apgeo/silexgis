@@ -186,8 +186,8 @@ export async function centreOnDemoCave(page: Page) {
   await page.getByPlaceholder('Search by name').fill('Peștera Demo Mare');
   const row = page.getByRole('row', { name: /Peștera Demo Mare/ });
   await expect(row).toBeVisible({ timeout: 15_000 });
-  // Icon-only antd button: its accessible name is the icon's aria-label.
-  await row.getByRole('button', { name: 'aim' }).click();
+  // Icon-only antd button: its accessible name is the label it is given.
+  await row.getByRole('button', { name: 'Show on map' }).click();
   await expect(page.locator('.map-canvas')).toBeVisible({ timeout: 15_000 });
 }
 

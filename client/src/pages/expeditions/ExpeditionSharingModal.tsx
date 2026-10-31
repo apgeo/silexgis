@@ -498,6 +498,7 @@ export default function ExpeditionSharingModal({ expeditionId, open, onClose }: 
                         type="text"
                         danger
                         icon={<DeleteOutlined />}
+                        aria-label={t('iconButtons.delete')}
                         onClick={() => setDrafts(drafts.filter((_, i) => i !== index))}
                       />
                     ),
