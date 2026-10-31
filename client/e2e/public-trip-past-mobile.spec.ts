@@ -354,7 +354,9 @@ async function serveCave(page: Page, cave: ServedCave = {}) {
 async function fingerSized(control: Locator, name: string) {
   await expect(control, `${name} is on screen`).toBeVisible();
   const box = (await control.boundingBox())!;
-  expect(box.height, `${name} is ${box.height}px tall`).toBeGreaterThanOrEqual(FINGER);
+  // A layout in fractional pixels can land a 40px control at 39.99997; a hundredth of a pixel is
+  // rounding, not a control too small to press.
+  expect(box.height, `${name} is ${box.height}px tall`).toBeGreaterThanOrEqual(FINGER - 0.01);
 }
 
 const noSidewaysScroll = (page: Page) =>
