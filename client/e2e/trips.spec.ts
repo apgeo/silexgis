@@ -604,7 +604,7 @@ test('a trip is written up as a document, and the document is filed against the 
     timeout: 15_000,
   });
 
-  await page.getByRole('button', { name: /Delete/ }).click();
+  await page.getByTestId('trip-delete').click();
   await confirmOk(page);
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });
