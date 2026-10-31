@@ -65,7 +65,30 @@ public class TerrainCellFetchTests : IDisposable
     [Fact]
     public async Task A_link_that_drops_mid_body_leaves_neither_the_cell_nor_the_fragment()
     {
-        await Should.ThrowAsync<IOException>(() => FetchAsync(Dropping()));
+        var failure = await Should.ThrowAsync<TerrainBuildException>(
+            () => FetchAsync(Dropping(new HttpIOException(HttpRequestError.ResponseEnded, "The response ended prematurely."))));
+
+        failure.Code.ShouldBe(TerrainBuildFailures.FetchFailed);
+        File.Exists(Target).ShouldBeFalse();
+        File.Exists(Partial).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_socket_reset_mid_body_is_a_fetch_failure()
+    {
+        var reset = new IOException("reset", new System.Net.Sockets.SocketException());
+
+        var failure = await Should.ThrowAsync<TerrainBuildException>(() => FetchAsync(Dropping(reset)));
+
+        failure.Code.ShouldBe(TerrainBuildFailures.FetchFailed);
+        File.Exists(Partial).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_local_io_error_mid_transfer_is_not_blamed_on_the_server_and_leaves_no_fragment()
+    {
+        // A plain I/O error is what a failing local disk raises too, so it keeps its own type.
+        await Should.ThrowAsync<IOException>(() => FetchAsync(Dropping(new IOException("The connection went away."))));
 
         File.Exists(Target).ShouldBeFalse();
         File.Exists(Partial).ShouldBeFalse();
@@ -93,6 +116,47 @@ public class TerrainCellFetchTests : IDisposable
         failure.Code.ShouldBe(TerrainBuildFailures.FetchFailed);
         failure.Message.ShouldContain("500");
         File.Exists(Target).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_connection_that_cannot_be_made_is_a_fetch_failure_and_not_an_unexpected_one()
+    {
+        // A refused or unreachable connection is the likeliest way this step fails. Escaping as the
+        // raw transport exception, it was recorded as "something unexpected", which tells the
+        // operator nothing about where to look.
+        var failure = await Should.ThrowAsync<TerrainBuildException>(
+            () => FetchAsync(new StubHandler(_ => throw new HttpRequestException("connection refused"))));
+
+        failure.Code.ShouldBe(TerrainBuildFailures.FetchFailed);
+        failure.Message.ShouldContain(Cell);
+        File.Exists(Target).ShouldBeFalse();
+        File.Exists(Partial).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_cell_that_outlasts_the_clients_time_limit_is_a_fetch_failure()
+    {
+        var failure = await Should.ThrowAsync<TerrainBuildException>(
+            () => FetchAsync(new StubHandler(_ => throw new TaskCanceledException("timed out"))));
+
+        failure.Code.ShouldBe(TerrainBuildFailures.FetchFailed);
+        failure.Message.ShouldContain("time allowed");
+    }
+
+    [Fact]
+    public async Task A_stop_requested_by_the_caller_is_not_turned_into_a_failure()
+    {
+        // The positive case beside the two above: the same exception type, but the caller asked for
+        // it, as a host shutdown or a called-off build does. It must reach the build handler as a
+        // cancellation, or a stopped build would be recorded as having failed to fetch.
+        using var stop = new CancellationTokenSource();
+        await stop.CancelAsync();
+        var fetcher = new CopernicusFetcher(
+            new OneClient(new StubHandler(_ => throw new TaskCanceledException("stopped"))),
+            Options.Create(new TerrainBuildOptions()));
+
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => fetcher.DownloadAsync(Cell, Target, stop.Token));
     }
 
     [Fact]
@@ -129,11 +193,11 @@ public class TerrainCellFetchTests : IDisposable
     }
 
     /// <summary>A server that answers, starts sending, and then goes away.</summary>
-    private static HttpMessageHandler Dropping()
+    private static HttpMessageHandler Dropping(Exception error)
     {
         return new StubHandler(_ =>
         {
-            var content = new StreamContent(new FailingStream());
+            var content = new StreamContent(new FailingStream(error));
             content.Headers.ContentLength = 4096;
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
         });
@@ -164,7 +228,7 @@ public class TerrainCellFetchTests : IDisposable
     }
 
     /// <summary>Reads a little and then fails, the way a dropped connection does.</summary>
-    private sealed class FailingStream : Stream
+    private sealed class FailingStream(Exception error) : Stream
     {
         private int served;
 
@@ -182,7 +246,7 @@ public class TerrainCellFetchTests : IDisposable
         {
             if (served > 0)
             {
-                throw new IOException("The connection went away.");
+                throw error;
             }
 
             var given = Math.Min(count, 512);

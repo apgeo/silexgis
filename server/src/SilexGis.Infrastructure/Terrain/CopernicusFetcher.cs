@@ -46,6 +46,53 @@ public sealed class CopernicusFetcher(
     /// </remarks>
     public async Task<long?> DownloadAsync(string cell, string target, CancellationToken ct)
     {
+        try
+        {
+            return await TransferAsync(cell, target, ct);
+        }
+        catch (HttpRequestException e)
+        {
+            // The connection could not be made, was refused, or dropped part-way: the commonest way
+            // this step fails and, left to escape, the one reported as something unexpected.
+            throw new TerrainBuildException(
+                TerrainBuildFailures.FetchFailed,
+                $"Obtaining the elevation cell {cell} failed: the connection to the elevation "
+                + $"server could not be made or was lost ({e.GetType().Name}).");
+        }
+        catch (Exception e) when (IsLostBodyTransfer(e))
+        {
+            // The headers arrived and the link then broke while the cell's body was being copied:
+            // the likeliest transport failure, since a cell is tens of megabytes. The runtime
+            // reports it as an I/O error, not as a request error.
+            throw new TerrainBuildException(
+                TerrainBuildFailures.FetchFailed,
+                $"Obtaining the elevation cell {cell} failed: the connection to the elevation "
+                + $"server could not be made or was lost ({e.GetType().Name}).");
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // The client's own time limit, not a request to stop: a cancellation that came from
+            // the caller still propagates untouched, so a host shutdown or a called-off build is
+            // never turned into a failure.
+            throw new TerrainBuildException(
+                TerrainBuildFailures.FetchFailed,
+                $"Obtaining the elevation cell {cell} failed: the elevation server did not finish "
+                + "answering within the time allowed for one cell.");
+        }
+    }
+
+    /// <summary>
+    /// A network failure surfacing as an I/O error while the body is read: the response stream's own
+    /// error type, or an I/O error wrapping a socket error. A plain <see cref="IOException"/> is
+    /// deliberately not matched, because a full or failing local disk raises that same type while
+    /// the partial file is written and must not be blamed on the elevation server.
+    /// </summary>
+    private static bool IsLostBodyTransfer(Exception e) =>
+        e is HttpIOException
+        || e is IOException { InnerException: System.Net.Sockets.SocketException };
+
+    private async Task<long?> TransferAsync(string cell, string target, CancellationToken ct)
+    {
         var url = CopernicusCoverage.Url(cell);
         var partial = target + PartialSuffix;
 
