@@ -1381,3 +1381,77 @@ describe('what the installation has decided this page may do', () => {
     expect(liveAsked).toBe(false);
   });
 });
+
+describe('what assistive technology is told on a followed page', () => {
+  const readJustNow = () => {
+    answer = { data: envelope(), isPending: false, error: null, dataUpdatedAt: Date.now() - 40_000 };
+  };
+
+  const before = (first: Element, second: Element) =>
+    Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it('has one main landmark in every state the page can be in', () => {
+    // Pending: nothing yet, announced as loading rather than left as a bare spinner.
+    answer = { data: undefined, isPending: true, error: null };
+    const loading = render(<PublicTripPage />);
+    expect(screen.getByRole('main')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading…' })).toBeInTheDocument();
+    loading.unmount();
+
+    // Unreachable and not found take the place of the page, and are announced when they arrive.
+    answer = { data: undefined, isPending: false, error: new ApiError(404) };
+    const missing = render(<PublicTripPage />);
+    expect(screen.getByRole('main')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toContainElement(screen.getByTestId('public-trip-not-found'));
+    missing.unmount();
+
+    answer = { data: undefined, isPending: false, error: new TypeError('Failed to fetch'), refetch: vi.fn() };
+    const unreachable = render(<PublicTripPage />);
+    expect(screen.getByRole('main')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toContainElement(screen.getByTestId('public-trip-unreachable'));
+    unreachable.unmount();
+
+    ready();
+    render(<PublicTripPage />);
+    expect(screen.getByRole('main')).toBeInTheDocument();
+  });
+
+  it('reads in the order it is drawn: title, figures, party, then the foot', () => {
+    readJustNow();
+    const { container } = render(<PublicTripPage />);
+
+    const inOrder = [
+      container.querySelector('header')!,
+      screen.getByTestId('public-trip-title'),
+      container.querySelector('main')!,
+      screen.getByTestId('public-trip-counts'),
+      screen.getByTestId('public-trip-updated'),
+      screen.getByTestId('public-trip-party'),
+      container.querySelector('footer')!,
+    ];
+    for (let i = 1; i < inOrder.length; i += 1) {
+      expect(before(inOrder[i - 1], inOrder[i]), `element ${i} follows element ${i - 1}`).toBe(true);
+    }
+    // Nothing is drawn out of order by the stylesheet either: it never reorders flex children.
+    const reordered = Array.from(container.querySelectorAll<HTMLElement>('[style]')).filter((el) => el.style.order !== '');
+    expect(reordered).toHaveLength(0);
+  });
+
+  it('announces the figures when they change, but not the age of the page twice a minute', () => {
+    readJustNow();
+    render(<PublicTripPage />);
+
+    expect(screen.getByTestId('public-trip-counts')).toHaveAttribute('role', 'status');
+    expect(screen.getByTestId('public-trip-counts')).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByTestId('public-trip-updated')).not.toHaveAttribute('aria-live');
+    expect(screen.getByTestId('public-trip-updated')).not.toHaveAttribute('role');
+  });
+
+  it('names the language of the page on the document, and of the button that changes it', () => {
+    ready();
+    render(<PublicTripPage />);
+
+    expect(document.documentElement.lang).toBe('en');
+    expect(screen.getByRole('button', { name: 'Afișează pagina în română' })).toHaveAttribute('lang', 'ro');
+  });
+});

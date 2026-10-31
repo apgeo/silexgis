@@ -562,6 +562,9 @@ export default function PublicPastBar({
               // Named on the handle rather than on the control: the handle is the element that
               // carries the slider role, and a label on the wrapper reaches nothing.
               ariaLabelForHandle={t('publicTrip.past.scrub')}
+              // The handle's value is an epoch in milliseconds, which is what `aria-valuenow`
+              // carries and is meaningless read aloud; this is what a screen reader says instead.
+              ariaValueTextFormatterForHandle={(value) => clock(value)}
             />
           </ConfigProvider>
         </div>
@@ -661,7 +664,7 @@ export default function PublicPastBar({
     }
     if (without === 'reading') {
       return (
-        <Flex gap="small" align="center">
+        <Flex gap="small" align="center" role="status">
           <Spin size="small" />
           <Typography.Text type="secondary" data-testid="public-past-track-loading">
             {t('publicTrip.past.reading')}

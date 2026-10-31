@@ -720,8 +720,12 @@ export default function PublicTripPage() {
 
   if (isPending && !firstReadHeld) {
     return (
-      <Flex align="center" justify="center" style={{ minHeight: '100dvh' }}>
-        <Spin size="large" />
+      // A page that is still being read is announced as such, and has a main landmark from the
+      // first frame so that a screen reader's "go to main content" lands somewhere on every state.
+      <Flex component="main" align="center" justify="center" style={{ minHeight: '100dvh' }}>
+        <div role="status" aria-label={t('common.loading')}>
+          <Spin size="large" />
+        </div>
       </Flex>
     );
   }
@@ -743,8 +747,10 @@ export default function PublicTripPage() {
   // actually gave — and every unusable link gives the same one — is drawn as nothing to show.
   if (data === undefined && (firstReadHeld || (error != null && !isSettledRefusal(error)))) {
     return (
-      <Flex align="center" justify="center" style={{ minHeight: '100dvh', padding: 16 }}>
-        <Card style={{ maxWidth: 520, width: '100%' }}>
+      <Flex component="main" align="center" justify="center" style={{ minHeight: '100dvh', padding: 16 }}>
+        {/* An alert: the page changes from a spinner to this without a press, and a reader who
+            cannot see it change would otherwise wait for a page that is not coming. */}
+        <Card role="alert" style={{ maxWidth: 520, width: '100%' }}>
           <Result
             status="warning"
             title={t('publicTrip.unreachableTitle')}
@@ -769,8 +775,8 @@ export default function PublicTripPage() {
   }
   if (data === undefined) {
     return (
-      <Flex align="center" justify="center" style={{ minHeight: '100dvh', padding: 16 }}>
-        <Card style={{ maxWidth: 520, width: '100%' }}>
+      <Flex component="main" align="center" justify="center" style={{ minHeight: '100dvh', padding: 16 }}>
+        <Card role="alert" style={{ maxWidth: 520, width: '100%' }}>
           <Result
             icon={<QuestionCircleOutlined />}
             status="warning"

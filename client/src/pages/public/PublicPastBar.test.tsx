@@ -109,6 +109,17 @@ describe('the rail a past trip is scrubbed on', () => {
   });
 });
 
+describe('what the rail says to assistive technology', () => {
+  it('reads the moment on the clock, not the epoch the handle carries', () => {
+    render(<PublicPastBar playback={playback(everyMinute(20))} liveState="closed" cavers={[]} />);
+
+    const handle = screen.getByRole('slider', { name: 'Moment of the trip' });
+    // The value is milliseconds since 1970 — right for the control, meaningless read aloud.
+    expect(Number(handle.getAttribute('aria-valuenow'))).toBeGreaterThan(1_000_000_000_000);
+    expect(handle.getAttribute('aria-valuetext')).toBe(screen.getByTestId('public-past-clock').textContent);
+  });
+});
+
 describe('the photographs of the moment on the clock', () => {
   const hour = (clock: string) => at(`2019-07-06T${clock}:00Z`);
   const picture = (clock: string, ordinal: number | null, file: string, caption: string | null) => ({
@@ -615,6 +626,18 @@ describe('a chosen trip that could not be read', () => {
     );
 
     expect(screen.getByTestId('public-past-banner-what')).toHaveTextContent('Reading this trip');
+  });
+
+  it('announces that it is reading, where the reading takes a moment', () => {
+    render(
+      <PublicPastBar
+        playback={{ ...refused(), failed: false, loading: true }}
+        liveState="closed"
+        cavers={[]}
+      />,
+    );
+
+    expect(screen.getByRole('status')).toContainElement(screen.getByTestId('public-past-track-loading'));
   });
 });
 
