@@ -35,12 +35,28 @@ const OUTLINE = JSON.stringify({
   coordinates: [[[25.43, 45.52], [25.46, 45.52], [25.46, 45.54], [25.43, 45.54], [25.43, 45.52]]],
 });
 
+/**
+ * Takes an option by walking the keyboard highlight to it and pressing Enter, not by clicking it: a
+ * list still sliding open commits nothing on a click (the control keeps what it had and the next
+ * step waits for a control that never appears), while a highlight walked to and taken with Enter
+ * does not depend on where the list is on screen.
+ */
 async function choose(page: Page, testId: string, option: RegExp, search?: string) {
   await page.getByTestId(testId).click();
   if (search !== undefined) {
     await page.keyboard.type(search);
   }
-  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: option }).first().click();
+  const wanted = page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: option }).first();
+  await expect(wanted).toBeVisible({ timeout: 15_000 });
+  for (let step = 0; step < 30; step++) {
+    if (await wanted.evaluate((el) => el.classList.contains('ant-select-item-option-active'))) {
+      break;
+    }
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(wanted).toHaveClass(/ant-select-item-option-active/);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0);
 }
 
 async function editorCount(page: Page): Promise<number> {
@@ -174,7 +190,7 @@ test('a pasted polygon narrows the registry and is never offered for saving', as
   await expect(save).toBeDisabled();
   await save.hover({ force: true });
   await expect(page.getByRole('tooltip')).toContainText(
-    'A typed point, a pasted polygon or a place to measure nearest first from is never saved.');
+    'A typed point, a map view, a drawn or pasted outline or a place to measure nearest first from is never saved.');
 });
 
 /** The names in the registry's table, top to bottom. */
