@@ -38,7 +38,6 @@ import {
   chownTree,
   emptyDirectory,
   fail,
-  findExecutable,
   healthTimeout,
   layoutOptionSpec,
   loadInstallation,
@@ -52,6 +51,7 @@ import {
   sqlIdent,
   startApi,
   stopApi,
+  tarProgram,
   unexpectedRestoreErrors,
   waitHealthy,
   warn,
@@ -72,7 +72,7 @@ export async function runRestore({ layout, db }, sourceDir, { adminUrl, start = 
   const dbFile = path.join(sourceDir, 'db.sql.gz');
   const filesFile = path.join(sourceDir, 'files.tar.gz');
   for (const file of [dbFile, filesFile]) if (!fs.existsSync(file)) fail(`missing ${file}`);
-  const tar = findExecutable('tar') ?? fail('tar is not available on this machine');
+  const tar = tarProgram() ?? fail('tar is not available on this machine');
 
   let target = adminAccess(layout, db, adminUrl);
   if (!target) {

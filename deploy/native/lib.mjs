@@ -545,6 +545,20 @@ export function findExecutable(name, extraDirs = [], env = process.env) {
   return undefined;
 }
 
+/**
+ * The `tar` the backup and restore scripts run. On Windows that is the system's own bsdtar, ahead
+ * of whatever else is on PATH: the GNU tar that Git for Windows ships reads `C:\backups\x.tar.gz`
+ * as the file `x.tar.gz` on a host called `C` unless it is told `--force-local`, and the system
+ * one reads a drive letter as a drive letter.
+ */
+export function tarProgram(env = process.env) {
+  if (isWindows) {
+    const system = path.join(env.SystemRoot || env.windir || 'C:\\Windows', 'System32', 'tar.exe');
+    if (fs.existsSync(system)) return system;
+  }
+  return findExecutable('tar', [], env);
+}
+
 /** A PostgreSQL client program, from --pg-bin when given. */
 export function pgProgram(layout, name) {
   if (layout.pgBin) return path.join(layout.pgBin, isWindows ? `${name}.exe` : name);
@@ -1589,9 +1603,54 @@ export function windowsGrantArgs(dir, serviceName) {
  * The `icacls` arguments that leave a directory to administrators and the system alone. ProgramData
  * is readable by every local account by default, and the configuration directory holds the
  * database and administrator passwords; on Linux the same file is mode 600.
+ *
+ * Deliberately without `/T`. Applied to the directory alone, the new inheritable entries reach the
+ * files already inside it through Windows' own propagation, and they stay inherited. With `/T`,
+ * icacls repeats `/inheritance:r` on every file too: that strips the entries the file has just
+ * inherited and leaves it depending on an explicit entry written with directory-only inheritance
+ * flags, which is the form that left the installer's own elevated process unable to open the file
+ * it had written a moment before.
  */
 export function windowsProtectArgs(dir) {
-  return [dir, '/inheritance:r', '/grant:r', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F', '/T', '/Q'];
+  return [dir, '/inheritance:r', '/grant:r', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F', '/Q'];
+}
+
+/**
+ * The `icacls` arguments that bring one file back into line with a protected directory: inheritance
+ * on again (an earlier install may have left it switched off with nothing granted) and an explicit
+ * full-control entry for administrators and the system. A file takes no inheritance flags.
+ */
+export function windowsProtectFileArgs(file) {
+  return [file, '/inheritance:e', '/grant:r', '*S-1-5-32-544:F', '*S-1-5-18:F', '/Q'];
+}
+
+function canOpenForReading(file) {
+  try {
+    fs.closeSync(fs.openSync(file, 'r'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Leaves a Windows directory to administrators and the system, and proves the protected files can
+ * still be read by the process that did it. Every later step of an install or update reads the
+ * settings file from that same elevated process, so a protection that locks it out is a failure to
+ * report here, with what icacls shows, rather than an EPERM several steps later. Files that cannot
+ * be opened are repaired once, one by one, before giving up.
+ */
+export function protectWindowsDirectory(dir, { exec = run, canRead = canOpenForReading } = {}) {
+  exec('icacls', windowsProtectArgs(dir));
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const file = path.join(dir, entry.name);
+    if (canRead(file)) continue;
+    exec('icacls', windowsProtectFileArgs(file));
+    if (canRead(file)) continue;
+    const shown = (target) => exec('icacls', [target], { capture: true, allowFail: true }).stdout?.trim() ?? '';
+    fail(`${file} cannot be read after its directory was restricted to administrators and the system.\n${shown(dir)}\n${shown(file)}`);
+  }
 }
 
 /** `RUNNING`, `STOPPED`, … from `sc.exe query` output; `MISSING` when there is no such service. */
@@ -1643,7 +1702,7 @@ export function convergeWindowsService(layout, dotnetPath) {
     fs.mkdirSync(dir, { recursive: true });
     run('icacls', windowsGrantArgs(dir, layout.serviceName));
   }
-  run('icacls', windowsProtectArgs(layout.configDir));
+  protectWindowsDirectory(layout.configDir);
   const fileValues = parseEnvFile(fs.readFileSync(layout.envFile, 'utf8')).values;
   run('reg.exe', windowsServiceEnvironmentRegArgs(layout.serviceName, windowsServiceEnvironment(fileValues, layout)));
   note(`Windows service ${exists ? 'updated' : 'registered'}: ${layout.serviceName}, as ${windowsServiceAccount(layout.serviceName)}`);

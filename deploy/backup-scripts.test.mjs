@@ -77,8 +77,13 @@ describe('uploaded terrain rasters are in the backup', () => {
 
       const listing = spawnSync('tar', ['-tzf', archive], { encoding: 'utf8' });
       assert.equal(listing.status, 0);
-      const members = listing.stdout.split('\n').filter(Boolean);
-      assert.ok(members.includes('builds/uploads/r1.tif'));
+      // The listing is the tool's text output: a Windows tar ends its lines with CRLF and may
+      // list a member with backslashes or a leading './', none of which changes what is archived.
+      const members = listing.stdout
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((name) => name.replaceAll('\\', '/').replace(/^\.\//, ''));
+      assert.ok(members.includes('builds/uploads/r1.tif'), `members listed: ${JSON.stringify(members)}`);
       assert.ok(members.every((name) => name.startsWith('builds/uploads')), `only uploads: ${members}`);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });

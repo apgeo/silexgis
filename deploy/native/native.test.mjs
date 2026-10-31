@@ -552,6 +552,53 @@ describe('the Windows service', () => {
     // Well-known identifiers, so the grant works on a Windows in any language.
     assert.ok(protect.includes('*S-1-5-32-544:(OI)(CI)F'));
     assert.ok(protect.includes('*S-1-5-18:(OI)(CI)F'));
+    // The directory alone: a recursive run would repeat the inheritance removal on each file and
+    // leave the installer's own process unable to read the settings file it had just written.
+    assert.ok(!protect.includes('/T'), 'restricting the directory must not recurse into its files');
+  });
+
+  it('puts one file back under a protected directory with inheritance on and no inheritance flags', async () => {
+    const { windowsProtectFileArgs } = await import('./lib.mjs');
+    const args = windowsProtectFileArgs('C:\\ProgramData\\SilexGIS\\config\\silexgis.env');
+    assert.ok(args.includes('/inheritance:e'));
+    assert.ok(args.includes('*S-1-5-32-544:F') && args.includes('*S-1-5-18:F'));
+    assert.ok(!args.some((a) => /\((OI|CI|IO)\)/.test(a)), 'a file takes no inheritance flags');
+    assert.ok(!args.includes('/T'));
+  });
+
+  it('restricts a directory, then proves its files can still be read, repairing one that cannot', async () => {
+    const { protectWindowsDirectory } = await import('./lib.mjs');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sx-protect-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'silexgis.env'), 'A=1\n');
+      fs.mkdirSync(path.join(dir, 'sub'));
+      const calls = [];
+      let locked = true;
+      const exec = (command, args) => {
+        calls.push(args);
+        // Only the repair of the file itself lets a read through, as it would on Windows.
+        if (args[0].endsWith('silexgis.env')) locked = false;
+        return { status: 0, stdout: '', stderr: '' };
+      };
+      protectWindowsDirectory(dir, { exec, canRead: () => !locked });
+      assert.equal(calls[0][0], dir, 'the directory is restricted first');
+      assert.equal(calls.length, 2, 'one directory run and one repair of the unreadable file; the subdirectory is left');
+      assert.ok(calls[1].includes('/inheritance:e'));
+
+      // Readable straight away: nothing beyond the directory is touched.
+      calls.length = 0;
+      protectWindowsDirectory(dir, { exec, canRead: () => true });
+      assert.equal(calls.length, 1);
+
+      // Still unreadable after the repair: a failure that shows what icacls reports.
+      locked = true;
+      assert.throws(
+        () => protectWindowsDirectory(dir, { exec: () => ({ status: 0, stdout: 'ACL-LISTING', stderr: '' }), canRead: () => false }),
+        /cannot be read[\s\S]*ACL-LISTING/,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('reads the service state the way sc.exe reports it', async () => {

@@ -31,7 +31,6 @@ import {
   backupStamp,
   backupsToPrune,
   fail,
-  findExecutable,
   isWindows,
   layoutOptionSpec,
   loadInstallation,
@@ -42,6 +41,7 @@ import {
   runMain,
   say,
   spawnStreaming,
+  tarProgram,
   warn,
 } from './lib.mjs';
 
@@ -61,7 +61,7 @@ export async function dumpDatabase(layout, db, file) {
 
 /** Archives a directory's contents the way the Docker path does: `tar czf … -C <dir> .` */
 export function archiveDirectory(dir, file) {
-  const tar = findExecutable('tar') ?? fail('tar is not available on this machine');
+  const tar = tarProgram() ?? fail('tar is not available on this machine');
   fs.mkdirSync(dir, { recursive: true });
   const result = run(tar, ['-czf', file, '-C', dir, '.'], { allowFail: true, label: 'tar' });
   // GNU tar ends with 1 when a file changed while it was read — an upload landing mid-backup.
@@ -79,7 +79,7 @@ export function archiveDirectory(dir, file) {
 export function archiveTerrainUploads(terrainDir, file) {
   const uploads = path.join(terrainDir, 'builds', 'uploads');
   if (!fs.existsSync(uploads) || fs.readdirSync(uploads).length === 0) return false;
-  const tar = findExecutable('tar') ?? fail('tar is not available on this machine');
+  const tar = tarProgram() ?? fail('tar is not available on this machine');
   const result = run(tar, ['-czf', file, '-C', terrainDir, 'builds/uploads'], { allowFail: true, label: 'tar' });
   if (result.status === 1 && !isWindows) warn('a file changed while it was archived; the archive holds the rest');
   else if (result.status !== 0) fail(`tar exited with ${result.status}`);
