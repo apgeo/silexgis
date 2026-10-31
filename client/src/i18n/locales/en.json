@@ -2,6 +2,12 @@
   "app": {
     "name": "SilexGIS"
   },
+  "iconButtons": {
+    "delete": "Delete",
+    "download": "Download",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
+  },
   "nav": {
     "map": "Map",
     "map3d": "3D view",
@@ -6962,6 +6968,11 @@
     "viewRankSize": "Rank–size"
   },
   "registryStats": {
+    "basis": {
+      "readable": "Computed over the caves you may read. Somebody with different access sees different figures for the same registry, and both are right.",
+      "placeable": "Computed over the caves you may read and may place exactly. A cave whose position is closed to you is counted in the registry's totals and appears under no place, because a count under a place would say where it is.",
+      "area": "Computed over the caves you may read and may place exactly, inside the area you named. A cave whose position is closed to you is absent from these figures altogether, totals included, because a count inside a named area would say it is there."
+    },
     "distributionTitle": "Distribution across the registry",
     "asVisibleToYou": "Counted over the caves you may read. Somebody with different access sees different figures for the same registry, and both are right.",
     "stale": "These are the previous answer's figures, still on screen while the new one is worked out. No file is offered until the two are the same.",

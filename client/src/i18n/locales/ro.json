@@ -2,6 +2,12 @@
   "app": {
     "name": "SilexGIS"
   },
+  "iconButtons": {
+    "delete": "Șterge",
+    "download": "Descarcă",
+    "moveUp": "Mută mai sus",
+    "moveDown": "Mută mai jos"
+  },
   "nav": {
     "map": "Hartă",
     "map3d": "Vizualizare 3D",
@@ -6975,6 +6981,11 @@
     "viewRankSize": "Rang–mărime"
   },
   "registryStats": {
+    "basis": {
+      "readable": "Calculat pe peșterile pe care ai voie să le citești. Cineva cu alt acces vede alte cifre pentru același registru, iar ambele sunt corecte.",
+      "placeable": "Calculat pe peșterile pe care ai voie să le citești și să le localizezi exact. O peșteră a cărei poziție îți este închisă este numărată în totalurile registrului și nu apare sub niciun loc, pentru că un număr sub un loc ar spune unde se află.",
+      "area": "Calculat pe peșterile pe care ai voie să le citești și să le localizezi exact, în zona indicată de tine. O peșteră a cărei poziție îți este închisă lipsește cu totul din aceste cifre, totalurile incluse, pentru că un număr într-o zonă numită ar spune că ea se află acolo."
+    },
     "distributionTitle": "Distribuție în registru",
     "asVisibleToYou": "Calculat pe peșterile pe care le poți citi. Cineva cu alte drepturi vede alte cifre pentru același registru, și amândoi au dreptate.",
     "stale": "Acestea sunt cifrele răspunsului anterior, rămase pe ecran cât timp se calculează cel nou. Niciun fișier nu este oferit până când cele două nu coincid.",
