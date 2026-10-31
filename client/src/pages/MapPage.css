@@ -101,8 +101,11 @@ html[data-theme='dark'] .map-workspace-panel {
   align-items: flex-start;
   /* Stop short of the pop-out buttons pinned at the top right: when the map is narrow (docks
      open) the selector wraps under search instead of running on beneath those buttons, which
-     then took every press meant for it. */
-  max-width: calc(100% - 44px - 300px);
+     then took every press meant for it. The reserve is that group at its widest — six small
+     buttons and their gaps, 48px in from the edge — and no more, because the quick-filter chips
+     share this width and every pixel taken here can push them onto another line. */
+  --map-popout-reserve: 240px;
+  max-width: calc(100% - 44px - var(--map-popout-reserve));
 }
 
 /* Phone: search is the primary action and takes the strip, clearing the corner toggle on the
@@ -113,12 +116,15 @@ html[data-theme='dark'] .map-workspace-panel {
 .map-search-overlay-mobile {
   right: 56px;
   max-width: none;
+  --map-popout-reserve: 0px;
 }
 
 /* The quick-filter chips take a row of their own under search and the selector, led by the
    "list what is in view" button. */
 .map-filter-row {
-  flex-basis: 100%;
+  /* The row sits under the pop-out buttons, not beside them, so it takes back the width the
+     strip leaves free for them; otherwise the chips would wrap onto more lines than they need. */
+  flex: 0 0 calc(100% + var(--map-popout-reserve));
   display: flex;
   gap: 8px;
   align-items: flex-start;
