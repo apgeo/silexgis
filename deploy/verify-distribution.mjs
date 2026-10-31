@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // Build, run and smoke-test the production Docker distribution (deploy/docker-compose.yml).
-// Cross-platform (Node 18+, no shell-isms): `node deploy/verify-distribution.mjs`.
+// Cross-platform (Node 24, tested on 24 only, no shell-isms): `node deploy/verify-distribution.mjs`.
 //
 // Flags:
 //   --no-build   skip the image build, just (re)start and verify what is already built

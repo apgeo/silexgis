@@ -8,7 +8,15 @@
 
 ---
 
-Clientul web are nevoie de conexiune. **Offline-ul este rostul aplicației de telefon.**
+Clientul web are nevoie de conexiune. **Offline-ul este rostul unei aplicații de telefon.**
+
+> **Unde se află lucrurile azi.** Partea de server a sincronizării este construită și face parte
+> din această instalație: selecțiile de sincronizare, vizibilitatea trimiterilor și fereastra de
+> reîmprospătare descrise mai jos funcționează. **SpeleoLoc**, aplicația de telefon pentru
+> navigare în peșteri pentru care sunt făcute, este un proiect separat, dezvoltat în propriul
+> depozit. O versiune care se sincronizează cu SilexGIS este în lucru și nu e încă publicată
+> pentru uz general, așa că o selecție creată aici este citită doar de versiunile ei aflate în
+> testare.
 
 SilexGIS servește o interfață de sincronizare pe rânduri pentru **SpeleoLoc**, o aplicație de
 navigare în peșteri pentru telefoane. Un telefon se autentifică drept aplicație instalată,

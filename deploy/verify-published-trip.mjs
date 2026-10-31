@@ -2,7 +2,7 @@
 //
 // Ask an installation, from outside, what one published-trip link answers — the check to run
 // when somebody says "the page shows nothing" or "the article's frame is blank".
-// Cross-platform (Node 18+, built-ins only, no shell-isms).
+// Cross-platform (Node 24, tested on 24 only, built-ins only, no shell-isms).
 //
 //   node deploy/verify-published-trip.mjs https://gis.example.org
 //   node deploy/verify-published-trip.mjs https://gis.example.org --origin https://club.example.org

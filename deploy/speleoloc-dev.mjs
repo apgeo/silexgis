@@ -2,7 +2,7 @@
 //
 // A throwaway SilexGIS installation for writing a mobile client against the sync API.
 //
-// Cross-platform (Node 18+, no shell-isms). Four commands:
+// Cross-platform (Node 24, tested on 24 only, no shell-isms). Four commands:
 //
 //   node deploy/speleoloc-dev.mjs up
 //       Starts a dedicated PostGIS container on a loopback port with its own named volume,

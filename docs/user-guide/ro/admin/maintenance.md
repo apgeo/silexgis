@@ -76,7 +76,8 @@ Citește din nou **fiecare model de drumuire** (`.lox` / `.3d`) a instalării, d
 
 **Rulează-o când:**
 
-- ai actualizat la o versiune ale cărei note spun că topografiile sunt citite altfel — o stație
+- ai actualizat la o versiune care citește topografiile altfel (secțiunile „Upgrading across …”
+  din ghidul de instalare spun asta acolo unde e cazul) — o stație
   numită în alt fel, o cifră înregistrată de acum, pereți construiți de acum dintr-un grafic,
 - modelele topo încărcate înaintea unei asemenea actualizări se comportă altfel decât cele
   încărcate după ea.

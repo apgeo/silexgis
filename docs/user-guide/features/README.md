@@ -15,6 +15,7 @@ detail those walkthroughs link into.
 | Page | Covers |
 |---|---|
 | [Map workspace](map-workspace.md) | The main map: layers, selection, drawing, measuring, the details panel |
+| [Map services (WMS and WMTS)](map-services.md) | Agencies' maps drawn from their own servers: where they are, what is different about them |
 | [3D view](3d-view.md) | The globe, surveys in place, cutaway, camera, walls |
 | [Terrain](terrain.md) | Real relief under the 3D scene, and what an installation must do for it |
 | [Work areas](work-areas.md) | The ground your club actually works, as a browsable tree |
@@ -68,7 +69,7 @@ detail those walkthroughs link into.
 | Page | Covers |
 |---|---|
 | [Sharing, QR codes and public pages](sharing-and-public-pages.md) | Every anonymous surface the application has |
-| [Mobile and offline sync](mobile-sync.md) | The companion phone app and what it carries |
+| [Mobile and offline sync](mobile-sync.md) | What the server offers a phone app, and what is set up for it (the app itself is not released yet) |
 | [Reviewing uploads](upload-review.md) | The queue of uploads held for review, reading one, and accepting it whole, by line or by field |
 | [Phone recordings and trips that need a look](phone-recordings.md) | Recordings on the cave page, converting one by hand, and the notice on a flagged trip |
 | [Uploading surveys from TopoDroid](topodroid-uploads.md) | Access keys, a cave's surveys and their versions, the status page of an upload, the public result link |

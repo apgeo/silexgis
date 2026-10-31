@@ -69,13 +69,17 @@ Previous versions:
   grants, two-factor sign-in, optional external login, and an explainer answering "why can this
   person see that?".
 - **Share links** — revocable, public or sign-in-only, and never revealing a protected location.
+- **The national cave catalogue** — where an administrator has set a key, the cave catalogue
+  searches speologie.org, the Romanian community register of published caves, and brings the caves
+  you pick into your own registry without re-typing them; searching creates nothing. A cave can
+  also be matched to its entry in Grottocenter, the international database.
 - **Operator-controlled email and SMS** — any SMTP server, any HTTP SMS gateway, every message
   editable per language; configure nothing and the app still runs.
 - **English and Romanian** throughout, screens, dates and sent messages alike.
 
 Each of these is a paragraph or several in **[docs/FEATURES.md](docs/FEATURES.md)**, and a page
 of its own in the [user guide](docs/user-guide/README.md).
-The application is in an early beta stage. Some of the above features might be still buggy or not fully tested.
+The application is in an early alpha stage. Some of the above features might be still buggy or not fully tested, and the schema and the API may still change between releases.
 
 ## Quick start
 
@@ -107,18 +111,25 @@ client/   React + TypeScript SPA (Vite, Ant Design, OpenLayers)
 deploy/   Docker Compose, TLS and terrain overlays (serving, and the optional tile-making
           worker), reverse-proxy configs, backup/restore, terrain pre-bake, the
           mobile-sync development server scripts, and the install without Docker (native/)
-docs/     Installation and operations documentation, and the mobile-sync integration
-          contract in docs/speleoloc-sync/
+docs/     Installation and operations documentation, the contributor and test-gate rules
+          (CONTRIBUTING.md), and the mobile-sync integration contract in docs/speleoloc-sync/
 contract/ Recorded HTTP exchanges that are the mobile-sync contract, asserted byte for
           byte by the API test suite
 ```
 
 ### The mobile-sync integration
 
-SilexGIS serves a row-level sync API for the SpeleoLoc cave-navigation application: a phone signs in
-as an installed application, names the caves it carries, reads them a page at a time and writes its
-own edits back, with the server arbitrating each row. A code printed on a cave label also resolves
-to a public landing address.
+SpeleoLoc is a cave-navigation application for phones, developed as a separate project in its own
+repository. What exists in SilexGIS today is the **server side** of the sync with it, both phases:
+the row-level sync API (a device signs in as an installed application, names the caves it carries,
+reads them a page at a time and writes its own edits back, with the server arbitrating each row),
+and what the second phase added — photos and documents in both directions, the people directory,
+trip recordings, raster maps with pins, and uploads that wait for a reviewer. A code printed on a
+cave label also resolves to a public landing address. The phone application is developed
+separately, and a version that syncs with SilexGIS is in development and not yet published for
+general use; the handbook's
+[mobile-sync page](docs/user-guide/features/mobile-sync.md) describes what the server offers a
+device and what the settings on it do.
 
 Whoever writes a client for it starts at [docs/speleoloc-sync/README.md](docs/speleoloc-sync/README.md).
 The recorded exchanges under `contract/speleoloc-sync/` are the specification of the wire; they are
@@ -179,6 +190,10 @@ instead of running them one after another: thirteen minutes instead of twenty wi
 smoke spec — typically a few minutes — by the map in `scripts/e2e-affected.map.mjs`; it combines
 with `--mode fast`. Neither is the suite's verdict: the run's last line says what was left out,
 and the whole suite is the command without them.
+
+The rules that keep a test run honest — name the project file and never the solution, a run of
+zero tests is not a verdict, no `timeout` around the gate lock, never `pkill -f` — are written
+down in **[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)**.
 
 ## License
 

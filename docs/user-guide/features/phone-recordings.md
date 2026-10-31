@@ -10,6 +10,11 @@
 
 ---
 
+The server side of this is built; the SpeleoLoc phone application that sends recordings is a
+separate project; a version that syncs with SilexGIS is in development and not yet published for
+general use (see [Mobile and offline sync](mobile-sync.md)). Until it is, recordings arrive here
+only from the builds being tested.
+
 A phone running SpeleoLoc can **record a trip**: which cave, when it started and ended, and a scan
 at each marked place it passed. That recording is not yet the club's trip report. This page is about
 the two places where you meet it: the **cave page**, which lists the recordings made in that cave,

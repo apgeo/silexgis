@@ -10,6 +10,11 @@
 
 ---
 
+Partea de server a acestui lucru este construită; aplicația de telefon SpeleoLoc, care trimite
+înregistrările, este un proiect separat, iar o versiune care se sincronizează cu SilexGIS este în lucru și nu e încă publicată pentru uz
+general (vezi [Telefon și sincronizare offline](mobile-sync.md)). Până atunci înregistrările
+ajung aici doar de la versiunile aflate în testare.
+
 Un telefon cu SpeleoLoc poate **înregistra o tură**: în ce peșteră, când a început și s-a încheiat și
 câte o scanare la fiecare loc marcat pe lângă care a trecut. Înregistrarea nu este încă raportul de
 tură al clubului. Pagina de față este despre cele două locuri unde o întâlnești: **pagina peșterii**,

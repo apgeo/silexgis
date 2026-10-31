@@ -157,28 +157,35 @@ services:
       # container.
       IMMICH_MACHINE_LEARNING_ENABLED: "false"
       # -----------------------------------------------------------------------------------
-      # THE SERVER CONFIGURATION FILE — SHIPPED, BUT NOT MOUNTED. Read this before uncommenting.
+      # THE SERVER CONFIGURATION FILE — NOT SHIPPED, NOT MOUNTED. What was measured about it.
       #
       # Immich's map and reverse-geocoding settings are not environment variables; they live in a
-      # server configuration file. deploy/immich/immich.json holds the protective values and is
-      # in the repository ready to use. The mount is commented out for two reasons that have to
-      # be dealt with together:
+      # server configuration file named by IMMICH_CONFIG_FILE (the name is confirmed against
+      # release v3.1.0; a partial file is accepted and merged with the defaults). THERE IS NO
+      # FILE FOR IT IN THIS REPOSITORY — an earlier version of this comment said there was. To use
+      # one, write it and mount it read-only; the two settings that matter are
+      #     {"map": {"enabled": false}, "reverseGeocoding": {"enabled": false}}
+      # and the variable is left commented out below because whether to run a hardened Immich at all
+      # is the operator's decision, not this file's.
       #
-      #   (a) THE NAME OF THE VARIABLE BELOW IS NOT VERIFIED. Take it from the environment
-      #       reference for the release pinned above and correct this line before uncommenting.
-      #       A mount pointed at a variable nobody checked is how a file that was meant to be
-      #       copied fails to start.
-      #   (b) TURNING THE MAP OFF MAY ALSO REFUSE THE MAP API — and this deployment exists to
-      #       read photograph positions through that API. The sibling product was measured and
-      #       its equivalent switch does NOT disable its geographic API; whether Immich behaves
-      #       the same way is a different question about a different product and is NOT
-      #       established. Test it the same way — mount the file, call the marker route, count
-      #       what comes back — before relying on either answer.
-      #       DO NOT DELETE THIS COMMENT UNTIL IT IS ANSWERED HERE.
+      # What each setting does, measured on v3.1.0 (re-measure at every release change):
       #
-      # Until then the map setting is left to whoever administers this instance, which is an
-      # honest position for a test instance and not one for an installation.
-      # IMMICH_CONFIG_FILE: /config/immich.json   # <-- VARIABLE NAME UNVERIFIED. Confirm first.
+      #   * MAP OFF DOES NOT STOP THE MARKER ROUTE. It changes one thing: the flag Immich's own web
+      #     page reads to hide its world map. The marker route this deployment reads, the asset
+      #     detail, the metadata search and the rectangle query all still hand every position to
+      #     any signed-in account or key. Treat "map off" as cosmetic, never as protection. Who
+      #     holds a login on this instance is the protection.
+      #   * REVERSE GEOCODING OFF IS THE SETTING THAT CHANGES WHAT THE MARKER FEED SAYS. With it on,
+      #     every marker carries a place name computed from its position — a searchable place index
+      #     built from coordinates. It must be off FROM THE FIRST START: Immich imports its place
+      #     table when it first starts, and turning it off later does not remove names already
+      #     written.
+      #   * A MOUNTED FILE LOCKS THE SETTINGS. The server then refuses a settings change for
+      #     everybody, administrators included ("Cannot update configuration while
+      #     IMMICH_CONFIG_FILE is in use"), so the file's values are a default nobody can undo from
+      #     the settings screen, not an initial value.
+      #
+      # IMMICH_CONFIG_FILE: /config/immich.json   # uncomment together with a read-only mount of the file
       # -----------------------------------------------------------------------------------
     volumes:
       # Derived data — thumbnails, previews, transcodes, avatars — and, in MODE B, the

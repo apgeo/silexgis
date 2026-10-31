@@ -8,7 +8,14 @@
 
 ---
 
-The web client expects a connection. **Offline is what the phone app is for.**
+The web client expects a connection. **Offline is what a phone app is for.**
+
+> **Where this stands today.** The server side of the sync is built and is part of this
+> installation: the sync selections, the visibility of uploads and the refresh window described
+> below all work. **SpeleoLoc**, the cave-navigation phone application they are made for, is a
+> separate project developed in its own repository. A version that syncs with SilexGIS is in
+> development and not yet published for general use, so a selection you create here is read only
+> by the builds of it that are being tested.
 
 SilexGIS serves a row-level sync API for **SpeleoLoc**, a cave-navigation application for
 phones. A phone signs in as an installed application, names the caves it carries, reads them a

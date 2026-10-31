@@ -28,7 +28,7 @@ Additional tile layers configured by the installation, drawn over the base.
 
 A background or an overlay can also be a **map service** (WMS or WMTS) — the way a national
 mapping agency usually publishes its sheets — where your installation lists one. Map services are
-drawn in this map and in the [3D view](3d-view.md) only: never on the overview of
+drawn in this map and in the [3D view](3d-view.md) only (see [Map services](map-services.md)): never on the overview of
 [work areas](work-areas.md), and never in a document such as a trip write-up's map.
 
 A background can also be a **vector background** — shapes such as roads, rivers and place names

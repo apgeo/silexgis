@@ -2,7 +2,7 @@
 //
 // The SpeleoLoc app's live sync tests, run against a SilexGIS server built from this checkout.
 //
-// Cross-platform (Node 18+, no shell-isms). One command:
+// Cross-platform (Node 24, tested on 24 only, no shell-isms). One command:
 //
 //   node deploy/speleoloc-e2e.mjs --app <SpeleoLoc checkout> [options]
 //

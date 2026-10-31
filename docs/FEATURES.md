@@ -737,11 +737,16 @@ feature and walkthroughs of whole jobs.
   and search it, with the pictures passed through this application so no page names the library's
   host. Who sees them is the installation's choice — Full Administrators only unless it opens them
   to everyone signed in — and an administrator can suspend either library at once.
-- **A phone app that works underground** — SpeleoLoc, a cave-navigation application, carries a
-  chosen selection of caves offline and writes its edits back through a row-level sync, with the
-  server arbitrating every row; a position the phone's account may not see exactly never reaches
-  the phone at all. A code printed on a cave's label opens a public landing address. The protocol
-  is documented for anybody writing such a client in [speleoloc-sync](speleoloc-sync/README.md).
+- **A server for a phone app that works underground** — SpeleoLoc is a cave-navigation
+  application for phones, developed as a separate project. This installation already serves the
+  whole of its side of the sync: a device carries a chosen selection of caves offline and writes
+  its edits back through a row-level sync, with the server arbitrating every row, and the second
+  phase added photos and documents, the people directory, trip recordings, raster maps with pins
+  and uploads that wait for a reviewer. A position the device's account may not see exactly never
+  reaches it at all. A code printed on a cave's label opens a public landing address. The phone
+  application is a separate project; a version that syncs with SilexGIS is in development and not
+  yet published for general use. The protocol is documented for anybody writing
+  one in [speleoloc-sync](speleoloc-sync/README.md).
 - **Works on a phone** — the map workspace adapts to touch, including full geometry editing by
   finger, and the app installs to a home screen.
 - **Accounts & permissions** — editable permission groups instead of fixed roles: named

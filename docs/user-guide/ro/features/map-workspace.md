@@ -29,7 +29,7 @@ Straturi suplimentare de dale configurate de instalare, desenate peste fundal.
 
 Un fundal sau o hartă suprapusă poate fi și un **serviciu de hărți** (WMS sau WMTS) — felul în
 care o agenție națională de cartografie își publică de obicei foile — acolo unde instalarea
-ta listează unul. Serviciile de hărți se desenează doar pe această hartă și în
+ta listează unul. Serviciile de hărți (vezi [Servicii de hărți](map-services.md)) se desenează doar pe această hartă și în
 [vizualizarea 3D](3d-view.md): niciodată pe harta de ansamblu a [zonelor de lucru](work-areas.md)
 și niciodată într-un document, cum ar fi harta din raportul unei ture.
 

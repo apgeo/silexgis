@@ -842,7 +842,7 @@ anything built inside the application, deliberately, so switching the feature on
 about an installation that already had terrain.
 
 The command-line route needs Docker (for the pre-baker, and for GDAL if you bring your own
-rasters) and Node 18+ (for the script). Nothing is installed on the host itself. Budget roughly
+rasters) and Node.js 24 (for the script; it uses nothing but Node's own modules, and 24 is the version this repository's tests run it on). Nothing is installed on the host itself. Budget roughly
 **45 MB of download and 40 MB of tiles per 1°×1° cell**, and about **6 minutes** of one machine's
 time per cell at full detail. Romania is about 30 cells.
 
@@ -1465,6 +1465,28 @@ The thing in each library that cannot be rebuilt is the photograph, wherever you
 can be re-indexed, slowly. Whatever you do, do it with the product stopped or with its own tool, not
 by copying a running database's directory.
 
+**Who can see what inside the library is the library's own business, not SilexGIS's.** The photo
+library is a separate product with accounts of its own, and nothing in it knows which caves your
+installation protects. Measured on the Immich release this project was tested with (and to be
+measured again at each release change):
+
+- **Any account on the Immich instance can read the position of every photograph it can see.**
+  Switching Immich's map off in its settings (or in a configuration file) only hides its own world
+  map page; the route that lists photograph positions, the photograph detail and the search all
+  keep answering. Do not treat "map off" as protection. The protection is who holds a login there:
+  give the instance one account, the one SilexGIS reads through, and keep it off the public
+  internet.
+- **Turn reverse geocoding off before the first start, with a configuration file.** With it on,
+  Immich attaches a place name (city, region, country) computed from the position to every photograph
+  and keeps it; switching the setting off afterwards does not remove names already written. The
+  setting is not an environment variable. It is `{"reverseGeocoding": {"enabled": false}}` in a
+  server configuration file that the container is pointed at with `IMMICH_CONFIG_FILE` and mounted
+  read-only, from the very first start (the commented lines in `deploy/docker-compose.immich.yml`
+  say where). No such file ships in this repository. While a configuration file is in use Immich
+  refuses every change to the settings it holds, administrators included.
+- PhotoPrism behaves the same way about positions: its places switch hides a page and leaves its
+  position interface answering.
+
 ## Backups
 
 `deploy/scripts/backup.sh` dumps the database, the uploaded-files volume and the rasters uploaded
@@ -1675,8 +1697,10 @@ docker compose build --pull
 docker compose up -d
 ```
 
-Database migrations run automatically on start. Take a backup first; release notes call out
-any manual steps. An installation without Docker updates with `deploy/native/update.mjs`, which
+Database migrations run automatically on start. Take a backup first. There are no separate
+release notes: a manual step that a particular upgrade needs is written up in the section of
+this page headed "Upgrading across …" below, so read those that fall between the version you run
+and the one you are moving to. An installation without Docker updates with `deploy/native/update.mjs`, which
 backs up first and rolls back a build that does not come up — see [Updating](#updating).
 
 ### Upgrading across the document text-reading release
@@ -2765,7 +2789,7 @@ It asks for the follow link on standard input (or reads it from `SILEXGIS_VERIFY
 shell's history and shown in the process list. Nothing it prints contains the link. A line
 beginning `LIMITED` means the server refused the check itself as one request too many from the
 address you ran it from — which is not a verdict on the link, and is a finding about that address.
-It needs Node 18 or newer and nothing else, so it runs from a laptop as well as from the server.
+It needs Node.js 24 and nothing else (it uses only Node's own modules, and 24 is the version this repository's tests run it on), so it runs from a laptop as well as from the server.
 
 The causes, most likely first. "Reason" is the word in the log line and the `outcome` of the reads
 counter.

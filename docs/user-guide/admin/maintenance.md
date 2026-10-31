@@ -75,7 +75,8 @@ that is already stored.
 
 **Run it when:**
 
-- you have upgraded to a version whose release notes say surveys are read differently — a
+- you have upgraded to a version that reads surveys differently (the installation guide's
+  "Upgrading across …" sections say so where it applies) — a
   station named another way, a figure newly recorded, walls newly built from a plot,
 - survey models uploaded before such an upgrade behave differently from ones uploaded after it.
 

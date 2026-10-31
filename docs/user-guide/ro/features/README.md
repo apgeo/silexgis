@@ -15,6 +15,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | Pagina | Acoperă |
 |---|---|
 | [Spațiul de lucru al hărții](map-workspace.md) | Harta principală: straturi, selecție, desenare, măsurare, panoul de detalii |
+| [Servicii de hărți (WMS și WMTS)](map-services.md) | Hărțile agențiilor, desenate de pe serverele lor: unde sunt și ce e diferit la ele |
 | [Vizualizarea 3D](3d-view.md) | Globul, topografiile la locul lor, decuparea, camera, pereții |
 | [Relief](terrain.md) | Relieful real sub scena 3D și ce trebuie să facă o instalare pentru el |
 | [Zone de lucru](work-areas.md) | Terenul pe care lucrează efectiv clubul, ca arbore navigabil |
@@ -68,7 +69,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | Pagina | Acoperă |
 |---|---|
 | [Partajare, coduri QR și pagini publice](sharing-and-public-pages.md) | Fiecare suprafață anonimă a aplicației |
-| [Telefon și sincronizare offline](mobile-sync.md) | Aplicația de telefon și ce transportă |
+| [Telefon și sincronizare offline](mobile-sync.md) | Ce oferă serverul unei aplicații de telefon și ce se configurează pentru ea (aplicația nu este încă lansată) |
 | [Verificarea încărcărilor](upload-review.md) | Coada încărcărilor reținute pentru verificare, citirea uneia și acceptarea ei întreagă, pe linii sau pe câmpuri |
 | [Înregistrări de pe telefon și ture care au nevoie de o privire](phone-recordings.md) | Înregistrările de pe pagina peșterii, transformarea manuală și notificarea de pe o tură semnalată |
 | [Încărcarea topografiilor din TopoDroid](topodroid-uploads.md) | Chei de acces, topografiile unei peșteri și versiunile lor, pagina de stare a unei încărcări, linkul public al rezultatului |

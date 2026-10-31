@@ -47,6 +47,7 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 
 **Privirea asupra terenului**
 [Spațiul de lucru al hărții](features/map-workspace.md) ·
+[Servicii de hărți (WMS și WMTS)](features/map-services.md) ·
 [Vizualizarea 3D](features/3d-view.md) ·
 [Relief](features/terrain.md) ·
 [Zone de lucru](features/work-areas.md) ·

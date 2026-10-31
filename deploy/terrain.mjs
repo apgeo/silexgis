@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Build the elevation model the 3D view can draw its ground from.
-// Cross-platform (Node 18+, no shell-isms). Four commands; `fetch` and `prepare` are two ways of
+// Cross-platform (Node 24, tested on 24 only, no shell-isms). Four commands; `fetch` and `prepare` are two ways of
 // arriving at the same place, and one of them is enough:
 //
 //   node deploy/terrain.mjs fetch --bbox 22,45,26,48 --out ./dem
