@@ -114,7 +114,7 @@ export const specs = {
     'map-editing.spec.ts', 'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
     'karst-layers.spec.ts', 'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
     'accessibility.spec.ts', 'workspace-state.spec.ts', 'map-filters.spec.ts', 'table-map.spec.ts',
-    'coordinate-converter.spec.ts',
+    'coordinate-converter.spec.ts', 'terrain-profile-tool.spec.ts',
     // Saved-filter layers clicked on the map and drawn in the 3D view beside it.
     'map-filter-layers.spec.ts',
     // The workspace's panes, presets, the table under the map, and the corner notice's place.
@@ -175,7 +175,7 @@ export const specs = {
   tags: ['trips.spec.ts'],
   taxonomies: [],
   terrain: [
-    'terrain.spec.ts', 'terrain-derivatives.spec.ts', 'overburden-profile.spec.ts',
+    'terrain.spec.ts', 'terrain-derivatives.spec.ts', 'overburden-profile.spec.ts', 'terrain-profile-tool.spec.ts',
     'scene3d.spec.ts',
   ],
   trips: [
