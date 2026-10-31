@@ -13818,6 +13818,7 @@ export interface components {
             minimumGroupCaveCount: number;
             groups: components["schemas"]["RegistryCategoryGroup"][];
             basis: string;
+            basisKind: string;
         };
         RegistryCategoryGroup: {
             /** Format: int64 */
@@ -13921,6 +13922,7 @@ export interface components {
             correlation: null | number;
             logarithmic: boolean;
             basis: string;
+            basisKind: string;
         };
         RegistryDistribution: {
             measure: components["schemas"]["RegistryMeasure"];
@@ -13937,6 +13939,7 @@ export interface components {
             lognormal: null | components["schemas"]["LognormalFit"];
             paretoTail: null | components["schemas"]["ParetoTailFit"];
             basis: string;
+            basisKind: string;
         };
         /** @enum {unknown} */
         RegistryMeasure: "surveyedLength" | "estimatedLength" | "depth" | "positiveDepth" | "negativeDepth" | "realExtension" | "projectedExtension" | "volume" | "area" | "ramificationIndex";
@@ -13951,6 +13954,7 @@ export interface components {
             caveCount: number;
             regions: components["schemas"]["RegistryRegionRow"][];
             basis: string;
+            basisKind: string;
         };
         RegistryRegionRow: {
             region: null | string;

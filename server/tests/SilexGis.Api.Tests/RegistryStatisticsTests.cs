@@ -266,6 +266,7 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
         body.GetProperty("rSquared").GetDouble().ShouldBe(1, 1e-9);
         body.GetProperty("logarithmic").GetBoolean().ShouldBeTrue();
         body.GetProperty("basis").GetString().ShouldNotBeNullOrWhiteSpace();
+        body.GetProperty("basisKind").GetString().ShouldBe("readable");
     }
 
     [Fact]
@@ -581,6 +582,7 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
         var whole = await ReadJsonAsync(viewer, "regions");
         whole.GetProperty("basis").GetString().ShouldNotBeNull()
             .ShouldContain("is counted in the registry's totals");
+        whole.GetProperty("basisKind").GetString().ShouldBe("placeable");
 
         // Narrowed to an area, the same cave is out of the total as well, because a count inside a
         // named area would say it is there. A reader told otherwise would add the rows up, find
@@ -589,6 +591,7 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
         var basis = inArea.GetProperty("basis").GetString().ShouldNotBeNull();
         basis.ShouldContain("absent from these figures altogether");
         basis.ShouldNotBe(whole.GetProperty("basis").GetString());
+        inArea.GetProperty("basisKind").GetString().ShouldBe("area");
 
         // And the file says it in the same words the screen did.
         Text(await SheetAsync(viewer, $"regions?areaId={areaId}")).ShouldContain(basis);

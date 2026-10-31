@@ -307,6 +307,8 @@ public sealed class RegistryRegionsRequestValidator : AbstractValidator<Registry
 /// and both are right. A figure with no basis beside it invites the reader to take it for the whole
 /// truth and somebody else's copy for a contradiction.
 /// </param>
+/// <param name="BasisKind">Which sentence <paramref name="Basis"/> is, by name ("readable" or
+/// "area"), so a client can show it in the reader's own language.</param>
 public sealed record RegistryCorrelationDto(
     RegistryMeasure X,
     RegistryMeasure Y,
@@ -316,7 +318,8 @@ public sealed record RegistryCorrelationDto(
     double? RSquared,
     double? Correlation,
     bool Logarithmic,
-    string Basis);
+    string Basis,
+    string BasisKind);
 
 /// <summary>How many caves stand under each region in scope.</summary>
 /// <param name="CaveCount">
@@ -324,7 +327,8 @@ public sealed record RegistryCorrelationDto(
 /// and may not place is counted here and stands under no region.
 /// </param>
 public sealed record RegistryRegionBreakdownDto(
-    int CaveCount, IReadOnlyList<RegistryRegionRow> Regions, string Basis);
+    int CaveCount, IReadOnlyList<RegistryRegionRow> Regions, string Basis,
+    string BasisKind);
 
 /// <summary>
 /// Reading a list of measure names off a request, in one place so the rule that refuses a bad list

@@ -188,7 +188,8 @@ public sealed record RegistryCategoryComparison(
     RegistryCategory Category,
     int MinimumGroupCaveCount,
     IReadOnlyList<RegistryCategoryGroup> Groups,
-    string Basis);
+    string Basis,
+    string BasisKind);
 
 /// <summary>
 /// A measure summarised over a scope: its extent, its histogram after the publication rule, its
@@ -196,6 +197,8 @@ public sealed record RegistryCategoryComparison(
 /// </summary>
 /// <param name="Basis">What the figures were computed over, in words, so a reader who compares two
 /// people's copies of the same answer can see why they differ.</param>
+/// <param name="BasisKind">Which sentence <paramref name="Basis"/> is, by name ("readable" or
+/// "area"), so a client can show it in the reader's own language.</param>
 public sealed record RegistryDistribution(
     RegistryMeasure Measure,
     int CaveCount,
@@ -206,4 +209,5 @@ public sealed record RegistryDistribution(
     IReadOnlyList<RegistryPercentileRow> Percentiles,
     LognormalFit? Lognormal,
     ParetoTailFit? ParetoTail,
-    string Basis);
+    string Basis,
+    string BasisKind);

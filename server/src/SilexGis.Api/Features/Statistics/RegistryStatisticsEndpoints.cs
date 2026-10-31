@@ -284,7 +284,8 @@ public static class RegistryStatisticsEndpoints
                 fit.RSquared,
                 fit.Correlation,
                 fit.Logarithmic,
-                basis));
+                basis,
+                RegistryStatisticsQuery.MeasurementBasisKind(scope)));
     }
 
     /// <summary>
@@ -424,7 +425,8 @@ public static class RegistryStatisticsEndpoints
         var basis = RegistryStatisticsQuery.PlacementBasis(scope);
 
         return new Answer<RegistryRegionBreakdownDto>(
-            false, null, new RegistryRegionBreakdownDto(caveCount, regions, basis));
+            false, null, new RegistryRegionBreakdownDto(
+                caveCount, regions, basis, RegistryStatisticsQuery.PlacementBasisKind(scope)));
     }
 
     /// <summary>

@@ -83,6 +83,27 @@ public static class RegistryStatisticsQuery
     }
 
     /// <summary>
+    /// The language-neutral name of the sentence <see cref="MeasurementBasis"/> returns, so a client
+    /// can show that sentence in the reader's own language instead of the English text: "readable"
+    /// or "area".
+    /// </summary>
+    public static string MeasurementBasisKind(RegistryStatisticsScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        return scope.IsSpatiallyScoped ? "area" : "readable";
+    }
+
+    /// <summary>
+    /// The language-neutral name of the sentence <see cref="PlacementBasis"/> returns: "placeable"
+    /// or "area".
+    /// </summary>
+    public static string PlacementBasisKind(RegistryStatisticsScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        return scope.IsSpatiallyScoped ? "area" : "placeable";
+    }
+
+    /// <summary>
     /// A measure summarised over a scope: its extent, its histogram, its quantiles and the two
     /// distribution fits, in one pass.
     /// </summary>
@@ -126,7 +147,8 @@ public static class RegistryStatisticsQuery
                 [],
                 null,
                 null,
-                basis);
+                basis,
+                MeasurementBasisKind(scope));
         }
 
         var bins = await HistogramAsync(
@@ -159,7 +181,8 @@ public static class RegistryStatisticsQuery
             percentiles,
             DistributionFits.FitLognormal(sample),
             DistributionFits.FitParetoTail(sample),
-            basis);
+            basis,
+            MeasurementBasisKind(scope));
     }
 
     /// <summary>
@@ -231,7 +254,7 @@ public static class RegistryStatisticsQuery
             .ToList();
 
         return new RegistryCategoryComparison(
-            measure, category, floor, groups, MeasurementBasis(scope));
+            measure, category, floor, groups, MeasurementBasis(scope), MeasurementBasisKind(scope));
     }
 
     /// <summary>One group as the statement returns it, before the floor is applied.</summary>
