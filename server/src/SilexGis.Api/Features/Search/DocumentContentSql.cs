@@ -220,7 +220,8 @@ public static class DocumentContentSql
                 {UploadBehindMatch}
                 JOIN document_versions v ON v.id = f.document_version_id
                 JOIN documents d ON d.id = v.document_id
-                WHERE ({indexable})
+                WHERE d.deleted_at IS NULL
+                  AND ({indexable})
                   AND ({exact})
                   AND {versionArm}
                   AND {readSql}
@@ -332,7 +333,8 @@ public static class DocumentContentSql
             JOIN files f ON f.id = p.file_id
             JOIN document_versions v ON v.id = f.document_version_id
             JOIN documents d ON d.id = v.document_id
-            WHERE ({plan.Indexable})
+            WHERE d.deleted_at IS NULL
+              AND ({plan.Indexable})
               AND ({plan.Exact})
               AND NOT {plan.ReadSql}
               AND {ReachCouldAdmit}

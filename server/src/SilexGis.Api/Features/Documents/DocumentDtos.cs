@@ -115,3 +115,28 @@ public sealed record UnfiledDocumentDto(
     string? MimeType,
     long? SizeBytes,
     DateTimeOffset CreatedAt);
+
+/// <summary>A deleted document, as the list of documents that can be put back shows it.</summary>
+/// <param name="RestorableUntil">
+/// When it stops being restorable and is removed for good, or null on an installation that keeps
+/// deleted documents until somebody says otherwise. What a "12 days left" line is drawn from.
+/// </param>
+/// <param name="DeletedByName">
+/// Who deleted it, under the label this reader may be shown for them — never an address — or null
+/// when the account is gone or its name is not this reader's to see.
+/// </param>
+public sealed record DeletedDocumentDto(
+    Guid Id,
+    string Title,
+    long? DocumentTypeId,
+    DateTimeOffset DeletedAt,
+    DateTimeOffset? RestorableUntil,
+    Guid? DeletedByUserId,
+    string? DeletedByName);
+
+/// <summary>What this installation does with a deleted document.</summary>
+/// <param name="DeletedRetentionDays">
+/// How many days a deleted document can still be put back, or null when it is kept until somebody
+/// says otherwise. Asked before the delete so the confirmation can say what is about to happen.
+/// </param>
+public sealed record DocumentConfigDto(int? DeletedRetentionDays);

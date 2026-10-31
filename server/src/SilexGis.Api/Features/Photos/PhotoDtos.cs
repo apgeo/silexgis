@@ -216,13 +216,14 @@ public sealed record PhotoDuplicateGroupDto(string Sha256, IReadOnlyList<PhotoDt
 
 /// <summary>A deleted photograph, as the restore list shows it.</summary>
 /// <param name="RestorableUntil">
-/// When it stops being restorable and its bytes become eligible to go. What a "12 days left"
+/// When it stops being restorable and its bytes become eligible to go, or null when this
+/// installation keeps deleted documents until somebody says otherwise. What a "12 days left"
 /// line is drawn from.
 /// </param>
 public sealed record DeletedPhotoDto(
     Guid DocumentId,
     string Title,
     DateTimeOffset DeletedAt,
-    DateTimeOffset RestorableUntil,
+    DateTimeOffset? RestorableUntil,
     Guid? DeletedByUserId,
     string? DeletedByName);

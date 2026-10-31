@@ -113,4 +113,26 @@ public class Document : IProtectedEntity, ITimestamped, IAuditable
     public string AuditId => Id.ToString();
 
     public bool IsDeleted => DeletedAt is not null;
+
+    /// <summary>
+    /// Marks the document deleted. Already deleted is left as it is, so the first deletion's
+    /// moment and person stay the record of it.
+    /// </summary>
+    public void MarkDeleted(DateTimeOffset at, Guid? byUserId)
+    {
+        if (DeletedAt is not null)
+        {
+            return;
+        }
+
+        DeletedAt = at;
+        DeletedByUserId = byUserId;
+    }
+
+    /// <summary>Puts the document back by clearing the deletion mark.</summary>
+    public void MarkRestored()
+    {
+        DeletedAt = null;
+        DeletedByUserId = null;
+    }
 }

@@ -4586,6 +4586,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Deleted documents the caller could put back, newest deletion first. */
+        get: operations["documentDeletionList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a delete does on this installation: how long a deleted document can be put back. */
+        get: operations["documentDeletionConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/documents/{id}": {
         parameters: {
             query?: never;
@@ -4598,6 +4632,24 @@ export interface paths {
         /** Updates a document's title, kind and typed metadata; requires write access. */
         put: operations["documentUpdate"];
         post?: never;
+        /** Deletes a document: it is hidden everywhere and can be restored; requires write access. */
+        delete: operations["documentDeletionDelete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Puts a deleted document back, if this installation still keeps it; requires write access. */
+        post: operations["documentDeletionRestore"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9944,6 +9996,20 @@ export interface components {
             /** Format: date-time */
             expiresAt: null | string;
         };
+        DeletedDocumentDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: int64 */
+            documentTypeId: null | number;
+            /** Format: date-time */
+            deletedAt: string;
+            /** Format: date-time */
+            restorableUntil: null | string;
+            /** Format: uuid */
+            deletedByUserId: null | string;
+            deletedByName: null | string;
+        };
         DeletedFeatureDto: {
             /** Format: uuid */
             id: string;
@@ -9965,7 +10031,7 @@ export interface components {
             /** Format: date-time */
             deletedAt: string;
             /** Format: date-time */
-            restorableUntil: string;
+            restorableUntil: null | string;
             /** Format: uuid */
             deletedByUserId: null | string;
             deletedByName: null | string;
@@ -10137,6 +10203,10 @@ export interface components {
         };
         DocumentCommentUpdateRequest: {
             body: string;
+        };
+        DocumentConfigDto: {
+            /** Format: int32 */
+            deletedRetentionDays: null | number;
         };
         DocumentDto: {
             /** Format: uuid */
@@ -12478,6 +12548,15 @@ export interface components {
         };
         PagedResultOfCaveListItemDto: {
             items: components["schemas"]["CaveListItemDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfDeletedDocumentDto: {
+            items: components["schemas"]["DeletedDocumentDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -29295,6 +29374,67 @@ export interface operations {
             };
         };
     };
+    documentDeletionList: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagedResultOfDeletedDocumentDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    documentDeletionConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentConfigDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     documentGet: {
         parameters: {
             query?: never;
@@ -29358,6 +29498,64 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    documentDeletionDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    documentDeletionRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {

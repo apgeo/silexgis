@@ -43,6 +43,10 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable, IClassFixtu
         {
             ["Files:Root"] = filesRoot,
             ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+
+            // A window, because the purge and the past-the-window refusal are what some of these
+            // tests are about; an installation that sets none keeps everything it deletes.
+            ["DocumentRetention:RetentionDays"] = ((int)SoftDeleteRules.DefaultRetention.TotalDays).ToString(),
         });
     }
 

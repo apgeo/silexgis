@@ -60,7 +60,9 @@ public static class PositionMembershipSql
             SELECT sf.id AS "FileId", v.document_id AS "DocumentId"
             FROM files sf
             JOIN document_versions v ON v.id = sf.document_version_id
+            JOIN documents d ON d.id = v.document_id
             WHERE v.is_current
+              AND d.deleted_at IS NULL
               AND sf.kind = {image}
               AND sf.geom IS NOT NULL
               AND sf.geom && ST_MakeEnvelope(@sc_west, @sc_south, @sc_east, @sc_north, 4326)

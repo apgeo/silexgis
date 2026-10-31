@@ -50,8 +50,13 @@ public sealed class DocumentPurgeHandler(
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
-        var retention = options.Value.Retention;
-        var cutoff = SoftDeleteRules.PurgeCutoff(DateTimeOffset.UtcNow, retention);
+        // No window means this installation keeps what is deleted until somebody decides
+        // otherwise: nothing is selected, so a pass that was queued before the setting changed
+        // removes nothing.
+        if (SoftDeleteRules.PurgeCutoff(DateTimeOffset.UtcNow, options.Value.Window) is not { } cutoff)
+        {
+            return;
+        }
 
         // An indexed comparison over the filtered index rather than a predicate per row: the
         // rule computes the cut-off precisely so the database can use one.
@@ -130,16 +135,22 @@ public sealed class DocumentRetentionOptions
     public const string SectionName = "DocumentRetention";
 
     /// <summary>
-    /// Days a deleted document can still be got back. Zero is a real setting — an installation
-    /// that wants deletion to mean deletion — and is why this is a number of days rather than a
-    /// nullable one.
+    /// Days a deleted document can still be got back before its rows and bytes are removed for
+    /// good. Zero or less — the default — switches the removal off: deleted documents are kept,
+    /// and stay restorable, until an installation sets a window.
     /// </summary>
-    public int RetentionDays { get; set; } = (int)SoftDeleteRules.DefaultRetention.TotalDays;
+    /// <remarks>
+    /// The same reading as a deleted trip's setting, and for the same reason: removing the bytes
+    /// is the one step that cannot be undone, so nothing takes it unless somebody chose to. A
+    /// window of zero therefore no longer means "remove at the next pass".
+    /// </remarks>
+    public int RetentionDays { get; set; }
 
     /// <summary>How often the sweep runs. Well inside the window, so nothing waits long past it.</summary>
     public TimeSpan SweepInterval { get; set; } = TimeSpan.FromHours(6);
 
-    public TimeSpan Retention => TimeSpan.FromDays(Math.Max(0, RetentionDays));
+    /// <summary>The window those days stand for, or null when nothing is removed.</summary>
+    public TimeSpan? Window => SoftDeleteRules.Window(RetentionDays);
 }
 
 /// <summary>
@@ -158,6 +169,12 @@ public sealed class DocumentPurgeScheduler(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var interval = options.Value.SweepInterval;
+        if (options.Value.Window is null)
+        {
+            logger.LogInformation("Deleted documents are kept: no retention window is set");
+            return;
+        }
+
         if (interval <= TimeSpan.Zero)
         {
             logger.LogInformation("Scheduled document purging is disabled");

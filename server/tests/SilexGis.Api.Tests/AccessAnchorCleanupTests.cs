@@ -47,7 +47,14 @@ public sealed class AccessAnchorCleanupTests : IAsyncLifetime, IDisposable, ICla
     private long caveTypeId;
 
     public AccessAnchorCleanupTests(PostgresFixture postgres) =>
-        factory = new SilexGisApiFactory(postgres.ConnectionString, configureServices: JobWorkers.RemoveFrom);
+        factory = new SilexGisApiFactory(
+            postgres.ConnectionString,
+            new Dictionary<string, string?>
+            {
+                // The purge these tests run is off unless a window is set.
+                ["DocumentRetention:RetentionDays"] = "30",
+            },
+            configureServices: JobWorkers.RemoveFrom);
 
     public async ValueTask InitializeAsync()
     {

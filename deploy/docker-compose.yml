@@ -81,9 +81,9 @@ services:
       # knows its size.
       SILEXGIS__Files__DefaultUserQuotaBytes: ${SILEXGIS_USER_QUOTA_BYTES:-0}
       SILEXGIS__Files__MaxTotalStoreBytes: ${SILEXGIS_MAX_TOTAL_STORE_BYTES:-0}
-      # How long a deleted document can still be got back, and how often the sweep that removes
-      # the expired ones runs.
-      SILEXGIS__DocumentRetention__RetentionDays: ${SILEXGIS_RETENTION_DAYS:-30}
+      # How long a deleted document can still be got back before it is removed for good. 0, the
+      # default, removes nothing: deleted documents are kept until an installation sets a window.
+      SILEXGIS__DocumentRetention__RetentionDays: ${SILEXGIS_RETENTION_DAYS:-0}
       SILEXGIS__Keys__Path: /data/keys
       # Where a terrain build works. It must be a volume rather than the default beside the
       # application: a build keeps the rasters it was given until somebody deletes it, which is

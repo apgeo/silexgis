@@ -341,16 +341,14 @@ public static class PhotoEndpoints
     }
 
     /// <summary>
-    /// What the caller deleted and can still get back.
+    /// The deleted photographs the caller could put back.
     /// </summary>
     /// <remarks>
-    /// Their own, and a full administrator's view of everybody's. Deliberately not "everything
-    /// you may write": a restore list is a list of things that are gone, and the useful question
-    /// is "what did I just delete" rather than "what has anyone deleted anywhere".
+    /// The same answer the document list gives, narrowed to pictures: what a person may restore is
+    /// what they may edit, not what they happened to delete themselves.
     /// </remarks>
     private static async Task<Results<Ok<PagedResult<DeletedPhotoDto>>, UnauthorizedHttpResult>> DeletedAsync(
-        SilexGisDbContext db,
-        IOptions<DocumentRetentionOptions> retention,
+        DocumentDeletionService deletion,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct,
         int? page = null,
@@ -362,33 +360,27 @@ public static class PhotoEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var window = retention.Value.Retention;
         var (p, size) = Paging.Normalize(page, pageSize);
-
-        // Through the model-wide filter, which hides exactly the rows this list is about.
-        var deleted = db.Documents.AsNoTracking().IgnoreQueryFilters()
-            .Where(d => d.DeletedAt != null && (ctx.IsFullAdmin || d.DeletedByUserId == ctx.UserId))
-            .OrderByDescending(d => d.DeletedAt)
-            .ThenByDescending(d => d.Id);
-
-        return TypedResults.Ok(await deleted.ToPagedAsync(
+        var (shown, total) = await deletion.ListAsync(ctx, photographsOnly: true, p, size, ct);
+        return TypedResults.Ok(new PagedResult<DeletedPhotoDto>(
+            [
+                .. shown.Select(r => new DeletedPhotoDto(
+                    r.Document.Id,
+                    r.Document.Title,
+                    r.Document.DeletedAt!.Value,
+                    r.RestorableUntil,
+                    r.Document.DeletedByUserId,
+                    null)),
+            ],
             p,
             size,
-            d => new DeletedPhotoDto(
-                d.Id,
-                d.Title,
-                d.DeletedAt!.Value,
-                d.DeletedAt!.Value + window,
-                d.DeletedByUserId,
-                null),
-            ct));
+            total));
     }
 
-    /// <summary>Puts a deleted photograph back, if its window has not run out.</summary>
+    /// <summary>Puts a deleted photograph back, if this installation still keeps it.</summary>
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> RestoreAsync(
         Guid documentId,
-        SilexGisDbContext db,
-        IOptions<DocumentRetentionOptions> retention,
+        DocumentDeletionService deletion,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -398,32 +390,16 @@ public static class PhotoEndpoints
             return TypedResults.Unauthorized();
         }
 
-        // Seen through the filter, and narrowed to what this caller deleted: the ordinary read
-        // rule cannot answer for a row it hides, and "who deleted it" is the claim that stands
-        // in for it. A full administrator can reach any of them.
-        var document = await db.Documents.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(
-                d => d.Id == documentId
-                    && d.DeletedAt != null
-                    && (ctx.IsFullAdmin || d.DeletedByUserId == ctx.UserId),
-                ct);
-        if (document is null)
+        return await deletion.RestoreAsync(ctx, documentId, ct) switch
         {
-            return ApiProblems.NotFound(NotFoundCode);
-        }
-
-        if (!SoftDeleteRules.IsRestorable(document.DeletedAt!.Value, DateTimeOffset.UtcNow, retention.Value.Retention))
-        {
-            // Past the window the bytes may already be gone, so a restore would produce a row
-            // pointing at nothing — worse than refusing.
-            return ApiProblems.Conflict(
-                SoftDeleteRules.NotDeletedCode, "The restore window for this photograph has passed.");
-        }
-
-        document.DeletedAt = null;
-        document.DeletedByUserId = null;
-        await db.SaveChangesAsync(ct);
-        return TypedResults.NoContent();
+            DocumentRestoreOutcome.Restored => TypedResults.NoContent(),
+            DocumentRestoreOutcome.Forbidden => ApiProblems.Forbidden(WriteForbiddenCode),
+            DocumentRestoreOutcome.NotDeleted =>
+                ApiProblems.Conflict(SoftDeleteRules.NotDeletedCode, "This photograph is not deleted."),
+            DocumentRestoreOutcome.WindowPassed => ApiProblems.Conflict(
+                SoftDeleteRules.RestoreWindowPassedCode, "The restore window for this photograph has passed."),
+            _ => ApiProblems.NotFound(NotFoundCode),
+        };
     }
 
     /// <summary>
@@ -547,8 +523,7 @@ public static class PhotoEndpoints
         if (request.Delete == true)
         {
             var tracked = await db.Documents.FirstAsync(d => d.Id == document.Id, ct);
-            tracked.DeletedAt = DateTimeOffset.UtcNow;
-            tracked.DeletedByUserId = userId;
+            tracked.MarkDeleted(DateTimeOffset.UtcNow, userId);
             return;
         }
 

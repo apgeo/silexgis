@@ -326,6 +326,9 @@ public static class SurveySourceEndpoints
             join stored in db.StoredFiles.AsNoTracking()
                 on version.Id equals stored.DocumentVersionId
             where documentIds.Contains(version.DocumentId)
+                // Through the document filter: a deleted document is absent here too, and comes
+                // back with a restore.
+                && db.Documents.Any(d => d.Id == version.DocumentId)
                 && version.IsCurrent
                 && stored.ConvertedFromFileId == null
             select new { version.DocumentId, version.VersionNumber, stored.Id, stored.MimeType, stored.SizeBytes })

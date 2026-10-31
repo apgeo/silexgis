@@ -58,6 +58,9 @@ public sealed class TripSoftDeleteTests : IAsyncLifetime, IDisposable, IClassFix
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Protection:CalendarFeedEnabled"] = "true",
+
+            // The document purge run below is off unless a window is set.
+            ["DocumentRetention:RetentionDays"] = "30",
         });
 
     public async ValueTask InitializeAsync()

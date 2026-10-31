@@ -19,9 +19,9 @@ namespace SilexGis.Domain.Documents;
 public static class SoftDeleteRules
 {
     /// <summary>
-    /// How long a deleted document stays restorable before its bytes are eligible to go.
-    /// Configuration, with a default long enough that somebody coming back from a week in a
-    /// cave can still undo what they did before they left.
+    /// The default restore window of a deleted trip: long enough that somebody coming back from
+    /// a week in a cave can still undo what they did before they left. Documents do not use it —
+    /// an installation keeps deleted documents for ever unless it sets a window of its own.
     /// </summary>
     public static readonly TimeSpan DefaultRetention = TimeSpan.FromDays(30);
 
@@ -30,6 +30,46 @@ public static class SoftDeleteRules
 
     /// <summary>Refusal: it is not deleted, so there is nothing to restore.</summary>
     public const string NotDeletedCode = "document.not_deleted";
+
+    /// <summary>
+    /// Refusal: it was deleted longer ago than this installation keeps one, so the sweep may
+    /// already have taken its bytes.
+    /// </summary>
+    public const string RestoreWindowPassedCode = "document.restore_window_passed";
+
+    /// <summary>
+    /// The window a configured number of days stands for, or null when deleted documents are
+    /// kept until somebody says otherwise — which is what zero or less asks for, and what an
+    /// installation gets when it says nothing.
+    /// </summary>
+    /// <remarks>
+    /// Keeping is the default because removing the bytes of a document is the one step here that
+    /// cannot be undone, and an installation chooses to take it; nothing takes it on their
+    /// behalf. Trips read the same number the same way.
+    /// </remarks>
+    public static TimeSpan? Window(int retentionDays) =>
+        retentionDays > 0 ? TimeSpan.FromDays(retentionDays) : null;
+
+    /// <summary>
+    /// Whether a document deleted at <paramref name="deletedAt"/> may still be restored, when a
+    /// null <paramref name="window"/> means deleted documents are kept and so always can be.
+    /// </summary>
+    public static bool IsRestorable(DateTimeOffset deletedAt, DateTimeOffset now, TimeSpan? window) =>
+        window is not { } kept || IsRestorable(deletedAt, now, kept);
+
+    /// <summary>
+    /// The moment the sweep measures against, or null when there is no window and so nothing for a
+    /// sweep to remove.
+    /// </summary>
+    public static DateTimeOffset? PurgeCutoff(DateTimeOffset now, TimeSpan? window) =>
+        window is { } kept ? PurgeCutoff(now, kept) : null;
+
+    /// <summary>
+    /// When a document deleted at <paramref name="deletedAt"/> stops being restorable, or null
+    /// when nothing ever removes it.
+    /// </summary>
+    public static DateTimeOffset? RemovedAt(DateTimeOffset deletedAt, TimeSpan? window) =>
+        window is { } kept ? deletedAt + kept : null;
 
     /// <summary>
     /// Whether a document deleted at <paramref name="deletedAt"/> may still be restored.

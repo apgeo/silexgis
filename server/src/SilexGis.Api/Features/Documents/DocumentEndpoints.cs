@@ -68,11 +68,19 @@ public static class DocumentEndpoints
 
         documents.MapGet("/unfiled", ListUnfiledAsync)
             .WithSummary("Documents the caller may read that sit in no cabinet — the inbox filing is deferred into.");
+        documents.MapGet("/deleted", DocumentDeletionEndpoints.ListAsync)
+            .WithSummary("Deleted documents the caller could put back, newest deletion first.");
+        documents.MapGet("/config", DocumentDeletionEndpoints.ConfigAsync)
+            .WithSummary("What a delete does on this installation: how long a deleted document can be put back.");
         documents.MapGet("/{id:guid}", GetAsync)
             .WithSummary("A document's title, kind and typed metadata.");
         documents.MapPut("/{id:guid}", UpdateAsync)
             .WithValidation<DocumentUpdateRequest>()
             .WithSummary("Updates a document's title, kind and typed metadata; requires write access.");
+        documents.MapDelete("/{id:guid}", DocumentDeletionEndpoints.DeleteAsync)
+            .WithSummary("Deletes a document: it is hidden everywhere and can be restored; requires write access.");
+        documents.MapPost("/{id:guid}/restore", DocumentDeletionEndpoints.RestoreAsync)
+            .WithSummary("Puts a deleted document back, if this installation still keeps it; requires write access.");
 
         return api;
     }

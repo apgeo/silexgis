@@ -219,6 +219,7 @@ public static class DependencyInjection
         services.AddScoped<Trips.TripSectionWriter>();
         services.AddScoped<Trips.TripLogWriteService>();
         services.AddScoped<Documents.DocumentWriteService>();
+        services.AddScoped<Documents.DocumentDeletionService>();
         services.AddScoped<Documents.DocumentTypeWriteService>();
         services.AddScoped<Features.FeatureTypeWriteService>();
         services.AddScoped<Documents.CabinetWriteService>();

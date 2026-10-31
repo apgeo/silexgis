@@ -53,6 +53,9 @@ public sealed class PlacePointWriteTests : IAsyncLifetime, IDisposable, IClassFi
         {
             ["Files:Root"] = filesRoot,
             ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+
+            // The purge these tests run is off unless a window is set.
+            ["DocumentRetention:RetentionDays"] = "30",
         });
     }
 

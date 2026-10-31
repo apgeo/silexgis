@@ -27,9 +27,8 @@ namespace SilexGis.Domain.Trips;
 public static class TripDeletionRules
 {
     /// <summary>
-    /// The window an installation gets when it names none: the one a deleted document gets, so
-    /// "how long do I have to change my mind" has one answer across the archive unless somebody
-    /// chose otherwise.
+    /// The window an installation gets when it names none. Deleted documents do not share it:
+    /// they are kept for ever unless a window is set.
     /// </summary>
     public static readonly int DefaultRetentionDays = (int)SoftDeleteRules.DefaultRetention.TotalDays;
 

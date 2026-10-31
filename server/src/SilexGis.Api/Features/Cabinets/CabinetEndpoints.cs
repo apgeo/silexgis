@@ -40,6 +40,7 @@ public static class CabinetEndpoints
     public const string NameTakenCode = "cabinet.name_taken";
     public const string InUseCode = "cabinet.in_use";
     public const string NotEmptyCode = "cabinet.not_empty";
+    public const string HoldsDeletedCode = "cabinet.holds_deleted_documents";
     public const string DocumentNotFoundCode = "document.not_found";
     public const string DocumentWriteForbiddenCode = "document.write_forbidden";
     public const string DocumentTypeUnknownCode = "document.type_unknown";
@@ -349,9 +350,18 @@ public static class CabinetEndpoints
         // Emptying comes first and is deliberate. Cascading would silently unfile a whole
         // archive — and unfiling moves access wherever a rule names a cabinet above it.
         if (await db.Cabinets.AnyAsync(c => c.ParentId == id, ct)
-            || await db.CabinetDocuments.AnyAsync(m => m.CabinetId == id, ct))
+            || await db.CabinetDocuments.AnyAsync(
+                m => m.CabinetId == id && db.Documents.Any(d => d.Id == m.DocumentId), ct))
         {
             return ApiProblems.Conflict(NotEmptyCode, "The cabinet still holds cabinets or documents.");
+        }
+
+        // A deleted document keeps its filing so that a restore brings it back where it was. The
+        // shelf looks empty, so say what is holding it rather than repeat the refusal above.
+        if (await db.CabinetDocuments.AnyAsync(m => m.CabinetId == id, ct))
+        {
+            return ApiProblems.Conflict(
+                HoldsDeletedCode, "The cabinet still holds deleted documents; restore and unfile them first.");
         }
 
         // Resource-link members naming the shelf have no FK; they go with it.
