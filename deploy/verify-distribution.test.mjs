@@ -463,8 +463,13 @@ function standIn() {
         return;
       }
       if (held && route === `DELETE ${record(kind)}`) {
+        // As the application does it: a camp's delete is final and takes its generated write-up
+        // with it; a trip's only hides the trip, whose write-up goes when the trip is removed for
+        // good, days later.
         state.records.delete(record(kind));
-        state.documents.delete(kind.document);
+        if (kind !== TRIP) {
+          state.documents.delete(kind.document);
+        }
         res.writeHead(204);
         res.end();
         return;
@@ -524,14 +529,14 @@ describe('the report check, against a server that answers the way the API does',
     `GET ${filed(kind)}`,
     `DELETE ${record(kind)}`,
     `GET ${record(kind)}`,
-    `GET ${filed(kind)}`,
+    ...(kind === TRIP ? [] : [`GET ${filed(kind)}`]),
   ];
 
-  it('has both documents written and filed, and leaves nothing behind', async () => {
+  it('has both documents written and filed, and leaves only the deleted trip\'s write-up', async () => {
     await checkReports(stack, out);
 
     assert.equal(state.records.size, 0, 'a trip or a camp is still there');
-    assert.equal(state.documents.size, 0, 'a filed write-up is still there');
+    assert.deepEqual([...state.documents], [TRIP.document], 'a filed write-up other than the trip\'s is still there');
 
     assert.deepEqual(state.asked, [
       'POST /api/v1/auth/login',
@@ -546,7 +551,8 @@ describe('the report check, against a server that answers the way the API does',
     assert.equal(lines[0], `Signing in as ${ADMIN.email} ok`);
     assert.match(lines[1], /^Writing up a throwaway trip ok \(\d+ bytes in 3 parts\)$/);
     assert.equal(lines[2], `Filing that write-up against the trip ok (${TRIP.fileName})`);
-    assert.equal(lines[3], 'Deleting the trip ok (its filed write-up went with it)');
+    assert.equal(lines[3],
+      'Deleting the trip ok (its filed write-up goes when the deleted trip is removed for good)');
     assert.match(lines[4], /^Writing up a throwaway camp ok \(\d+ bytes in 3 parts\)$/);
     assert.equal(lines[5], `Filing that write-up against the camp ok (${CAMP.fileName})`);
     assert.equal(lines[6], 'Deleting the camp ok (its filed write-up went with it)');
@@ -624,13 +630,13 @@ describe('the report check, against a server that answers the way the API does',
     await assert.rejects(checkReports(stack, out), /served as "text\/html"/);
     assert.equal(state.records.size, 0, 'the failed check left its camp behind');
     // The trip's half had already passed, and had cleared up after itself by then.
-    assert.match(said, /Deleting the trip ok \(its filed write-up went with it\)\n/);
+    assert.match(said, /Deleting the trip ok \(its filed write-up goes when the deleted trip is removed for good\)\n/);
     assert.match(said, /Writing up a throwaway camp failed\n$/);
   });
 
-  // The three ways filing and deleting can go wrong are asked of the camp as well as of the
-  // trip. They are two deletes and two filing routes in the application, written separately, and
-  // one of them keeping a rule says nothing about the other.
+  // The ways filing and deleting can go wrong are asked of the camp as well as of the trip. They
+  // are two deletes and two filing routes in the application, written separately, and one of
+  // them keeping a rule says nothing about the other.
   for (const [what, kind] of [['trip', TRIP], ['camp', CAMP]]) {
     it(`fails when filing the ${what}'s write-up answers without having filed anything`, async () => {
       failing(`POST ${record(kind)}/report`, (res) => json(res, 200, {
@@ -649,6 +655,11 @@ describe('the report check, against a server that answers the way the API does',
       assert.equal(state.records.size, 0);
     });
 
+  }
+
+  // Only a final delete can be asked to have taken the write-up: a deleted trip keeps its own
+  // until it is removed for good, so this one is the camp's alone.
+  for (const [what, kind] of [['camp', CAMP]]) {
     it(`fails when deleting the ${what} leaves its write-up on the installation`, async () => {
       // The whole claim that the check can be run against an installation rests on this, so it
       // is checked on every run rather than assumed from how the delete is written today.

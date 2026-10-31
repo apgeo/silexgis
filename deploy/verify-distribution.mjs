@@ -572,7 +572,8 @@ const namesSomething = (id) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test
 
 /**
  * Has the running image write one record up, files the write-up against it, and deletes the
- * record — confirming that the record and the write-up filed on it are then both gone.
+ * record — confirming that the record is then gone, and, for a record whose delete is final,
+ * that the write-up filed on it went too.
  *
  * The same three steps for a trip and for a camp, because one rule holds for both: a write-up
  * the application generated is a derivative of what it was written for, and goes with it. That
@@ -580,8 +581,14 @@ const namesSomething = (id) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test
  * rather than assumed from how the delete is written today. The day it stopped holding, this
  * check would be leaving a document behind on every installation it ran against — and nothing
  * else would say so.
+ *
+ * A camp's delete is final, so the write-up must be unreadable straight after it. A trip's is
+ * not: deleting one only hides it, with everything it had, so that it can be restored, and the
+ * pass that removes deleted trips for good once their window has run out takes the generated
+ * write-up with the trip. Its write-up is therefore not asked about after the delete — it still
+ * reads until then, and that is the trip waiting to be restored, not the check leaving it behind.
  */
-async function writeUpAndRemove(session, out, { what, collection, body }) {
+async function writeUpAndRemove(session, out, { what, collection, body, keptUntilRemoved = false }) {
   let record = null;
   let filed = null;
   try {
@@ -615,6 +622,10 @@ async function writeUpAndRemove(session, out, { what, collection, body }) {
     throw err;
   }
   await step(out, `Deleting the ${what}`, async () => {
+    if (keptUntilRemoved) {
+      await remove(session, record);
+      return `its filed write-up goes when the deleted ${what} is removed for good`;
+    }
     await remove(session, record, [filed]);
     return 'its filed write-up went with it';
   });
@@ -626,7 +637,10 @@ async function writeUpAndRemove(session, out, { what, collection, body }) {
  * Both are made for the purpose, private to the administrator who made them, and named so that
  * one a killed run left behind says what it is. Each write-up is asked for, then filed against
  * what it was written for, and that record is deleted — which takes the filed write-up with it,
- * and the check confirms that it did rather than assuming so. What a sign-in and a write always
+ * straight away for the camp and, for the trip, when the deleted trip is removed for good at the
+ * end of its window (`SILEXGIS__Trips__DeletedRetentionDays`); the camp's is confirmed rather
+ * than assumed. Until then the trip sits, with its write-up, in the administrator's list of
+ * deleted trips, from which it can also be restored. What a sign-in and a write always
  * leave — the session's entries in the token store and the lines in the audit trail — stays, as
  * it does for anybody.
  *
@@ -654,6 +668,7 @@ export async function checkReports(stack, out = process.stdout) {
     what: 'trip',
     collection: '/api/v1/trip-logs',
     body: { title, tripDate: day, participants: [], visibility: 'private' },
+    keptUntilRemoved: true,
   });
   await writeUpAndRemove(session, out, {
     what: 'camp',
