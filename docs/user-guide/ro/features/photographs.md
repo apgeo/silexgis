@@ -59,6 +59,8 @@ vizualizarea salvată.
 - **Roti** — corectează un card întreg de poze culcate dintr-o apăsare,
 - **Adăuga într-un album**,
 - **Șterge** — *„Dispar din toate listele deodată și pot fi recuperate o vreme după aceea."*
+  O fotografie ștearsă apare în **Documente șterse** (din pagina Dulapuri), unde poate fi
+  restaurată; vezi [Documente și dulapuri](documents-and-cabinets.md#ștergerea-și-restaurarea-unui-document).
 
 O acțiune în masă care reușește parțial o spune: *„n modificate; m nu au putut fi."*
 

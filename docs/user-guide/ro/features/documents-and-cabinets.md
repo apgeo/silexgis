@@ -85,6 +85,37 @@ Documentele poartă **versiuni**: încarci una nouă și cele vechi se păstreaz
 
 ---
 
+## Ștergerea și restaurarea unui document
+
+Pe pagina unui document, **Șterge** (afișat oricui poate edita documentul) cere confirmare.
+Confirmarea spune ce urmează să se întâmple, în termenii acestei instalații: nimic nu este
+eliminat, documentul dispare din toate listele, căutările, galeriile și legăturile și poate fi
+restaurat din **Documente șterse**.
+
+- **Cine poate șterge și restaura.** Exact cei care pot edita documentul respectiv. Oricine altcineva
+  l-ar fi putut citi primește un refuz; cine nu l-ar fi putut citi află că nu există, ca pentru
+  orice document.
+- **Ce este un document șters.** Absent peste tot: dulapuri, căsuța documentelor neclasate,
+  rezultatele căutării (inclusiv în textul lui), galerii de fotografii și albume, legăturile care îl
+  numesc și propria adresă, care răspunde *negăsit*.
+- **Documente șterse** se ajunge din pagina **Dulapuri** sau din adresa unui document șters, care
+  oferă aceeași legătură oricui poate edita documente. Listează documentele pe care le poți
+  restaura, cele mai recente primele, cu cine le-a șters și, acolo unde instalația le elimină după
+  un timp, cât a mai rămas.
+- **Restaurează** cere confirmare și aduce documentul înapoi **întreg**: toate versiunile,
+  observațiile, atașamentele, legăturile și locurile în dosare pe care le avea, și îl deschide.
+  Nimeni nu este anunțat.
+- **Audit.** Ștergerea și restaurarea sunt înregistrate în jurnalul de audit ca modificări ale
+  documentului, cu cine a făcut-o și când.
+- **Nimic nu se elimină definitiv decât dacă cel care administrează instalația hotărăște asta.**
+  Implicit documentele șterse se păstrează, rămânând restaurabile, fără limită. Un operator poate
+  seta un număr de zile după care un document șters și fișierele lui sunt eliminate definitiv —
+  vezi `SILEXGIS__DocumentRetention__RetentionDays` în
+  [ghidul de instalare](../../../INSTALL.md#configuration-reference). Fotografiile șterse apar în
+  aceeași listă.
+
+---
+
 ## Citirea fără descărcare
 
 Vizualizatorul arată:

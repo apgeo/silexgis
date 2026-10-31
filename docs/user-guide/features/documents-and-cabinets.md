@@ -84,6 +84,36 @@ Documents carry **versions**: upload a new one and the old are kept.
 
 ---
 
+## Deleting and restoring a document
+
+On a document's page, **Delete** (shown to whoever may edit the document) asks for confirmation.
+The confirmation says what is about to happen, in this installation's own terms: nothing is
+removed, the document disappears from every list, search, gallery and link, and it can be restored
+from **Deleted documents**.
+
+- **Who may delete and restore.** Exactly the people who may edit that document. Anyone else
+  who could read it is refused; anyone who could not read it is told it does not exist, as for any
+  document.
+- **What a deleted document is.** Absent everywhere: cabinets, the unfiled inbox, search results
+  (including inside its text), photograph galleries and albums, the links that name it and its own
+  address, which answers *not found*.
+- **Deleted documents** is reached from the **Cabinets** page, or from a deleted document's
+  address, which offers the same link to anyone who may edit documents. It lists the documents you
+  may put back, most recent first, with who deleted each and, where the installation removes them
+  after a time, how long is left.
+- **Restore** asks for confirmation and brings the document back **whole**: every version, remark,
+  attachment, link and filing it had, and opens it. Nobody is notified.
+- **Audit.** Deleting and restoring are recorded in the audit trail as changes to the document,
+  with who did it and when.
+- **Nothing is removed for good unless the person who runs the installation says so.** By default
+  deleted documents are kept, and stay restorable, indefinitely. An operator may set a number of
+  days, after which a deleted document and its files are removed for good — see
+  `SILEXGIS__DocumentRetention__RetentionDays` in the
+  [installation guide](../../INSTALL.md#configuration-reference). Deleted photographs are
+  listed in the same place.
+
+---
+
 ## Reading without downloading
 
 The viewer shows:

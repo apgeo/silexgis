@@ -57,7 +57,9 @@ view.
 - **Rotate** — corrects a whole card of sideways pictures in one press,
 - **Add to album…**,
 - **Delete** — *"They leave every listing at once and can be restored for a while
-  afterwards."*
+  afterwards."* A deleted photograph is listed under **Deleted documents** (reached from the
+  Cabinets page), where it can be restored; see
+  [Documents and cabinets](documents-and-cabinets.md#deleting-and-restoring-a-document).
 
 A bulk action that partly fails says so: *"n changed; m could not be."*
 
