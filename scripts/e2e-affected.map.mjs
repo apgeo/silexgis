@@ -61,7 +61,10 @@ export const specs = {
   crs: [],
   dashboard: ['my-trips.spec.ts'],
   diagnostics: ['consoleGuard.spec.ts', 'errorReporting.spec.ts'],
-  documents: ['documents.spec.ts', 'annotated-text.spec.ts', 'reslinks.spec.ts'],
+  documents: [
+    'documents.spec.ts', 'document-delete-restore.spec.ts', 'annotated-text.spec.ts',
+    'reslinks.spec.ts',
+  ],
   events: ['events.spec.ts', 'calendar.spec.ts'],
   expeditions: [
     'expeditions.spec.ts', 'expedition-sharing.spec.ts', 'calendar.spec.ts',
