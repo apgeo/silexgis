@@ -138,3 +138,28 @@ public interface IDemSampleService
     Task<IReadOnlyList<DemSample>> SampleAsync(
         TerrainCoverage coverage, IReadOnlyList<DemSamplePoint> points, CancellationToken ct);
 }
+
+/// <summary>What a computed picture of the ground (slope, aspect, position index) said at a point.</summary>
+/// <param name="Outcome">Whether a value was read, and if not, why not.</param>
+/// <param name="Value">The picture's own number, in the picture's own unit — never converted, and
+/// never given the geoid shift a height gets, because a steepness or a bearing has no datum.</param>
+public readonly record struct LayerSample(DemSampleOutcome Outcome, double? Value);
+
+/// <summary>
+/// Reads a computed picture of the ground at places on it, nearest cell.
+/// </summary>
+/// <remarks>
+/// Nearest rather than interpolated because a facing is a bearing: blending the cells either side
+/// of north gives south. It shares the raster library's single gate with <see cref="IDemSampleService"/>
+/// — two threads in the library at once fault the process — so the implementation behind both is one
+/// object.
+/// </remarks>
+public interface IDerivativeSampleService
+{
+    /// <summary>
+    /// The picture's value at each point, in the order given, every one of them answered. The
+    /// rasters are one picture's tiles; the finest covering a point answers.
+    /// </summary>
+    Task<IReadOnlyList<LayerSample>> SampleLayerAsync(
+        IReadOnlyList<PreparedTerrainRaster> layer, IReadOnlyList<DemSamplePoint> points, CancellationToken ct);
+}

@@ -39,7 +39,7 @@ namespace SilexGis.Infrastructure.Terrain;
 /// that would be a statement about the terrain rather than about the disk.
 /// </para>
 /// </remarks>
-public sealed class GdalDemSampler : IDemSampleService, IDisposable
+public sealed class GdalDemSampler : IDemSampleService, IDerivativeSampleService, IDisposable
 {
     /// <summary>The formats a prepared raster may be, which is the only thing this opens.</summary>
     /// <remarks>
@@ -127,6 +127,125 @@ public sealed class GdalDemSampler : IDemSampleService, IDisposable
         }
 
         return answers;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<LayerSample>> SampleLayerAsync(
+        IReadOnlyList<PreparedTerrainRaster> layer, IReadOnlyList<DemSamplePoint> points, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        ArgumentNullException.ThrowIfNull(points);
+
+        if (points.Count == 0)
+        {
+            return [];
+        }
+
+        ct.ThrowIfCancellationRequested();
+
+        if (layer.Count == 0)
+        {
+            return [.. points.Select(_ => new LayerSample(DemSampleOutcome.OutsideCoverage, null))];
+        }
+
+        var candidates = layer.OrderBy(r => r.PixelSizeDegrees).ToArray();
+        var answers = new LayerSample[points.Count];
+
+        await gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            for (var i = 0; i < points.Count; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                answers[i] = AtLayer(candidates, points[i]);
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        return answers;
+    }
+
+    /// <summary>
+    /// A picture's value at one point, from the finest tile that has one. Same search as for
+    /// heights, with no geoid shift: a steepness or a bearing is not measured from a datum.
+    /// </summary>
+    private LayerSample AtLayer(IReadOnlyList<PreparedTerrainRaster> candidates, DemSamplePoint point)
+    {
+        var covered = false;
+
+        foreach (var raster in candidates)
+        {
+            if (!Holds(raster, point))
+            {
+                continue;
+            }
+
+            var reading = ReadNearest(raster, point);
+            if (reading.Unreadable)
+            {
+                continue;
+            }
+
+            covered = true;
+            if (reading.ElevationM is { } value)
+            {
+                return new LayerSample(DemSampleOutcome.Sampled, value);
+            }
+        }
+
+        return new LayerSample(covered ? DemSampleOutcome.NoData : DemSampleOutcome.OutsideCoverage, null);
+    }
+
+    /// <summary>
+    /// The value of the cell holding the point. The marker for a hole is read from the band itself,
+    /// because a computed picture states its own and is not the elevation raster's.
+    /// </summary>
+    private Reading ReadNearest(PreparedTerrainRaster raster, DemSamplePoint point)
+    {
+        var dataset = Dataset(raster.Path);
+        if (dataset is null)
+        {
+            return Reading.Missing;
+        }
+
+        var pixelWidth = raster.PixelSizeDegrees;
+        var pixelHeight = (raster.North - raster.South) / raster.Height;
+        if (pixelWidth <= 0 || pixelHeight <= 0)
+        {
+            return Reading.Missing;
+        }
+
+        var x = Math.Clamp((int)Math.Floor((point.Longitude - raster.West) / pixelWidth), 0, raster.Width - 1);
+        var y = Math.Clamp((int)Math.Floor((raster.North - point.Latitude) / pixelHeight), 0, raster.Height - 1);
+        var cell = new float[1];
+
+        try
+        {
+            var band = dataset.GetRasterBand(1);
+            band.GetNoDataValue(out var hole, out var marked);
+            Gdal.ErrorReset();
+            if (band.ReadRaster(x, y, 1, 1, cell, 1, 1, 0, 0) != CPLErr.CE_None)
+            {
+                var reason = Gdal.GetLastErrorMsg();
+                Forget(raster.Path);
+                logger.LogWarning("A terrain picture could not be read: {Path}. {Reason}", raster.Path, reason);
+                return Reading.Missing;
+            }
+
+            var value = cell[0];
+            return !float.IsFinite(value) || (marked != 0 && (double)value == hole)
+                ? Reading.Unknown
+                : Reading.Height(value);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            Forget(raster.Path);
+            logger.LogWarning(e, "A terrain picture could not be read: {Path}", raster.Path);
+            return Reading.Missing;
+        }
     }
 
     /// <summary>The ground at one point, from the finest raster that has a value for it.</summary>

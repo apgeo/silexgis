@@ -470,7 +470,11 @@ public static class DependencyInjection
         // datasets open behind a gate only one caller holds at a time, because the raster library's
         // handles fault the whole process rather than throwing when two threads touch one, and
         // reopening a file per point would spend a profile's whole request in header reads.
-        services.AddSingleton<Domain.Terrain.IDemSampleService, Terrain.GdalDemSampler>();
+        // The computed pictures (steepness, facing) are read through the same object: it owns the one
+        // gate, and a second reader with a gate of its own would let two threads into the library.
+        services.AddSingleton<Terrain.GdalDemSampler>();
+        services.AddSingleton<Domain.Terrain.IDemSampleService>(sp => sp.GetRequiredService<Terrain.GdalDemSampler>());
+        services.AddSingleton<Domain.Terrain.IDerivativeSampleService>(sp => sp.GetRequiredService<Terrain.GdalDemSampler>());
 
         // Drawing the ground from those rasters: shaded relief, steepness, facing and the rest. One
         // instance, because it holds nothing between calls — but note that it does not serialise
