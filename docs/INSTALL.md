@@ -2378,7 +2378,8 @@ load** except the three the Docker restore also lets through (the PostGIS image'
 `tiger_data` and `topology` schemas already existing) — and then leaves the files untouched and the
 API stopped, so a half-restored database is not mistaken for a working one. The load recreates
 PostGIS, which needs administrative access: as root on the database's machine it uses the local
-`postgres` account, otherwise give `--db-admin-url`.
+`postgres` account, otherwise give `--db-admin-url` — on Windows always, since there is no local
+account to borrow there.
 
 **Moving between the Docker path and this one.** A backup from either restores on the other, with
 two conditions. The dump sets every object's owner to the role it was taken from, so the role must

@@ -307,7 +307,7 @@ jobs:
 
       - name: Restore the backup
         run: |
-          node deploy/native/restore.mjs (Join-Path $env:RUNNER_TEMP 'backup') --yes
+          node deploy/native/restore.mjs (Join-Path $env:RUNNER_TEMP 'backup') --yes --db-admin-url $env:ADMIN_URL
           if ($LASTEXITCODE -ne 0) { throw 'restore failed' }
           $sql = Join-Path $env:RUNNER_TEMP 'pending.sql'
           for ($i = 0; $i -lt 100; $i++) {
