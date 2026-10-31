@@ -4,6 +4,7 @@ import { App, ConfigProvider } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import en from '../../i18n/locales/en.json';
 
 import type { RegistryCorrelation } from '../../api/hooks.ts';
 
@@ -52,6 +53,7 @@ function fit(overrides: Partial<RegistryCorrelation> = {}): RegistryCorrelation 
     correlation: 0.783,
     logarithmic: true,
     basis: 'Counted over the caves you may read.',
+    basisKind: 'readable',
     ...overrides,
   };
 }
@@ -93,7 +95,7 @@ describe('the registry correlation page', () => {
     expect(screen.getByTestId('registry-correlation-count').textContent).toContain('137');
     // The server's own sentence about what it counted over, in its own words rather than ours.
     expect(screen.getByTestId('registry-correlation-basis').textContent).toBe(
-      'Counted over the caves you may read.',
+      en.registryStats.basis.readable,
     );
     expect(screen.getByTestId('chart-registry-correlation')).toBeTruthy();
   });

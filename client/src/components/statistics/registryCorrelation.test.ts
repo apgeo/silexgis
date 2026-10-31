@@ -15,6 +15,7 @@ function fit(overrides: Partial<RegistryCorrelation> = {}): RegistryCorrelation 
     correlation: 0.77,
     logarithmic: true,
     basis: 'Counted over the caves you may read.',
+    basisKind: 'readable',
     ...overrides,
   };
 }

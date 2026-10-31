@@ -20,6 +20,7 @@ import {
 } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { basisSentence } from './basisSentence';
 import { useSearchParams } from 'react-router-dom';
 
 import { ApiError } from '../../api/client.ts';
@@ -364,7 +365,7 @@ export default function RegistryDistributionPage() {
                 data-testid="registry-distribution-basis"
                 style={{ marginTop: 4, marginBottom: 0 }}
               >
-                {data.basis}
+                {basisSentence(t, data.basisKind, data.basis)}
               </Typography.Paragraph>
             </Card>
           </Col>

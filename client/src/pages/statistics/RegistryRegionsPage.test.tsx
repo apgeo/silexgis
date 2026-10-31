@@ -4,6 +4,7 @@ import { App, ConfigProvider } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import en from '../../i18n/locales/en.json';
 
 import type { RegistryRegionBreakdown } from '../../api/hooks.ts';
 
@@ -47,6 +48,7 @@ function breakdown(overrides: Partial<RegistryRegionBreakdown> = {}): RegistryRe
       { region: null, caveCount: 5 },
     ],
     basis: 'Counted over the caves you may place.',
+    basisKind: 'placeable',
     ...overrides,
   };
 }
@@ -85,7 +87,7 @@ describe('the registry regions page', () => {
     expect(screen.queryByText('%')).toBeNull();
     // The server's own sentence about what it counted over, in its own words rather than ours.
     expect(screen.getByTestId('registry-regions-basis').textContent).toBe(
-      'Counted over the caves you may place.',
+      en.registryStats.basis.placeable,
     );
   });
 

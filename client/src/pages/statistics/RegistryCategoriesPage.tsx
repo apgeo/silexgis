@@ -2,6 +2,7 @@
 import { useMemo } from 'react';
 import { Alert, Card, Empty, Flex, Input, Select, Skeleton, Table, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { basisSentence } from './basisSentence';
 import { useSearchParams } from 'react-router-dom';
 
 import { ApiError } from '../../api/client.ts';
@@ -183,7 +184,7 @@ export default function RegistryCategoriesPage() {
               },
             ]}
           />
-          <Typography.Text type="secondary">{data.basis}</Typography.Text>
+          <Typography.Text type="secondary">{basisSentence(t, data.basisKind, data.basis)}</Typography.Text>
         </Flex>
       )}
     </div>

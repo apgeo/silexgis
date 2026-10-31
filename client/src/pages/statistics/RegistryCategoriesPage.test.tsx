@@ -64,6 +64,7 @@ function comparison(): RegistryCategoryComparison {
       },
     ],
     basis: 'Counted over the caves you may read.',
+    basisKind: 'readable',
   };
 }
 

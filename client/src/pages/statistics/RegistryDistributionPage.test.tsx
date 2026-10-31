@@ -56,6 +56,7 @@ function answer(overrides: Partial<RegistryDistribution> = {}): RegistryDistribu
     lognormal: null,
     paretoTail: null,
     basis: 'Computed over the caves you may read.',
+    basisKind: 'readable',
     ...overrides,
   };
 }

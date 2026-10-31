@@ -15,6 +15,7 @@ import {
 } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { basisSentence } from './basisSentence';
 import { useSearchParams } from 'react-router-dom';
 
 import { ApiError } from '../../api/client.ts';
@@ -240,7 +241,7 @@ export default function RegistryRegionsPage() {
             data-testid="registry-regions-basis"
             style={{ marginTop: 16, marginBottom: 0 }}
           >
-            {data.basis}
+            {basisSentence(t, data.basisKind, data.basis)}
           </Typography.Paragraph>
         </Card>
       )}
