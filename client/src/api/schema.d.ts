@@ -1523,6 +1523,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terrain/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ground height along a line the caller draws; requires Read on the Terrain domain and carries no cave data at all. */
+        post: operations["terrainProfileProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/terrain/derivatives": {
         parameters: {
             query?: never;
@@ -2981,6 +2998,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/altitude-disagreement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One cave's entrance altitudes against the elevation model. Requires Read on the Terrain domain, and is withheld from a caller who may not place the cave exactly. */
+        get: operations["entranceAltitudeCaveReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/altitude-disagreement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The entrances under one area ranked by how far their recorded altitude is from the elevation model. Requires Read on the Terrain domain and counts only entrances this caller may place. */
+        get: operations["entranceAltitudeAreaReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cave-entrances/{id}/fill-altitude": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fills an empty entrance altitude from the elevation model (Write on the cave, Read on the Terrain domain). Never replaces a recorded altitude. */
+        post: operations["entranceAltitudeFill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/system-figures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Highest and lowest entrance, total depth, height and potential depth of one cave. Withheld from a caller who may not place the cave exactly. */
+        get: operations["caveSystemFiguresSystemFigures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/depth-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Depth below the highest surveyed point against distance along one cave's passages. Withheld from a caller who may not place the cave exactly. */
+        get: operations["caveDepthProfileDepthProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{id}/structure-comparison": {
         parameters: {
             query?: never;
@@ -3180,6 +3282,23 @@ export interface paths {
         };
         /** The same area statistics as a two-column CSV, for a spreadsheet. */
         get: operations["areaKarstStatisticsAreaStatisticsCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/terrain-statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Slope, aspect and position classes of an area's entrances and sinkholes beside the same classes over the area's ground. Requires Read on the Terrain domain; counts only what the caller may place. */
+        get: operations["areaTerrainStatisticsStatistics"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8780,6 +8899,25 @@ export interface components {
             /** Format: uuid */
             subjectEntityId: null | string;
         };
+        AltitudeDisagreementDto: {
+            /** Format: uuid */
+            scopeId: string;
+            hasTerrain: boolean;
+            /** Format: int32 */
+            entranceCount: number;
+            /** Format: int32 */
+            comparedCount: number;
+            /** Format: int32 */
+            disagreeingCount: number;
+            /** Format: int32 */
+            notRecordedCount: number;
+            /** Format: int32 */
+            notModelledCount: number;
+            /** Format: double */
+            toleranceM: number;
+            truncated: boolean;
+            entrances: components["schemas"]["EntranceAltitudeRowDto"][];
+        };
         /** @enum {unknown} */
         AnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange" | "modelStation" | "modelStationRange" | "modelSurvey" | "modelSurveyRange" | "modelPoint" | "waypoint" | "waypointRange" | "tripMoment";
         AnnotatedBlock: {
@@ -8901,6 +9039,18 @@ export interface components {
             dolines: null | components["schemas"]["OrientationSummary"];
             structure: null | components["schemas"]["OrientationSummary"];
             divergence: null | components["schemas"]["RoseDivergence"];
+        };
+        AreaTerrainStatisticsDto: {
+            /** Format: uuid */
+            areaId: string;
+            hasTerrain: boolean;
+            /** Format: int32 */
+            entrances: number;
+            /** Format: int32 */
+            sinkholes: number;
+            /** Format: int32 */
+            backgroundPoints: number;
+            measures: components["schemas"]["TerrainMeasureDto"][];
         };
         AttachmentCreateRequest: {
             /** Format: uuid */
@@ -9205,6 +9355,36 @@ export interface components {
             placeLabel: null | string;
             note?: null | string;
             landmark?: null | boolean;
+        };
+        CaveDepthProfileDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            /** Format: double */
+            passageLengthM: number;
+            /** Format: double */
+            highestM: null | number;
+            /** Format: double */
+            lowestM: null | number;
+            /** Format: double */
+            deepestM: null | number;
+            samples: components["schemas"]["CaveDepthProfileSampleDto"][];
+        };
+        CaveDepthProfileSampleDto: {
+            /** Format: double */
+            distanceAlongM: number;
+            /** Format: double */
+            altitudeM: number;
+            /** Format: double */
+            depthM: number;
+            /** Format: int32 */
+            pathIndex: null | number;
+            /** Format: int32 */
+            segmentIndex: number;
         };
         CaveDto: {
             /** Format: uuid */
@@ -9571,6 +9751,41 @@ export interface components {
             mainEntrance: null | components["schemas"]["CaveMainEntranceDto"];
             permissions: components["schemas"]["CavePermissionsDto"];
             headlinePicture: null | components["schemas"]["CaveHeadlinePictureDto"];
+        };
+        CaveSystemFiguresDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            figures: components["schemas"]["CaveSystemFiguresSummary"];
+            /** Format: double */
+            surveyHighestM: null | number;
+            /** Format: double */
+            surveyLowestM: null | number;
+            potentialDepth: components["schemas"]["MorphometryComparison"];
+        };
+        CaveSystemFiguresSummary: {
+            /** Format: int32 */
+            entranceCount: number;
+            /** Format: int32 */
+            entrancesWithAltitude: number;
+            /** Format: double */
+            highestEntranceM: null | number;
+            /** Format: double */
+            lowestEntranceM: null | number;
+            /** Format: double */
+            entranceSpreadM: null | number;
+            /** Format: double */
+            totalDepthM: null | number;
+            /** Format: double */
+            heightAboveLowestEntranceM: null | number;
+            /** Format: double */
+            resurgenceLevelM: null | number;
+            /** Format: double */
+            potentialDepthM: null | number;
         };
         CaveTopologyDto: {
             /** Format: uuid */
@@ -10341,6 +10556,24 @@ export interface components {
         EmailConfirmRequest: {
             token: string;
         };
+        EntranceAltitudeRowDto: {
+            /** Format: uuid */
+            entranceId: string;
+            /** Format: uuid */
+            caveId: string;
+            caveName: null | string;
+            entranceName: null | string;
+            /** Format: double */
+            recordedAltitudeM: null | number;
+            /** Format: double */
+            modelledAltitudeM: null | number;
+            /** Format: double */
+            differenceM: null | number;
+            verdict: components["schemas"]["EntranceAltitudeVerdict"];
+            fillableFromTerrain: boolean;
+        };
+        /** @enum {unknown} */
+        EntranceAltitudeVerdict: "notRecorded" | "notModelled" | "agrees" | "disagrees";
         EntranceDto: {
             /** Format: uuid */
             id: string;
@@ -15941,6 +16174,25 @@ export interface components {
             /** Format: uuid */
             baseBuildId?: null | string;
         };
+        TerrainClassRowDto: {
+            code: string;
+            /** Format: int32 */
+            entrances: number;
+            /** Format: double */
+            entranceShare: null | number;
+            /** Format: double */
+            entranceRatio: null | number;
+            /** Format: int32 */
+            sinkholes: number;
+            /** Format: double */
+            sinkholeShare: null | number;
+            /** Format: double */
+            sinkholeRatio: null | number;
+            /** Format: int32 */
+            background: number;
+            /** Format: double */
+            backgroundShare: null | number;
+        };
         TerrainColourStop: {
             /** Format: double */
             elevation?: number;
@@ -16042,6 +16294,18 @@ export interface components {
         TerrainHeightDatum: "orthometric" | "ellipsoidal";
         /** @enum {unknown} */
         TerrainHillshadeLighting: "single" | "multidirectional";
+        TerrainMeasureDto: {
+            measure: string;
+            available: boolean;
+            reason: null | string;
+            /** Format: int32 */
+            entrancesRead: number;
+            /** Format: int32 */
+            sinkholesRead: number;
+            /** Format: int32 */
+            backgroundRead: number;
+            classes: components["schemas"]["TerrainClassRowDto"][];
+        };
         TerrainProbeDto: {
             hasTerrain: boolean;
             samples: components["schemas"]["TerrainProbeSampleDto"][];
@@ -16056,6 +16320,36 @@ export interface components {
             points: components["schemas"]["TerrainProbePointRequest"][];
         };
         TerrainProbeSampleDto: {
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            outcome: components["schemas"]["DemSampleOutcome"];
+            /** Format: double */
+            elevationM: null | number;
+        };
+        TerrainProfileDto: {
+            hasTerrain: boolean;
+            /** Format: double */
+            lengthM: number;
+            /** Format: int32 */
+            readCount: number;
+            /** Format: double */
+            lowestM: null | number;
+            /** Format: double */
+            highestM: null | number;
+            /** Format: double */
+            ascentM: number;
+            /** Format: double */
+            descentM: number;
+            samples: components["schemas"]["TerrainProfileSampleDto"][];
+        };
+        TerrainProfileRequest: {
+            points: components["schemas"]["TerrainProbePointRequest"][];
+        };
+        TerrainProfileSampleDto: {
+            /** Format: double */
+            distanceAlongM: number;
             /** Format: double */
             longitude: number;
             /** Format: double */
@@ -21070,6 +21364,48 @@ export interface operations {
             };
         };
     };
+    terrainProfileProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TerrainProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerrainProfileDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     terrainDerivativeList: {
         parameters: {
             query?: {
@@ -25000,6 +25336,206 @@ export interface operations {
             };
         };
     };
+    entranceAltitudeCaveReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AltitudeDisagreementDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    entranceAltitudeAreaReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AltitudeDisagreementDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    entranceAltitudeFill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntranceDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    caveSystemFiguresSystemFigures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaveSystemFiguresDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    caveDepthProfileDepthProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaveDepthProfileDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     caveStructureComparisonStructureComparison: {
         parameters: {
             query?: {
@@ -25571,6 +26107,46 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    areaTerrainStatisticsStatistics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AreaTerrainStatisticsDto"];
+                };
+            };
             /** @description Unauthorized */
             401: {
                 headers: {

@@ -357,7 +357,7 @@ public static class EntranceEndpoints
 
     // Entrance features always carry a point geometry (enforced by the write service and a
     // database check constraint), so the cast is total.
-    private static EntranceDto ToDto(Feature feature, CaveEntrance entrance, bool exact, double gridMeters)
+    internal static EntranceDto ToDto(Feature feature, CaveEntrance entrance, bool exact, double gridMeters)
     {
         var point = (Point)feature.Geom!;
         return new EntranceDto(

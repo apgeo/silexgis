@@ -319,7 +319,7 @@ public static class CaveHypsometryEndpoints
     /// region" is not a base level anybody is reading against. Gathering goes through the area
     /// reader, so the caller's own visibility and exact-placement set decide what is in it.
     /// </remarks>
-    private static async Task<IReadOnlyList<double>> SpringReferenceLinesAsync(
+    internal static async Task<IReadOnlyList<double>> SpringReferenceLinesAsync(
         SilexGisDbContext db,
         FeatureProtection protection,
         AccessContext ctx,
