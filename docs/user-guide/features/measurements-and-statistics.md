@@ -154,6 +154,102 @@ is. Ask an administrator if the panel does not appear.
 
 ---
 
+## Depth and height across entrances
+
+On the cave's page, before the heights of the passage.
+
+A cave with several entrances is measured between them: the **highest** and **lowest
+entrance**, the **height between** them, the **depth** from the highest entrance down to the
+lowest point the survey reaches, and the **height** from the lowest entrance up to the highest
+point. The **resurgence level** is the lowest spring-cave entrance in the area that contains
+the cave, and the **potential depth** is the highest entrance less that level — how deep the cave
+could go if it were followed down to where the water leaves the massif. If a potential depth is
+typed into the cave's record, it is shown beside the computed one, and a note appears when they
+differ.
+
+A survey drawn in plan carries no altitudes, so depth and height show a dash and a sentence
+saying why — never a nought, which would describe a cave of no depth.
+
+An entrance you may not place is not used, and is not counted either; you can't tell from the
+figures that one was left out. The panel does not appear at all for a cave you may read but not
+place.
+
+---
+
+## Entrance altitudes against the ground
+
+A recorded altitude that differs from the ground height by tens of metres nearly always means a
+wrong coordinate. Two places show it.
+
+- **On the cave's page**, one row per entrance: the altitude recorded, the height the elevation
+  model gives under it, the difference and a result — *agrees*, *disagrees* (more than 20 m
+  apart), *no altitude recorded* or *no ground height here*.
+- **On an area's page**, the entrances under it, widest gap first.
+
+For an entrance with **no altitude recorded**, the cave's page offers **Fill from ground**. It
+writes the model's height, to a tenth of a metre, and only where nothing is recorded. An altitude
+somebody measured is **never replaced by the model**; to change one, edit the entrance and type
+the number you mean. You need permission to edit the cave to use it.
+
+Counts and order are worked out over the entrances you may place, and over no others, so the
+ranking is the same with or without a protected entrance. You need permission to read elevation
+data, and the panel does not appear without it. Nothing here is published or exported; it is for
+signed-in accounts only.
+
+---
+
+## Depth profile
+
+On the cave's page, after the depth and height across entrances.
+
+The depth profile draws the **altitude of the passages against distance along them**, with the
+highest point, the lowest point, the depth between them and the passage length above it. Distance
+is the length of passage before each point **in the order the survey records it**, not a walk from
+the entrance, so a branch that climbs back shows as a rise. The picture carries no position at all.
+
+A survey drawn in plan carries no altitudes, so the profile shows a sentence saying why and no
+curve — never a flat one. The panel does not appear for a cave you may read but not place. It reads
+no elevation data, so it needs no permission for that.
+
+---
+
+## Terrain profile along a line
+
+On the map, press the **Terrain profile** button at the left edge (shown to those who may read
+elevation), click the points of a line and double-click to finish. The profile opens beside the
+button as height against distance, with the length, ascent and descent; **Close** removes it and
+the line. A surface profile along a line somebody draws, for approach and rigging planning. The server
+resamples the line at evenly spaced points (never closer than 5 m, never more than 400) and reads
+the elevation model at each, answering distance, height, and the total ascent and descent. A point
+the model does not cover is a **gap**, never a height of nought, and ascent and descent are never
+added across a gap.
+
+It knows nothing about caves: the line is only the coordinates you give it, so it cannot be used to
+find or trace one. It needs permission to read elevation data.
+
+---
+
+## Entrances and sinkholes against the terrain
+
+On an area's page. For an area with an outline, the **slope class**, the **direction the ground
+faces** and the **position on the relief** (hollow, level or rise) of each entrance and sinkhole,
+each class set beside the share of the area's own ground in the same class — drawn as paired bars
+for slope and position and as a rose for the facing, with a table under each — with the **ratio**
+between them. A ratio above 1 means caves sit there more often than the terrain alone would
+suggest — where to look next; below 1, less often.
+
+It reads the pictures an administrator has already computed from the terrain page (slope in
+degrees, facing, position index). A measure without its picture says so and shows no table, so a
+missing picture is never read as "no caves on steep ground". Facing is counted only where the slope
+is at least 2°, because flat ground faces nowhere. The area's ground is sampled on a regular grid
+over its outline, so shares are estimates, good to a percentage point or so.
+
+Only entrances and sinkholes you may place are counted, so the figures do not change when a
+protected one is added. You need permission to read elevation data. Nothing here is published or
+exported.
+
+---
+
 ## Karst distributions
 
 Over the caves on a cave-list page: **Distributions**.

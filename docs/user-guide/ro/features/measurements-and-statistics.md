@@ -155,6 +155,103 @@ peștera. Cere-l unui administrator dacă panoul nu apare.
 
 ---
 
+## Adâncime și înălțime între intrări
+
+Pe pagina peșterii, înaintea înălțimilor galeriilor.
+
+O peșteră cu mai multe intrări se măsoară între ele: **cea mai înaltă** și **cea mai joasă
+intrare**, **diferența de nivel** dintre ele, **adâncimea** de la cea mai înaltă intrare până la
+cel mai de jos punct atins de topografie și **înălțimea** de la cea mai joasă intrare până la cel
+mai înalt punct. **Nivelul exurgenței** este cea mai joasă intrare a unei peșteri-izvor din zona
+care conține peștera, iar **adâncimea potențială** este cea mai înaltă intrare minus acel nivel —
+cât de adâncă ar putea fi peștera dacă ar fi urmărită până unde iese apa din masiv. Dacă în fișa
+peșterii este scrisă o adâncime potențială, ea apare lângă cea calculată, cu o notă când diferă.
+
+O topografie desenată în plan nu conține altitudini, deci adâncimea și înălțimea arată o liniuță
+și o propoziție care spune de ce — niciodată un zero, care ar descrie o peșteră fără adâncime.
+
+O intrare pe care nu o poți localiza nu este folosită și nici numărată; din cifre nu poți ghici că
+a fost lăsată deoparte. Panoul nu apare deloc pentru o peșteră pe care o poți citi, dar nu o poți
+localiza.
+
+---
+
+## Altitudinile intrărilor față de teren
+
+O altitudine înregistrată care diferă de înălțimea terenului cu zeci de metri înseamnă aproape
+întotdeauna o coordonată greșită. Se vede în două locuri.
+
+- **Pe pagina peșterii**, un rând pe intrare: altitudinea înregistrată, înălțimea dată de modelul
+  de elevație sub ea, diferența și un rezultat — *concordă*, *nu concordă* (la peste 20 m
+  distanță), *altitudine neînregistrată* sau *fără înălțime a terenului aici*.
+- **Pe pagina unei zone**, intrările de sub ea, cele cu cea mai mare diferență primele.
+
+Pentru o intrare **fără altitudine înregistrată**, pagina peșterii oferă **Completează din
+teren**. Scrie înălțimea modelului, cu o zecime de metru, și numai acolo unde nu e înregistrat
+nimic. O altitudine măsurată de cineva **nu este niciodată înlocuită de model**; ca s-o schimbi,
+editează intrarea și scrie numărul pe care îl vrei. Ai nevoie de dreptul de a edita peștera.
+
+Numărătoarea și ordinea se calculează peste intrările pe care le poți localiza și peste niciuna
+alta, deci clasamentul este același cu sau fără o intrare protejată. Ai nevoie de dreptul de a citi
+datele de elevație, iar fără el panoul nu apare. Nimic de aici nu este publicat sau exportat; este
+doar pentru conturile autentificate.
+
+---
+
+## Profil de adâncime
+
+În pagina peșterii, după adâncimea și înălțimea între intrări.
+
+Profilul de adâncime desenează **altitudinea galeriilor în funcție de distanța de-a lungul lor**,
+cu punctul cel mai înalt, cel mai jos, diferența dintre ele și lungimea galeriilor deasupra.
+Distanța este lungimea galeriilor dinaintea fiecărui punct **în ordinea în care o înregistrează
+releveul**, nu un traseu de la intrare, așa că o ramură care urcă din nou apare ca o creștere.
+Imaginea nu conține nicio poziție.
+
+Un releveu desenat în plan nu conține altitudini, așa că profilul arată o propoziție care spune de
+ce și nicio curbă — niciodată una plată. Panoul nu apare pentru o peșteră pe care o poți citi, dar
+nu o poți localiza. Nu citește date de elevație, deci nu cere dreptul respectiv.
+
+---
+
+## Profilul reliefului de-a lungul unei linii
+
+Pe hartă, apasă butonul **Profil de relief** din marginea stângă (apare pentru cei care pot citi
+elevația), fă clic pe punctele liniei și dublu clic pentru a termina. Profilul se deschide lângă
+buton, ca înălțime în funcție de distanță, cu lungimea, urcarea și coborârea; **Închide** scoate
+profilul și linia. Un profil al suprafeței de-a lungul unei linii desenate de cineva, pentru planificarea accesului
+și a echipării. Serverul reeșantionează linia la puncte la distanțe egale (niciodată mai aproape de
+5 m, niciodată mai mult de 400) și citește modelul de elevație în fiecare, răspunzând cu distanța,
+înălțimea, urcarea și coborârea totală. Un punct pe care modelul nu îl acoperă este un **gol**,
+niciodată o înălțime de zero, iar urcarea și coborârea nu se adună peste un gol.
+
+Nu știe nimic despre peșteri: linia este doar coordonatele pe care le dai, deci nu poate fi
+folosită pentru a găsi sau a urmări una. Cere dreptul de a citi datele de elevație.
+
+---
+
+## Intrări și doline față de relief
+
+În pagina unei zone. Pentru o zonă cu contur: **clasa de pantă**, **direcția spre care privește
+terenul** și **poziția pe relief** (adâncitură, plat sau ridicătură) pentru fiecare intrare și
+dolină, fiecare clasă pusă lângă ponderea terenului zonei în aceeași clasă — desenate ca bare perechi
+pentru pantă și poziție și ca o roză pentru orientare, cu un tabel dedesubt — cu **raportul** dintre
+ele. Un raport peste 1 înseamnă că peșterile se află acolo mai des decât ar sugera terenul singur —
+un loc de căutat în continuare; sub 1, mai rar.
+
+Citește imaginile pe care un administrator le-a calculat deja din pagina de relief (panta în
+grade, orientarea, indicele de poziție). O măsurătoare fără imaginea ei spune asta și nu arată
+niciun tabel, așa că o imagine lipsă nu se citește niciodată ca „nicio peșteră pe pantă abruptă".
+Orientarea se numără doar unde panta este de cel puțin 2°, pentru că terenul plat nu privește
+nicăieri. Terenul zonei este eșantionat într-o grilă regulată peste contur, deci ponderile sunt
+estimări, bune până la aproximativ un procent.
+
+Se numără doar intrările și dolinele pe care le poți localiza, deci cifrele nu se schimbă când se
+adaugă una protejată. Cere dreptul de a citi datele de elevație. Nimic de aici nu se publică și nu
+se exportă.
+
+---
+
 ## Distribuții carstice
 
 Peste peșterile de pe o pagină de listă: **Distribuții**.

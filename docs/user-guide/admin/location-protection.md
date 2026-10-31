@@ -62,6 +62,11 @@ not a protection.
 | **Change history** | A protected value reads *"Value hidden (protected location)"* |
 | **Closest approach** | Refused unless you may place **both** caves |
 | **Rock overhead (overburden)** | Refused **whole** unless you may place the cave — not a blank curve, nothing at all. The curve is the passage's position drawn against the ground above it. It also needs permission to read elevation data |
+| **Depth and height across entrances** | Refused **whole** unless you may place the cave. An entrance you may not place is left out of every figure and every count, and the resurgence level is taken only from springs you may place |
+| **Entrance altitudes against the ground** | Counted and ranked over the entrances you may place and no others, so the order and totals do not change when a protected entrance is added. No position is returned. A single cave is refused whole unless you may place it, and the fill action answers a withheld entrance as *not found*. Also needs permission to read elevation data |
+| **Depth profile** | Refused **whole** unless you may place the cave, answered as *not found*. Altitude against distance along the passages; no position is returned |
+| **Terrain profile along a line** | Knows nothing about caves: the line is only the coordinates you give it. Needs permission to read elevation data |
+| **Entrances and sinkholes against the terrain** | Counted over the entrances and sinkholes you may place and no others, so no count, share or ratio changes when a protected one is added. No position is returned. Needs permission to read elevation data |
 | **Import duplicate checking** | Only objects whose exact position you may see are measured against — a protected cave you cannot locate is not silently used as a match |
 | **A `.stl` origin** | The pre-filled origin says it is deliberately approximate and asks for the true point |
 | **QR landing pages** | No cave, no place, no position — for anybody, account or not |

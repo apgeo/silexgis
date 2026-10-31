@@ -60,6 +60,11 @@ protecție.
 | **Istoricul modificărilor** | O valoare protejată se citește *„Valoare ascunsă (locație protejată)"* |
 | **Cea mai mică distanță** | Refuzată dacă nu poți localiza **ambele** peșteri |
 | **Roca de deasupra** | Refuzată **în întregime** dacă nu poți localiza peștera — nu o curbă goală, nimic. Curba este poziția galeriei desenată față de terenul de deasupra ei. Are nevoie și de dreptul de a citi datele de elevație |
+| **Adâncime și înălțime între intrări** | Refuzată **în întregime** dacă nu poți localiza peștera. O intrare pe care nu o poți localiza este lăsată în afara oricărei cifre și a oricărei numărători, iar nivelul exurgenței se ia doar din izvoarele pe care le poți localiza |
+| **Altitudinile intrărilor față de teren** | Numărate și ordonate peste intrările pe care le poți localiza și peste niciuna alta, deci ordinea și totalurile nu se schimbă când se adaugă o intrare protejată. Nu se întoarce nicio poziție. O singură peșteră este refuzată în întregime dacă nu o poți localiza, iar completarea răspunde la o intrare ascunsă ca *negăsită*. Are nevoie și de dreptul de a citi datele de elevație |
+| **Profil de adâncime** | Refuzat **în întregime** dacă nu poți localiza peștera, cu răspunsul *negăsit*. Altitudine în funcție de distanța de-a lungul galeriilor; nu se întoarce nicio poziție |
+| **Profilul reliefului de-a lungul unei linii** | Nu știe nimic despre peșteri: linia este doar coordonatele pe care le dai. Cere dreptul de a citi datele de elevație |
+| **Intrări și doline față de relief** | Numărate peste intrările și dolinele pe care le poți localiza și peste niciuna alta, deci nicio numărătoare, pondere sau raport nu se schimbă când se adaugă una protejată. Nu se întoarce nicio poziție. Cere dreptul de a citi datele de elevație |
 | **Verificarea duplicatelor la import** | Se compară doar cu obiectele a căror poziție exactă o poți vedea |
 | **Originea unui `.stl`** | Originea precompletată spune că este deliberat aproximativă și cere punctul adevărat |
 | **Paginile QR** | Nicio peșteră, niciun loc, nicio poziție — pentru nimeni, cu sau fără cont |
