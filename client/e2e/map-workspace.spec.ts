@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { asPerson, registerAccount, signedInElsewhere, tryAsPerson } from './arrange.ts';
-import { gotoRoute, login, overlayTreeNode, waitForScene3dReady } from './helpers.ts';
+import { closeOwnWindow, gotoRoute, login, overlayTreeNode, waitForScene3dReady } from './helpers.ts';
 import { bearerToken } from './rastermapApi.ts';
 import {
   boxOf,
@@ -120,7 +120,7 @@ test('the panes move by their own menus, the docks swap, and a pane fills the wo
   await movePane(page, 'workspace-scene3d', 'In its own window');
   const window3d = await popup;
   await window3d.waitForURL(/\/panel\/scene3d/);
-  await window3d.close();
+  await closeOwnWindow(window3d);
   await expect(pane(page, 'scene3d')).toHaveCount(0);
   await expect(page.getByTestId('map-scene3d-toggle')).toHaveAttribute('aria-pressed', 'false');
 });
@@ -194,7 +194,7 @@ test('the table under the map lists what is in view and what is picked, and the 
   await chooseInWorkspaceMenu(page, 'The map here, the 3D scene in a window');
   const window3d = await popup;
   await window3d.waitForURL(/\/panel\/scene3d/);
-  await window3d.close();
+  await closeOwnWindow(window3d);
   await expect(pane(page, 'scene3d')).toHaveCount(0);
 
   // Save the current arrangement, change it, and bring it back from the list.
@@ -308,7 +308,7 @@ test('moving the 3D scene and a survey model never builds another graphics conte
     await movePane(page, 'map-caveview', 'In its own window');
     const modelWindow = await popup;
     await modelWindow.waitForURL(/\/panel\/viewer3d\?model=/);
-    await modelWindow.close();
+    await closeOwnWindow(modelWindow);
     await expect(pane(page, 'caveview')).toHaveCount(0);
     await expect.poll(async () => (await graphics(page)).alive).toBeLessThan(modelOpened.alive);
   } finally {

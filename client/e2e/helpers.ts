@@ -65,6 +65,23 @@ export async function confirmOk(
 }
 
 /**
+ * Closes a window the application opened (a pane sent to its own window), and waits a bounded time
+ * for it to be gone.
+ *
+ * Playwright's own close waits until the window's process has let go of everything, and a window
+ * holding a 3D scene on this software-rendered graphics stack has been seen to take six minutes
+ * over that under a whole run's load — the test then dies on whatever line comes next with the
+ * application having done nothing wrong. So the close is started and waited for up to half a
+ * minute, which an ordinary close takes a fraction of; past that the window's page has already
+ * unloaded and only the browser's teardown is left. Not waiting at all is wrong the other way: a
+ * window still running while the test rearranges the workspace writes its own arrangement back.
+ */
+export async function closeOwnWindow(win: Page) {
+  const closing = win.close().catch(() => {});
+  await Promise.race([closing, new Promise((resolve) => setTimeout(resolve, 30_000))]);
+}
+
+/**
  * Signs in, as the demo administrator unless another account is named. A flow that has to
  * show one person's content to a different person needs a second account, and the sign-in
  * itself is identical for both — only the credentials differ.
