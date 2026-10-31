@@ -209,12 +209,34 @@ public class TerrainBuild : ITimestamped, IAuditable
     /// </summary>
     public string? LogTail { get; set; }
 
-    /// <summary>Bytes the finished pyramid and its retained intermediates occupy on disk.</summary>
+    /// <summary>
+    /// Bytes everything this build keeps occupies on disk: the finished pyramid and its retained
+    /// intermediates (the prepared rasters and the tool's working files).
+    /// </summary>
     /// <remarks>
     /// Shown wherever builds are listed. Builds are kept until somebody deletes them, so the size
-    /// is what makes that an informed choice rather than a surprise when the disk fills.
+    /// is what makes that an informed choice rather than a surprise when the disk fills. It is
+    /// measured over the whole build folder, so it is larger than <see cref="PyramidBytes"/>,
+    /// sometimes by a factor of dozens; the two are kept apart so that a screen can say which
+    /// number it is showing.
     /// </remarks>
     public long? SizeBytes { get; set; }
+
+    /// <summary>Bytes the finished pyramid's tiles alone occupy; what a viewer is served from.</summary>
+    /// <remarks>Null until the pyramid has passed its checks, and for builds checked before this was recorded.</remarks>
+    public long? PyramidBytes { get; set; }
+
+    /// <summary>
+    /// The deepest level the finished pyramid actually holds tiles for, which can be shallower than
+    /// <see cref="RequestedMaxDepth"/>.
+    /// </summary>
+    /// <remarks>
+    /// The meshing tool stops descending when the sources run out of detail (thirty-metre data
+    /// gives out around level 13 however deep the request), and without this the only evidence of
+    /// the cap is a warning issued before the bake. Read off the tiles on disk rather than the
+    /// manifest, so it states what is there. Null until the pyramid has passed its checks.
+    /// </remarks>
+    public int? AchievedMaxDepth { get; set; }
 
     /// <summary>
     /// The version string stamped into the finished pyramid's manifest, derived from the tiles it

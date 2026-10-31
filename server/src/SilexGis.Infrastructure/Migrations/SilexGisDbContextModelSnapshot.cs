@@ -7084,6 +7084,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<int?>("AchievedMaxDepth")
+                        .HasColumnType("integer")
+                        .HasColumnName("achieved_max_depth");
+
                     b.Property<bool>("ActivationWasAutomatic")
                         .HasColumnType("boolean")
                         .HasColumnName("activation_was_automatic");
@@ -7143,6 +7147,10 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<int>("Progress")
                         .HasColumnType("integer")
                         .HasColumnName("progress");
+
+                    b.Property<long?>("PyramidBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("pyramid_bytes");
 
                     b.Property<string>("PyramidVersion")
                         .HasMaxLength(64)

@@ -87,7 +87,8 @@ public sealed class TerrainValidatePhase(SilexGisDbContext db) : ITerrainPhase
         TerrainManifestFile.Write(tiles, report.Manifest);
 
         var size = Occupied(context.Directories.Root);
-        await TerrainBuildWrites.RecordPyramidAsync(db, context.Build.Id, size, version, ct);
+        await TerrainBuildWrites.RecordPyramidAsync(
+            db, context.Build.Id, size, report.TileBytes, report.DeepestLevel, version, ct);
 
         await context.LogAsync(
             FormattableString.Invariant(

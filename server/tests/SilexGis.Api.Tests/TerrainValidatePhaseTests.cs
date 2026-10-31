@@ -94,6 +94,11 @@ public sealed class TerrainValidatePhaseTests : IAsyncLifetime, IDisposable, ICl
         build.PyramidVersion.ShouldNotBeNull().ShouldStartWith("1.1.0-");
         build.SizeBytes.ShouldNotBeNull().ShouldBeGreaterThan(0);
 
+        // The pyramid is reported on its own beside the whole build folder, which also holds the
+        // layer file and whatever the tools left, so it can never be the larger of the two.
+        build.PyramidBytes.ShouldNotBeNull().ShouldBeGreaterThan(0);
+        build.PyramidBytes.Value.ShouldBeLessThanOrEqualTo(build.SizeBytes.Value);
+
         var manifest = Manifest(buildId);
 
         // Repeats folded together, in the order the sources were recorded, and never a constant:
@@ -113,6 +118,25 @@ public sealed class TerrainValidatePhaseTests : IAsyncLifetime, IDisposable, ICl
 
         // Everything the viewer needs and we did not write is still there.
         manifest["format"]!.GetValue<string>().ShouldBe("quantized-mesh-1.0");
+    }
+
+    /// <summary>
+    /// The depth the tool asked for and the depth the tiles reach are different facts, and only the
+    /// second can be read off the disk. A build asked for sixteen levels over thirty-metre data
+    /// stops around thirteen and, until this was recorded, said nothing about it afterwards.
+    /// </summary>
+    [Fact]
+    public async Task The_deepest_level_actually_written_is_recorded_whatever_was_asked_for()
+    {
+        var buildId = await SeedAsync("Copernicus DEM");
+        Pyramid(TilesOf(buildId), levels: 3);
+
+        await RunAsync(buildId);
+
+        var build = await ReadAsync(buildId);
+        build.Status.ShouldBe(TerrainBuildStatus.Succeeded);
+        build.RequestedMaxDepth.ShouldBeGreaterThan(2);
+        build.AchievedMaxDepth.ShouldBe(2);
     }
 
     /// <summary>

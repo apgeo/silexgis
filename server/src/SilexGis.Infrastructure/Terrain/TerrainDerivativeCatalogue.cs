@@ -14,6 +14,9 @@ namespace SilexGis.Infrastructure.Terrain;
 /// is still shown, so the only thing standing between a reader and a shaded relief that disagrees
 /// with the heights beneath it is that somebody remembered to say so.
 /// </param>
+/// <param name="SlopeUnit">
+/// What a steepness picture's numbers mean (degrees or a percentage); null for any other kind.
+/// </param>
 public sealed record TerrainDerivativeLayerView(
     Guid Id,
     Guid TerrainBuildId,
@@ -25,6 +28,7 @@ public sealed record TerrainDerivativeLayerView(
     string? Message,
     int Version,
     long SizeBytes,
+    TerrainSlopeUnit? SlopeUnit,
     TerrainDerivativeStaleness? Staleness,
     DateTimeOffset? ComputedAt,
     DateTimeOffset CreatedAt)
@@ -102,6 +106,7 @@ public sealed class TerrainDerivativeCatalogue(SilexGisDbContext db)
             row.Message,
             row.Version,
             row.SizeBytes,
+            TerrainDerivativeRegistry.SlopeUnitOf(row.Derivative, row.Settings),
             TerrainDerivativeRegistry.Staleness(
                 row.TerrainBuildId, activeBuildId, row.Derivative, row.Version, row.MethodRevision),
             row.ComputedAt,

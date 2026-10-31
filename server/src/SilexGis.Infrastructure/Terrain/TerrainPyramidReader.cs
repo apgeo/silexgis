@@ -20,6 +20,7 @@ namespace SilexGis.Infrastructure.Terrain;
 /// <param name="Damaged">The ones that are neither, in the order they were read.</param>
 /// <param name="Unadvertised">The ones the manifest does not say are there.</param>
 /// <param name="EmptyLevels">The levels the manifest says are there and that hold nothing.</param>
+/// <param name="DeepestLevel">The deepest level any tile on disk sits at, or null for no tiles.</param>
 internal sealed record TerrainPyramidReport(
     JsonObject Manifest,
     int TileCount,
@@ -29,7 +30,8 @@ internal sealed record TerrainPyramidReport(
     int CompressedCount,
     IReadOnlyList<string> Damaged,
     IReadOnlyList<string> Unadvertised,
-    IReadOnlyList<int> EmptyLevels);
+    IReadOnlyList<int> EmptyLevels,
+    int? DeepestLevel);
 
 /// <summary>
 /// Reads a pyramid off the disk and says what is wrong with it.
@@ -123,7 +125,8 @@ internal static class TerrainPyramidReader
             compressed,
             damaged,
             unadvertised,
-            TerrainPyramidCheck.LevelsAdvertisedAndEmpty(available, counts));
+            TerrainPyramidCheck.LevelsAdvertisedAndEmpty(available, counts),
+            counts.Count == 0 ? null : counts.Keys.Max());
     }
 
     /// <summary>Every tile under a pyramid, by its place under the root, in a fixed order.</summary>

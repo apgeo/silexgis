@@ -37,6 +37,11 @@ public sealed record TerrainDerivativeRasterDto(
 /// One computed picture of the ground: what it is, what it was drawn from, and whether the ground
 /// it was drawn from is still the ground this installation serves.
 /// </summary>
+/// <param name="SlopeUnit">
+/// What a steepness picture's numbers mean, as a field of its own so a display can stretch its
+/// colours to match: a percentage runs far past the ninety degrees stop at. Null for every other
+/// kind of picture.
+/// </param>
 /// <param name="Stale">
 /// True when this picture is out of date. Served rather than worked out in the browser, because it
 /// is facts joined and a caller holding only the row has no way to know it is missing the rest. A
@@ -60,6 +65,7 @@ public sealed record TerrainDerivativeLayerDto(
     string? Message,
     int Version,
     long SizeBytes,
+    TerrainSlopeUnit? SlopeUnit,
     bool Stale,
     TerrainDerivativeStaleness? StaleReason,
     DateTimeOffset? ComputedAt,
@@ -465,6 +471,7 @@ public static class TerrainDerivativeEndpoints
             view.Message,
             view.Version,
             view.SizeBytes,
+            view.SlopeUnit,
             view.Stale,
             view.Staleness,
             view.ComputedAt,

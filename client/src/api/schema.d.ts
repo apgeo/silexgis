@@ -15872,6 +15872,10 @@ export interface components {
             errorCode: null | string;
             /** Format: int64 */
             sizeBytes: null | number;
+            /** Format: int64 */
+            pyramidBytes: null | number;
+            /** Format: int32 */
+            achievedMaxDepth: null | number;
             pyramidVersion: null | string;
             heightDatum: components["schemas"]["TerrainHeightDatum"];
             /** Format: double */
@@ -15982,6 +15986,7 @@ export interface components {
             version: number;
             /** Format: int64 */
             sizeBytes: number;
+            slopeUnit: null | components["schemas"]["TerrainSlopeUnit"];
             stale: boolean;
             staleReason: null | components["schemas"]["TerrainDerivativeStaleness"];
             /** Format: date-time */

@@ -38,6 +38,19 @@ public sealed record TerrainBuildSourceDto(
 /// whether it is the terrain the scene draws.
 /// </summary>
 /// <param name="Extent">The ground the build covers, as drawn (WGS84).</param>
+/// <param name="SizeBytes">
+/// What everything the build keeps takes on disk: the pyramid plus the prepared rasters and the
+/// tool's working files. Always at least <paramref name="PyramidBytes"/>.
+/// </param>
+/// <param name="PyramidBytes">
+/// What the pyramid's tiles alone take, which is what a viewer is served from; null until the
+/// pyramid has been checked. Served beside the whole so a screen can say which number it shows.
+/// </param>
+/// <param name="AchievedMaxDepth">
+/// The deepest level the finished pyramid really holds tiles for. Can be shallower than the depth
+/// asked for, because the meshing tool stops descending where the sources run out of detail; null
+/// until the pyramid has been checked.
+/// </param>
 /// <param name="SurveyHeightOffsetM">
 /// Metres to add to a surveyed altitude so it sits on the ground this build draws. Served rather
 /// than left to the caller to work out, because the rule that decides it has exactly one home and
@@ -67,6 +80,8 @@ public sealed record TerrainBuildDto(
     string? Message,
     string? ErrorCode,
     long? SizeBytes,
+    long? PyramidBytes,
+    int? AchievedMaxDepth,
     string? PyramidVersion,
     TerrainHeightDatum HeightDatum,
     double GeoidHeightM,
@@ -1401,6 +1416,8 @@ public static class TerrainBuildEndpoints
         build.Message,
         build.ErrorCode,
         build.SizeBytes,
+        build.PyramidBytes,
+        build.AchievedMaxDepth,
         build.PyramidVersion,
         build.HeightDatum,
         build.GeoidHeightM,

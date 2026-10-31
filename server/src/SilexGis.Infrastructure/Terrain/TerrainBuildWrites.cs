@@ -119,8 +119,9 @@ public static class TerrainBuildWrites
     }
 
     /// <summary>
-    /// Records what a checked pyramid turned out to be: what it takes up, and the version every
-    /// address into it carries.
+    /// Records what a checked pyramid turned out to be: what it takes up (the pyramid alone, and
+    /// the whole build folder), how deep it really goes, and the version every address into it
+    /// carries.
     /// </summary>
     /// <remarks>
     /// Written only once the pyramid has passed every check, because both values are read as
@@ -128,7 +129,13 @@ public static class TerrainBuildWrites
     /// so a build carrying one is a build something may be asked to draw.
     /// </remarks>
     public static Task RecordPyramidAsync(
-        SilexGisDbContext db, Guid buildId, long sizeBytes, string version, CancellationToken ct)
+        SilexGisDbContext db,
+        Guid buildId,
+        long sizeBytes,
+        long pyramidBytes,
+        int? achievedMaxDepth,
+        string version,
+        CancellationToken ct)
     {
         var bounded = Head(version, PyramidVersionLength);
         var now = DateTimeOffset.UtcNow;
@@ -137,6 +144,8 @@ public static class TerrainBuildWrites
             .Where(b => b.Id == buildId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(b => b.SizeBytes, Math.Max(sizeBytes, 0))
+                .SetProperty(b => b.PyramidBytes, Math.Max(pyramidBytes, 0))
+                .SetProperty(b => b.AchievedMaxDepth, achievedMaxDepth)
                 .SetProperty(b => b.PyramidVersion, bounded)
                 .SetProperty(b => b.UpdatedAt, now), ct);
     }

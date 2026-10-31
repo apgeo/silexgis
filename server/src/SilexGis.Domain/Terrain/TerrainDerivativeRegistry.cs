@@ -92,6 +92,34 @@ public static class TerrainDerivativeRegistry
         JsonSerializer.Serialize(Normalise(settings), JsonSerializerOptions.Web);
 
     /// <summary>
+    /// What a steepness picture's numbers mean, read from the settings it was stored with; null for
+    /// every other kind of picture, and for settings that can no longer be read.
+    /// </summary>
+    /// <remarks>
+    /// Served as a field of its own so that a display does not have to parse the settings text to
+    /// learn how to stretch the colours: a percentage runs far past the ninety a degree stops at,
+    /// and a picture drawn against the wrong end saturates over most of any steep ground.
+    /// </remarks>
+    public static TerrainSlopeUnit? SlopeUnitOf(TerrainDerivative derivative, string settings)
+    {
+        if (derivative != TerrainDerivative.Slope)
+        {
+            return null;
+        }
+
+        try
+        {
+            var stored = JsonSerializer.Deserialize<TerrainDerivativeSettings>(
+                settings, JsonSerializerOptions.Web);
+            return stored is null ? null : Normalise(stored).SlopeUnit;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// The fingerprint of a request: lower-case hex, and the same for any two requests that would
     /// produce the same file.
     /// </summary>

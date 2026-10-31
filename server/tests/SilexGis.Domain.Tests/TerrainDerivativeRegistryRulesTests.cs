@@ -285,4 +285,29 @@ public sealed class TerrainDerivativeRegistryRulesTests
         => TerrainDerivativeRegistry.Staleness(
                 Guid.CreateVersion7(), Guid.CreateVersion7(), TerrainDerivative.Aspect, 1, 0)
             .ShouldBe(TerrainDerivativeStaleness.ElevationReplaced);
+
+    /// <summary>
+    /// The unit is read back from the stored settings exactly as written, and only for steepness.
+    /// </summary>
+    [Fact]
+    public void A_steepness_picture_reports_the_unit_it_was_stored_with_and_no_other_picture_does()
+    {
+        var percent = new TerrainDerivativeSettings
+        {
+            Derivative = TerrainDerivative.Slope,
+            SlopeUnit = TerrainSlopeUnit.Percent,
+        };
+        var stored = TerrainDerivativeRegistry.Describe(percent);
+
+        TerrainDerivativeRegistry.SlopeUnitOf(TerrainDerivative.Slope, stored)
+            .ShouldBe(TerrainSlopeUnit.Percent);
+        TerrainDerivativeRegistry.SlopeUnitOf(
+                TerrainDerivative.Slope,
+                TerrainDerivativeRegistry.Describe(percent with { SlopeUnit = TerrainSlopeUnit.Degrees }))
+            .ShouldBe(TerrainSlopeUnit.Degrees);
+
+        // The same text under another kind of picture, and text that is not settings at all.
+        TerrainDerivativeRegistry.SlopeUnitOf(TerrainDerivative.Aspect, stored).ShouldBeNull();
+        TerrainDerivativeRegistry.SlopeUnitOf(TerrainDerivative.Slope, "not json").ShouldBeNull();
+    }
 }

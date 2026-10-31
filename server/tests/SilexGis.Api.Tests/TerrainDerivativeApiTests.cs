@@ -415,6 +415,52 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
+    /// A steepness picture says on its own what its numbers mean, so a display can stretch its
+    /// colours to match: a picture asked for as a percentage runs far past the ninety degrees stop
+    /// at and, drawn against that range, goes flat above forty-five degrees. Every other kind says
+    /// nothing, because the unit means nothing to it.
+    /// </summary>
+    [Fact]
+    public async Task A_steepness_picture_carries_its_unit_and_other_pictures_carry_none()
+    {
+        var buildId = await SeedBuildAsync(active: true);
+
+        async Task<JsonElement> AskAsync(string derivative, string? unit)
+        {
+            var response = await holder.PostAsJsonAsync("/api/v1/terrain/derivatives", new
+            {
+                terrainBuildId = buildId,
+                derivative,
+                name = $"{derivative} {unit}",
+                slopeUnit = unit,
+            });
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            return await response.Content.ReadFromJsonAsync<JsonElement>();
+        }
+
+        var percent = await AskAsync("slope", "percent");
+        var degrees = await AskAsync("slope", "degrees");
+        var unstated = await AskAsync("slope", null);
+        var shaded = await AskAsync("hillshade", "percent");
+
+        percent.GetProperty("slopeUnit").GetString().ShouldBe("percent");
+        degrees.GetProperty("slopeUnit").GetString().ShouldBe("degrees");
+        unstated.GetProperty("slopeUnit").GetString().ShouldBe("degrees");
+        shaded.GetProperty("slopeUnit").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The list says the same as the request that created each, and the two slopes are two
+        // pictures: the unit is part of what was asked for.
+        percent.GetProperty("id").GetGuid().ShouldNotBe(degrees.GetProperty("id").GetGuid());
+        unstated.GetProperty("id").GetGuid().ShouldBe(degrees.GetProperty("id").GetGuid());
+
+        var listed = await holder.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/terrain/derivatives?buildId={buildId}");
+        listed.EnumerateArray()
+            .Single(l => l.GetProperty("id").GetGuid() == percent.GetProperty("id").GetGuid())
+            .GetProperty("slopeUnit").GetString().ShouldBe("percent");
+    }
+
+    /// <summary>
     /// A picture is computed from the elevation a build prepared, so a build that is waiting,
     /// running or stopped has nothing to draw it from. The request is refused there and then,
     /// with nothing written and nothing queued, rather than accepted into a run that can only
