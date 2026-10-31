@@ -3,7 +3,7 @@ import { expect, type Page } from '@playwright/test';
 // Straight from Playwright this spec would run unwatched: the guard is what records uncaught
 // errors, unhandled rejections and console errors across the whole browser context.
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login, confirmOk } from './helpers.ts';
+import { chooseOption, gotoRoute, login, confirmOk } from './helpers.ts';
 
 /**
  * A camp's own page, driven the way somebody arrives at one: by address.
@@ -138,10 +138,10 @@ test('the camp list narrows by name and by how far along a camp is', async ({ pa
   // Every row left has to carry the state that was asked for — checking only "some row matched"
   // would pass against a filter the server ignored entirely.
   await page.getByTestId('expedition-search').locator('input').fill('');
-  await page.getByTestId('expedition-state-filter').click();
   // A state the seeded data actually holds. Filtering on one nothing carries would settle to an
-  // empty table, and a loop over no rows asserts nothing at all.
-  await page.getByTitle('Confirmed', { exact: true }).click();
+  // empty table, and a loop over no rows asserts nothing at all. Taken by keyboard and read back:
+  // a click into a list still sliding open chooses nothing.
+  await chooseOption(page, page.getByTestId('expedition-state-filter'), 'Confirmed');
   // The previous rows stay on screen while the narrowed request is in flight, so the settled
   // answer has to be waited for rather than read once: a snapshot taken now would be the
   // unfiltered table. Polling on "some row, and every row, says Confirmed" is both the wait and
