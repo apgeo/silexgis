@@ -1003,6 +1003,39 @@
     "clearPrimary": "Stop using as the headline picture"
   },
   "documents": {
+    "deletion": {
+      "delete": "Delete",
+      "confirm": "Delete this document?",
+      "restorableFor": "Nothing is removed: it disappears from every list, search and link, and can be restored from Deleted documents for {{period}}.",
+      "restorable": "Nothing is removed: it disappears from every list, search and link, and can be restored from Deleted documents.",
+      "done": "The document is deleted.",
+      "forbidden": "You may not delete that document.",
+      "inUse": "A survey archive entry, survey model, georeferenced map or geofile is built on this document. Remove that first.",
+      "notFoundHint": "If it was deleted, it may still be among the deleted documents.",
+      "link": "Deleted documents",
+      "title": "Deleted documents",
+      "intro": "The deleted documents you may put back. A restored document returns whole: with its versions, remarks, links and filing.",
+      "introWindow": "A deleted document is kept for {{period}} and then removed for good.",
+      "introKept": "This installation keeps deleted documents until an administrator decides otherwise.",
+      "empty": "Nothing here. A document you delete is listed on this page.",
+      "loadFailed": "The deleted documents could not be loaded.",
+      "columns": {
+        "title": "Document",
+        "deletedAt": "Deleted",
+        "deletedBy": "Deleted by",
+        "removed": "Removed for good"
+      },
+      "removedIn": "in {{period}}",
+      "removedToday": "within a day",
+      "kept": "Not scheduled",
+      "restore": "Restore",
+      "restoreConfirm": "Restore this document?",
+      "restoreConfirmDetail": "It returns with everything it had, and opens once it is back. Nobody is notified.",
+      "restored": "The document is back.",
+      "windowPassed": "That document was deleted too long ago to be restored.",
+      "gone": "That document is no longer among the deleted ones.",
+      "restoreForbidden": "You may not restore that document."
+    },
     "language": "Language",
     "languageUnknown": "Not known",
     "languages": {
@@ -1094,6 +1127,7 @@
     "deleteConfirm": "Delete this cabinet?",
     "inUse": "Rules still point at this cabinet; remove them first.",
     "notEmpty": "The cabinet still holds cabinets or documents.",
+    "holdsDeleted": "The cabinet still holds deleted documents. Restore them from Deleted documents and unfile them first.",
     "nameTaken": "A cabinet with this name already sits here.",
     "cycle": "A cabinet cannot be moved inside itself.",
     "tooDeep": "The filing tree cannot go this deep.",

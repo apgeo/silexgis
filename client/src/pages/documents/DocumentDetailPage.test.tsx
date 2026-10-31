@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -70,6 +70,9 @@ let fileInfo = {
 };
 
 let rights = 'read, write';
+let documentFailed = false;
+let retentionDays: number | null | undefined = 30;
+const deleteSpy = vi.fn();
 
 // One link naming this document and a cave, so the page's own links section has something
 // to render. The section itself is exercised by its own tests; here it only has to prove
@@ -98,7 +101,15 @@ const links = [
 ];
 
 vi.mock('../../api/hooks.ts', () => ({
-  useDocument: () => ({ data: doc, isPending: false, isError: false }),
+  useDocument: () =>
+    documentFailed
+      ? { data: undefined, isPending: false, isError: true }
+      : { data: doc, isPending: false, isError: false },
+  useDocumentConfig: () =>
+    retentionDays === undefined
+      ? { data: undefined, isLoading: true }
+      : { data: { deletedRetentionDays: retentionDays }, isLoading: false },
+  useDeleteDocument: () => ({ mutateAsync: deleteSpy, isPending: false }),
   useFile: () => ({ data: fileInfo }),
   // Refetching the file once its text has been read is the query cache's business, and it has
   // its own test; here the page only has to survive calling it.
@@ -141,6 +152,8 @@ function renderPage() {
       <App>
         <Routes>
           <Route path="/documents/:id" element={<DocumentDetailPage />} />
+          <Route path="/cabinets" element={<div data-testid="cabinets-page" />} />
+          <Route path="/documents/deleted" element={<div data-testid="deleted-page" />} />
         </Routes>
       </App>
     </MemoryRouter>,
@@ -176,6 +189,9 @@ let antdComplaints: string[] = [];
 
 beforeEach(() => {
   antdComplaints = [];
+  documentFailed = false;
+  retentionDays = 30;
+  deleteSpy.mockReset().mockResolvedValue(undefined);
   vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
     const first = String(args[0] ?? '');
     if (first.includes('[antd:')) {
@@ -191,6 +207,58 @@ afterEach(() => {
 });
 
 describe('DocumentDetailPage', () => {
+  it('offers a delete to a writer, says what it does, and leaves for the cabinets once it is done', async () => {
+    rights = 'read, write';
+    renderPage();
+
+    fireEvent.click(screen.getByTestId('document-delete'));
+    expect(deleteSpy).not.toHaveBeenCalled();
+
+    const dialog = await screen.findByRole('tooltip');
+    expect(within(dialog).getByText('Delete this document?')).toBeInTheDocument();
+    expect(within(dialog).getByText(/can be restored from Deleted documents for 30 days/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith('doc-1'));
+    expect(await screen.findByTestId('cabinets-page')).toBeInTheDocument();
+  });
+
+  it('says a deleted document is kept where the installation sets no window', async () => {
+    rights = 'read, write';
+    retentionDays = null;
+    renderPage();
+
+    fireEvent.click(screen.getByTestId('document-delete'));
+    const dialog = await screen.findByRole('tooltip');
+    expect(within(dialog).getByText(/can be restored from Deleted documents\./)).toBeInTheDocument();
+  });
+
+  it('does not offer a delete before the installation has said what it does, or to a reader', () => {
+    rights = 'read, write';
+    retentionDays = undefined;
+    renderPage();
+    expect(screen.getByTestId('document-delete')).toBeDisabled();
+    cleanup();
+
+    retentionDays = 30;
+    rights = 'read';
+    renderPage();
+    expect(screen.queryByTestId('document-delete')).not.toBeInTheDocument();
+  });
+
+  it('points somebody who may edit from a document that is not there to the deleted ones', () => {
+    documentFailed = true;
+    rights = 'read, write';
+    renderPage();
+    fireEvent.click(screen.getByTestId('document-not-found-deleted'));
+    expect(screen.getByTestId('deleted-page')).toBeInTheDocument();
+    cleanup();
+
+    rights = 'read';
+    renderPage();
+    expect(screen.queryByTestId('document-not-found-deleted')).not.toBeInTheDocument();
+  });
+
   it('lays the block of facts out in whole rows, whether or not the file names an author', () => {
     rights = 'read';
     // Both counts of short facts, because the row the long entries start on depends on it and

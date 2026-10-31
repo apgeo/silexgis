@@ -144,6 +144,10 @@ export const queryKeys = {
   // Deliberately its own root rather than nested under 'documents': saving a title
   // invalidates that whole prefix, and a remark thread has no reason to be refetched
   // because somebody corrected a spelling in the metadata panel above it.
+  deletedDocuments: (page: number) => ['documents', 'deleted', page] as const,
+  // Outside the documents prefix on purpose: it describes the installation, so no write to a
+  // document makes it stale.
+  documentConfig: ['document-config'] as const,
   documentComments: (id: string) => ['document-comments', id] as const,
   cabinets: ['cabinets'] as const,
   unfiledDocuments: (params: UnfiledDocumentParams) => ['documents', 'unfiled', params] as const,

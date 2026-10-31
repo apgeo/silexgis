@@ -1003,6 +1003,39 @@
     "clearPrimary": "Nu mai folosi ca fotografie reprezentativă"
   },
   "documents": {
+    "deletion": {
+      "delete": "Șterge",
+      "confirm": "Ștergi acest document?",
+      "restorableFor": "Nimic nu este eliminat: documentul dispare din liste, căutări și legături și poate fi restaurat din Documente șterse timp de {{period}}.",
+      "restorable": "Nimic nu este eliminat: documentul dispare din liste, căutări și legături și poate fi restaurat din Documente șterse.",
+      "done": "Documentul a fost șters.",
+      "forbidden": "Nu poți șterge acest document.",
+      "inUse": "O intrare din arhiva topografică, un model topo, o hartă georeferențiată sau un geofișier se sprijină pe acest document. Eliminați-le mai întâi.",
+      "notFoundHint": "Dacă a fost șters, s-ar putea să fie încă printre documentele șterse.",
+      "link": "Documente șterse",
+      "title": "Documente șterse",
+      "intro": "Documentele șterse pe care le poți restaura. Un document restaurat revine întreg: cu versiunile, observațiile, legăturile și locul în dosare.",
+      "introWindow": "Un document șters este păstrat {{period}} și apoi eliminat definitiv.",
+      "introKept": "Această instalație păstrează documentele șterse până când un administrator hotărăște altfel.",
+      "empty": "Nimic aici. Un document pe care îl ștergi apare pe această pagină.",
+      "loadFailed": "Documentele șterse nu au putut fi încărcate.",
+      "columns": {
+        "title": "Document",
+        "deletedAt": "Șters",
+        "deletedBy": "Șters de",
+        "removed": "Eliminat definitiv"
+      },
+      "removedIn": "în {{period}}",
+      "removedToday": "în mai puțin de o zi",
+      "kept": "Neprogramat",
+      "restore": "Restaurează",
+      "restoreConfirm": "Restaurezi acest document?",
+      "restoreConfirmDetail": "Revine cu tot ce avea și se deschide după ce este restaurat. Nimeni nu este anunțat.",
+      "restored": "Documentul a fost restaurat.",
+      "windowPassed": "Documentul a fost șters de prea mult timp pentru a mai putea fi restaurat.",
+      "gone": "Documentul nu mai este printre cele șterse.",
+      "restoreForbidden": "Nu poți restaura acest document."
+    },
     "language": "Limbă",
     "languageUnknown": "Necunoscută",
     "languages": {
@@ -1094,6 +1127,7 @@
     "deleteConfirm": "Ștergi acest dulap?",
     "inUse": "Există reguli care indică acest dulap; șterge-le mai întâi.",
     "notEmpty": "Dulapul încă mai conține dulapuri sau documente.",
+    "holdsDeleted": "Dulapul încă mai conține documente șterse. Restaurați-le din Documente șterse și scoateți-le din dulap mai întâi.",
     "nameTaken": "Un dulap cu această denumire se află deja aici.",
     "cycle": "Un dulap nu poate fi mutat în el însuși.",
     "tooDeep": "Arborele de clasare nu poate coborî atât de adânc.",

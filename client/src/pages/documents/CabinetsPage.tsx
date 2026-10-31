@@ -312,6 +312,7 @@ export default function CabinetsPage() {
       'cabinet.name_taken': 'cabinets.nameTaken',
       'cabinet.in_use': 'cabinets.inUse',
       'cabinet.not_empty': 'cabinets.notEmpty',
+      'cabinet.holds_deleted_documents': 'cabinets.holdsDeleted',
       'cabinet.cycle': 'cabinets.cycle',
       'cabinet.too_deep': 'cabinets.tooDeep',
       'document.write_forbidden': 'cabinets.filingForbidden',
@@ -466,6 +467,15 @@ export default function CabinetsPage() {
             setShelfOpen(false);
           }}
         />
+      )}
+      {canWrite && (
+        // Whoever may edit documents may delete them, so they are who a deleted one is waiting
+        // for. The list itself is decided row by row on the server.
+        <Typography.Paragraph style={{ marginTop: 16, marginBottom: 0 }}>
+          <Link to="/documents/deleted" data-testid="cabinets-deleted-link">
+            {t('documents.deletion.link')}
+          </Link>
+        </Typography.Paragraph>
       )}
     </>
   );

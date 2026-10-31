@@ -20,6 +20,7 @@ export * from './hooks/surveys.ts';
 export * from './hooks/features.ts';
 export * from './hooks/geodata.ts';
 export * from './hooks/documents.ts';
+export * from './hooks/documentDeletion.ts';
 export * from './hooks/photos.ts';
 export * from './hooks/photoLibraries.ts';
 export * from './hooks/people.ts';

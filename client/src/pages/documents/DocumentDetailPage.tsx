@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo } from 'react';
-import { Alert, Breadcrumb, Card, Descriptions, Flex, Spin, Tag, Typography } from 'antd';
+import { DeleteOutlined } from '@ant-design/icons';
+import {
+  Alert, App, Breadcrumb, Card, Descriptions, Flex, Popconfirm, Spin, Tag, Typography,
+} from 'antd';
+import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ApiError } from '../../api/client.ts';
 import {
   useCabinets,
   useCan,
+  useDeleteDocument,
   useDocument,
+  useDocumentConfig,
   useDocumentTypes,
   useFile,
   useRefreshFileWhenTextRead,
@@ -19,6 +26,7 @@ import DocumentContent from '../../components/documents/DocumentContent.tsx';
 import DownloadDocument from '../../components/documents/DownloadDocument.tsx';
 import TextState from '../../components/documents/TextState.tsx';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
+import { formatDays } from '../../components/trips/tripRestoreWindow.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 
 /**
@@ -39,6 +47,7 @@ export default function DocumentDetailPage() {
   const { t, i18n } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const isMobile = useIsMobile();
   // A content search knows which page matched; arriving here without one is simply arriving
   // at the beginning, so anything that is not a page number is read as none.
@@ -57,6 +66,10 @@ export default function DocumentDetailPage() {
 
   const mayWrite = useCan('documents', 'write');
   const mayReadDocuments = useCan('documents', 'read');
+  // What this installation does with a deleted document, asked so the confirmation can say it
+  // rather than promise a window the operator may have changed.
+  const { data: config, isLoading: retentionOutstanding } = useDocumentConfig();
+  const deleteDocument = useDeleteDocument();
   // The tree is small enough to fetch whole, and it is the only thing that can turn a
   // filing into a name. A caller who may not list it simply sees no filing section.
   const { data: cabinets } = useCabinets(mayReadDocuments);
@@ -79,7 +92,26 @@ export default function DocumentDetailPage() {
   if (isError) {
     return (
       <div style={{ padding: 24 }}>
-        <Alert type="error" showIcon title={t('common.loadFailed')} />
+        <Alert
+          type="error"
+          showIcon
+          title={t('common.loadFailed')}
+          // A deleted document answers exactly as one that was never there, so this page cannot
+          // know which it is looking at. What it can do is say where a deleted one would be, to
+          // somebody who might have deleted it.
+          description={mayWrite ? t('documents.deletion.notFoundHint') : undefined}
+          action={
+            mayWrite ? (
+              <Button
+                size="small"
+                data-testid="document-not-found-deleted"
+                onClick={() => void navigate('/documents/deleted')}
+              >
+                {t('documents.deletion.link')}
+              </Button>
+            ) : undefined
+          }
+        />
       </div>
     );
   }
@@ -93,6 +125,33 @@ export default function DocumentDetailPage() {
   }
 
   const type = types?.find((candidate) => candidate.id === document.documentTypeId);
+
+  const onDelete = async () => {
+    try {
+      await deleteDocument.mutateAsync(document.id);
+      message.success(t('documents.deletion.done'));
+      void navigate('/cabinets');
+    } catch (e) {
+      message.error(
+        e instanceof ApiError && e.status === 403
+          ? t('documents.deletion.forbidden')
+          : e instanceof ApiError && e.code === 'document.in_use'
+            ? t('documents.deletion.inUse')
+            : t('common.saveFailed'),
+      );
+    }
+  };
+
+  // What the delete is about to do, in the installation's own number. Nothing is promised until
+  // the server has said.
+  const restoreHint =
+    config === undefined
+      ? undefined
+      : config.deletedRetentionDays === null
+        ? t('documents.deletion.restorable')
+        : t('documents.deletion.restorableFor', {
+            period: formatDays(config.deletedRetentionDays, i18n.resolvedLanguage),
+          });
 
   return (
     // `minWidth: 0` so a wide child — a page picture, a delimited table read as text — scrolls
@@ -128,6 +187,27 @@ export default function DocumentDetailPage() {
             canEdit={mayWrite}
           />
           {file && <DownloadDocument file={file} />}
+          {mayWrite && (
+            // Not offered while the answer about restoring is still on its way: a confirmation
+            // that gained its second sentence a moment after opening would widen and carry its
+            // buttons sideways under a press already aimed at OK.
+            <Popconfirm
+              title={t('documents.deletion.confirm')}
+              description={restoreHint}
+              disabled={retentionOutstanding}
+              okButtonProps={{ loading: deleteDocument.isPending }}
+              onConfirm={() => void onDelete()}
+            >
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                disabled={retentionOutstanding}
+                data-testid="document-delete"
+              >
+                {t('documents.deletion.delete')}
+              </Button>
+            </Popconfirm>
+          )}
         </Flex>
       </Flex>
 

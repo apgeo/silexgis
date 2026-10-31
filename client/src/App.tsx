@@ -82,6 +82,7 @@ const ReportTemplatesPage = lazy(() => import('./pages/admin/ReportTemplatesPage
 const RelationTypesPage = lazy(() => import('./pages/admin/RelationTypesPage.tsx'));
 const TerrainPage = lazy(() => import('./pages/admin/TerrainPage.tsx'));
 const CabinetsPage = lazy(() => import('./pages/documents/CabinetsPage.tsx'));
+const DeletedDocumentsPage = lazy(() => import('./pages/documents/DeletedDocumentsPage.tsx'));
 const DocumentDetailPage = lazy(() => import('./pages/documents/DocumentDetailPage.tsx'));
 const UploadsPage = lazy(() => import('./pages/documents/UploadsPage.tsx'));
 const GalleryPage = lazy(() => import('./pages/gallery/GalleryPage.tsx'));
@@ -256,6 +257,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/photo-library', element: <Loadable><PhotoLibraryPage /></Loadable> },
           { path: '/albums', element: <Loadable><AlbumsPage /></Loadable> },
           { path: '/albums/:id', element: <Loadable><AlbumDetailPage /></Loadable> },
+          { path: '/documents/deleted', element: <Loadable><DeletedDocumentsPage /></Loadable> },
           { path: '/documents/:id', element: <Loadable><DocumentDetailPage /></Loadable> },
           // A link's own page, reached by the short code someone pasted into a chat.
           { path: '/links/:code', element: <Loadable><LinkPage /></Loadable> },

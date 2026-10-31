@@ -111,6 +111,17 @@ function renderPage() {
 }
 
 describe('CabinetsPage', () => {
+  it('points an editor, and nobody who can only read, to the deleted documents', () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    renderPage();
+    expect(screen.getByTestId('cabinets-deleted-link')).toHaveAttribute('href', '/documents/deleted');
+    cleanup();
+
+    capabilities = { domains: { documents: 'read' } };
+    renderPage();
+    expect(screen.queryByTestId('cabinets-deleted-link')).not.toBeInTheDocument();
+  });
+
   it('draws the tree with each shelf\'s size and asks for a selection before listing anything', () => {
     capabilities = { domains: { documents: 'read' } };
     renderPage();
