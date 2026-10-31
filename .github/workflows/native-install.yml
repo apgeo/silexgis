@@ -52,7 +52,7 @@ jobs:
       # nothing to do with the restore.
       JOBS_PENDING: select count(*) from processing_jobs where status in (0, 1)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: actions/setup-dotnet@v4
@@ -134,7 +134,7 @@ jobs:
     env:
       PUBLIC_URL: http://localhost:8080
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: actions/setup-dotnet@v4
@@ -209,7 +209,7 @@ jobs:
       PUBLIC_URL: http://localhost:8080
       ADMIN_URL: postgres://postgres:ci@127.0.0.1:5432/postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: actions/setup-dotnet@v4
