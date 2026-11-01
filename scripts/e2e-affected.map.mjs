@@ -61,8 +61,8 @@ export const specs = {
   crs: [],
   dashboard: ['my-trips.spec.ts'],
   diagnostics: ['consoleGuard.spec.ts', 'errorReporting.spec.ts'],
-  // The relations graph's server routes; its browser spec joins when the explorer page lands.
-  graph: [],
+  // The relations graph: its server routes and the explorer page, driven on a canvas.
+  graph: ['graph-explorer.spec.ts'],
   documents: [
     'documents.spec.ts', 'document-delete-restore.spec.ts', 'annotated-text.spec.ts',
     'reslinks.spec.ts',
