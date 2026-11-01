@@ -105,20 +105,8 @@ public static class CenterlineEndpoints
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        // The cave's visibility cascades to its centerlines at read time, so the row-local
-        // filter is the whole read rule — no join back to the cave.
-        var rows = await db.Features.AsNoTracking()
-            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-            .Where(f => f.Kind == FeatureKind.Centerline && f.Centerline!.CaveFeatureId == caveId)
-            .Include(f => f.Centerline)
-            .OrderBy(f => f.CreatedAt)
-            .ToListAsync(ct);
-
-        // The cave stays readable, but its centerlines trace its exact position: whoever may
-        // not see that sees no centerlines at all, and is told nothing about how many exist.
-        var exact = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(f => f.Id)], ct);
+        var rows = await CavePartReads.CenterlinesAsync(db, protection, ctx, caveId, ct);
         return TypedResults.Ok(rows
-            .Where(f => exact.Contains(f.Id))
             .Select(f => ToDto(f, f.Centerline!))
             .ToList());
     }

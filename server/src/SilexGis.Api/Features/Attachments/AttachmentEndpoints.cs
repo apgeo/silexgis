@@ -12,6 +12,9 @@ using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Attachments;
 
+/// <summary>One attachment row its target's list would show, with the document it serves.</summary>
+internal sealed record VisibleAttachment(Attachment Attachment, DocumentFile Content, Document Document);
+
 /// <summary>
 /// <see cref="EntityType"/>/<see cref="EntityId"/> name the attachment's target:
 /// "feature" + a feature id, or a non-feature entity name + its id.
@@ -122,6 +125,33 @@ public static class AttachmentEndpoints
             return ApiProblems.NotFound("attachment.entity_not_found");
         }
 
+        var shown = await VisibleRowsAsync(db, associations, ctx, parsedType, entityId, ct);
+
+        // Asked separately from the withholding above, and it has to be: that answer is per
+        // row, and a photo hanging on two features — one open, one guarded — has a row that
+        // survives. The bytes do not care which row was followed to reach them, so the right
+        // to have them is decided over everything the photo hangs on at once.
+        var reach = await photos.ReachAsync(
+            ctx, [.. shown.Select(x => x.Attachment.FileId)], ct);
+
+        return TypedResults.Ok(shown
+            .Select(x => x.Attachment.ToDto(x.Content, tokens, reach))
+            .ToList());
+    }
+
+    /// <summary>
+    /// The attachments of one target as its attachment list shows them: the documents' own
+    /// rules consulted, and the pairing withheld wherever the caller may not place the feature
+    /// exactly. The caller has already been found to read the target; nothing here decides that.
+    /// </summary>
+    internal static async Task<List<VisibleAttachment>> VisibleRowsAsync(
+        SilexGisDbContext db,
+        AssociationDisclosure associations,
+        AccessContext ctx,
+        AttachedEntityType? parsedType,
+        Guid entityId,
+        CancellationToken ct)
+    {
         var scoped = parsedType is { } pairType
             ? db.Attachments.AsNoTracking().Where(a => a.EntityType == pairType && a.EntityId == entityId)
             : db.Attachments.AsNoTracking().Where(a => a.FeatureId == entityId);
@@ -161,18 +191,9 @@ public static class AttachmentEndpoints
                 new FeatureAssociation(x.Attachment.FeatureId, x.HasOwnPosition)))],
             ct);
 
-        var shown = rows.Where(x => !withheld.Contains(x.Attachment.Id)).ToList();
-
-        // Asked separately from the withholding above, and it has to be: that answer is per
-        // row, and a photo hanging on two features — one open, one guarded — has a row that
-        // survives. The bytes do not care which row was followed to reach them, so the right
-        // to have them is decided over everything the photo hangs on at once.
-        var reach = await photos.ReachAsync(
-            ctx, [.. shown.Select(x => x.Attachment.FileId)], ct);
-
-        return TypedResults.Ok(shown
-            .Select(x => x.Attachment.ToDto(x.Content, tokens, reach))
-            .ToList());
+        return [.. rows
+            .Where(x => !withheld.Contains(x.Attachment.Id))
+            .Select(x => new VisibleAttachment(x.Attachment, x.Content, x.Document))];
     }
 
     private static async Task<Results<Created<AttachmentDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(

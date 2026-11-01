@@ -89,7 +89,38 @@ public static partial class ResLinkEndpoints
         }
 
         var (p, size) = Paging.Normalize(page, pageSize);
+        var (rows, total) = await IncidentLinksAsync(
+            db, targets, associations, protection, photoPositions, placePoints, access, ctx,
+            parsedType, id, relationTypeId, (p - 1) * size, size, ct);
+        return TypedResults.Ok(new PagedResult<ResLinkDto>(rows, p, size, total));
+    }
 
+    /// <summary>
+    /// The panel's answer for one readable target: a window of the links naming it, newest
+    /// first, each projected under the disclosure cut, and how many there are for this caller
+    /// in all. The one home of that answer — the panel route pages through it, and the
+    /// relations graph asks it for the same item, so the two can never disagree about which
+    /// links, which members or which total a viewer is shown.
+    /// </summary>
+    /// <param name="withCuration">False when the caller has no use for <see cref="ResLinkDto.MayEdit"/>,
+    /// which is then false on every row and costs nothing to answer.</param>
+    internal static async Task<(List<ResLinkDto> Links, int Total)> IncidentLinksAsync(
+        SilexGisDbContext db,
+        ResLinkTargetDirectory targets,
+        AssociationDisclosure associations,
+        FeatureProtection protection,
+        PhotoPositionDisclosure photoPositions,
+        PlacePointDisclosure placePoints,
+        IAccessService access,
+        AccessContext ctx,
+        AttachedEntityType? parsedType,
+        Guid id,
+        long? relationTypeId,
+        int skip,
+        int take,
+        CancellationToken ct,
+        bool withCuration = true)
+    {
         var incident = parsedType is { } pairType
             ? db.ResLinkMembers.AsNoTracking().Where(m => m.EntityType == pairType && m.EntityId == id)
             : db.ResLinkMembers.AsNoTracking().Where(m => m.FeatureId == id);
@@ -131,7 +162,7 @@ public static partial class ResLinkEndpoints
         {
             if (await associations.IsWithheldAsync(ctx, ResLinkRules.MemberAssociation(id), ct))
             {
-                return TypedResults.Ok(new PagedResult<ResLinkDto>([], p, size, 0));
+                return ([], 0);
             }
 
             // The installation reveals protected associations, so each link now decides
@@ -172,7 +203,12 @@ public static partial class ResLinkEndpoints
             // projected, but who may curate them is only ever asked about the rows actually
             // returned. So this arm's per-row cost is the page's, not the candidate set's,
             // and the honest total stays the count of what survived.
-            var rows = listed.Skip((p - 1) * size).Take(size).ToList();
+            var rows = listed.Skip(skip).Take(take).ToList();
+            if (!withCuration)
+            {
+                return (rows, listed.Count);
+            }
+
             var pageIds = rows.Select(l => l.Id).ToHashSet();
             List<ResLinkMember> pageMains = pageIds.Count == 0
                 ? []
@@ -181,18 +217,15 @@ public static partial class ResLinkEndpoints
                     .ToListAsync(ct);
             var curated = await CuratedLinkIdsAsync(
                 db, access, targets, ctx, [.. candidates.Where(l => pageIds.Contains(l.Id))], pageMains, ct);
-            return TypedResults.Ok(new PagedResult<ResLinkDto>(
-                [.. rows.Select(l => l with { MayEdit = curated.Contains(l.Id) })],
-                p,
-                size,
-                listed.Count));
+            return ([.. rows.Select(l => l with { MayEdit = curated.Contains(l.Id) })], listed.Count);
         }
 
         var total = await linkQuery.CountAsync(ct);
-        var links = await linkQuery.Skip((p - 1) * size).Take(size).ToListAsync(ct);
+        var links = await linkQuery.Skip(skip).Take(take).ToListAsync(ct);
         var dtos = await ProjectAsync(
-            db, targets, associations, protection, photoPositions, access, ctx, links, ct);
-        return TypedResults.Ok(new PagedResult<ResLinkDto>(dtos, p, size, total));
+            db, targets, associations, protection, photoPositions, access, ctx, links, ct,
+            skipCuration: !withCuration);
+        return (dtos, total);
     }
 
     private static async Task<Results<Ok<List<ResLinkTargetHitDto>>, UnauthorizedHttpResult, ProblemHttpResult>> SearchTargetsAsync(

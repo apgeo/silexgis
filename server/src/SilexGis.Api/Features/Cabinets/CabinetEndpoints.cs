@@ -610,14 +610,8 @@ public static class CabinetEndpoints
     /// </para>
     /// </summary>
     private static Task<IReadOnlyCollection<Guid>> ReachOverAsync(
-        SilexGisDbContext db, AccessContext ctx, IQueryable<Document> candidates, CancellationToken ct)
-    {
-        var admitted = candidates
-            .VisibleTo(ctx, AccessDomain.Documents, null, (db.CabinetDocuments, db.Cabinets))
-            .Select(d => d.Id);
-        return DocumentAccessRules.ReachedByAttachmentAsync(
-            db, ctx, candidates.Where(d => !admitted.Contains(d.Id)).Select(d => d.Id), ct);
-    }
+        SilexGisDbContext db, AccessContext ctx, IQueryable<Document> candidates, CancellationToken ct) =>
+        DocumentReach.ReachOverAsync(db, ctx, candidates, ct);
 
     /// <summary>One cabinet with its count, under the same rule the whole tree uses.</summary>
     private static async Task<CabinetDto?> ProjectOneAsync(

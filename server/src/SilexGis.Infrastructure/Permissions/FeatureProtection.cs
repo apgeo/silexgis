@@ -243,6 +243,34 @@ public sealed class FeatureProtection(SilexGisDbContext db, IAccessService acces
     }
 
     /// <summary>
+    /// Of the given feature ids, the protected centerlines the caller may not place exactly.
+    /// A centerline traces its cave's course underground, so without exact view the row is
+    /// withheld altogether — not named, not counted — as its own address answers it with a
+    /// not-found. Ids that are not centerlines, or not protected, are never returned.
+    /// </summary>
+    public async Task<HashSet<Guid>> WithheldCenterlineIdsAsync(
+        AccessContext? ctx, IReadOnlyCollection<Guid> featureIds, CancellationToken ct = default)
+    {
+        var ids = featureIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var guarded = await db.Features.AsNoTracking()
+            .Where(f => ids.Contains(f.Id) && f.Kind == FeatureKind.Centerline && f.IsProtectedEffective)
+            .Select(f => f.Id)
+            .ToListAsync(ct);
+        if (guarded.Count == 0)
+        {
+            return [];
+        }
+
+        var exact = await ExactViewIdsAsync(ctx, guarded, ct);
+        return [.. guarded.Where(id => !exact.Contains(id))];
+    }
+
+    /// <summary>
     /// Of the given LINK TARGET ids, the ones whose reference must be hidden from the
     /// caller: a locating link on a record with exact coordinates discloses a protected
     /// target's position by proximity. A target is redacted when the caller lacks exact

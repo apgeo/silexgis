@@ -157,7 +157,7 @@ public static class FeatureLinkEndpoints
     /// caller lacks exact view on either endpoint (the pairing itself places the
     /// protected one).
     /// </summary>
-    private static async Task<List<FeatureLinkDto>> LinksViewAsync(
+    internal static async Task<List<FeatureLinkDto>> LinksViewAsync(
         SilexGisDbContext db, FeatureProtection protection, AccessContext? ctx, Guid id, CancellationToken ct)
     {
         var links = await db.FeatureLinks.AsNoTracking()

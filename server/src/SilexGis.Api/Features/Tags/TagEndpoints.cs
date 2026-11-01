@@ -73,7 +73,7 @@ public static class TagEndpoints
         // Every account holds this through the All Users seed, so the catalogue reads as
         // openly as it always did — but as an entry an installation can tighten, rather
         // than as an absence of any rule.
-        if (!AccessEvaluator.Decide(ctx, AccessDomain.Tags, AccessAction.Read, null).Allowed)
+        if (!TagCatalogue.MayRead(ctx))
         {
             return ApiProblems.Forbidden();
         }

@@ -135,16 +135,49 @@ public static class HierarchyEndpoints
             return ApiProblems.NotFound("feature.not_found");
         }
 
-        var query = db.FeatureHierarchyEdges.AsNoTracking()
+        var query = await ChildrenQueryAsync(db, protection, ctx!, id, ct);
+
+        var (p, size) = Paging.Normalize(page, pageSize);
+        var total = await query.CountAsync(ct);
+        var rows = await query.OrderBy(x => x.Name).ThenBy(x => x.Id)
+            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
+        var items = rows.Select(x => new FeatureChildDto(x.Id, x.Kind, x.Name, x.IsPrimary)).ToList();
+
+        return TypedResults.Ok(new PagedResult<FeatureChildDto>(items, p, size, total));
+    }
+
+    /// <summary>A child edge joined with its readable child row. Initialised by members, not a
+    /// constructor, so that a query ordering or counting over it still translates to SQL.</summary>
+    internal sealed record ChildRow
+    {
+        public required Guid Id { get; init; }
+
+        public required FeatureKind Kind { get; init; }
+
+        public string? Name { get; init; }
+
+        public required bool IsPrimary { get; init; }
+    }
+
+    /// <summary>
+    /// The feature's children as the caller may see them: readable child rows only, and
+    /// protected centerline children withheld entirely from callers without exact view — even
+    /// their existence is not disclosed. Unordered; whoever pages it orders it.
+    /// </summary>
+    internal static async Task<IQueryable<ChildRow>> ChildrenQueryAsync(
+        SilexGisDbContext db, FeatureProtection protection, AccessContext ctx, Guid id, CancellationToken ct)
+    {
+        // No tracking option here: the query projects into a row that is not an entity, so
+        // there is nothing to track, and a helper returning a query must not state one.
+        var query = db.FeatureHierarchyEdges
             .Where(e => e.ParentId == id)
             .Join(
-                db.Features.AsNoTracking().VisibleTo(ctx!, db.Features, db.FeatureSetMembers),
+                db.Features.VisibleTo(ctx, db.Features, db.FeatureSetMembers),
                 e => e.ChildId,
                 f => f.Id,
                 (e, f) => new { f.Id, f.Kind, f.Name, f.IsProtectedEffective, e.IsPrimary });
 
-        // Protected centerline children are withheld entirely for callers without exact
-        // view — even their existence is not disclosed. Excluded before counting.
+        // Excluded before counting, so a total never discloses them either.
         var protectedCenterlineIds = await query
             .Where(x => x.Kind == FeatureKind.Centerline && x.IsProtectedEffective)
             .Select(x => x.Id)
@@ -159,17 +192,11 @@ public static class HierarchyEndpoints
             }
         }
 
-        var (p, size) = Paging.Normalize(page, pageSize);
-        var total = await query.CountAsync(ct);
-        var rows = await query.OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
-        var items = rows.Select(x => new FeatureChildDto(x.Id, x.Kind, x.Name, x.IsPrimary)).ToList();
-
-        return TypedResults.Ok(new PagedResult<FeatureChildDto>(items, p, size, total));
+        return query.Select(x => new ChildRow { Id = x.Id, Kind = x.Kind, Name = x.Name, IsPrimary = x.IsPrimary });
     }
 
     /// <summary>The feature's parent edges joined with readable parent rows (primary edge first).</summary>
-    private static async Task<List<FeatureParentDto>> ParentsViewAsync(
+    internal static async Task<List<FeatureParentDto>> ParentsViewAsync(
         SilexGisDbContext db, AccessContext ctx, Guid id, CancellationToken ct)
     {
         var rows = await db.FeatureHierarchyEdges.AsNoTracking()

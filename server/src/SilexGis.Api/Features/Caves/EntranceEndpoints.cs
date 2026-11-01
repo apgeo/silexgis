@@ -114,14 +114,7 @@ public static class EntranceEndpoints
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        // Readability is decided on the cave alone. Re-filtering the entrance rows would be
-        // wrong, not merely redundant: ACL grants are keyed to the row they were made on, so
-        // a caller who reads a private cave through a grant holds none on its entrances.
-        var rows = await db.CaveEntrances.AsNoTracking()
-            .Include(e => e.Feature)
-            .Where(e => e.CaveFeatureId == caveId)
-            .OrderByDescending(e => e.IsMain).ThenBy(e => e.Feature.CreatedAt)
-            .ToListAsync(ct);
+        var rows = await CavePartReads.EntrancesAsync(db, caveId, ct);
 
         var exact = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(e => e.Id)], ct);
         return TypedResults.Ok(rows

@@ -311,6 +311,16 @@ public static class CavingGroupEndpoints
             return ApiProblems.NotFound("caving_group.not_found");
         }
 
+        return TypedResults.Ok(await MembersViewAsync(db, user, id, ct));
+    }
+
+    /// <summary>
+    /// A group's members as its member list shows them. The caller has already been found to
+    /// hold Read on the group; nothing here decides that.
+    /// </summary>
+    internal static async Task<List<CavingGroupMemberDto>> MembersViewAsync(
+        SilexGisDbContext db, UserContext user, Guid id, CancellationToken ct)
+    {
         var members = await (
             from membership in db.CavingGroupMemberships.AsNoTracking()
             join caver in db.Cavers.AsNoTracking() on membership.CaverId equals caver.Id
@@ -322,11 +332,11 @@ public static class CavingGroupEndpoints
         // home, and it prefers their account's chosen name over the roster spelling.
         var labels = await CaverDirectory.ResolveLabelsAsync(db, user, members.Select(m => m.CaverId), ct);
 
-        return TypedResults.Ok(members
+        return members
             .Select(m => new CavingGroupMemberDto(
                 m.CaverId, labels.GetValueOrDefault(m.CaverId) ?? string.Empty, m.UserId, m.Role))
             .OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)
-            .ToList());
+            .ToList();
     }
 
     private static async Task<Results<Ok<CavingGroupMemberDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpsertMemberAsync(
