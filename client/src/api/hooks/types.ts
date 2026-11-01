@@ -547,3 +547,10 @@ export interface EventListParams {
    */
   seriesId?: string;
 }
+
+/** One hop around one item, as the relations graph route answers it. */
+export type GraphNeighbourhood = components['schemas']['GraphNeighbourhoodDto'];
+export type GraphNodeWire = components['schemas']['GraphNodeDto'];
+export type GraphEdgeWire = components['schemas']['GraphEdgeDto'];
+export type GraphCategoryCountWire = components['schemas']['GraphCategoryCountDto'];
+export type GraphSearchHit = components['schemas']['GraphSearchHitDto'];
