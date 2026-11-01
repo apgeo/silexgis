@@ -143,7 +143,11 @@ export const specs = {
     'public-trip-as-installed.spec.ts',
   ],
   qr: ['qr-landing.spec.ts'],
-  resLinks: ['reslinks.spec.ts', 'annotated-text.spec.ts', 'cave-grant-link.spec.ts', 'place-map.spec.ts'],
+  resLinks: [
+    'reslinks.spec.ts', 'annotated-text.spec.ts', 'cave-grant-link.spec.ts', 'place-map.spec.ts',
+    // A place a phone mapped to a survey station, listed and removed on the place's page.
+    'place-station.spec.ts',
+  ],
   scene: ['scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts', 'scene3d-backgrounds.spec.ts'],
   search: ['documents.spec.ts'],
   settings: [
