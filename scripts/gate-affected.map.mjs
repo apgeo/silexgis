@@ -279,6 +279,8 @@ export const groups = {
     // A place a phone pinned on its map is a link shown whole or not at all, and written only by
     // the phone's sync and the map screen.
     'PlacePointProtectionTests', 'PlacePointWriteTests',
+    // A place a phone mapped to a survey station: shown whole or not at all, written by the sync.
+    'PlaceStationProtectionTests', 'PlaceStationTests',
   ],
   search: ['DocumentContentSearchSqlTests', 'DocumentContentSearchTests', 'PersistenceTests'],
   statistics: [
@@ -306,7 +308,7 @@ export const groups = {
   about: ['ApiSmokeTests', 'ResponseCompressionTests', 'TestClassDisposalTests', 'TestModeTests'],
   // How a database the old migration chain built is moved onto the baseline; a change to
   // persistence or the migrations selects the whole suite anyway, so this group only names it.
-  migrationBaseline: ['MigrationBaselineTests', 'RasterPinsAsLinksMigrationTests'],
+  migrationBaseline: ['MigrationBaselineTests', 'RasterPinsAsLinksMigrationTests', 'SurveyModelRemovalsMigrationTests'],
   audit: [
     'AccessHistoryTests', 'HistoryTests', 'AuditClientAddressTests', 'ChangeAttributionTests',
     // Large shapes kept beside an edit, and put back from it.
@@ -362,6 +364,8 @@ export const groups = {
     'SyncRasterPictureTurnTests',
     // A phone's pins, as links: moved, added and removed in the browser, redrawn on a turn.
     'PlacePointWriteTests',
+    // The line plots of a set's caves for phones, and the places phones map to their stations.
+    'SyncSurveyModelTests', 'PlaceStationTests',
     // An upload names its batch on every history row it writes.
     'ChangeAttributionTests',
     // An upload is taken back out of that history: created, edited and deleted rows alike.
@@ -536,6 +540,8 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/PhotoLibraries/': 'photoLibraries',
   // Where phones' map pins are written and read, as place-pin links.
   'server/src/SilexGis.Infrastructure/RasterMaps/': 'sync',
+  // Where phones' places at survey stations are written and read, as place-at-station links.
+  'server/src/SilexGis.Infrastructure/PlaceStations/': [...groups.sync, ...groups.resLinks],
   'server/src/SilexGis.Infrastructure/Settings/': 'settings',
   'server/src/SilexGis.Infrastructure/Sms/': 'sms',
   'server/src/SilexGis.Infrastructure/Surveys/': 'surveys',
@@ -591,9 +597,9 @@ export const crossCutting = {
   permissionClasses: [
     'AccessApiTests', 'AccessHistoryTests', 'AccessKeyTests', 'AccessModelTests',
     'AclAndCavingGroupTests', 'AdminMessagingTests', 'AlbumAndPublicGalleryTests',
-    'AnnotatedTextApiTests', 'AreaTerrainStatisticsTests', 'AuthFlowTests', 'BasemapDownloadTests',
-    'BulkImportTests', 'CabinetApiTests', 'CaveDomainTests', 'CaveExternalIdTests',
-    'CaveOverburdenTests', 'CaveQrPublicationTests', 'CaverRosterTests',
+    'AnnotatedTextApiTests', 'AreaTerrainStatisticsTests', 'AuthFlowTests',
+    'BasemapDownloadTests', 'BulkImportTests', 'CabinetApiTests', 'CaveDomainTests',
+    'CaveExternalIdTests', 'CaveOverburdenTests', 'CaveQrPublicationTests', 'CaverRosterTests',
     'CavingGroupAnnouncementTests', 'CavingGroupMembershipTests', 'CenterlineTests',
     'ChecklistAuthoringTests', 'DocumentAccessApiTests', 'DocumentCommentApiTests',
     'DocumentDeletionTests', 'DocumentLanguageTests', 'DocumentMetadataTests',
@@ -608,9 +614,9 @@ export const crossCutting = {
     'MapBackgroundDocumentChoiceTests', 'MapViewTests', 'NotificationHealthTests',
     'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
     'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',
-    'PlacePointProtectionTests', 'PlacePointWriteTests', 'PublicTripMomentPicturesTests',
-    'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests', 'ReportTemplateTests',
-    'ResLinkApiTests', 'SavedFilterTests', 'SpeleolocTripImportTests',
+    'PlacePointProtectionTests', 'PlacePointWriteTests', 'PlaceStationTests',
+    'PublicTripMomentPicturesTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
+    'ReportTemplateTests', 'ResLinkApiTests', 'SavedFilterTests', 'SpeleolocTripImportTests',
     'SpeologieCatalogueTests', 'StagedImportTests', 'SurveyCompilationTests',
     'SurveyModelReadingTests', 'SurveyModelTests', 'SurveySourceTests',
     'SurveyUploadPipelineTests', 'SurveyUploadPreferenceTests', 'SurveyUploadPublicLinkTests',
@@ -656,8 +662,9 @@ export const crossCutting = {
     'MapClusterConfigurationTests', 'MapDensityTests', 'MapFilterTests', 'MapKarstIndexTests',
     'MapPointPatternTests', 'MapWindowMembershipTests', 'PhotoBytesProtectionTests',
     'PhotoImportTests', 'PlacePointProtectionTests', 'PlacePointWriteTests',
-    'PolygonMorphometryTests', 'ProtectionDepthTests', 'PublicTripCachingTests',
-    'PublicTripDepthPlacesTests', 'PublicTripDiagnosticsTests', 'PublicTripMomentPicturesTests',
+    'PlaceStationProtectionTests', 'PlaceStationTests', 'PolygonMorphometryTests',
+    'ProtectionDepthTests', 'PublicTripCachingTests', 'PublicTripDepthPlacesTests',
+    'PublicTripDiagnosticsTests', 'PublicTripMomentPicturesTests',
     'PublicTripPlannedReturnTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
     'PublishedNamesNowhereTests', 'PublishedSurveyBoundsTests', 'RegistryStatisticsTests',
     'ResLinkApiTests', 'ResLinkProtectionFloorTests', 'ResLinkTargetPictureTests',
@@ -671,18 +678,19 @@ export const crossCutting = {
     'SyncDocumentStreamTests', 'SyncNamelessPhoneUserTests', 'SyncPageSizeTests',
     'SyncProtocolTests', 'SyncRasterPictureTurnTests', 'SyncRasterTests',
     'SyncRecordingPhotoTests', 'SyncReviewCurrentTests', 'SyncReviewStreamTests',
-    'SyncTripRecordingTests', 'SyncUndoTests', 'SyncUploadTests', 'TerrainProbeTests',
-    'TrackingCsvImportReplacementTests', 'TrackingCsvImportTests', 'TripAndTagTests',
-    'TripCalloutSweepTests', 'TripCaveReachTests', 'TripHandoverTests', 'TripImportCommitTests',
-    'TripImportPreviewResolutionTests', 'TripImportResolutionTests', 'TripListFacetTests',
-    'TripLiveSiblingTests', 'TripMapDerivedPositionTests', 'TripMeetingPointTests',
-    'TripPastTrackTests', 'TripPlanNotificationTests', 'TripPurgeTests',
-    'TripRecordingConversionTests', 'TripReportDocumentTests', 'TripReportTrackingTests',
-    'TripRoleLinkUnitOfWorkTests', 'TripSoftDeleteTests', 'TripStatisticsTests',
-    'TripStatsTests', 'TripTrackingCaveNoteTests', 'TripTrackingPicturesTests',
-    'TripTrackingPublicationTests', 'TripTrackingStationNamesTests', 'TripTrackingStretchTests',
-    'TripTrackingTests', 'UploadReviewCurrentStateTests', 'UploadReviewDecisionTests',
-    'UploadReviewSectionsTests', 'WorkAreaTests', 'WorkingSridBehaviourTests',
+    'SyncSurveyModelTests', 'SyncTripRecordingTests', 'SyncUndoTests', 'SyncUploadTests',
+    'TerrainProbeTests', 'TrackingCsvImportReplacementTests', 'TrackingCsvImportTests',
+    'TripAndTagTests', 'TripCalloutSweepTests', 'TripCaveReachTests', 'TripHandoverTests',
+    'TripImportCommitTests', 'TripImportPreviewResolutionTests', 'TripImportResolutionTests',
+    'TripListFacetTests', 'TripLiveSiblingTests', 'TripMapDerivedPositionTests',
+    'TripMeetingPointTests', 'TripPastTrackTests', 'TripPlanNotificationTests',
+    'TripPurgeTests', 'TripRecordingConversionTests', 'TripReportDocumentTests',
+    'TripReportTrackingTests', 'TripRoleLinkUnitOfWorkTests', 'TripSoftDeleteTests',
+    'TripStatisticsTests', 'TripStatsTests', 'TripTrackingCaveNoteTests',
+    'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
+    'TripTrackingStationNamesTests', 'TripTrackingStretchTests', 'TripTrackingTests',
+    'UploadReviewCurrentStateTests', 'UploadReviewDecisionTests', 'UploadReviewSectionsTests',
+    'WorkAreaTests', 'WorkingSridBehaviourTests',
   ],
 };
 

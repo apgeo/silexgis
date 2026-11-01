@@ -512,6 +512,12 @@ public class ImportBatchItem
     /// </summary>
     public Guid? RasterPinId { get; set; }
 
+    /// <summary>
+    /// The place-to-station mapping this line created, edited or removed: the link that maps the
+    /// place, whose identifier is the one the phone gave the mapping.
+    /// </summary>
+    public Guid? PlaceStationId { get; set; }
+
     /// <summary>The geofile row this came from. Kept even after a re-import replaces those rows.</summary>
     public long? SourceFeatureId { get; set; }
 

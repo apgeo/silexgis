@@ -6,6 +6,7 @@ using SilexGis.Domain.Import;
 using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.PlaceStations;
 using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.Sync;
@@ -43,6 +44,7 @@ internal static class SyncReviewCurrent
         SyncUploadSections.TripPoints,
         SyncUploadSections.RasterMaps,
         SyncUploadSections.RasterPins,
+        SyncUploadSections.PlaceStations,
     ];
 
     /// <summary>
@@ -87,6 +89,11 @@ internal static class SyncReviewCurrent
         var features = (await SyncFeatureShaping.CurrentAsync(db, protection, ctx, IdsOf(SyncUploadSections.Rows), ct))
             .ToDictionary(f => f.Id);
         Answer(SyncUploadSections.Rows, r => features.GetValueOrDefault(r.RowId));
+
+        foreach (var (id, station) in await StationsAsync(db, protection, ctx, IdsOf(SyncUploadSections.PlaceStations), ct))
+        {
+            Answer(SyncUploadSections.PlaceStations, r => r.RowId == id ? station : null);
+        }
 
         var links = wanted.Where(r => r.Section == SyncUploadSections.DocumentLinks && r.Link is not null)
             .Select(r => r.Link!).ToList();
@@ -160,6 +167,56 @@ internal static class SyncReviewCurrent
                 .ToDictionary(g => g.Key, g => g.OrderBy(l => l.Id).First().Document);
             Answer(SyncUploadSections.Documents, r => documents.GetValueOrDefault(r.RowId));
             Answer(SyncUploadSections.DocumentLinks, r => r.Link is { } link ? LinkOf(shaped, link) : null);
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// The places' stations asked about, each as the survey-models stream would hand it to this
+    /// caller now — its place and its survey handed — by identifier.
+    /// </summary>
+    private static async Task<Dictionary<Guid, SyncPlaceStationDto>> StationsAsync(
+        SilexGisDbContext db, FeatureProtection protection, AccessContext ctx, IReadOnlyList<Guid> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await PlaceStationQueries.Rows(db).AsNoTracking()
+            .Where(r => ids.Contains(r.Id) && r.DeletedAt == null)
+            .Select(r => new { r.PlaceId, r.SurveyModelId, r.DocumentId })
+            .ToListAsync(ct);
+        var models = rows.Where(r => r.SurveyModelId != null).Select(r => r.SurveyModelId!.Value).Distinct().ToList();
+        var documents = rows.Where(r => r.DocumentId != null).Select(r => r.DocumentId!.Value).Distinct().ToList();
+        var asked = rows.Select(r => r.PlaceId)
+            .Concat(await db.SurveyModels.AsNoTracking()
+                .Where(m => models.Contains(m.Id)).Select(m => m.CaveFeatureId).ToListAsync(ct))
+            .Concat(await (from link in db.Attachments.AsNoTracking()
+                           join file in db.StoredFiles.AsNoTracking() on link.FileId equals file.Id
+                           join version in db.DocumentVersions.AsNoTracking() on file.DocumentVersionId equals version.Id
+                           where documents.Contains(version.DocumentId) && link.FeatureId != null
+                           select link.FeatureId!.Value).ToListAsync(ct))
+            .Distinct()
+            .ToArray();
+        var handed = await SyncScope.WithoutWithheldAsync(
+            db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers).Where(f => asked.Contains(f.Id)),
+            protection,
+            ctx,
+            ct);
+
+        var found = new Dictionary<Guid, SyncPlaceStationDto>();
+        var (onModels, onDocuments) = await SyncSurveyModelEndpoints.StationsAsync(db, ctx, handed, ct);
+        foreach (var carried in new[] { onModels, onDocuments })
+        {
+            foreach (var entry in await carried.Where(s => ids.Contains(s.Row.Id) && s.Row.DeletedAt == null).ToListAsync(ct))
+            {
+                if (SyncSurveyModelEndpoints.Shape(entry.Row) is { } shaped)
+                {
+                    found[shaped.Id] = shaped;
+                }
+            }
         }
 
         return found;

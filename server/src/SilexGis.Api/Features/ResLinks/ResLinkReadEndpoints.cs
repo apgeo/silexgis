@@ -48,6 +48,7 @@ public static partial class ResLinkEndpoints
         FeatureProtection protection,
         PhotoPositionDisclosure photoPositions,
         PlacePointDisclosure placePoints,
+        PlaceStationDisclosure placeStations,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct,
@@ -104,13 +105,14 @@ public static partial class ResLinkEndpoints
             incidentLinks = incidentLinks.Where(l => l.RelationTypeId == roleId);
         }
 
-        // Places pinned on phones' maps are shown whole or not at all, and a hidden one is not
-        // counted either: cut from the query both arms below order, page and count, for the reason
-        // the relation filter is.
-        var hiddenPins = await placePoints.HiddenLinkIdsAsync(ctx, incidentLinks, ct);
-        if (hiddenPins.Count > 0)
+        // Places pinned on phones' maps and places phones mapped to survey stations are shown whole
+        // or not at all, and a hidden one is not counted either: cut from the query both arms below
+        // order, page and count, for the reason the relation filter is.
+        var hiddenWhole = await placePoints.HiddenLinkIdsAsync(ctx, incidentLinks, ct);
+        hiddenWhole.UnionWith(await placeStations.HiddenLinkIdsAsync(ctx, incidentLinks, ct));
+        if (hiddenWhole.Count > 0)
         {
-            incidentLinks = incidentLinks.Where(l => !hiddenPins.Contains(l.Id));
+            incidentLinks = incidentLinks.Where(l => !hiddenWhole.Contains(l.Id));
         }
 
         var linkQuery = incidentLinks

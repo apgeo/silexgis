@@ -4150,6 +4150,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("import_batch_id");
 
+                    b.Property<Guid?>("PlaceStationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("place_station_id");
+
                     b.Property<string>("Proposal")
                         .HasColumnType("jsonb")
                         .HasColumnName("proposal");
@@ -4271,6 +4275,10 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("ImportBatchId")
                         .HasDatabaseName("ix_import_batch_items_import_batch_id");
+
+                    b.HasIndex("PlaceStationId")
+                        .HasDatabaseName("ix_import_batch_items_place_station_id")
+                        .HasFilter("place_station_id is not null");
 
                     b.HasIndex("RasterMapId")
                         .HasDatabaseName("ix_import_batch_items_raster_map_id")
@@ -6896,6 +6904,36 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ux_sync_set_members_set_root");
 
                     b.ToTable("sync_set_members", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SyncSurveyModelRemoval", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("CaveFeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cave_feature_id");
+
+                    b.Property<DateTimeOffset>("RemovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("removed_at");
+
+                    b.Property<Guid>("SurveyModelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_model_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sync_survey_model_removals");
+
+                    b.HasIndex("CaveFeatureId", "RemovedAt", "SurveyModelId")
+                        .HasDatabaseName("ix_sync_survey_model_removals_cave_removed");
+
+                    b.ToTable("sync_survey_model_removals", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Tag", b =>
@@ -10245,6 +10283,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_import_batch_items_import_batches_import_batch_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.ResLink", null)
+                        .WithMany()
+                        .HasForeignKey("PlaceStationId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_import_batch_items_res_links_place_station_id");
 
                     b.HasOne("SilexGis.Domain.Entities.RasterMap", null)
                         .WithMany()

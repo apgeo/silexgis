@@ -77,6 +77,8 @@ Two consequences worth stating, because they are easy to misread:
 | `27-files-upload-piece` | One piece of the bytes, sent as the raw request body at `?offset=` — only the request line is recorded, since the body is the file. The answer says how far the file has got |
 | `28-files-upload-complete` | The last piece in, completing: the bytes hashed and typed, waiting under the transfer's `id` as the staged upload a document row names, with `stagedAt` and `expiresAt`. No document is made |
 | `29-files-upload-status` | Asking about a transfer after a dropped connection or before sending the row that needs it: `receivedBytes`, `stagedForSync`, `stagedAt`, `sha256` and `expiresAt` |
+| `31-survey-models-first-page` | The survey-models stream for a member who may see one cave exactly and not the other: that cave's two line plots (one `lox`, current; one `3d`), and a tombstone for the other cave's model — withheld, so the phone drops it. Its wall mesh is not listed. One place mapped to a station of the `lox` model rides along in `placeStations` |
+| `32-upload-place-stations` | An upload of two place-to-station mappings: one at a station of a server model (`surveyModelId`), one at the far end of a splay from a station of a survey file the phone uploaded (`documentId`, `splay`). Only the request line is recorded; the answer is the per-item shape of `rows` |
 
 A refusal is recorded with a `status.txt` beside its body, holding the status line. A successful
 exchange has no such file: its status is 200 by construction, and a file saying so on every case

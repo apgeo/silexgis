@@ -13,6 +13,7 @@ using SilexGis.Domain.ResLinks;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.PlaceStations;
 using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.ResLinks;
@@ -81,6 +82,15 @@ public static partial class ResLinkEndpoints
     private const string PlacePointFixedDetail =
         "A place pinned on a phone's map is moved or removed from its map, and is not edited as a link.";
 
+    /// <summary>
+    /// A place a phone mapped to a survey station is made and changed only by the phones, and never
+    /// edited or made through these; it may be removed through the ordinary link delete.
+    /// </summary>
+    public const string PlaceStationFixedCode = "reslink.place_station.fixed";
+
+    private const string PlaceStationFixedDetail =
+        "A place's station is set on the phones, and is not edited as a link; it can be removed.";
+
     /// <summary>The seeded feature kind a GPS-point member is born as — an ordinary
     /// generic feature, editable and protectable like any other from its first moment.</summary>
     private const string GeoPointFeatureTypeCode = "generic";
@@ -139,9 +149,9 @@ public static partial class ResLinkEndpoints
             return ApiProblems.BadRequest(RelationNotFoundCode, "The relation type does not exist.");
         }
 
-        if (ResLinkRules.IsPlacePoint(relation?.Code))
+        if (FixedRelationProblem(relation, creating: true) is { } fixedRelation)
         {
-            return ApiProblems.BadRequest(PlacePointFixedCode, PlacePointFixedDetail);
+            return fixedRelation;
         }
 
         var members = new List<ResLinkMember>();
@@ -255,6 +265,7 @@ public static partial class ResLinkEndpoints
         FeatureProtection protection,
         PhotoPositionDisclosure photoPositions,
         PlacePointDisclosure placePoints,
+        PlaceStationDisclosure placeStations,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -270,7 +281,7 @@ public static partial class ResLinkEndpoints
         if (Guid.TryParse(idOrCode, out var id))
         {
             var byId = await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
-            return byId is null || await placePoints.IsHiddenAsync(ctx, byId.Id, ct)
+            return byId is null || await HiddenWholeAsync(placePoints, placeStations, ctx, byId.Id, ct)
                 ? ApiProblems.NotFound(NotFoundCode)
                 : TypedResults.Ok((await ProjectAsync(
                     db, targets, associations, protection, photoPositions, access, ctx, [byId], ct)).Single());
@@ -279,7 +290,7 @@ public static partial class ResLinkEndpoints
         var byCode = ResLinkRules.IsShortCode(idOrCode)
             ? await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.ShortCode == idOrCode, ct)
             : null;
-        return byCode is null || await placePoints.IsHiddenAsync(ctx, byCode.Id, ct)
+        return byCode is null || await HiddenWholeAsync(placePoints, placeStations, ctx, byCode.Id, ct)
             ? ApiProblems.NotFound(CodeUnresolvedCode)
             : TypedResults.Ok((await ProjectAsync(
                 db, targets, associations, protection, photoPositions, access, ctx, [byCode], ct)).Single());
@@ -294,6 +305,7 @@ public static partial class ResLinkEndpoints
         FeatureProtection protection,
         PhotoPositionDisclosure photoPositions,
         PlacePointDisclosure placePoints,
+        PlaceStationDisclosure placeStations,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -305,12 +317,12 @@ public static partial class ResLinkEndpoints
         }
 
         var link = await Standing(db).FirstOrDefaultAsync(l => l.Id == id, ct);
-        if (link is null || await placePoints.IsHiddenAsync(ctx, link.Id, ct))
+        if (link is null || await HiddenWholeAsync(placePoints, placeStations, ctx, link.Id, ct))
         {
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (await FixedPlacePointAsync(db, link, ct) is { } fixedProblem)
+        if (await FixedLinkAsync(db, link, ct) is { } fixedProblem)
         {
             return fixedProblem;
         }
@@ -321,11 +333,11 @@ public static partial class ResLinkEndpoints
             return ApiProblems.BadRequest(RelationNotFoundCode, "The relation type does not exist.");
         }
 
-        // Nor is a link of another kind turned into one: a pin made by a side door would answer to
-        // none of the cave, place and one-per-place rules a pin is written under.
-        if (ResLinkRules.IsPlacePoint(relation?.Code))
+        // Nor is a link of another kind turned into one: a pin or a station made by a side door would
+        // answer to none of the place, survey and one-per-place rules they are written under.
+        if (FixedRelationProblem(relation, creating: false) is { } fixedRelation)
         {
-            return ApiProblems.Conflict(PlacePointFixedCode, PlacePointFixedDetail);
+            return fixedRelation;
         }
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -401,7 +413,9 @@ public static partial class ResLinkEndpoints
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
         PlacePointDisclosure placePoints,
+        PlaceStationDisclosure placeStations,
         PlacePointStore placePointStore,
+        PlaceStationStore placeStationStore,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -413,7 +427,7 @@ public static partial class ResLinkEndpoints
         }
 
         var link = await Standing(db).FirstOrDefaultAsync(l => l.Id == id, ct);
-        if (link is null || await placePoints.IsHiddenAsync(ctx, link.Id, ct))
+        if (link is null || await HiddenWholeAsync(placePoints, placeStations, ctx, link.Id, ct))
         {
             return ApiProblems.NotFound(NotFoundCode);
         }
@@ -423,6 +437,12 @@ public static partial class ResLinkEndpoints
         if (await IsPlacePointAsync(db, link, ct))
         {
             return await PlacePointEndpoints.RemoveAsync(db, placePointStore, access, ctx, link.Id, ct);
+        }
+
+        // So is a place's station, by whoever may change the place.
+        if (await IsPlaceStationAsync(db, link, ct))
+        {
+            return await PlaceStationEndpoints.RemoveAsync(db, placeStationStore, access, ctx, link.Id, ct);
         }
 
         // Locked like every other write of this link, so the edit decision and the delete

@@ -1,0 +1,49 @@
+{
+  "setRevision": 1,
+  "settings": {},
+  "models": [
+    {
+      "id": "<lox-model>",
+      "caveId": "<cave>",
+      "documentId": "<lox-document>",
+      "versionId": "<lox-version>",
+      "name": "Sistemul",
+      "format": "lox",
+      "isCurrent": true,
+      "sizeBytes": 29,
+      "sha256": "<lox-sha256>",
+      "revision": "<timestamp>"
+    },
+    {
+      "id": "<survex-model>",
+      "caveId": "<cave>",
+      "documentId": "<survex-document>",
+      "versionId": "<survex-version>",
+      "name": "Sistemul-3d",
+      "format": "3d",
+      "isCurrent": false,
+      "sizeBytes": 32,
+      "sha256": "<survex-sha256>",
+      "revision": "<timestamp>"
+    }
+  ],
+  "tombstones": [
+    {
+      "id": "<withheld-model>",
+      "deleted": true,
+      "revision": "<timestamp>"
+    }
+  ],
+  "placeStations": [
+    {
+      "id": "<place-station>",
+      "placeId": "<place>",
+      "surveyModelId": "<lox-model>",
+      "station": "1.12",
+      "revision": "<timestamp>"
+    }
+  ],
+  "placeStationTombstones": [],
+  "nextCursor": "<cursor>",
+  "hasMore": false
+}

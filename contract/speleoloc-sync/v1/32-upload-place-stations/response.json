@@ -1,0 +1,26 @@
+{
+  "batchId": "<batch>",
+  "importBatchId": "<uuid-1>",
+  "replayed": false,
+  "written": 2,
+  "refused": 0,
+  "rows": [],
+  "conflicts": [],
+  "duplicates": [],
+  "placeStations": [
+    {
+      "id": "<place-station>",
+      "status": "created",
+      "revision": "<timestamp>",
+      "code": null,
+      "detail": null
+    },
+    {
+      "id": "<place-splay>",
+      "status": "created",
+      "revision": "<timestamp>",
+      "code": null,
+      "detail": null
+    }
+  ]
+}

@@ -12,6 +12,7 @@ using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.PlaceStations;
 using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.Sync;
@@ -492,6 +493,7 @@ internal sealed class SyncHeldBatchHandler(
     [
         ("row", ["geometry", "altitude", "positionQuality", "isMain"]),
         ("pin", ["x", "y"]),
+        ("mapping", ["station", "splay"]),
     ];
 
     private sealed class Reach
@@ -606,6 +608,14 @@ internal sealed class SyncHeldBatchHandler(
                 .Select(r => (new SyncHeldTarget(SyncHeldTargetKind.RasterPin, r.Id), r.UpdatedAt)));
         }
 
+        var stations = IdsOf(targets, SyncHeldTargetKind.PlaceStation);
+        if (stations.Count > 0)
+        {
+            found.AddRange((await PlaceStationQueries.Rows(db).AsNoTracking()
+                    .Where(r => stations.Contains(r.Id)).Select(r => new { r.Id, r.UpdatedAt }).ToListAsync(ct))
+                .Select(r => (new SyncHeldTarget(SyncHeldTargetKind.PlaceStation, r.Id), r.UpdatedAt)));
+        }
+
         return found;
     }
 
@@ -678,6 +688,23 @@ internal sealed class SyncHeldBatchHandler(
             readable.UnionWith(readableMaps.Select(id => new SyncHeldTarget(SyncHeldTargetKind.RasterMap, id)));
             readable.UnionWith(pins.Where(p => readableMaps.Contains(p.RasterMapId) && visible.Contains(p.PlaceFeatureId))
                 .Select(p => new SyncHeldTarget(SyncHeldTargetKind.RasterPin, p.Id)));
+        }
+
+        // A place's station is read through its place, as the survey-models stream reads it.
+        var stationIds = IdsOf(targets, SyncHeldTargetKind.PlaceStation);
+        if (stationIds.Count > 0)
+        {
+            var stations = await PlaceStationQueries.Rows(db).AsNoTracking()
+                .Where(r => stationIds.Contains(r.Id)).Select(r => new { r.Id, r.PlaceId }).ToListAsync(ct);
+            var places = stations.Select(s => s.PlaceId).Distinct().ToList();
+            var visible = (await db.Features.AsNoTracking()
+                    .Where(f => places.Contains(f.Id))
+                    .VisibleTo(viewer, db.Features, db.FeatureSetMembers)
+                    .Select(f => f.Id)
+                    .ToListAsync(ct))
+                .ToHashSet();
+            readable.UnionWith(stations.Where(s => visible.Contains(s.PlaceId))
+                .Select(s => new SyncHeldTarget(SyncHeldTargetKind.PlaceStation, s.Id)));
         }
 
         return readable;

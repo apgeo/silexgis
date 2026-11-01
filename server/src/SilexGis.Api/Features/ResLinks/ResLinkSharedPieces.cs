@@ -13,6 +13,7 @@ using SilexGis.Domain.ResLinks;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.PlaceStations;
 using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.ResLinks;
@@ -100,15 +101,45 @@ public static partial class ResLinkEndpoints
         link.RelationTypeId is { } relationId
         && relationId == await PlacePointQueries.RelationIdAsync(db, ct);
 
+    /// <summary>Whether a link is a place a phone mapped to a survey station.</summary>
+    internal static async Task<bool> IsPlaceStationAsync(SilexGisDbContext db, ResLink link, CancellationToken ct) =>
+        link.RelationTypeId is { } relationId
+        && relationId == await PlaceStationQueries.RelationIdAsync(db, ct);
+
     /// <summary>
-    /// The refusal a generic edit of a place pin gets: its members and its relation are what the
-    /// pin is, and they are written only by the place-pin store.
+    /// The refusal a generic edit of a link a phone keeps gets — a place pin or a place's station:
+    /// its members and its relation are what it is, and they are written only by its own store.
     /// </summary>
-    private static async Task<ProblemHttpResult?> FixedPlacePointAsync(
+    private static async Task<ProblemHttpResult?> FixedLinkAsync(
         SilexGisDbContext db, ResLink link, CancellationToken ct) =>
         await IsPlacePointAsync(db, link, ct)
             ? ApiProblems.Conflict(PlacePointFixedCode, PlacePointFixedDetail)
-            : null;
+            : await IsPlaceStationAsync(db, link, ct)
+                ? ApiProblems.Conflict(PlaceStationFixedCode, PlaceStationFixedDetail)
+                : null;
+
+    /// <summary>
+    /// The refusal a generic route gives to making a link of a kind only a phone's sync writes, or to
+    /// turning a link into one; null for every other relation.
+    /// </summary>
+    private static ProblemHttpResult? FixedRelationProblem(ResLinkRelationType? relation, bool creating) =>
+        ResLinkRules.IsPlacePoint(relation?.Code)
+            ? (creating
+                ? ApiProblems.BadRequest(PlacePointFixedCode, PlacePointFixedDetail)
+                : ApiProblems.Conflict(PlacePointFixedCode, PlacePointFixedDetail))
+            : ResLinkRules.IsPlaceStation(relation?.Code)
+                ? (creating
+                    ? ApiProblems.BadRequest(PlaceStationFixedCode, PlaceStationFixedDetail)
+                    : ApiProblems.Conflict(PlaceStationFixedCode, PlaceStationFixedDetail))
+                : null;
+
+    /// <summary>
+    /// Whether this caller is not shown a link of a kind that is shown whole or not at all — a place
+    /// pin or a place's station. Any other link answers false.
+    /// </summary>
+    private static async Task<bool> HiddenWholeAsync(
+        PlacePointDisclosure placePoints, PlaceStationDisclosure placeStations, AccessContext ctx, Guid linkId, CancellationToken ct) =>
+        await placePoints.IsHiddenAsync(ctx, linkId, ct) || await placeStations.IsHiddenAsync(ctx, linkId, ct);
 
     private static Task<ResLinkRelationType?> RelationAsync(
         SilexGisDbContext db, long? relationTypeId, CancellationToken ct) =>

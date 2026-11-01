@@ -13,6 +13,7 @@ using SilexGis.Domain.ResLinks;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.PlaceStations;
 using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.ResLinks;
@@ -191,6 +192,12 @@ public static partial class ResLinkEndpoints
         var placeRelation = await PlacePointQueries.RelationIdAsync(db, ct);
         var pins = links.Where(l => placeRelation is not null && l.RelationTypeId == placeRelation).Select(l => l.Id).ToHashSet();
         var curated = await PlacePointEndpoints.WritableAsync(db, access, ctx, pins, ct);
+
+        // A place's station, likewise, by whoever may change the place.
+        var stationRelation = await PlaceStationQueries.RelationIdAsync(db, ct);
+        var stations = links.Where(l => stationRelation is not null && l.RelationTypeId == stationRelation).Select(l => l.Id).ToHashSet();
+        curated.UnionWith(await PlaceStationEndpoints.WritableAsync(db, access, ctx, stations, ct));
+        pins.UnionWith(stations);
         links = [.. links.Where(l => !pins.Contains(l.Id))];
         mainMembers = [.. mainMembers.Where(m => !pins.Contains(m.ResLinkId))];
 

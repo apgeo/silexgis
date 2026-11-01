@@ -8,7 +8,8 @@
     "documentUpload",
     "trips",
     "reviews",
-    "rasters"
+    "rasters",
+    "surveyModels"
   ],
   "reserved": [
     "01-login",
@@ -21,8 +22,8 @@
   "notCovered": [
     "manifest.json"
   ],
-  "fileCount": 81,
-  "digest": "922e50a0679faf2bfb8763ce1834d78573704152d0491ecf7f4f6ffacbd3bb37",
+  "fileCount": 86,
+  "digest": "907e7334533204d89acddf9788a921c92b72e5d515b3b7054e9d8cc7c21df620",
   "files": {
     "07-download-first-page/request.txt": {
       "bytes": 37,
@@ -340,13 +341,33 @@
       "bytes": 295,
       "sha256": "e681a371c5b8cdf71c075a855309a8d3963f39b2f91e7a7446e065579869048d"
     },
+    "31-survey-models-first-page/request.txt": {
+      "bytes": 42,
+      "sha256": "4e5e0c3310bc5b68bc7f23ae1877636d7894ad7bfbc5636775af8520468f5321"
+    },
+    "31-survey-models-first-page/response.json": {
+      "bytes": 1070,
+      "sha256": "b97e63707be2f12e49649b797f298b394262f38add1376e5b7213b801c1e43de"
+    },
+    "32-upload-place-stations/request.json": {
+      "bytes": 417,
+      "sha256": "76ec028d87d1d9a76bdc94d48dfad6e655c1af488f0950b603063663a8840e9d"
+    },
+    "32-upload-place-stations/request.txt": {
+      "bytes": 36,
+      "sha256": "735b1d7fc6fb5cd2f8e388d48b10bc209f07755cf193c121a8315b44214d7817"
+    },
+    "32-upload-place-stations/response.json": {
+      "bytes": 477,
+      "sha256": "1b2182c5a5491742c052d8d3f48fd10b2a5e3b7876fa398d99c88e45e0a2c349"
+    },
     "CHANGELOG.md": {
-      "bytes": 34538,
-      "sha256": "66078952e0604d53f14ff395754dd7e94bb72b9a91effc7102000a2808834ec2"
+      "bytes": 36029,
+      "sha256": "3cb977eb87b42f3fa0702b25e904619a63f1467f4ffcd210a41add9aa0f4e7a9"
     },
     "README.md": {
-      "bytes": 13752,
-      "sha256": "4b0ae91580cea483f840d345bd3b23d885c1c93b5ccb0de11ab8558798f6ff60"
+      "bytes": 14437,
+      "sha256": "f77a35b1bfb088d0913f00b813571718e00b6564cb098c1ba472662eea2d646f"
     }
   }
 }

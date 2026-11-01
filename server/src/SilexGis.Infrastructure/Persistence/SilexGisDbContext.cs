@@ -259,6 +259,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<SyncLinkRemoval> SyncLinkRemovals => Set<SyncLinkRemoval>();
 
+    public DbSet<SyncSurveyModelRemoval> SyncSurveyModelRemovals => Set<SyncSurveyModelRemoval>();
+
     public DbSet<DevicePerson> DevicePersons => Set<DevicePerson>();
 
     /// <summary>Trips as phones recorded them, kept beside any report made from them.</summary>

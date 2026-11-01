@@ -5,6 +5,7 @@ using FluentValidation;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.ResLinks;
 
 namespace SilexGis.Api.Features.Sync;
 
@@ -147,8 +148,12 @@ public sealed record SyncUploadRowDto(
 /// The phone's raster maps, each with its picture staged beforehand. Applied after the documents.
 /// </param>
 /// <param name="RasterPins">
-/// The places pinned on those maps, applied last so a pin sent beside its new map and a place sent
-/// beside it finds both.
+/// The places pinned on those maps, applied after everything but the stations, so a pin sent beside
+/// its new map and a place sent beside it finds both.
+/// </param>
+/// <param name="PlaceStations">
+/// The places mapped to stations of survey models or of the phone's survey files, applied last of
+/// all so a mapping finds a place, a survey file and its link sent beside it.
 /// </param>
 /// <remarks>
 /// Each array is a section, applied in a fixed order whatever order the arrays sit in here —
@@ -165,7 +170,8 @@ public sealed record SyncUploadRequest(
     IReadOnlyList<SyncUploadTripRecordingDto>? TripRecordings = null,
     IReadOnlyList<SyncUploadTripPointDto>? TripPoints = null,
     IReadOnlyList<SyncUploadRasterMapDto>? RasterMaps = null,
-    IReadOnlyList<SyncUploadRasterPinDto>? RasterPins = null);
+    IReadOnlyList<SyncUploadRasterPinDto>? RasterPins = null,
+    IReadOnlyList<SyncUploadPlaceStationDto>? PlaceStations = null);
 
 /// <summary>One of the phone's own users, as the phone describes them.</summary>
 /// <param name="DeviceUserId">The phone's identifier for this user, adopted verbatim and never translated.</param>
@@ -338,6 +344,10 @@ public sealed record SyncUploadRowResultDto(
 /// <param name="RasterPins">
 /// What became of each pin the upload carried; present only when it carried the section.
 /// </param>
+/// <param name="PlaceStations">
+/// What became of each place-to-station mapping the upload carried; present only when it carried
+/// the section.
+/// </param>
 /// <param name="Duplicates">
 /// What was already here, near a row this batch created. A report and never a verdict: every row
 /// listed was written, and its entry in <c>Rows</c> says so. It is here because a device is
@@ -367,7 +377,9 @@ public sealed record SyncUploadResultDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<SyncUploadRowResultDto>? RasterMaps = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<SyncUploadRowResultDto>? RasterPins = null);
+    IReadOnlyList<SyncUploadRowResultDto>? RasterPins = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<SyncUploadRowResultDto>? PlaceStations = null);
 
 /// <summary>One created row and what it landed next to.</summary>
 public sealed record SyncDuplicateDto(Guid Id, IReadOnlyList<SyncDuplicateCandidateDto> Nearby);
@@ -553,6 +565,30 @@ public sealed class SyncUploadRequestValidator : AbstractValidator<SyncUploadReq
             pin.RuleFor(p => p.PlaceId).NotNull().NotEqual(Guid.Empty).When(p => !p.Deleted);
             pin.RuleFor(p => p.X).NotNull().InclusiveBetween(0, PinPixelMax).When(p => !p.Deleted);
             pin.RuleFor(p => p.Y).NotNull().InclusiveBetween(0, PinPixelMax).When(p => !p.Deleted);
+        });
+
+        RuleFor(x => x.PlaceStations)
+            .Must(items => items is null || items.Select(s => s.Id).Distinct().Count() == items.Count)
+            .WithMessage("A place's station may appear only once in a batch.");
+
+        // A removal names the mapping and nothing else; anything written names its place, exactly
+        // one survey and the station.
+        RuleForEach(x => x.PlaceStations).ChildRules(mapping =>
+        {
+            mapping.RuleFor(m => m.Id).NotEmpty();
+            mapping.RuleFor(m => m.PlaceId).NotNull().NotEqual(Guid.Empty).When(m => !m.Deleted);
+            mapping.RuleFor(m => m.SurveyModelId).NotEqual(Guid.Empty);
+            mapping.RuleFor(m => m.DocumentId).NotEqual(Guid.Empty);
+            mapping.RuleFor(m => m)
+                .Must(m => (m.SurveyModelId is null) != (m.DocumentId is null))
+                .When(m => !m.Deleted)
+                .WithName("surveyModelId")
+                .WithMessage("A place's station names a survey model or a document, exactly one.");
+            mapping.RuleFor(m => m)
+                .Must(m => PlaceStationAnchor.Problem(m.Station, m.Splay) is null)
+                .When(m => !m.Deleted)
+                .WithName("station")
+                .WithMessage(m => PlaceStationAnchor.Problem(m.Station, m.Splay) ?? "");
         });
 
         RuleForEach(x => x.TripPoints).ChildRules(point =>

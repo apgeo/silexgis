@@ -30,6 +30,7 @@ namespace SilexGis.Infrastructure.Import;
 /// <param name="TripReason">Why the report was left (<see cref="SyncUndoReasons.TripChanged"/>, <see cref="SyncUndoReasons.ConvertedElsewhere"/>).</param>
 /// <param name="RasterMapId">The raster map the line is about, for a map line.</param>
 /// <param name="RasterPinId">The pin on a raster map the line is about, for a pin line.</param>
+/// <param name="PlaceStationId">The place's station the line is about, for a place-station line.</param>
 public sealed record SyncUndoItemResult(
     long ItemId,
     Guid? FeatureId,
@@ -46,7 +47,8 @@ public sealed record SyncUndoItemResult(
     string? TripOutcome = null,
     string? TripReason = null,
     Guid? RasterMapId = null,
-    Guid? RasterPinId = null);
+    Guid? RasterPinId = null,
+    Guid? PlaceStationId = null);
 
 /// <summary>A request to undo an upload that cannot be answered line by line.</summary>
 public sealed class SyncUndoException(string code, string message) : InvalidOperationException(message)
@@ -205,6 +207,8 @@ public sealed partial class DeviceSyncUndoService(
                     ? await UndoPersonLineAsync(item, personId, byPerson.GetValueOrDefault(personId.ToString()) ?? [], force, ct)
                     : item.RasterMapId is not null || item.RasterPinId is not null
                       ? await UndoRasterLineAsync(item, written, ctx, force, ct)
+                    : item.PlaceStationId is not null
+                      ? await UndoPlaceStationLineAsync(item, written, ctx, force, ct)
                     : IsLinkLine(item)
                         ? await UndoLinkLineAsync(item, byDocument, ctx, force, ct)
                         : item.DocumentId is { } documentId
