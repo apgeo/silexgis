@@ -304,10 +304,11 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
       { key: 'caving-groups', icon: <TeamOutlined />, label: t('nav.cavingGroups') },
       { key: 'cavers', icon: <UserOutlined />, label: t('nav.cavers') },
     ]),
-    // Work done on a position rather than on a record: nothing here reads or writes the register,
-    // so it is offered to everyone.
+    // Tools that are offered to everyone: the coordinate converter reads and writes nothing in the
+    // register, and the relations graph shows only what the signed-in account may already read.
     ...group('tools', <CalculatorOutlined />, t('nav.groups.tools'), [
       { key: 'tools/coordinates', icon: <AimOutlined />, label: t('nav.coordinateConverter') },
+      { key: 'graph', icon: <ClusterOutlined />, label: t('nav.graph') },
     ]),
     ...group('admin', <ControlOutlined />, t('nav.groups.admin'), adminPages),
     ...group('config', <ToolOutlined />, t('nav.groups.config'), configPages),

@@ -57,6 +57,7 @@
     },
     "workAreas": "Work areas",
     "coordinateConverter": "Coordinate converter",
+    "graph": "Relations graph",
     "speologie": "Cave catalogue",
     "registryDistribution": "Distributions",
     "registryCorrelation": "Correlations",
@@ -8611,6 +8612,7 @@
     }
   },
   "graph": {
+    "showAsGraph": "Show as graph",
     "title": "Relations graph",
     "canvasLabel": "Relations graph drawing",
     "summary": "{{nodes}} items, {{edges}} relations",
@@ -8624,13 +8626,57 @@
       "generic": "The relations could not be loaded.",
       "action": "That step could not be loaded. The graph is unchanged."
     },
+    "filters": {
+      "title": "Filters",
+      "all": "Show all",
+      "categories": "Kinds of relation",
+      "types": "Kinds of item",
+      "only": "Only",
+      "none": "Nothing loaded yet.",
+      "showRelations": "Show the relations of {{name}}",
+      "hideRelations": "Hide the relations of {{name}}",
+      "hint": "Counts are of what is loaded so far. Items cut off from the first item by a filter are hidden too."
+    },
+    "seedSearch": {
+      "label": "Find an item to explore",
+      "placeholder": "Find an item to explore…",
+      "none": "Nothing found."
+    },
+    "search": {
+      "label": "Search the graph",
+      "placeholder": "Search the graph…",
+      "none": "No match",
+      "count": "{{count}} found",
+      "position": "{{position}} of {{count}}"
+    },
+    "legend": {
+      "title": "Legend",
+      "more": "More items to load",
+      "restricted": "An item you may not see (small square mark)"
+    },
     "toolbar": {
       "label": "Graph controls",
       "layout": "Layout",
       "fit": "Fit to view",
       "refresh": "Refresh",
       "expand": "Expand selected",
-      "collapse": "Collapse to the first item"
+      "collapse": "Collapse to the first item",
+      "details": "Details",
+      "remove": "Remove from graph"
+    },
+    "details": {
+      "title": "Details",
+      "relation": "Relation",
+      "open": "Open the page",
+      "openLink": "Open the link's page",
+      "members": "Members of the link",
+      "noRelations": "Nothing related is shown.",
+      "remove": "Remove from the graph",
+      "restrictedBody": "You may not see this item. Nothing more can be shown about it."
+    },
+    "moreButton": {
+      "button": "+{{count}} more: {{category}}",
+      "label": "Load {{count}} more {{category}} for {{title}}"
     },
     "layouts": {
       "force": "Force",

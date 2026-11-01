@@ -57,6 +57,7 @@
     },
     "workAreas": "Zone de lucru",
     "coordinateConverter": "Convertor de coordonate",
+    "graph": "Graful relațiilor",
     "speologie": "Catalogul peșterilor",
     "registryDistribution": "Distribuții",
     "registryCorrelation": "Corelații",
@@ -8624,6 +8625,7 @@
     }
   },
   "graph": {
+    "showAsGraph": "Arată ca graf",
     "title": "Graful relațiilor",
     "canvasLabel": "Desenul grafului de relații",
     "summary": "{{nodes}} elemente, {{edges}} relații",
@@ -8637,13 +8639,57 @@
       "generic": "Relațiile nu au putut fi încărcate.",
       "action": "Pasul nu a putut fi încărcat. Graful a rămas neschimbat."
     },
+    "filters": {
+      "title": "Filtre",
+      "all": "Arată tot",
+      "categories": "Tipuri de relație",
+      "types": "Tipuri de obiecte",
+      "only": "Doar",
+      "none": "Încă nu s-a încărcat nimic.",
+      "showRelations": "Arată relațiile din {{name}}",
+      "hideRelations": "Ascunde relațiile din {{name}}",
+      "hint": "Numerele sunt ale celor încărcate până acum. Elementele rămase fără legătură cu primul element din cauza unui filtru sunt ascunse și ele."
+    },
+    "seedSearch": {
+      "label": "Caută un element de explorat",
+      "placeholder": "Caută un element de explorat…",
+      "none": "Nu s-a găsit nimic."
+    },
+    "search": {
+      "label": "Caută în graf",
+      "placeholder": "Caută în graf…",
+      "none": "Nicio potrivire",
+      "count": "{{count}} găsite",
+      "position": "{{position}} din {{count}}"
+    },
+    "legend": {
+      "title": "Legendă",
+      "more": "Mai multe elemente de încărcat",
+      "restricted": "Un element pe care nu ai voie să-l vezi (semn pătrat mic)"
+    },
     "toolbar": {
       "label": "Comenzile grafului",
       "layout": "Aranjare",
       "fit": "Încadrează în ecran",
       "refresh": "Reîmprospătează",
       "expand": "Extinde elementul ales",
-      "collapse": "Revino la primul element"
+      "collapse": "Revino la primul element",
+      "details": "Detalii",
+      "remove": "Scoate din graf"
+    },
+    "details": {
+      "title": "Detalii",
+      "relation": "Relație",
+      "open": "Deschide pagina",
+      "openLink": "Deschide pagina legăturii",
+      "members": "Membrii legăturii",
+      "noRelations": "Nu este afișat nimic înrudit.",
+      "remove": "Scoate din graf",
+      "restrictedBody": "Nu ai voie să vezi acest element. Nu se poate arăta nimic altceva despre el."
+    },
+    "moreButton": {
+      "button": "+{{count}} în plus: {{category}}",
+      "label": "Încarcă încă {{count}} din {{category}} pentru {{title}}"
     },
     "layouts": {
       "force": "Forțe",

@@ -194,10 +194,18 @@ describe('LinksSection', () => {
     expect(screen.getByRole('button', { name: /Link/ })).toBeInTheDocument();
   });
 
-  it('stays out of the way entirely when there is nothing to show and no way to add', () => {
-    const { container } = show(0, []);
-    expect(container.textContent).toBe('');
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  // The graph also draws attachments, participants, tags and more, so an item with no resource
+  // links still needs the way in.
+  it('offers only the graph entry when there is nothing to show and no way to add', () => {
+    show(0, []);
+    expect(screen.queryByText(/^Linked items \(/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('show-as-graph')).toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('offers the graph entry beside the add action when the panel counts no links', () => {
+    show(0, [], true);
+    expect(screen.getByTestId('show-as-graph')).toBeInTheDocument();
   });
 
   it('renders a withheld member as an anonymous chip, with none of what still travels', () => {

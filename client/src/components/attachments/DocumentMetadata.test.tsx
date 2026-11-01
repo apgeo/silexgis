@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 
@@ -101,9 +102,9 @@ const sentences = [
 describe('DocumentMetadata', () => {
   it('builds the form from the kind schema and keeps values the schema does not describe', async () => {
     render(
-      <App>
+      <MemoryRouter><App>
         <DocumentMetadata documentId="doc-1" />
-      </App>,
+      </App></MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('button'));
 
@@ -137,9 +138,9 @@ describe('DocumentMetadata', () => {
   it('shows the language the text was read as and lets it be corrected', async () => {
     mutateAsync.mockClear();
     render(
-      <App>
+      <MemoryRouter><App>
         <DocumentMetadata documentId="doc-1" />
-      </App>,
+      </App></MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('button'));
     await screen.findByText('Cave');
@@ -160,9 +161,9 @@ describe('DocumentMetadata', () => {
   it('sends an emptied language as a value rather than as silence', async () => {
     mutateAsync.mockClear();
     render(
-      <App>
+      <MemoryRouter><App>
         <DocumentMetadata documentId="doc-1" />
-      </App>,
+      </App></MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('button'));
     await screen.findByText('Cave');
@@ -181,9 +182,9 @@ describe('DocumentMetadata', () => {
   it('asks which club a document belongs to only under club visibility, and drops the binding when it leaves', async () => {
     mutateAsync.mockClear();
     render(
-      <App>
+      <MemoryRouter><App>
         <DocumentMetadata documentId="doc-1" />
-      </App>,
+      </App></MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('button'));
     await screen.findByText('Cave');
@@ -213,9 +214,9 @@ describe('DocumentMetadata', () => {
     fileAsync.mockClear();
     documentActions = 'read, write';
     render(
-      <App>
+      <MemoryRouter><App>
         <DocumentMetadata documentId="doc-1" />
-      </App>,
+      </App></MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('button'));
 
@@ -236,9 +237,9 @@ describe('DocumentMetadata', () => {
   it('offers no filing control to someone who may not write documents', async () => {
     documentActions = 'read';
     render(
-      <App>
+      <MemoryRouter><App>
         <DocumentMetadata documentId="doc-1" />
-      </App>,
+      </App></MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('button'));
 
@@ -263,9 +264,9 @@ describe('DocumentMetadata', () => {
   ])('says plainly what reading the text of a %s document found', async (state, sentence) => {
     document.textExtraction = state;
     render(
-      <App>
+      <MemoryRouter><App>
         <DocumentMetadata documentId="doc-1" />
-      </App>,
+      </App></MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('button'));
 

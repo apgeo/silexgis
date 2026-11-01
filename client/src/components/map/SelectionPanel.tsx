@@ -5,6 +5,7 @@ import {
   Alert, App, ConfigProvider, Descriptions, Empty, Flex, Popconfirm, Spin, Tag, Typography,
 } from 'antd';
 import Button from '../Button.tsx';
+import ShowAsGraphButton from '../graph/ShowAsGraphButton.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -313,6 +314,7 @@ function CaveCard({
         >
           {t('map.openCave')}
         </Button>
+        <ShowAsGraphButton type="feature" id={cave.id} buttonType="default" />
         {entrance && (
           <Button
             icon={<AimOutlined />}
@@ -512,6 +514,7 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
             {t('map.zoomTo')}
           </Button>
         )}
+        <ShowAsGraphButton type="feature" id={feature.id} buttonType="default" />
         {canEdit && (
           <Button
             ref={editButton}

@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { App, Card, Dropdown, Flex, Tag, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
+import ShowAsGraphButton from '../graph/ShowAsGraphButton.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDeleteResLink, useResLinksForTarget, type ResLink } from '../../api/hooks.ts';
@@ -232,6 +233,9 @@ export default function LinksSection({
     </Button>
   );
 
+  // Offered wherever there is something to draw; an empty section shows nothing but the invitation to add.
+  const graphButton = <ShowAsGraphButton type={entityType} id={entityId} />;
+
   // Mounted only while open: the picker asks the server for a vocabulary and a target feed,
   // and a page carrying several of these sections should ask for none of it until someone
   // actually starts recording a link.
@@ -260,9 +264,12 @@ export default function LinksSection({
 
   // Nothing recorded: no empty section, just the quiet invitation to record the first one.
   if (total === 0) {
-    return addButton ? (
+    return addButton || graphButton ? (
       <div style={{ marginTop: 12 }}>
-        {addButton}
+        <Flex align="center" gap={4} wrap>
+          {graphButton}
+          {addButton}
+        </Flex>
         {dialog}
       </div>
     ) : null;
@@ -288,6 +295,7 @@ export default function LinksSection({
           <Button size="small" type="text" icon={<LinkOutlined />} onClick={() => setSelfExpanded((x) => !x)}>
             {t('resLinks.titleCount', { count: total })}
           </Button>
+          {expanded && graphButton}
           {expanded && addButton}
         </Flex>
         {expanded && <div style={{ marginTop: 8 }}>{rows}</div>}
@@ -301,7 +309,12 @@ export default function LinksSection({
       size="small"
       title={t('resLinks.titleCount', { count: total })}
       style={{ marginTop: 16 }}
-      extra={addButton}
+      extra={
+        <Flex gap={4}>
+          {graphButton}
+          {addButton}
+        </Flex>
+      }
     >
       {rows}
       {dialog}
