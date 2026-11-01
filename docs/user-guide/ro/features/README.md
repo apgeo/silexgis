@@ -42,6 +42,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | [Documente și dulapuri](documents-and-cabinets.md) | Arborele de clasare, pagina documentului, vizualizatorul, discuțiile |
 | [Încărcări](uploads.md) | Introducerea fișierelor în masă și ce s-a întâmplat cu fiecare |
 | [Legături între înregistrări](links.md) | Relații numite între orice și orice |
+| [Graful relațiilor](relations-graph.md) | Un element și tot ce e legat de el, ca graf |
 
 ## Activitate
 

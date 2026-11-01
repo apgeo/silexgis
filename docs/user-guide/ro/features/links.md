@@ -152,4 +152,5 @@ principal, și poți edita relația și descrierea.
 ---
 
 Înrudite: [Documente și dulapuri](documents-and-cabinets.md#text-adnotat-cu-legături) ·
-[Fenomene de suprafață](surface-features.md) · [Vocabulare](../admin/vocabularies.md)
+[Fenomene de suprafață](surface-features.md) · [Vocabulare](../admin/vocabularies.md) ·
+[Graful relațiilor](relations-graph.md)

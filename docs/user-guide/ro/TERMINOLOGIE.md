@@ -89,6 +89,8 @@ persoana a treia rămân așa cum sunt.
 | Camp roles | Roluri în tabără |
 | Report layouts | Modele de raport |
 | Link relations | Relații între obiecte |
+| Relations graph | Graful relațiilor |
+| Show as graph | Arată ca graf |
 | Detection rules | Reguli de detectare |
 | Message texts | Texte mesaje |
 | Settings | Setări |

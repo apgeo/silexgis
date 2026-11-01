@@ -160,6 +160,9 @@ hartă, estimată. Diferența dintre „mergi aici" și „caută pe versantul �
 **Regulă de detectare** — Ce decide că un punct numit `P. Ursilor` este propus ca peșteră numită
 *Ursilor*. → [Vocabulare](admin/vocabularies.md#configurare--reguli-de-detectare)
 
+**Graful relațiilor** — O pagină care desenează un element și tot ce e legat de el, câte un pas, cu
+filtre pe tipuri de relație. Doar arată, nu modifică. → [Graful relațiilor](features/relations-graph.md)
+
 **Resetarea celui de-al doilea factor** — Ce face un administrator pentru un membru care și-a
 pierdut *și* aplicația de autentificare, *și* codurile de recuperare: **Resetează al doilea
 factor** dezactivează toți factorii secundari, oprește codurile de recuperare, deconectează

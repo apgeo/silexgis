@@ -42,6 +42,7 @@ detail those walkthroughs link into.
 | [Documents and cabinets](documents-and-cabinets.md) | The filing tree, the document page, the viewer, discussions |
 | [Uploads](uploads.md) | Getting files in, in bulk, and what happened to each one |
 | [Links between records](links.md) | Named relations between anything and anything |
+| [Relations graph](relations-graph.md) | See an item and everything related to it as a graph |
 
 ## Activity
 

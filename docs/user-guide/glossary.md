@@ -152,6 +152,9 @@ registered. → [Sharing](features/sharing-and-public-pages.md#printed-qr-codes)
 the feature list. Up to twelve; they follow your account.
 → [Search and filters](features/search-and-filters.md#quick-filters)
 
+**Relations graph** — A page that draws one item and everything related to it, one step at a time,
+with filters per kind of relation. Shows, never edits. → [Relations graph](features/relations-graph.md)
+
 **Report layout** — A club-authored template for the Word document a trip generates. Can only
 ask for things the reader was already given.
 

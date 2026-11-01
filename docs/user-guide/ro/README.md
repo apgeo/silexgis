@@ -67,7 +67,8 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Fotografii și albume](features/photographs.md) ·
 [Documente și dulapuri](features/documents-and-cabinets.md) ·
 [Încărcări](features/uploads.md) ·
-[Legături între înregistrări](features/links.md)
+[Legături între înregistrări](features/links.md) ·
+[Graful relațiilor](features/relations-graph.md)
 
 **Activitate**
 [Ture](features/trips.md) ·

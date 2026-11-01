@@ -63,7 +63,8 @@ linking out to the reference pages for detail.
 [Photographs and albums](features/photographs.md) ·
 [Documents and cabinets](features/documents-and-cabinets.md) ·
 [Uploads](features/uploads.md) ·
-[Links between records](features/links.md)
+[Links between records](features/links.md) ·
+[Relations graph](features/relations-graph.md)
 
 **Activity**
 [Trips](features/trips.md) ·

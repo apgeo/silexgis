@@ -148,4 +148,5 @@ member, and edit the relation and description.
 ---
 
 Related: [Documents and cabinets](documents-and-cabinets.md#link-annotated-text) ·
-[Surface features](surface-features.md) · [Vocabularies](../admin/vocabularies.md)
+[Surface features](surface-features.md) · [Vocabularies](../admin/vocabularies.md) ·
+[Relations graph](relations-graph.md)
