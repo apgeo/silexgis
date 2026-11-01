@@ -328,7 +328,7 @@ export const groups = {
     'HistoryRestoreTests',
   ],
   admin: [
-    'AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests',
+    'AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests', 'GraphDemoSeedTests',
     // Which map backgrounds a document may copy is an administrator's setting, kept across
     // restarts beside the shipped catalogue's answer.
     'MapBackgroundDocumentChoiceTests',
@@ -668,7 +668,7 @@ export const crossCutting = {
     'FeatureTests', 'FileAccessBatchParityTests', 'FileAttachmentTests',
     'FileImportReviewHoldTests', 'FilterEndpointTests', 'FilterKindPositionTests',
     'FilterParityTests', 'FilterSpatialConditionTests', 'FilterWorldConformanceTests',
-    'FilterWorldListParityTests', 'GeofileTests', 'GeoreferencedMapTests',
+    'FilterWorldListParityTests', 'GeofileTests', 'GeoreferencedMapTests', 'GraphDemoSeedTests',
     'GraphDisclosureTests', 'GraphParityTests', 'GraphRelationParityTests', 'HiddenRowCapTests',
     'HistoryRestoreTests', 'HistoryTests', 'HypsometryTests', 'KarstLinkExportTests',
     'MapClusterConfigurationTests', 'MapDensityTests', 'MapFilterTests', 'MapKarstIndexTests',
