@@ -27,18 +27,24 @@ What it does, in order:
 4. Adds the **sync development data** — a caving group, a second account that is a plain member of
    it, and the group binding the demonstration dataset leaves off; then what a phone reads beyond
    caves and places: two generated photos with an invented GPS tag, a trip recording, a raster map
-   with two pins, the people directory, and a third account whose uploads wait for a reviewer. §3
+   with two pins, three survey models of an invented survey with two places at their stations, the
+   people directory, and a third account whose uploads wait for a reviewer. §3
    says why that step is not optional and what each piece is for.
 5. Serves the API on `http://127.0.0.1:5205`.
 6. **Signs in as the member account, completes the whole authorization-code exchange, and reads
    `/api/v1/sync/capabilities`** before saying a word about success.
 7. **Proves, as the member, that the phone-side data is there and protected**: it creates a sync set
-   rooted at `DEMO-0001`, reads its documents stream, its download and its rasters stream, and
-   requires one photo announced `original`, the other `locationFree`, and the raster map with one of
-   its two pins — the one whose `placeId` is `Demo marker A`'s, as the member's own download names
-   it. A single pin on the protected place would be the leak, so the pin is matched by place rather
-   than counted, and a download that does not hand over `Demo marker A` is refused rather than
-   accepted. The set is deleted again afterwards.
+   rooted at `DEMO-0001` and `DEMO-0002`, reads its documents stream, its download and its rasters
+   stream, and requires one photo announced `original`, the other `locationFree`, and the raster map
+   with one of its two pins — the one whose `placeId` is `Demo marker A`'s, as the member's own
+   download names it. A single pin on the protected place would be the leak, so the pin is matched by
+   place rather than counted, and a download that does not hand over `Demo marker A` is refused rather
+   than accepted. Then it reads the survey-models stream from the beginning — again every two seconds,
+   for up to three minutes, until the server has read the `.lox` model and it has taken the cave's
+   current mark — and requires both `DEMO-0001` models with a size and a sha256, the `.lox` one
+   current, `Demo marker A` at `demo.2` without a splay and `Demo marker C` at a splay from `demo.3`,
+   and nothing of `DEMO-0002`'s model; it fetches the `.lox` file through `/sync/files/links` and
+   checks its length and sha256 against the stream's. The set is deleted again afterwards.
 
 Steps 6 and 7 are the point of the script and not a flourish. Both seeding commands exit *zero* when
 they refuse to do anything — they log a reason and return — so a script that trusted an exit code
@@ -83,7 +89,7 @@ rules observable from outside.
 
 | Code | Cave | Visibility | What `member@dev.local` gets |
 |---|---|---|---|
-| `DEMO-0001` | Peștera Demo Mare | Public | Everything, exact. Two entrances, and the seeded place `Demo marker A`. Its other seeded place, `Demo marker B (protected)`, is a protection root of its own and is **absent** — the per-row case of the rule below. |
+| `DEMO-0001` | Peștera Demo Mare | Public | Everything, exact. Two entrances, the seeded places `Demo marker A` and `Demo marker C`, and three centrelines — one read from each of its survey models. Its other seeded place, `Demo marker B (protected)`, is a protection root of its own and is **absent** — the per-row case of the rule below. |
 | `DEMO-0002` | Avenul Demo Protejat | Authenticated | **Its exact position is protected.** The cave and its entrance are **absent from the sync download entirely** — not delivered blurred. See below. |
 | `DEMO-0003` | Peștera Demo Mică | Public | Everything, exact. |
 | `DEMO-0004` | Peștera Demo Ursului | Public | Everything, exact. |
@@ -93,11 +99,16 @@ rules observable from outside.
 `DEMO-0002` is the row worth writing tests against. Create a sync set whose roots are all six caves
 and download it:
 
-- as `member@dev.local` the page carries **13 rows** — five caves, six entrances, one centreline and
-  `Demo marker A` — and `Avenul Demo Protejat`, its `Shaft` entrance and `Demo marker B (protected)`
-  are simply not among them: no row, no geometry, no placeholder;
-- as `admin@dev.local` the same selection carries **16 rows**, those three included, with exact
+- as `member@dev.local` the page carries **16 rows** — five caves, six entrances, three centrelines
+  and `Demo marker A` and `Demo marker C` — and `Avenul Demo Protejat`, its `Shaft` entrance, the
+  centreline read from its survey model and `Demo marker B (protected)` are simply not among them: no
+  row, no geometry, no placeholder;
+- as `admin@dev.local` the same selection carries **20 rows**, those four included, with exact
   coordinates.
+
+The three centrelines of `DEMO-0001` exist only once the server has read the cave's survey models,
+which its worker does in the first seconds after it starts; `up` waits for that before it reports
+success, so a download made after `up` has printed its summary sees all of them.
 
 That difference, against the same selection on the same server, is the protection rule working, and
 it is the cheapest thing to point a first client test at. (Creating the set needs both
@@ -134,6 +145,10 @@ and lies near the invented demo caves.
 | Photo `Demo photo — open and protected caves` | on `DEMO-0001` **and** `DEMO-0002` | `reach: "locationFree"`: a copy without the position, because the protected cave is part of where the camera may have been. The administrator is handed the same photo as `original`. (`01-protocol.md` §11.) |
 | Raster map `Demo plan` | `DEMO-0001`, two pins | In the rasters stream with **one** pin, on `Demo marker A`; the pin on `Demo marker B (protected)` is withheld with the place it hangs on. The administrator gets both. (`01-protocol.md` §15.) |
 | Trip recording `Demo trip recording` | `DEMO-0001`, one scan of `Demo marker A` | In the trips stream; it is visible to the caving group, which the member is in. (`01-protocol.md` §13.) |
+| Survey model `demo-sync-survey` (`.lox`) | `DEMO-0001`, **current**; an invented survey of four stations, `demo.1` … `demo.4` | In the survey-models stream with `format: "lox"`, `isCurrent: true`, and the `sizeBytes` and `sha256` of the file `/sync/files/links` hands over for its `documentId`. It was seeded asking to take the cave's current mark from the demonstration dataset's own model, and takes it when the server has read it — as an upload that asks does. (`01-protocol.md` §16.1.) |
+| Survey model `demo-sync-survey-export` (`.3d`) | `DEMO-0001`, the same survey as a Survex file | Listed with `format: "3d"`, `isCurrent: false`. The demonstration dataset's own model of the cave (`pestera-demo-mare-invented`, `.3d`) is listed beside it, not current either. |
+| Places at stations | `Demo marker A` at `demo.2`; `Demo marker C` at a splay `[1.5, -0.5, 0.25]` from `demo.3`, both of `demo-sync-survey` | In the same stream's `placeStations`: one row without `splay`, one with it. Written as the member's phone writes them. The member may read both places but may not change them, so an upload moving either is answered `sync.row_forbidden`. (`01-protocol.md` §16.2.) |
+| Survey model `demo-protected-survey` (`.3d`) | `DEMO-0002` | **Never listed** to the member: the cave's exact position is closed to it. A set that has `DEMO-0002` among its roots tells the model's id among the stream's `tombstones` — the same answer a model that stopped being handed over gets — and `/sync/files/links` refuses its document. The administrator gets it as a row. |
 | People directory | on | `GET /api/v1/sync/people` lists `Demo Caver`, a club member with no account, and links the phone user `democaver` — reported by the member's phone — to that person. (`01-protocol.md` §12.) |
 
 To see the two photo reaches and the withheld pin side by side, create one sync set rooted at
