@@ -24,7 +24,7 @@ namespace SilexGis.Api.Tests;
 /// the survey, and naming the station a place is at says where the place is. So the link is shown
 /// whole or not at all, on every route that emits links: only to a reader who may read the place and
 /// see it exactly, and who is shown the survey — a model only with its cave's exact position open, a
-/// survey file by its own rules.
+/// survey file by its own rules. The relations graph is one of those routes.
 /// <para>
 /// Every case is built where the rule every other link answers to would have shown something: the
 /// installation reveals protected associations; the place is private to a club the reader is not in
@@ -143,6 +143,21 @@ public sealed class PlaceStationProtectionTests : IAsyncLifetime, IDisposable, I
         readerGuarded.GetProperty("totalItems").GetInt32().ShouldBe(0);
         LinkIds(await PanelAsync(uploader, "feature", guarded)).ShouldBe([onGuarded]);
 
+        // The relations graph draws an item's links from the same answer: the same hubs, the same
+        // total, and a hidden mapping cannot be opened as a starting point either.
+        (await GraphHubsAsync(reader, "feature", open)).ShouldBe(([shown, onFile], 2), GraphCompare);
+        (await GraphHubsAsync(reader, "surveyModel", model)).ShouldBe(([shown], 1), GraphCompare);
+        (await GraphHubsAsync(reader, "feature", guarded)).ShouldBe(([], 0), GraphCompare);
+        (await GraphHubsAsync(uploader, "surveyModel", model)).ShouldBe(([shown, onGuarded, onClubOnly], 3), GraphCompare);
+        foreach (var link in hiddenFromReader)
+        {
+            var seeded = await reader.GetAsync($"/api/v1/graph/neighbourhood?type=resLink&id={link}");
+            seeded.StatusCode.ShouldBe(HttpStatusCode.NotFound, link.ToString());
+            (await ProblemCodeAsync(seeded)).ShouldBe("graph.seed.not_found");
+        }
+
+        (await reader.GetAsync($"/api/v1/graph/neighbourhood?type=resLink&id={shown}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
         // By id and by short code.
         foreach (var link in hiddenFromReader)
         {
@@ -192,6 +207,26 @@ public sealed class PlaceStationProtectionTests : IAsyncLifetime, IDisposable, I
 
     private static Task<JsonElement> PanelAsync(HttpClient client, string type, Guid id) =>
         GetPageAsync(client, $"/api/v1/reslinks/for-target?type={type}&id={id}&pageSize=100&relation=place-at-station");
+
+    private static readonly IEqualityComparer<(IReadOnlyList<Guid> Hubs, int Total)> GraphCompare =
+        EqualityComparer<(IReadOnlyList<Guid> Hubs, int Total)>.Create(
+            (a, b) => a.Total == b.Total && a.Hubs.Order().SequenceEqual(b.Hubs.Order()),
+            v => v.Total);
+
+    /// <summary>The link hubs the relations graph draws around one item, and the links total it reports.</summary>
+    private static async Task<(IReadOnlyList<Guid> Hubs, int Total)> GraphHubsAsync(HttpClient client, string type, Guid id)
+    {
+        var graph = await GetPageAsync(client, $"/api/v1/graph/neighbourhood?type={type}&id={id}&category=resLink&limit=200");
+        var hubs = graph.GetProperty("nodes").EnumerateArray()
+            .Where(n => n.GetProperty("type").GetString() == "resLink")
+            .Select(n => Guid.Parse(n.GetProperty("id").GetString()!))
+            .ToList();
+        var total = graph.GetProperty("counts").EnumerateArray()
+            .Where(c => c.GetProperty("category").GetString() == "resLink")
+            .Select(c => c.GetProperty("total").GetInt32())
+            .SingleOrDefault();
+        return (hubs, total);
+    }
 
     private static IReadOnlyList<Guid> LinkIds(JsonElement page) =>
         [.. page.GetProperty("items").EnumerateArray().Select(l => l.GetProperty("id").GetGuid())];

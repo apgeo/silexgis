@@ -138,7 +138,7 @@ public static partial class ResLinkEndpoints
     /// Whether this caller is not shown a link of a kind that is shown whole or not at all — a place
     /// pin or a place's station. Any other link answers false.
     /// </summary>
-    private static async Task<bool> HiddenWholeAsync(
+    internal static async Task<bool> HiddenWholeAsync(
         PlacePointDisclosure placePoints, PlaceStationDisclosure placeStations, AccessContext ctx, Guid linkId, CancellationToken ct) =>
         await placePoints.IsHiddenAsync(ctx, linkId, ct) || await placeStations.IsHiddenAsync(ctx, linkId, ct);
 

@@ -91,7 +91,7 @@ public static partial class ResLinkEndpoints
 
         var (p, size) = Paging.Normalize(page, pageSize);
         var (rows, total) = await IncidentLinksAsync(
-            db, targets, associations, protection, photoPositions, placePoints, access, ctx,
+            db, targets, associations, protection, photoPositions, placePoints, placeStations, access, ctx,
             parsedType, id, relationTypeId, (p - 1) * size, size, ct);
         return TypedResults.Ok(new PagedResult<ResLinkDto>(rows, p, size, total));
     }
@@ -112,6 +112,7 @@ public static partial class ResLinkEndpoints
         FeatureProtection protection,
         PhotoPositionDisclosure photoPositions,
         PlacePointDisclosure placePoints,
+        PlaceStationDisclosure placeStations,
         IAccessService access,
         AccessContext ctx,
         AttachedEntityType? parsedType,

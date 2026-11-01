@@ -14,7 +14,7 @@ namespace SilexGis.Api.Features.ResLinks;
 /// Resource links as graph edges: each link is a hub with an edge to every member the viewer
 /// is shown. Read through the links panel's own answer for the same item, so the hubs, the
 /// members, the placeholders and the total are exactly the panel's: members of dead trips,
-/// hidden place pins and withheld associations are absent, and a member the viewer cannot
+/// hidden place pins, hidden places at survey stations and withheld associations are absent, and a member the viewer cannot
 /// read is a placeholder of its own that names nothing. Links page in the panel's order,
 /// newest first, so a window here is a window there.
 /// </summary>
@@ -25,6 +25,7 @@ internal sealed class ResLinkGraphSource(
     FeatureProtection protection,
     PhotoPositionDisclosure photoPositions,
     PlacePointDisclosure placePoints,
+    PlaceStationDisclosure placeStations,
     IAccessService access) : IGraphEdgeSource
 {
     public GraphCategory Category => GraphCategory.ResLink;
@@ -39,7 +40,7 @@ internal sealed class ResLinkGraphSource(
         {
             // A link asked about directly is its own single hub: the one-link read's answer.
             var link = await ResLinkStanding.Of(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == seed.Guid, ct);
-            if (link is null || await placePoints.IsHiddenAsync(ctx, link.Id, ct))
+            if (link is null || await ResLinkEndpoints.HiddenWholeAsync(placePoints, placeStations, ctx, link.Id, ct))
             {
                 return GraphSourceAnswer.Empty;
             }
@@ -51,7 +52,7 @@ internal sealed class ResLinkGraphSource(
 
         GraphWire.TryTargetWorld(seed.Type, out var world);
         var (links, total) = await ResLinkEndpoints.IncidentLinksAsync(
-            db, targets, associations, protection, photoPositions, placePoints, access, ctx,
+            db, targets, associations, protection, photoPositions, placePoints, placeStations, access, ctx,
             world, seed.Guid, null, page.Offset, page.Limit, ct, withCuration: false);
         return await AnswerAsync(links, total, ctx, ct);
     }
@@ -117,10 +118,12 @@ internal sealed class ResLinkGraphSource(
 
 /// <summary>
 /// Link hubs. A standing link is readable by every signed-in account unless it is a place
-/// pinned on phones' maps that this viewer is not shown — the rule of the one-link read.
+/// pinned on phones' maps or a place mapped to a survey station that this viewer is not
+/// shown — the rule of the one-link read.
 /// A hub carries no title of its own; its relation travels on its edges.
 /// </summary>
-internal sealed class ResLinkGraphNodeResolver(SilexGisDbContext db, PlacePointDisclosure placePoints) : IGraphNodeResolver
+internal sealed class ResLinkGraphNodeResolver(
+    SilexGisDbContext db, PlacePointDisclosure placePoints, PlaceStationDisclosure placeStations) : IGraphNodeResolver
 {
     public IReadOnlyCollection<GraphNodeType> Types { get; } = [GraphNodeType.ResLink];
 
@@ -136,6 +139,7 @@ internal sealed class ResLinkGraphNodeResolver(SilexGisDbContext db, PlacePointD
 
         var standing = ResLinkStanding.Of(db).AsNoTracking().Where(l => guids.Contains(l.Id));
         var hidden = await placePoints.HiddenLinkIdsAsync(ctx, standing, ct);
+        hidden.UnionWith(await placeStations.HiddenLinkIdsAsync(ctx, standing, ct));
         var rows = await standing.Select(l => new { l.Id, l.Description }).ToListAsync(ct);
         return rows
             .Where(r => !hidden.Contains(r.Id))
