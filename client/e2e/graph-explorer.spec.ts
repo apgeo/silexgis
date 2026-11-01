@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { asPerson } from './arrange.ts';
+import { asPerson, registerAccount, signedInElsewhere } from './arrange.ts';
 import { gotoRoute, login } from './helpers.ts';
 
 /**
@@ -33,13 +33,13 @@ interface Network {
   ids: string[];
 }
 
-async function createCave(page: Page, name: string, region: string): Promise<string> {
+async function createCave(page: Page, name: string, region: string, visibility = 'authenticated'): Promise<string> {
   const caveTypes = await asPerson<{ id: number }[]>(page, 'GET', '/api/v1/cave-types');
   const cave = await asPerson<{ id: string }>(page, 'POST', '/api/v1/caves', {
     name,
     caveTypeId: caveTypes[0].id,
     region,
-    visibility: 'authenticated',
+    visibility,
     locationProtected: false,
     explorationStatus: 'Unknown',
     isShowCave: false,
@@ -170,6 +170,164 @@ test.describe('relations graph', () => {
           { timeout: 30_000 },
         )
         .toBe(true);
+    } finally {
+      for (const id of network.ids) {
+        await asPerson(page, 'DELETE', `/api/v1/caves/${id}`).catch(() => undefined);
+      }
+    }
+  });
+
+  test('opens from a cave page, hides a kind of relation and brings it back, and finds an item by name', async ({ page }) => {
+    const stamp = `${Date.now()}${String(test.info().parallelIndex).padStart(2, '0')}`;
+    await login(page);
+    const network = await arrangeNetwork(page, stamp);
+    try {
+      // The entry point: the links section of the cave's own page.
+      await gotoRoute(page, `/caves/${network.seed}`);
+      await page.getByTestId('show-as-graph').first().click();
+      await expect(page).toHaveURL(new RegExp(`/graph\\?type=feature&id=${network.seed}`));
+      await expect(canvas(page)).toHaveAttribute('data-node-count', '3', { timeout: 30_000 });
+      await expect(canvas(page)).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
+
+      // Several kinds can be switched off at once; here the one kind that joins these items.
+      const links = page.locator('[data-testid="graph-filter-category"][data-category="resLink"]');
+      await expect(links).toBeVisible();
+      await links.getByTestId('graph-filter-category-check').uncheck();
+      await expect(canvas(page)).toHaveAttribute('data-node-count', '1', { timeout: 30_000 });
+      await expect(listItem(page, network.near)).toHaveCount(0);
+      await expect(listItem(page, network.seed)).toBeVisible();
+      await links.getByTestId('graph-filter-category-check').check();
+      await expect(canvas(page)).toHaveAttribute('data-node-count', '3', { timeout: 30_000 });
+      await expect(listItem(page, network.near)).toBeVisible();
+
+      // Searching inside the graph reports the match; a name that is not there reports none.
+      await page.getByLabel('Search the graph').fill(`graph side ${stamp}`);
+      await expect(page.getByTestId('graph-search-count')).toContainText('1');
+      await page.getByLabel('Search the graph').fill(`nothing called this ${stamp}`);
+      await expect(page.getByTestId('graph-search-count')).toBeVisible();
+
+      // The details of a chosen item name it and offer its page.
+      await listItem(page, network.near).getByTestId('graph-list-select').click();
+      await page.getByTestId('graph-details-open-button').click();
+      await expect(page.getByTestId('graph-details')).toContainText(`E2E graph near ${stamp}`);
+      await expect(page.getByTestId('graph-details-open')).toBeVisible();
+    } finally {
+      for (const id of network.ids) {
+        await asPerson(page, 'DELETE', `/api/v1/caves/${id}`).catch(() => undefined);
+      }
+    }
+  });
+
+  test('finds a starting item by name on the empty page', async ({ page }) => {
+    const stamp = `${Date.now()}${String(test.info().parallelIndex).padStart(2, '0')}`;
+    await login(page);
+    const network = await arrangeNetwork(page, stamp);
+    try {
+      await gotoRoute(page, '/graph');
+      await expect(page.getByTestId('graph-no-seed')).toBeVisible();
+      await page.getByTestId('graph-no-seed').getByTestId('graph-seed-search-input').fill(`E2E graph seed ${stamp}`);
+      await page.locator('.ant-select-dropdown:visible').getByText(`E2E graph seed ${stamp}`).first().click();
+      await expect(page).toHaveURL(new RegExp(`/graph\\?type=feature&id=${network.seed}`));
+      await expect(canvas(page)).toHaveAttribute('data-node-count', '3', { timeout: 30_000 });
+    } finally {
+      for (const id of network.ids) {
+        await asPerson(page, 'DELETE', `/api/v1/caves/${id}`).catch(() => undefined);
+      }
+    }
+  });
+
+  test('shows a viewer a restricted placeholder that cannot be expanded', async ({ page, browser }) => {
+    const stamp = `${Date.now()}${String(test.info().parallelIndex).padStart(2, '0')}`;
+    await login(page);
+    const region = `E2E graph region ${stamp}`;
+    const open = await createCave(page, `E2E graph open ${stamp}`, region);
+    const readable = await createCave(page, `E2E graph readable ${stamp}`, region);
+    const hidden = await createCave(page, `E2E graph hidden ${stamp}`, region, 'private');
+    const relationTypes = await asPerson<{ id: number; code: string }[]>(page, 'GET', '/api/v1/reslinks/relation-types');
+    const related = relationTypes.find((row) => row.code === 'related-to')!;
+    await relate(page, related.id, open, readable);
+    await relate(page, related.id, open, hidden);
+    const viewerAccount = await registerAccount(page.request, 'graphviewer');
+    const viewer = await signedInElsewhere(browser, viewerAccount);
+    try {
+      await gotoRoute(viewer.page, `/graph?type=feature&id=${open}`);
+      const viewerCanvas = canvas(viewer.page);
+      await expect(viewerCanvas).toHaveAttribute('data-node-count', '3', { timeout: 30_000 });
+      await expect(listItem(viewer.page, readable)).toContainText(`E2E graph readable ${stamp}`);
+      // The unreadable member is there as a placeholder: no title, and nothing of its name anywhere on the page.
+      const placeholder = viewer.page.getByTestId('graph-list-select').filter({ hasText: 'Restricted' });
+      await expect(placeholder).toHaveCount(1);
+      await expect(viewer.page.getByText(`E2E graph hidden ${stamp}`)).toHaveCount(0);
+      // Positive control: a readable neighbour, once selected, can be expanded. Without it the
+      // button is disabled for the trivial reason that nothing is selected.
+      await listItem(viewer.page, readable).getByTestId('graph-list-select').click();
+      await expect(viewerCanvas).toHaveAttribute('data-selected', keyOf(readable));
+      await expect(viewer.page.getByTestId('graph-expand')).toBeEnabled();
+      await placeholder.click();
+      await expect(viewerCanvas).toHaveAttribute('data-selected', /^restricted:/);
+      await expect(viewer.page.getByTestId('graph-expand')).toBeDisabled();
+      // The administrator, who may read it, sees the real item in the same position.
+      await gotoRoute(page, `/graph?type=feature&id=${open}`);
+      await expect(listItem(page, hidden)).toContainText(`E2E graph hidden ${stamp}`, { timeout: 30_000 });
+    } finally {
+      await viewer.context.close();
+      for (const id of [open, readable, hidden]) {
+        await asPerson(page, 'DELETE', `/api/v1/caves/${id}`).catch(() => undefined);
+      }
+    }
+  });
+
+  test('pages through a family too big for one step with the plus-N-more control', async ({ page }) => {
+    const stamp = `${Date.now()}${String(test.info().parallelIndex).padStart(2, '0')}`;
+    await login(page);
+    const region = `E2E graph region ${stamp}`;
+    const hub = await createCave(page, `E2E graph hub ${stamp}`, region);
+    const ids: string[] = [hub];
+    const relationTypes = await asPerson<{ id: number; code: string }[]>(page, 'GET', '/api/v1/reslinks/relation-types');
+    const related = relationTypes.find((row) => row.code === 'related-to')!;
+    // One step carries at most forty links of a kind; forty-three leaves a remainder of three.
+    const total = 43;
+    try {
+      for (let start = 0; start < total; start += 8) {
+        const batch = await Promise.all(
+          Array.from({ length: Math.min(8, total - start) }, async (_, i) => {
+            const id = await createCave(page, `E2E graph spoke ${start + i} ${stamp}`, region);
+            ids.push(id);
+            await relate(page, related.id, hub, id);
+            return id;
+          }),
+        );
+        expect(batch.length).toBeGreaterThan(0);
+      }
+      await gotoRoute(page, `/graph?type=feature&id=${hub}`);
+      await expect(canvas(page)).toHaveAttribute('data-node-count', '41', { timeout: 60_000 });
+      const more = page.getByTestId('graph-list-more');
+      await expect(more).toHaveCount(1);
+      await more.click();
+      await expect(canvas(page)).toHaveAttribute('data-node-count', String(total + 1), { timeout: 60_000 });
+      await expect(page.getByTestId('graph-list-more')).toHaveCount(0);
+    } finally {
+      for (const id of ids) {
+        await asPerson(page, 'DELETE', `/api/v1/caves/${id}`).catch(() => undefined);
+      }
+    }
+  });
+});
+
+test.describe('relations graph in the dark theme', () => {
+  test.slow();
+  test.use({ colorScheme: 'dark' });
+
+  test('draws under the dark theme', async ({ page }) => {
+    const stamp = `${Date.now()}${String(test.info().parallelIndex).padStart(2, '0')}`;
+    await login(page);
+    const network = await arrangeNetwork(page, stamp);
+    try {
+      await gotoRoute(page, `/graph?type=feature&id=${network.seed}`);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+      await expect(canvas(page)).toHaveAttribute('data-node-count', '3', { timeout: 30_000 });
+      await expect(canvas(page)).toHaveAttribute('data-drawn-nodes', '3', { timeout: 30_000 });
+      await expect(page.getByTestId('graph-legend')).toBeVisible();
     } finally {
       for (const id of network.ids) {
         await asPerson(page, 'DELETE', `/api/v1/caves/${id}`).catch(() => undefined);
