@@ -251,6 +251,10 @@ public class DependencyRuleTests
         "Therion.Blender.Parsing.CaveFileFormatException",
         "Therion.Blender.Parsing.CaveModelReader",
 
+        // Writing an invented survey in the compiled Therion format for the development data: a
+        // model in, bytes in memory out. It reads nothing, locates nothing and starts nothing.
+        "Therion.Blender.Parsing.LoxWriter",
+
         // Reading what a compilation printed. Text in, records out — this starts no compiler.
         "Therion.Build.TherionLogDiagnostic",
         "Therion.Build.TherionLogLoopError",
