@@ -273,8 +273,13 @@ const anchorKinds: Record<AnchorKind, AnchorKindEntry> = {
   modelStation: {
     summary: (anchor, t) => {
       const station = text(anchor, 'station');
-      return station === null
-        ? t('resLinks.anchors.part')
+      if (station === null) {
+        return t('resLinks.anchors.part');
+      }
+      // A phone's mapping of a place to the far end of a splay carries the offset from the
+      // station beside it; the station is what a person reads it by.
+      return Array.isArray(field(anchor, 'splay'))
+        ? t('resLinks.anchors.splayFrom', { station })
         : t('resLinks.anchors.station', { station });
     },
     editor: null,

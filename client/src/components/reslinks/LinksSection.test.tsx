@@ -291,4 +291,35 @@ describe('LinksSection', () => {
     expect(await screen.findByText('Delete link')).toBeInTheDocument();
     expect(screen.queryByText('Edit link')).not.toBeInTheDocument();
   });
+
+  it('offers a place a phone mapped to a station removal, and never an edit as a link', async () => {
+    const mapped = link({
+      id: 'station',
+      relationType: {
+        id: 10,
+        code: 'place-at-station',
+        name: 'At station',
+        description: null,
+        sortOrder: 250,
+        directed: true,
+        inverseName: 'Station of place',
+        seeded: true,
+      },
+      members: [
+        member({ id: 'station-self', targetId: 'self' }),
+        member({
+          id: 'station-model',
+          targetType: 'surveyModel',
+          targetId: 'model',
+          anchorKind: 'modelStation',
+          anchor: { station: 'A.12', splay: [1, 2, 3] },
+        }),
+      ],
+    });
+    show(1, [mapped]);
+    expect(await screen.findByText('splay from A.12', { exact: false })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Link actions' }));
+    expect(await screen.findByText('Delete link')).toBeInTheDocument();
+    expect(screen.queryByText('Edit link')).not.toBeInTheDocument();
+  });
 });

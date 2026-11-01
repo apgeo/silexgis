@@ -160,6 +160,8 @@ describe('anchor summaries', () => {
     expect(anchorSummary('timePoint', { t: 55 }, t)).toBe('0:55');
     expect(anchorSummary('timeRange', { start: 55, end: 80 }, t)).toBe('0:55–1:20');
     expect(anchorSummary('modelStation', { station: 'p12' }, t)).toBe('station p12');
+    // A phone's mapping of a place to the far end of a splay reads by the station it is taken from.
+    expect(anchorSummary('modelStation', { station: 'A.12', splay: [1.5, -2, 0.3] }, t)).toBe('splay from A.12');
     expect(anchorSummary('modelSurveyRange', { fromSurvey: 'intrare', toSurvey: 'lac' }, t)).toBe(
       'surveys intrare→lac',
     );
@@ -286,8 +288,9 @@ describe('relation phrasing', () => {
     for (const code of DIRECTED_RELATION_CODES) {
       expect(SEEDED_RELATION_CODES).toContain(code);
     }
-    // Four of the original eight, the ten trip roles, text-of, and the five map codes.
-    expect(DIRECTED_RELATION_CODES).toHaveLength(20);
+    // Four of the original eight, the ten trip roles, text-of, the five map codes and the
+    // place's station.
+    expect(DIRECTED_RELATION_CODES).toHaveLength(21);
   });
 
   // The picker offers exactly what the server admits: an offer it refuses is a form that

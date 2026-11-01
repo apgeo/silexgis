@@ -20,6 +20,7 @@ export const SECTION_ORDER = [
   'tripPoints',
   'rasterMaps',
   'rasterPins',
+  'placeStations',
 ] as const;
 
 export type Json = Record<string, unknown>;
@@ -65,6 +66,8 @@ export function recordOf(line: HeldLine): Json {
       return record(line.proposal, 'map');
     case 'rasterPins':
       return record(line.proposal, 'pin');
+    case 'placeStations':
+      return record(line.proposal, 'mapping');
     default:
       return {};
   }
@@ -169,6 +172,9 @@ export function placeLines(lines: readonly HeldLine[]): Map<string, Placement> {
         break;
       case 'rasterPins':
         cave = via(str(rec.rasterMapId));
+        break;
+      case 'placeStations':
+        cave = via(str(rec.placeId));
         break;
       case 'documentLinks': {
         const proposal = isObject(line.proposal) ? line.proposal : {};

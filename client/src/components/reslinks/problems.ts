@@ -57,6 +57,7 @@ const byCode: Record<string, string> = {
   'validation.failed': 'resLinks.problems.validationFailed',
   // A place a phone pinned on its map, written from the map screen.
   'reslink.place_point.fixed': 'resLinks.problems.placePointFixed',
+  'reslink.place_station.fixed': 'resLinks.problems.placeStationFixed',
   'reslink.place_point.map_not_found': 'resLinks.problems.placePointMapNotFound',
   'reslink.place_point.place_not_found': 'resLinks.problems.placePointPlaceNotFound',
   'reslink.place_point.place_pinned': 'resLinks.problems.placePointPlacePinned',

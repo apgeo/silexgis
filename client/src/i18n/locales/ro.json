@@ -1249,6 +1249,7 @@
       "tripPoints": "Scanări",
       "rasterMaps": "Hărți raster",
       "rasterPins": "Repere pe hartă",
+      "placeStations": "Stațiile locurilor",
       "vectorFile": "Fișier vectorial",
       "photos": "Fotografii",
       "tripSheet": "Fișă de ieșire",
@@ -1330,6 +1331,9 @@
     "mapType": "Tip de hartă",
     "pin": "Reper",
     "pinNotShown": "Locul acestui reper nu ți se arată.",
+    "station": "Stația",
+    "splay": "Viză laterală din stație (m est, nord, sus)",
+    "stationNotShown": "Stația acestui loc nu ți se arată.",
     "accept": "Acceptă",
     "reject": "Respinge",
     "acceptAfterAll": "Acceptă totuși",
@@ -5399,6 +5403,7 @@
       "pageRange": "p. {{from}}–{{to}}",
       "region": "regiune",
       "station": "stația {{station}}",
+      "splayFrom": "viză laterală din {{station}}",
       "stationRange": "stațiile {{from}}→{{to}}",
       "survey": "drumuirea {{survey}}",
       "surveyRange": "drumuirile {{from}}→{{to}}",
@@ -5512,6 +5517,10 @@
       "map-place-point": {
         "name": "Marchează locul",
         "inverse": "Marcat pe hartă"
+      },
+      "place-at-station": {
+        "name": "La stația",
+        "inverse": "Stația locului"
       }
     },
     "members": "Elemente",
@@ -5635,6 +5644,7 @@
       "createForbidden": "Nu ai voie să creezi obiecte aici.",
       "validationFailed": "Ceva din formular nu este acceptat. Verifică valorile și încearcă din nou.",
       "placePointFixed": "Un punct de pe harta unui telefon se mută sau se șterge pe hartă, nu se editează ca legătură.",
+      "placeStationFixed": "Stația unui loc se stabilește pe telefoane și nu se editează ca legătură; poate fi ștearsă.",
       "placePointMapNotFound": "Această imagine nu este o hartă de pe telefon.",
       "placePointPlaceNotFound": "Acest loc nu este în peștera hărții sau nu ai voie să vezi unde se află.",
       "placePointPlacePinned": "Acest loc are deja un punct pe această hartă.",

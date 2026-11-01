@@ -1249,6 +1249,7 @@
       "tripPoints": "Scans",
       "rasterMaps": "Raster maps",
       "rasterPins": "Map pins",
+      "placeStations": "Places' stations",
       "vectorFile": "Vector file",
       "photos": "Photos",
       "tripSheet": "Trip sheet",
@@ -1330,6 +1331,9 @@
     "mapType": "Map type",
     "pin": "Pin",
     "pinNotShown": "The place of this pin is not shown to you.",
+    "station": "Station",
+    "splay": "Splay from the station (m east, north, up)",
+    "stationNotShown": "The station of this place is not shown to you.",
     "accept": "Accept",
     "reject": "Reject",
     "acceptAfterAll": "Accept after all",
@@ -5386,6 +5390,7 @@
       "pageRange": "pp. {{from}}–{{to}}",
       "region": "region",
       "station": "station {{station}}",
+      "splayFrom": "splay from {{station}}",
       "stationRange": "stations {{from}}→{{to}}",
       "survey": "survey {{survey}}",
       "surveyRange": "surveys {{from}}→{{to}}",
@@ -5499,6 +5504,10 @@
       "map-place-point": {
         "name": "Marks place",
         "inverse": "Marked on map"
+      },
+      "place-at-station": {
+        "name": "At station",
+        "inverse": "Station of place"
       }
     },
     "members": "Members",
@@ -5622,6 +5631,7 @@
       "createForbidden": "You are not allowed to create features here.",
       "validationFailed": "Something in the form is not accepted. Check the values and try again.",
       "placePointFixed": "A point on a phone's map is moved or removed on its map, not edited as a link.",
+      "placeStationFixed": "A place's station is set on the phones and is not edited as a link; it can be removed.",
       "placePointMapNotFound": "This picture is not a map a phone carries.",
       "placePointPlaceNotFound": "That place is not in this map's cave, or you may not see where it is.",
       "placePointPlacePinned": "That place already has a point on this map.",

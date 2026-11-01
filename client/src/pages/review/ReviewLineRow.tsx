@@ -415,6 +415,20 @@ function SectionDetail({ line, lines }: { line: HeldLine; lines: readonly HeldLi
           <LockOutlined /> {t('review.pinNotShown')}
         </Typography.Text>
       );
+    case 'placeStations': {
+      // The server leaves the station off when this reader may not place the place it maps.
+      const splay = Array.isArray(rec.splay) ? rec.splay.filter((v): v is number => typeof v === 'number') : null;
+      return typeof rec.station === 'string' ? (
+        <Flex vertical gap={2}>
+          <Fact label={t('review.station')}>{rec.station}</Fact>
+          {splay && splay.length === 3 && <Fact label={t('review.splay')}>{splay.join(', ')}</Fact>}
+        </Flex>
+      ) : (
+        <Typography.Text type="secondary">
+          <LockOutlined /> {t('review.stationNotShown')}
+        </Typography.Text>
+      );
+    }
     default: {
       // A file import's candidate: what it names and the choices it would be committed with.
       const proposal = line.proposal as { decision?: unknown; names?: unknown } | null;

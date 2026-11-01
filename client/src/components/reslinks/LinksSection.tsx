@@ -18,7 +18,7 @@ import AddMemberModal from './AddMemberModal.tsx';
 import MemberChip from './MemberChip.tsx';
 import { mayEditResLink } from './permissions.ts';
 import { MAP_PLACE_POINT_CODE } from '../../rastermap/vocabulary.ts';
-import { relationPhraseFor } from './relations.ts';
+import { PLACE_AT_STATION_CODE, relationPhraseFor } from './relations.ts';
 import { linkPageRoute, linkPageUrl, type ResLinkTargetType } from './registry.ts';
 
 /** Chips beyond this collapse into a "+n" tag; a row stays one line's worth of reading. */
@@ -78,9 +78,11 @@ function LinkRow({
   const deleteLink = useDeleteResLink();
 
   const mayEdit = mayEditResLink(link);
-  // A place a phone pinned on its map is moved on the map and never edited as a link; removing it
-  // is the one change this row offers, and the phones are told.
-  const placePoint = link.relationType?.code === MAP_PLACE_POINT_CODE;
+  // A place a phone pinned on its map is moved on the map, and a place's station is set on the
+  // phones; neither is edited as a link. Removing it is the one change this row offers, and the
+  // phones are told.
+  const placePoint =
+    link.relationType?.code === MAP_PLACE_POINT_CODE || link.relationType?.code === PLACE_AT_STATION_CODE;
 
   // The entity whose page this is speaks for itself; repeating its chip in its own row
   // would say nothing. Everything else is what the row is actually about.
