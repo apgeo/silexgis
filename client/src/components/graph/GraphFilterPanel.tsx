@@ -44,8 +44,7 @@ export default function GraphFilterPanel(p: GraphFilterPanelProps) {
 
   return (
     <Flex vertical gap={12} data-testid="graph-filters" role="group" aria-label={t('graph.filters.title')}>
-      <Flex justify="space-between" align="center">
-        <Typography.Text strong>{t('graph.filters.title')}</Typography.Text>
+      <Flex justify="flex-end" align="center">
         <Button size="small" type="link" disabled={!isFiltered(p.filters)} onClick={p.onReset} data-testid="graph-filter-all">
           {t('graph.filters.all')}
         </Button>

@@ -55,6 +55,9 @@ describe('G6 style mapping', () => {
     expect(style.fill).toBe(theme.preset.blue);
     expect(style.badge).toBe(false);
     expect(style.labelText).toBe('Cave S');
+    // Lines passing under the name must not strike through it.
+    expect(style.labelBackground).toBe(true);
+    expect(style.labelBackgroundFill).toBe(theme.background);
   });
 
   it('fades the label with the node', () => {

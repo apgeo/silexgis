@@ -57,6 +57,11 @@ export const NODE_VISUALS: Record<GraphNodeType, NodeVisual> = {
 /** A feature of kind cave entrance: the feature's colour, a smaller circle. */
 export const ENTRANCE_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'blue', glyph: 'e', size: 20 };
 
+/** A survey line (centerline) feature: the feature's colour, a wavy-line glyph instead of the cave's "C". */
+export const CENTERLINE_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'blue', glyph: '~', size: 24 };
+/** Any other feature (a bivouac, a sinkhole, a spring…): the feature's colour, a plain smaller circle. */
+export const GENERIC_FEATURE_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'blue', glyph: '', size: 22 };
+
 /** A type this client has never heard of. */
 export const UNKNOWN_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'neutral', glyph: '?', size: 24 };
 /** The "+N more" stub: a small ring that reads as "there is more here". */
@@ -121,14 +126,29 @@ export const nodeTypeVisual = (type: string): NodeVisual =>
 export const categoryVisual = (category: string): EdgeVisual =>
   (CATEGORY_VISUALS as Record<string, EdgeVisual | undefined>)[category] ?? UNKNOWN_EDGE_VISUAL;
 
+function featureVisual(kind: string | null): NodeVisual {
+  switch (kind) {
+    case 'caveEntrance':
+      return ENTRANCE_NODE_VISUAL;
+    case 'centerline':
+      return CENTERLINE_NODE_VISUAL;
+    case 'generic':
+      return GENERIC_FEATURE_NODE_VISUAL;
+    default:
+      // A cave, or a placeholder whose kind is not disclosed.
+      return nodeTypeVisual('feature');
+  }
+}
+
 /** The visual of one node in a view: a stub, a placeholder and the seed each differ from their type's. */
 export function nodeVisual(vn: Pick<ViewNode, 'kind' | 'type' | 'isSeed'> & { node?: { kind: string | null } | null }): NodeVisual {
   if (vn.kind === 'more') {
     return MORE_NODE_VISUAL;
   }
-  // A cave entrance is a feature like a cave, drawn as a smaller circle with its own glyph so a
-  // cave's neighbourhood does not show several identical cave-looking nodes.
-  const base = vn.type === 'feature' && vn.node?.kind === 'caveEntrance' ? ENTRANCE_NODE_VISUAL : nodeTypeVisual(vn.type);
+  // Only a cave carries the cave's "C": an entrance, a survey line or any other feature is drawn
+  // in the same colour but smaller and with its own glyph (or none), so a neighbourhood does not
+  // show a bivouac or a sinkhole as one more cave.
+  const base = vn.type === 'feature' ? featureVisual(vn.node?.kind ?? null) : nodeTypeVisual(vn.type);
   return vn.isSeed ? { ...base, size: Math.round(base.size * SEED_SCALE) } : base;
 }
 

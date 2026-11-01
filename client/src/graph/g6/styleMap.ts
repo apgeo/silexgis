@@ -64,6 +64,10 @@ export function nodeStyle(paint: NodePaint, label: string, theme: GraphTheme): G
     labelFontSize: 12,
     labelPlacement: 'bottom',
     labelOpacity: paint.opacity,
+    // A backing in the canvas colour keeps lines that pass under a name from striking through it.
+    labelBackground: label !== '',
+    labelBackgroundFill: theme.background,
+    labelBackgroundOpacity: 0.85 * paint.opacity,
     badge: paint.lock,
     // A plain geometric mark rather than a padlock emoji: emoji need a colour-emoji font that many
     // machines lack and would draw as an empty box. U+25A0 exists in every ordinary text font.
@@ -94,8 +98,12 @@ export function edgeStyle(paint: EdgePaint, label: string, theme: GraphTheme): G
   };
 }
 
-/** Edge labels on a busy picture are clutter: past this many edges only touched edges are labelled. */
-export const EDGE_LABEL_LIMIT = 40;
+/**
+ * Edge labels on every line are clutter even on a modest neighbourhood (a dozen lines already hide
+ * the node names), so past this many edges only the lines touching the selection are labelled. The
+ * relation names of every line stay readable in the list view, and selecting a node names its own.
+ */
+export const EDGE_LABEL_LIMIT = 6;
 
 export const showEdgeLabel = (paint: Pick<EdgePaint, 'state'>, edgeCount: number): boolean =>
   edgeCount <= EDGE_LABEL_LIMIT || paint.state === 'selected' || paint.state === 'neighbour';

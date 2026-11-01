@@ -84,6 +84,15 @@ describe('the visual tables', () => {
     expect(entrance.glyph).not.toBe(cave.glyph);
   });
 
+  it('keep the cave glyph for caves alone: a survey line or any other feature carries its own or none', () => {
+    const glyph = (kind: string | null) => nodeVisual({ kind: 'node', type: 'feature', isSeed: false, node: { kind } }).glyph;
+    expect(glyph('cave')).toBe('C');
+    expect(glyph('centerline')).toBe('~');
+    expect(glyph('generic')).toBe('');
+    // A placeholder whose kind is withheld looks like any feature, not like a particular kind.
+    expect(glyph(null)).toBe('C');
+  });
+
   it('fall back to a generic look for an unknown type and category', () => {
     expect(nodeVisual({ kind: 'node', type: 'hologram', isSeed: false }).shape).toBe('circle');
     expect(paintEdge(ve({ category: 'telepathy' }), light).stroke).toBe(light.preset.neutral);
