@@ -111,6 +111,7 @@ const DYNAMIC_KEY_FAMILIES: readonly string[] = [
   'geodata.mapKinds.',
   'geodata.rasterStatusValues.',
   'geodata.statusValues.',
+  'graph.relations.',
   'history.action.',
   'history.entity.',
   'history.field.',
