@@ -16,7 +16,7 @@ a separate piece of work, done in the application's own repository.**
 it, and what does not, is in `01-protocol.md`; what has changed is in
 `../../contract/speleoloc-sync/v1/CHANGELOG.md`. Everything the second phase added is additive and
 is announced in the capabilities answer's `features` — `documents`, `documentUpload`, `trips`,
-`reviews`, `rasters` and, while the installation has its people directory on, `people` — so a build
+`reviews`, `rasters`, `surveyModels` and, while the installation has its people directory on, `people` — so a build
 pinned to version 1 that reads only `download` and `upload` keeps working unchanged. The one new
 behaviour a client must understand is opted into rather than imposed: an upload naming
 `clientFeatures: ["held"]` may get rows back `held` for a reviewer (`01-protocol.md` §14).

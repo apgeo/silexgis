@@ -344,6 +344,18 @@ documents. These are their own:
 | `rejected` | `sync.place_not_found` | On a pin: the named place is not on this server, is not readable by this account, or is not inside the map's cave — answered alike | `apply-and-resubmit` — send the place in `rows` of the same upload |
 | `rejected` | `sync.pin_exists` | On a pin: another live pin already marks that place on the map | `apply-and-resubmit` — read the map from the rasters stream and edit that pin |
 
+### 6.2b One place's station inside a 200
+
+An entry in `placeStations` (section 16.3 of the protocol document) is answered in the same shape, with
+the mapping's identifier as its `id`, and shares `sync.row_not_found`, `sync.id_conflict` (also: the same
+identifier sent with another place or survey), `sync.row_deleted`, `sync.row_forbidden`, `sync.conflict`
+and `sync.place_not_found` with the rows above. These are its own:
+
+| `status` | `code` | Means | Action |
+|---|---|---|---|
+| `rejected` | `sync.survey_not_found` | The named survey model is not on this server, is a mesh, or its cave is not one this account may see exactly; or the named survey file is not readable by this account — answered alike | `stop` for this item — keep the mapping on the phone; read the survey-models stream again |
+| `rejected` | `sync.place_station_exists` | Another live mapping already gives that place a station in that survey | `apply-and-resubmit` — read the survey-models stream and edit that mapping |
+
 ### 6.3 The write-service codes, named
 
 Two rows above pass a code through from the shared write service rather than minting one in the

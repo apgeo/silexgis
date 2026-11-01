@@ -57,7 +57,7 @@ running.
 | | |
 |---|---|
 | Base URL | `http://127.0.0.1:5205` |
-| Sync capabilities | `GET /api/v1/sync/capabilities` — contract version 1; `features` lists `download`, `upload`, `documents`, `documentUpload`, `trips`, `reviews`, `rasters` and — because this installation has the people directory on and the member may read it — `people` |
+| Sync capabilities | `GET /api/v1/sync/capabilities` — contract version 1; `features` lists `download`, `upload`, `documents`, `documentUpload`, `trips`, `reviews`, `rasters`, `surveyModels` and — because this installation has the people directory on and the member may read it — `people` |
 | OpenAPI document | `http://127.0.0.1:5205/openapi/v1.json` (no database needed to render it) |
 | Database | `127.0.0.1:5434`, database `silexgis`, user `silexgis`, password `silexgis` |
 | Client id | `silexgis-speleoloc` — public, **no secret**, PKCE `S256` required |

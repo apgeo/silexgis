@@ -390,3 +390,32 @@ raster maps says how they are read and sent.
 
 The app's raster images are always named `.jpg` whatever their format; the server types the file by its
 content, and refuses a picture that is not an image (`sync.raster_not_an_image`).
+
+## 11. Survey models, and places at their stations
+
+A cave's line plots (Therion `.lox`, Survex `.3d`) reach a phone on the survey-models stream for a cave
+it may see exactly; a phone never sends a model. A place a phone maps to a station of one — or of a
+survey file it uploaded itself — is kept as a **place-at-station link** between the place and the model
+(or the document), with the station and splay as plain data on the survey member (provisional: the pin,
+marker and map sync is to be analysed again). The protocol document's section on survey models says how
+they are read and sent.
+
+| On the server | A stream model | On the phone |
+|---|---|---|
+| The model's identifier | `id` | The server model a local document came from, kept so a mapping can name it |
+| The model's cave | `caveId` | — |
+| The model's file, as a document and its revision | `documentId`, `versionId` | Fetched through the address route with `rendition: "original"` |
+| The model's name | `name` | — |
+| Lox / Survex 3d | `format` (`lox` / `3d`) | — |
+| The cave's current line plot | `isCurrent` | — |
+| The file's size and hash | `sizeBytes`, `sha256` | — |
+
+| On the phone (`cave_place_model_stations`) | In a `placeStations` item / a stream mapping | On the server |
+|---|---|---|
+| The mapping's id | `id` | The mapping's identifier, adopted verbatim as the link's |
+| `cave_place_uuid` | `placeId` | The place, the link's main member; fixed for good |
+| The model (server model) | `surveyModelId` | A survey-model member; fixed for good |
+| The model (a document the phone uploaded as `surveyData`) | `documentId` | A document member; fixed for good |
+| The viewer's station name | `station` | The member's station anchor, as sent |
+| The splay end, metres east, north, up | `splay` | Kept beside the station, as sent; absent for a station |
+| — | `revision` | The server's revision of the mapping: the link's own write time |
