@@ -324,6 +324,9 @@ export const queryKeys = {
   featureSetMembers: (id: string) => ['feature-sets', id, 'members'] as const,
   resLinksForTarget: (targetType: string, targetId: string, params: ResLinkPageParams) =>
     ['reslinks', 'for-target', targetType, targetId, params] as const,
+  graphNeighbourhood: (type: string, id: string, category?: string, offset?: number) =>
+    ['graph', 'neighbourhood', type, id, category ?? null, offset ?? 0] as const,
+  graphSearch: (q: string, types: string, limit: number) => ['graph', 'search', q, types, limit] as const,
   resLink: (idOrCode: string) => ['reslinks', 'detail', idOrCode] as const,
   resLinkTargets: (targetType: string, q: string) => ['reslinks', 'targets', targetType, q] as const,
   resLinkRelationTypes: ['reslinks', 'relation-types'] as const,

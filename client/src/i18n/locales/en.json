@@ -8609,5 +8609,211 @@
         "empty": "Nothing to read."
       }
     }
+  },
+  "graph": {
+    "title": "Relations graph",
+    "canvasLabel": "Relations graph drawing",
+    "summary": "{{nodes}} items, {{edges}} relations",
+    "loading": "Loading the relations…",
+    "noSeed": {
+      "title": "Pick an item to explore",
+      "body": "Open this page from an item's links, or add ?type=…&id=… to the address. The graph shows the item and everything related to it, one step at a time."
+    },
+    "errors": {
+      "notFound": "That item does not exist or you may not see it.",
+      "generic": "The relations could not be loaded.",
+      "action": "That step could not be loaded. The graph is unchanged."
+    },
+    "toolbar": {
+      "label": "Graph controls",
+      "layout": "Layout",
+      "fit": "Fit to view",
+      "refresh": "Refresh",
+      "expand": "Expand selected",
+      "collapse": "Collapse to the first item"
+    },
+    "layouts": {
+      "force": "Force",
+      "radial": "Radial",
+      "layered": "Layered"
+    },
+    "list": {
+      "title": "Items in the graph",
+      "empty": "Nothing to list yet.",
+      "relations": "Relations of {{title}}",
+      "seed": "Starting item"
+    },
+    "restricted": "Restricted",
+    "untitled": "Untitled",
+    "more": "+{{count}} more",
+    "types": {
+      "tag": "Tag",
+      "resLink": "Link",
+      "file": "File"
+    },
+    "categories": {
+      "resLink": "Resource links",
+      "featureLink": "Feature links",
+      "hierarchy": "Hierarchy",
+      "attachment": "Attachments",
+      "tripParticipant": "Trip participants",
+      "expedition": "Expeditions",
+      "cabinet": "Cabinets",
+      "tag": "Tags",
+      "groupMembership": "Group membership",
+      "survey": "Survey models"
+    },
+    "relations": {
+      "hierarchy": {
+        "parent": {
+          "name": "Parent of",
+          "inverse": "Child of"
+        },
+        "entrance": {
+          "name": "Has entrance",
+          "inverse": "Entrance of"
+        },
+        "centerline": {
+          "name": "Has centerline",
+          "inverse": "Centerline of"
+        }
+      },
+      "cabinet": {
+        "filed": {
+          "name": "Holds",
+          "inverse": "Filed in"
+        },
+        "parent": {
+          "name": "Parent of",
+          "inverse": "Child of"
+        }
+      },
+      "tag": {
+        "tagged": {
+          "name": "Tagged with",
+          "inverse": "Tags"
+        }
+      },
+      "survey": {
+        "model": {
+          "name": "Has survey model",
+          "inverse": "Survey model of"
+        }
+      },
+      "expedition": {
+        "trip": {
+          "name": "Includes trip",
+          "inverse": "Part of expedition"
+        },
+        "roster": {
+          "name": "Roster includes",
+          "inverse": "On the roster of"
+        }
+      },
+      "featureLink": {
+        "associated_cave": {
+          "name": "Associated cave",
+          "inverse": "Associated cave"
+        },
+        "hydro_connection": {
+          "name": "Hydrological connection",
+          "inverse": "Hydrological connection"
+        },
+        "same_system": {
+          "name": "Same cave system",
+          "inverse": "Same cave system"
+        },
+        "related": {
+          "name": "Related feature",
+          "inverse": "Related feature"
+        }
+      },
+      "attachment": {
+        "photoEntrance": {
+          "name": "Entrance photo",
+          "inverse": "Entrance photo of"
+        },
+        "photoInterior": {
+          "name": "Interior photo",
+          "inverse": "Interior photo of"
+        },
+        "photoSurface": {
+          "name": "Surface photo",
+          "inverse": "Surface photo of"
+        },
+        "document": {
+          "name": "Document",
+          "inverse": "Document of"
+        },
+        "report": {
+          "name": "Report document",
+          "inverse": "Report document of"
+        },
+        "map2d": {
+          "name": "2D map",
+          "inverse": "2D map of"
+        },
+        "surveyData": {
+          "name": "Survey data",
+          "inverse": "Survey data of"
+        },
+        "other": {
+          "name": "Other attachment",
+          "inverse": "Other attachment of"
+        }
+      },
+      "tripParticipant": {
+        "participant": {
+          "name": "Participant",
+          "inverse": "Participant in"
+        },
+        "proposer": {
+          "name": "Proposer",
+          "inverse": "Proposer of"
+        },
+        "leader": {
+          "name": "Leader",
+          "inverse": "Leader of"
+        },
+        "driver": {
+          "name": "Driver",
+          "inverse": "Driver on"
+        },
+        "surveyor": {
+          "name": "Surveyor",
+          "inverse": "Surveyor on"
+        },
+        "photographer": {
+          "name": "Photographer",
+          "inverse": "Photographer on"
+        },
+        "trainee": {
+          "name": "Trainee",
+          "inverse": "Trainee on"
+        },
+        "instructor": {
+          "name": "Instructor",
+          "inverse": "Instructor on"
+        },
+        "callout_contact": {
+          "name": "Callout contact",
+          "inverse": "Callout contact for"
+        }
+      },
+      "groupMembership": {
+        "member": {
+          "name": "Member",
+          "inverse": "Member of"
+        },
+        "admin": {
+          "name": "Administrator",
+          "inverse": "Administrator of"
+        },
+        "owner": {
+          "name": "Owner",
+          "inverse": "Owner of"
+        }
+      }
+    }
   }
 }

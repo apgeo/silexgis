@@ -8622,5 +8622,211 @@
         "empty": "Nu este nimic de citit."
       }
     }
+  },
+  "graph": {
+    "title": "Graful relațiilor",
+    "canvasLabel": "Desenul grafului de relații",
+    "summary": "{{nodes}} elemente, {{edges}} relații",
+    "loading": "Se încarcă relațiile…",
+    "noSeed": {
+      "title": "Alege un element de explorat",
+      "body": "Deschide această pagină din legăturile unui element sau adaugă ?type=…&id=… în adresă. Graful arată elementul și tot ce este legat de el, pas cu pas."
+    },
+    "errors": {
+      "notFound": "Elementul nu există sau nu ai voie să îl vezi.",
+      "generic": "Relațiile nu au putut fi încărcate.",
+      "action": "Pasul nu a putut fi încărcat. Graful a rămas neschimbat."
+    },
+    "toolbar": {
+      "label": "Comenzile grafului",
+      "layout": "Aranjare",
+      "fit": "Încadrează în ecran",
+      "refresh": "Reîmprospătează",
+      "expand": "Extinde elementul ales",
+      "collapse": "Revino la primul element"
+    },
+    "layouts": {
+      "force": "Forțe",
+      "radial": "Radială",
+      "layered": "Pe niveluri"
+    },
+    "list": {
+      "title": "Elementele din graf",
+      "empty": "Încă nu e nimic de listat.",
+      "relations": "Relațiile lui {{title}}",
+      "seed": "Elementul de pornire"
+    },
+    "restricted": "Restricționat",
+    "untitled": "Fără titlu",
+    "more": "+{{count}} în plus",
+    "types": {
+      "tag": "Etichetă",
+      "resLink": "Legătură",
+      "file": "Fișier"
+    },
+    "categories": {
+      "resLink": "Legături între resurse",
+      "featureLink": "Legături între obiecte",
+      "hierarchy": "Ierarhie",
+      "attachment": "Atașamente",
+      "tripParticipant": "Participanți la ture",
+      "expedition": "Expediții",
+      "cabinet": "Dulapuri",
+      "tag": "Etichete",
+      "groupMembership": "Apartenență la grupuri",
+      "survey": "Modele topo"
+    },
+    "relations": {
+      "hierarchy": {
+        "parent": {
+          "name": "Părinte al",
+          "inverse": "Copil al"
+        },
+        "entrance": {
+          "name": "Are intrarea",
+          "inverse": "Intrare a"
+        },
+        "centerline": {
+          "name": "Are drumuirea",
+          "inverse": "Drumuire a"
+        }
+      },
+      "cabinet": {
+        "filed": {
+          "name": "Conține",
+          "inverse": "Așezat în"
+        },
+        "parent": {
+          "name": "Părinte al",
+          "inverse": "Copil al"
+        }
+      },
+      "tag": {
+        "tagged": {
+          "name": "Etichetat cu",
+          "inverse": "Etichetează"
+        }
+      },
+      "survey": {
+        "model": {
+          "name": "Are modelul topo",
+          "inverse": "Model topo al"
+        }
+      },
+      "expedition": {
+        "trip": {
+          "name": "Include tura",
+          "inverse": "Parte din expediția"
+        },
+        "roster": {
+          "name": "Lista include",
+          "inverse": "Pe lista expediției"
+        }
+      },
+      "featureLink": {
+        "associated_cave": {
+          "name": "Peșteră asociată",
+          "inverse": "Peșteră asociată"
+        },
+        "hydro_connection": {
+          "name": "Legătură hidrologică",
+          "inverse": "Legătură hidrologică"
+        },
+        "same_system": {
+          "name": "Același sistem de peșteri",
+          "inverse": "Același sistem de peșteri"
+        },
+        "related": {
+          "name": "Obiect înrudit",
+          "inverse": "Obiect înrudit"
+        }
+      },
+      "attachment": {
+        "photoEntrance": {
+          "name": "Fotografie intrare",
+          "inverse": "Fotografie intrare pentru"
+        },
+        "photoInterior": {
+          "name": "Fotografie interior",
+          "inverse": "Fotografie interior pentru"
+        },
+        "photoSurface": {
+          "name": "Fotografie suprafață",
+          "inverse": "Fotografie suprafață pentru"
+        },
+        "document": {
+          "name": "Document",
+          "inverse": "Document al"
+        },
+        "report": {
+          "name": "Document raport",
+          "inverse": "Document raport pentru"
+        },
+        "map2d": {
+          "name": "Hartă 2D",
+          "inverse": "Hartă 2D pentru"
+        },
+        "surveyData": {
+          "name": "Date topografice",
+          "inverse": "Date topografice pentru"
+        },
+        "other": {
+          "name": "Alt atașament",
+          "inverse": "Alt atașament pentru"
+        }
+      },
+      "tripParticipant": {
+        "participant": {
+          "name": "Participant",
+          "inverse": "Participant la"
+        },
+        "proposer": {
+          "name": "Propunător",
+          "inverse": "Propunător al"
+        },
+        "leader": {
+          "name": "Responsabil de tură",
+          "inverse": "Responsabil de tură la"
+        },
+        "driver": {
+          "name": "Șofer",
+          "inverse": "Șofer la"
+        },
+        "surveyor": {
+          "name": "Topograf",
+          "inverse": "Topograf la"
+        },
+        "photographer": {
+          "name": "Fotograf",
+          "inverse": "Fotograf la"
+        },
+        "trainee": {
+          "name": "Cursant",
+          "inverse": "Cursant la"
+        },
+        "instructor": {
+          "name": "Instructor",
+          "inverse": "Instructor la"
+        },
+        "callout_contact": {
+          "name": "Persoană de contact",
+          "inverse": "Persoană de contact pentru"
+        }
+      },
+      "groupMembership": {
+        "member": {
+          "name": "Membru",
+          "inverse": "Membru al"
+        },
+        "admin": {
+          "name": "Administrator",
+          "inverse": "Administrator al"
+        },
+        "owner": {
+          "name": "Proprietar",
+          "inverse": "Proprietar al"
+        }
+      }
+    }
   }
 }

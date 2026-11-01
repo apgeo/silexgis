@@ -31,6 +31,7 @@ describe('an address nobody answers', () => {
 
   it('is never the answer for an address the application does answer', () => {
     expect(pageFor('/caves')).not.toBeNull();
+    expect(pageFor('/graph')).not.toBeNull();
     expect(pageFor(`/trip-logs/${SOME_ID}`)?.at(-1)?.route.path).toBe('/trip-logs/:id');
   });
 

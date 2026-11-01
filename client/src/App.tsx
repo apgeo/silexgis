@@ -50,6 +50,7 @@ const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const MyTripsPage = lazy(() => import('./pages/trips/MyTripsPage.tsx'));
 const DeletedTripsPage = lazy(() => import('./pages/trips/DeletedTripsPage.tsx'));
 const TripStatsPage = lazy(() => import('./pages/trips/TripStatsPage.tsx'));
+const GraphExplorerPage = lazy(() => import('./pages/graph/GraphExplorerPage.tsx'));
 const RegistryDistributionPage = lazy(
   () => import('./pages/statistics/RegistryDistributionPage.tsx'),
 );
@@ -194,6 +195,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/map', element: <Loadable><MapPage /></Loadable> },
           { path: '/map3d', element: <Loadable><Scene3DPage /></Loadable> },
           { path: '/dashboard', element: <Loadable><DashboardPage /></Loadable> },
+          { path: '/graph', element: <Loadable><GraphExplorerPage /></Loadable> },
           { path: '/work-areas', element: <Loadable><WorkAreasPage /></Loadable> },
           { path: '/caves', element: <Loadable><CaveListPage /></Loadable> },
           { path: '/caves/new', element: <Loadable><CaveFormPage /></Loadable> },
