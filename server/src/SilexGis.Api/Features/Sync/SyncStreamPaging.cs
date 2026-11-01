@@ -30,6 +30,9 @@ public enum SyncStream
 
     /// <summary>The raster maps of the set's caves, each with its pins embedded.</summary>
     Rasters,
+
+    /// <summary>The line-plot survey models of the set's caves, and the places mapped to their stations.</summary>
+    SurveyModels,
 }
 
 /// <summary>

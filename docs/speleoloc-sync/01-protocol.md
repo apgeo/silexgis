@@ -30,7 +30,7 @@ Authorization: Bearer <token>
   "contractVersion": 1,
   "pageSizeMax": 500,
   "uploadRowsMax": 500,
-  "features": ["download", "upload", "documents", "documentUpload", "trips", "reviews", "rasters", "people"]
+  "features": ["download", "upload", "documents", "documentUpload", "trips", "reviews", "rasters", "surveyModels", "people"]
 }
 ```
 
@@ -47,6 +47,7 @@ Authorization: Bearer <token>
 staged bytes through the transfer routes, and the upload's `documents` and `documentLinks` sections;
 `trips` means the trips stream and the upload's `tripRecordings` and `tripPoints` sections of section 13;
 `rasters` means the rasters stream and the upload's `rasterMaps` and `rasterPins` sections of section 15;
+`surveyModels` means the survey-models stream and the upload's `placeStations` section of section 16;
 `reviews` means the reviews stream of section 14 is served, and that an account under review is
 answered `held` to a device that opts in with `clientFeatures: ["held"]`;
 `people` means the people directory and the upload's `people` section of
@@ -1741,3 +1742,117 @@ it waits. A reviewer who may not be given a pinned place's position is shown the
 `features` in `GET /sync/capabilities` names **`rasters`** on every installation running this build: the
 rasters stream and the two upload sections are served. A device that does not see the name does not
 send the sections.
+
+## 16. Survey models, and places at their stations
+
+A cave's **survey models** are its line plots — Therion `.lox` and Survex `.3d` files — in georeferenced
+coordinates, which the app draws in 3D. Holding one is holding the cave's position, so a model reaches a
+phone only for a cave the phone's account may see **exactly**. Wall meshes (STL) are not listed.
+
+A phone may also say that a **place of the cave is at a station** of a model — or at the far end of a
+splay from one — and the server keeps that, both ways. *Provisional:* the place-to-station mappings are
+to be analysed again with the whole pin, marker and map sync; the wire is kept plain so it can be
+reshaped then.
+
+### 16.1 Reading survey models
+
+```
+GET /api/v1/sync/sets/{id}/survey-models?cursor=…&pageSize=…
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "setRevision": 4,
+  "settings": { },
+  "models": [
+    {
+      "id": "…", "caveId": "…", "documentId": "…", "versionId": "…", "name": "…",
+      "format": "lox", "isCurrent": true, "sizeBytes": 123456, "sha256": "…", "revision": "…"
+    }
+  ],
+  "tombstones": [ { "id": "…", "deleted": true, "revision": "…" } ],
+  "placeStations": [
+    { "id": "…", "placeId": "…", "surveyModelId": "…", "station": "1.12", "revision": "…" },
+    { "id": "…", "placeId": "…", "documentId": "…", "station": "A.3", "splay": [1.5, -2, 0.25], "revision": "…" }
+  ],
+  "placeStationTombstones": [ { "id": "…", "deleted": true, "revision": "…" } ],
+  "nextCursor": "…",
+  "hasMore": false
+}
+```
+
+- Paged exactly as the feature stream is (section 3): an opaque cursor of its own — another stream's is
+  refused `400 sync.cursor_invalid` — `409 sync.cursor_stale` when the set moved, `pageSize` clamped,
+  every array riding the same cursor.
+- **Which models.** A model is on a page when its cave is one the feature stream would hand this account
+  right now — inside the set, readable and **not withheld**, which for a protected cave means with its
+  exact position open. `format` is `lox` or `3d`.
+- **`isCurrent`** marks the line plot the cave is represented by; at most one of a cave's models carries
+  it. When it moves, **both** models come again with new revisions.
+- **`revision`** moves on every change a phone is told of (a rename, the current mark). Models are not
+  written by phones, so nothing is arbitrated on it.
+- **The file** is `documentId`, revision `versionId`: ask the address route (section 11.2) for
+  `{ documentId, rendition: "original" }`. It answers only a caller who may see the model's cave
+  exactly — whatever the document's own rules would say — and hands the model's own file; `sizeBytes`
+  and `sha256` are that file's. A model has no pictures: a numeric rendition is
+  `sync.rendition_unavailable`.
+- **Tombstones** `{ id, deleted: true, revision }` — `revision` is the moment — name models the device is
+  to drop: one **removed**; one whose **cave is withheld** from this account now (protected, or moved
+  under a protection); one whose **cave was deleted**. Unlike the other streams, losing exact view is told,
+  because a phone keeping the file keeps the position. *What cannot be told:* a change to the account's
+  own rights, or a root taken out of the set, writes no row after the device's position. The second
+  already answers `409 sync.cursor_stale`; for both, **a read from the beginning lists every model the
+  account may hold now, and a device drops the models it holds from this server that such a read did
+  not list.** A tombstone for a model the device never held is a no-op.
+
+### 16.2 Places at stations, read
+
+- **`placeStations`** lists the live mappings whose place the feature stream hands this account and
+  whose survey it is handed: a model listed on this stream (`surveyModelId`), or a survey file the
+  documents stream lists (`documentId`) — exactly one of the two is present. `station` is the 3D
+  viewer's spelling (CaveView's dotted name); `splay` is `[east, north, up]` metres from that station
+  for the far end of a splay, and absent for the station itself.
+- A mapping merely missing is **withheld**, not removed — keep it, as a pin (section 15.1).
+- **`placeStationTombstones`** name mappings removed after the cursor — by a phone, or in the browser —
+  each only when its place and its survey are handed to this account now. A model's removal takes its
+  mappings with it: the model's tombstone is the signal, and they are not named again.
+- A mapping comes again when it changes, when its place changes, or when its survey's cave does.
+
+### 16.3 The `placeStations` section of an upload
+
+`{ id, baseRevision, deleted, placeId, surveyModelId | documentId, station, splay? }`, answered in an
+array of the same name in the per-item shape of `rows`, and applied **last** — after `rasterPins` — so a
+mapping finds a place, a survey file and its link sent in the same upload.
+
+- **The survey.** `surveyModelId` names a server model from this stream; `documentId` a survey file the
+  phone uploaded as a document (section 11.3, with `role: "surveyData"` on its link) that is not a server
+  model. Exactly one. A model must be one the account may see exactly; a survey file one the account may
+  read, filed on the place's cave or something containing it. Not here, not shown, a mesh, and filed
+  elsewhere are answered alike: `sync.survey_not_found`.
+- **The place** must be readable and inside the model's cave (or the survey file's cave):
+  `sync.place_not_found` otherwise. Writing takes the right to change the place.
+- **One live mapping per place per survey:** a second is refused `sync.place_station_exists`.
+- **A mapping stays with its place and its survey:** the same `id` with another is refused
+  `sync.id_conflict`. Change `station` or `splay` freely, on `baseRevision` as a feature row.
+- `station` is 1–400 characters; `splay` is absent or three finite numbers, each within ±10 000 m.
+- **From an account under review** (section 14) a mapping is held like every other row; a reviewer who
+  may not be given the place's position is shown it without `station` and `splay`.
+- **Taking an upload back** removes the mappings it created, brings back those it removed while the
+  place has no other mapping in that survey, and puts back a station it changed while it still holds
+  what the upload wrote. The undo's line names `placeStationId`.
+- **An uploaded survey file stays a document.** A `.lox` or `.3d` sent as a document with
+  `role: "surveyData"` is filed on the cave and makes no survey model, and changes no current model —
+  turning one into a model is a deliberate act in the browser.
+
+*On the server (provisional).* A mapping is kept as a resource link between the place and the model (or
+the survey file), with the station and splay as plain data, under the mapping's own identifier; its
+revision is that link's. The browser lists it in the place's and the model's linked items ("station
+A.12", "splay from A.12") to a reader who may read the place, see it exactly, and is shown the survey,
+and lets whoever may change the place remove it — the phones are then told by a tombstone. The browser
+does not make or edit one.
+
+### 16.4 Announcement
+
+`features` names **`surveyModels`** on every installation running this build: the survey-models stream
+and the `placeStations` section are served. A device that does not see the name does not send the section.

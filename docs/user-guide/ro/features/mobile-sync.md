@@ -169,6 +169,24 @@ unei ridicări topografice, fila de hartă din vizualizatorul ridicării desenea
 
 *Această parte a sincronizării cu telefonul este provizorie și se poate încă schimba.*
 
+### Modelele topografice pe telefon și locurile din dreptul stațiilor
+
+Un telefon care poartă o peșteră primește modelele topografice ale peșterii sub formă de linii (Therion
+`.lox`, Survex `.3d`) — dar numai pentru o peșteră a cărei poziție exactă contul lui o poate vedea,
+pentru că un model topografic este poziția peșterii. Când peștera nu mai este arătată astfel sau modelul
+este șters, telefonului i se spune să renunțe la el. Un fișier topografic atașat de un speolog pe telefon
+se întoarce ca document obișnuit, pus la peșteră ca date topografice; nu devine singur unul dintre
+modelele topografice ale peșterii.
+
+Pe telefon, un speolog poate spune și că un loc al peșterii se află la o stație a unei ridicări — sau la
+capătul unei vize laterale dintr-o stație. Un astfel de loc arată ridicarea în **Elemente legate**
+(„La stația”, cu „stația A.12” sau „viză laterală din A.12” lângă ridicare), iar ridicarea arată locul.
+Cine are voie să modifice locul îl poate **șterge** acolo, iar telefoanele află la următoarea
+sincronizare; nu se editează în browser. Se arată doar cuiva care poate citi locul, vede exact unde se
+află și poate deschide ridicarea.
+
+*Această parte a sincronizării cu telefonul este provizorie și se poate încă schimba.*
+
 ### Valori implicite și avertismente de duplicat
 
 Un dispozitiv care nu numește un fel primește o valoare implicită rezonabilă — o peșteră aterizează

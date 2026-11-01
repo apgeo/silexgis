@@ -45,6 +45,8 @@ export const SEEDED_RELATION_CODES = [
   'map-station-point',
   // A place a phone pinned on its map of a cave, at a point of the picture.
   'map-place-point',
+  // A place a phone mapped to a station of a survey, or to the far end of a splay from one.
+  'place-at-station',
 ] as const;
 
 export type SeededRelationCode = (typeof SEEDED_RELATION_CODES)[number];
@@ -71,7 +73,15 @@ export const DIRECTED_RELATION_CODES: readonly SeededRelationCode[] = [
   'map-other-of',
   'map-station-point',
   'map-place-point',
+  'place-at-station',
 ];
+
+/**
+ * The relation of a place a phone mapped to a survey station. Set on the phones and never
+ * edited as a link here; removing it is the one change the browser offers, and the phones are
+ * told.
+ */
+export const PLACE_AT_STATION_CODE: SeededRelationCode = 'place-at-station';
 
 export function isSeededRelationCode(code: string): code is SeededRelationCode {
   return (SEEDED_RELATION_CODES as readonly string[]).includes(code);

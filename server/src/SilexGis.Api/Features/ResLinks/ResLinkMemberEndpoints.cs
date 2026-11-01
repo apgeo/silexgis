@@ -26,6 +26,7 @@ public static partial class ResLinkEndpoints
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
         PlacePointDisclosure placePoints,
+        PlaceStationDisclosure placeStations,
         FeatureWriteService featureWriter,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -38,12 +39,12 @@ public static partial class ResLinkEndpoints
         }
 
         var link = await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
-        if (link is null || await placePoints.IsHiddenAsync(ctx, link.Id, ct))
+        if (link is null || await HiddenWholeAsync(placePoints, placeStations, ctx, link.Id, ct))
         {
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (await FixedPlacePointAsync(db, link, ct) is { } fixedProblem)
+        if (await FixedLinkAsync(db, link, ct) is { } fixedProblem)
         {
             return fixedProblem;
         }
@@ -262,6 +263,7 @@ public static partial class ResLinkEndpoints
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
         PlacePointDisclosure placePoints,
+        PlaceStationDisclosure placeStations,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -273,12 +275,12 @@ public static partial class ResLinkEndpoints
         }
 
         var link = await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
-        if (link is null || await placePoints.IsHiddenAsync(ctx, link.Id, ct))
+        if (link is null || await HiddenWholeAsync(placePoints, placeStations, ctx, link.Id, ct))
         {
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (await FixedPlacePointAsync(db, link, ct) is { } fixedProblem)
+        if (await FixedLinkAsync(db, link, ct) is { } fixedProblem)
         {
             return fixedProblem;
         }
@@ -345,6 +347,7 @@ public static partial class ResLinkEndpoints
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
         PlacePointDisclosure placePoints,
+        PlaceStationDisclosure placeStations,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -356,12 +359,12 @@ public static partial class ResLinkEndpoints
         }
 
         var link = await Standing(db).AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
-        if (link is null || await placePoints.IsHiddenAsync(ctx, link.Id, ct))
+        if (link is null || await HiddenWholeAsync(placePoints, placeStations, ctx, link.Id, ct))
         {
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (await FixedPlacePointAsync(db, link, ct) is { } fixedProblem)
+        if (await FixedLinkAsync(db, link, ct) is { } fixedProblem)
         {
             return fixedProblem;
         }

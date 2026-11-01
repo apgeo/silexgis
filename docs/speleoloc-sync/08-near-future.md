@@ -116,6 +116,12 @@ become coordinates** — a pin is a position in an image, and unless the image i
 nothing to turn it into — but a pin names the place it marks, so a pin on a place this reader may not
 see exactly is withheld with that place.
 
+**Survey models and places at their stations — built (stations provisional).** `01-protocol.md` §16:
+the `GET /sync/sets/{id}/survey-models` stream of the line plots of caves the account may see exactly,
+their files through the address route under the same rule, places mapped to stations both ways (the
+upload's `placeStations` section), and `surveyModels` in `features`. The place-to-station mappings are
+to be analysed again with the whole pin, marker and map sync.
+
 **The people directory — built.** `01-protocol.md` §12: `GET /sync/people` lists the club's people a
 phone may attribute trips and photos to, and the upload's `people` section reports the phone's own
 users. An installation can switch it off, and `people` is in `features` only while it is on.

@@ -40,6 +40,29 @@ So: read the version to know whether you still work, and read `features` to know
 
 ---
 
+## 2026-11-01 — survey models and places at their stations
+
+**Contract version: still 1. A build pinned to version 1 keeps working.** Both additions are reached
+only by a build that asks for them, and are announced in `features` as **`surveyModels`**.
+
+- **The survey-models stream**, `GET /api/v1/sync/sets/{id}/survey-models`: the line plots (`lox`, `3d`)
+  of the caves the set hands the account with their exact position, each with its document, revision,
+  size, hash and whether it is the cave's current one; tombstones `{ id, deleted: true, revision }` for
+  a model removed, or whose cave is withheld or deleted. Its files come through the address route under
+  the same exact-view rule.
+- **Places at stations, both ways** (provisional): the stream's `placeStations` and
+  `placeStationTombstones`, and the upload's `placeStations` section
+  `{ id, baseRevision, deleted, placeId, surveyModelId | documentId, station, splay? }`. The undo's line
+  may name `placeStationId`.
+- Nothing existing changed: an upload carrying none of the new section is answered byte for byte as
+  before, and a survey file sent as a document with `role: "surveyData"` stays a document.
+
+Recorded exchanges written in this entry: `31-survey-models-first-page` and `32-upload-place-stations`.
+Every earlier recording was re-recorded with no difference.
+
+Codes new in this entry, in `docs/speleoloc-sync/04-errors.md`: `sync.survey_not_found` and
+`sync.place_station_exists`, on a `placeStations` item.
+
 ## 2026-10-26 — documents, review, people, trips and raster maps recorded
 
 **Contract version: still 1. A build pinned to version 1 keeps working.** Nothing here changes a

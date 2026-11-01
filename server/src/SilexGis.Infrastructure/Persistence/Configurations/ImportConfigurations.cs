@@ -243,6 +243,9 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         // A pin is the link that pins its place on the map's picture, under the phone's identifier.
         builder.HasOne<ResLink>().WithMany().HasForeignKey(x => x.RasterPinId)
             .OnDelete(DeleteBehavior.SetNull);
+        // A place's station is the link that maps it, under the phone's identifier.
+        builder.HasOne<ResLink>().WithMany().HasForeignKey(x => x.PlaceStationId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.ImportBatchId);
         // "Where did this cave come from?" is a lookup by feature, and it is the question the
@@ -279,6 +282,8 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
             .HasDatabaseName("ix_import_batch_items_raster_map_id");
         builder.HasIndex(x => x.RasterPinId).HasFilter("raster_pin_id is not null")
             .HasDatabaseName("ix_import_batch_items_raster_pin_id");
+        builder.HasIndex(x => x.PlaceStationId).HasFilter("place_station_id is not null")
+            .HasDatabaseName("ix_import_batch_items_place_station_id");
 
         builder.Property(x => x.ReviewDecision).HasConversion<short?>();
         builder.Property(x => x.Proposal).HasColumnType("jsonb");

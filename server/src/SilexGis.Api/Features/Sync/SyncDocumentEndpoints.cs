@@ -505,6 +505,7 @@ public static class SyncDocumentEndpoints
         IAppSettingsService settings,
         LocationFreeCopyService locationFreeCopies,
         ILogger<LocationFreeCopyService> logger,
+        FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -533,6 +534,7 @@ public static class SyncDocumentEndpoints
             })
             .Where(x => x.File != null)
             .ToDictionaryAsync(x => x.DocumentId, x => x.File!, ct);
+        await DecideSurveyModelFilesAsync(db, protection, ctx, ids, files, ct);
 
         var reach = await photos.ReachAsync(ctx, [.. files.Values.Select(f => f.Id)], ct);
         var describeCopies = (await settings.GetProtectionAsync(ct)).DescribeLocationFreeCopies;
@@ -620,6 +622,59 @@ public static class SyncDocumentEndpoints
 
             described[file.Id] = known;
             return known;
+        }
+    }
+
+    /// <summary>
+    /// Decides the documents among <paramref name="ids"/> that hold a survey model's file by the
+    /// model's rule rather than the document's own: a line plot is its cave's position, so its file
+    /// is handed to a caller who may read the cave with its exact position open — as every survey
+    /// model surface hands it — and to nobody else, whatever the document's own rules would say. The
+    /// address is the model's own file, the revision the survey-models stream names.
+    /// </summary>
+    /// <remarks>
+    /// A model's document is otherwise readable only by whoever uploaded it, so without this no
+    /// other phone could fetch a model at all; and its uploader, once the cave's exact position is
+    /// closed to them, could still fetch it by owning the document.
+    /// </remarks>
+    private static async Task DecideSurveyModelFilesAsync(
+        SilexGisDbContext db,
+        FeatureProtection protection,
+        AccessContext ctx,
+        IReadOnlyCollection<Guid> ids,
+        Dictionary<Guid, StoredFile> files,
+        CancellationToken ct)
+    {
+        var models = await (
+                from model in db.SurveyModels.AsNoTracking()
+                join file in db.StoredFiles.AsNoTracking() on model.FileId equals file.Id
+                join version in db.DocumentVersions.AsNoTracking() on file.DocumentVersionId equals version.Id
+                where ids.Contains(version.DocumentId)
+                orderby model.CreatedAt, model.Id
+                select new { version.DocumentId, model.CaveFeatureId, model.Format, File = file })
+            .ToListAsync(ct);
+        if (models.Count == 0)
+        {
+            return;
+        }
+
+        var caveIds = models.Select(m => m.CaveFeatureId).Distinct().ToList();
+        var readable = await db.Features.AsNoTracking()
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+            .Where(f => caveIds.Contains(f.Id))
+            .Select(f => f.Id)
+            .ToListAsync(ct);
+        var shown = readable.Count == 0 ? [] : await protection.ExactViewIdsAsync(ctx, readable, ct);
+
+        foreach (var document in models.GroupBy(m => m.DocumentId))
+        {
+            files.Remove(document.Key);
+            var handed = document.FirstOrDefault(m =>
+                SyncSurveyModelEndpoints.Listed(m.Format) && shown.Contains(m.CaveFeatureId));
+            if (handed is not null)
+            {
+                files[document.Key] = handed.File;
+            }
         }
     }
 }

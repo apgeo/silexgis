@@ -89,3 +89,22 @@ public sealed class SyncLinkRemovalConfiguration : IEntityTypeConfiguration<Sync
             .HasDatabaseName("ix_sync_link_removals_entity");
     }
 }
+
+public sealed class SyncSurveyModelRemovalConfiguration : IEntityTypeConfiguration<SyncSurveyModelRemoval>
+{
+    public void Configure(EntityTypeBuilder<SyncSurveyModelRemoval> builder)
+    {
+        // Written by the trigger on the survey models table, which the migration that creates this
+        // table also creates; the application only reads it.
+        builder.ToTable("sync_survey_model_removals");
+        builder.Property(x => x.Id).UseIdentityByDefaultColumn();
+
+        // No foreign keys, on purpose: every row describes something that is no longer there, and a
+        // key to the cave would delete the record of the removal with the cave that explained it.
+
+        // The survey-models stream reads the removals of the caves it is asked about, in its own
+        // order — the cave first, then the change key and the identifier it pages on.
+        builder.HasIndex(x => new { x.CaveFeatureId, x.RemovedAt, x.SurveyModelId })
+            .HasDatabaseName("ix_sync_survey_model_removals_cave_removed");
+    }
+}

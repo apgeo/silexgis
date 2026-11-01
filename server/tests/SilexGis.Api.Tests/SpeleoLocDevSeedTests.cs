@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -11,6 +13,7 @@ using Shouldly;
 using SilexGis.Api.Auth;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -105,6 +108,10 @@ public sealed class SpeleoLocDevSeedTests : IAsyncLifetime, IClassFixture<Postgr
             (await SpeleoLocDevSeeder.SeedAsync(scope.ServiceProvider))
                 .ShouldBe(SpeleoLocDevSeedOutcome.Seeded);
         }
+
+        // The survey models are queued for reading and this host keeps its worker, which would
+        // otherwise write their stations while the tables are being counted.
+        await ReadQueuedSurveysAsync();
 
         Dictionary<string, long> afterFirst;
         await using (var counting = CreateContext())
@@ -299,25 +306,152 @@ public sealed class SpeleoLocDevSeedTests : IAsyncLifetime, IClassFixture<Postgr
         (await check.Features.AnyAsync(f => f.Name == "Not written")).ShouldBeFalse();
     }
 
-    private static async Task<Guid> CreateSetAsync(HttpClient client, Guid rootId)
+    /// <summary>
+    /// The survey models as a phone reads them, as the plain account and as the administrator, over
+    /// a set rooted at the open cave and the protected one. The plain account is handed both models
+    /// of the open cave — the Therion one current, having taken the mark from the demonstration
+    /// model when it was read — with sizes and hashes that match the file it is then handed, and
+    /// both places at their stations, one with a splay and one without. The protected cave's model
+    /// reaches the administrator and not the plain account, whose stream tells it only as gone.
+    /// </summary>
+    [Fact]
+    public async Task The_plain_account_is_handed_the_seeded_survey_models_and_places_at_stations_as_protection_decides()
+    {
+        using (var scope = factory.Services.CreateScope())
+        {
+            (await SpeleoLocDevSeeder.SeedAsync(scope.ServiceProvider))
+                .ShouldBe(SpeleoLocDevSeedOutcome.Seeded);
+        }
+
+        await ReadQueuedSurveysAsync();
+
+        Guid openCaveId;
+        Guid protectedCaveId;
+        Guid openPlaceId;
+        Guid stationPlaceId;
+        Guid protectedModelId;
+        await using (var db = CreateContext())
+        {
+            openCaveId = await db.Caves
+                .Where(c => c.IdentificationCode == SpeleoLocDevSeeder.OpenCaveCode).Select(c => c.Id).SingleAsync();
+            protectedCaveId = await db.Caves
+                .Where(c => c.IdentificationCode == SpeleoLocDevSeeder.ProtectedCaveCode).Select(c => c.Id).SingleAsync();
+            openPlaceId = await db.Features
+                .Where(f => f.Name == SpeleoLocDevSeeder.OpenPlaceName).Select(f => f.Id).SingleAsync();
+            stationPlaceId = await db.Features
+                .Where(f => f.Name == SpeleoLocDevSeeder.StationPlaceName).Select(f => f.Id).SingleAsync();
+            protectedModelId = await db.SurveyModels
+                .Where(m => m.Name == SpeleoLocDevSeeder.ProtectedSurveyModelName).Select(m => m.Id).SingleAsync();
+
+            // Read, all of them: a model the reading refused would still be listed, and would show
+            // nothing on a phone.
+            (await db.SurveyModels.CountAsync(m => m.Status != SurveyModelStatus.Ready)).ShouldBe(0);
+        }
+
+        using var member = await AuthHelper.BearerClientAsync(
+            factory, SpeleoLocDevSeeder.MemberEmail, MemberPassword);
+        using var admin = await AuthHelper.BearerClientAsync(factory, AdminEmail, AdminPassword);
+        var membersSet = await CreateSetAsync(member, openCaveId, protectedCaveId);
+        var adminsSet = await CreateSetAsync(admin, openCaveId, protectedCaveId);
+
+        var membersPage = await GetJsonAsync(member, $"/api/v1/sync/sets/{membersSet}/survey-models");
+        var adminsPage = await GetJsonAsync(admin, $"/api/v1/sync/sets/{adminsSet}/survey-models");
+        var membersModels = membersPage.GetProperty("models").EnumerateArray()
+            .ToDictionary(m => m.GetProperty("name").GetString()!);
+        var adminsModels = adminsPage.GetProperty("models").EnumerateArray()
+            .ToDictionary(m => m.GetProperty("name").GetString()!);
+
+        var lox = membersModels[SpeleoLocDevSeeder.SurveyModelName];
+        var survex = membersModels[SpeleoLocDevSeeder.SurveyExportModelName];
+        lox.GetProperty("format").GetString().ShouldBe("lox");
+        lox.GetProperty("isCurrent").GetBoolean().ShouldBeTrue();
+        survex.GetProperty("format").GetString().ShouldBe("3d");
+        survex.GetProperty("isCurrent").GetBoolean().ShouldBeFalse();
+        membersModels.Values.Count(m => m.GetProperty("isCurrent").GetBoolean()).ShouldBe(1);
+
+        // Named and counted the other way round: the administrator is handed the protected model,
+        // so its absence for the plain account is the rule and not a seeder that never wrote it.
+        adminsModels.ShouldContainKey(SpeleoLocDevSeeder.ProtectedSurveyModelName);
+        membersModels.ShouldNotContainKey(SpeleoLocDevSeeder.ProtectedSurveyModelName);
+        membersModels.Values.ShouldAllBe(m => m.GetProperty("caveId").GetGuid() == openCaveId);
+        membersPage.GetProperty("tombstones").EnumerateArray()
+            .Select(t => t.GetProperty("id").GetGuid()).ShouldContain(protectedModelId);
+
+        // What the stream lists is what the file is: fetched through the route a phone uses and
+        // hashed here.
+        foreach (var model in new[] { lox, survex })
+        {
+            var links = await member.PostAsJsonAsync("/api/v1/sync/files/links", new
+            {
+                items = new[] { new { documentId = model.GetProperty("documentId").GetGuid(), rendition = "original" } },
+            });
+            var linksPayload = await links.Content.ReadAsStringAsync();
+            links.StatusCode.ShouldBe(HttpStatusCode.OK, linksPayload);
+            var url = JsonDocument.Parse(linksPayload).RootElement.GetProperty("links")
+                .EnumerateArray().Single().GetProperty("url").GetString()!;
+            var bytes = await member.GetByteArrayAsync(url);
+            bytes.LongLength.ShouldBe(model.GetProperty("sizeBytes").GetInt64());
+            Convert.ToHexStringLower(SHA256.HashData(bytes)).ShouldBe(model.GetProperty("sha256").GetString());
+        }
+
+        var stations = membersPage.GetProperty("placeStations").EnumerateArray().ToList();
+        stations.Count.ShouldBe(2);
+        stations.ShouldAllBe(s => s.GetProperty("surveyModelId").GetGuid() == lox.GetProperty("id").GetGuid());
+        var plain = stations.Single(s => s.GetProperty("placeId").GetGuid() == openPlaceId);
+        plain.GetProperty("station").GetString().ShouldBe(SpeleoLocDevSeeder.MappedStation);
+        plain.TryGetProperty("splay", out _).ShouldBeFalse();
+        var splayed = stations.Single(s => s.GetProperty("placeId").GetGuid() == stationPlaceId);
+        splayed.GetProperty("station").GetString().ShouldBe(SpeleoLocDevSeeder.SplayStation);
+        splayed.GetProperty("splay").EnumerateArray().Select(v => v.GetDouble()).ShouldBe(SpeleoLocDevSeeder.StationSplay);
+
+        // The stations the mappings name are stations the reading found in the file.
+        await using var check = CreateContext();
+        var loxId = lox.GetProperty("id").GetGuid();
+        (await check.SurveyStations.CountAsync(s => s.SurveyModelId == loxId
+            && (s.Name == SpeleoLocDevSeeder.MappedStation || s.Name == SpeleoLocDevSeeder.SplayStation))).ShouldBe(2);
+    }
+
+    /// <summary>
+    /// Carries every survey reading in the queue through, once each, whether this host's worker or
+    /// the call takes it.
+    /// </summary>
+    private async Task ReadQueuedSurveysAsync()
+    {
+        long[] jobs;
+        await using (var db = CreateContext())
+        {
+            jobs = await db.ProcessingJobs
+                .Where(j => j.Kind == ProcessingJobKinds.SurveyGraph)
+                .OrderBy(j => j.Id)
+                .Select(j => j.Id)
+                .ToArrayAsync();
+        }
+
+        foreach (var job in jobs)
+        {
+            await QueuedJob.RunAsync(factory.Services, job);
+        }
+    }
+
+    private static async Task<Guid> CreateSetAsync(HttpClient client, params Guid[] rootIds)
     {
         var response = await client.PostAsJsonAsync("/api/v1/sync/sets/", new
         {
             name = $"Seeded {Guid.NewGuid():N}"[..20],
             uploadVisibility = "private",
-            rootFeatureIds = new[] { rootId },
+            rootFeatureIds = rootIds,
             settings = new { },
         });
         response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
     }
 
-    private static async Task<System.Text.Json.JsonElement> GetJsonAsync(HttpClient client, string url)
+    private static async Task<JsonElement> GetJsonAsync(HttpClient client, string url)
     {
         var response = await client.GetAsync(url);
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
-        return System.Text.Json.JsonDocument.Parse(payload).RootElement.Clone();
+        return JsonDocument.Parse(payload).RootElement.Clone();
     }
 
     /// <summary>The reach each seeded photo is announced with, by title.</summary>

@@ -406,6 +406,25 @@ describe('the batch view', () => {
     expect(within(lineEl('P1')).getByTestId('review-line-detail').textContent).toContain('not shown');
   });
 
+  it("shows a place's station and splay, and only a sentence when the server left them off", () => {
+    show([
+      line('S1', {
+        section: 'placeStations',
+        proposal: { act: 'create', mapping: { id: 's1', placeId: 'p', surveyModelId: 'm', station: 'A.12', splay: [1.5, -2, 0.25] } },
+      }),
+      line('S2', {
+        section: 'placeStations',
+        proposal: { act: 'create', mapping: { id: 's2', placeId: 'p', surveyModelId: 'm' } },
+      }),
+    ]);
+    fireEvent.click(within(lineEl('S1')).getByTestId('review-line-toggle'));
+    const detail = within(lineEl('S1')).getByTestId('review-line-detail').textContent;
+    expect(detail).toContain('A.12');
+    expect(detail).toContain('1.5, -2, 0.25');
+    fireEvent.click(within(lineEl('S2')).getByTestId('review-line-toggle'));
+    expect(within(lineEl('S2')).getByTestId('review-line-detail').textContent).toContain('not shown');
+  });
+
   it('shows the picture a held photo keeps, and only a sentence for a file the server has no picture of', () => {
     show([
       line('D1', {

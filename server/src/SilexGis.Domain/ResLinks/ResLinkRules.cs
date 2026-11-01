@@ -491,6 +491,26 @@ public static class ResLinkRules
     public static bool PlacePointShown(bool pictureReadable, bool placeReadable, bool placeExactView) =>
         pictureReadable && placeReadable && placeExactView;
 
+    // ---- places mapped to survey stations by a phone ---------------------------------
+
+    /// <summary>Whether a relation code is the place-to-station mapping's.</summary>
+    public static bool IsPlaceStation(string? relationCode) =>
+        relationCode == ResLinkRelationTypeSeeds.PlaceAtStationCode;
+
+    /// <summary>
+    /// Whether a place mapped to a station of a survey is shown to one caller — whole, or not at all.
+    /// </summary>
+    /// <remarks>
+    /// A survey's stations are georeferenced, so naming the station a place is at says where the
+    /// place is. The mapping is shown only to a caller who may read the place and see its exact
+    /// position, and who is shown the survey it names: a survey model only with its cave's exact
+    /// position open (every survey-model surface asks that), a survey file by the document's own
+    /// rules. To everyone else it is not there — no station, no name, not counted — whatever the
+    /// installation's reveal setting says. A mapping missing either end is hidden.
+    /// </remarks>
+    public static bool PlaceStationShown(bool placeReadable, bool placeExactView, bool surveyShown) =>
+        placeReadable && placeExactView && surveyShown;
+
     // ---- payload field helpers ----------------------------------------------------
 
     private static string? TextRangeProblem(JsonElement root)

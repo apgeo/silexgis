@@ -56,7 +56,7 @@ public sealed class PlacePointDisclosure(SilexGisDbContext db, IAccessService ac
         }
 
         var pictures = await ReadableDocumentIdsAsync(
-            ctx, [.. pins.Where(p => p.Picture is not null).Select(p => p.Picture!.Value).Distinct()], ct);
+            db, access, ctx, [.. pins.Where(p => p.Picture is not null).Select(p => p.Picture!.Value).Distinct()], ct);
         var placeIds = pins.Where(p => p.Place is not null).Select(p => p.Place!.Value).Distinct().ToList();
         var readablePlaces = placeIds.Count == 0
             ? []
@@ -82,8 +82,13 @@ public sealed class PlacePointDisclosure(SilexGisDbContext db, IAccessService ac
     public async Task<bool> IsHiddenAsync(AccessContext ctx, Guid linkId, CancellationToken ct = default) =>
         (await HiddenLinkIdsAsync(ctx, db.ResLinks.Where(l => l.Id == linkId), ct)).Count > 0;
 
-    private async Task<HashSet<Guid>> ReadableDocumentIdsAsync(
-        AccessContext ctx, IReadOnlyList<Guid> ids, CancellationToken ct)
+    /// <summary>
+    /// Of these documents, the ones this caller may read by the document's own rules, asked of the
+    /// file each serves now. Shared with the place-to-station disclosure, which reads a survey file
+    /// by the same rule.
+    /// </summary>
+    internal static async Task<HashSet<Guid>> ReadableDocumentIdsAsync(
+        SilexGisDbContext db, IAccessService access, AccessContext ctx, IReadOnlyList<Guid> ids, CancellationToken ct)
     {
         if (ids.Count == 0)
         {

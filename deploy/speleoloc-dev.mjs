@@ -10,7 +10,8 @@
 //       adds the sync-specific development data, serves the API from source on a loopback
 //       port, proves it answers by signing in and reading the sync capabilities, proves the
 //       phone-side data is there and protected (one photo handed over without its location,
-//       one raster pin withheld), then prints
+//       one raster pin withheld, two survey models with places at their stations and the
+//       protected cave's model withheld), then prints
 //       the base URL, both accounts, the caving group, the client id and a paste-ready
 //       sequence of curl calls for the whole sign-in dance. Stays in the foreground; Ctrl-C
 //       stops the API and leaves the database running.
@@ -128,6 +129,24 @@ export const RASTER_TITLE = 'Demo plan';
 export const OPEN_PLACE_NAME = 'Demo marker A';
 export const PROTECTED_PLACE_NAME = 'Demo marker B (protected)';
 export const RECORDING_TITLE = 'Demo trip recording';
+/** A third place in the open cave, ordinary like the first: the one mapped with a splay. */
+export const STATION_PLACE_NAME = 'Demo marker C';
+/**
+ * Two survey models of one invented survey on the open cave, and one on the protected cave. The
+ * Therion one asks to take the cave's current mark, which happens when the server has read it;
+ * the protected cave's model is never handed to the member.
+ */
+export const SURVEY_MODEL_NAME = 'demo-sync-survey';
+export const SURVEY_EXPORT_MODEL_NAME = 'demo-sync-survey-export';
+export const PROTECTED_SURVEY_MODEL_NAME = 'demo-protected-survey';
+/** The stations of the Therion model the two places are mapped to, the second with a splay. */
+export const MAPPED_STATION = 'demo.2';
+export const SPLAY_STATION = 'demo.3';
+/**
+ * How long `up` waits for the server's worker to read the seeded models. Two files of four
+ * stations each take seconds; the bound is for a machine that is busy with something else.
+ */
+const SURVEY_READING_TIMEOUT_MS = 180_000;
 /** A person on the club roster with no account, listed by the people directory. */
 export const ROSTER_ONLY_CAVER = 'Demo Caver';
 
@@ -585,9 +604,107 @@ export function photoReachProblem(documentsPage) {
  * Exported for its own test; `up` is what a developer runs.
  */
 export function openPlaceIdIn(downloadPage) {
+  return placeIdIn(downloadPage, OPEN_PLACE_NAME);
+}
+
+/** The identifier of the place of this name in the download, or null unless it is there exactly once. */
+export function placeIdIn(downloadPage, name) {
   const features = Array.isArray(downloadPage?.features) ? downloadPage.features : [];
-  const matches = features.filter((feature) => feature?.name === OPEN_PLACE_NAME);
+  const matches = features.filter((feature) => feature?.name === name);
   return matches.length === 1 && typeof matches[0].id === 'string' ? matches[0].id : null;
+}
+
+/**
+ * Null when the survey-models stream, read from the beginning, hands the member both models of
+ * the open cave — the Therion one current — each with a size and a hash, and nothing of the
+ * protected cave. The protected cave is one of the set's roots, so its model's absence is the
+ * protection rule and not a set that never reached it; without that cave's identifier there is
+ * nothing to compare against, and that is refused rather than accepted.
+ *
+ * Exported for its own test; `up` is what a developer runs.
+ */
+export function surveyModelProblem(surveys, protectedCaveId) {
+  if (typeof protectedCaveId !== 'string' || protectedCaveId === '') {
+    return `the member could not find the protected cave ${PROTECTED_CAVE_CODE}, so the absence of `
+      + 'its model cannot be judged';
+  }
+  if (surveys === null || typeof surveys !== 'object' || !Array.isArray(surveys.models)) {
+    return 'the survey-models stream answer carried no models list';
+  }
+  const expected = [[SURVEY_MODEL_NAME, 'lox', true], [SURVEY_EXPORT_MODEL_NAME, '3d', false]];
+  for (const [name, format, current] of expected) {
+    const matches = surveys.models.filter((model) => model?.name === name);
+    if (matches.length !== 1) {
+      return `the survey model "${name}" was listed ${matches.length} times, expected once`;
+    }
+    const [model] = matches;
+    if (model.format !== format) {
+      return `the survey model "${name}" was listed as "${model.format}", expected "${format}"`;
+    }
+    if (model.isCurrent !== current) {
+      return `the survey model "${name}" was listed with isCurrent ${model.isCurrent}, expected ${current}`;
+    }
+    if (!Number.isInteger(model.sizeBytes) || model.sizeBytes <= 0
+      || typeof model.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(model.sha256)) {
+      return `the survey model "${name}" was listed without a size and a sha256`;
+    }
+  }
+  if (surveys.models.some((model) => model?.name === PROTECTED_SURVEY_MODEL_NAME
+    || model?.caveId === protectedCaveId)) {
+    return `a survey model of the protected cave ${PROTECTED_CAVE_CODE} reached the member`;
+  }
+  return null;
+}
+
+/**
+ * Null when the stream's places at stations map the open place to `demo.2` of the Therion model
+ * without a splay, and the third place to `demo.3` with one — one row each. Matched by place, so
+ * the two shapes cannot be swapped and still pass.
+ *
+ * Exported for its own test; `up` is what a developer runs.
+ */
+export function placeStationProblem(surveys, surveyModelId, openPlaceId, stationPlaceId) {
+  if (typeof openPlaceId !== 'string' || typeof stationPlaceId !== 'string') {
+    return `the member's download did not hand over both "${OPEN_PLACE_NAME}" and "${STATION_PLACE_NAME}", `
+      + 'so the places at stations cannot be named';
+  }
+  const rows = Array.isArray(surveys?.placeStations)
+    ? surveys.placeStations.filter((row) => row?.surveyModelId === surveyModelId)
+    : [];
+  const expected = [[openPlaceId, OPEN_PLACE_NAME, MAPPED_STATION, false], [stationPlaceId, STATION_PLACE_NAME, SPLAY_STATION, true]];
+  for (const [placeId, name, station, splayed] of expected) {
+    const matches = rows.filter((row) => row.placeId === placeId);
+    if (matches.length !== 1) {
+      return `"${name}" was mapped to a station of "${SURVEY_MODEL_NAME}" ${matches.length} times, expected once`;
+    }
+    const [row] = matches;
+    if (row.station !== station) {
+      return `"${name}" was mapped to station "${row.station}", expected "${station}"`;
+    }
+    const hasSplay = Array.isArray(row.splay) && row.splay.length === 3 && row.splay.every(Number.isFinite);
+    if (splayed !== hasSplay || (!splayed && 'splay' in row)) {
+      return `"${name}" was mapped ${'splay' in row ? 'with' : 'without'} a splay, expected ${splayed ? 'one' : 'none'}`;
+    }
+  }
+  return null;
+}
+
+/** The whole survey-models stream of a set, read from the beginning, page by page. */
+async function readSurveyModels(getJson, setId) {
+  const surveys = { models: [], tombstones: [], placeStations: [] };
+  let cursor = null;
+  for (let page = 0; page < 100; page += 1) {
+    const query = cursor === null ? '' : `?cursor=${encodeURIComponent(cursor)}`;
+    const body = await getJson(`/api/v1/sync/sets/${setId}/survey-models${query}`);
+    for (const key of Object.keys(surveys)) {
+      surveys[key].push(...(Array.isArray(body[key]) ? body[key] : []));
+    }
+    cursor = body.nextCursor ?? null;
+    if (!body.hasMore || cursor === null) {
+      break;
+    }
+  }
+  return surveys;
 }
 
 /**
@@ -628,9 +745,12 @@ export function withheldPinProblem(rastersPage, openPlaceId) {
 
 /**
  * Proves, as the member, that the phone-side data is there and protected: a sync set rooted at
- * the open cave, its documents stream judged by `photoReachProblem`, its rasters stream by
- * `withheldPinProblem` against the open place's identifier read from its own download. The set is deleted afterwards, so running `up` again leaves no pile of
- * sets behind in the member's list. Throws with the reason, like the sign-in does.
+ * the open cave and the protected one, its documents stream judged by `photoReachProblem`, its
+ * rasters stream by `withheldPinProblem` against the open place's identifier read from its own
+ * download, its survey-models stream by `surveyModelProblem` and `placeStationProblem`, and the
+ * Therion model's file fetched through `/sync/files/links` and checked against the size and hash
+ * the stream listed. The set is deleted afterwards, so running `up` again leaves no pile of sets
+ * behind in the member's list. Throws with the reason, like the sign-in does.
  *
  * Exported for its own test; `up` is what a developer runs.
  */
@@ -649,6 +769,9 @@ export async function proveSyncContent(baseUrl, accessToken) {
   if (!openCave) {
     throw new Error(`The member could not find the demo cave ${OPEN_CAVE_CODE}; seed-demo did not run.`);
   }
+  // A root of the set too, so that its survey model is absent because it is withheld and not
+  // because the set never reached it.
+  const protectedCave = (caves.items ?? []).find((cave) => cave.identificationCode === PROTECTED_CAVE_CODE);
 
   const created = await fetch(`${baseUrl}/api/v1/sync/sets`, {
     method: 'POST',
@@ -656,7 +779,7 @@ export async function proveSyncContent(baseUrl, accessToken) {
     body: JSON.stringify({
       name: `speleoloc-dev check ${randomBytes(3).toString('hex')}`,
       uploadVisibility: 'private',
-      rootFeatureIds: [openCave.id],
+      rootFeatureIds: protectedCave ? [openCave.id, protectedCave.id] : [openCave.id],
       settings: {},
     }),
   });
@@ -685,6 +808,47 @@ export async function proveSyncContent(baseUrl, accessToken) {
     const pinProblem = withheldPinProblem(await getJson(`/api/v1/sync/sets/${set.id}/rasters`), openPlaceId);
     if (pinProblem) {
       throw new Error(`The seeded raster map is not protected as expected: ${pinProblem}`);
+    }
+
+    // The server reads the seeded models after it starts, and the Therion one takes the cave's
+    // current mark only once it has been read — so the stream is read again until it has, within
+    // a bound. Any other problem is final at once.
+    const deadline = Date.now() + SURVEY_READING_TIMEOUT_MS;
+    let surveys = await readSurveyModels(getJson, set.id);
+    const unread = () => surveys.models.some((model) => model?.name === SURVEY_MODEL_NAME && model.isCurrent === false);
+    while (unread() && Date.now() < deadline) {
+      await new Promise((done) => setTimeout(done, 2_000));
+      surveys = await readSurveyModels(getJson, set.id);
+    }
+    const modelProblem = surveyModelProblem(surveys, protectedCave?.id);
+    if (modelProblem) {
+      throw new Error(`The seeded survey models are not handed over as expected: ${modelProblem}`
+        + (unread() ? ` (still not current after ${SURVEY_READING_TIMEOUT_MS / 1000} s: was it read?)` : ''));
+    }
+    const surveyModel = surveys.models.find((model) => model.name === SURVEY_MODEL_NAME);
+    const stationProblem = placeStationProblem(
+      surveys, surveyModel.id, openPlaceId, placeIdIn({ features }, STATION_PLACE_NAME));
+    if (stationProblem) {
+      throw new Error(`The seeded places at stations are not handed over as expected: ${stationProblem}`);
+    }
+
+    // What the stream lists is what the file is: fetched as a phone fetches it, and hashed here.
+    const links = await fetch(`${baseUrl}/api/v1/sync/files/links`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [{ documentId: surveyModel.documentId, rendition: 'original' }] }),
+    });
+    const linksBody = await links.json().catch(() => null);
+    const url = linksBody?.links?.[0]?.url;
+    if (links.status !== 200 || typeof url !== 'string') {
+      throw new Error(`The member was given no address for "${SURVEY_MODEL_NAME}": ${links.status} ${JSON.stringify(linksBody)}`);
+    }
+    const file = await fetch(new URL(url, baseUrl), { headers });
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    if (file.status !== 200 || bytes.length !== surveyModel.sizeBytes || sha256 !== surveyModel.sha256) {
+      throw new Error(`The file of "${SURVEY_MODEL_NAME}" answered ${file.status} with ${bytes.length} bytes `
+        + `and sha256 ${sha256}; the stream listed ${surveyModel.sizeBytes} bytes and ${surveyModel.sha256}`);
     }
   } finally {
     await fetch(`${baseUrl}/api/v1/sync/sets/${set.id}`, { method: 'DELETE', headers }).catch(() => {});
@@ -921,7 +1085,10 @@ function printSummary(baseUrl, capabilities) {
   console.log('                  reaches the member as stored, the one that also hangs on');
   console.log(`                  ${PROTECTED_CAVE_CODE} without its location; a raster map "${RASTER_TITLE}" with`);
   console.log('                  two pins, one withheld from the member; a trip recording');
-  console.log(`                  "${RECORDING_TITLE}"`);
+  console.log(`                  "${RECORDING_TITLE}"; survey models "${SURVEY_MODEL_NAME}" (.lox, current)`);
+  console.log(`                  and "${SURVEY_EXPORT_MODEL_NAME}" (.3d), stations demo.1 … demo.4, with`);
+  console.log(`                  "${OPEN_PLACE_NAME}" at ${MAPPED_STATION} and "${STATION_PLACE_NAME}" at a splay from ${SPLAY_STATION}`);
+  console.log(`On ${PROTECTED_CAVE_CODE}         survey model "${PROTECTED_SURVEY_MODEL_NAME}" — never handed to the member`);
   console.log(`People directory  on — lists "${ROSTER_ONLY_CAVER}" (no account) and links one phone`);
   console.log('                  user the member\'s phone reported to that person');
   console.log('');
@@ -988,7 +1155,8 @@ async function upCommand(options) {
   console.log(`\n✅ Signed in as ${MEMBER_EMAIL} and read the sync capabilities.`);
   await proveSyncContent(baseUrl, tokens.access_token)
     .catch((error) => fail(error.message, seedingHint));
-  console.log(`✅ As ${MEMBER_EMAIL}: one photo handed over without its location, one raster pin withheld.`);
+  console.log(`✅ As ${MEMBER_EMAIL}: one photo handed over without its location, one raster pin withheld,`
+    + ' two survey models with places at their stations, the protected cave\'s model withheld.');
   printSummary(baseUrl, capabilities);
 
   await new Promise((done) => api.on('exit', done));

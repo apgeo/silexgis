@@ -365,6 +365,7 @@ public sealed class UploadReviewService(
                     line.TripRecordingPointId = written.TripRecordingPointId;
                     line.RasterMapId = written.RasterMapId;
                     line.RasterPinId = written.RasterPinId;
+                    line.PlaceStationId = written.PlaceStationId;
                     line.AttachmentIds = written.AttachmentIds;
                     line.SourceProperties = written.SourceProperties;
 

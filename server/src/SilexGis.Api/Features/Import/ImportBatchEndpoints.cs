@@ -282,7 +282,8 @@ public static class ImportBatchEndpoints
                     r.TripOutcome,
                     r.TripReason,
                     r.RasterMapId,
-                    r.RasterPinId))];
+                    r.RasterPinId,
+                    r.PlaceStationId))];
             }
             catch (SyncUndoException e)
             {
@@ -476,6 +477,7 @@ public sealed record ImportBatchUndoSkippedDto(string Field, string Reason);
 /// <param name="TripRecordingPointId">For a line about one scan of a phone recording: that scan.</param>
 /// <param name="RasterMapId">For a line about a phone's raster map: that map.</param>
 /// <param name="RasterPinId">For a line about one pin on a raster map: that pin.</param>
+/// <param name="PlaceStationId">For a line about a place a phone mapped to a survey station: that mapping.</param>
 /// <param name="TripLogId">
 /// For a recording line whose recording had been made into a trip report: that report — null when the
 /// caller may not read it, while the outcome is still given.
@@ -498,7 +500,8 @@ public sealed record ImportBatchUndoItemDto(
     string? TripOutcome = null,
     string? TripReason = null,
     Guid? RasterMapId = null,
-    Guid? RasterPinId = null);
+    Guid? RasterPinId = null,
+    Guid? PlaceStationId = null);
 
 /// <summary>
 /// The answer to taking a confirmation back: the batch as it now stands, and for a phone upload

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using ImageMagick;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
@@ -11,13 +12,16 @@ using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.PlaceStations;
 using SilexGis.Infrastructure.RasterMaps;
+using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Auth;
 
 /// <summary>
 /// The part of the development dataset a phone reads beyond features: photos, a trip recording, a
-/// raster map, the people directory, and an account whose uploads wait for a reviewer.
+/// raster map, survey models with places at their stations, the people directory, and an account
+/// whose uploads wait for a reviewer.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -30,6 +34,13 @@ namespace SilexGis.Api.Auth;
 /// one pin and not two.
 /// </para>
 /// <para>
+/// The open cave also gets two survey models of one invented survey, a Therion file asked to take
+/// the cave's current mark and a Survex file that is not asked to, with two places mapped to its
+/// stations; the protected cave gets one model, which that account is never handed. A survey is the
+/// most exact description of a cave there is, so these are written here from a handful of numbers
+/// rather than taken from any file.
+/// </para>
+/// <para>
 /// Every picture is drawn here, never taken from anywhere. The position stamped into the photos is
 /// invented and lies near the invented demo caves.
 /// </para>
@@ -38,7 +49,8 @@ namespace SilexGis.Api.Auth;
 /// the two ways the exact-location rule is short-circuited, and an account that owned what it is
 /// meant to be refused would demonstrate nothing. The one row the plain account is the source of
 /// is a phone user it reported, because that is what the people directory hands back to the phone
-/// that sent it.
+/// that sent it; the places at stations are written as that account's phone writes them, under its
+/// name, as mappings carry no owner of their own.
 /// </para>
 /// </remarks>
 public static partial class SpeleoLocDevSeeder
@@ -67,6 +79,45 @@ public static partial class SpeleoLocDevSeeder
     public const string RasterTitle = "Demo plan";
 
     public const string RecordingTitle = "Demo trip recording";
+
+    /// <summary>
+    /// A third place inside the open cave, ordinary like the first: the one mapped to a station
+    /// with a splay. A place has one mapping per survey, so the two shapes need two places.
+    /// </summary>
+    public const string StationPlaceName = "Demo marker C";
+
+    /// <summary>
+    /// The open cave's Therion model of the invented survey. Asked, as an upload can ask, to take the
+    /// cave's current mark once it has been read, from whichever model held it.
+    /// </summary>
+    public const string SurveyModelName = "demo-sync-survey";
+
+    /// <summary>The same invented survey as a Survex file on the open cave, not asked to be current.</summary>
+    public const string SurveyExportModelName = "demo-sync-survey-export";
+
+    /// <summary>A model on the protected cave, which the plain account may not place and is never handed.</summary>
+    public const string ProtectedSurveyModelName = "demo-protected-survey";
+
+    /// <summary>The station <see cref="OpenPlaceName"/> is mapped to, in the Therion model.</summary>
+    public const string MappedStation = "demo.2";
+
+    /// <summary>The station <see cref="StationPlaceName"/> is mapped to, with a splay, in the Therion model.</summary>
+    public const string SplayStation = "demo.3";
+
+    /// <summary>Where <see cref="StationPlaceName"/> lies from its station: metres east, north and up.</summary>
+    public static readonly IReadOnlyList<double> StationSplay = [1.5, -0.5, 0.25];
+
+    /// <summary>
+    /// The invented survey: four stations, the first a way in, in plain metres east, north and up
+    /// from it. The names are whole in both formats, so they are the names a mapping holds.
+    /// </summary>
+    private static readonly InventedSurveyFile.Station[] SurveyStations =
+    [
+        new("demo.1", 0, 0, 0, Entrance: true),
+        new(MappedStation, 9, 3, -2),
+        new(SplayStation, 17, 8, -6),
+        new("demo.4", 24, 7, -11),
+    ];
 
     /// <summary>A person on the roster without an account, for the directory to list.</summary>
     public const string RosterOnlyCaverName = "Demo Caver";
@@ -116,11 +167,15 @@ public static partial class SpeleoLocDevSeeder
             var openPlace = await EnsurePlaceAsync(db, writer, adminUserId, open, OpenPlaceName, false, ct);
             var protectedPlace = await EnsurePlaceAsync(
                 db, writer, adminUserId, open, ProtectedPlaceName, true, ct);
+            var stationPlace = await EnsurePlaceAsync(db, writer, adminUserId, open, StationPlaceName, false, ct);
             await db.SaveChangesAsync(ct);
 
             await EnsureRasterAsync(db, documents, fileStore, adminUserId, open, openPlace, protectedPlace, ct);
             await EnsureRecordingAsync(db, adminUserId, groupId, open, openPlace, ct);
             await db.SaveChangesAsync(ct);
+
+            await EnsureSurveyModelsAsync(
+                db, documents, fileStore, adminUserId, memberUserId, open, guarded, openPlace, stationPlace, ct);
         }
 
         var caverId = await EnsureRosterOnlyCaverAsync(db, groupId, ct);
@@ -291,6 +346,128 @@ public static partial class SpeleoLocDevSeeder
             Notes = "Marker scanned on the way in.",
         });
         db.TripRecordings.Add(recording);
+    }
+
+    private static async Task EnsureSurveyModelsAsync(
+        SilexGisDbContext db,
+        DocumentWriteService documents,
+        IFileStore fileStore,
+        Guid adminUserId,
+        Guid memberUserId,
+        Guid openCaveId,
+        Guid protectedCaveId,
+        Guid openPlaceId,
+        Guid stationPlaceId,
+        CancellationToken ct)
+    {
+        var legs = new InventedSurveyFile.Leg[SurveyStations.Length - 1];
+        for (var i = 0; i < legs.Length; i++)
+        {
+            var (from, to) = (SurveyStations[i], SurveyStations[i + 1]);
+            legs[i] = new((from.X, from.Y, from.Z), (to.X, to.Y, to.Z));
+        }
+
+        // One at a time and in this order, each saved with its reading queued: the queue reads them
+        // in turn, so the Therion model has taken the mark before the Survex one is read, and the
+        // Survex one finds the cave already drawn and stays a second model of it.
+        var surveyModelId = await EnsureSurveyModelAsync(
+            db, documents, fileStore, adminUserId, openCaveId, SurveyModelName, SurveyModelFormat.Lox,
+            InventedSurveyFile.Lox(SurveyStations, legs), takeCurrentMark: true, ct);
+        await EnsureSurveyModelAsync(
+            db, documents, fileStore, adminUserId, openCaveId, SurveyExportModelName, SurveyModelFormat.Survex3d,
+            InventedSurveyFile.Survex3d(SurveyStations, legs, []), takeCurrentMark: false, ct);
+        await EnsureSurveyModelAsync(
+            db, documents, fileStore, adminUserId, protectedCaveId, ProtectedSurveyModelName, SurveyModelFormat.Survex3d,
+            InventedSurveyFile.Survex3d(SurveyStations, legs, []), takeCurrentMark: false, ct);
+
+        var placeStations = new PlaceStationStore(db);
+        await EnsurePlaceStationAsync(placeStations, openPlaceId, surveyModelId, MappedStation, null, memberUserId, ct);
+        await EnsurePlaceStationAsync(
+            placeStations, stationPlaceId, surveyModelId, SplayStation, StationSplay, memberUserId, ct);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// A survey model of a cave by name, stored the way the browser's upload stores one: the file as
+    /// a survey document with its size and hash, the model row, its first reading queued, and the
+    /// current mark either taken because the cave has none of this kind or asked for from the model
+    /// holding it — in which case the reading moves it, as it does for an upload that asks.
+    /// </summary>
+    private static async Task<Guid> EnsureSurveyModelAsync(
+        SilexGisDbContext db,
+        DocumentWriteService documents,
+        IFileStore fileStore,
+        Guid adminUserId,
+        Guid caveId,
+        string name,
+        SurveyModelFormat format,
+        byte[] bytes,
+        bool takeCurrentMark,
+        CancellationToken ct)
+    {
+        var existing = await db.SurveyModels
+            .Where(m => m.CaveFeatureId == caveId && m.Name == name)
+            .Select(m => (Guid?)m.Id)
+            .FirstOrDefaultAsync(ct);
+        if (existing is { } id)
+        {
+            return id;
+        }
+
+        var fileName = name + (format == SurveyModelFormat.Lox ? ".lox" : ".3d");
+        var stored = documents.Create(
+            await StoreContentAsync(fileStore, bytes, fileName, "application/octet-stream", FileKind.Survey, ct),
+            title: name,
+            ownerUserId: adminUserId,
+            uploadedBy: adminUserId).File;
+
+        var model = new SurveyModel
+        {
+            CaveFeatureId = caveId,
+            Name = name,
+            FileId = stored.Id,
+            Format = format,
+            Description = "An invented survey — no real cave was measured to make it.",
+        };
+
+        // Neither format says here where its zero is, so the model says it, as an uploader does: at
+        // the cave's own position, which is its main entrance — where the survey's way in is.
+        // Without it the reading cannot place a single station and refuses the file.
+        if (await db.Features.Where(f => f.Id == caveId).Select(f => f.Geom).FirstOrDefaultAsync(ct) is Point at)
+        {
+            model.Anchor = new Point(at.X, at.Y) { SRID = 4326 };
+            model.AnchorHeightM = double.IsNaN(at.Z) ? null : at.Z;
+        }
+
+        db.SurveyModels.Add(model);
+        var takesMarkFrom = takeCurrentMark
+            ? await SurveyModelCurrency.HolderAsync(db, caveId, format, ct)
+            : null;
+        SurveyModelReading.QueueFirst(db, model, requestedBy: null, takesMarkFrom);
+        await SurveyModelCurrency.TakeIfUnclaimedAsync(db, model, ct);
+        await db.SaveChangesAsync(ct);
+        return model.Id;
+    }
+
+    /// <summary>
+    /// A place mapped to a station of a survey model, unless the place already has a live mapping in
+    /// that model. Written as a phone's upload writes it, under the account whose phone sent it.
+    /// </summary>
+    private static async Task EnsurePlaceStationAsync(
+        PlaceStationStore store,
+        Guid placeId,
+        Guid surveyModelId,
+        string station,
+        IReadOnlyList<double>? splay,
+        Guid by,
+        CancellationToken ct)
+    {
+        if (await store.LiveMappingOfAsync(placeId, surveyModelId, documentId: null, except: Guid.Empty, ct))
+        {
+            return;
+        }
+
+        await store.AddAsync(Guid.CreateVersion7(), placeId, surveyModelId, documentId: null, station, splay, by, ct);
     }
 
     private static async Task<Guid> EnsureRosterOnlyCaverAsync(SilexGisDbContext db, Guid groupId, CancellationToken ct)

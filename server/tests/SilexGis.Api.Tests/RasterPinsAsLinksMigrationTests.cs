@@ -93,7 +93,6 @@ public sealed class RasterPinsAsLinksMigrationTests : IAsyncLifetime, IClassFixt
                 DeletedAt = DateTimeOffset.UtcNow,
             });
             db.ImportBatches.Add(new ImportBatch { Id = batch, ConfirmedByUserId = owner, Source = ImportSource.DeviceSync });
-            db.ImportBatchItems.Add(new ImportBatchItem { ImportBatchId = batch, Action = ImportDecisionAction.Create });
             await db.SaveChangesAsync();
         }
 
@@ -110,7 +109,10 @@ public sealed class RasterPinsAsLinksMigrationTests : IAsyncLifetime, IClassFixt
                 ('{removed}', '{map}', '{placeB}', 0, 0, {Stamp(created)}, {Stamp(gone)}, {Stamp(gone)}),
                 ('{offPicture}', '{map}', '{placeB}', 400, 3, {Stamp(created)}, {Stamp(updated)}, NULL),
                 ('{onRemovedMap}', '{removedMap}', '{placeA}', 1, 1, {Stamp(created)}, {Stamp(updated)}, NULL);
-            UPDATE import_batch_items SET raster_pin_id = '{live}' WHERE import_batch_id = '{batch}';
+            -- The upload's line, written by SQL as that step stored it: a later step adds columns to
+            -- this table, which the model of today would write and the database of then lacks.
+            INSERT INTO import_batch_items (import_batch_id, action, source_properties, attachment_ids, raster_pin_id)
+                VALUES ('{batch}', {(short)ImportDecisionAction.Create}, '{"{}"}', '[]', '{live}');
             """);
 
         await using (var db = Context(connectionString))

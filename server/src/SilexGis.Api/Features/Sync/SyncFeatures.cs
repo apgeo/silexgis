@@ -51,10 +51,17 @@ public static class SyncFeatures
     public const string Rasters = "rasters";
 
     /// <summary>
+    /// Survey models both ways: <c>GET /sync/sets/{id}/survey-models</c> — the line plots of the
+    /// set's caves handed with their exact position, and the places mapped to their stations — and
+    /// the upload's <c>placeStations</c> section.
+    /// </summary>
+    public const string SurveyModels = "surveyModels";
+
+    /// <summary>
     /// The parts every installation running this build serves, whatever it has switched — the
     /// baseline the recorded exchanges are pinned to.
     /// </summary>
-    public static readonly IReadOnlyList<string> Unconditional = [Download, Upload, Documents, DocumentUpload, Trips, Reviews, Rasters];
+    public static readonly IReadOnlyList<string> Unconditional = [Download, Upload, Documents, DocumentUpload, Trips, Reviews, Rasters, SurveyModels];
 
     /// <summary>
     /// The people directory and the phone-user links (<c>GET /sync/people</c> and the upload's

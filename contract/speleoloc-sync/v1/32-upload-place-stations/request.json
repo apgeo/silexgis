@@ -1,0 +1,23 @@
+{
+  "batchId": "<batch>",
+  "contractVersion": 1,
+  "placeStations": [
+    {
+      "id": "<place-station>",
+      "placeId": "<place>",
+      "surveyModelId": "<survey-model>",
+      "station": "1.12"
+    },
+    {
+      "id": "<place-splay>",
+      "placeId": "<other-place>",
+      "documentId": "<survey-document>",
+      "station": "A.3",
+      "splay": [
+        1.5,
+        -2,
+        0.25
+      ]
+    }
+  ]
+}

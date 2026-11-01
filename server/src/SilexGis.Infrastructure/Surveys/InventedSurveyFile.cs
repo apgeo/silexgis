@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Buffers.Binary;
 using System.Text;
+using Therion.Blender;
+using Therion.Blender.Parsing;
 
 namespace SilexGis.Infrastructure.Surveys;
 
@@ -8,8 +10,9 @@ namespace SilexGis.Infrastructure.Surveys;
 /// Writes a small survey file from numbers given in code — a survey nobody measured.
 ///
 /// <para>
-/// One of the two compiled line-plot formats has a writer in the library that reads it; the other
-/// has none, so the few items an invented survey needs are written here by hand. Two things use
+/// One of the two compiled line-plot formats has a writer in the library that reads it, which the
+/// Therion file below goes through; the other has none, so the few items an invented survey needs
+/// are written here by hand. Two things use
 /// it and must not drift apart: the demonstration data, which needs a survey that is no real
 /// cave's and therefore cannot ship one somebody surveyed, and the tests, where every number in
 /// a fixture is then stated by the test that uses it instead of read off a file opened in another
@@ -87,6 +90,68 @@ public static class InventedSurveyFile
 
         file.WriteByte(0x00); // stop
         return file.ToArray();
+    }
+
+    /// <summary>
+    /// A compiled Therion (loch) file holding exactly the stations and legs it is given, written by
+    /// the survey library's own writer for the format.
+    ///
+    /// <para>
+    /// The format joins a leg to stations by number rather than by position, so each end of a leg
+    /// must stand on one of the stations given; a leg that ends anywhere else is refused rather
+    /// than given a nameless station of its own. Names are written whole and belong to no survey,
+    /// which keeps a dotted name the name the reading stores. Coordinates are plain metres about
+    /// the file's own zero: the format has no field naming a coordinate system.
+    /// </para>
+    /// </summary>
+    public static byte[] Lox(IReadOnlyList<Station> stations, IReadOnlyList<Leg> legs)
+    {
+        ArgumentNullException.ThrowIfNull(stations);
+        ArgumentNullException.ThrowIfNull(legs);
+
+        // The format's own bits for a way in and for a shot at the wall; the reader maps both back
+        // to the shared flags.
+        const uint loxEntranceBit = 2;
+        const uint loxSplayBit = 16;
+
+        var ids = new Dictionary<(double X, double Y, double Z), uint>();
+        var written = new List<CaveStation>(stations.Count);
+        for (var i = 0; i < stations.Count; i++)
+        {
+            var station = stations[i];
+            var id = (uint)(i + 1);
+            ids[(station.X, station.Y, station.Z)] = id;
+            written.Add(new CaveStation
+            {
+                Id = id,
+                Name = station.Name,
+                Position = new CaveVector3(station.X, station.Y, station.Z),
+                Flags = station.Entrance ? CaveStationFlags.Entrance : CaveStationFlags.None,
+                RawFlags = station.Entrance ? loxEntranceBit : 0,
+            });
+        }
+
+        uint StationAt((double X, double Y, double Z) at) =>
+            ids.TryGetValue(at, out var id)
+                ? id
+                : throw new ArgumentException($"A leg ends at {at}, where none of the stations given stands.", nameof(legs));
+
+        var shots = legs
+            .Select(leg => new CaveShot
+            {
+                FromStationId = StationAt(leg.From),
+                ToStationId = StationAt(leg.To),
+                Flags = leg.Splay ? CaveShotFlags.Splay : CaveShotFlags.None,
+                RawFlags = leg.Splay ? loxSplayBit : 0,
+            })
+            .ToList();
+
+        return LoxWriter.Write(new CaveModel
+        {
+            SourceFormat = CaveSourceFormat.Lox,
+            Stations = written,
+            Shots = shots,
+        });
     }
 
     /// <summary>

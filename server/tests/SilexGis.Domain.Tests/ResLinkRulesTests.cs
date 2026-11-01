@@ -766,4 +766,15 @@ public class ResLinkRulesTests
     [InlineData(false, false, false, false)]
     public void A_place_pin_is_shown_only_whole(bool picture, bool place, bool exact, bool shown) =>
         PlacePointShown(picture, place, exact).ShouldBe(shown);
+
+    // ---- places mapped to survey stations by a phone -------------------------------
+
+    [Theory]
+    [InlineData(true, true, true, true)]
+    [InlineData(false, true, true, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(true, true, false, false)]
+    [InlineData(false, false, false, false)]
+    public void A_place_station_is_shown_only_whole(bool place, bool exact, bool survey, bool shown) =>
+        PlaceStationShown(place, exact, survey).ShouldBe(shown);
 }

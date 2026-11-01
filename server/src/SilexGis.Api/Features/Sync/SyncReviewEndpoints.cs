@@ -11,6 +11,7 @@ using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.PlaceStations;
 using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Features.Sync;
@@ -38,7 +39,7 @@ public enum SyncReviewOutcome
 /// <param name="ReviewId">The id the upload answered the row with.</param>
 /// <param name="Entity">The upload section the row came in: <c>rows</c>, <c>people</c>,
 /// <c>documents</c>, <c>documentLinks</c>, <c>tripRecordings</c>, <c>tripPoints</c>,
-/// <c>rasterMaps</c> or <c>rasterPins</c>.</param>
+/// <c>rasterMaps</c>, <c>rasterPins</c> or <c>placeStations</c>.</param>
 /// <param name="RowId">The row's id as the upload answered it (for a document link, the document's).</param>
 /// <param name="Note">What the reviewer wrote to the uploader, if anything.</param>
 /// <param name="Revision">The revision the server holds the row at now; absent when it holds no such
@@ -55,7 +56,8 @@ public enum SyncReviewOutcome
 /// the catalogue's <c>document</c>, for <c>documentLinks</c> a catalogue link, for
 /// <c>tripRecordings</c> a recording of the trips stream with its scans, for <c>tripPoints</c> one
 /// entry of a recording's <c>points</c>, for <c>rasterMaps</c> a map of the rasters stream with its
-/// pins, for <c>rasterPins</c> one entry of a map's <c>pins</c>. Absent whenever that stream would
+/// pins, for <c>rasterPins</c> one entry of a map's <c>pins</c>, for <c>placeStations</c> one entry of
+/// the survey-models stream's <c>placeStations</c>. Absent whenever that stream would
 /// not hand this caller the row now — withheld, unreadable or gone — and never for <c>people</c>.
 /// </param>
 public sealed record SyncReviewDto(
@@ -322,6 +324,27 @@ public static class SyncReviewEndpoints
             foreach (var p in pins.Where(p => readableMaps.ContainsKey(p.RasterMapId) && visible.Contains(p.PlaceFeatureId)))
             {
                 found[(SyncUploadSections.RasterPins, p.Id)] = p.UpdatedAt;
+            }
+        }
+
+        // A place's station is read through its place.
+        var stationIds = IdsOf(SyncUploadSections.PlaceStations);
+        if (stationIds.Count > 0)
+        {
+            var stations = await PlaceStationQueries.Rows(db).AsNoTracking()
+                .Where(r => stationIds.Contains(r.Id))
+                .Select(r => new { r.Id, r.PlaceId, r.UpdatedAt })
+                .ToListAsync(ct);
+            var places = stations.Select(s => s.PlaceId).Distinct().ToList();
+            var visible = (await db.Features.AsNoTracking()
+                    .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+                    .Where(f => places.Contains(f.Id))
+                    .Select(f => f.Id)
+                    .ToListAsync(ct))
+                .ToHashSet();
+            foreach (var station in stations.Where(s => visible.Contains(s.PlaceId)))
+            {
+                found[(SyncUploadSections.PlaceStations, station.Id)] = station.UpdatedAt;
             }
         }
 

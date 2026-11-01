@@ -19,6 +19,7 @@ using SilexGis.Domain.ResLinks;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.PlaceStations;
 using SilexGis.Infrastructure.RasterMaps;
 
 namespace SilexGis.Api.Tests;
@@ -2076,6 +2077,34 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         Maps(page).ShouldHaveSingleItem().GetProperty("points").EnumerateArray().ShouldHaveSingleItem()
             .GetProperty("station").GetString().ShouldBe("cave.upper.2");
         page.GetRawText().ShouldNotContain(placePin.ToString());
+    }
+
+    /// <summary>
+    /// A place a phone mapped to a station of the very model on the page never travels, though its
+    /// link anchors that station as a published photograph's does: the page reads photographs off
+    /// station links, and the place is a position of a place on a page strangers read.
+    /// </summary>
+    [Fact]
+    public async Task A_place_a_phone_mapped_to_a_station_never_reaches_the_page()
+    {
+        var trip = await TrackedTripAsync("Phone station", locationProtected: false);
+        var photograph = await PhotographAsync("station");
+        await LinkAsync(trip.Model, "cave.upper.2", photograph.Document);
+        await PublishPhotographAsync(photograph.Document);
+        var mapping = Guid.CreateVersion7();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var ownerId = await db.Users.AsNoTracking().Where(u => u.Email == ownerEmail).Select(u => u.Id).SingleAsync();
+            await new PlaceStationStore(db).AddAsync(mapping, trip.Cave, trip.Model, null, "cave.upper.2", [1, 2, 3], ownerId);
+            await db.SaveChangesAsync();
+        }
+
+        var (_, token) = await PublishAsync(trip.Trip);
+        var page = await FollowAsync(token);
+        Pictures(page).ShouldHaveSingleItem().GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        page.GetRawText().ShouldNotContain(mapping.ToString());
+        page.GetRawText().ShouldNotContain("splay");
     }
 
     /// <summary>

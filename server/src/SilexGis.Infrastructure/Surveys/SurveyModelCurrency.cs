@@ -76,7 +76,11 @@ public static class SurveyModelCurrency
                 && m.IsCurrent
                 && m.Id != model.Id
                 && formats.Contains(m.Format))
-            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsCurrent, false), ct);
+            // The demoted row is stamped too: its revision is what tells a phone holding it that it
+            // is no longer the cave's current model, and a bulk statement passes the stamping by.
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(m => m.IsCurrent, false)
+                .SetProperty(m => m.UpdatedAt, DateTimeOffset.UtcNow), ct);
 
         // Rows the context already tracks are not touched by a bulk statement, and a stale tracked
         // flag would be written back over the demotion at the next save.
@@ -143,6 +147,8 @@ public static class SurveyModelCurrency
 
         await db.SurveyModels
             .Where(m => m.Id == successor)
-            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsCurrent, true), ct);
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(m => m.IsCurrent, true)
+                .SetProperty(m => m.UpdatedAt, DateTimeOffset.UtcNow), ct);
     }
 }

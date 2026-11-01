@@ -165,6 +165,23 @@ profile, the survey viewer's map tab draws the pinned places too.
 
 *This part of the phone sync is provisional and may still change.*
 
+### Survey models on a phone, and places at their stations
+
+A phone that carries a cave is given the cave's line-plot survey models (Therion `.lox`, Survex `.3d`) —
+but only for a cave whose exact position its account may see, because a survey model is the cave's
+position. When the cave stops being shown that way, or the model is deleted, the phone is told to drop it.
+A survey file a caver attaches on the phone comes back as an ordinary document filed on the cave as
+survey data; it does not become one of the cave's survey models by itself.
+
+A caver can also say on the phone that a place of the cave is at a station of a survey — or at the end
+of a splay from one. Such a place shows the survey in its **Linked items** ("At station", with
+"station A.12" or "splay from A.12" beside the survey), and the survey shows the place. Whoever may
+change the place can **delete** it there, and the phones are told at their next sync; it is not edited in
+the browser. It is shown only to someone who may read the place, see exactly where it is, and open the
+survey.
+
+*This part of the phone sync is provisional and may still change.*
+
 ### Defaults and duplicate warnings
 
 A device that does not name a kind gets a sensible default — a cave lands as a cave, an
