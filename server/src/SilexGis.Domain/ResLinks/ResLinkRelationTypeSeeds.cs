@@ -83,6 +83,13 @@ public static class ResLinkRelationTypeSeeds
         // identifier the phone gave it, and is shown whole or not at all — a point on a map of the
         // cave beside the name of a place is that place's position.
         new("map-place-point", "Marks place", true, "Marked on map"),
+
+        // A place of a cave that a phone mapped to a station of a survey model — or to the far end
+        // of a splay from one. Directed with the place as the main member, so the forward name reads
+        // out of the place. Written only by the phone's sync, kept under the identifier the phone
+        // gave it, and shown whole or not at all: a station of a georeferenced survey beside the
+        // name of a place is that place's position.
+        new("place-at-station", "At station", true, "Station of place"),
     ];
 
     /// <summary>
@@ -132,6 +139,12 @@ public static class ResLinkRelationTypeSeeds
     /// pin on a map, not a map of a model.
     /// </summary>
     public const string MapPlacePointCode = "map-place-point";
+
+    /// <summary>
+    /// The shipped code of a place mapped to a station of a survey model (or of a phone's survey
+    /// file) by a phone.
+    /// </summary>
+    public const string PlaceAtStationCode = "place-at-station";
 
     private static readonly HashSet<string> Codes = [.. All.Select(s => s.Code)];
 

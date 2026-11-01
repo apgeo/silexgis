@@ -10,11 +10,11 @@ public class ResLinkRelationTypeSeedsTests
     public void The_map_vocabulary_is_seeded_directed_and_appended_at_the_end()
     {
         // Appended, never inserted: a row's sort order is its position in the list, so these
-        // five must be the last five — a middle insert would renumber everything after it on a
+        // six must be the last six — a middle insert would renumber everything after it on a
         // fresh install only, and nothing on screen would say why two installs disagree.
         string[] expectedTail =
-            ["map-plan-of", "map-profile-of", "map-other-of", "map-station-point", "map-place-point"];
-        var tail = ResLinkRelationTypeSeeds.All.Skip(ResLinkRelationTypeSeeds.All.Count - 5).ToList();
+            ["map-plan-of", "map-profile-of", "map-other-of", "map-station-point", "map-place-point", "place-at-station"];
+        var tail = ResLinkRelationTypeSeeds.All.Skip(ResLinkRelationTypeSeeds.All.Count - 6).ToList();
         tail.Select(s => s.Code).ShouldBe(expectedTail);
 
         foreach (var seed in tail)
@@ -65,5 +65,17 @@ public class ResLinkRelationTypeSeedsTests
         ResLinkRules.IsPlacePoint(ResLinkRelationTypeSeeds.MapPlacePointCode).ShouldBeTrue();
         ResLinkRules.IsPlacePoint(ResLinkRelationTypeSeeds.MapStationPointCode).ShouldBeFalse();
         ResLinkRules.IsPlacePoint(null).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void The_place_station_code_is_seeded_directed_and_never_joins_the_view_codes()
+    {
+        ResLinkRelationTypeSeeds.PlaceAtStationCode.ShouldBe("place-at-station");
+        ResLinkRelationTypeSeeds.IsSeeded(ResLinkRelationTypeSeeds.PlaceAtStationCode).ShouldBeTrue();
+        ResLinkRelationTypeSeeds.All.Single(s => s.Code == ResLinkRelationTypeSeeds.PlaceAtStationCode).Directed.ShouldBeTrue();
+        ResLinkRelationTypeSeeds.MapViewCodes.ShouldNotContain(ResLinkRelationTypeSeeds.PlaceAtStationCode);
+        ResLinkRules.IsPlaceStation(ResLinkRelationTypeSeeds.PlaceAtStationCode).ShouldBeTrue();
+        ResLinkRules.IsPlaceStation(ResLinkRelationTypeSeeds.MapPlacePointCode).ShouldBeFalse();
+        ResLinkRules.IsPlaceStation(null).ShouldBeFalse();
     }
 }
