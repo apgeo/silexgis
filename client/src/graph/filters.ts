@@ -132,3 +132,19 @@ export function facetsOf(nodes: Iterable<GraphNode>, edges: Iterable<GraphEdge>)
     types: [...byType].map(([type, count]) => ({ type, nodes: count })),
   };
 }
+
+/**
+ * One representative edge per relation code of each category, keyed like the filter set. The panel
+ * words a code through the same label function the canvas uses, and a custom link relation's name
+ * lives only on its edges, so a code alone is not enough to label it.
+ */
+export function relationSamples(edges: Iterable<GraphEdge>): Map<string, GraphEdge> {
+  const samples = new Map<string, GraphEdge>();
+  for (const edge of edges) {
+    const key = relationFilterKey(edge.category, edge.relation);
+    if (!samples.has(key)) {
+      samples.set(key, edge);
+    }
+  }
+  return samples;
+}

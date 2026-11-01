@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { sanitizeGraphFilterPref } from '../graph/filterStorage.ts';
 import { isSavedFilterAudience } from '../filters/savedFilterAudience.ts';
 import { isCoordinateFormat, isFormatId, sanitizeFormatSettings, sanitizeReadingRules } from '../geo/formats/settings.ts';
 import { accountPrefDefaults, MAX_PINNED_FILTERS, type AccountPrefsState } from './uiPrefsStore.ts';
@@ -171,6 +172,7 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
     overviewMap,
     karstLinkTreatment,
     savedFilterAudience,
+    graphFilters,
     coordinateSettings,
     coordinateFormatsListed,
     coordinateReading,
@@ -235,6 +237,9 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
   }
   if (isSavedFilterAudience(savedFilterAudience)) {
     out.savedFilterAudience = savedFilterAudience;
+  }
+  if (isPlainObject(graphFilters)) {
+    out.graphFilters = sanitizeGraphFilterPref(graphFilters);
   }
   return out;
 }

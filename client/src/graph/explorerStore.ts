@@ -10,6 +10,8 @@ import {
   toggleRelation,
   toggleType,
 } from './filters.ts';
+import { filtersToPref, prefToFilters, samePref } from './filterStorage.ts';
+import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { GraphModel, type MergeResult } from './graphModel.ts';
 import type { LayoutKind } from './renderer.ts';
 import { DEFAULT_RENDERER, type RendererKind } from './rendererRegistry.ts';
@@ -37,6 +39,10 @@ export interface ExplorerSeed {
   type: string;
   id: string;
 }
+
+/** The page address of the graph for one item; the seed lives in the address so a graph is a link. */
+export const graphAddress = (seed: ExplorerSeed): string =>
+  `/graph?type=${encodeURIComponent(seed.type)}&id=${encodeURIComponent(seed.id)}`;
 
 export interface ExplorerState {
   /** Bumped on every change to the model; the only thing a component subscribes to for it. */
@@ -79,7 +85,7 @@ export interface ExplorerState {
 export const useExplorerStore = create<ExplorerState>()((set, get) => ({
   version: 0,
   seed: null,
-  filters: noFilters(),
+  filters: prefToFilters(useUiPrefsStore.getState().graphFilters),
   selection: null,
   layout: 'force',
   rendererKind: DEFAULT_RENDERER,
@@ -142,6 +148,27 @@ export const useExplorerStore = create<ExplorerState>()((set, get) => ({
 
 export const selectIsFiltered = (s: ExplorerState): boolean => isFiltered(s.filters);
 
+// Remember the filter choice in the account preferences; the set objects are replaced on every change, so identity is the signal.
+useExplorerStore.subscribe((state, previous) => {
+  if (state.filters !== previous.filters) {
+    const pref = filtersToPref(state.filters);
+    if (!samePref(pref, useUiPrefsStore.getState().graphFilters)) {
+      useUiPrefsStore.getState().setGraphFilters(pref);
+    }
+  }
+});
+
+// The other direction: signing in, signing out or another tab's account preferences replace the
+// stored choice, and the explorer follows it. Comparing contents keeps the two from chasing each other.
+useUiPrefsStore.subscribe((state, previous) => {
+  if (state.graphFilters !== previous.graphFilters) {
+    const current = useExplorerStore.getState().filters;
+    if (!samePref(filtersToPref(current), state.graphFilters)) {
+      useExplorerStore.setState({ filters: prefToFilters(state.graphFilters) });
+    }
+  }
+});
+
 // The view is derived data. One slot is enough: there is one explorer on screen, and a component
 // re-rendering for an unrelated reason must get the same object back so effects keyed on it stay quiet.
 let cache: { key: unknown[]; view: GraphView } | null = null;
@@ -154,7 +181,7 @@ export function selectView(
   state: Pick<ExplorerState, 'version' | 'filters' | 'selection'>,
   options: ViewOptions = {},
 ): GraphView {
-  const key = [model, state.version, state.filters, state.selection, options.showMore ?? false];
+  const key = [model, state.version, state.filters, state.selection, options.showMore ?? false, options.searchText ?? ''];
   if (cache !== null && cache.key.every((part, i) => Object.is(part, key[i]))) {
     return cache.view;
   }

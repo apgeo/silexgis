@@ -15,6 +15,7 @@ import {
   type FormatSettings,
   type ReadingRules,
 } from '../geo/formats/settings.ts';
+import { NO_GRAPH_FILTER_PREF, type GraphFilterPref } from '../graph/filterStorage.ts';
 import type { DensityPref, PanelLayout, PanelPrefs, PanelScope } from './panelPrefs.ts';
 import { sanitizeSavedWorkspace, type SavedWorkspace, type WorkspaceArrangement } from './workspacePrefs.ts';
 
@@ -139,6 +140,12 @@ interface UiPrefsState {
    */
   savedFilterAudience: SavedFilterAudience;
   setSavedFilterAudience: (audience: SavedFilterAudience) => void;
+  /**
+   * The relations-graph categories, relations and item types this person hides. The account's, so
+   * the next member on a shared laptop opens the graph with nothing hidden.
+   */
+  graphFilters: GraphFilterPref;
+  setGraphFilters: (filters: GraphFilterPref) => void;
   /**
    * How this person last set up a tracking movie — format, size, motion, labels, layers,
    * captions — so the next movie starts from it. Undefined until one has been set up.
@@ -287,6 +294,7 @@ export interface AccountPrefsState {
   overviewMap: boolean;
   karstLinkTreatment: ProtectedPositionTreatment | undefined;
   savedFilterAudience: SavedFilterAudience;
+  graphFilters: GraphFilterPref;
 }
 
 /**
@@ -315,6 +323,7 @@ export function accountPrefDefaults(): AccountPrefsState {
     overviewMap: false,
     karstLinkTreatment: undefined,
     savedFilterAudience: DEFAULT_SAVED_FILTER_AUDIENCE,
+    graphFilters: NO_GRAPH_FILTER_PREF,
   };
 }
 
@@ -369,6 +378,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       setAppearance: (patch) => set((state) => ({ appearance: { ...state.appearance, ...patch } })),
       setKarstLinkTreatment: (treatment) => set({ karstLinkTreatment: treatment }),
       setSavedFilterAudience: (audience) => set({ savedFilterAudience: audience }),
+      setGraphFilters: (filters) => set({ graphFilters: filters }),
       movieSettings: undefined,
       setMovieSettings: (settings) => set({ movieSettings: settings }),
       movieGifCalibration: undefined,

@@ -11,6 +11,8 @@ export interface GraphListViewProps {
   view: GraphView;
   text: GraphText;
   onSelect: (key: NodeKey) => void;
+  /** Load the next page of one category of an expanded item; the list's "+N more" buttons call it. */
+  onMore?: (nodeKey: NodeKey, category: string) => void;
 }
 
 // A bare button: no border or fill of its own, but the browser's focus ring is left alone.
@@ -34,8 +36,9 @@ interface Group {
  * the surface browser tests drive, because choosing a row does exactly what pressing the node does.
  * It lists the view, not the model, so a filtered-out item is absent here as on the canvas.
  */
-export default function GraphListView({ view, text, onSelect }: GraphListViewProps) {
+export default function GraphListView({ view, text, onSelect, onMore }: GraphListViewProps) {
   const { t } = useTranslation();
+  const stubs = useMemo(() => view.nodes.filter((vn) => vn.kind === 'more' && vn.more !== null), [view]);
   const groups = useMemo(() => {
     const byType = new Map<string, ViewNode[]>();
     for (const vn of view.nodes) {
@@ -119,6 +122,30 @@ export default function GraphListView({ view, text, onSelect }: GraphListViewPro
           </ul>
         </section>
       ))}
+      {onMore && stubs.length > 0 && (
+        <section aria-label={t('graph.legend.more')} style={{ marginBottom: 8 }}>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {stubs.map((vn) => {
+              const parent = view.nodes.find((n) => n.key === vn.more!.nodeKey);
+              const category = text.categoryName(vn.more!.category);
+              return (
+                <li key={vn.key}>
+                  <button
+                    type="button"
+                    data-testid="graph-list-more"
+                    data-key={vn.key}
+                    aria-label={t('graph.moreButton.label', { count: vn.more!.remaining, category, title: parent ? text.node(parent) : '' })}
+                    onClick={() => onMore(vn.more!.nodeKey, vn.more!.category)}
+                    style={{ ...bareButton, padding: '2px 8px', textDecoration: 'underline' }}
+                  >
+                    {t('graph.moreButton.button', { count: vn.more!.remaining, category })}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
     </nav>
   );
 }

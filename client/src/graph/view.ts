@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { connectedFromSeed, isEdgeEnabled, isNodeShown, noFilters } from './filters.ts';
 import type { GraphModel } from './graphModel.ts';
+import { searchNodes } from './search.ts';
 import type { GraphEdge, GraphFilters, GraphNode, GraphSelection, HighlightState, NodeKey } from './types.ts';
 
 /** 'hub' is a resource link of three or more members drawn as a node of its own; 'more' is a "+N more" stub. */
@@ -52,9 +53,16 @@ export interface GraphView {
   /** Nodes and edges that are real items and relations, not "+N more" stubs. */
   nodeCount: number;
   edgeCount: number;
+  /** Keys of the nodes the typed search text finds, best match first; empty when no text is typed. */
+  matches: NodeKey[];
 }
 
 export interface ViewOptions {
+  /**
+   * Text typed in the in-graph search. Matching nodes are lifted out of a view that has no
+   * selection, the rest fade; a selection takes over the highlight and `matches` is still filled.
+   */
+  searchText?: string;
   /** Add one "+N more" stub per expanded visible node and category with items left to load. Off until the UI can page. */
   showMore?: boolean;
 }
@@ -85,7 +93,7 @@ export function toView(
 ): GraphView {
   const seedKey = model.seedKey;
   if (seedKey === null) {
-    return { seedKey, nodes: [], edges: [], selection: null, nodeCount: 0, edgeCount: 0 };
+    return { seedKey, nodes: [], edges: [], selection: null, nodeCount: 0, edgeCount: 0, matches: [] };
   }
 
   const { candidateEdges, collapsedHubs } = candidateEdgesOf(model, filters);
@@ -156,7 +164,23 @@ export function toView(
   }
 
   const effective = applySelection(nodes, edges, selection);
-  return { seedKey, nodes, edges, selection: effective, nodeCount: realNodes, edgeCount: realEdges };
+  const matches = searchNodes(nodes, options.searchText ?? '');
+  if (effective === null && matches.length > 0) {
+    const found = new Set(matches);
+    for (const node of nodes) {
+      node.state = found.has(node.key) ? 'selected' : 'faded';
+    }
+  } else if (effective !== null && matches.length > 0) {
+    // A selection keeps its own ring, but the other matches must stay distinguishable from the
+    // faded rest: they get the ringed, full-strength look of a neighbour.
+    const found = new Set(matches);
+    for (const node of nodes) {
+      if (found.has(node.key) && node.state !== 'selected') {
+        node.state = 'neighbour';
+      }
+    }
+  }
+  return { seedKey, nodes, edges, selection: effective, nodeCount: realNodes, edgeCount: realEdges, matches };
 }
 
 /** Enabled edges after the two-member collapse, plus the hubs that collapse made redundant. */

@@ -6,6 +6,7 @@ import type { ResLinkRelationType } from '../../api/hooks.ts';
 import type { GraphLabels } from '../../graph/renderer.ts';
 import {
   buildGraphTheme,
+  categoryLabel,
   nodeLabel,
   nodeTypeLabel,
   relationLabel,
@@ -38,7 +39,8 @@ export interface GraphText {
   /** What the renderer draws; a new object whenever the language changes, which makes it repaint. */
   labels: GraphLabels;
   node: (vn: ViewNode) => string;
-  relation: (edge: ViewEdge, reading: Reading) => string;
+  relation: (edge: Parameters<typeof relationLabel>[0], reading: Reading) => string;
+  categoryName: (category: string) => string;
   typeName: (type: string) => string;
 }
 
@@ -60,10 +62,11 @@ export function useGraphText(): GraphText {
         ),
     };
     const node = (vn: ViewNode) => nodeLabel(vn, translate);
-    const relation = (edge: ViewEdge, reading: Reading) => relationLabel(edge, reading, deps);
+    const relation = (edge: Parameters<typeof relationLabel>[0], reading: Reading) => relationLabel(edge, reading, deps);
     return {
       node,
       relation,
+      categoryName: (category: string) => categoryLabel(category, translate),
       typeName: (type: string) => nodeTypeLabel(type, translate),
       labels: { node, edge: (edge: ViewEdge) => relation(edge, 'forward') },
     };

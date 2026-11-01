@@ -34,6 +34,7 @@ const text: GraphText = {
   labels: { node: () => '', edge: () => '' },
   node: (vn) => nodeLabel(vn, i18n.t as unknown as Translate),
   relation: (edge) => `rel:${edge.relation}`,
+  categoryName: (c: string) => c,
   typeName: (type) => `type:${type}`,
 };
 

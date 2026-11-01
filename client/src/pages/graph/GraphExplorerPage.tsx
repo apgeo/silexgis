@@ -1,15 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Alert, Card, Empty, Flex, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import GraphCanvas, { type GraphCanvasHandle } from '../../components/graph/GraphCanvas.tsx';
+import GraphDetailsDrawer from '../../components/graph/GraphDetailsDrawer.tsx';
+import GraphFilterPanel from '../../components/graph/GraphFilterPanel.tsx';
+import GraphLegend from '../../components/graph/GraphLegend.tsx';
 import GraphListView from '../../components/graph/GraphListView.tsx';
+import GraphSearchBox from '../../components/graph/GraphSearchBox.tsx';
+import GraphSeedSearch from '../../components/graph/GraphSeedSearch.tsx';
 import GraphToolbar from '../../components/graph/GraphToolbar.tsx';
 import { useGraphExplorer } from '../../components/graph/useGraphExplorer.ts';
 import { useGraphText, useGraphTheme } from '../../components/graph/useGraphPresentation.ts';
 import { getExplorerModel, selectView, useExplorerStore, type ExplorerSeed } from '../../graph/explorerStore.ts';
-import type { NodeKey } from '../../graph/types.ts';
+import { facetsOf, relationSamples } from '../../graph/filters.ts';
+import { nextMatch, previousMatch } from '../../graph/search.ts';
+import { GRAPH_CATEGORIES, GRAPH_NODE_TYPES, type NodeKey } from '../../graph/types.ts';
 
 /**
  * The relations graph: one item and what is related to it, grown one step at a time.
@@ -40,9 +47,17 @@ export default function GraphExplorerPage() {
   const layout = useExplorerStore((s) => s.layout);
   const rendererKind = useExplorerStore((s) => s.rendererKind);
   const lastExpanded = useExplorerStore((s) => s.lastExpanded);
+  const searchText = useExplorerStore((s) => s.searchText);
   const store = useExplorerStore.getState;
 
-  const view = useMemo(() => selectView({ version, filters, selection }), [version, filters, selection]);
+  const view = useMemo(() => selectView({ version, filters, selection }, { searchText, showMore: true }), [version, filters, selection, searchText]);
+
+  const facets = useMemo(
+    // `version` is read so the lists follow the model, which React does not otherwise see change.
+    () => (version >= 0 ? facetsOf(getExplorerModel().nodes.values(), getExplorerModel().edges.values()) : { categories: [], types: [] }),
+    [version],
+  );
+  const samples = useMemo(() => (version >= 0 ? relationSamples(getExplorerModel().edges.values()) : new Map()), [version]);
 
   const selectedNode = view.selection?.kind === 'node' ? view.selection.key : null;
   const canExpand = useMemo(
@@ -51,7 +66,33 @@ export default function GraphExplorerPage() {
     [version, selectedNode],
   );
 
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const selectNode = (key: NodeKey) => store().select({ kind: 'node', key });
+  // A "+N more" stub is a control, not an item: pressing it loads that category's next page.
+  const loadMore = (nodeKey: NodeKey, category: string) => void controller.expand(nodeKey, category);
+  const pressNode = (key: NodeKey, thenExpand: boolean) => {
+    const pressed = view.nodes.find((n) => n.key === key);
+    if (pressed?.more) {
+      loadMore(pressed.more.nodeKey, pressed.more.category);
+      return;
+    }
+    selectNode(key);
+    if (thenExpand) {
+      void controller.expand(key);
+    }
+  };
+  const canRemove = selectedNode !== null && selectedNode !== view.seedKey;
+  const removeNode = (key: NodeKey) => {
+    store().removeNode(key);
+    setDetailsOpen(false);
+  };
+  const stepMatch = (step: typeof nextMatch) => {
+    const found = step(view.matches, selectedNode);
+    if (found !== null) {
+      selectNode(found);
+      canvas.current?.focus(found);
+    }
+  };
   const expandSelected = () => {
     if (selectedNode !== null) {
       void controller.expand(selectedNode);
@@ -69,6 +110,7 @@ export default function GraphExplorerPage() {
               <Typography.Paragraph type="secondary" style={{ maxWidth: 480 }}>
                 {t('graph.noSeed.body')}
               </Typography.Paragraph>
+              <GraphSeedSearch fullWidth autoFocus />
             </>
           }
         />
@@ -114,7 +156,22 @@ export default function GraphExplorerPage() {
         canCollapse={view.nodeCount > 1 || getExplorerModel().expandedKeys().length > 1}
         canRefresh={controller.status === 'ready'}
         busy={controller.pending > 0}
+        onDetails={() => setDetailsOpen(true)}
+        canDetails={view.selection !== null}
+        onRemove={() => selectedNode !== null && removeNode(selectedNode)}
+        canRemove={canRemove}
       />
+      <Flex gap={12} wrap align="center">
+        <GraphSeedSearch />
+        <GraphSearchBox
+          value={searchText}
+          onChange={(text) => store().setSearchText(text)}
+          matchCount={view.matches.length}
+          position={selectedNode === null ? 0 : view.matches.indexOf(selectedNode) + 1}
+          onNext={() => stepMatch(nextMatch)}
+          onPrevious={() => stepMatch(previousMatch)}
+        />
+      </Flex>
       {controller.actionFailed && <Alert type="warning" showIcon title={t('graph.errors.action')} data-testid="graph-action-error" />}
       <Flex gap={12} wrap style={{ flex: 1, minHeight: 420 }}>
         <Card styles={{ body: { padding: 0 } }} style={{ flex: '3 1 480px' }}>
@@ -127,30 +184,58 @@ export default function GraphExplorerPage() {
             layout={layout}
             rendererKind={rendererKind}
             anchorKey={lastExpanded}
-            onNodeClick={selectNode}
-            onNodeDoubleClick={(key) => {
-              selectNode(key);
-              void controller.expand(key);
-            }}
+            onNodeClick={(key) => pressNode(key, false)}
+            onNodeDoubleClick={(key) => pressNode(key, true)}
             onEdgeClick={(key) => store().select({ kind: 'edge', key })}
             onCanvasClick={() => store().select(null)}
           />
           </div>
+          <div style={{ padding: '8px 12px', borderTop: '1px solid var(--ant-color-border-secondary, #f0f0f0)' }}>
+            <GraphLegend view={view} text={text} theme={theme} />
+          </div>
         </Card>
-        <Card
-          title={t('graph.list.title')}
-          style={{ flex: '1 1 300px', maxHeight: 'calc(100dvh - 160px)', overflow: 'auto' }}
-        >
-          <GraphListView
-            view={view}
-            text={text}
-            onSelect={(key) => {
-              selectNode(key);
-              canvas.current?.focus(key);
-            }}
-          />
-        </Card>
+        <Flex vertical gap={12} style={{ flex: '1 1 300px', minWidth: 0 }}>
+          <Card title={t('graph.filters.title')} size="small" styles={{ body: { maxHeight: 360, overflow: 'auto' } }}>
+            <GraphFilterPanel
+              facets={facets}
+              samples={samples}
+              filters={filters}
+              text={text}
+              onToggleCategory={(c, on) => store().toggleCategory(c, on)}
+              onToggleRelation={(c, r, on) => store().toggleRelation(c, r, on)}
+              onToggleType={(ty, on) => store().toggleType(ty, on)}
+              onOnlyCategory={(c) => store().onlyCategory(c, GRAPH_CATEGORIES)}
+              onOnlyType={(ty) => store().onlyType(ty, GRAPH_NODE_TYPES)}
+              onReset={() => store().resetFilters()}
+            />
+          </Card>
+          <Card
+            title={t('graph.list.title')}
+            style={{ maxHeight: 'calc(100dvh - 160px)', overflow: 'auto' }}
+          >
+            <GraphListView
+              view={view}
+              text={text}
+              onMore={loadMore}
+              onSelect={(key) => {
+                selectNode(key);
+                canvas.current?.focus(key);
+              }}
+            />
+          </Card>
+        </Flex>
       </Flex>
+      <GraphDetailsDrawer
+        open={detailsOpen}
+        view={view}
+        text={text}
+        onClose={() => setDetailsOpen(false)}
+        onSelect={(key) => {
+          selectNode(key);
+          canvas.current?.focus(key);
+        }}
+        onRemove={removeNode}
+      />
     </Flex>
   );
 }

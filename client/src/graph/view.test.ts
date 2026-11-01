@@ -212,3 +212,26 @@ describe('neighboursOf', () => {
     expect(undirected[0].reading).toBe('forward');
   });
 });
+
+describe('search matches', () => {
+  it('finds loaded titles ignoring case and accents, lifts them and fades the rest', () => {
+    const view = toView(explored(), noFilters(), null, { searchText: 'SURVEY' });
+    expect(view.matches).toEqual([doc.key]);
+    const states = Object.fromEntries(view.nodes.map((n) => [n.key, n.state]));
+    expect(states[doc.key]).toBe('selected');
+    expect(states[S.key]).toBe('faded');
+  });
+
+  it('keeps the selection ringed and the other matches distinguishable from the faded rest', () => {
+    const view = toView(explored(), noFilters(), { kind: 'node', key: S.key }, { searchText: 'survey' });
+    expect(view.matches).toEqual([doc.key]);
+    expect(view.nodes.find((n) => n.key === S.key)!.state).toBe('selected');
+    expect(view.nodes.find((n) => n.key === doc.key)!.state).not.toBe('faded');
+  });
+
+  it('highlights nothing when the text matches nothing', () => {
+    const view = toView(explored(), noFilters(), null, { searchText: 'zzz' });
+    expect(view.matches).toEqual([]);
+    expect(view.nodes.every((n) => n.state === 'normal')).toBe(true);
+  });
+});

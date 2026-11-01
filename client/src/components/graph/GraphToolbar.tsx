@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { NodeCollapseOutlined, NodeExpandOutlined, ReloadOutlined, FullscreenOutlined } from '@ant-design/icons';
+import { DeleteOutlined, InfoCircleOutlined, NodeCollapseOutlined, NodeExpandOutlined, ReloadOutlined, FullscreenOutlined } from '@ant-design/icons';
 import { Flex, Segmented } from 'antd';
 import { useTranslation } from 'react-i18next';
 import Button from '../Button.tsx';
@@ -29,6 +29,12 @@ export interface GraphToolbarProps {
   canCollapse: boolean;
   canRefresh: boolean;
   busy: boolean;
+  /** Open the details of the selection. */
+  onDetails?: () => void;
+  canDetails?: boolean;
+  /** Forget the selected item (never the starting one). */
+  onRemove?: () => void;
+  canRemove?: boolean;
 }
 
 /** The controls over the drawing; it holds no state of its own. */
@@ -77,6 +83,16 @@ export default function GraphToolbar(props: GraphToolbarProps) {
       >
         {t('graph.toolbar.refresh')}
       </Button>
+      {props.onDetails && (
+        <Button icon={<InfoCircleOutlined />} onClick={props.onDetails} disabled={!props.canDetails} data-testid="graph-details-open-button">
+          {t('graph.toolbar.details')}
+        </Button>
+      )}
+      {props.onRemove && (
+        <Button icon={<DeleteOutlined />} onClick={props.onRemove} disabled={!props.canRemove} data-testid="graph-remove">
+          {t('graph.toolbar.remove')}
+        </Button>
+      )}
     </Flex>
   );
 }

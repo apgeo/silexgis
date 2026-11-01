@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { ViewNode } from './view.ts';
-import type { NodeKey } from './types.ts';
+import type { GraphNode, NodeKey } from './types.ts';
+
+/** What search reads of a node in a view; kept structural so this file does not depend on the view that uses it. */
+export interface Searchable {
+  key: NodeKey;
+  node: Pick<GraphNode, 'title' | 'subtitle' | 'restricted'> | null;
+}
 
 /** Lower-case, accent-free text: "Peștera Ţiganului" and "pestera tiganului" are the same words to a searcher. */
 export function normalise(text: string): string {
@@ -13,7 +18,7 @@ export function normalise(text: string): string {
  * Placeholders and "+N more" stubs have no title and never match — searching must not be a way to
  * probe what a placeholder stands for.
  */
-export function searchNodes(nodes: readonly ViewNode[], query: string): NodeKey[] {
+export function searchNodes(nodes: readonly Searchable[], query: string): NodeKey[] {
   const needle = normalise(query);
   if (needle === '') {
     return [];
