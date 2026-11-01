@@ -9,6 +9,7 @@ using Serilog;
 using Serilog.Events;
 using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
+using SilexGis.Api.Common.Targets;
 using SilexGis.Api.Diagnostics;
 using Microsoft.AspNetCore.DataProtection;
 using SilexGis.Api.Features.About;

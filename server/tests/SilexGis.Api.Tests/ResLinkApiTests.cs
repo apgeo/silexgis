@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 using Npgsql;
 using Shouldly;
+using SilexGis.Api.Common.Targets;
 using SilexGis.Api.Features.ResLinks;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;

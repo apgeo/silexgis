@@ -34,7 +34,7 @@ public class QueryHelperTrackingTests
     [
         ("server/src/SilexGis.Api/Features/Cabinets/CabinetEndpoints.cs", "FiledOn"),
         ("server/src/SilexGis.Api/Features/History/HistoryEndpoints.cs", "TimelineAsync"),
-        ("server/src/SilexGis.Api/Features/ResLinks/ResLinkTargetResolvers.cs", "Readable"),
+        ("server/src/SilexGis.Api/Common/Targets/ResLinkTargetResolvers.cs", "Readable"),
         ("server/src/SilexGis.Api/Features/Sync/SyncDocumentEndpoints.cs", "ReadableLinksAsync"),
         ("server/src/SilexGis.Api/Features/Sync/SyncEndpoints.cs", "ReadableBy"),
         ("server/src/SilexGis.Api/Features/Sync/SyncPeopleEndpoints.cs", "Listed"),

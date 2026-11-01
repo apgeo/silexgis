@@ -13,7 +13,7 @@ using SilexGis.Domain.ResLinks;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
-namespace SilexGis.Api.Features.ResLinks;
+namespace SilexGis.Api.Common.Targets;
 
 /// <summary>
 /// Wire vocabulary of resource-link target types: "feature" plus the camelCase names of
