@@ -58,7 +58,16 @@ import {
   tokenDanceCurl,
   withheldPinProblem,
   openPlaceIdIn,
+  placeIdIn,
+  placeStationProblem,
+  surveyModelProblem,
+  MAPPED_STATION,
   OPEN_PLACE_NAME,
+  PROTECTED_SURVEY_MODEL_NAME,
+  SPLAY_STATION,
+  STATION_PLACE_NAME,
+  SURVEY_EXPORT_MODEL_NAME,
+  SURVEY_MODEL_NAME,
   REVIEW_EMAIL,
   ReviewRefusal,
   decidedLine,
@@ -381,6 +390,66 @@ describe('the seeded phone-side data is judged as the protection rules decide it
     assert.equal(openPlaceIdIn({ features: [feature(protectedId, 'Other')] }), null);
     assert.equal(openPlaceIdIn({ features: [feature(openId, OPEN_PLACE_NAME), feature(protectedId, OPEN_PLACE_NAME)] }), null);
     assert.equal(openPlaceIdIn(null), null);
+    assert.equal(placeIdIn({ features: [feature(protectedId, STATION_PLACE_NAME)] }, STATION_PLACE_NAME), protectedId);
+  });
+
+  const openCaveId = '00000000-0000-4000-8000-0000000000c1';
+  const protectedCaveId = '00000000-0000-4000-8000-0000000000c2';
+  const hash = 'a'.repeat(64);
+  const model = (name, format, isCurrent, caveId = openCaveId) =>
+    ({ id: `${name}-id`, name, format, isCurrent, caveId, sizeBytes: 120, sha256: hash });
+  const lox = model(SURVEY_MODEL_NAME, 'lox', true);
+  const survex = model(SURVEY_EXPORT_MODEL_NAME, '3d', false);
+
+  it('accepts both models of the open cave, the Therion one current, and nothing of the protected cave', () => {
+    assert.equal(surveyModelProblem({ models: [lox, survex] }, protectedCaveId), null);
+  });
+
+  it('refuses the protected cave\'s model, by its name or by its cave', () => {
+    assert.match(surveyModelProblem({ models: [lox, survex, model(PROTECTED_SURVEY_MODEL_NAME, '3d', true, protectedCaveId)] }, protectedCaveId),
+      /protected cave DEMO-0002 reached the member/);
+    assert.match(surveyModelProblem({ models: [lox, survex, model('other', '3d', true, protectedCaveId)] }, protectedCaveId),
+      /reached the member/);
+  });
+
+  it('refuses a missing model, a Therion model not yet current and a model without its hash', () => {
+    assert.match(surveyModelProblem({ models: [lox] }, protectedCaveId), /listed 0 times/);
+    assert.match(surveyModelProblem({ models: [{ ...lox, isCurrent: false }, survex] }, protectedCaveId), /isCurrent false/);
+    assert.match(surveyModelProblem({ models: [lox, { ...survex, sha256: null }] }, protectedCaveId), /without a size and a sha256/);
+    assert.match(surveyModelProblem({ models: [{ ...lox, format: '3d' }, survex] }, protectedCaveId), /expected "lox"/);
+    assert.match(surveyModelProblem({}, protectedCaveId), /no models list/);
+  });
+
+  it('refuses rather than accepts when the protected cave could not be found', () => {
+    assert.match(surveyModelProblem({ models: [lox, survex] }, undefined), /cannot be judged/);
+  });
+
+  const stationPlaceId = '00000000-0000-4000-8000-0000000000c3';
+  const row = (placeId, station, splay) => ({ id: `${placeId}-m`, placeId, surveyModelId: lox.id, station, ...(splay ? { splay } : {}) });
+  const stations = (...rows) => ({ placeStations: rows });
+
+  it('accepts one place at a station and one at a splay from another', () => {
+    assert.equal(placeStationProblem(
+      stations(row(openId, MAPPED_STATION), row(stationPlaceId, SPLAY_STATION, [1.5, -0.5, 0.25])),
+      lox.id, openId, stationPlaceId), null);
+  });
+
+  it('refuses the two shapes swapped, a missing mapping and a mapping on another model', () => {
+    assert.match(placeStationProblem(
+      stations(row(openId, MAPPED_STATION, [1, 2, 3]), row(stationPlaceId, SPLAY_STATION)),
+      lox.id, openId, stationPlaceId), /with a splay, expected none/);
+    assert.match(placeStationProblem(stations(row(openId, MAPPED_STATION)), lox.id, openId, stationPlaceId),
+      /"Demo marker C" was mapped .* 0 times/);
+    assert.match(placeStationProblem(
+      stations(row(openId, MAPPED_STATION), { ...row(stationPlaceId, SPLAY_STATION, [1, 2, 3]), surveyModelId: survex.id }),
+      lox.id, openId, stationPlaceId), /0 times/);
+    assert.match(placeStationProblem(
+      stations(row(openId, 'demo.4'), row(stationPlaceId, SPLAY_STATION, [1, 2, 3])),
+      lox.id, openId, stationPlaceId), /expected "demo.2"/);
+  });
+
+  it('refuses rather than accepts when either place could not be named', () => {
+    assert.match(placeStationProblem(stations(), lox.id, openId, null), /cannot be named/);
   });
 });
 
@@ -699,11 +768,11 @@ describe('the server this script starts', () => {
       // Everything this build serves, and `people` because the development installation has the
       // directory on and the member may read it.
       assert.deepEqual([...body.features].sort(), [
-        'documentUpload', 'documents', 'download', 'people', 'rasters', 'reviews', 'trips', 'upload',
+        'documentUpload', 'documents', 'download', 'people', 'rasters', 'reviews', 'surveyModels', 'trips', 'upload',
       ]);
     });
 
-  it('hands the member one photo without its location and one raster pin fewer than were seeded',
+  it('hands the member one photo without its location, one raster pin fewer than were seeded, and the survey models of the open cave alone',
     { skip, timeout: 120_000 },
     async () => {
       const tokens = await signIn(BASE_URL, MEMBER_EMAIL, MEMBER_PASSWORD);
