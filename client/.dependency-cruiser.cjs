@@ -88,6 +88,45 @@ module.exports = {
       to: { path: '^node_modules/(echarts|zrender)/' },
     },
     {
+      name: 'antv-only-in-the-graph-renderer',
+      comment:
+        'Only the files under src/graph/g6/ may import the graph rendering library. Everything '
+        + 'else talks to the GraphRenderer contract in src/graph/renderer.ts, so a second '
+        + 'renderer can stand beside the first without the model, the store or the page '
+        + 'noticing, and the library\'s weight (several hundred kB gzipped) stays in the lazily '
+        + 'loaded route\'s own chunk instead of the entry bundle every signed-in reader '
+        + 'fetches. Type-only imports count, and so do the library\'s sub-packages. Test files '
+        + 'are excluded from this graph, so a test may import the library to stand in for it.',
+      severity: 'error',
+      from: { pathNot: '^src/graph/g6/' },
+      to: { path: '^node_modules/@antv/' },
+    },
+    {
+      name: 'graph-model-is-library-neutral',
+      comment:
+        'The graph model (types, merge, view, filters, search, visuals, the renderer contract and '
+        + 'the explorer store) must be usable and testable without a canvas, a component tree or '
+        + 'a drawing library: a second renderer, a list view or a unit test builds a view from '
+        + 'it without mounting anything. So it may not import React, the component library, '
+        + 'any @antv package, or any page or component. Enforced rather than asserted, because '
+        + '"library-neutral" is true the day it is written and quietly false six months later. '
+        + 'Type-only imports count.',
+      severity: 'error',
+      from: { path: '^src/graph/', pathNot: '^src/graph/g6/' },
+      to: { path: ['^node_modules/(react|react-dom|antd|@ant-design|@antv)/', '^src/(pages|components)/'] },
+    },
+    {
+      name: 'graph-renderer-loads-only-on-demand',
+      comment:
+        'The G6 renderer is reached through renderer.ts\'s dynamic import and nowhere else. A '
+        + 'static import of anything under src/graph/g6/ from the model, the store, a component '
+        + 'or a page would pull the whole drawing library into the chunk of whoever imported '
+        + 'it, which for the store or an eager module is the entry bundle.',
+      severity: 'error',
+      from: { pathNot: '^src/graph/g6/' },
+      to: { path: '^src/graph/g6/', dependencyTypesNot: ['dynamic-import'] },
+    },
+    {
       name: 'grid-libraries-only-in-their-format-modules',
       comment:
         'Only the national-grid and MGRS format modules may import the projection library '

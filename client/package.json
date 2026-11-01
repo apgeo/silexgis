@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",
+    "@antv/g6": "5.1.1",
     "@tanstack/react-query": "^5.105.0",
     "@terrestris/ol-util": "^21.3.2",
     "@terrestris/react-geo": "^33.1.4",
