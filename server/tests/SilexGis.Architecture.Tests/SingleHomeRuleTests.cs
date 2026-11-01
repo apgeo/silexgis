@@ -34,6 +34,28 @@ public class SingleHomeRuleTests
     }
 
     [Fact]
+    public void Whether_tags_may_be_read_at_all_is_asked_in_one_place()
+    {
+        // The domain-wide read over tags decides whether the tag list, the relations graph's
+        // tag neighbourhood, its tag nodes and its seed search may name any tag. It is
+        // TagCatalogue.MayRead; an installation that tightens the right must find tag names
+        // withheld everywhere at once, not only on the list.
+        var asked = new Regex(@"AccessDomain\.Tags,\s*AccessAction\.Read,\s*null\b");
+
+        var elsewhere = TripSoftDeleteGuardTests.Sources()
+            .Where(s => !s.File.EndsWith("/Common/TagCatalogue.cs", StringComparison.Ordinal))
+            .Where(s => asked.IsMatch(s.Source))
+            .Select(s => s.File)
+            .ToList();
+
+        elsewhere.ShouldBeEmpty("ask TagCatalogue.MayRead instead of asking the evaluator directly");
+
+        TripSoftDeleteGuardTests.Sources()
+            .Single(s => s.File.EndsWith("/Common/TagCatalogue.cs", StringComparison.Ordinal))
+            .Source.ShouldMatch(asked.ToString());
+    }
+
+    [Fact]
     public void A_file_that_takes_the_injected_clock_reads_no_other()
     {
         // The clock is injected where a test reads a stamp back — a delivery's next attempt, a
