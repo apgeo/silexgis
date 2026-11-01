@@ -30,7 +30,10 @@ describe('classification', () => {
   it('a feature file selects its owning classes', () => {
     const r = classify(['server/src/SilexGis.Api/Features/Cabinets/CabinetEndpoints.cs'], map);
     assert.equal(r.mode, 'targeted');
-    assert.deepEqual(r.classes, ['CabinetApiTests', 'CabinetTreeTests', 'FilterWorldConformanceTests', 'FilterWorldListParityTests']);
+    assert.deepEqual(r.classes, [
+      'CabinetApiTests', 'CabinetTreeTests', 'FilterWorldConformanceTests', 'FilterWorldListParityTests',
+      'GraphRelationParityTests',
+    ]);
   });
 
   it('a Domain area routes to the same group as its feature slice', () => {

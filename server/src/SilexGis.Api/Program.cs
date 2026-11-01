@@ -9,6 +9,7 @@ using Serilog;
 using Serilog.Events;
 using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
+using SilexGis.Api.Common.Graph;
 using SilexGis.Api.Common.Targets;
 using SilexGis.Api.Diagnostics;
 using Microsoft.AspNetCore.DataProtection;
@@ -35,6 +36,7 @@ using SilexGis.Api.Features.Export;
 using SilexGis.Api.Features.Files;
 using SilexGis.Api.Features.Geofiles;
 using SilexGis.Api.Features.GeoreferencedMaps;
+using SilexGis.Api.Features.Graph;
 using SilexGis.Api.Features.History;
 using SilexGis.Api.Features.Import;
 using SilexGis.Api.Features.Jobs;
@@ -340,6 +342,23 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     builder.Services.AddScoped<IResLinkTargetResolver, GeofileTargetResolver>();
     builder.Services.AddScoped<IResLinkTargetResolver, ExpeditionTargetResolver>();
     builder.Services.AddScoped<ResLinkTargetDirectory>();
+    // The relations graph: one edge source per relation family, each living beside the route
+    // whose answer it mirrors, and one display resolver per node type for the backstop pass.
+    builder.Services.AddScoped<IGraphEdgeSource, SilexGis.Api.Features.ResLinks.ResLinkGraphSource>();
+    builder.Services.AddScoped<IGraphEdgeSource, SilexGis.Api.Features.Features.FeatureLinkGraphSource>();
+    builder.Services.AddScoped<IGraphEdgeSource, SilexGis.Api.Features.Features.HierarchyGraphSource>();
+    builder.Services.AddScoped<IGraphEdgeSource, SilexGis.Api.Features.Attachments.AttachmentGraphSource>();
+    builder.Services.AddScoped<IGraphEdgeSource, SilexGis.Api.Features.TripLogs.TripParticipantGraphSource>();
+    builder.Services.AddScoped<IGraphEdgeSource, SilexGis.Api.Features.Expeditions.ExpeditionGraphSource>();
+    builder.Services.AddScoped<IGraphEdgeSource, SilexGis.Api.Features.Cabinets.CabinetGraphSource>();
+    builder.Services.AddScoped<IGraphEdgeSource, SilexGis.Api.Features.Tags.TagGraphSource>();
+    builder.Services.AddScoped<IGraphEdgeSource, SilexGis.Api.Features.CavingGroups.GroupMembershipGraphSource>();
+    builder.Services.AddScoped<IGraphEdgeSource, SilexGis.Api.Features.Caves.SurveyModelGraphSource>();
+    builder.Services.AddScoped<IGraphNodeResolver, GraphTargetNodeResolver>();
+    builder.Services.AddScoped<IGraphNodeResolver, GraphTagNodeResolver>();
+    builder.Services.AddScoped<IGraphNodeResolver, SilexGis.Api.Features.ResLinks.ResLinkGraphNodeResolver>();
+    builder.Services.AddScoped<SilexGis.Api.Features.Graph.GraphNeighbourhoodService>();
+    builder.Services.AddScoped<SilexGis.Api.Features.Graph.GraphSearchService>();
     // Credential-guessing protection: per-IP fixed window on the auth surface.
     // Limit is configurable for installations behind shared NATs.
     //
@@ -653,6 +672,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapPublicPhotoEndpoints();
     api.MapPublicQrEndpoints();
     api.MapResLinkEndpoints();
+    api.MapGraphEndpoints();
     api.MapResLinkRelationTypeEndpoints();
     api.MapGeoreferencedMapEndpoints();
     api.MapTripLogEndpoints();

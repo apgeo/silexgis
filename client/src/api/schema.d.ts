@@ -5522,6 +5522,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/graph/neighbourhood": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One hop around one item: its neighbours in each asked category as the caller may see them. type + id name the item; categories (comma list, default all) narrows the families; category + offset pages one family; limit (1-200, default 40) caps each family's top-level items. */
+        get: operations["graphNeighbourhood"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/graph/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Items to start exploring from, found by name and offered only when the caller may read them. q is the typed text (blank answers nothing); types (comma list, default every searchable kind) narrows the kinds; limit (1-20, default 5) caps the hits per kind. */
+        get: operations["graphSearch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reslinks/relation-types": {
         parameters: {
             query?: never;
@@ -11626,6 +11660,54 @@ export interface components {
             /** Format: uuid */
             cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
+        };
+        GraphCategoryCountDto: {
+            category: string;
+            /** Format: int32 */
+            shown: number;
+            /** Format: int32 */
+            total: number;
+        };
+        GraphEdgeDto: {
+            key: string;
+            category: string;
+            relation: string;
+            relationName: null | string;
+            inverseName: null | string;
+            directed: boolean;
+            isMain: null | boolean;
+            source: string;
+            target: string;
+            anchorKind: null | string;
+        };
+        GraphNeighbourhoodDto: {
+            seed: components["schemas"]["GraphNodeDto"];
+            nodes: components["schemas"]["GraphNodeDto"][];
+            edges: components["schemas"]["GraphEdgeDto"][];
+            counts: components["schemas"]["GraphCategoryCountDto"][];
+        };
+        GraphNodeDto: {
+            key: string;
+            type: string;
+            id: null | string;
+            title: null | string;
+            subtitle: null | string;
+            kind: null | string;
+            restricted: boolean;
+            expandable: boolean;
+            route: null | string;
+            shortCode: null | string;
+            /** Format: int32 */
+            memberCount: null | number;
+        };
+        GraphSearchHitDto: {
+            key: string;
+            type: string;
+            id: string;
+            title: null | string;
+            subtitle: null | string;
+            kind: null | string;
+            route: null | string;
         };
         GrottocenterCandidateDto: {
             externalId: string;
@@ -32262,6 +32344,102 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    graphNeighbourhood: {
+        parameters: {
+            query?: {
+                type?: string;
+                id?: string;
+                categories?: string;
+                category?: string;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphNeighbourhoodDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    graphSearch: {
+        parameters: {
+            query?: {
+                q?: string;
+                types?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphSearchHitDto"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Unauthorized */
