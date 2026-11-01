@@ -177,6 +177,14 @@ class G6Renderer implements GraphRenderer {
         await graph.fitView({ when: 'always' }, false);
       } else if (!hadNodes && view.nodes.length === 1) {
         await graph.fitCenter(false);
+      } else if (hadNodes) {
+        // An update that only adds, removes or repaints must not move what the user was looking at.
+        // The library applies a finished layout without waiting for its element redraw, so a late
+        // write from an earlier arrangement can land during this update; put every surviving node
+        // back where it was, now and again once the pending work has had a turn.
+        await this.pinPositions(graph, placed);
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        await this.pinPositions(graph, placed);
       }
     });
   }
@@ -295,6 +303,25 @@ class G6Renderer implements GraphRenderer {
       }
     }
     return result;
+  }
+
+  /** Writes back the remembered position of every node that has drifted from it. */
+  private async pinPositions(graph: Graph, remembered: ReadonlyMap<NodeKey, Point>): Promise<void> {
+    if (this.live() !== graph) {
+      return;
+    }
+    const now = this.nodePositions();
+    const moved: NodeData[] = [];
+    for (const [key, was] of remembered) {
+      const is = now.get(key);
+      if (is !== undefined && (Math.abs(is.x - was.x) > 0.5 || Math.abs(is.y - was.y) > 0.5)) {
+        moved.push({ id: key, style: { x: was.x, y: was.y } });
+      }
+    }
+    if (moved.length > 0) {
+      graph.updateNodeData(moved);
+      await graph.draw();
+    }
   }
 
   /** Re-lays out every node with the current kind, around the focus node for the radial layout. */

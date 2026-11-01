@@ -65,8 +65,10 @@ export function nodeStyle(paint: NodePaint, label: string, theme: GraphTheme): G
     labelPlacement: 'bottom',
     labelOpacity: paint.opacity,
     badge: paint.lock,
+    // A plain geometric mark rather than a padlock emoji: emoji need a colour-emoji font that many
+    // machines lack and would draw as an empty box. U+25A0 exists in every ordinary text font.
     badges: paint.lock
-      ? [{ text: '\u{1F512}', placement: 'right-top', fontSize: 10, fill: theme.textSecondary, backgroundFill: 'transparent' }]
+      ? [{ text: '\u25A0', placement: 'right-top', fontSize: 9, fill: theme.textSecondary, backgroundFill: 'transparent' }]
       : [],
     cursor: 'pointer',
   };
