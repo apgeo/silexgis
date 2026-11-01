@@ -8475,6 +8475,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/sets/{id}/survey-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One page of the line-plot survey models of a sync set's caves, the places mapped to their stations, and what has gone. */
+        get: operations["syncSurveyModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/phone-users": {
         parameters: {
             query?: never;
@@ -11869,6 +11886,8 @@ export interface components {
             rasterMapId?: null | string;
             /** Format: uuid */
             rasterPinId?: null | string;
+            /** Format: uuid */
+            placeStationId?: null | string;
         };
         ImportBatchUndoSkippedDto: {
             field: string;
@@ -15437,6 +15456,13 @@ export interface components {
             uploadRowsMax: number;
             features: string[];
         };
+        SyncDeletedRowDto: {
+            /** Format: uuid */
+            id: string;
+            deleted: boolean;
+            /** Format: date-time */
+            revision: string;
+        };
         SyncDocumentDto: {
             /** Format: uuid */
             id: string;
@@ -15597,6 +15623,20 @@ export interface components {
             /** Format: uuid */
             caverId: null | string;
         };
+        SyncPlaceStationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            placeId: string;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            /** Format: uuid */
+            documentId: null | string;
+            station: string;
+            splay: null | number[];
+            /** Format: date-time */
+            revision: string;
+        };
         SyncRasterMapDto: {
             /** Format: uuid */
             id: string;
@@ -15714,6 +15754,37 @@ export interface components {
             /** Format: int64 */
             baseRevision?: null | number;
         };
+        SyncSurveyModelDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            caveId: string;
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            versionId: string;
+            name: string;
+            format: components["schemas"]["SyncSurveyModelFormat"];
+            isCurrent: boolean;
+            /** Format: int64 */
+            sizeBytes: number;
+            sha256: string;
+            /** Format: date-time */
+            revision: string;
+        };
+        /** @enum {unknown} */
+        SyncSurveyModelFormat: "lox" | "3d";
+        SyncSurveyModelsPageDto: {
+            /** Format: int64 */
+            setRevision: number;
+            settings: components["schemas"]["JsonElement"];
+            models: components["schemas"]["SyncSurveyModelDto"][];
+            tombstones: components["schemas"]["SyncDeletedRowDto"][];
+            placeStations: components["schemas"]["SyncPlaceStationDto"][];
+            placeStationTombstones: components["schemas"]["SyncDeletedRowDto"][];
+            nextCursor: null | string;
+            hasMore: boolean;
+        };
         SyncTombstoneDto: {
             /** Format: uuid */
             id: string;
@@ -15817,6 +15888,22 @@ export interface components {
             /** Format: uuid */
             caverId?: null | string;
         };
+        SyncUploadPlaceStationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            baseRevision?: null | string;
+            /** @default false */
+            deleted: boolean;
+            /** Format: uuid */
+            placeId?: null | string;
+            /** Format: uuid */
+            surveyModelId?: null | string;
+            /** Format: uuid */
+            documentId?: null | string;
+            station?: null | string;
+            splay?: null | number[];
+        };
         SyncUploadRasterMapDto: {
             /** Format: uuid */
             id: string;
@@ -15871,6 +15958,7 @@ export interface components {
             tripPoints?: null | components["schemas"]["SyncUploadTripPointDto"][];
             rasterMaps?: null | components["schemas"]["SyncUploadRasterMapDto"][];
             rasterPins?: null | components["schemas"]["SyncUploadRasterPinDto"][];
+            placeStations?: null | components["schemas"]["SyncUploadPlaceStationDto"][];
         };
         SyncUploadResultDto: {
             /** Format: uuid */
@@ -15892,6 +15980,7 @@ export interface components {
             tripPoints?: null | components["schemas"]["SyncUploadRowResultDto"][];
             rasterMaps?: null | components["schemas"]["SyncUploadRowResultDto"][];
             rasterPins?: null | components["schemas"]["SyncUploadRowResultDto"][];
+            placeStations?: null | components["schemas"]["SyncUploadRowResultDto"][];
         };
         SyncUploadRowDto: {
             /** Format: uuid */
@@ -41341,6 +41430,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncRastersPageDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncSurveyModels: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncSurveyModelsPageDto"];
                 };
             };
             /** @description Bad Request */
