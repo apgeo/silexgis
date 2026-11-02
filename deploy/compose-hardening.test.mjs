@@ -146,12 +146,18 @@ describe('the compose files resolve together', () => {
       try {
         for (const file of composeFiles) fs.copyFileSync(path.join(deployDir, file), path.join(dir, file));
         fs.copyFileSync(path.join(deployDir, '.env.example'), path.join(dir, '.env'));
-        const result = spawnSync('docker', ['compose', ...files.flatMap((f) => ['-f', f]), 'config', '-q'], {
+        const result = spawnSync('docker', ['compose', ...files.flatMap((f) => ['-f', f]), 'config', '--format', 'json'], {
           cwd: dir,
           encoding: 'utf8',
           env: { ...process.env, ...required, COMPOSE_FILE: '' },
+          maxBuffer: 16 * 1024 * 1024,
         });
         assert.equal(result.status, 0, result.stderr);
+        // The API parses uploaded files of many kinds; whichever overlays run, it keeps no Linux
+        // capability and cannot gain privileges, as resolved rather than as written in one file.
+        const api = JSON.parse(result.stdout).services.api;
+        assert.deepEqual(api.cap_drop, ['ALL'], 'the api service drops every capability');
+        assert.ok(api.security_opt?.includes('no-new-privileges:true'), 'the api service may not gain privileges');
       } finally {
         fs.rmSync(dir, { recursive: true, force: true });
       }

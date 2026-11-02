@@ -29,6 +29,90 @@ APP_DIR=/opt/silexgis
 
 say() { printf '\n==> %s\n' "$*"; }
 
+# Container logs are unbounded by default and this host has one disk for everything.
+#
+# The three settings are merged into whatever daemon.json already holds rather than written over
+# it: an operator's data-root on a second disk, registry mirror or proxy must survive a re-run, and
+# losing a data-root silently starts the daemon on an empty image store. The operator's own log
+# options are kept only when the file already used the json-file driver: options of another driver
+# (syslog-address, gelf-address) are unknown to json-file, and a daemon handed them refuses to
+# start. A daemon.json that is not valid JSON, or a result the daemon itself rejects, stops the
+# script with the file as it was. The log settings take effect only when the daemon restarts (a
+# reload does not apply them), so it is restarted -- and only when the file actually changed,
+# because a restart without live-restore already in force stops the containers.
+#
+# Takes the configuration directory (/etc/docker on a host) so that it can be run against a scratch one.
+configure_docker_daemon() {
+	local dir="$1"
+	local current="$dir/daemon.json" new driver
+	local settings='{"log-driver": "json-file", "log-opts": {"max-size": "10m", "max-file": "5"}, "live-restore": true}'
+	say "Docker: daemon configuration"
+	mkdir -p "$dir"
+	new=$(mktemp "$dir/daemon.json.XXXXXX")
+	if [ -s "$current" ]; then
+		if ! driver=$(jq -r '.["log-driver"] // "json-file"' "$current" 2>/dev/null) \
+			|| ! jq --argjson ours "$settings" \
+				'if (.["log-driver"] // "json-file") == "json-file"
+				 then . + $ours + {"log-opts": ((.["log-opts"] // {}) + $ours["log-opts"])}
+				 else . + $ours end' \
+				"$current" > "$new"; then
+			rm -f "$new"
+			echo "!! $current is not valid JSON -- fix it by hand and run this again" >&2
+			return 1
+		fi
+		if [ "$driver" != json-file ]; then
+			echo "    note: the log driver was $driver; it is now json-file, and that driver's options replace its own" >&2
+		fi
+	else
+		jq -n --argjson ours "$settings" '$ours' > "$new"
+	fi
+	if cmp -s "$new" "$current"; then
+		rm -f "$new"
+		systemctl enable --now docker >/dev/null
+		return 0
+	fi
+	# Ask the daemon whether it would start on the new file before the running one is stopped for it.
+	# --validate arrived in Docker 23; an engine without it is restarted unasked, as before.
+	if command -v dockerd >/dev/null && dockerd --help 2>&1 | grep -q -- '--validate'; then
+		if ! dockerd --validate --config-file "$new" >&2; then
+			rm -f "$new"
+			echo "!! the Docker daemon rejects the merged $current -- it was left as it was and Docker was not restarted" >&2
+			return 1
+		fi
+	fi
+	chmod 644 "$new"
+	mv -f "$new" "$current"
+	systemctl enable docker >/dev/null
+	systemctl restart docker
+}
+
+# Firewall. Note that Docker inserts its published-port rules ahead of ufw's filter chain, so ufw
+# does not gate a published container port: what actually keeps the database private is that it
+# publishes no port at all. These rules govern host services.
+#
+# Rules are added, never reset: a re-run must not drop a rule the operator added by hand, nor the
+# 443 rule of an earlier run that set SILEXGIS_HTTPS=1 when this one does not. `ufw allow` of a
+# rule that already exists does nothing. The flip side is that a port this script once opened and
+# no longer needs (an SSH port that moved) stays open until it is removed by hand:
+# ufw delete allow <port>/tcp
+configure_firewall() {
+	say "Firewall"
+	ufw default deny incoming >/dev/null
+	ufw default allow outgoing >/dev/null
+	ufw allow "${SSH_PORT}/tcp" comment 'ssh' >/dev/null
+	ufw allow "${HTTP_PORT}/tcp" comment 'silexgis web' >/dev/null
+	if [ "$OPEN_HTTPS" = 1 ]; then
+		ufw allow 443/tcp comment 'silexgis web tls' >/dev/null
+	fi
+	ufw --force enable >/dev/null
+	ufw status verbose | sed 's/^/    /'
+}
+
+# Sourced rather than run (as the tests do): define the steps above and change nothing.
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then
+	return 0
+fi
+
 [ "$(id -u)" -eq 0 ] || { echo "must run as root" >&2; exit 1; }
 . /etc/os-release
 [ "${ID:-}" = ubuntu ] || echo "warning: tested on Ubuntu, found ${ID:-unknown}" >&2
@@ -84,18 +168,7 @@ else
 	say "Docker: already installed ($(docker --version))"
 fi
 
-# Container logs are unbounded by default and this host has one disk for everything.
-say "Docker: daemon configuration"
-mkdir -p /etc/docker
-cat > /etc/docker/daemon.json <<'EOF'
-{
-  "log-driver": "json-file",
-  "log-opts": { "max-size": "10m", "max-file": "5" },
-  "live-restore": true
-}
-EOF
-systemctl enable --now docker >/dev/null
-systemctl reload docker 2>/dev/null || systemctl restart docker
+configure_docker_daemon /etc/docker
 
 # ---------------------------------------------------------------------------
 # The account that owns the checkout. Membership of the docker group is
@@ -137,21 +210,7 @@ fi
 install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$APP_DIR"
 install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 750 /var/backups/silexgis
 
-# ---------------------------------------------------------------------------
-# Firewall. Note that Docker inserts its published-port rules ahead of ufw's
-# filter chain, so ufw does not gate a published container port: what actually
-# keeps the database private is that it publishes no port at all. These rules
-# govern host services.
-# ---------------------------------------------------------------------------
-say "Firewall"
-ufw --force reset >/dev/null
-ufw default deny incoming >/dev/null
-ufw default allow outgoing >/dev/null
-ufw allow "${SSH_PORT}/tcp" comment 'ssh' >/dev/null
-ufw allow "${HTTP_PORT}/tcp" comment 'silexgis web' >/dev/null
-[ "$OPEN_HTTPS" = 1 ] && ufw allow 443/tcp comment 'silexgis web tls' >/dev/null
-ufw --force enable >/dev/null
-ufw status verbose | sed 's/^/    /'
+configure_firewall
 
 say "fail2ban"
 cat > /etc/fail2ban/jail.d/silexgis.local <<EOF
