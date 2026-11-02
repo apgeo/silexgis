@@ -13,6 +13,7 @@ using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Identity;
+using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 
@@ -446,6 +447,80 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
         health.GetProperty("paidMessagesToday").GetInt32().ShouldBe(7);
         health.GetProperty("dailyPaidMessageCap").GetInt32()
             .ShouldBe(AnnouncementSettings.DefaultDailyPaidMessageCap);
+    }
+
+    [Fact]
+    public async Task An_announcement_the_queue_gave_up_handing_out_stops_counting_against_the_day()
+    {
+        await StartAsync();
+        await SpendAsync(0);
+        using var admin = await OperatorClientAsync();
+
+        // Accepted for a large club and never handed out: its job's runner was lost on every
+        // attempt it was allowed, so the job is Running on its last attempt with nobody renewing it.
+        Guid announcementId;
+        long jobId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var announcement = new CavingGroupAnnouncement
+            {
+                CavingGroupId = cavingGroupId,
+                SenderUserId = leaderId,
+                Message = "Never handed out.",
+                CavingGroupName = "Paid Cap Club",
+                SenderName = "A leader",
+                RecipientCount = 3,
+                SegmentsPerCopy = WeighedPerCopy,
+            };
+            db.CavingGroupAnnouncements.Add(announcement);
+            var job = new ProcessingJob
+            {
+                Kind = ProcessingJobKinds.CavingGroupAnnouncement,
+                Payload = JsonSerializer.Serialize(
+                    new CavingGroupAnnouncementPayload(announcement.Id), JsonSerializerOptions.Web),
+                Status = ProcessingJobStatus.Running,
+                StartedAt = DateTimeOffset.UtcNow.AddMinutes(-10),
+                Attempts = JobRetry.MaxAttempts,
+                LeaseExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            };
+            db.ProcessingJobs.Add(job);
+            await db.SaveChangesAsync();
+            announcementId = announcement.Id;
+            jobId = job.Id;
+        }
+
+        // What it promised is counted while it waits — the half that shows the next assertion is
+        // about the give-up and not about a notice that was never counted at all.
+        (await admin.GetFromJsonAsync<JsonElement>("/api/v1/admin/notifications/health"))
+            .GetProperty("paidMessagesToday").GetInt32().ShouldBe(3 * WeighedPerCopy);
+
+        await new SweepingWorker(
+                factory.Services.GetRequiredService<IServiceScopeFactory>(),
+                factory.Services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>())
+            .SweepAsync();
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.ProcessingJobs.AsNoTracking().SingleAsync(j => j.Id == jobId)).Status
+                .ShouldBe(ProcessingJobStatus.Failed);
+            var given = await db.CavingGroupAnnouncements.AsNoTracking().SingleAsync(a => a.Id == announcementId);
+            given.FailedAt.ShouldNotBeNull();
+            given.ExpandedAt.ShouldBeNull();
+        }
+
+        (await admin.GetFromJsonAsync<JsonElement>("/api/v1/admin/notifications/health"))
+            .GetProperty("paidMessagesToday").GetInt32().ShouldBe(0);
+    }
+
+    /// <summary>The general lane's worker, driven one sweep at a time.</summary>
+    private sealed class SweepingWorker(
+        IServiceScopeFactory scopes, Microsoft.Extensions.Configuration.IConfiguration configuration)
+        : ProcessingJobWorkerBase(
+            JobLane.General, scopes, configuration, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance)
+    {
+        public Task SweepAsync() => ReturnStaleAsync(CancellationToken.None);
     }
 
     /// <summary>

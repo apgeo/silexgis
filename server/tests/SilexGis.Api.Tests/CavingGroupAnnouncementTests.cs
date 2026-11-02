@@ -281,6 +281,56 @@ public sealed class CavingGroupAnnouncementTests : IAsyncLifetime, IDisposable, 
     }
 
     [Fact]
+    public async Task Two_announcements_sent_at_the_same_moment_reach_the_roster_once()
+    {
+        // A double-click, or a script: both requests arrive before either has written anything.
+        // The cooldown is asked and stamped as one act, so the second waits for the first and
+        // then finds it too soon — rather than both finding the cooldown open.
+        var responses = await Task.WhenAll(
+            AnnounceAsync(leader, "The meet is on."),
+            AnnounceAsync(leader, "The meet is on."));
+
+        responses.Count(r => r.StatusCode == HttpStatusCode.OK).ShouldBe(1);
+        var refused = responses.Single(r => r.StatusCode != HttpStatusCode.OK);
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await refused.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("caving_group.announcement_too_soon");
+        (await NoticesForAsync(memberId)).Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task The_cooldown_opens_again_after_its_interval_and_a_refused_attempt_does_not_extend_it()
+    {
+        // On a clock the test sets, with the interval the application ships with — so a cooldown
+        // stretched to hours, or one that a refusal restarts, fails here rather than only being
+        // noticed by a club leader locked out for the evening.
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        await using var host = new SilexGisApiFactory(
+            connectionString,
+            null,
+            services =>
+            {
+                JobWorkers.RemoveFrom(services);
+                services.AddSingleton<TimeProvider>(clock);
+            });
+        using var sender = await AuthHelper.BearerClientAsync(host, EmailOf(leaderId));
+        var start = clock.Now;
+
+        (await AnnounceAsync(sender, "First.")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        clock.Now = start + SilexGis.Api.Auth.SendThrottle.GroupAnnouncementInterval - TimeSpan.FromMinutes(1);
+        var early = await AnnounceAsync(sender, "Too early.");
+        early.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await early.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("caving_group.announcement_too_soon");
+
+        // Measured from the announcement that went out, not from the attempt just refused.
+        clock.Now = start + SilexGis.Api.Auth.SendThrottle.GroupAnnouncementInterval + TimeSpan.FromSeconds(1);
+        (await AnnounceAsync(sender, "Second.")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await NoticesForAsync(memberId)).Count.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task A_refusal_costs_nothing_and_leaves_the_next_announcement_free()
     {
         // The cooldown is stamped where the sending starts, so being turned away before that —

@@ -44,6 +44,23 @@ public class NotificationRoutingTests
     }
 
     [Fact]
+    public void Retry_delay_steps_are_one_five_and_thirty_minutes_then_two_and_six_hours()
+    {
+        // Pinned step by step: the shape test above passes for a ladder squashed to a few seconds
+        // or stretched to days, and either would change how soon a failed message is tried again.
+        Enumerable.Range(1, NotificationRouting.MaxAttempts)
+            .Select(NotificationRouting.RetryDelay)
+            .ShouldBe(
+            [
+                TimeSpan.FromMinutes(1),
+                TimeSpan.FromMinutes(5),
+                TimeSpan.FromMinutes(30),
+                TimeSpan.FromHours(2),
+                TimeSpan.FromHours(6),
+            ]);
+    }
+
+    [Fact]
     public void Next_digest_is_today_when_the_window_is_still_ahead()
     {
         var now = new DateTimeOffset(2026, 7, 31, 6, 59, 0, TimeSpan.Zero);
