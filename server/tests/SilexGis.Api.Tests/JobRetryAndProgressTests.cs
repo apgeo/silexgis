@@ -9,6 +9,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Messaging;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
@@ -59,7 +60,12 @@ public sealed class JobRetryAndProgressTests : IAsyncLifetime, IDisposable, ICla
     {
         var id = await QueueAsync(Passing);
 
+        // Bracketed on both sides rather than measured against one later reading, so a machine
+        // that stalls between the put-back and the read cannot move the answer out of range.
+        // The second of slack is for the two clocks: the delay is added to the database's.
+        var before = DateTimeOffset.UtcNow;
         (await TurnAsync()).ShouldBeTrue();
+        var after = DateTimeOffset.UtcNow;
 
         var waiting = await ReadAsync(id);
         waiting.Status.ShouldBe(ProcessingJobStatus.Queued);
@@ -68,7 +74,9 @@ public sealed class JobRetryAndProgressTests : IAsyncLifetime, IDisposable, ICla
         waiting.Error.ShouldContain("did not answer");
         // Not before thirty seconds from the failure, and not taken before then.
         waiting.NotBefore.ShouldNotBeNull();
-        (waiting.NotBefore!.Value - DateTimeOffset.UtcNow).ShouldBeInRange(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(31));
+        waiting.NotBefore!.Value.ShouldBeInRange(
+            before + JobRetry.DelayAfter(1) - TimeSpan.FromSeconds(1),
+            after + JobRetry.DelayAfter(1) + TimeSpan.FromSeconds(1));
         (await TurnAsync()).ShouldBeFalse();
 
         await DueNowAsync(id);
@@ -149,6 +157,91 @@ public sealed class JobRetryAndProgressTests : IAsyncLifetime, IDisposable, ICla
     }
 
     [Fact]
+    public async Task Progress_is_written_at_most_once_a_second_and_always_for_the_last_unit()
+    {
+        var id = await QueueAsync(Reports);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.ProcessingJobs.Where(j => j.Id == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(j => j.Status, ProcessingJobStatus.Running));
+        }
+
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var progress = new JobProgress(factory.Services.GetRequiredService<IServiceScopeFactory>(), clock);
+
+        // The first report is written; the next hundred at the same instant are not.
+        for (var done = 0; done <= 100; done++)
+        {
+            await progress.ReportAsync(id, done, 1000, CancellationToken.None);
+        }
+
+        (await ReadAsync(id)).ProgressDone.ShouldBe(0);
+
+        // A second later the next one is.
+        clock.Now += TimeSpan.FromSeconds(1.1);
+        await progress.ReportAsync(id, 101, 1000, CancellationToken.None);
+        (await ReadAsync(id)).ProgressDone.ShouldBe(101);
+
+        // And the last unit always, however soon after.
+        await progress.ReportAsync(id, 1000, 1000, CancellationToken.None);
+        (await ReadAsync(id)).ProgressDone.ShouldBe(1000);
+    }
+
+    [Fact]
+    public async Task The_requester_is_told_once_when_a_job_ends_and_never_while_it_is_put_back()
+    {
+        var retried = await QueueAsync(Passing);
+        await TurnAsync();
+        (await ReadAsync(retried)).Status.ShouldBe(ProcessingJobStatus.Queued);
+        (await JobNoticesAsync()).ShouldBeEmpty();
+
+        await DueNowAsync(retried);
+        await TurnAsync();
+        (await JobNoticesAsync()).ShouldBe([MessageTemplateCatalog.NotifyJobCompleted]);
+
+        // A failure on the ordinary path and on the path that records it apart from rows the
+        // attempt added: one failure notice each.
+        await QueueAsync(NotRetried);
+        await TurnAsync();
+        await QueueAsync(LeavesRows);
+        await TurnAsync();
+        (await JobNoticesAsync()).ShouldBe(
+            [MessageTemplateCatalog.NotifyJobCompleted, MessageTemplateCatalog.NotifyJobFailed, MessageTemplateCatalog.NotifyJobFailed]);
+    }
+
+    [Fact]
+    public async Task A_database_connection_dropped_under_a_query_made_through_the_model_counts_as_passing()
+    {
+        // The real shape, not a hand-made one: the provider's execution strategy wraps a transient
+        // error from any query or save made through the model in an exception of its own.
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.Database.OpenConnectionAsync();
+        var pid = await db.Database.SqlQueryRaw<int>("SELECT pg_backend_pid() AS \"Value\"").SingleAsync();
+        await using (var other = factory.Services.CreateAsyncScope())
+        {
+            await other.ServiceProvider.GetRequiredService<SilexGisDbContext>().Database
+                .ExecuteSqlRawAsync("SELECT pg_terminate_backend({0})", pid);
+        }
+
+        var failure = await Should.ThrowAsync<Exception>(() => db.ProcessingJobs.CountAsync());
+
+        JobRetry.IsPassing(failure).ShouldBeTrue(failure.ToString());
+    }
+
+    private async Task<string[]> JobNoticesAsync()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Notifications.AsNoTracking()
+            .Where(n => n.RecipientUserId == ownerId)
+            .OrderBy(n => n.Id)
+            .Select(n => n.TemplateKey)
+            .ToArrayAsync();
+    }
+
+    [Fact]
     public void A_failure_counts_as_passing_only_when_it_says_nothing_about_the_input()
     {
         // Of the surroundings: tried again.
@@ -158,6 +251,12 @@ public sealed class JobRetryAndProgressTests : IAsyncLifetime, IDisposable, ICla
         JobRetry.IsPassing(new IOException("the device is not ready")).ShouldBeTrue();
         JobRetry.IsPassing(new DbUpdateException("save", new TimeoutException())).ShouldBeTrue();
         JobRetry.IsPassing(new TaskCanceledException("timed out", new TimeoutException())).ShouldBeTrue();
+        // A save through the model, wrapped by the execution strategy, is looked through only as
+        // far as the database's own word: a save refused for what it held stays final.
+        JobRetry.IsPassing(new InvalidOperationException("transient", new DbUpdateException("save", new TimeoutException())))
+            .ShouldBeTrue();
+        JobRetry.IsPassing(new InvalidOperationException("transient", new DbUpdateException("save", new InvalidDataException())))
+            .ShouldBeFalse();
 
         // About the input, or said so by the handler: not tried again.
         JobRetry.IsPassing(new HttpRequestException("refused", null, System.Net.HttpStatusCode.BadRequest)).ShouldBeFalse();

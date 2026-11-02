@@ -129,6 +129,70 @@ public sealed class JobFailureRecordingTests : IAsyncLifetime, IDisposable, ICla
         failed.ImportError.ShouldBe("The file is not a track log.");
     }
 
+    // The whole set of kinds the queue retries, named rather than sampled: a kind that starts
+    // retrying has to be added here, which is where its author is asked whether running it twice is
+    // safe and whether it records a failure on a subject row (then it belongs in the theory below
+    // too, and must ask WillBeRetried before writing it).
+    [Fact]
+    public void The_kinds_that_retry_passing_failures_are_exactly_these()
+    {
+        using var scope = factory.Services.CreateScope();
+
+        var retrying = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
+            .Where(h => h.RetriesPassingFailures)
+            .Select(h => h.Kind)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        string[] expected =
+        [
+            // Record a failure on a subject row, and hold it back while a retry is coming.
+            ProcessingJobKinds.GeofileImport,
+            ProcessingJobKinds.SurveyCompilation,
+            ProcessingJobKinds.SurveyGraph,
+            ProcessingJobKinds.SurveyMesh,
+            ProcessingJobKinds.TerrainDerivative,
+            ProcessingJobKinds.TextExtraction,
+            // Record nothing on a subject: a re-run starts over, and what an attempt wrote is
+            // either all saved or none of it.
+            ProcessingJobKinds.AccessHistoryPrune,
+            ProcessingJobKinds.CavingGroupAnnouncement,
+            ProcessingJobKinds.DocumentPurge,
+            ProcessingJobKinds.ImportCommit,
+            ProcessingJobKinds.PhotoGeoBackfill,
+            ProcessingJobKinds.SurveyUploadSweep,
+            ProcessingJobKinds.TerrainUploadSweep,
+            ProcessingJobKinds.TripPurge,
+            ProcessingJobKinds.UploadSessionSweep,
+        ];
+        retrying.ShouldBe(expected.Order(StringComparer.Ordinal).ToArray());
+    }
+
+    // The worker takes the first handler of a kind it finds, so a second one would be silently
+    // ignored, and a kind with none fails only when somebody's job reaches it. The lists the
+    // lanes and the claim order are built from must name real kinds, or a kind meant for the
+    // terrain lane would run in the general one.
+    [Fact]
+    public void Every_job_kind_has_exactly_one_handler_and_the_lane_lists_name_only_real_kinds()
+    {
+        using var scope = factory.Services.CreateScope();
+        var kinds = typeof(ProcessingJobKinds)
+            .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(f => f.IsLiteral && f.FieldType == typeof(string))
+            .Select(f => (string)f.GetRawConstantValue()!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var handled = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
+            .GroupBy(h => h.Kind, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+
+        kinds.Where(k => !handled.ContainsKey(k)).ShouldBeEmpty("kinds with no handler");
+        handled.Where(h => h.Value > 1).Select(h => h.Key).ShouldBeEmpty("kinds with more than one handler");
+        handled.Keys.Where(k => !kinds.Contains(k)).ShouldBeEmpty("handlers for a kind ProcessingJobKinds does not name");
+        ProcessingJobKinds.TerrainLane.Where(k => !kinds.Contains(k)).ShouldBeEmpty();
+        ProcessingJobKinds.Background.Where(k => !kinds.Contains(k)).ShouldBeEmpty();
+    }
+
     // Every kind that retries must also hold its failure back, or the first attempt's failure is
     // shown as final under a job that is still going to run.
     [Theory]

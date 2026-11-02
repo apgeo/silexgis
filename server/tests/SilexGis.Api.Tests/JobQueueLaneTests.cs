@@ -56,14 +56,14 @@ public sealed class JobQueueLaneTests : IDisposable, IClassFixture<PostgresFixtu
         await db.SaveChangesAsync();
         terrain.Id.ShouldBeLessThan(ordinary.Id);
 
-        var claimed = await JobsSql.ClaimNextAsync(db, JobLane.General, CancellationToken.None);
+        var claimed = await JobsSql.ClaimNextAsync(db, JobLane.General, Lease, CancellationToken.None);
 
         claimed.ShouldBe(ordinary.Id);
         await db.Entry(terrain).ReloadAsync();
         terrain.Status.ShouldBe(ProcessingJobStatus.Queued);
 
         // Nothing else is left for that lane, so the terrain row is not merely later in the queue.
-        (await JobsSql.ClaimNextAsync(db, JobLane.General, CancellationToken.None)).ShouldBeNull();
+        (await JobsSql.ClaimNextAsync(db, JobLane.General, Lease, CancellationToken.None)).ShouldBeNull();
     }
 
     [Fact]
@@ -83,14 +83,14 @@ public sealed class JobQueueLaneTests : IDisposable, IClassFixture<PostgresFixtu
         await db.SaveChangesAsync();
         ordinary.Id.ShouldBeLessThan(terrain.Id);
 
-        (await JobsSql.ClaimNextAsync(db, JobLane.Terrain, CancellationToken.None))
+        (await JobsSql.ClaimNextAsync(db, JobLane.Terrain, Lease, CancellationToken.None))
             .ShouldBe(terrain.Id);
 
         // With its own kind taken, the terrain worker sees an empty queue although a job is
         // sitting in it — and that job is claimable, which is what proves the refusal was about
         // the lane rather than about the row.
-        (await JobsSql.ClaimNextAsync(db, JobLane.Terrain, CancellationToken.None)).ShouldBeNull();
-        (await JobsSql.ClaimNextAsync(db, JobLane.General, CancellationToken.None))
+        (await JobsSql.ClaimNextAsync(db, JobLane.Terrain, Lease, CancellationToken.None)).ShouldBeNull();
+        (await JobsSql.ClaimNextAsync(db, JobLane.General, Lease, CancellationToken.None))
             .ShouldBe(ordinary.Id);
     }
 
@@ -110,7 +110,7 @@ public sealed class JobQueueLaneTests : IDisposable, IClassFixture<PostgresFixtu
         // A worker puts back whatever its own lane was in the middle of when the process died.
         // Unfiltered it would also put back what the other lane's worker is doing right now, and
         // that job would then be run a second time alongside the first.
-        await JobsSql.RequeueInterruptedAsync(db, JobLane.General, CancellationToken.None);
+        await JobsSql.ReturnStaleAsync(db, JobLane.General, JobRetry.MaxAttempts, "interrupted", CancellationToken.None);
 
         await db.Entry(ordinary).ReloadAsync();
         ordinary.Status.ShouldBe(ProcessingJobStatus.Queued);
@@ -118,7 +118,7 @@ public sealed class JobQueueLaneTests : IDisposable, IClassFixture<PostgresFixtu
         await db.Entry(terrain).ReloadAsync();
         terrain.Status.ShouldBe(ProcessingJobStatus.Running);
 
-        await JobsSql.RequeueInterruptedAsync(db, JobLane.Terrain, CancellationToken.None);
+        await JobsSql.ReturnStaleAsync(db, JobLane.Terrain, JobRetry.MaxAttempts, "interrupted", CancellationToken.None);
         await db.Entry(terrain).ReloadAsync();
         terrain.Status.ShouldBe(ProcessingJobStatus.Queued);
     }
@@ -148,7 +148,7 @@ public sealed class JobQueueLaneTests : IDisposable, IClassFixture<PostgresFixtu
             await using var firstScope = factory.Services.CreateAsyncScope();
             var first = firstScope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             await using var held = await first.Database.BeginTransactionAsync();
-            (await JobsSql.ClaimNextAsync(first, JobLane.Terrain, CancellationToken.None))
+            (await JobsSql.ClaimNextAsync(first, JobLane.Terrain, Lease, CancellationToken.None))
                 .ShouldBe(job.Id);
 
             await using var secondScope = factory.Services.CreateAsyncScope();
@@ -163,7 +163,7 @@ public sealed class JobQueueLaneTests : IDisposable, IClassFixture<PostgresFixtu
             var waited = false;
             try
             {
-                secondClaim = await JobsSql.ClaimNextAsync(second, JobLane.Terrain, patience.Token);
+                secondClaim = await JobsSql.ClaimNextAsync(second, JobLane.Terrain, Lease, patience.Token);
             }
             catch (OperationCanceledException)
             {
@@ -201,9 +201,9 @@ public sealed class JobQueueLaneTests : IDisposable, IClassFixture<PostgresFixtu
         await db.SaveChangesAsync();
         backfill.Id.ShouldBeLessThan(confirmation.Id);
 
-        (await JobsSql.ClaimNextAsync(db, JobLane.General, CancellationToken.None)).ShouldBe(confirmation.Id);
+        (await JobsSql.ClaimNextAsync(db, JobLane.General, Lease, CancellationToken.None)).ShouldBe(confirmation.Id);
         // Behind, not dropped: it is the next one taken.
-        (await JobsSql.ClaimNextAsync(db, JobLane.General, CancellationToken.None)).ShouldBe(backfill.Id);
+        (await JobsSql.ClaimNextAsync(db, JobLane.General, Lease, CancellationToken.None)).ShouldBe(backfill.Id);
     }
 
     [Fact]
@@ -223,8 +223,8 @@ public sealed class JobQueueLaneTests : IDisposable, IClassFixture<PostgresFixtu
         db.ProcessingJobs.AddRange(waiting, due);
         await db.SaveChangesAsync();
 
-        (await JobsSql.ClaimNextAsync(db, JobLane.General, CancellationToken.None)).ShouldBe(due.Id);
-        (await JobsSql.ClaimNextAsync(db, JobLane.General, CancellationToken.None)).ShouldBeNull();
+        (await JobsSql.ClaimNextAsync(db, JobLane.General, Lease, CancellationToken.None)).ShouldBe(due.Id);
+        (await JobsSql.ClaimNextAsync(db, JobLane.General, Lease, CancellationToken.None)).ShouldBeNull();
 
         // A claimed job starts afresh: no delay left on it and no progress from an earlier attempt.
         await db.Entry(due).ReloadAsync();
@@ -248,6 +248,8 @@ public sealed class JobQueueLaneTests : IDisposable, IClassFixture<PostgresFixtu
         Kind = kind,
         Status = ProcessingJobStatus.Queued,
     };
+
+    private static readonly TimeSpan Lease = TimeSpan.FromMinutes(2);
 
     private static ProcessingJob Running(string kind) => new()
     {
