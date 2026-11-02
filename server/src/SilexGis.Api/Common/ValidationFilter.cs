@@ -43,5 +43,16 @@ public static class ValidationFilterExtensions
     /// the route can answer 400 with the validator's messages.
     /// </summary>
     public static RouteHandlerBuilder WithValidation<T>(this RouteHandlerBuilder builder)
-        where T : class => builder.AddEndpointFilter<ValidationFilter<T>>().ProducesValidationProblem();
+        where T : class => builder
+            .AddEndpointFilter<ValidationFilter<T>>()
+            .WithMetadata(new ValidatedBodyMetadata(typeof(T)))
+            .ProducesValidationProblem();
 }
+
+/// <summary>
+/// Names the body type a route's validation filter checks. A filter leaves no trace on the built
+/// endpoint, and the filter passes a body through silently when no validator is registered for it,
+/// so without this mark nothing could tell a validated route from one that forgot the call: the
+/// endpoint table is walked by a test that holds every body-taking route to both halves.
+/// </summary>
+public sealed record ValidatedBodyMetadata(Type RequestType);
