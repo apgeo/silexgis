@@ -465,7 +465,11 @@ public sealed class GraphRelationParityTests : IAsyncLifetime, IDisposable, ICla
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    public async ValueTask DisposeAsync() => await kit.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await kit.DisposeAsync();
+        Dispose();
+    }
 
     public void Dispose() => factory.Dispose();
 }
