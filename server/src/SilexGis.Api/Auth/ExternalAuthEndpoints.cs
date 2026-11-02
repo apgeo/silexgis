@@ -243,10 +243,18 @@ public static class ExternalAuthEndpoints
             p => string.Equals(p.Name, provider, StringComparison.Ordinal));
 
     /// <summary>Accepts only same-site absolute paths; anything else falls back to the app root.</summary>
+    /// <remarks>
+    /// The value goes into a Location header unchanged, so what matters is how a browser reads it,
+    /// not how .NET would: a browser deletes tabs and line breaks anywhere in an address and reads
+    /// a backslash as a slash, which turns "/&lt;tab&gt;/evil.example" or "/\evil.example" into the
+    /// other-site address "//evil.example". So no control character and no backslash anywhere (a
+    /// path this application builds has neither), and no second slash straight after the first.
+    /// </remarks>
     private static string SafeLocalPath(string? url)
     {
-        if (string.IsNullOrEmpty(url) || !url.StartsWith('/') || url.StartsWith("//", StringComparison.Ordinal)
-            || url.StartsWith("/\\", StringComparison.Ordinal))
+        if (string.IsNullOrEmpty(url) || url[0] != '/'
+            || url.StartsWith("//", StringComparison.Ordinal)
+            || url.Any(c => char.IsControl(c) || c == '\\'))
         {
             return "/";
         }

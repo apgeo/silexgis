@@ -25,9 +25,11 @@ internal static class TwoFactorSignIn
     /// </summary>
     /// <remarks>
     /// Wrong codes are counted by the sign-in manager itself: each one is a failed access attempt
-    /// under Identity's lockout threshold, and a locked-out account is refused before its code is
-    /// looked at. Recovery codes are random and long, and are redeemed without that count, as the
-    /// framework does.
+    /// under Identity's lockout threshold. Recovery codes are random and long, and are redeemed
+    /// without that count, as the framework does — but the framework's recovery-code sign-in also
+    /// skips the lock check its other sign-ins make, so a half-finished sign-in that began before
+    /// the account was locked could still be completed with one. The lock is therefore checked
+    /// here, before any code is looked at, and a refused recovery code is not spent.
     /// </remarks>
     public static async Task<IResult> AnswerAsync(
         SignInManager<SilexGisUser> signInManager,
@@ -62,6 +64,11 @@ internal static class TwoFactorSignIn
                 });
         }
 
+        if (await signInManager.UserManager.IsLockedOutAsync(user))
+        {
+            return LockedOut();
+        }
+
         var trimmed = code.Trim();
         var signIn = trimmed.StartsWith(RecoveryPrefix, StringComparison.OrdinalIgnoreCase)
             ? await signInManager.TwoFactorRecoveryCodeSignInAsync(
@@ -71,14 +78,16 @@ internal static class TwoFactorSignIn
         if (!signIn.Succeeded)
         {
             return signIn.IsLockedOut
-                ? AuthEndpoints.AuthProblem(
-                    StatusCodes.Status401Unauthorized, "auth.locked_out", "Account temporarily locked after repeated failures.")
+                ? LockedOut()
                 : AuthEndpoints.AuthProblem(
                     StatusCodes.Status401Unauthorized, "auth.mfa_invalid", "The two-factor code is not valid.");
         }
 
         return TypedResults.Ok(new SessionDto(user.Id, user.Email!, user.DisplayName));
     }
+
+    private static IResult LockedOut() => AuthEndpoints.AuthProblem(
+        StatusCodes.Status401Unauthorized, "auth.locked_out", "Account temporarily locked after repeated failures.");
 
     private static async Task<SignInResult> SignInWithMethodAsync(
         SignInManager<SilexGisUser> signInManager,
