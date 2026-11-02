@@ -52,6 +52,12 @@ public sealed class MfaConfirmRequestValidator : AbstractValidator<MfaConfirmReq
     public MfaConfirmRequestValidator() => RuleFor(x => x.Code).NotEmpty().MaximumLength(20);
 }
 
+public sealed class MfaPreferredRequestValidator : AbstractValidator<MfaPreferredRequest>
+{
+    // Null clears the preference; any other value has to be a method the application knows.
+    public MfaPreferredRequestValidator() => RuleFor(x => x.Method).IsInEnum();
+}
+
 /// <summary>
 /// Two-factor management for the signed-in account, across all three methods.
 /// </summary>
@@ -87,6 +93,7 @@ public static class MfaEndpoints
         mfa.MapDelete("/methods/{method}", DisableMethodAsync)
             .WithSummary("Switches one method off.");
         mfa.MapPut("/preferred", SetPreferredAsync)
+            .WithValidation<MfaPreferredRequest>()
             .WithSummary("Chooses which method is offered first at sign-in.");
         mfa.MapPost("/disable", DisableAllAsync)
             .WithSummary("Switches two-factor off entirely and clears the authenticator key.");
@@ -132,7 +139,19 @@ public static class MfaEndpoints
                 "auth.mfa_method_not_allowed", "Authenticator apps are not enabled on this installation.");
         }
 
-        // A fresh key per enrollment: re-enrolling invalidates any earlier authenticator.
+        // A new key replaces the old one at once, while the method stays switched on: rotating it
+        // here would leave an account whose authenticator no app can answer the moment the dialog
+        // is closed or the code mis-scanned, and would let a borrowed session swap the key and
+        // verify it itself. So a switched-on authenticator is switched off first — which asks for
+        // nothing more today, but is a deliberate act rather than a side effect of looking.
+        if (user.TwoFactorAuthenticatorEnabled)
+        {
+            return ApiProblems.Conflict(
+                "auth.mfa_already_enabled",
+                "The authenticator is already switched on. Switch it off before setting up another.");
+        }
+
+        // A fresh key per enrollment: an abandoned earlier setup is never switched on.
         await userManager.ResetAuthenticatorKeyAsync(user);
         var key = (await userManager.GetAuthenticatorKeyAsync(user))!;
 
