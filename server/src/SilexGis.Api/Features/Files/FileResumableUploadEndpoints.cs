@@ -105,6 +105,8 @@ public static partial class FileEndpoints
             AttachEntityType = destination.AttachEntityType,
             AttachEntityId = destination.AttachEntityId,
             AttachFeatureId = destination.AttachFeatureId,
+            AttachRole = destination.AttachRole,
+            CavingGroupId = destination.CavingGroupId,
             RelativePath = request.RelativePath,
             ExpiresAt = UploadSessionRules.ExpiryFrom(DateTimeOffset.UtcNow),
         };
@@ -220,56 +222,103 @@ public static partial class FileEndpoints
             return ApiProblems.NotFound(UploadSessionRules.SessionNotFoundCode);
         }
 
-        var length = httpRequest.ContentLength ?? 0;
-        switch (UploadSessionRules.Decide(session.ReceivedBytes, offset, length, session.DeclaredSizeBytes))
+        if (httpRequest.ContentLength is not { } length)
         {
-            case ChunkDisposition.AlreadyHeld:
-                return TypedResults.Ok(ToDto(session));
-
-            case ChunkDisposition.OutOfOrder:
-                // The response carries how far the file actually got, so the client's next
-                // attempt is right rather than another guess — as a member a client reads, beside
-                // the sentence a person does.
-                return ApiProblems.Conflict(
-                    UploadSessionRules.OutOfOrderCode,
-                    $"The next piece starts at {session.ReceivedBytes}.",
-                    ExpectedOffsetMember,
-                    session.ReceivedBytes);
-
-            case ChunkDisposition.Overflow:
-                return ApiProblems.BadRequest(
-                    UploadSessionRules.OverflowCode, "The upload is larger than it was declared to be.");
-
-            default:
-                break;
+            // Sent without a length, a piece cut short by a dropped connection looks exactly like
+            // a whole one, so none is taken rather than one guessed at.
+            return TypedResults.Problem(
+                detail: "A piece has to say how long it is.",
+                statusCode: StatusCodes.Status411LengthRequired,
+                extensions: new Dictionary<string, object?> { ["code"] = UploadSessionRules.LengthRequiredCode });
         }
 
-        long received;
+        // Judged once on what was read, so a replay or a gap is answered without waiting on a
+        // piece that is being written, and again below once the content is held.
+        if (Refuse(session, offset, length) is { } early)
+        {
+            return early;
+        }
+
+        IExclusiveContentWriter blob;
         try
         {
-            received = await fileStore.AppendAsync(session.StoragePath, httpRequest.Body, ct);
+            blob = await fileStore.OpenExclusiveAsync(session.StoragePath, ct);
         }
         catch (IOException)
         {
-            // Two pieces of one upload arriving at once: the store refuses to open the blob
+            // Two pieces of one upload arriving at once: the store refuses to open the content
             // twice, and the loser is told where the file ends so it can resend from there.
-            return ApiProblems.Conflict(
-                UploadSessionRules.OutOfOrderCode,
-                $"The next piece starts at {session.ReceivedBytes}.",
-                ExpectedOffsetMember,
-                session.ReceivedBytes);
+            return OutOfOrder(session);
         }
 
-        // Taken from the stored bytes rather than added up here. What actually landed is the
-        // only thing a resuming client can safely continue from — a number kept beside the
-        // bytes would, on the one occasion it disagreed with them, produce a file with a hole
-        // in it that nothing notices until somebody opens it months later.
-        session.ReceivedBytes = Math.Min(received, session.DeclaredSizeBytes);
-        session.ExpiresAt = UploadSessionRules.ExpiryFrom(DateTimeOffset.UtcNow);
-        await db.SaveChangesAsync(ct);
+        await using (blob)
+        {
+            // Read again while the content is held. Every writer of this session holds it while
+            // it reads the session, writes and records the new length, so what is read here is
+            // current: a copy of a piece whose first copy has just been recorded is answered as
+            // already held instead of being written a second time.
+            await db.Entry(session).ReloadAsync(ct);
+            if (db.Entry(session).State == EntityState.Detached)
+            {
+                return ApiProblems.NotFound(UploadSessionRules.SessionNotFoundCode);
+            }
+
+            if (blob.Length < session.ReceivedBytes)
+            {
+                // Fewer bytes are stored than the session says. The bytes are what a client can
+                // continue from, so the session is brought back to them and the client told.
+                session.ReceivedBytes = blob.Length;
+                await db.SaveChangesAsync(ct);
+                return OutOfOrder(session);
+            }
+
+            if (Refuse(session, offset, length) is { } late)
+            {
+                return late;
+            }
+
+            // Written at the session's length, not wherever the file ends: anything beyond it is
+            // the remains of a piece that was never recorded, and is written over. A body that
+            // could not be read to its end answers false with the piece already cut back out; a
+            // store that cannot write throws, and is answered as the server fault it is.
+            if (!await blob.WriteAtAsync(session.ReceivedBytes, httpRequest.Body, length, ct))
+            {
+                return OutOfOrder(session);
+            }
+
+            session.ReceivedBytes = offset + length;
+            session.ExpiresAt = UploadSessionRules.ExpiryFrom(DateTimeOffset.UtcNow);
+
+            // Recorded before the content is released. Should this save fail, the stored bytes
+            // run past the recorded length, and the next piece is written over them from the
+            // recorded length.
+            await db.SaveChangesAsync(ct);
+        }
 
         return TypedResults.Ok(ToDto(session));
     }
+
+    /// <summary>The answer to a piece that is not to be written, or null when it is.</summary>
+    private static Results<Ok<UploadSessionDto>, UnauthorizedHttpResult, ProblemHttpResult>? Refuse(
+        UploadSession session, long offset, long length) =>
+        UploadSessionRules.Decide(session.ReceivedBytes, offset, length, session.DeclaredSizeBytes) switch
+        {
+            ChunkDisposition.AlreadyHeld => TypedResults.Ok(ToDto(session)),
+            ChunkDisposition.OutOfOrder => OutOfOrder(session),
+            ChunkDisposition.Overflow => ApiProblems.BadRequest(
+                UploadSessionRules.OverflowCode, "The upload is larger than it was declared to be."),
+            _ => null,
+        };
+
+    // The response carries how far the file actually got, so the client's next attempt is
+    // right rather than another guess — as a member a client reads, beside the sentence a
+    // person does.
+    private static ProblemHttpResult OutOfOrder(UploadSession session) =>
+        ApiProblems.Conflict(
+            UploadSessionRules.OutOfOrderCode,
+            $"The next piece starts at {session.ReceivedBytes}.",
+            ExpectedOffsetMember,
+            session.ReceivedBytes);
 
     /// <summary>
     /// Finishes a resumable upload: the assembled blob is described and filed exactly as a
@@ -283,10 +332,12 @@ public static partial class FileEndpoints
         ContentIntake intake,
         UploadIngestService ingest,
         UploadBatchService batches,
+        UploadAllowanceService allowances,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         PhotoPositionDisclosure photos,
         IAppSettingsService settings,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -316,6 +367,21 @@ public static partial class FileEndpoints
             return TypedResults.Ok(ToStagedDto(session));
         }
 
+        // Asked before the file is read, because they are cheap and reading 400 MB to then
+        // refuse it is not.
+        UploadDestination? destination = null;
+        if (!session.StagedForSync)
+        {
+            var (resolved, guardProblem) = await GuardCompletionAsync(
+                session, ctx, db, ingest, allowances, access, ct);
+            if (resolved is null)
+            {
+                return guardProblem!;
+            }
+
+            destination = resolved;
+        }
+
         // Described now rather than piece by piece: the hash, the format and a photograph's
         // capture facts are all properties of the whole file, and none of them can be read
         // from a fragment.
@@ -339,18 +405,30 @@ public static partial class FileEndpoints
             return TypedResults.Ok(ToStagedDto(session));
         }
 
-        var destination = new UploadDestination(
-            session.CabinetId,
-            FilingPaths.FolderSegmentsOf(session.RelativePath) ?? [],
-            session.AttachEntityType,
-            session.AttachEntityId,
-            session.AttachFeatureId);
+        // The document, its batch line and the end of the session are one unit of work. Saved
+        // apart, a request cut off (or a save that failed) between the document and the
+        // session's removal left a session still claiming the bytes of a committed document,
+        // and the expiry sweep deletes a session's bytes a day later. In one transaction a
+        // failure anywhere leaves the session and its bytes exactly as they were, so asking
+        // again simply completes it.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // Taken under the session row's lock and before anything is recorded: a second
+        // completion of the same session (a client that timed out on a long hash and asked
+        // again) waits here until the first has finished, then finds no session and records
+        // nothing — rather than both passing the duplicate check and filing two documents over
+        // one blob, which the first deletion of either would take from the other. The sweep
+        // claims the same row, so it waits too.
+        if (!await ClaimForCompletionAsync(db, session.Id, ct))
+        {
+            return ApiProblems.NotFound(UploadSessionRules.SessionNotFoundCode);
+        }
 
         var outcome = await ingest.RecordAsync(
             content,
             string.IsNullOrWhiteSpace(session.RelativePath) ? session.OriginalName : session.RelativePath,
             ctx,
-            destination,
+            destination!,
             session.UploadBatchId,
             allowDuplicate ?? false,
             ct);
@@ -360,31 +438,53 @@ public static partial class FileEndpoints
             await batches.RecordAsync(batch, content.OriginalName, content.SizeBytes, outcome, ct);
         }
 
-        if (outcome.Outcome != UploadItemOutcome.Stored || outcome.Content is null)
-        {
-            // The session stays open on a refusal the caller can answer — a duplicate they may
-            // choose to store anyway — so the bytes they spent ten minutes sending are still
-            // there when they say yes. Anything else is final, and takes them with it.
-            if (outcome.Reason == UploadItemReasons.Duplicate)
-            {
-                return OutcomeProblem(outcome);
-            }
+        var stored = outcome.Outcome == UploadItemOutcome.Stored && outcome.Content is not null;
 
+        // The session stays open on a refusal the caller can answer — a duplicate they may
+        // choose to store anyway — so the bytes they spent ten minutes sending are still there
+        // when they say yes. Anything else ends it: a stored document now owns the bytes (and
+        // the sweep must not see a session claiming them), and any other refusal is final and
+        // takes them with it.
+        var ends = stored || outcome.Reason != UploadItemReasons.Duplicate;
+        if (ends)
+        {
             db.UploadSessions.Remove(session);
             await db.SaveChangesAsync(ct);
-            await fileStore.DeleteAsync(session.StoragePath, CancellationToken.None);
+        }
+
+        // Not the request's token: past this point the work is done, and a client hanging up
+        // now must not turn it into a rollback after the answer was decided.
+        await transaction.CommitAsync(CancellationToken.None);
+
+        if (!stored)
+        {
+            if (ends)
+            {
+                await fileStore.DeleteAsync(session.StoragePath, CancellationToken.None);
+            }
+
             return OutcomeProblem(outcome);
         }
 
-        // The blob is now a stored file's own content, so the session must stop claiming it —
-        // otherwise the expiry sweep would delete the bytes of a perfectly good document.
-        db.UploadSessions.Remove(session);
-        await db.SaveChangesAsync(ct);
-
+        var made = outcome.Content!;
         return TypedResults.Created(
-            $"/api/v1/files/{outcome.Content.File.Id}",
-            outcome.Content.File.ToDto(
-                outcome.Content.Version, tokens, await photos.ForUploaderAsync(outcome.Content.File.Id, ct)));
+            $"/api/v1/files/{made.File.Id}",
+            made.File.ToDto(made.Version, tokens, await photos.ForUploaderAsync(made.File.Id, ct)));
+    }
+
+    /// <summary>
+    /// Takes the session row's lock for the rest of the caller's transaction, answering whether
+    /// the session is still there and unexpired to take. The update changes nothing; it is how
+    /// the lock is asked for without hand-written SQL, and a row another transaction removed
+    /// meanwhile is not updated, so the answer is read after that transaction has finished.
+    /// </summary>
+    private static async Task<bool> ClaimForCompletionAsync(SilexGisDbContext db, Guid sessionId, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var claimed = await db.UploadSessions
+            .Where(s => s.Id == sessionId && s.ExpiresAt > now)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpiresAt, x => x.ExpiresAt), ct);
+        return claimed == 1;
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> AbandonUploadAsync(
@@ -410,6 +510,74 @@ public static partial class FileEndpoints
         await db.SaveChangesAsync(ct);
         await fileStore.DeleteAsync(session.StoragePath, CancellationToken.None);
         return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// The destination a finished upload is filed to, asked again exactly as a single-request
+    /// upload asks it: who may create in the club it names, where it is filed and what it hangs
+    /// on, the batch it counts into, and whether it still fits.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The opening answered all of this once, so an upload that was going to be refused is
+    /// refused before its bytes are sent. It is asked again because a transfer can last a
+    /// day: a right withdrawn, a batch closed or a quota filled by the caller's other uploads
+    /// in the meantime would otherwise be reached through the long route and not the short one.
+    /// </para>
+    /// <para>
+    /// A refusal here leaves the session and its bytes in place. What changed may change back
+    /// — a grant restored, room made — and the bytes go with the session when it expires.
+    /// </para>
+    /// </remarks>
+    private static async Task<(UploadDestination? Destination, ProblemHttpResult? Problem)> GuardCompletionAsync(
+        UploadSession session,
+        AccessContext ctx,
+        SilexGisDbContext db,
+        UploadIngestService ingest,
+        UploadAllowanceService allowances,
+        IAccessService access,
+        CancellationToken ct)
+    {
+        if (await GuardCreationAsync(ctx, db, session.CavingGroupId, ct) is { } createProblem)
+        {
+            return (null, createProblem);
+        }
+
+        // The target is put back into the words the opening request used, so it is resolved and
+        // guarded by the one rule every upload route shares rather than by a copy of it.
+        var hasTarget = session.AttachFeatureId is not null || session.AttachEntityType is not null;
+        var (destination, destinationProblem) = await UploadDestinationBinding.ResolveAsync(
+            new UploadDestinationRequest(
+                session.CabinetId,
+                session.RelativePath,
+                hasTarget ? AttachmentTargets.NameOf(session.AttachFeatureId, session.AttachEntityType) : null,
+                session.AttachFeatureId ?? session.AttachEntityId,
+                session.AttachRole,
+                session.CavingGroupId),
+            ctx,
+            db,
+            ingest,
+            access,
+            ct);
+        if (destination is null)
+        {
+            return (null, destinationProblem);
+        }
+
+        if (await GuardBatchAsync(ctx, db, session.UploadBatchId, ct) is { } batchProblem)
+        {
+            return (null, batchProblem);
+        }
+
+        // An ordinary transfer is not counted against the quota while it arrives, so the room
+        // asked about here excludes this file, as it did at the opening.
+        var allowance = await allowances.ForAsync(ctx.UserId, ct);
+        if (UploadLimits.Refuse(allowance, session.OriginalName, session.DeclaredSizeBytes) is { } refusal)
+        {
+            return (null, RefusalProblem(refusal, allowance));
+        }
+
+        return (destination, null);
     }
 
     /// <summary>

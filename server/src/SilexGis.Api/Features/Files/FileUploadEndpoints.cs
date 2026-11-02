@@ -100,18 +100,38 @@ public static partial class FileEndpoints
         var content = await intake.FromStreamAsync(
             file.OpenReadStream(), file.FileName, file.ContentType, ct);
 
-        var outcome = await ingest.RecordAsync(
-            content,
-            string.IsNullOrWhiteSpace(relativePath) ? file.FileName : relativePath,
-            ctx,
-            destination,
-            batchId,
-            allowDuplicate ?? false,
-            ct);
-
-        if (batchId is { } batch)
+        // The bytes are already in the store, and only a committed document references them. So
+        // the recording is one transaction, and anything that stops it before the commit — a
+        // failed save, a client that hangs up during the duplicate walk — rolls the rows back
+        // and takes the bytes out with it, rather than leaving a blob no row and no sweep will
+        // ever find.
+        IngestOutcome outcome;
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
         {
-            await batches.RecordAsync(batch, content.OriginalName, content.SizeBytes, outcome, ct);
+            try
+            {
+                outcome = await ingest.RecordAsync(
+                    content,
+                    string.IsNullOrWhiteSpace(relativePath) ? file.FileName : relativePath,
+                    ctx,
+                    destination,
+                    batchId,
+                    allowDuplicate ?? false,
+                    ct);
+
+                if (batchId is { } batch)
+                {
+                    await batches.RecordAsync(batch, content.OriginalName, content.SizeBytes, outcome, ct);
+                }
+            }
+            catch
+            {
+                // Uncommitted, so the rows go back with the transaction when it is disposed.
+                await fileStore.DeleteAsync(content.StoragePath, CancellationToken.None);
+                throw;
+            }
+
+            await transaction.CommitAsync(CancellationToken.None);
         }
 
         if (outcome.Outcome != UploadItemOutcome.Stored || outcome.Content is null)
@@ -282,28 +302,10 @@ public static partial class FileEndpoints
         }
 
         var content = await intake.FromStreamAsync(file.OpenReadStream(), file.FileName, file.ContentType, ct);
+        DocumentFile stored;
         try
         {
-            var stored = await documents.AddVersionAsync(subject.File.DocumentVersionId, content, ctx.UserId, ct);
-
-            // A corrected compilation log arrives this way — as a later revision of the archived
-            // source, not as a second one. The quality figures read out of the previous revision
-            // describe a run this document no longer holds, so the record that carries them is
-            // pointed at the new bytes and read again rather than being left to show them under a
-            // revision number that no longer matches.
-            if (await SurveyCompilationRequeue.ForNewRevisionAsync(
-                db, stored.Version.DocumentId, stored.File.Id, stored.Version.VersionNumber, ctx.UserId, ct) > 0)
-            {
-                await db.SaveChangesAsync(ct);
-            }
-
-            // A new revision inherits the document's attachments, so unlike a first upload
-            // this one can already be placed by something — and being allowed to change a
-            // document is not the same as being allowed to know where its subject is.
-            var reach = await photos.ReachAsync(ctx, [stored.File.Id], ct);
-            return TypedResults.Created(
-                $"/api/v1/files/{stored.File.Id}",
-                stored.File.ToDto(stored.Version, tokens, reach));
+            stored = await documents.AddVersionAsync(subject.File.DocumentVersionId, content, ctx.UserId, ct);
         }
         catch (DocumentWriteException e)
         {
@@ -314,6 +316,32 @@ public static partial class FileEndpoints
             await fileStore.DeleteAsync(content.StoragePath, CancellationToken.None);
             return ToProblem(e);
         }
+        catch
+        {
+            // Any other failure of the revision's own transaction leaves no row pointing at the
+            // bytes either — a save that broke, a client that hung up — so they go too.
+            await fileStore.DeleteAsync(content.StoragePath, CancellationToken.None);
+            throw;
+        }
+
+        // A corrected compilation log arrives this way — as a later revision of the archived
+        // source, not as a second one. The quality figures read out of the previous revision
+        // describe a run this document no longer holds, so the record that carries them is
+        // pointed at the new bytes and read again rather than being left to show them under a
+        // revision number that no longer matches.
+        if (await SurveyCompilationRequeue.ForNewRevisionAsync(
+            db, stored.Version.DocumentId, stored.File.Id, stored.Version.VersionNumber, ctx.UserId, ct) > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
+
+        // A new revision inherits the document's attachments, so unlike a first upload
+        // this one can already be placed by something — and being allowed to change a
+        // document is not the same as being allowed to know where its subject is.
+        var reach = await photos.ReachAsync(ctx, [stored.File.Id], ct);
+        return TypedResults.Created(
+            $"/api/v1/files/{stored.File.Id}",
+            stored.File.ToDto(stored.Version, tokens, reach));
     }
 
     private static async Task<Results<Ok<IReadOnlyList<FileVersionDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListVersionsAsync(
@@ -397,10 +425,7 @@ public static partial class FileEndpoints
         Guid id,
         SilexGisDbContext db,
         DocumentWriteService documents,
-        IFileStore fileStore,
-        ThumbnailService thumbnails,
-        LocationFreeCopyService locationFreeCopies,
-        PageRenderService pages,
+        StoredContentRemover content,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -427,16 +452,12 @@ public static partial class FileEndpoints
             return ToProblem(e);
         }
 
-        // Purge bytes and every cached rendering after the rows are gone (best-effort; missing
-        // files are fine). A rendering outliving the file it was drawn from would be a copy of
-        // deleted content nothing knows how to find.
-        foreach (var purged in removed)
-        {
-            await fileStore.DeleteAsync(purged.StoragePath, ct);
-            thumbnails.Purge(purged.Id);
-            locationFreeCopies.Purge(purged.Id);
-            pages.Purge(purged.Id);
-        }
+        // Bytes and every cached rendering go after the rows, best effort, by the same remover
+        // the purge sweep uses: the version is already gone, so a file that will not delete is
+        // logged rather than turned into a failure of a delete that happened, and it does not
+        // stop the rest from being cleared. A rendering outliving the file it was drawn from
+        // would be a copy of deleted content nothing knows how to find.
+        await content.DropAsync(removed);
 
         return TypedResults.NoContent();
     }

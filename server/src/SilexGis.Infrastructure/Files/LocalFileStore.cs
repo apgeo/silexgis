@@ -131,29 +131,17 @@ public sealed class LocalFileStore(IOptions<FilesOptions> options) : IFileStore
         return relative;
     }
 
-    public async Task<long> AppendAsync(string storagePath, Stream content, CancellationToken ct = default)
+    public Task<IExclusiveContentWriter> OpenExclusiveAsync(string storagePath, CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(content);
-
         var absolute = GetAbsolutePath(storagePath);
         Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
 
-        // Opened for append with no sharing: two pieces of one upload arriving at once would
-        // otherwise interleave into a file neither of them describes. The second request
-        // fails to open, is answered as a conflict, and the client resends from the length
-        // the first one actually reached.
-        await using (var target = new FileStream(
-            absolute, FileMode.Append, FileAccess.Write, FileShare.None))
-        {
-            await content.CopyToAsync(target, ct);
-
-            // Flushed through to the device before the length is read and recorded. The
-            // recorded length is what a resuming client is told to continue from, so it has
-            // to describe bytes that survive the process dying, not bytes still in a buffer.
-            await target.FlushAsync(ct);
-        }
-
-        return new FileInfo(absolute).Length;
+        // No sharing: a second writer fails to open, and is answered as a conflict by the
+        // caller. Two pieces of one upload written at once would otherwise interleave into a
+        // file neither of them describes.
+        var stream = new FileStream(
+            absolute, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 81920, FileOptions.Asynchronous);
+        return Task.FromResult<IExclusiveContentWriter>(new ExclusiveWriter(stream));
     }
 
     public Task<Stream> OpenReadAsync(string storagePath, CancellationToken ct = default)
@@ -173,10 +161,96 @@ public sealed class LocalFileStore(IOptions<FilesOptions> options) : IFileStore
     public string GetAbsolutePath(string storagePath)
     {
         var combined = Path.GetFullPath(Path.Combine(root, storagePath));
+
         // Defense in depth: paths are server-generated, but never allow escaping the root.
-        return combined.StartsWith(root, StringComparison.Ordinal)
+        // Compared with the separator after the root, so a sibling directory whose name merely
+        // starts with the root's ("files-old" beside "files") does not count as inside it.
+        // A volume root (D:\ or /) keeps its separator through the trim, so it is not added twice.
+        var trimmed = Path.TrimEndingDirectorySeparator(root);
+        var inside = Path.EndsInDirectorySeparator(trimmed) ? trimmed : trimmed + Path.DirectorySeparatorChar;
+        return combined.StartsWith(inside, StringComparison.Ordinal)
             ? combined
             : throw new InvalidOperationException("Storage path escapes the file store root.");
+    }
+
+    private sealed class ExclusiveWriter(FileStream stream) : IExclusiveContentWriter
+    {
+        public long Length => stream.Length;
+
+        public async Task<bool> WriteAtAsync(long offset, Stream content, long length, CancellationToken ct = default)
+        {
+            ArgumentNullException.ThrowIfNull(content);
+            ArgumentOutOfRangeException.ThrowIfNegative(offset);
+            ArgumentOutOfRangeException.ThrowIfNegative(length);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(offset, stream.Length);
+
+            // Whatever lies past the offset is the remains of an earlier piece that never
+            // finished — or one whose length was never recorded — and is written over.
+            stream.SetLength(offset);
+            stream.Position = offset;
+            try
+            {
+                var buffer = new byte[81920];
+                var remaining = length;
+                while (remaining > 0)
+                {
+                    int read;
+                    try
+                    {
+                        read = await content.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), ct);
+                    }
+                    catch (Exception e) when (e is not OperationCanceledException)
+                    {
+                        // The sender's side failed — a dropped connection, a body that could not
+                        // be read to its end. That is a piece that did not arrive, not a fault of
+                        // the store, and it is answered like one that ended early.
+                        read = 0;
+                    }
+
+                    if (read == 0)
+                    {
+                        CutBack(offset);
+                        return false;
+                    }
+
+                    await stream.WriteAsync(buffer.AsMemory(0, read), ct);
+                    remaining -= read;
+                }
+
+                // Through to the device before the caller records the new length: that length
+                // is what a resuming client is told to continue from, so it has to describe
+                // bytes that survive the process dying, not bytes still in a buffer.
+                await stream.FlushAsync(ct);
+                stream.Flush(flushToDisk: true);
+                return true;
+            }
+            catch
+            {
+                // A cancelled copy, or a write or flush the device refused (a full disk): cut
+                // back and let it leave. A store that cannot write is the server's fault, and
+                // answering it as a piece to send again would have a client resend for ever.
+                CutBack(offset);
+                throw;
+            }
+        }
+
+        public ValueTask DisposeAsync() => stream.DisposeAsync();
+
+        // Not cancellable: it runs because the request was cancelled or failed, and leaving the
+        // partial piece in place is the failure it exists to prevent.
+        private void CutBack(long offset)
+        {
+            try
+            {
+                stream.SetLength(offset);
+                stream.Flush(flushToDisk: true);
+            }
+            catch (IOException)
+            {
+                // The next writer cuts the content back to the recorded length before it
+                // writes, so a cut-back that fails here is repaired there.
+            }
+        }
     }
 
     /// <summary>Keeps only a plain ".ext" suffix; anything suspicious is dropped.</summary>

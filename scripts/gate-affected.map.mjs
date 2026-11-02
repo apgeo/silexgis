@@ -177,7 +177,7 @@ export const groups = {
   ],
   uploads: [
     'EnumBindingTests', 'UploadDestinationTests', 'UploadLimitsAndResumeTests',
-    'UploadSurfaceTests',
+    'UploadSurfaceTests', 'LocalFileStoreTests',
     // Bytes a phone stages through the same transfer routes, the sweep and the quota over them.
     'SyncStagedUploadTests',
   ],
@@ -633,9 +633,10 @@ export const crossCutting = {
     'TripRestoreTests', 'TripRosterTimesFromTrackingTests', 'TripStatisticsTests',
     'TripTrackImportTests', 'TripTrackingCaveNoteTests', 'TripTrackingPicturesTests',
     'TripTrackingPublicationTests', 'TripTrackingTests', 'TripTypeVocabularyTests',
-    'UiDefaultsTests', 'UploadDestinationTests', 'UploadReviewCurrentStateTests',
-    'UploadReviewDecisionTests', 'UserAdministrationLastAdministratorTests',
-    'UserAdministrationTests', 'UserDeleteBlockedTests', 'UserTwoFactorResetTests',
+    'UiDefaultsTests', 'UploadDestinationTests', 'UploadLimitsAndResumeTests',
+    'UploadReviewCurrentStateTests', 'UploadReviewDecisionTests',
+    'UserAdministrationLastAdministratorTests', 'UserAdministrationTests',
+    'UserDeleteBlockedTests', 'UserTwoFactorResetTests',
   ],
   locationClasses: [
     'AccessAnchorCleanupTests', 'AccessHistoryTests', 'AclAndCavingGroupTests',
@@ -689,8 +690,8 @@ export const crossCutting = {
     'TripStatisticsTests', 'TripStatsTests', 'TripTrackingCaveNoteTests',
     'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
     'TripTrackingStationNamesTests', 'TripTrackingStretchTests', 'TripTrackingTests',
-    'UploadReviewCurrentStateTests', 'UploadReviewDecisionTests', 'UploadReviewSectionsTests',
-    'WorkAreaTests', 'WorkingSridBehaviourTests',
+    'UploadLimitsAndResumeTests', 'UploadReviewCurrentStateTests', 'UploadReviewDecisionTests',
+    'UploadReviewSectionsTests', 'WorkAreaTests', 'WorkingSridBehaviourTests',
   ],
 };
 
