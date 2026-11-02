@@ -15,7 +15,10 @@ namespace SilexGis.Infrastructure.Messaging;
 /// sending rather than writing prose inline — which is what made the wording unconfigurable
 /// before. Sending never throws: every caller is past the point of no return (the account exists,
 /// the pending change is committed, the code is already valid) and a mail server that is refusing
-/// connections must not turn that into a failed request. The result says what happened instead.
+/// connections must not turn that into a failed request. The result says what happened instead —
+/// a transport timeout included. The exceptions are a cancellation the caller itself asked for,
+/// and the two programming errors named below (a channel with no sender, a template that does not
+/// exist), which are not delivery outcomes.
 /// </remarks>
 public sealed class MessageDispatcher(
     MessageTemplateStore templates,
@@ -91,6 +94,16 @@ public sealed class MessageDispatcher(
                 "Could not send {TemplateKey} on {Channel}: refused for good ({Reason})",
                 templateKey, definition.Channel, ex.Message);
             return MessageResult.FailedPermanently(ex.Message, segments);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            // A transport that gave up waiting: an HttpClient timeout surfaces as a cancellation
+            // although nobody cancelled anything, and a mail client's can too. Only a cancellation
+            // the caller asked for (a shutdown, an aborted request) may leave this method as one;
+            // this is a failed send, and letting it escape loses the outcome of whatever else the
+            // caller was in the middle of.
+            logger.LogWarning(ex, "Could not send {TemplateKey} on {Channel}: timed out", templateKey, definition.Channel);
+            return MessageResult.Failed(ex.Message, segments);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
