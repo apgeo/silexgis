@@ -50,7 +50,10 @@ ls -1 "$OPS_DIR" | sed 's/^/    /'
 # load-bearing: without it the switched process keeps the caller's environment, and a root caller's
 # HOME=/root is unreadable to $DEPLOY_USER -- docker then cannot load its configuration, does not
 # know the compose command, and every check that asks compose which services run reports "the db
-# service is not running" while the database is up and healthy.
+# service is not running" while the database is up and healthy. The number of backups to keep is
+# passed on for the same reason: the updater prunes the same folder the nightly unit does, and with
+# its own default it would cut a longer rotation set here down to its size on every update. The
+# pre-reset safety copies live in that folder too and count towards the number kept.
 say "Installing /usr/local/sbin/silexgis-update"
 cat > /usr/local/sbin/silexgis-update <<EOF
 #!/usr/bin/env bash
@@ -60,10 +63,10 @@ cat > /usr/local/sbin/silexgis-update <<EOF
 set -euo pipefail
 if [ "\$(id -un)" != "$DEPLOY_USER" ]; then
 	exec setpriv --reuid="$DEPLOY_USER" --regid="$DEPLOY_USER" --init-groups --reset-env \\
-		env SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR" \\
+		env SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR" SILEXGIS_BACKUP_KEEP="$BACKUP_KEEP" \\
 		bash "$OPS_DIR/update.sh" "\$@"
 fi
-export SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR"
+export SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR" SILEXGIS_BACKUP_KEEP="$BACKUP_KEEP"
 exec bash "$OPS_DIR/update.sh" "\$@"
 EOF
 chmod 755 /usr/local/sbin/silexgis-update
