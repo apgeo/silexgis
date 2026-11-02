@@ -35,7 +35,9 @@ public sealed class ClientErrorBatchValidator : AbstractValidator<ClientErrorBat
     {
         RuleFor(x => x.Errors).NotEmpty().Must(e => e.Count <= MaxErrors)
             .WithMessage($"At most {MaxErrors} errors are taken at once.");
-        RuleForEach(x => x.Errors).ChildRules(error =>
+        // A null item binds from `[null]` and the child rules skip it, so it is refused here rather
+        // than dereferenced by the handler.
+        RuleForEach(x => x.Errors).NotNull().ChildRules(error =>
         {
             error.RuleFor(e => e.Fingerprint).NotEmpty().MaximumLength(64);
             error.RuleFor(e => e.Kind).NotEmpty().Must(k => k is "uncaught" or "console")
@@ -128,8 +130,10 @@ public static class ClientErrorEndpoints
             // which a structured sink keeps and a plain console leaves out.
             using (log.BeginScope(new Dictionary<string, object?>
             {
-                ["ClientStack"] = error.Stack,
-                ["ClientComponentStack"] = error.ComponentStack,
+                // A stack's first line repeats the message, address and all, so it carries whatever
+                // the message would have; every free-text member is scrubbed, not only the message.
+                ["ClientStack"] = CredentialUrlScrubber.Scrub(error.Stack),
+                ["ClientComponentStack"] = CredentialUrlScrubber.Scrub(error.ComponentStack),
                 ["ClientBreadcrumbs"] = error.Breadcrumbs?.Select(CredentialUrlScrubber.Scrub).ToList(),
                 ["ClientUserAgent"] = error.UserAgent,
                 ["ClientViewport"] = error.Viewport,
@@ -138,14 +142,22 @@ public static class ClientErrorEndpoints
             {
                 log.LogWarning(
                     "Browser error {Fingerprint} ({Kind}) {Name}: {Message} at {Frame} on {Page} for user {UserId}",
-                    error.Fingerprint, error.Kind, error.Name ?? "", CredentialUrlScrubber.Scrub(error.Message),
-                    CredentialUrlScrubber.Scrub(error.Frame) ?? "",
+                    OneLine(error.Fingerprint), error.Kind, OneLine(CredentialUrlScrubber.Scrub(error.Name)),
+                    OneLine(CredentialUrlScrubber.Scrub(error.Message)),
+                    OneLine(CredentialUrlScrubber.Scrub(error.Frame)),
                     PathOf(error.PageUrl), userId);
             }
         }
 
         return TypedResults.NoContent();
     }
+
+    /// <summary>
+    /// The members that make up the log line with their line breaks replaced: the caller writes
+    /// them, and a line break in one would let a report forge further lines in a plain-text log.
+    /// </summary>
+    private static string OneLine(string? text) =>
+        text is null ? "" : text.ReplaceLineEndings(" ");
 
     /// <summary>
     /// The page's path without its query: an address can carry a share token or a search somebody
