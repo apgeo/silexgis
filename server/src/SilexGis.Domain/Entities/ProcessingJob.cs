@@ -36,6 +36,14 @@ public class ProcessingJob
 
     public DateTimeOffset? StartedAt { get; set; }
 
+    /// <summary>
+    /// Until when the worker running this job holds it; null for a job nobody is running. Renewed
+    /// while the job runs, and compared with the database's own clock. A Running job whose lease
+    /// has run out — or that has none — was lost by whatever was running it (the process died, or
+    /// could not save the outcome), and the queue takes it back.
+    /// </summary>
+    public DateTimeOffset? LeaseExpiresAt { get; set; }
+
     public DateTimeOffset? CompletedAt { get; set; }
 
     /// <summary>

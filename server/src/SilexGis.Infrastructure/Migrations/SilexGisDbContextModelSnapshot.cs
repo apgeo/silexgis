@@ -1874,6 +1874,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expanded_at");
 
+                    b.Property<DateTimeOffset?>("FailedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("failed_at");
+
                     b.Property<string>("Message")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -4972,6 +4976,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("kind");
+
+                    b.Property<DateTimeOffset?>("LeaseExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_expires_at");
 
                     b.Property<DateTimeOffset?>("NotBefore")
                         .HasColumnType("timestamp with time zone")

@@ -80,6 +80,13 @@ public static class JobRetry
                 return failure.GetType() == typeof(IOException) || failure.InnerException is SocketException;
             case DbUpdateConcurrencyException:
                 return false;
+            case InvalidOperationException when failure.InnerException is NpgsqlException or DbUpdateException:
+                // The wrapper the database provider's execution strategy puts around a transient
+                // error from any query or save made through the model ("an exception has been
+                // raised that is likely due to a transient failure"). Only a database cause is
+                // looked through: a handler's own InvalidOperationException around an I/O error
+                // has said the input is at fault, and stays final.
+                return IsPassing(failure.InnerException);
             case DbUpdateException or AggregateException or TaskCanceledException or JobFailedException
                 when failure.InnerException is { } inner:
                 return IsPassing(inner);

@@ -21,4 +21,18 @@ public interface IProcessingJobHandler
     bool RetriesPassingFailures => false;
 
     Task ExecuteAsync(ProcessingJob job, CancellationToken ct);
+
+    /// <summary>
+    /// Called once when the queue gives a job up without running it again: its runner was lost on
+    /// the last attempt it was allowed — the process died under it, or was stopped — so
+    /// <see cref="ExecuteAsync"/> never got to record how it ended. A handler that marks what it
+    /// works on as in progress closes that mark here, or the record says "in progress" for good
+    /// while the job says failed. Nothing by default: most kinds keep no state of their own.
+    /// </summary>
+    /// <remarks>
+    /// Runs inside the sweep's transaction on the scope's own context, so the record's stop and
+    /// the job's commit together. It writes only that stop: it is not the job being run again, and
+    /// nothing the lost attempt did may be assumed to have finished.
+    /// </remarks>
+    Task AbandonedAsync(ProcessingJob job, CancellationToken ct) => Task.CompletedTask;
 }
