@@ -487,7 +487,7 @@ public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClass
     public async Task A_drop_whose_new_tag_is_coined_by_someone_else_mid_request_adopts_that_tag()
     {
         var tagName = $"mid-{Guid.NewGuid():N}"[..14];
-        var coinFirst = new CoinTheSameTagFirst(tagName);
+        var coinFirst = new CoinTheSameTagFirst(tagName, connectionString);
         using var host = new SilexGisApiFactory(connectionString, Settings(), services =>
             services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(coinFirst)));
         using var client = await AuthHelper.BearerClientAsync(host, ownerEmail);
@@ -870,7 +870,14 @@ public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClass
     /// own and commits it — the other writer of a race, placed exactly between the request's look-up
     /// and its insert. Fires once.
     /// </summary>
-    private sealed class CoinTheSameTagFirst(string tagName) : SaveChangesInterceptor
+    /// <remarks>
+    /// Connects with the test's own connection string rather than the intercepted context's: once a
+    /// connection has been open, Npgsql leaves the password out of the string it reports, so a
+    /// second writer built from that string fails to sign in and the request dies on the test's own
+    /// error instead of on the race. The tag's timestamps are set here because the application's
+    /// timestamp interceptor is not on this context.
+    /// </remarks>
+    private sealed class CoinTheSameTagFirst(string tagName, string connectionString) : SaveChangesInterceptor
     {
         private int fired;
 
@@ -886,12 +893,13 @@ public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClass
             {
                 var added = context.ChangeTracker.Entries<Tag>().First(e => e.Entity.Name == tagName).Entity;
                 var options = new DbContextOptionsBuilder<SilexGisDbContext>()
-                    .UseNpgsql(context.Database.GetConnectionString(), npgsql => npgsql.UseNetTopologySuite())
+                    .UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite())
                     .UseSnakeCaseNamingConvention()
                     .UseOpenIddict()
                     .Options;
                 await using var other = new SilexGisDbContext(options);
-                var tag = new Tag { Name = added.Name, Slug = added.Slug };
+                var now = DateTimeOffset.UtcNow;
+                var tag = new Tag { Name = added.Name, Slug = added.Slug, CreatedAt = now, UpdatedAt = now };
                 other.Tags.Add(tag);
                 await other.SaveChangesAsync(cancellationToken);
                 CoinedTagId = tag.Id;
