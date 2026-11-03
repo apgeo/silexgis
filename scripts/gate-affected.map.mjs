@@ -90,6 +90,8 @@ export const groups = {
   photos: [
     'AlbumAndPublicGalleryTests', 'ExpeditionPhotographTests', 'PhotoBytesProtectionTests',
     'PhotoGalleryTests', 'PhotoImportTests',
+    // The frame a photograph is placed on, read from its header, against a full decode.
+    'PhotoFrameReadingTests',
     // A capped photo window counts only photos its caller may be told the position of.
     'HiddenRowCapTests',
   ],
@@ -181,7 +183,7 @@ export const groups = {
     // Bytes a phone stages through the same transfer routes, the sweep and the quota over them.
     'SyncStagedUploadTests',
   ],
-  geofiles: ['GeofileTests', 'JobFailureRecordingTests', 'PagedListOrderTests'],
+  geofiles: ['GeofileTests', 'JobFailureRecordingTests', 'PagedListOrderTests', 'UploadedGeodataDriverTests', 'ImportedCoordinatesTests'],
   georeferencedMaps: ['GeoreferencedMapTests', 'FilterWorldConformanceTests', 'FilterWorldListParityTests'],
   history: ['AccessHistoryTests', 'ChangeAttributionTests', 'HistoryRestoreTests', 'HistoryTests', 'SyncUndoTests'],
   imports: [

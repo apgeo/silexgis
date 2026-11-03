@@ -264,6 +264,23 @@ public sealed class TripReportDocumentTests : IAsyncLifetime, IDisposable, IClas
     }
 
     /// <summary>
+    /// A picture whose header declares more pixels than may be drawn gets no rendering, and so no
+    /// plate; the write-up is still produced for every reader of the trip, with the ordinary
+    /// picture beside it in place.
+    /// </summary>
+    [Fact]
+    public async Task A_picture_too_large_to_draw_is_left_out_of_the_write_up_rather_than_failing_it()
+    {
+        var tripId = await CreateTripAsync(_ => { });
+        await AttachToTripAsync(await UploadAsync("plate.jpg", GeotaggedJpeg(CaveLat, CaveLon)), tripId);
+        await AttachToTripAsync(
+            await UploadAsync("panorama.png", PictureBombs.BlankPng(20_000, 20_000), "image/png"), tripId);
+
+        (await PicturesAsync(owner, tripId)).Count.ShouldBe(1);
+        (await PicturesAsync(reader, tripId)).Count.ShouldBe(1);
+    }
+
+    /// <summary>
     /// A write-up kept against the trip lands in the slot the trip's report document lives in,
     /// and answers to who may change the trip rather than to who may read it.
     /// </summary>
@@ -538,10 +555,10 @@ public sealed class TripReportDocumentTests : IAsyncLifetime, IDisposable, IClas
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetInt64();
     }
 
-    private async Task<Guid> UploadAsync(string fileName, byte[] bytes)
+    private async Task<Guid> UploadAsync(string fileName, byte[] bytes, string contentType = "image/jpeg")
     {
         var content = new ByteArrayContent(bytes);
-        content.Headers.ContentType = new("image/jpeg");
+        content.Headers.ContentType = new(contentType);
         using var form = new MultipartFormDataContent { { content, "file", fileName } };
         var response = await owner.PostAsync("/api/v1/files/?allowDuplicate=true", form);
         var payload = await response.Content.ReadAsStringAsync();

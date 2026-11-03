@@ -324,6 +324,190 @@ public class PdfAndOfficeTextExtractorTests
         result.Pages[0].Text.ShouldBe("Peștera Șura Mare\nPrima vizită");
     }
 
+    [Fact]
+    public async Task A_document_whose_text_expands_a_thousandfold_is_refused_before_it_is_parsed()
+    {
+        // Sixteen megabytes of one repeated paragraph store in a few tens of kilobytes. Scaled to
+        // gigabytes the same file is a few megabytes of upload that the document library would
+        // build into an object tree before anything could stop it; the ratio alone gives it away.
+        using var content = WordDocumentWithMarkup(
+            16L * 1024 * 1024, _ => "<w:p><w:r><w:t>Galeria</w:t></w:r></w:p>");
+        content.Length.ShouldBeLessThan(1024 * 1024);
+
+        await Should.ThrowAsync<ContentTooLargeException>(() => Selector
+            .For("application/vnd.openxmlformats-officedocument.wordprocessingml.document")!
+            .ExtractAsync(content, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_document_whose_text_part_is_larger_than_a_reader_may_hold_is_refused()
+    {
+        // Text that does not compress, so only the declared size can be what refuses it.
+        var line = new byte[3 * 1024];
+        using var content = WordDocumentWithMarkup(InMemoryBoundBytes + (1024 * 1024), _ =>
+        {
+            Random.Shared.NextBytes(line);
+            return $"<w:p><w:r><w:t>{Convert.ToBase64String(line)}</w:t></w:r></w:p>";
+        });
+
+        await Should.ThrowAsync<ContentTooLargeException>(() => Selector
+            .For("application/vnd.openxmlformats-officedocument.wordprocessingml.document")!
+            .ExtractAsync(content, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// A package's parts may be called anything: what a part is comes from the relationship that
+    /// names it and the content type the package declares for it, not from its extension. A
+    /// worksheet stored under a name that does not end in ".xml" is read as a worksheet — which
+    /// is what makes it a way past any rule that judged parts by their names.
+    /// </summary>
+    [Fact]
+    public async Task A_worksheet_stored_under_any_name_is_still_read()
+    {
+        using var content = WorkbookWithSheetPart("xl/worksheets/s1.dat", WorksheetContentType, 1, _ =>
+            "<row><c t=\"inlineStr\"><is><t>Galeria Mare</t></is></c></row>");
+
+        var result = await Selector.For(ExcelMimeType)!.ExtractAsync(content, CancellationToken.None);
+
+        result.Pages.Count.ShouldBe(1);
+        result.Pages[0].Text.ShouldNotBeNull().ShouldContain("Galeria Mare");
+    }
+
+    [Fact]
+    public async Task A_worksheet_stored_under_any_name_that_expands_a_thousandfold_is_refused()
+    {
+        using var content = WorkbookWithSheetPart(
+            "xl/worksheets/s1.dat", WorksheetContentType, 16L * 1024 * 1024, _ =>
+                "<row><c t=\"inlineStr\"><is><t>Galeria</t></is></c></row>");
+        content.Length.ShouldBeLessThan(1024 * 1024);
+
+        await Should.ThrowAsync<ContentTooLargeException>(() => Selector
+            .For(ExcelMimeType)!.ExtractAsync(content, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// A part the package declares as a picture is never parsed, so it is not held to the markup
+    /// ceilings; declaring a worksheet as a picture therefore must not get it parsed either —
+    /// otherwise the exemption pictures need would be the way past the ceilings.
+    /// </summary>
+    [Fact]
+    public async Task A_worksheet_declared_as_a_picture_is_not_read_as_a_worksheet()
+    {
+        using var content = WorkbookWithSheetPart("xl/media/s1.png", "image/png", 1, _ =>
+            "<row><c t=\"inlineStr\"><is><t>Galeria Mare</t></is></c></row>");
+
+        try
+        {
+            var result = await Selector.For(ExcelMimeType)!.ExtractAsync(content, CancellationToken.None);
+            result.Pages.ShouldAllBe(page => page.Text == null || !page.Text.Contains("Galeria Mare"));
+        }
+        catch (InvalidDataException)
+        {
+            // Refusing the package outright keeps the same promise.
+        }
+        catch (DocumentFormat.OpenXml.Packaging.OpenXmlPackageException)
+        {
+            // So does the library declining to open it.
+        }
+    }
+
+    private const string ExcelMimeType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    private const string WorksheetContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
+
+    /// <summary>
+    /// A workbook of one sheet, written entry by entry so the sheet's part can be given any name
+    /// and any declared content type. Its rows are written straight to the entry until it holds
+    /// at least <paramref name="markupBytes"/>, so the test never holds the expanded text.
+    /// </summary>
+    private static MemoryStream WorkbookWithSheetPart(
+        string sheetPartName, string sheetContentType, long markupBytes, Func<long, string> row)
+    {
+        var buffer = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(
+            buffer, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Entry(string name, string text)
+            {
+                using var writer = new StreamWriter(archive.CreateEntry(name).Open(), new UTF8Encoding(false));
+                writer.Write(text);
+            }
+
+            Entry("[Content_Types].xml",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                + "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+                + "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+                + "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+                + "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
+                + $"<Override PartName=\"/{sheetPartName}\" ContentType=\"{sheetContentType}\"/>"
+                + "</Types>");
+            Entry("_rels/.rels",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+                + "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>"
+                + "</Relationships>");
+            Entry("xl/workbook.xml",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                + "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+                + "<sheets><sheet name=\"Peșteri\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
+            Entry("xl/_rels/workbook.xml.rels",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+                + $"<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"/{sheetPartName}\"/>"
+                + "</Relationships>");
+
+            using var sheet = new StreamWriter(archive.CreateEntry(sheetPartName).Open(), new UTF8Encoding(false));
+            sheet.Write(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                + "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>");
+            long written = 0;
+            for (long i = 0; written < markupBytes; i++)
+            {
+                var next = row(i);
+                sheet.Write(next);
+                written += next.Length;
+            }
+
+            sheet.Write("</sheetData></worksheet>");
+        }
+
+        buffer.Position = 0;
+        return buffer;
+    }
+
+    /// <summary>
+    /// A word processing document whose main part is written as raw markup, paragraph after
+    /// paragraph, until it holds at least <paramref name="markupBytes"/>. Written straight to
+    /// the part's stream so the test never holds the expanded text itself.
+    /// </summary>
+    private static MemoryStream WordDocumentWithMarkup(long markupBytes, Func<long, string> paragraph)
+    {
+        var buffer = new MemoryStream();
+        using (var document = WordprocessingDocument.Create(
+            buffer, WordprocessingDocumentType.Document))
+        {
+            var main = document.AddMainDocumentPart();
+            using var part = main.GetStream(FileMode.Create, FileAccess.Write);
+            using var writer = new StreamWriter(part, new UTF8Encoding(false));
+            writer.Write(
+                "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>");
+            long written = 0;
+            for (long i = 0; written < markupBytes; i++)
+            {
+                var next = paragraph(i);
+                writer.Write(next);
+                written += next.Length;
+            }
+
+            writer.Write("</w:body></w:document>");
+        }
+
+        buffer.Position = 0;
+        return buffer;
+    }
+
     /// <summary>
     /// The most a reader takes into memory when it cannot read its source a second time. A file
     /// on disk can be read where it lies, so nothing about a stored document is bounded by this

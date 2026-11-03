@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.IO.Compression;
 using System.Text;
+using System.Xml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using SilexGis.Domain.Documents;
@@ -71,26 +72,28 @@ public sealed class OfficeOpenXmlTextExtractor : ITextExtractor
         string? mainPart;
         using (var archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true))
         {
+            RefuseOversizedMarkup(archive);
             mainPart = MainParts.FirstOrDefault(p => archive.GetEntry(p) is not null);
         }
 
         buffer.Position = 0;
+        var settings = new OpenSettings { MaxCharactersInPart = MaxMarkupPartBytes };
         switch (mainPart)
         {
             case WordMainPart:
-                using (var word = WordprocessingDocument.Open(buffer, isEditable: false))
+                using (var word = WordprocessingDocument.Open(buffer, isEditable: false, settings))
                 {
                     return [new ExtractedPage(1, PageText.Normalize(WordText(word)))];
                 }
 
             case ExcelMainPart:
-                using (var workbook = SpreadsheetDocument.Open(buffer, isEditable: false))
+                using (var workbook = SpreadsheetDocument.Open(buffer, isEditable: false, settings))
                 {
                     return SheetPages(workbook, ct);
                 }
 
             case PowerPointMainPart:
-                using (var presentation = PresentationDocument.Open(buffer, isEditable: false))
+                using (var presentation = PresentationDocument.Open(buffer, isEditable: false, settings))
                 {
                     return SlidePages(presentation, ct);
                 }
@@ -99,6 +102,172 @@ public sealed class OfficeOpenXmlTextExtractor : ITextExtractor
                 throw new InvalidDataException(
                     "The package holds none of the parts an Office document is built around.");
         }
+    }
+
+    /// <summary>
+    /// Most bytes one markup part may expand to. The document library builds a whole part into
+    /// an object tree several times the size of its text before anything here can stop it, so
+    /// the bound has to be applied before the part is opened rather than to the text it yields.
+    /// It is the same ceiling every other reader here holds a single entry of a container to,
+    /// and far above what the two million characters a page keeps could need.
+    /// </summary>
+    internal const int MaxMarkupPartBytes = ExtractionStreams.MaxBytes;
+
+    /// <summary>
+    /// Most bytes all the markup parts of one package may expand to together. The library keeps
+    /// every part it has opened until the package is closed, so a workbook of many sheets each
+    /// just under the single-part ceiling would otherwise be held all at once.
+    /// </summary>
+    internal const long MaxMarkupPackageBytes = 4L * ExtractionStreams.MaxBytes;
+
+    /// <summary>
+    /// Refuses a package whose markup would expand past what may be held, judged from the sizes
+    /// the package's directory declares and before a single part is parsed. A few megabytes of
+    /// upload can declare gigabytes of repetitive markup — deflate reaches about a thousand to
+    /// one — so a part is also refused when it expands far more than ordinary text does, by the
+    /// rule every archive this application unpacks is held to.
+    /// <para>
+    /// Only markup counts, and what is markup is decided the way the document library decides
+    /// what to parse — by the content type the package declares for a part, not by the part's
+    /// name. A part may be called anything: a worksheet stored as <c>xl/worksheets/s1.dat</c>
+    /// and declared a worksheet is parsed as one. So the one thing read past is a part the
+    /// package declares to be something other than markup, such as a picture or an embedded
+    /// file; the library never parses those as markup, so a large scan inside a report is read
+    /// past as before. Anything not declared at all counts, and so does every relationships part
+    /// and the content-type list itself, which are found and parsed by their names.
+    /// </para>
+    /// <para>
+    /// The declared size is binding rather than a hint: the runtime's archive reader stops a
+    /// deflated entry at the length the directory gives it, and the part limit passed to the
+    /// library holds the parse to the same ceiling should that ever change.
+    /// </para>
+    /// </summary>
+    /// <exception cref="ContentTooLargeException">The markup would expand past a ceiling.</exception>
+    private static void RefuseOversizedMarkup(ZipArchive archive)
+    {
+        var notMarkup = PartsDeclaredNotMarkup(archive);
+
+        long total = 0;
+        foreach (var entry in archive.Entries)
+        {
+            if (notMarkup.Contains(entry.FullName))
+            {
+                continue;
+            }
+
+            total += entry.Length;
+            RefuseOversizedPart(entry, total);
+        }
+    }
+
+    /// <summary>Refuses one markup part, given what the markup comes to with it included.</summary>
+    private static void RefuseOversizedPart(ZipArchiveEntry entry, long total)
+    {
+        if (entry.Length > MaxMarkupPartBytes || total > MaxMarkupPackageBytes)
+        {
+            throw new ContentTooLargeException(
+                "The document's text would expand past what may be read.");
+        }
+
+        if (ArchiveExpansionRules.AbandonReason(
+                ArchiveLimits.Default, entry.Length, entry.CompressedLength, entry.Length)
+            is not null)
+        {
+            throw new ContentTooLargeException(
+                "The document's text is compressed far more than any ordinary document, "
+                + "so it is not expanded.");
+        }
+    }
+
+    private const string ContentTypesEntry = "[Content_Types].xml";
+
+    /// <summary>
+    /// The entries the package's content-type list declares to be something other than markup,
+    /// by their names in the archive. The list is itself markup, so it is measured before it is
+    /// read; a package without one is not a package the library opens, and nothing is exempt.
+    /// </summary>
+    private static HashSet<string> PartsDeclaredNotMarkup(ZipArchive archive)
+    {
+        var notMarkup = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var list = archive.GetEntry(ContentTypesEntry);
+        if (list is null)
+        {
+            return notMarkup;
+        }
+
+        RefuseOversizedPart(list, list.Length);
+
+        var defaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var stream = list.Open();
+            using var reader = XmlReader.Create(stream, new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null,
+                IgnoreComments = true,
+            });
+            while (reader.Read())
+            {
+                if (reader.NodeType != XmlNodeType.Element
+                    || reader.GetAttribute("ContentType") is not { } type)
+                {
+                    continue;
+                }
+
+                if (reader.LocalName == "Default" && reader.GetAttribute("Extension") is { } extension)
+                {
+                    defaults[extension] = type;
+                }
+                else if (reader.LocalName == "Override" && reader.GetAttribute("PartName") is { } part)
+                {
+                    overrides[part.TrimStart('/')] = type;
+                }
+            }
+        }
+        catch (XmlException e)
+        {
+            throw new InvalidDataException("The package's list of content types is not readable.", e);
+        }
+
+        foreach (var entry in archive.Entries)
+        {
+            var name = entry.FullName;
+            if (IsReadByName(name))
+            {
+                continue;
+            }
+
+            var declared = overrides.TryGetValue(name, out var byPart)
+                ? byPart
+                : defaults.GetValueOrDefault(Path.GetExtension(name).TrimStart('.'));
+            if (declared is not null && !IsMarkupType(declared))
+            {
+                notMarkup.Add(name);
+            }
+        }
+
+        return notMarkup;
+    }
+
+    /// <summary>
+    /// The parts the package reader finds and parses by name, whatever content type is declared
+    /// for them: the content-type list and the relationships.
+    /// </summary>
+    private static bool IsReadByName(string name) =>
+        name.Equals(ContentTypesEntry, StringComparison.OrdinalIgnoreCase)
+        || name.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A markup content type: <c>application/xml</c>, <c>text/xml</c> or any of the
+    /// <c>…+xml</c> types every Office part is declared with. Parameters are ignored.
+    /// </summary>
+    private static bool IsMarkupType(string contentType)
+    {
+        var media = contentType.Split(';')[0].Trim();
+        return media.EndsWith("+xml", StringComparison.OrdinalIgnoreCase)
+            || media.EndsWith("/xml", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>The body of a word processing document, its paragraphs on separate lines.</summary>

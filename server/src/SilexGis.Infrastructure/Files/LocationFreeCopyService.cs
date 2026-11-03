@@ -75,7 +75,9 @@ public sealed class LocationFreeCopyService(IFileStore fileStore)
     /// The absolute path of the file's location-free copy, made now when there is none yet.
     /// </summary>
     /// <exception cref="InvalidOperationException">The file is not in a format this can write.</exception>
-    /// <exception cref="MagickException">The stored image could not be read or written.</exception>
+    /// <exception cref="MagickException">
+    /// The stored image could not be read or written, or declares more pixels than may be decoded.
+    /// </exception>
     public async Task<string> GetOrCreateAsync(StoredFile file, CancellationToken ct)
     {
         if (!CanRemoveLocation(file.Kind, file.MimeType))
@@ -92,10 +94,15 @@ public sealed class LocationFreeCopyService(IFileStore fileStore)
 
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
 
+        // Measured before it is decoded: a small file can declare gigabytes of pixels, and every
+        // frame is decoded below, so every frame is counted.
+        var sourcePath = fileStore.GetAbsolutePath(file.StoragePath);
+        PictureCeiling.Require(sourcePath, everyFrame: true);
+
         // A collection rather than one image, so an animated picture keeps every frame instead
         // of being cut to its first.
         using var frames = new MagickImageCollection();
-        await frames.ReadAsync(fileStore.GetAbsolutePath(file.StoragePath), ct);
+        await frames.ReadAsync(sourcePath, ct);
         foreach (var frame in frames)
         {
             RemoveLocation(frame);
