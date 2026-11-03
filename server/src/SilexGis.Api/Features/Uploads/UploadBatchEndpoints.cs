@@ -27,6 +27,7 @@ public static class UploadBatchEndpoints
 {
     public const string NotFoundCode = "upload_batch.not_found";
     public const string ImportForbiddenCode = "import.forbidden";
+    public const string TagRaceCode = "upload_batch.tag_race";
 
     public static RouteGroupBuilder MapUploadBatchEndpoints(this RouteGroupBuilder api)
     {
@@ -102,7 +103,12 @@ public static class UploadBatchEndpoints
             return ApiProblems.BadRequest(UploadDestinationBinding.CabinetNotFoundCode);
         }
 
-        var tagId = await ResolveTagAsync(db, request.TagName, ct);
+        var (tagId, tagRefusal) = await ResolveTagAsync(db, ctx, request.TagName, ct);
+        if (tagRefusal is not null)
+        {
+            return tagRefusal;
+        }
+
         var batch = await batches.OpenAsync(
             ctx.UserId, UploadSource.Interactive, request.Label, request.CabinetId, tagId,
             sourceDescription: null, ct);
@@ -297,7 +303,12 @@ public static class UploadBatchEndpoints
             return ApiProblems.BadRequest(UploadDestinationBinding.CabinetNotFoundCode);
         }
 
-        var tagId = await ResolveTagAsync(db, request.TagName, ct);
+        var (tagId, tagRefusal) = await ResolveTagAsync(db, ctx, request.TagName, ct);
+        if (tagRefusal is not null)
+        {
+            return tagRefusal;
+        }
+
         var batch = await batches.OpenAsync(
             ctx.UserId,
             UploadSource.ServerDirectory,
@@ -341,29 +352,66 @@ public static class UploadBatchEndpoints
     /// identified because somebody types it — and a name that already exists is the same tag,
     /// since tags are installation-wide by design.
     /// </summary>
-    private static async Task<long?> ResolveTagAsync(SilexGisDbContext db, string? name, CancellationToken ct)
+    /// <remarks>
+    /// <para>
+    /// Applying an existing tag takes nothing beyond opening the drop. Coining a new one adds
+    /// to the vocabulary every account's tag picker shows, so it takes the right to create
+    /// tags — the same bar tagging an object with a new name sets — and is refused before
+    /// anything is written, so a refused open leaves neither a tag nor a drop behind.
+    /// </para>
+    /// <para>
+    /// Two drops opened at once under one new name both miss the look-up and both insert; the
+    /// unique slug index lets one through. The loser adopts the winner's row, because a tag is
+    /// identified by its slug and carries nothing else: the caller asked for a tag by that
+    /// name and one now exists, so refusing would report a conflict over exactly the outcome
+    /// that was wanted.
+    /// </para>
+    /// </remarks>
+    private static async Task<(long? TagId, ProblemHttpResult? Refusal)> ResolveTagAsync(
+        SilexGisDbContext db, AccessContext ctx, string? name, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return null;
+            return (null, null);
         }
 
         var slug = Tag.Slugify(name);
         if (slug.Length == 0)
         {
-            return null;
+            return (null, null);
         }
 
-        var existing = await db.Tags.FirstOrDefaultAsync(t => t.Slug == slug, ct);
+        var existing = await db.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Slug == slug, ct);
         if (existing is not null)
         {
-            return existing.Id;
+            return (existing.Id, null);
+        }
+
+        if (!CreateRules.MayCreate(ctx, AccessDomain.Tags))
+        {
+            return (null, ApiProblems.Forbidden(CreateRules.ForbiddenCode));
         }
 
         var tag = new Tag { Name = name.Trim(), Slug = slug };
         db.Tags.Add(tag);
-        await db.SaveChangesAsync(ct);
-        return tag.Id;
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return (tag.Id, null);
+        }
+        catch (DbUpdateException e) when (TagIdentity.IsTagRace(e))
+        {
+            db.Entry(tag).State = EntityState.Detached;
+            var winner = await db.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Slug == slug, ct);
+
+            // Gone again only if it was deleted in the instant it was created, which nothing in
+            // the product does. Refusing beats inventing an identity.
+            return winner is null
+                ? (null, ApiProblems.Conflict(
+                    TagRaceCode,
+                    "The tag was created and removed while this drop was being opened. Try again."))
+                : (winner.Id, null);
+        }
     }
 
     /// <summary>Titles of the documents among these that the caller may actually read.</summary>

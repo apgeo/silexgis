@@ -3,7 +3,6 @@ using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
@@ -180,7 +179,7 @@ public static class TagEndpoints
                 // Materialize the identity now — the tagging row references it by value.
                 await db.SaveChangesAsync(ct);
             }
-            catch (DbUpdateException e) when (IsRaceOn(e, TagIdentityIndexes))
+            catch (DbUpdateException e) when (TagIdentity.IsTagRace(e))
             {
                 // Somebody coined the same tag between the look-up above and this write. Saving a
                 // form that names two new tags at once produces exactly that, and the loser used
@@ -234,7 +233,7 @@ public static class TagEndpoints
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException e) when (IsRaceOn(e, TaggingIdentityIndexes))
+        catch (DbUpdateException e) when (TagIdentity.IsTaggingRace(e))
         {
             // The same tag applied to the same target twice at once. The look-up above found
             // nothing for either request, so both tried to add — and this route is documented
@@ -294,34 +293,6 @@ public static class TagEndpoints
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }
-
-    /// <summary>
-    /// The unique indexes that make a tag's identity, and the ones that make a tagging's.
-    /// </summary>
-    /// <remarks>
-    /// A tag is unique on both its slug and its name, and either can be the one PostgreSQL
-    /// reports — they are derived from the same input, so which index refuses first is not this
-    /// code's to predict. Matching only the slug caught the race in a test and not in the wild.
-    /// A tagging is unique per tag and target, in two indexes because the target is a feature or
-    /// a non-feature entity and never both.
-    /// </remarks>
-    private static readonly string[] TagIdentityIndexes = ["ix_tags_slug", "ix_tags_name"];
-
-    private static readonly string[] TaggingIdentityIndexes =
-        ["ix_taggings_tag_id_feature_id", "ix_taggings_tag_id_entity_type_entity_id"];
-
-    /// <summary>
-    /// Whether a failed write is a second request about the same thing arriving at the same moment.
-    /// </summary>
-    /// <remarks>
-    /// Matched on the index by name rather than on the error code alone, so that a different
-    /// unique violation arriving through this path — a defect somewhere else in the write — is
-    /// not quietly swallowed and answered as somebody else's success.
-    /// </remarks>
-    private static bool IsRaceOn(DbUpdateException e, string[] indexes) =>
-        e.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } violation
-        && violation.ConstraintName is { } name
-        && Array.IndexOf(indexes, name) >= 0;
 
     // The row's XOR maps directly: a feature row has a null EntityType, which is exactly
     // the parsed shape of a feature target.
