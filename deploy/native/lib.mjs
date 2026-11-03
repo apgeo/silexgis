@@ -1718,28 +1718,97 @@ export function writeRecord(layout, recorded, extra) {
 }
 
 /**
+ * When a process started, as the system counts it (Linux: the start time in `/proc/<pid>/stat`), or
+ * undefined where that cannot be read. Two processes that share a pid at different times differ in it.
+ */
+export function processStartTime(pid) {
+  if (process.platform !== 'linux') return undefined;
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+    // The fields after the command name begin with the state (field 3); the start time is field 22.
+    return stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[19];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * One updater (or installer) at a time, across processes. Two concurrent builds on a small host
  * is how an update runs it out of memory and leaves neither version running. A lock whose
  * process is gone is taken over rather than left to block every later run.
+ *
+ * The lock appears with its holder's pid already in it: the pid is written to a file of this
+ * process's own and hard-linked to the lock's name, which either creates the lock whole or fails
+ * because it exists. Creating the lock and then writing the pid into it left a moment in which a
+ * second process read an empty lock, took it for a dead holder's, deleted it and ran beside the
+ * first. A lock that holds no pid -- written by a version that still created it in two steps, and
+ * perhaps being written right now -- counts as held until it is a minute old.
+ *
+ * Beside the pid it records when that process started, where the platform says. A run that crashed
+ * leaves its pid behind and the system may give the number to something unrelated and long-lived;
+ * judged by the pid alone, that lock would refuse every later run until someone deleted it. A live
+ * pid whose start time differs from the recorded one is therefore not the holder.
+ *
+ * A stale lock is moved aside under a name of this process's own before it is removed, and read
+ * again there. Two processes can judge the same lock stale at once; the first replaces it with its
+ * own, and a plain remove by the second would then delete that live lock and let both run. What the
+ * second moves aside is then not what it judged stale, so it puts it back and stops.
  */
-export function acquireLock(file) {
+export function acquireLock(file, { now = Date.now, startTime = processStartTime, beforeTakeover } = {}) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const fd = fs.openSync(file, 'wx');
-      fs.writeSync(fd, `${process.pid}\n`);
-      fs.closeSync(fd);
-      return () => fs.rmSync(file, { force: true });
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-      const holder = Number(fs.readFileSync(file, 'utf8').trim());
-      if (Number.isInteger(holder) && holder > 0 && pidAlive(holder)) {
-        fail(`another install or update is running (pid ${holder}); lock ${file}`);
+  const mine = `${file}.${process.pid}.tmp`;
+  const aside = `${file}.${process.pid}.stale`;
+  const myStart = startTime(process.pid);
+  fs.writeFileSync(mine, `${process.pid}${myStart ? ` ${myStart}` : ''}\n`);
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        fs.linkSync(mine, file);
+        return () => fs.rmSync(file, { force: true });
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+        let text;
+        let age;
+        try {
+          text = fs.readFileSync(file, 'utf8').trim();
+          age = now() - fs.statSync(file).mtimeMs;
+        } catch (gone) {
+          if (gone.code === 'ENOENT') continue; // released between the two calls: try again
+          throw gone;
+        }
+        const [pidText, recordedStart] = text.split(/\s+/);
+        const holder = Number(pidText);
+        if (text === '' && age < 60_000) fail(`another install or update is starting; lock ${file}`);
+        if (Number.isInteger(holder) && holder > 0 && pidAlive(holder)) {
+          const liveStart = recordedStart === undefined ? undefined : startTime(holder);
+          if (liveStart === undefined || liveStart === recordedStart) {
+            fail(`another install or update is running (pid ${holder}); lock ${file}`);
+          }
+        }
+        beforeTakeover?.();
+        try {
+          fs.renameSync(file, aside);
+        } catch (gone) {
+          if (gone.code === 'ENOENT') continue; // another process took it over first: try again
+          throw gone;
+        }
+        if (fs.readFileSync(aside, 'utf8').trim() !== text) {
+          // Not the lock judged stale: another process has just taken it over. Put it back.
+          try {
+            fs.linkSync(aside, file);
+          } catch (back) {
+            if (back.code !== 'EEXIST') throw back;
+          }
+          fs.rmSync(aside, { force: true });
+          fail(`another install or update is starting; lock ${file}`);
+        }
+        fs.rmSync(aside, { force: true });
       }
-      fs.rmSync(file, { force: true });
     }
+    fail(`could not take the lock ${file}`);
+  } finally {
+    fs.rmSync(mine, { force: true });
   }
-  fail(`could not take the lock ${file}`);
 }
 
 /** Starts a long streaming child and resolves with its exit code and collected standard error. */

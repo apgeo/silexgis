@@ -1497,6 +1497,15 @@ cd deploy
 sh scripts/backup.sh                 # → ./backups/<timestamp>/{db.sql.gz,files.tar.gz[,terrain-uploads.tar.gz]}
 ```
 
+A backup is all of those files or none of them. Each archive is written into a hidden `.incomplete`
+folder inside the target and read back before it counts: the dump must report success, decompress
+cleanly and end with pg_dump's own completion line, and the other archives must decompress
+cleanly. Only then is everything moved into place. If any step fails, for example a database that
+cannot be reached, a dump cut off part-way or a full disk, the script removes what it wrote,
+prints `FAILED: …` with the cause, and exits non-zero. The updater, the reset and baseline
+commands and the nightly unit stop on that exit status, so a failed backup is never taken for a
+good one.
+
 Restore into a stopped stack:
 
 ```bash
@@ -2372,8 +2381,10 @@ out for the reasons given under [Backups](#backups). The installer's nightly tim
 sudo node deploy/native/restore.mjs /var/backups/silexgis/<timestamp> --yes
 ```
 
-It stops the API, drops and recreates the database's `public` schema, loads the dump, unpacks the
-files, hands them to the service account and starts the API again. **It fails on any error in the
+It first reads every archive of the backup back in full, and refuses with nothing changed a backup
+that does not: a `db.sql.gz` cut short or without `pg_dump`'s closing line, or a `files.tar.gz` or
+`terrain-uploads.tar.gz` that `tar` cannot list. Then it stops the API, drops and recreates the
+database's `public` schema, loads the dump, unpacks the files, hands them to the service account and starts the API again. **It fails on any error in the
 load** except the three the Docker restore also lets through (the PostGIS image's `tiger`,
 `tiger_data` and `topology` schemas already existing) — and then leaves the files untouched and the
 API stopped, so a half-restored database is not mistaken for a working one. The load recreates

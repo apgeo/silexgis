@@ -1669,7 +1669,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Requests a password-reset link by email. Always returns 202. */
+        /** Requests a password-reset link by email. Returns 202 whether or not the address has an account. */
         post: operations["authForgotPassword"];
         delete?: never;
         options?: never;
@@ -1720,7 +1720,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sends the address-confirmation message again. Always returns 202. */
+        /** Sends the address-confirmation message again. Returns 202 whether or not the address has an account. */
         post: operations["authResendConfirmation"];
         delete?: never;
         options?: never;
@@ -21682,6 +21682,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Too Many Requests */
             429: {
                 headers: {
@@ -21726,6 +21735,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Too Many Requests */
             429: {
                 headers: {
@@ -21750,6 +21768,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Too Many Requests */
             429: {
                 headers: {
@@ -21774,6 +21801,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Too Many Requests */
             429: {
                 headers: {
@@ -21798,6 +21834,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Too Many Requests */
             429: {
                 headers: {
@@ -21822,6 +21867,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Too Many Requests */
             429: {
                 headers: {
@@ -23964,6 +24018,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MfaStatusDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
                 };
             };
             /** @description Unauthorized */

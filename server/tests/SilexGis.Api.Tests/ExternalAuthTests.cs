@@ -152,6 +152,42 @@ public sealed class ExternalAuthTests : IDisposable, IClassFixture<PostgresFixtu
     }
 
     [Fact]
+    public async Task A_return_address_off_this_site_is_replaced_by_the_application_root()
+    {
+        var email = Email();
+        await LinkAsync(await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, email), "gh-return");
+
+        // The positive half: a path on this site is where the sign-in lands.
+        using (var good = Browser())
+        {
+            var landed = await ReturnFromProviderAsync(good, "gh-return", "/map?view=1");
+            landed.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+            LocationOf(landed).ShouldBe("/map?view=1");
+        }
+
+        // Each of these is read by a browser as another site, or as an address it repairs into
+        // one: browsers delete tabs and line breaks anywhere in an address and read a backslash
+        // as a slash, so "/<tab>/evil.example" and "/\evil.example" both become "//evil.example".
+        string[] hostile =
+        [
+            "//evil.example/x", "/\\evil.example/x", "/\t/evil.example/x", "/\n/evil.example/x",
+            "/\r\n/evil.example/x", "/x\\..\\..\\/evil.example", "http://evil.example/x",
+            "https:evil.example", "evil.example", "",
+        ];
+        foreach (var returnUrl in hostile)
+        {
+            using var client = Browser();
+            var landed = await ReturnFromProviderAsync(client, "gh-return", returnUrl);
+            landed.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+            LocationOf(landed).ShouldBe("/", $"return address {JsonSerializer.Serialize(returnUrl)}");
+        }
+    }
+
+    /// <summary>The Location header exactly as sent, before any parser has repaired it.</summary>
+    private static string? LocationOf(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("Location", out var values) ? values.Single() : null;
+
+    [Fact]
     public async Task A_provider_sign_in_to_an_account_without_a_second_factor_signs_straight_in()
     {
         var email = Email();
@@ -336,11 +372,12 @@ public sealed class ExternalAuthTests : IDisposable, IClassFixture<PostgresFixtu
         factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
     /// <summary>Returns from the provider as the browser would, then follows into the real callback.</summary>
-    private static async Task<HttpResponseMessage> ReturnFromProviderAsync(HttpClient client, string providerKey)
+    private static async Task<HttpResponseMessage> ReturnFromProviderAsync(
+        HttpClient client, string providerKey, string? returnUrl = null)
     {
         var stood = await client.PostAsync(
             $"{ProviderReturnStandIn.Path}?key={Uri.EscapeDataString(providerKey)}"
-            + $"&returnUrl={Uri.EscapeDataString(AuthHelper.AuthorizeUrl())}",
+            + $"&returnUrl={Uri.EscapeDataString(returnUrl ?? AuthHelper.AuthorizeUrl())}",
             null);
         stood.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         return await client.GetAsync("/api/v1/auth/external/github/callback");

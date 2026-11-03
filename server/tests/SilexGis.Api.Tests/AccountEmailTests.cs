@@ -111,6 +111,101 @@ public sealed class AccountEmailTests : IAsyncLifetime, IDisposable, IClassFixtu
     }
 
     [Fact]
+    public async Task Asking_for_another_change_within_a_minute_is_refused_and_mails_nothing()
+    {
+        // The positive half: the first request stages the change and mails the new address.
+        factory.Messages.Clear();
+        (await RequestChangeAsync(TargetEmail)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        factory.Messages.Messages.Count(m => m.Recipient == TargetEmail).ShouldBe(1);
+
+        // Each request mails an address the caller chose; without the gap the resend route keeps,
+        // one session could mail a stranger as fast as the rate limit allows.
+        var again = await RequestChangeAsync(TargetEmail);
+        again.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemCodeAsync(again)).ShouldBe("me.email_resend_too_soon");
+        var elsewhere = await RequestChangeAsync($"mail-other-{suffix}@t.local");
+        elsewhere.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemCodeAsync(elsewhere)).ShouldBe("me.email_resend_too_soon");
+        factory.Messages.Messages.Count(m => m.Recipient == TargetEmail).ShouldBe(1);
+        factory.Messages.Messages.ShouldNotContain(m => m.Recipient == $"mail-other-{suffix}@t.local");
+    }
+
+    [Fact]
+    public async Task A_request_for_a_taken_address_holds_the_gap_just_as_a_free_one_does()
+    {
+        // If only a free address started the gap, the answer to the next request would tell a
+        // signed-in caller whether the first address has an account here.
+        factory.Messages.Clear();
+        (await RequestChangeAsync(NeighbourEmail)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+
+        var next = await RequestChangeAsync(TargetEmail);
+        next.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemCodeAsync(next)).ShouldBe("me.email_resend_too_soon");
+
+        // And the taken address itself was never mailed, nor staged.
+        factory.Messages.Messages.ShouldNotContain(m => m.Recipient == NeighbourEmail);
+        factory.Messages.Messages.ShouldNotContain(m => m.Recipient == TargetEmail);
+        (await GetMeAsync()).GetProperty("pendingEmail").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task Abandoning_a_change_does_not_reopen_the_gap()
+    {
+        factory.Messages.Clear();
+        (await RequestChangeAsync(TargetEmail)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        (await me.DeleteAsync("/api/v1/me/email/pending")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // A change-and-cancel loop would otherwise mail a stranger once per pair of calls.
+        var again = await RequestChangeAsync(TargetEmail);
+        again.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemCodeAsync(again)).ShouldBe("me.email_resend_too_soon");
+        factory.Messages.Messages.Count(m => m.Recipient == TargetEmail).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task An_address_that_cannot_be_the_user_name_is_refused_before_anything_is_staged()
+    {
+        // A user name accepts fewer characters than an address; this account's user name follows
+        // its address, so the change would confirm with the rename failing behind it and the old
+        // address left as the account's public name.
+        var response = await RequestChangeAsync($"o'brien-{suffix}@t.local");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemCodeAsync(response)).ShouldBe("me.email_not_usable");
+        (await GetMeAsync()).GetProperty("pendingEmail").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The positive half: an account with a chosen handle keeps it, so the same address is fine.
+        (await me.PutAsJsonAsync("/api/v1/me/username", new { username = $"ana-{suffix}" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await RequestChangeAsync($"o'brien-{suffix}@t.local")).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        (await GetMeAsync()).GetProperty("pendingEmail").GetString().ShouldBe($"o'brien-{suffix}@t.local");
+    }
+
+    [Fact]
+    public async Task A_change_whose_user_name_was_taken_meanwhile_is_refused_whole()
+    {
+        await RequestChangeAsync(TargetEmail);
+
+        // After the request, another account takes the new address as its handle.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+            var neighbour = (await users.FindByEmailAsync(NeighbourEmail))!;
+            (await users.SetUserNameAsync(neighbour, TargetEmail)).Succeeded.ShouldBeTrue();
+        }
+
+        var response = await me.PostAsJsonAsync(
+            "/api/v1/me/email/confirm", new { token = await ChangeTokenAsync(TargetEmail) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemCodeAsync(response)).ShouldBe("me.email_taken");
+        // Neither half moved: the address and the user name are both still the old address.
+        var user = await UserAsync();
+        user.Email.ShouldBe(StartingEmail);
+        user.UserName.ShouldBe(StartingEmail);
+    }
+
+    [Fact]
     public async Task Requesting_an_address_that_is_taken_stages_nothing_and_says_nothing()
     {
         // Answering "that address is taken" would tell any signed-in caller whether an address has

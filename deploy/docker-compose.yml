@@ -34,6 +34,14 @@ services:
         max-size: "20m"
         max-file: "5"
     build: ../server
+    # The API runs as the image's unprivileged app user, binds an unprivileged port and needs no
+    # Linux capability. It parses uploaded office documents, PDFs, spreadsheets and survey files,
+    # so a flaw in one of those readers should find nothing to escalate with: every capability is
+    # dropped, and no process inside may gain privileges through a setuid binary.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     # Any SILEXGIS__* line added to .env (e.g. external login providers) flows through here;
     # the explicit mappings below still take precedence for the common settings.
     env_file:

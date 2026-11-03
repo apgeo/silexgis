@@ -7,6 +7,8 @@
 // Takes a directory holding db.sql.gz and files.tar.gz (and terrain-uploads.tar.gz, when the backup
 // has browser-uploaded terrain rasters) — written by backup.mjs, or by the Docker
 // path's deploy/scripts/backup.sh — and:
+//   0. reads every archive back in full, and refuses with nothing changed a backup that does not:
+//      a copy cut short in transfer, or a dump that stopped before pg_dump finished;
 //   1. stops the API, so nothing writes during the restore;
 //   2. drops and recreates the database's public schema and loads the dump into it;
 //   3. fails, leaving the files and the stopped API as they are, if the load reported any error
@@ -26,6 +28,7 @@
 // that role is a superuser. The dump sets the owner of every object to the role it was taken
 // from, so restore into a role of the same name (the default, silexgis, on both paths).
 
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -68,11 +71,56 @@ export async function loadDump(layout, target, database, file) {
   return { code, unexpected };
 }
 
+// pg_dump writes this line only after the last object, so a plain dump without it is incomplete.
+const DUMP_COMPLETE = /^-- PostgreSQL database dump complete\r?$/m;
+
+/** Decompresses a gzipped dump to its end and returns its last few kilobytes. */
+async function dumpTail(file) {
+  let tail = '';
+  for await (const chunk of fs.createReadStream(file).pipe(createGunzip())) {
+    tail = (tail + chunk.toString('utf8')).slice(-4096);
+  }
+  return tail;
+}
+
+/**
+ * Reads every archive of a backup back in full, before anything is stopped, dropped or emptied.
+ * The restore removes the schema and the uploads before it loads anything, so a backup that cannot
+ * be restored whole would otherwise leave the installation with neither the old data nor the new.
+ */
+export async function checkBackup(sourceDir, tar) {
+  const problems = [];
+  const dbFile = path.join(sourceDir, 'db.sql.gz');
+  try {
+    if (!DUMP_COMPLETE.test(await dumpTail(dbFile))) {
+      problems.push("db.sql.gz is incomplete: it does not end with pg_dump's completion line");
+    }
+  } catch (error) {
+    problems.push(`db.sql.gz does not decompress whole (${error.message})`);
+  }
+  const archives = ['files.tar.gz', 'terrain-uploads.tar.gz'].filter(
+    (name) => name === 'files.tar.gz' || fs.existsSync(path.join(sourceDir, name)),
+  );
+  for (const name of archives) {
+    const listed = spawnSync(tar, ['-tzf', path.join(sourceDir, name)], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+    if (listed.status !== 0) {
+      const detail = String(listed.stderr ?? listed.error?.message ?? '').trim();
+      problems.push(`${name} does not read back${detail ? ` (${detail.split('\n').at(-1)})` : ''}`);
+    }
+  }
+  if (problems.length > 0) {
+    fail(`the backup in ${sourceDir} cannot be restored whole -- nothing was changed:\n    ${problems.join('\n    ')}`);
+  }
+}
+
 export async function runRestore({ layout, db }, sourceDir, { adminUrl, start = true } = {}) {
   const dbFile = path.join(sourceDir, 'db.sql.gz');
   const filesFile = path.join(sourceDir, 'files.tar.gz');
   for (const file of [dbFile, filesFile]) if (!fs.existsSync(file)) fail(`missing ${file}`);
   const tar = tarProgram() ?? fail('tar is not available on this machine');
+
+  say(`Checking ${sourceDir} before anything is changed`);
+  await checkBackup(sourceDir, tar);
 
   let target = adminAccess(layout, db, adminUrl);
   if (!target) {

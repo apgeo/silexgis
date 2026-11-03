@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
@@ -25,19 +26,25 @@ public static class AuthEndpoints
         var auth = api.MapGroup("/auth").WithTags("Auth").AllowAnonymous().RequireRateLimiting("auth");
 
         auth.MapPost("/login", LoginAsync)
+            .WithValidation<LoginRequest>()
             .WithSummary("Signs in with email + password, establishing the cookie session used by the OIDC authorize flow.");
         auth.MapPost("/logout", LogoutAsync)
             .WithSummary("Ends the cookie session.");
         auth.MapPost("/register", RegisterAsync)
+            .WithValidation<RegisterRequest>()
             .WithSummary("Creates an account (enabled per installation via Auth:OpenRegistration).");
         auth.MapPost("/password/forgot", ForgotPasswordAsync)
-            .WithSummary("Requests a password-reset link by email. Always returns 202.");
+            .WithValidation<ForgotPasswordRequest>()
+            .WithSummary("Requests a password-reset link by email. Returns 202 whether or not the address has an account.");
         auth.MapPost("/password/reset", ResetPasswordAsync)
+            .WithValidation<ResetPasswordRequest>()
             .WithSummary("Resets the password using a reset token.");
         auth.MapPost("/email/confirm", ConfirmEmailAsync)
+            .WithValidation<ConfirmEmailRequest>()
             .WithSummary("Confirms an account's address from the emailed link, without a session.");
         auth.MapPost("/email/resend", ResendConfirmationAsync)
-            .WithSummary("Sends the address-confirmation message again. Always returns 202.");
+            .WithValidation<ForgotPasswordRequest>()
+            .WithSummary("Sends the address-confirmation message again. Returns 202 whether or not the address has an account.");
 
         return api;
     }
@@ -126,6 +133,11 @@ public static class AuthEndpoints
             DisplayName = request.DisplayName,
         };
 
+        // The account, its default memberships and its roster entry commit together. Identity
+        // saves the account on its own, so without one transaction a failure in the second save
+        // left an account with no roster entry, and the retry was refused as a duplicate address.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
         var result = await userManager.CreateAsync(user, request.Password);
         if (!result.Succeeded)
         {
@@ -141,6 +153,7 @@ public static class AuthEndpoints
 
         CaverDirectory.CreateForNewAccount(db, user.Id, user.DisplayName, user.UserName, user.Email);
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         var policy = await settings.GetSecurityAsync(ct);
         var confirmationSent = false;
@@ -207,10 +220,34 @@ public static class AuthEndpoints
                 new Dictionary<string, string>());
         }
 
+        // The link reached this address and came back, which is the same proof a confirmation link
+        // gives. Without it an invited member who has just chosen a password is refused at the first
+        // sign-in where confirmed addresses are required, by a confirmation nobody ever sent them.
+        // Set before the reset so the reset's own save carries it; a refused reset never saves.
+        user.EmailConfirmed = true;
+
         var result = await userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
         if (!result.Succeeded)
         {
-            return AuthProblem(StatusCodes.Status400BadRequest, "auth.reset_invalid", "The reset token is invalid or expired.");
+            // Identity checks the token before the new password, so a password error means the link
+            // is still good: saying it had expired would send the person off for another one.
+            var passwordErrors = result.Errors
+                .Where(e => e.Code != nameof(IdentityErrorDescriber.InvalidToken))
+                .Select(e => e.Description)
+                .ToArray();
+            return passwordErrors.Length > 0
+                ? Results.Problem(
+                    detail: "The new password was rejected.",
+                    statusCode: StatusCodes.Status400BadRequest,
+                    extensions: new Dictionary<string, object?>
+                    {
+                        ["code"] = "validation.failed",
+                        ["errors"] = new Dictionary<string, string[]>
+                        {
+                            [nameof(ResetPasswordRequest.NewPassword)] = passwordErrors,
+                        },
+                    })
+                : AuthProblem(StatusCodes.Status400BadRequest, "auth.reset_invalid", "The reset token is invalid or expired.");
         }
 
         // This is the path taken by somebody who has lost the device the sessions live on, so it is
@@ -298,6 +335,77 @@ public sealed record ForgotPasswordRequest(string Email);
 public sealed record ResetPasswordRequest(string Email, string Token, string NewPassword, bool RevokeAccessKeys = false);
 
 public sealed record ConfirmEmailRequest(Guid UserId, string Token);
+
+/// <summary>
+/// Bounds shared by the anonymous account requests. JSON binding leaves an omitted member null even
+/// where the record declares it required, and Identity's password hasher throws on a null password:
+/// without these a known address with no password answered 500 while an unknown one answered 401,
+/// which told an anonymous caller which addresses have accounts. The rules are presence and length
+/// only — what makes a password or an address acceptable stays Identity's, so registration keeps
+/// answering with Identity's own error codes.
+/// </summary>
+internal static class AuthRequestBounds
+{
+    /// <summary>The length of the address column Identity stores.</summary>
+    public const int Email = 256;
+
+    /// <summary>Far above any password a person types; a bound so the hasher is never fed megabytes.</summary>
+    public const int Password = 1_024;
+
+    /// <summary>Far above the data-protection tokens Identity mails.</summary>
+    public const int Token = 4_096;
+
+    /// <summary>A six-digit code or a prefixed recovery code, with room for spaces.</summary>
+    public const int Code = 100;
+
+    /// <summary>The length of the display-name column, the same bound the profile edit keeps.</summary>
+    public const int DisplayName = 100;
+}
+
+public sealed class LoginRequestValidator : AbstractValidator<LoginRequest>
+{
+    public LoginRequestValidator()
+    {
+        RuleFor(x => x.Email).NotEmpty().MaximumLength(AuthRequestBounds.Email);
+        RuleFor(x => x.Password).NotEmpty().MaximumLength(AuthRequestBounds.Password);
+        RuleFor(x => x.TwoFactorCode).MaximumLength(AuthRequestBounds.Code);
+    }
+}
+
+public sealed class RegisterRequestValidator : AbstractValidator<RegisterRequest>
+{
+    public RegisterRequestValidator()
+    {
+        RuleFor(x => x.Email).NotEmpty().MaximumLength(AuthRequestBounds.Email);
+        RuleFor(x => x.Password).NotEmpty().MaximumLength(AuthRequestBounds.Password);
+        RuleFor(x => x.DisplayName).MaximumLength(AuthRequestBounds.DisplayName);
+    }
+}
+
+public sealed class ForgotPasswordRequestValidator : AbstractValidator<ForgotPasswordRequest>
+{
+    // No presence rule: an empty address is answered like any address without an account.
+    public ForgotPasswordRequestValidator() => RuleFor(x => x.Email).MaximumLength(AuthRequestBounds.Email);
+}
+
+public sealed class ResetPasswordRequestValidator : AbstractValidator<ResetPasswordRequest>
+{
+    public ResetPasswordRequestValidator()
+    {
+        RuleFor(x => x.Email).NotEmpty().MaximumLength(AuthRequestBounds.Email);
+        RuleFor(x => x.Token).NotEmpty().MaximumLength(AuthRequestBounds.Token);
+        RuleFor(x => x.NewPassword).NotEmpty().MaximumLength(AuthRequestBounds.Password);
+    }
+}
+
+public sealed class ConfirmEmailRequestValidator : AbstractValidator<ConfirmEmailRequest>
+{
+    public ConfirmEmailRequestValidator()
+    {
+        RuleFor(x => x.UserId).NotEmpty();
+        RuleFor(x => x.Token).NotEmpty().MaximumLength(AuthRequestBounds.Token);
+    }
+}
 
 public sealed record SessionDto(Guid UserId, string Email, string? DisplayName);
 

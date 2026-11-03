@@ -18,6 +18,12 @@ on:
     branches: [master]
   pull_request:
 
+# The job token reads the repository and nothing else: no job here writes to it, comments on a
+# pull request or publishes a package, and a pull request's jobs run code from that pull request.
+# A job that ever needs more asks for it in its own permissions block.
+permissions:
+  contents: read
+
 jobs:
   server:
     strategy:
@@ -29,10 +35,10 @@ jobs:
       # The survey-format readers live in a submodule. Without this the checkout lacks a project
       # file the solution names, and the build fails at restore with a message about a missing
       # path rather than about a missing checkout step.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
       - name: Build (warnings as errors)
@@ -55,8 +61,8 @@ jobs:
       run:
         working-directory: client
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # 24, not 22: @terrestris/react-geo declares node >=24, and below it the two
           # CaveViewPanel tests fail on a Blob.stream() difference under jsdom whose error
@@ -102,13 +108,13 @@ jobs:
           --health-timeout 3s
           --health-retries 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
@@ -143,13 +149,13 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
@@ -168,7 +174,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [server, client]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
       - name: Build deployment images

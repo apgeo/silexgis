@@ -258,7 +258,9 @@ export const groups = {
   users: [
     'AuthFlowTests', 'CredentialRevocationTests', 'EmailVerificationTests', 'ExternalAuthTests',
     'MfaAndRateLimitTests', 'PerMinuteLimitTests', 'ProfileVisibilityTests', 'ProxyHopsCheckTests',
-    'StartupSettingsTests', 'TestLoginTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
+    'SignInProtectionTests', 'StartupSettingsTests', 'TestLoginTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
+    // Walks the endpoint table: every route reading a JSON body runs a registered validator.
+    'RequestValidationCoverageTests',
     'UserAdministrationLastAdministratorTests', 'UserAdministrationTests', 'UserTwoFactorResetTests',
     'UserDeleteBlockedTests', 'LoggedMessageSecretsTests',
     // The account mark that holds an account's uploads and file imports for review.
@@ -574,6 +576,15 @@ export const full = [
   'server/Directory.Build.props',
   'server/SilexGis.slnx',
 ];
+
+// Guards that walk the whole endpoint table rather than one slice's routes: a route mapped (or a
+// validator added) in any feature answers to them the day it changes, not on the next whole run.
+// A slice's own group cannot carry them, because the slice that breaks the rule is never the
+// slice the guard is filed under.
+export const routeTableWalks = {
+  triggers: ['server/src/SilexGis.Api/Features/'],
+  classes: ['RequestValidationCoverageTests'],
+};
 
 // The access walk and location protection are asserted suite-wide, not slice-wide: a change
 // to the rules they implement must answer to every class that asserts a denial or an

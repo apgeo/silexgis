@@ -14,6 +14,12 @@ on:
     branches: [master]
     paths: ['**/*.md']
 
+# The job token reads the repository and nothing else: no job here writes to it, comments on a
+# pull request or publishes a package, and a pull request's jobs run code from that pull request.
+# A job that ever needs more asks for it in its own permissions block.
+permissions:
+  contents: read
+
 jobs:
   notify:
     runs-on: ubuntu-latest

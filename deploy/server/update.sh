@@ -21,6 +21,11 @@
 #   SILEXGIS_BACKUP_KEEP    default 10     how many timestamped backups to retain
 #   SILEXGIS_HEALTH_TIMEOUT default 300    seconds to wait for /health/ready
 #   SILEXGIS_SKIP_BACKUP    default 0      set 1 to skip the pre-update backup (discouraged)
+#   SILEXGIS_UPDATE_LOCK    default /tmp/silexgis-update.lock   shared with reset.sh
+#
+# Exit status: 0 only when the new version was built, started and answered healthy. Any other
+# outcome exits 1 with a FAILED line saying what failed, whether the previous version is running
+# again, and whether the database may already have been migrated.
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -77,7 +82,7 @@ HEALTH_URL="${PUBLIC_URL%/}/health/ready"
 
 # One updater at a time. Two concurrent builds on a small host is how an update runs the
 # machine out of memory and leaves neither version running.
-exec 9>"/tmp/silexgis-update.lock"
+exec 9>"${SILEXGIS_UPDATE_LOCK:-/tmp/silexgis-update.lock}"
 flock -n 9 || fail "another update is already running"
 
 BRANCH="$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD)"
@@ -112,21 +117,27 @@ fi
 # taken here is what makes that recoverable rather than merely observable.
 # ---------------------------------------------------------------------------
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+# What a failure message tells the operator to restore from, if anything.
+BACKUP_NOTE="no backup was taken by this update (SILEXGIS_SKIP_BACKUP=1)"
 if [ "$SKIP_BACKUP" != 1 ]; then
 	say "Backup -> $BACKUP_DIR/$STAMP"
 	mkdir -p "$BACKUP_DIR/$STAMP"
 	# A compose that cannot run at all is not "no database yet": read as that, it skipped the
-	# backup and updated anyway. Only a compose that answers, without a running db, means there
-	# is nothing to back up.
+	# backup and updated anyway.
 	running="$(docker compose ps --status running --services)" || \
 		fail "docker compose could not list the services (its error is above) -- refusing to update without a backup"
-	if printf '%s\n' "$running" | grep -qx db; then
-		sh scripts/backup.sh "$BACKUP_DIR/$STAMP" || fail "backup failed -- refusing to update"
-		echo "$CURRENT" > "$BACKUP_DIR/$STAMP/commit.txt"
-	else
-		echo "    database is not running; nothing to back up yet"
-		rmdir "$BACKUP_DIR/$STAMP" 2>/dev/null || true
+	# A stopped db container is not an empty database either: the volume still holds every row,
+	# and the new API would migrate it the moment the stack comes up. So start the database on
+	# its own, wait for its health check, and back it up like any other. On an installation that
+	# has never held data this dumps an empty schema, which costs nothing.
+	if ! printf '%s\n' "$running" | grep -qx db; then
+		echo "    database is not running; starting it to take the backup"
+		docker compose up -d --wait db || \
+			fail "could not start the database to back it up (its error is above) -- refusing to update without a backup"
 	fi
+	sh scripts/backup.sh "$BACKUP_DIR/$STAMP" || fail "backup failed -- refusing to update"
+	echo "$CURRENT" > "$BACKUP_DIR/$STAMP/commit.txt"
+	BACKUP_NOTE="restore the backup at $BACKUP_DIR/$STAMP with deploy/scripts/restore.sh"
 else
 	say "Backup skipped (SILEXGIS_SKIP_BACKUP=1)"
 fi
@@ -141,48 +152,71 @@ git -C "$APP_DIR" merge --ff-only "origin/$BRANCH" || \
 git -C "$APP_DIR" submodule update --init --recursive --quiet || \
 	fail "could not update submodules"
 
-bring_up() {
-	docker compose build --pull
-	docker compose up -d --remove-orphans
-}
+# Every step below is a single command tested on its own. They used to be two commands inside a
+# function called as an `if` condition -- and bash ignores `set -e` for everything inside such a
+# function, so a failed build fell through to `up -d`, which restarted the previous images, the
+# previous API answered healthy, and the script reported "Updated" with exit 0.
 
+# Polls until the public health address answers healthy or the timeout has passed. It always
+# probes at least once, so a timeout of 0 means "check once, now".
 wait_healthy() {
 	local deadline=$(( SECONDS + HEALTH_TIMEOUT ))
-	while [ "$SECONDS" -lt "$deadline" ]; do
+	while :; do
 		if curl -fsSL --max-time 10 "$HEALTH_URL" 2>/dev/null | grep -qi healthy; then return 0; fi
-		# A container that keeps restarting will never become healthy; say so early rather
-		# than spending the whole timeout on it.
+		[ "$SECONDS" -lt "$deadline" ] || return 1
 		sleep 5
 	done
-	return 1
 }
 
-say "Build and start"
-if ! bring_up; then
-	say "Build or start failed -- rolling back to $(git -C "$APP_DIR" rev-parse --short "$CURRENT")"
-	git -C "$APP_DIR" reset --hard --quiet "$CURRENT"
-	git -C "$APP_DIR" submodule update --init --recursive --quiet || true
-	bring_up || true
-	fail "update aborted; previous version restored"
-fi
+# Puts the previous commit back and brings its containers up. Each command is checked explicitly
+# because this runs as a condition, where `set -e` does not apply. The rebuild is without --pull:
+# the previous version's base images are in the local cache, and a registry that cannot be
+# reached may be the very reason the update failed. Rebuilding is needed even when the update
+# failed at the build: a build that got halfway has already re-pointed some image tags at the new
+# code, and the next `up` would start those.
+roll_back() {
+	git -C "$APP_DIR" reset --hard --quiet "$CURRENT" || return 1
+	git -C "$APP_DIR" submodule update --init --recursive --quiet || return 1
+	docker compose build || return 1
+	docker compose up -d --remove-orphans || return 1
+}
+
+# Rolls back after a failed step and exits 1, saying what failed and what is running now.
+#   $1  what failed, as a sentence start ("the new version did not build")
+#   $2  "migrated" if the new API may have started and so may have applied migrations
+abort_update() {
+	local what="$1" migrated="${2:-}" previous
+	previous="$(git -C "$APP_DIR" rev-parse --short "$CURRENT")"
+	say "Update failed: $what -- rolling back to $previous"
+	local schema="No new container was started, so the database is as it was."
+	if [ "$migrated" = migrated ]; then
+		docker compose logs --tail 60 api || true
+		schema="If the new version had already applied a database migration, restoring the code is not enough:
+$BACKUP_NOTE."
+	fi
+	if ! roll_back; then
+		fail "$what, AND the previous version could not be put back (the error is above).
+Check \`docker compose ps\` in $DEPLOY_DIR; $BACKUP_NOTE."
+	fi
+	say "Waiting for $HEALTH_URL (previous version)"
+	if ! wait_healthy; then
+		fail "$what, AND the previous version did not come back up within ${HEALTH_TIMEOUT}s.
+$BACKUP_NOTE."
+	fi
+	fail "$what; the previous version ($previous) is running again.
+$schema"
+}
+
+say "Build"
+docker compose build --pull || abort_update "the new version did not build (the error is above)"
+
+say "Start"
+docker compose up -d --remove-orphans || \
+	abort_update "the new version did not start (the error is above; a failing database migration shows up here)" migrated
 
 say "Waiting for $HEALTH_URL"
-if wait_healthy; then
-	say "Healthy at $(git -C "$APP_DIR" rev-parse --short HEAD)"
-else
-	say "Did not become healthy within ${HEALTH_TIMEOUT}s -- rolling back"
-	docker compose logs --tail 60 api || true
-	git -C "$APP_DIR" reset --hard --quiet "$CURRENT"
-	git -C "$APP_DIR" submodule update --init --recursive --quiet || true
-	bring_up || true
-	if wait_healthy; then
-		fail "update failed; previous version ($(git -C "$APP_DIR" rev-parse --short "$CURRENT")) is running again.
-If the new version had already applied a database migration, restoring the code is not enough:
-restore the backup at $BACKUP_DIR/$STAMP with deploy/scripts/restore.sh."
-	fi
-	fail "update failed AND the previous version did not come back up.
-Restore from $BACKUP_DIR/$STAMP using deploy/scripts/restore.sh."
-fi
+wait_healthy || abort_update "the new version did not become healthy within ${HEALTH_TIMEOUT}s" migrated
+say "Healthy at $(git -C "$APP_DIR" rev-parse --short HEAD)"
 
 say "Housekeeping"
 docker image prune -f >/dev/null || true
