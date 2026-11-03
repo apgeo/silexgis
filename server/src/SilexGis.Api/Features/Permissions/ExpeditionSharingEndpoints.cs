@@ -161,8 +161,7 @@ public static class ExpeditionSharingEndpoints
             return outcome.Problem;
         }
 
-        Record(db, currentUser, expedition!.Id, "applied", outcome);
-        await db.SaveChangesAsync(ct);
+        await SaveAsAppliedAsync(db, currentUser, expedition!.Id, "applied", outcome, request.Entries, ct);
         return TypedResults.Ok(Answer(outcome, await SharingAsync(db, user, expedition.Id, ct)));
     }
 
@@ -212,8 +211,7 @@ public static class ExpeditionSharingEndpoints
             return outcome.Problem;
         }
 
-        Record(db, currentUser, expedition!.Id, "re-applied", outcome);
-        await db.SaveChangesAsync(ct);
+        await SaveAsAppliedAsync(db, currentUser, expedition!.Id, "re-applied", outcome, entries, ct);
         return TypedResults.Ok(Answer(outcome, await SharingAsync(db, user, expedition.Id, ct)));
     }
 
@@ -292,16 +290,31 @@ public static class ExpeditionSharingEndpoints
     }
 
     /// <summary>
-    /// The distinct rules this camp's sharing holds, read back from the rows it wrote. Where
-    /// one subject and effect appear with more than one action set — which the routes here
-    /// cannot produce, but a repaired database could — the rule written last is the camp's.
+    /// The camp's sharing as it was applied last, read back from the rows it wrote.
     /// </summary>
+    /// <remarks>
+    /// One subject and effect can carry different actions on different trips: an apply leaves a
+    /// trip it skipped exactly as an earlier apply wrote it. The camp's rule is then the one the
+    /// latest apply asked for, which is the action set on the most recently stamped row of that
+    /// rule — every apply stamps each row that carries what it asked (see
+    /// <see cref="SaveAsAppliedAsync"/>). Neither the row id (a restated row keeps its id) nor an
+    /// unstamped modification time (an apply that finds a trip already carrying the rule changes
+    /// nothing there) answers it.
+    /// <para>
+    /// The answer rests on the latest apply's rows still being there, and they can go: a trip that
+    /// leaves the camp takes its camp rows with it. When every trip the latest apply reached has
+    /// left, while a trip it skipped is still in the camp, the newest surviving row is the skipped
+    /// trip's older one, and a re-apply restates that older rule rather than the one applied last.
+    /// Keeping the requested rule set on the camp itself, where no trip leaving can take it, is
+    /// what would close that case.
+    /// </para>
+    /// </remarks>
     private static async Task<List<ExpeditionShareEntryWrite>> SharedRulesAsync(
         SilexGisDbContext db, Guid expeditionId, CancellationToken ct)
     {
         var rows = await db.AccessEntries.AsNoTracking()
             .Where(e => e.GrantedViaExpeditionId == expeditionId && e.SubjectKind != null)
-            .OrderBy(e => e.Id)
+            .OrderBy(e => e.UpdatedAt).ThenBy(e => e.Id)
             .ToListAsync(ct);
 
         return
@@ -354,6 +367,48 @@ public static class ExpeditionSharingEndpoints
             .ToList();
 
         return new ExpeditionSharingDto(memberTrips.Count, rules);
+    }
+
+    /// <summary>
+    /// Saves an apply or a re-apply: the rows it staged, its line on the camp's trail, and the
+    /// stamp that makes it the camp's latest decision.
+    /// </summary>
+    /// <remarks>
+    /// After the save, every row of this camp that carries exactly a rule the act asked for is
+    /// stamped with one moment — the rows it wrote or restated, and the ones it found already
+    /// right, which the save itself leaves alone. That is what lets a later re-apply tell the
+    /// rule applied last from a row an earlier apply left on a trip this one skipped, without a
+    /// copy of the rule set kept anywhere else. The stamp is written past the change tracker
+    /// because it changes nothing a person decided: recording it as an edit of every covered
+    /// row would put a line on each trip's history for every apply. One transaction, so an act
+    /// either lands with its stamp or not at all.
+    /// </remarks>
+    private static async Task SaveAsAppliedAsync(
+        SilexGisDbContext db,
+        ICurrentUser currentUser,
+        Guid expeditionId,
+        string act,
+        ExpeditionCascadeOutcome outcome,
+        IReadOnlyList<ExpeditionShareEntryWrite> entries,
+        CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        Record(db, currentUser, expeditionId, act, outcome);
+        await db.SaveChangesAsync(ct);
+
+        var appliedAt = DateTimeOffset.UtcNow;
+        foreach (var entry in entries)
+        {
+            await db.AccessEntries
+                .Where(e => e.GrantedViaExpeditionId == expeditionId
+                    && e.SubjectKind == entry.SubjectKind
+                    && e.SubjectId == entry.SubjectId
+                    && e.Effect == entry.Effect
+                    && e.Actions == entry.Actions)
+                .ExecuteUpdateAsync(u => u.SetProperty(e => e.UpdatedAt, appliedAt), ct);
+        }
+
+        await transaction.CommitAsync(ct);
     }
 
     /// <summary>

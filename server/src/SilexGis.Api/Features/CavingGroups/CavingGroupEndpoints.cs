@@ -69,6 +69,16 @@ public sealed class CavingGroupMemberWriteRequestValidator : AbstractValidator<C
 /// </remarks>
 public static class CavingGroupEndpoints
 {
+    /// <summary>Two requests enrolled the same person in the same group at the same moment.</summary>
+    public const string MemberRacedCode = "caving_group.member_raced";
+
+    // A caving group is unique on its name and on its slug, and either can be the index
+    // PostgreSQL reports first.
+    private static readonly string[] GroupIdentityIndexes = ["ix_caving_groups_name", "ix_caving_groups_slug"];
+
+    private static ProblemHttpResult NameTaken() =>
+        ApiProblems.BadRequest("caving_group.name_taken", "A caving group with this name already exists.");
+
     public static RouteGroupBuilder MapCavingGroupEndpoints(this RouteGroupBuilder api)
     {
         var cavingGroups = api.MapGroup("/caving-groups").WithTags("CavingGroups");
@@ -167,9 +177,9 @@ public static class CavingGroupEndpoints
             return ApiProblems.BadRequest("caving_group.name_invalid", "The caving group name must contain letters or digits.");
         }
 
-        if (await db.CavingGroups.AnyAsync(t => t.Slug == slug, ct))
+        if (await db.CavingGroups.AnyAsync(t => t.Slug == slug || t.Name == request.Name.Trim(), ct))
         {
-            return ApiProblems.BadRequest("caving_group.name_taken", "A caving group with this name already exists.");
+            return NameTaken();
         }
 
         var cavingGroup = new CavingGroup { Name = request.Name.Trim(), Slug = slug, Type = request.Type, Description = request.Description, Website = request.Website };
@@ -188,7 +198,15 @@ public static class CavingGroupEndpoints
         // (members read/write/create club content and see club caves' exact locations)
         // and the creator's "«name» — managers" group — all ordinary, editable data.
         await CavingGroupPermissionSeeder.SeedForNewGroupAsync(db, cavingGroup, user.UserId, ct);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (UniqueViolations.IsOn(e, GroupIdentityIndexes))
+        {
+            // Another create of the same name passed the check above at the same moment.
+            return NameTaken();
+        }
 
         return TypedResults.Created($"/api/v1/caving-groups/{cavingGroup.Id}",
             new CavingGroupDto(cavingGroup.Id, cavingGroup.Name, cavingGroup.Slug, cavingGroup.Type,
@@ -218,11 +236,35 @@ public static class CavingGroupEndpoints
             return ApiProblems.Forbidden("access.forbidden");
         }
 
-        cavingGroup.Name = request.Name.Trim();
+        // A rename is held to the same identity the create is: the slug follows the name, so the
+        // old name is free again for a new group, and a name — or a spelling that comes to the
+        // same slug — another group already carries is refused with the create's code.
+        var name = request.Name.Trim();
+        var slug = Tag.Slugify(name);
+        if (slug.Length == 0)
+        {
+            return ApiProblems.BadRequest("caving_group.name_invalid", "The caving group name must contain letters or digits.");
+        }
+
+        if (await db.CavingGroups.AnyAsync(t => t.Id != id && (t.Slug == slug || t.Name == name), ct))
+        {
+            return NameTaken();
+        }
+
+        cavingGroup.Name = name;
+        cavingGroup.Slug = slug;
         cavingGroup.Type = request.Type;
         cavingGroup.Description = request.Description;
         cavingGroup.Website = request.Website;
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (UniqueViolations.IsOn(e, GroupIdentityIndexes))
+        {
+            // Another rename or create took the name between the check above and this save.
+            return NameTaken();
+        }
 
         var count = await db.CavingGroupMemberships.CountAsync(m => m.CavingGroupId == id, ct);
         return TypedResults.Ok(new CavingGroupDto(cavingGroup.Id, cavingGroup.Name, cavingGroup.Slug,
@@ -247,6 +289,15 @@ public static class CavingGroupEndpoints
         if (!Holds(ctx, AccessAction.Delete, id))
         {
             return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        // A group that is a trustee of Full Administrators takes its row on that trustee list,
+        // and full administration from every account seated in it, when it goes. Taking that
+        // row away one trustee or one member at a time is reserved to full administrators, and
+        // a delete must not be the way round it.
+        if (await fullAdminGuard.ReservedToFullAdministratorsAsync(ctx!, id, ct))
+        {
+            return ApiProblems.Forbidden(FullAdminGuard.RevokesFullAdminCode);
         }
 
         // A DENY anchored on this group would be silently cancelled by deleting it —
@@ -335,6 +386,8 @@ public static class CavingGroupEndpoints
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
         IAccessContextAccessor accessAccessor,
+        FullAdminGuard fullAdminGuard,
+        ITrusteeRightsBound trusteeBound,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -365,6 +418,28 @@ public static class CavingGroupEndpoints
         var member = await db.CavingGroupMemberships
             .FirstOrDefaultAsync(m => m.CavingGroupId == id && m.CaverId == request.CaverId, ct);
         var joined = member is null;
+
+        // Enrolling somebody with an account in a group that is a trustee of Full Administrators
+        // makes that account a full administrator. Write on the group is not enough for that:
+        // it is reserved to people who already hold full administration. A role change moves
+        // nobody onto a new path, so it stays an ordinary roster write.
+        if (joined && await fullAdminGuard.ReservedToFullAdministratorsAsync(ctx, caver.UserId, [], [id], ct))
+        {
+            return ApiProblems.Forbidden(FullAdminGuard.GrantsFullAdminCode);
+        }
+
+        // The same holds for any other ruleset the group is a trustee of: seating somebody in it
+        // hands their account those rules, so the caller has to hold them — except the club's
+        // own content, which is what keeping its roster decides.
+        if (joined && await trusteeBound.ExceedsCallerAsync(ctx, caver.UserId, [], [id], ct))
+        {
+            return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
+        }
+
+        // A role saved as it already was changes nothing the member needs telling about — a
+        // roster form saved untouched, or a client repeating its call.
+        var changed = joined || member!.Role != request.Role;
+
         if (member is null)
         {
             member = new CavingGroupMembership { CavingGroupId = id, CaverId = request.CaverId, Role = request.Role };
@@ -381,7 +456,7 @@ public static class CavingGroupEndpoints
         // Queued before the save, so the notification and the membership commit together — never
         // for someone acting on their own membership, and never at all for a person with no
         // account, who has nowhere to receive it.
-        if (caver.UserId is { } memberUserId && memberUserId != user.UserId)
+        if (changed && caver.UserId is { } memberUserId && memberUserId != user.UserId)
         {
             var actorLabels = await ProfileDirectory.ResolveLabelsAsync(db, user, [user.UserId], ct);
             NotificationQueue.Enqueue(
@@ -400,7 +475,18 @@ public static class CavingGroupEndpoints
                 id);
         }
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (UniqueViolations.IsOn(e, "ix_caving_group_memberships_caver_id_caving_group_id"))
+        {
+            // Another request enrolled the same person at the same moment. Which role stands is
+            // that request's to have decided, so this one is refused rather than answered as if
+            // its role had been saved; read the group again and change the role from there.
+            return ApiProblems.Conflict(MemberRacedCode,
+                "This person was added to the group by another request at the same moment.");
+        }
 
         var labels = await CaverDirectory.ResolveLabelsAsync(db, user, [member.CaverId], ct);
         return TypedResults.Ok(new CavingGroupMemberDto(
@@ -442,6 +528,15 @@ public static class CavingGroupEndpoints
         if (!selfRemoval && !Holds(ctx, AccessAction.Write, id))
         {
             return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        // Taking somebody else out of a group that is a trustee of Full Administrators strips
+        // their account of full administration — a change to who holds it, reserved to people
+        // who already do. Leaving of one's own accord is not an edit of anybody else's rights.
+        if (!selfRemoval
+            && await fullAdminGuard.ReservedToFullAdministratorsAsync(ctx, memberUserId, [], [id], ct))
+        {
+            return ApiProblems.Forbidden(FullAdminGuard.RevokesFullAdminCode);
         }
 
         db.CavingGroupMemberships.Remove(member);

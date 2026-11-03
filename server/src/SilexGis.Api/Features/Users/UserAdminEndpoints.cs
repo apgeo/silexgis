@@ -217,12 +217,18 @@ public static class UserAdminEndpoints
         }
 
         var (pageNumber, size) = Paging.Normalize(page, pageSize);
-        var administrators = await FullAdministratorIdsAsync(db, ct);
-        var caverIds = await CaverIdsByUserAsync(db, ct);
-
-        return TypedResults.Ok(await query
+        var accounts = await query
             .OrderBy(u => u.Email).ThenBy(u => u.Id)
-            .ToPagedAsync(pageNumber, size, u => ToDto(u, administrators, caverIds), ct));
+            .ToPagedAsync(pageNumber, size, u => u, ct);
+
+        // The two facts every row carries are read for this page's accounts only, so a page costs
+        // the same in a club of fifty as in one of five thousand.
+        Guid[] onPage = [.. accounts.Items.Select(u => u.Id)];
+        var administrators = await FullAdministratorIdsAsync(db, onPage, ct);
+        var caverIds = await CaverIdsByUserAsync(db, onPage, ct);
+        return TypedResults.Ok(new PagedResult<AdminUserDto>(
+            [.. accounts.Items.Select(u => ToDto(u, administrators, caverIds))],
+            accounts.Page, accounts.PageSize, accounts.TotalItems));
     }
 
     /// <summary>
@@ -360,8 +366,8 @@ public static class UserAdminEndpoints
         // message to the log and reports success, and the person would wait for nothing.
         var invitationSent = sent.Sent && sent.ChannelConfigured;
 
-        var administrators = await FullAdministratorIdsAsync(db, ct);
-        var caverIds = await CaverIdsByUserAsync(db, ct);
+        var administrators = await FullAdministratorIdsAsync(db, [user.Id], ct);
+        var caverIds = await CaverIdsByUserAsync(db, [user.Id], ct);
         return new AdminUserCreatedDto(
             ToDto(user, administrators, caverIds),
             invitationSent,
@@ -392,8 +398,8 @@ public static class UserAdminEndpoints
             return ApiProblems.NotFound("user.not_found");
         }
 
-        var administrators = await FullAdministratorIdsAsync(db, ct);
-        var caverIds = await CaverIdsByUserAsync(db, ct);
+        var administrators = await FullAdministratorIdsAsync(db, [user.Id], ct);
+        var caverIds = await CaverIdsByUserAsync(db, [user.Id], ct);
         var dto = ToDto(user, administrators, caverIds);
         return TypedResults.Ok(new AdminUserDetailDto(
             dto.Id,
@@ -528,8 +534,8 @@ public static class UserAdminEndpoints
         // this change produced.
         await userManager.UpdateSecurityStampAsync(user);
 
-        var administrators = await FullAdministratorIdsAsync(db, ct);
-        var caverIds = await CaverIdsByUserAsync(db, ct);
+        var administrators = await FullAdministratorIdsAsync(db, [user.Id], ct);
+        var caverIds = await CaverIdsByUserAsync(db, [user.Id], ct);
         return TypedResults.Ok(ToDto(user, administrators, caverIds));
     }
 
@@ -574,6 +580,15 @@ public static class UserAdminEndpoints
             return ApiProblems.NotFound("user.not_found");
         }
 
+        // The mark says another person reviews what this account uploads; an account that could
+        // lift its own mark would decide its own uploads, which is what the mark exists to stop.
+        if (user.Id == ctx.UserId)
+        {
+            return ApiProblems.BadRequest(
+                "user.cannot_change_own_review_mark",
+                "Another administrator decides whether your uploads need review.");
+        }
+
         if (await IsAboveTheCallerAsync(db, ctx, user.Id, ct))
         {
             return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
@@ -600,8 +615,8 @@ public static class UserAdminEndpoints
             await db.SaveChangesAsync(ct);
         }
 
-        var administrators = await FullAdministratorIdsAsync(db, ct);
-        var caverIds = await CaverIdsByUserAsync(db, ct);
+        var administrators = await FullAdministratorIdsAsync(db, [user.Id], ct);
+        var caverIds = await CaverIdsByUserAsync(db, [user.Id], ct);
         return TypedResults.Ok(ToDto(user, administrators, caverIds));
     }
 
@@ -789,8 +804,8 @@ public static class UserAdminEndpoints
         await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, db, DateTimeOffset.UtcNow, user.Id, revokeAccessKeys: true, ct);
         await transaction.CommitAsync(ct);
 
-        var administrators = await FullAdministratorIdsAsync(db, ct);
-        var caverIds = await CaverIdsByUserAsync(db, ct);
+        var administrators = await FullAdministratorIdsAsync(db, [user.Id], ct);
+        var caverIds = await CaverIdsByUserAsync(db, [user.Id], ct);
         return TypedResults.Ok(ToDto(user, administrators, caverIds));
 
         static Dictionary<string, object?> Switched(bool was) => new() { ["old"] = was, ["new"] = false };
@@ -804,13 +819,23 @@ public static class UserAdminEndpoints
     /// screen exists to show: what matters is who could actually act.
     /// </remarks>
     private static async Task<HashSet<Guid>> FullAdministratorIdsAsync(
-        SilexGisDbContext db, CancellationToken ct) =>
-        [.. await FullAdministrators.LiveMemberIdsAsync(db, ct)];
+        SilexGisDbContext db, Guid[] userIds, CancellationToken ct)
+    {
+        if (userIds.Length == 0 || await FullAdministrators.GroupIdAsync(db, ct) is not { } groupId)
+        {
+            return [];
+        }
+
+        return [.. await FullAdministrators.LiveMemberIds(db, groupId)
+            .Where(id => userIds.Contains(id))
+            .Distinct()
+            .ToListAsync(ct)];
+    }
 
     private static async Task<Dictionary<Guid, Guid>> CaverIdsByUserAsync(
-        SilexGisDbContext db, CancellationToken ct) =>
+        SilexGisDbContext db, Guid[] userIds, CancellationToken ct) =>
         await db.Cavers.AsNoTracking()
-            .Where(c => c.UserId != null)
+            .Where(c => c.UserId != null && userIds.Contains(c.UserId.Value))
             .ToDictionaryAsync(c => c.UserId!.Value, c => c.Id, ct);
 
     private static AdminUserDto ToDto(
