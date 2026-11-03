@@ -190,16 +190,24 @@ public static class DependencyInjection
             configuration.GetSection(PhotoLibraries.ImmichOptions.SectionName));
         services.Configure<PhotoLibraries.PhotoPrismOptions>(
             configuration.GetSection(PhotoLibraries.PhotoPrismOptions.SectionName));
+
+        // Neither library's transport writes its outbound requests to the log. PhotoPrism takes its
+        // picture credential as a segment of the picture's own address — the library offers no
+        // header for it — so the standard "sending request to <address>" line would put a live credential, good for every
+        // picture in the library, into every request log. The other library is treated the same
+        // so that a credential added to its addresses later is not logged by default either.
         services.AddHttpClient(PhotoLibraries.ImmichClient.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
             {
                 AutomaticDecompression = System.Net.DecompressionMethods.All,
-            });
+            })
+            .RemoveAllLoggers();
         services.AddHttpClient(PhotoLibraries.PhotoPrismClient.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
             {
                 AutomaticDecompression = System.Net.DecompressionMethods.All,
-            });
+            })
+            .RemoveAllLoggers();
 
         // Each registered twice: once as itself, so a surface can name the product, and once behind
         // the shared contract, so everything above iterates over "the libraries this installation

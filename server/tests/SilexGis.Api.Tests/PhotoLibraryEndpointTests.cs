@@ -91,6 +91,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
 
     private readonly string connectionString;
     private readonly LibraryStub library = new();
+    private readonly LogCapture logs = new();
     private readonly SilexGisApiFactory factory;
 
     private string tag = string.Empty;
@@ -570,6 +571,153 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
         (await browser.GetAsync(reopened.Replace("{reference}", "aa11bb22cc33").Replace("{size}", "large")))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         stub.PictureCalls.Count.ShouldBe(2);
+    }
+
+    /// <summary>
+    /// A picture the library answers with a plain error — it has no such photograph, or a proxy in
+    /// front of it is restarting — fails that request as the library not answering, and the next
+    /// picture is still asked for. Only the drawing-with-success answer closes the path.
+    /// </summary>
+    [Fact]
+    public async Task A_missing_or_failing_picture_fails_one_request_and_the_next_is_still_asked_for()
+    {
+        library.AnswersGeo(OnePhotograph);
+        var template = (await JsonAsync(admin, $"{MapUrl}?bbox={Bbox}"))
+            .GetProperty("pictureUrlTemplate").GetString()!;
+        var address = template.Replace("{reference}", "aa11bb22cc33").Replace("{size}", "large");
+        using var browser = factory.CreateClient();
+
+        var geo = library;
+        foreach (var (status, mediaType) in new[]
+                 {
+                     (HttpStatusCode.NotFound, "application/json"),
+                     (HttpStatusCode.TooManyRequests, "text/plain"),
+                     (HttpStatusCode.BadGateway, "text/html"),
+                 })
+        {
+            geo.Answers(call => call.Url.Contains("/api/v1/t/", StringComparison.Ordinal)
+                ? new HttpResponseMessage(status)
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, mediaType),
+                }
+                : GeoAnswer(OnePhotograph, "preview-token-invented"));
+
+            var before = geo.PictureCalls.Count;
+            var failed = await browser.GetAsync(address);
+            var body = await failed.Content.ReadAsStringAsync();
+            failed.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable, body);
+            CodeOf(body).ShouldBe(PhotoLibraryException.UnavailableCode);
+            geo.PictureCalls.Count.ShouldBe(before + 1, $"the picture after a {(int)status} was not asked for");
+        }
+
+        geo.AnswersGeo(OnePhotograph);
+        geo.AnswersPicture(InventedJpeg);
+        (await browser.GetAsync(address)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await JsonAsync(admin, $"{MapUrl}?bbox={Bbox}")).GetProperty("picturesAvailable").GetBoolean().ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// A picture credential the library refuses is dropped, so the next picture asks for a fresh
+    /// one instead of reusing the refused one until some unrelated call happens to replace it.
+    /// </summary>
+    [Fact]
+    public async Task A_refused_picture_credential_is_replaced_on_the_next_picture()
+    {
+        library.AnswersGeo(OnePhotograph);
+        var template = (await JsonAsync(admin, $"{MapUrl}?bbox={Bbox}"))
+            .GetProperty("pictureUrlTemplate").GetString()!;
+        var address = template.Replace("{reference}", "aa11bb22cc33").Replace("{size}", "large");
+        using var browser = factory.CreateClient();
+
+        // The library restarted and minted a new picture credential: the held one is refused.
+        library.Answers(call => call.Url.Contains("/api/v1/t/", StringComparison.Ordinal)
+            ? new HttpResponseMessage(HttpStatusCode.Forbidden)
+            {
+                Content = new StringContent("<svg/>", Encoding.UTF8, "image/svg+xml"),
+            }
+            : GeoAnswer(OnePhotograph, "preview-token-renewed"));
+        var refused = await browser.GetAsync(address);
+        var body = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable, body);
+        CodeOf(body).ShouldBe(PhotoLibraryException.UnauthorizedCode);
+
+        library.Answers(call => call.Url.Contains("/api/v1/t/", StringComparison.Ordinal)
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(InventedJpeg) { Headers = { ContentType = new MediaTypeHeaderValue("image/jpeg") } },
+            }
+            : GeoAnswer(OnePhotograph, "preview-token-renewed"));
+        (await browser.GetAsync(address)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        library.PictureCalls[^1].Url.ShouldContain("preview-token-renewed");
+    }
+
+    /// <summary>
+    /// One photograph whose identifiers the library wrote as something other than text is dropped,
+    /// as every other unreadable row is, and the rest of the viewport is drawn.
+    /// </summary>
+    [Fact]
+    public async Task A_photograph_with_identifiers_that_are_not_text_is_dropped_and_the_viewport_is_drawn()
+    {
+        library.AnswersGeo("""
+        {"type":"FeatureCollection","features":[
+          {"id":"1","type":"Feature","geometry":{"type":"Point","coordinates":[22.5,45.5]},
+           "properties":{"Hash":"aa11bb22cc33","UID":"psinvented1","Title":"An invented photograph"}},
+          {"id":"2","type":"Feature","geometry":{"type":"Point","coordinates":[22.6,45.6]},
+           "properties":{"Hash":12345,"UID":"psinvented2","Title":"A number for a hash"}},
+          {"id":"3","type":"Feature","geometry":{"type":"Point","coordinates":[22.7,45.7]},
+           "properties":{"Hash":"dd44ee55ff66","UID":"psinvented3","Type":7}}
+        ]}
+        """);
+
+        var map = await JsonAsync(admin, $"{MapUrl}?bbox={Bbox}");
+        map.GetProperty("features").GetArrayLength().ShouldBe(2);
+    }
+
+    /// <summary>
+    /// The picture credential travels in the library's own address — the library leaves no other
+    /// place to put it — so the outbound request to the library is not written to the log at all:
+    /// a log line holding it would hand out every picture for as long as the credential lives.
+    /// </summary>
+    [Fact]
+    public async Task A_picture_fetched_from_the_library_leaves_its_credential_in_no_log_line()
+    {
+        const string credential = "preview-credential-never-logged";
+        library.Answers(call => call.Url.Contains("/api/v1/t/", StringComparison.Ordinal)
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(InventedJpeg) { Headers = { ContentType = new MediaTypeHeaderValue("image/jpeg") } },
+            }
+            : GeoAnswer(OnePhotograph, credential));
+        var template = (await JsonAsync(admin, $"{MapUrl}?bbox={Bbox}"))
+            .GetProperty("pictureUrlTemplate").GetString()!;
+        using var browser = factory.CreateClient();
+        logs.Clear();
+
+        var picture = await browser.GetAsync(template.Replace("{reference}", "aa11bb22cc33").Replace("{size}", "large"));
+
+        // The positive half: the picture was fetched with the credential, and the request logged.
+        picture.StatusCode.ShouldBe(HttpStatusCode.OK, await picture.Content.ReadAsStringAsync());
+        library.PictureCalls[^1].Url.ShouldContain(credential);
+        logs.Events.ShouldNotBeEmpty();
+
+        foreach (var e in logs.Events)
+        {
+            e.RenderMessage().ShouldNotContain(credential);
+            foreach (var property in e.Properties.Values)
+            {
+                property.ToString().ShouldNotContain(credential);
+            }
+        }
+    }
+
+    private static HttpResponseMessage GeoAnswer(string json, string previewToken)
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json"),
+        };
+        response.Headers.TryAddWithoutValidation("X-Preview-Token", previewToken);
+        return response;
     }
 
     // ------------------------------------------------------------------------- two of them at once
@@ -1244,6 +1392,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
             settings,
             services =>
             {
+                services.AddSingleton<Serilog.Core.ILogEventSink>(logs);
                 services.AddHttpClient(PhotoPrismClient.HttpClientName)
                     .ConfigurePrimaryHttpMessageHandler(() => stub);
 
