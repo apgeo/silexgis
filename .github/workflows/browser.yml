@@ -54,7 +54,7 @@ jobs:
         run: node scripts/e2e.mjs --project=desktop --shard=${{ matrix.shard }}/4
       - name: Keep the traces of what failed
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: browser-desktop-${{ matrix.shard }}
           path: |
@@ -86,7 +86,7 @@ jobs:
         run: node scripts/e2e.mjs --project=mobile-android --project=mobile-android-landscape --project=mobile-ios-smoke
       - name: Keep the traces of what failed
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: browser-phones
           path: |
@@ -124,7 +124,7 @@ jobs:
           SILEXGIS_E2E_BUNDLE: production
       - name: Keep the traces of what failed
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: browser-production-bundle
           path: |
@@ -166,7 +166,7 @@ jobs:
         run: node scripts/e2e-photo-libraries.mjs
       - name: Keep the traces of what failed
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: browser-photo-libraries
           path: |
