@@ -46,6 +46,40 @@ public sealed class GdalVectorIO : IVectorIO
 
     public VectorDataset Read(string absolutePath, GeofileFormat format, GeofileSourceOptions? sourceOptions = null)
     {
+        var dataset = ReadAnyFormat(absolutePath, format, sourceOptions);
+        RequireLongitudeLatitude(dataset);
+        return dataset;
+    }
+
+    /// <summary>
+    /// Refuses a dataset any of whose coordinates cannot be a longitude and latitude.
+    /// </summary>
+    /// <remarks>
+    /// Everything read is stored as longitude/latitude, but three ways in take that on trust: a
+    /// WKT or WKB file states no coordinate system at all, neither does a delimited file's
+    /// geometry column, and GeoJSON without a stated system is assumed to be in degrees. A file in
+    /// projected metres read through any of them lands as numbers in the hundreds of thousands
+    /// stamped as degrees — stored off the globe, drawn nowhere, and an error in every later query
+    /// that measures on the sphere. Refusing the whole file, with the likely cause named, is
+    /// kinder than importing the part that happens to fit: such a file is wrong throughout.
+    /// </remarks>
+    private static void RequireLongitudeLatitude(VectorDataset dataset)
+    {
+        foreach (var feature in dataset.Features)
+        {
+            var envelope = feature.Geom.EnvelopeInternal;
+            if (!(envelope.MinX >= -180 && envelope.MaxX <= 180 && envelope.MinY >= -90 && envelope.MaxY <= 90))
+            {
+                throw new VectorIOException(
+                    "Some coordinates are not a longitude and latitude (longitude -180 to 180, latitude -90 to 90). "
+                    + "The file is probably in a projected coordinate system it does not state; "
+                    + "export it in WGS 84 longitude/latitude, or as a format that carries its coordinate system.");
+            }
+        }
+    }
+
+    private static VectorDataset ReadAnyFormat(string absolutePath, GeofileFormat format, GeofileSourceOptions? sourceOptions)
+    {
         if (format is GeofileFormat.Wkt or GeofileFormat.Wkb)
         {
             return ReadWktLines(absolutePath, format);
@@ -68,11 +102,7 @@ public sealed class GdalVectorIO : IVectorIO
             _ => absolutePath,
         };
 
-        using var dataSource = Ogr.Open(openPath, 0);
-        if (dataSource is null)
-        {
-            throw new VectorIOException("The file could not be opened as a vector dataset.");
-        }
+        using var dataSource = OpenUpload(openPath, format);
 
         var features = new List<VectorFeature>();
         int? sourceSrid = null;
@@ -80,7 +110,7 @@ public sealed class GdalVectorIO : IVectorIO
 
         for (var i = 0; i < dataSource.GetLayerCount(); i++)
         {
-            var layer = dataSource.GetLayerByIndex(i);
+            var layer = dataSource.GetLayer(i);
             if (format == GeofileFormat.Gpx && !GpxLayers.Contains(layer.GetName(), StringComparer.OrdinalIgnoreCase))
             {
                 continue;
@@ -111,16 +141,12 @@ public sealed class GdalVectorIO : IVectorIO
             return [];
         }
 
-        using var dataSource = Ogr.Open(absolutePath, 0);
-        if (dataSource is null)
-        {
-            throw new VectorIOException("The file could not be opened as a vector dataset.");
-        }
+        using var dataSource = OpenUpload(absolutePath, format);
 
         var fixes = new List<TrackFix>();
         for (var i = 0; i < dataSource.GetLayerCount(); i++)
         {
-            var layer = dataSource.GetLayerByIndex(i);
+            var layer = dataSource.GetLayer(i);
             if (!GpxPointLayers.Contains(layer.GetName(), StringComparer.OrdinalIgnoreCase))
             {
                 continue;
@@ -185,9 +211,16 @@ public sealed class GdalVectorIO : IVectorIO
                     continue;
                 }
 
-                if (transform is not null)
+                // A feature that will not convert cannot be stored. Skipping it would import the
+                // rest as though the file were whole, with nothing to tell the importer part of it
+                // is gone, so the whole file is refused with the likely cause named, as one whose
+                // coordinates cannot be degrees is.
+                if (transform is not null && !Transformed(ogrGeometry, transform))
                 {
-                    ogrGeometry.Transform(transform);
+                    throw new VectorIOException(
+                        "Some coordinates could not be converted to longitude and latitude from the file's "
+                        + "coordinate system; they probably lie outside the area that system describes "
+                        + "(a mistyped or misplaced coordinate, or the wrong system stated for the file).");
                 }
 
                 var buffer = new byte[ogrGeometry.WkbSize()];
@@ -280,9 +313,17 @@ public sealed class GdalVectorIO : IVectorIO
                     continue;
                 }
 
-                if (transform is not null)
+                // A fix that did not transform, or that is not a position on the globe, places
+                // nothing; matching a photo against it would only place the photo wrongly.
+                if (transform is not null && !Transformed(ogrGeometry, transform))
                 {
-                    ogrGeometry.Transform(transform);
+                    continue;
+                }
+
+                var (x, y) = (ogrGeometry.GetX(0), ogrGeometry.GetY(0));
+                if (!(x >= -180 && x <= 180 && y >= -90 && y <= 90))
+                {
+                    continue;
                 }
 
                 if (ReadFieldTime(feature, timeField) is not { } time)
@@ -290,7 +331,7 @@ public sealed class GdalVectorIO : IVectorIO
                     continue;
                 }
 
-                fixes.Add(new TrackFix(time, ogrGeometry.GetX(0), ogrGeometry.GetY(0)));
+                fixes.Add(new TrackFix(time, x, y));
             }
         }
     }
@@ -401,6 +442,171 @@ public sealed class GdalVectorIO : IVectorIO
         srs.AutoIdentifyEPSG();
         return int.TryParse(srs.GetAuthorityCode(null), out var epsg) ? epsg : null;
     }
+
+    /// <summary>
+    /// Converts a geometry in place, and says whether it converted.
+    /// </summary>
+    /// <remarks>
+    /// The bindings report a failed conversion either way, depending on whether the library's
+    /// exceptions are switched on: as a return code, leaving the geometry in its source system,
+    /// or as an exception naming the cause ("point outside of projection domain"). Both mean the
+    /// geometry is not in longitude and latitude, and read on it would be stored as projected
+    /// metres stamped as degrees.
+    /// </remarks>
+    private static bool Transformed(OSGeo.OGR.Geometry geometry, CoordinateTransformation transform)
+    {
+        try
+        {
+            return geometry.Transform(transform) == Ogr.OGRERR_NONE;
+        }
+        catch (ApplicationException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Opens a file somebody uploaded with only the drivers of the format it was accepted as.
+    /// </summary>
+    /// <remarks>
+    /// Left to itself the library chooses a driver from the content, whatever the file is called,
+    /// and two of its drivers read documents that name other files: a few lines of "virtual"
+    /// vector XML uploaded as a track log would be opened as that, and would read whatever file on
+    /// the server, or address reachable from it, the document names — a zipped shapefile holding
+    /// one such document is opened the same way. Naming the drivers here means a file that is not
+    /// what it was accepted as is refused, and never reads past itself.
+    /// </remarks>
+    private static Dataset OpenUpload(string path, GeofileFormat format)
+    {
+        if (format == GeofileFormat.GeoJson)
+        {
+            RefuseCoordinateSystemByAddress(path);
+        }
+
+        var drivers = UploadDrivers(format);
+        Dataset? dataset;
+        try
+        {
+            dataset = Gdal.OpenEx(
+                path,
+                (uint)(GdalConst.OF_VECTOR | GdalConst.OF_READONLY),
+                allowed_drivers: drivers,
+                open_options: null,
+                sibling_files: null);
+        }
+        catch (ApplicationException e)
+        {
+            throw new VectorIOException("The file could not be opened as a vector dataset.", e);
+        }
+
+        return dataset ?? throw new VectorIOException("The file could not be opened as a vector dataset.");
+    }
+
+    /// <summary>
+    /// Refuses GeoJSON that names a coordinate system by an address.
+    /// </summary>
+    /// <remarks>
+    /// The original GeoJSON format let a file give its coordinate system as a link to a
+    /// definition elsewhere, and the library's reader still honours one by fetching it — through
+    /// its own HTTP client, which switching off the network file systems does not reach. A file
+    /// somebody uploaded would make the server send a request to whatever address it names, its
+    /// own private network included. Nothing legitimate needs it: a system is stated by name
+    /// ("urn:ogc:def:crs:EPSG::3844"), and current GeoJSON states none at all. So any address
+    /// inside a <c>crs</c> member, at any depth, refuses the file before the library opens it.
+    /// Read as a stream, token by token, so a large file is never held whole for this.
+    /// </remarks>
+    private static void RefuseCoordinateSystemByAddress(string path)
+    {
+        using var file = File.OpenRead(path);
+        var buffer = new byte[64 * 1024];
+        var state = new JsonReaderState(new JsonReaderOptions
+        {
+            CommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+        });
+        var carried = 0;
+        var crsDepth = -1; // the depth a crs member's object or array opened at, while inside one
+        var crsValueNext = false;
+        var final = false;
+        while (!final)
+        {
+            var read = file.Read(buffer, carried, buffer.Length - carried);
+            final = read == 0;
+            var reader = new Utf8JsonReader(buffer.AsSpan(0, carried + read), final, state);
+            try
+            {
+                while (reader.Read())
+                {
+                    switch (reader.TokenType)
+                    {
+                        case JsonTokenType.PropertyName:
+                            crsValueNext = crsDepth < 0 && reader.ValueTextEquals("crs");
+                            break;
+                        case JsonTokenType.StartObject or JsonTokenType.StartArray:
+                            if (crsValueNext)
+                            {
+                                crsDepth = reader.CurrentDepth;
+                                crsValueNext = false;
+                            }
+
+                            break;
+                        case JsonTokenType.EndObject or JsonTokenType.EndArray:
+                            if (reader.CurrentDepth == crsDepth)
+                            {
+                                crsDepth = -1;
+                            }
+
+                            break;
+                        case JsonTokenType.String:
+                            if ((crsDepth >= 0 || crsValueNext)
+                                && reader.GetString()!.Contains("://", StringComparison.Ordinal))
+                            {
+                                throw new VectorIOException(
+                                    "The file names its coordinate system by an address to fetch it from, "
+                                    + "which is not followed. State the system by name (for example "
+                                    + "urn:ogc:def:crs:EPSG::4326), or leave it out for longitude/latitude.");
+                            }
+
+                            crsValueNext = false;
+                            break;
+                        default:
+                            crsValueNext = false;
+                            break;
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // Not JSON at all: the library refuses it as the format it was accepted as.
+                return;
+            }
+
+            state = reader.CurrentState;
+            var consumed = (int)reader.BytesConsumed;
+            carried = carried + read - consumed;
+            Buffer.BlockCopy(buffer, consumed, buffer, 0, carried);
+            if (carried == buffer.Length)
+            {
+                // One token longer than the buffer: grow it so the token can be read whole.
+                Array.Resize(ref buffer, buffer.Length * 2);
+            }
+        }
+    }
+
+    /// <summary>The drivers that may open an upload of each format GDAL reads here.</summary>
+    /// <remarks>
+    /// Both KML drivers are named because which of them a build carries, and which one opens a
+    /// given document, varies; a KMZ is opened through the document inside it, so it needs the
+    /// same pair. Neither follows a document to another file the way the virtual drivers do.
+    /// </remarks>
+    private static string[] UploadDrivers(GeofileFormat format) => format switch
+    {
+        GeofileFormat.Gpx => ["GPX"],
+        GeofileFormat.Kml or GeofileFormat.Kmz => ["KML", "LIBKML"],
+        GeofileFormat.GeoJson => ["GeoJSON"],
+        GeofileFormat.Shapefile => ["ESRI Shapefile"],
+        _ => throw new VectorIOException($"The format {format} is not read through GDAL."),
+    };
 
     /// <summary>
     /// The KML document inside a KMZ, as a path GDAL's zip filesystem can open.

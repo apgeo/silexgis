@@ -186,6 +186,43 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable, IClassF
         failed.GetProperty("processingError").GetString().ShouldNotBeNullOrWhiteSpace();
     }
 
+    /// <summary>
+    /// A few lines of the raster library's "virtual raster" XML saved as <c>.tif</c> used to be
+    /// converted as what they are: a map whose pixels are read from whatever file the document
+    /// names, published back to the uploader. The file it names here is a real georeferenced
+    /// raster the test writes outside the store, so the only reason to refuse is what the upload is.
+    /// </summary>
+    [Fact]
+    public async Task A_virtual_raster_uploaded_as_a_geotiff_fails_rather_than_reading_the_file_it_names()
+    {
+        var serverOnly = Path.Combine(TestScratch.Root, $"silexgis-server-only-{Guid.NewGuid():N}.tif");
+        await File.WriteAllBytesAsync(serverOnly, MakeGeoTiff(25.0, 46.06, 0.004, 16));
+        try
+        {
+            var document = $"""
+                <VRTDataset rasterXSize="16" rasterYSize="16">
+                  <SRS>EPSG:4326</SRS>
+                  <GeoTransform>25.0, 0.004, 0, 46.06, 0, -0.004</GeoTransform>
+                  <VRTRasterBand dataType="Byte" band="1">
+                    <SimpleSource>
+                      <SourceFilename relativeToVRT="0">{serverOnly}</SourceFilename>
+                      <SourceBand>1</SourceBand>
+                    </SimpleSource>
+                  </VRTRasterBand>
+                </VRTDataset>
+                """;
+
+            var map = await UploadAsync(owner, "map.tif", System.Text.Encoding.UTF8.GetBytes(document));
+            var failed = await WaitForProcessingAsync(owner, map.GetProperty("id").GetGuid(), expectFailure: true);
+            failed.GetProperty("status").GetString().ShouldBe("failed");
+            failed.GetProperty("processingError").GetString().ShouldNotBeNullOrWhiteSpace();
+        }
+        finally
+        {
+            File.Delete(serverOnly);
+        }
+    }
+
     // ---- helpers ----
 
     /// <summary>A small georeferenced GeoTIFF (EPSG:4326) generated in-process.</summary>
