@@ -431,7 +431,7 @@ export const groups = {
     'TerrainDerivativeApiTests', 'TerrainDerivativeRegistryTests', 'TerrainDerivativeTests',
     'TerrainMapConfigTests', 'TerrainOptionsTests', 'TerrainPipelineRegistrationTests',
     'TerrainPreparePhaseTests', 'AreaTerrainStatisticsTests', 'TerrainProbeTests', 'TerrainProfileTests', 'TerrainPublishPhaseTests',
-    'TerrainRasterIndexTests', 'TerrainRasterPreparationTests', 'TerrainSourceTests',
+    'TerrainRasterIndexTests', 'TerrainRasterPreparationTests', 'TerrainRasterTokenServiceTests', 'TerrainSourceTests',
     'TerrainTileUploadTests', 'TerrainUploadSweepTests', 'TerrainValidatePhaseTests',
   ],
 };

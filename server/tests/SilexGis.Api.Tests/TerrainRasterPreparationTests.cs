@@ -112,6 +112,49 @@ public sealed class TerrainRasterPreparationTests : IDisposable
         LayoutOf(prepared.Path).ShouldBe("COG");
     }
 
+    /// <summary>
+    /// At a hole's rim, where resampling or reprojection takes pixels from both sides, the output
+    /// is a height or a hole and never a blend of the two: a pixel part void and part ground that
+    /// came out as a weighted average would be a pit thousands of metres deep along every edge of
+    /// every gap, and it would read as data. Checked over every output pixel, coarser and in the
+    /// national projected system, not only in the middle of the hole.
+    /// </summary>
+    [Fact]
+    public void A_hole_has_no_blended_rim_when_resampled_or_reprojected()
+    {
+        const double ItsOwnVoidValue = -32768d;
+        const float Ground = 600f;
+        static float Holed(int x, int y) =>
+            x >= 8 && x < 24 && y >= 8 && y < 24 ? (float)ItsOwnVoidValue : Ground;
+
+        var degrees = Raster(
+            "rim-degrees.tif", LongitudeLatitude, originX: 25.0, originY: 46.0,
+            pixelSize: 0.001, width: 32, height: 32, sample: Holed, noData: ItsOwnVoidValue);
+        var coarser = preparer
+            .Prepare(Request([degrees], targetPixelSizeDegrees: 0.0017, directory: "rim-coarser"), CancellationToken.None)
+            .ShouldHaveSingleItem();
+
+        var projected = Raster(
+            "rim-stereo.tif", Stereo70, originX: 430_000, originY: 640_000,
+            pixelSize: 30, width: 32, height: 32, sample: Holed, noData: ItsOwnVoidValue);
+        var reprojected = preparer
+            .Prepare(Request([projected], directory: "rim-reprojected"), CancellationToken.None)
+            .ShouldHaveSingleItem();
+
+        foreach (var prepared in new[] { coarser, reprojected })
+        {
+            var values = AllValues(prepared.Path);
+            var voids = values.Count(v => Math.Abs(v - TerrainRasterPreparation.VoidValue) < 0.5);
+            var ground = values.Count(v => Math.Abs(v - Ground) < 0.01);
+
+            // Both are there — the hole survived and so did the ground round it — and nothing else is.
+            voids.ShouldBeGreaterThan(0, prepared.Path);
+            ground.ShouldBeGreaterThan(0, prepared.Path);
+            values.Where(v => v > TerrainRasterPreparation.VoidValue + 0.5 && v < Ground - 0.01)
+                .ShouldBeEmpty(prepared.Path);
+        }
+    }
+
     [Fact]
     public void Asking_for_a_coarser_pixel_halves_the_raster()
     {
@@ -591,6 +634,18 @@ public sealed class TerrainRasterPreparationTests : IDisposable
         GdalBase.ConfigureAll();
         using var dataset = Gdal.Open(path, Access.GA_ReadOnly);
         return dataset.GetMetadataItem("LAYOUT", "IMAGE_STRUCTURE");
+    }
+
+    /// <summary>Every pixel of the file's one band.</summary>
+    private static float[] AllValues(string path)
+    {
+        GdalBase.ConfigureAll();
+        using var dataset = Gdal.Open(path, Access.GA_ReadOnly);
+        var width = dataset.RasterXSize;
+        var height = dataset.RasterYSize;
+        var buffer = new float[width * height];
+        dataset.GetRasterBand(1).ReadRaster(0, 0, width, height, buffer, width, height, 0, 0);
+        return buffer;
     }
 
     /// <summary>The value at one point on the ground, read out of the file.</summary>

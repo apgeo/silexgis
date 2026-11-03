@@ -172,10 +172,11 @@ public sealed class MapDensityTests : IAsyncLifetime, IDisposable, IClassFixture
         var normalised = await GridAsync(owner, bbox, GridMeters, openAreaId);
         normalised["studyAreaId"]!.GetValue<Guid>().ShouldBe(openAreaId);
 
-        // The outline is 0.2 by 0.2 degrees at 39 north: about 17.3 by 22.2 km, so roughly
-        // 385 km². The tolerance is wide because it is checking the order of magnitude — that the
-        // denominator is ground and not degrees — not the spheroid's fourth digit.
-        normalised["studyAreaKm2"]!.GetValue<double>().ShouldBeInRange(300d, 450d);
+        // The outline is 0.2 by 0.2 degrees at 39 north, and its area on the ellipsoid follows
+        // from those numbers alone: to within one per cent, which a denominator in degrees, or one
+        // taken over the wrong outline, is nowhere near.
+        var expectedKm2 = BoxAreaKm2(7.10, 39.10, 7.30, 39.30);
+        normalised["studyAreaKm2"]!.GetValue<double>().ShouldBe(expectedKm2, expectedKm2 * 0.01);
 
         // Only cells that touch the outline are returned, and each reports how much of it is
         // inside, so a cell half outside the karst is divided by the half that is karst.
@@ -204,6 +205,78 @@ public sealed class MapDensityTests : IAsyncLifetime, IDisposable, IClassFixture
             HttpStatusCode.NotFound, "feature.not_found");
         await ExpectAsync(viewer, $"?bbox={bbox}&areaId={Guid.NewGuid()}",
             HttpStatusCode.NotFound, "feature.not_found");
+    }
+
+    /// <summary>
+    /// A cave in a cell the outline's edge runs through is divided by the part of the cell inside
+    /// the outline, and both that part and the outline's own area match what the ellipsoid says,
+    /// computed here from the coordinates alone. A density that ignored the fraction, or a fraction
+    /// that ignored the outline, is a number in the right order of magnitude and wrong.
+    /// </summary>
+    [Fact]
+    public async Task A_cell_the_outline_runs_through_is_divided_by_the_part_of_it_inside()
+    {
+        const string bbox = "14.0,46.0,14.5,46.5";
+        const double areaWest = 14.10, areaSouth = 46.10, areaEast = 14.30, areaNorth = 46.30;
+        var areaId = await CreateKarstAreaAsync("Dens Edge Area", areaWest, areaSouth, areaEast, areaNorth);
+
+        var empty = await GridAsync(owner, bbox, GridMeters, areaId);
+        empty["studyAreaKm2"]!.GetValue<double>()
+            .ShouldBe(BoxAreaKm2(areaWest, areaSouth, areaEast, areaNorth), BoxAreaKm2(areaWest, areaSouth, areaEast, areaNorth) * 0.01);
+
+        // A cave a few tens of metres inside the western edge, so its cell is one the edge runs
+        // through: the cells are kilometres wide, and the test says so if this one is not.
+        await CreateCaveWithEntranceAsync(owner, "Dens Edge Cave", areaWest + 0.0003, 46.2);
+
+        var counted = Occupied(await GridAsync(owner, bbox, GridMeters, areaId)).Single();
+        var cellWest = counted["west"]!.GetValue<double>();
+        var cellSouth = counted["south"]!.GetValue<double>();
+        var cellEast = counted["east"]!.GetValue<double>();
+        var cellNorth = counted["north"]!.GetValue<double>();
+        cellWest.ShouldBeLessThan(areaWest, "the cave's cell should reach west of the outline");
+        cellEast.ShouldBeGreaterThan(areaWest);
+        cellSouth.ShouldBeGreaterThan(areaSouth);
+        cellNorth.ShouldBeLessThan(areaNorth);
+
+        var expectedFraction = BoxAreaKm2(areaWest, cellSouth, cellEast, cellNorth)
+            / BoxAreaKm2(cellWest, cellSouth, cellEast, cellNorth);
+        expectedFraction.ShouldBeInRange(0.001, 0.999);
+
+        var fraction = counted["studyAreaFraction"]!.GetValue<double>();
+        fraction.ShouldBe(expectedFraction, expectedFraction * 0.01);
+
+        var areaKm2 = counted["areaKm2"]!.GetValue<double>();
+        areaKm2.ShouldBe(BoxAreaKm2(cellWest, cellSouth, cellEast, cellNorth), areaKm2 * 0.01);
+
+        var count = counted["count"]!.GetValue<int>();
+        count.ShouldBe(1);
+        counted["densityPerKm2"]!.GetValue<double>().ShouldBe(count / (areaKm2 * fraction), 1e-9);
+
+        // Without the outline the same cell is divided by the whole of it.
+        var whole = Occupied(await GridAsync(owner, bbox, GridMeters)).Single();
+        whole["densityPerKm2"]!.GetValue<double>().ShouldBe(count / whole["areaKm2"]!.GetValue<double>(), 1e-9);
+    }
+
+    /// <summary>
+    /// The area of a box bounded by two meridians and two parallels on the WGS 84 ellipsoid, in
+    /// square kilometres: b²·Δλ/2 · [q(φ₂) − q(φ₁)], with q the authalic function of latitude.
+    /// </summary>
+    private static double BoxAreaKm2(double west, double south, double east, double north)
+    {
+        const double a = 6378137.0;
+        const double f = 1 / 298.257223563;
+        var e2 = f * (2 - f);
+        var e = Math.Sqrt(e2);
+        var b = a * (1 - f);
+
+        double Q(double latitudeDegrees)
+        {
+            var sin = Math.Sin(latitudeDegrees * Math.PI / 180);
+            return (sin / (1 - (e2 * sin * sin))) + (1 / (2 * e) * Math.Log((1 + (e * sin)) / (1 - (e * sin))));
+        }
+
+        var lambda = (east - west) * Math.PI / 180;
+        return b * b * lambda / 2 * (Q(north) - Q(south)) / 1_000_000d;
     }
 
     [Fact]
