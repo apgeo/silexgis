@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Import.TripCsv;
+
 namespace SilexGis.Domain.Import;
 
 /// <summary>
@@ -21,6 +23,17 @@ public sealed record DelimitedSourceOptions
 {
     /// <summary>The field separator. Null sniffs it from the header.</summary>
     public string? Delimiter { get; init; }
+
+    /// <summary>
+    /// The character encoding to read the bytes under, where the uploader overrules the one that
+    /// was detected. Null works it out: a byte-order mark, then strict UTF-8, then a guess between
+    /// the Central European code pages. A Western European spreadsheet (Windows-1252) cannot be
+    /// told from a Central European one by its bytes, and read as the wrong one it does not fail —
+    /// its accents come back as other accents — so naming it is the only way it reads right. The
+    /// same closed set the trip-sheet importer takes, so a name nothing can decode is refused at
+    /// the request.
+    /// </summary>
+    public TripCsvEncoding? Encoding { get; init; }
 
     public string? LatitudeColumn { get; init; }
 

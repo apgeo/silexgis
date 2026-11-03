@@ -23,6 +23,9 @@ public sealed class GeofileImportHandler(
     IFileStore fileStore,
     IVectorIO vectorIO) : IProcessingJobHandler
 {
+    /// <summary>What the geofile row holds of the reason an import failed.</summary>
+    private const int MaxImportErrorLength = 2000;
+
     public string Kind => ProcessingJobKinds.GeofileImport;
 
     // A second run does nothing twice: it replaces the file's features whole. The failure is
@@ -30,7 +33,10 @@ public sealed class GeofileImportHandler(
     // so the screens watching the import keep showing "importing" while another attempt is due.
     public bool RetriesPassingFailures => true;
 
-    /// <summary>An import given up by the queue stops reading "importing".</summary>
+    /// <summary>
+    /// An import given up by the queue stops reading "importing" — or "uploaded", when the worker
+    /// was lost before it got as far as saying it had started.
+    /// </summary>
     public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
     {
         if (AbandonedJob.PayloadOf<GeofileImportPayload>(job) is not { } payload)
@@ -39,7 +45,8 @@ public sealed class GeofileImportHandler(
         }
 
         await db.Geofiles
-            .Where(g => g.Id == payload.GeofileId && g.ImportStatus == GeofileImportStatus.Importing)
+            .Where(g => g.Id == payload.GeofileId
+                && (g.ImportStatus == GeofileImportStatus.Importing || g.ImportStatus == GeofileImportStatus.Uploaded))
             .ExecuteUpdateAsync(s => s
                 .SetProperty(g => g.ImportStatus, GeofileImportStatus.Failed)
                 .SetProperty(g => g.ImportError, AbandonedJob.Reason), ct);
@@ -84,7 +91,11 @@ public sealed class GeofileImportHandler(
             if (!JobRetry.WillBeRetried(job, e, ct))
             {
                 geofile.ImportStatus = GeofileImportStatus.Failed;
-                geofile.ImportError = e is VectorIOException ? e.Message : "Import failed unexpectedly.";
+                // Cut to the column's length: a reader message longer than the row holds would fail
+                // this save too, and the geofile would be left showing "importing" for good.
+                geofile.ImportError = e is VectorIOException
+                    ? (e.Message.Length <= MaxImportErrorLength ? e.Message : e.Message[..(MaxImportErrorLength - 1)] + "…")
+                    : "Import failed unexpectedly.";
                 await db.SaveChangesAsync(CancellationToken.None);
             }
 

@@ -10286,6 +10286,7 @@ export interface components {
         };
         DelimitedSourceOptions: {
             delimiter?: null | string;
+            encoding?: null | components["schemas"]["TripCsvEncoding"];
             latitudeColumn?: null | string;
             longitudeColumn?: null | string;
             elevationColumn?: null | string;
@@ -27088,6 +27089,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GeofileStatusDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
                 };
             };
             /** @description Unauthorized */
