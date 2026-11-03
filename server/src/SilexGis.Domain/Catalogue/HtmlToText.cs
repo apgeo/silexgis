@@ -86,7 +86,8 @@ public static partial class HtmlToText
 
         // Order matters: the element-with-content removals must run before the blanket tag
         // removal, or their bodies survive as text once their tags are gone.
-        s = ScriptOrStyle().Replace(s, " ");
+        s = Script().Replace(s, " ");
+        s = Style().Replace(s, " ");
         s = Comment().Replace(s, " ");
         s = ProcessingInstruction().Replace(s, " ");
         s = XmlIsland().Replace(s, " ");
@@ -191,45 +192,55 @@ public static partial class HtmlToText
         return cut.TrimEnd() + TruncationMarker;
     }
 
-    // Bounded, linear patterns only — these run over untrusted input that can be a megabyte long,
-    // so nothing here may backtrack. Each is anchored on a literal and consumes a negated class.
-    [GeneratedRegex(@"<\s*(?<tag>script|style)\b[^>]*>.*?<\s*/\s*\k<tag>\s*>",
-        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture)]
-    private static partial Regex ScriptOrStyle();
+    // Every pattern here runs on the non-backtracking engine, whose time is linear in the input.
+    // The input is a third party's text, up to eight times the budget, and the ordinary engine is
+    // not linear on it: a pattern of the shape "opener, anything, closer" scans from every opener
+    // to the end of the input when the closer never comes, so a few thousand unclosed openers
+    // cost minutes. That engine has no back-references, which is why script and style are two
+    // patterns rather than one that names its own closing tag.
+    private const RegexOptions Linear = RegexOptions.NonBacktracking;
 
-    [GeneratedRegex(@"<!--.*?-->", RegexOptions.Singleline)]
+    [GeneratedRegex(@"<\s*script\b[^>]*>.*?<\s*/\s*script\s*>",
+        Linear | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture)]
+    private static partial Regex Script();
+
+    [GeneratedRegex(@"<\s*style\b[^>]*>.*?<\s*/\s*style\s*>",
+        Linear | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture)]
+    private static partial Regex Style();
+
+    [GeneratedRegex(@"<!--.*?-->", Linear | RegexOptions.Singleline)]
     private static partial Regex Comment();
 
-    [GeneratedRegex(@"<[!?][^>]*>")]
+    [GeneratedRegex(@"<[!?][^>]*>", Linear)]
     private static partial Regex ProcessingInstruction();
 
     /// <summary>Word's XML islands: the whole block is machine residue, not text.</summary>
     [GeneratedRegex(@"<\s*xml\b[^>]*>.*?<\s*/\s*xml\s*>",
-        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture)]
+        Linear | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture)]
     private static partial Regex XmlIsland();
 
     [GeneratedRegex(@"<\s*a\b[^>]*?\bhref\s*=\s*[""'](?<href>[^""']*)[""'][^>]*>(?<text>.*?)<\s*/\s*a\s*>",
-        RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+        Linear | RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex Anchor();
 
-    [GeneratedRegex(@"<\s*br\b[^>]*>", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"<\s*br\b[^>]*>", Linear | RegexOptions.IgnoreCase)]
     private static partial Regex LineBreak();
 
-    [GeneratedRegex(@"<\s*li\b[^>]*>", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"<\s*li\b[^>]*>", Linear | RegexOptions.IgnoreCase)]
     private static partial Regex ListItemOpen();
 
     /// <summary>Opening or closing tags of elements a reader sees as starting a new block.</summary>
     [GeneratedRegex(@"<\s*/?\s*(p|div|tr|table|thead|tbody|ul|ol|li|h[1-6]|blockquote|pre|section|article|hr)\b[^>]*>",
-        RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture)]
+        Linear | RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture)]
     private static partial Regex BlockBoundary();
 
     /// <summary>Table cells: not a line of their own, but not nothing either.</summary>
-    [GeneratedRegex(@"<\s*/?\s*(td|th)\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture)]
+    [GeneratedRegex(@"<\s*/?\s*(td|th)\b[^>]*>", Linear | RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture)]
     private static partial Regex CellBoundary();
 
-    [GeneratedRegex(@"<[^>]*>")]
+    [GeneratedRegex(@"<[^>]*>", Linear)]
     private static partial Regex Tag();
 
-    [GeneratedRegex(@"[^\S\n]+")]
+    [GeneratedRegex(@"[^\S\n]+", Linear)]
     private static partial Regex WhitespaceRun();
 }
