@@ -14,27 +14,50 @@ namespace SilexGis.Infrastructure.Persistence;
 /// </summary>
 public sealed class FeatureAggregateInterceptor : SaveChangesInterceptor
 {
+    // A feature row that is not tracked is loaded rather than stood in for by a stub. A stub (an
+    // empty Feature carrying only the id) stays in the tracker after the save, so a later read
+    // through the same context is handed its empty name, kind and visibility in place of the real
+    // row; and the audit diff sees it as an edit of a generic feature whose updated_at moved from
+    // year one.
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData, InterceptionResult<int> result)
     {
-        Apply(eventData.Context);
+        if (eventData.Context is { } context && TouchedFeatures(context) is { Count: > 0 } ids)
+        {
+            var missing = Untracked(context, ids);
+            if (missing.Count > 0)
+            {
+                _ = context.Set<Feature>().IgnoreQueryFilters().Where(f => missing.Contains(f.Id)).ToList();
+            }
+
+            Stamp(context, ids);
+        }
+
         return base.SavingChanges(eventData, result);
     }
 
-    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+    public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
     {
-        Apply(eventData.Context);
-        return base.SavingChangesAsync(eventData, result, cancellationToken);
-    }
-
-    private static void Apply(DbContext? context)
-    {
-        if (context is null)
+        if (eventData.Context is { } context && TouchedFeatures(context) is { Count: > 0 } ids)
         {
-            return;
+            var missing = Untracked(context, ids);
+            if (missing.Count > 0)
+            {
+                _ = await context.Set<Feature>().IgnoreQueryFilters()
+                    .Where(f => missing.Contains(f.Id))
+                    .ToListAsync(cancellationToken);
+            }
+
+            Stamp(context, ids);
         }
 
+        return await base.SavingChangesAsync(eventData, result, cancellationToken);
+    }
+
+    /// <summary>The features whose subtype row this save changes.</summary>
+    private static HashSet<Guid> TouchedFeatures(DbContext context)
+    {
         var touched = new HashSet<Guid>();
         foreach (var entry in context.ChangeTracker.Entries())
         {
@@ -56,26 +79,25 @@ public sealed class FeatureAggregateInterceptor : SaveChangesInterceptor
             }
         }
 
-        if (touched.Count == 0)
-        {
-            return;
-        }
+        return touched;
+    }
 
+    private static List<Guid> Untracked(DbContext context, HashSet<Guid> ids)
+    {
+        var tracked = context.ChangeTracker.Entries<Feature>().Select(e => e.Entity.Id).ToHashSet();
+        return [.. ids.Where(id => !tracked.Contains(id))];
+    }
+
+    private static void Stamp(DbContext context, HashSet<Guid> ids)
+    {
         // The timestamp interceptor has already run by the time this one fires, so the
         // value is stamped here, not delegated.
         var now = DateTimeOffset.UtcNow;
-        foreach (var id in touched)
+        foreach (var entry in context.ChangeTracker.Entries<Feature>().Where(e => ids.Contains(e.Entity.Id)).ToList())
         {
-            var entry = context.ChangeTracker.Entries<Feature>().FirstOrDefault(e => e.Entity.Id == id);
-            if (entry is { State: EntityState.Added or EntityState.Deleted })
+            if (entry.State is EntityState.Added or EntityState.Deleted or EntityState.Detached)
             {
                 continue; // creation stamps both timestamps; deletion needs no touch
-            }
-
-            if (entry is null)
-            {
-                entry = context.Entry(new Feature { Id = id });
-                entry.State = EntityState.Unchanged;
             }
 
             entry.Entity.UpdatedAt = now;

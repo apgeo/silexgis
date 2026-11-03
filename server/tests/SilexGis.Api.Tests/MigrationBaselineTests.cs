@@ -153,6 +153,30 @@ public sealed class MigrationBaselineTests : IAsyncLifetime, IClassFixture<Postg
     }
 
     [Fact]
+    public async Task A_move_that_fails_part_way_leaves_nothing_of_the_catch_up_behind()
+    {
+        // Short of both catch-up steps by its history, but the map-layer column is already there, so
+        // the second step's ALTER fails after the first step's table has been created.
+        var connectionString = await MigratedDatabaseAsync(MigrationBaseline.BaselineId);
+        await ExecuteAsync(connectionString, "DROP TABLE saved_filters;");
+        await OldHistoryAsync(connectionString, "20261016021043_JobRetryAndProgress");
+
+        await using (var db = Context(connectionString))
+        {
+            var failed = await Should.ThrowAsync<PostgresException>(() => MigrationBaseline.AdoptAsync(db));
+            failed.SqlState.ShouldBe(PostgresErrorCodes.DuplicateColumn);
+        }
+
+        await using var after = Context(connectionString);
+        (await after.Database.SqlQueryRaw<bool>("SELECT to_regclass('public.saved_filters') IS NOT NULL AS \"Value\"").SingleAsync())
+            .ShouldBeFalse();
+        var history = await HistoryAsync(connectionString);
+        history.ShouldNotContain("20261016090838_SavedFilters");
+        history.ShouldNotContain(MigrationBaseline.BaselineId);
+        history[^1].ShouldBe("20261016021043_JobRetryAndProgress");
+    }
+
+    [Fact]
     public async Task A_database_further_back_is_refused_and_left_as_it_was()
     {
         var connectionString = await MigratedDatabaseAsync(MigrationBaseline.BaselineId);

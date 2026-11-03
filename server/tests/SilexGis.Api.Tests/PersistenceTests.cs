@@ -328,6 +328,41 @@ public sealed class PersistenceTests : IDisposable, IClassFixture<PostgresFixtur
     }
 
     [Fact]
+    public async Task An_edited_list_of_numbers_or_names_is_audited_as_its_values()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+
+        var cabinet = new Cabinet { Name = $"Audit cabinet {suffix}", DefaultTagIds = [3, 5] };
+        var type = new FeatureType { Code = $"audit_{suffix}", Name = $"Audit type {suffix}", AcceptedGeometryClasses = [GeometryClass.Point] };
+        db.Cabinets.Add(cabinet);
+        db.Entry(cabinet).Property("Path").CurrentValue = new LTree($"c{suffix}"); // a root cabinet
+        db.FeatureTypes.Add(type);
+        await db.SaveChangesAsync();
+
+        cabinet.DefaultTagIds = [3, 5, 8];
+        type.AcceptedGeometryClasses = [GeometryClass.Point, GeometryClass.MultiPolygon];
+        await db.SaveChangesAsync();
+
+        async Task<JsonElement> ChangeAsync(string entityType, string entityId, string property)
+        {
+            var row = await db.AuditEntries
+                .Where(a => a.EntityType == entityType && a.EntityId == entityId && a.Action == AuditActions.Updated)
+                .SingleAsync();
+            return JsonDocument.Parse(row.Changes!).RootElement.GetProperty(property);
+        }
+
+        var tags = await ChangeAsync(nameof(Cabinet), cabinet.Id.ToString(), nameof(Cabinet.DefaultTagIds));
+        tags.GetProperty("old").GetString().ShouldBe("3,5");
+        tags.GetProperty("new").GetString().ShouldBe("3,5,8");
+
+        var classes = await ChangeAsync(nameof(FeatureType), type.Id.ToString(), nameof(FeatureType.AcceptedGeometryClasses));
+        classes.GetProperty("old").GetString().ShouldBe("point");
+        classes.GetProperty("new").GetString().ShouldBe("point,multiPolygon");
+    }
+
+    [Fact]
     public async Task Feature_aggregate_persists_with_its_derived_state_and_one_audit_row()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
@@ -368,6 +403,60 @@ public sealed class PersistenceTests : IDisposable, IClassFixture<PostgresFixtur
         entry.EntityType.ShouldBe(FeatureAudit.TypeName(FeatureKind.Cave));
         entry.Changes.ShouldNotBeNull();
         entry.Changes.ShouldContain("Region"); // the subtype's columns are merged in
+    }
+
+    [Fact]
+    public async Task A_cave_row_saved_without_its_feature_moves_the_feature_and_leaves_the_real_row_readable()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var userId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"touch-{suffix}@t.local");
+        Guid id;
+        DateTimeOffset createdUpdatedAt;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+            var caveTypeId = await db.CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).SingleAsync();
+            var feature = new Feature { Name = $"Touched Cave {suffix}", OwnerUserId = userId };
+            var cave = new Cave { CaveTypeId = caveTypeId, Region = "Bihor" };
+            feature.Cave = cave;
+            await writer.CreateCaveAsync(feature, cave, [], CancellationToken.None);
+            await db.SaveChangesAsync();
+            id = feature.Id;
+            createdUpdatedAt = feature.UpdatedAt;
+        }
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var cave = await db.Caves.SingleAsync(c => c.Id == id); // the feature row is not loaded
+            cave.Region = "Alba";
+            await db.SaveChangesAsync();
+
+            // A read through the same context is handed the real row, not an empty stand-in.
+            var feature = await db.Features.SingleAsync(f => f.Id == id);
+            feature.Name.ShouldBe($"Touched Cave {suffix}");
+            feature.Kind.ShouldBe(FeatureKind.Cave);
+            feature.UpdatedAt.ShouldBeGreaterThan(createdUpdatedAt);
+
+            // The edit audits as the cave's one row, and the touch's old value is the stored one.
+            var updated = await db.AuditEntries
+                .Where(a => a.EntityId == id.ToString() && a.Action == AuditActions.Updated)
+                .SingleAsync();
+            updated.EntityType.ShouldBe(FeatureAudit.TypeName(FeatureKind.Cave));
+            var changes = JsonDocument.Parse(updated.Changes!).RootElement;
+            changes.GetProperty(nameof(Cave.Region)).GetProperty("new").GetString().ShouldBe("Alba");
+            if (changes.TryGetProperty(nameof(Feature.UpdatedAt), out var touch))
+            {
+                touch.GetProperty("old").GetDateTimeOffset().ShouldBeGreaterThan(DateTimeOffset.UnixEpoch);
+            }
+        }
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Features.AsNoTracking().SingleAsync(f => f.Id == id)).Name.ShouldBe($"Touched Cave {suffix}");
+        }
     }
 
     public void Dispose() => factory.Dispose();
