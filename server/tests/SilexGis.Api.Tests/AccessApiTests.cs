@@ -129,6 +129,35 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<
         ActionsOf(documents, "object").ShouldNotContain("create");
     }
 
+    /// <summary>
+    /// A rename is held to the same uniqueness a create is: the name index would refuse it in the
+    /// database anyway, and unhandled that refusal is an uncoded 500.
+    /// </summary>
+    [Fact]
+    public async Task Renaming_a_permission_group_onto_another_groups_name_is_refused_with_a_code()
+    {
+        var taken = $"Taken name {suffix}";
+        await CreatePermissionGroupAsync(taken);
+        var groupId = await CreatePermissionGroupAsync($"Renamed group {suffix}");
+
+        var clash = await admin.PutAsJsonAsync($"/api/v1/permission-groups/{groupId}", new { name = taken });
+        clash.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await clash.Content.ReadAsStringAsync());
+        JsonDocument.Parse(await clash.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("code").GetString().ShouldBe(PermissionGroupEndpoints.NameTakenCode);
+
+        // A name that comes to the same slug as the other group's is the same clash.
+        var sameSlug = await admin.PutAsJsonAsync(
+            $"/api/v1/permission-groups/{groupId}", new { name = taken.ToUpperInvariant() + "!" });
+        sameSlug.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await sameSlug.Content.ReadAsStringAsync());
+
+        // The positive half: a free name, and the group's own name kept, both save.
+        var free = await admin.PutAsJsonAsync($"/api/v1/permission-groups/{groupId}", new { name = $"Free name {suffix}" });
+        free.StatusCode.ShouldBe(HttpStatusCode.OK, await free.Content.ReadAsStringAsync());
+        var same = await admin.PutAsJsonAsync(
+            $"/api/v1/permission-groups/{groupId}", new { name = $"Free name {suffix}", description = "kept" });
+        same.StatusCode.ShouldBe(HttpStatusCode.OK, await same.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public async Task Rulesets_round_trip_and_refuse_rules_the_model_cannot_evaluate()
     {
