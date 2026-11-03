@@ -40,6 +40,50 @@ public static class AccessEntryMapping
     }
 
     /// <summary>
+    /// Stages a full replace of a rule list as the change it actually is: a rule the new list
+    /// states exactly as it already stood keeps its row — its id, its author and its place in
+    /// the access history — and only rules that are new are added and only rules that are gone
+    /// are removed. Deleting and re-inserting every row would credit each untouched rule to
+    /// whoever saved the list last and fill the history with removals and additions of rules
+    /// nobody changed. Every rule of the new list has still been through
+    /// <see cref="RejectAsync"/>, kept ones included; this decides only how the result is stored.
+    /// </summary>
+    public static void StageReplace(
+        SilexGisDbContext db, IReadOnlyList<AccessEntry> current, IReadOnlyList<AccessEntry> replacement)
+    {
+        var unmatched = current.ToList();
+        foreach (var entry in replacement)
+        {
+            var same = unmatched.FirstOrDefault(row => SameRule(row, entry));
+            if (same is null)
+            {
+                db.AccessEntries.Add(entry);
+            }
+            else
+            {
+                unmatched.Remove(same);
+            }
+        }
+
+        db.AccessEntries.RemoveRange(unmatched);
+    }
+
+    /// <summary>Whether two rows state the same rule: everything but who wrote it and when.</summary>
+    private static bool SameRule(AccessEntry a, AccessEntry b) =>
+        a.PermissionGroupId == b.PermissionGroupId
+        && a.SubjectKind == b.SubjectKind
+        && a.SubjectId == b.SubjectId
+        && a.Effect == b.Effect
+        && a.Domain == b.Domain
+        && a.Actions == b.Actions
+        && a.ScopeKind == b.ScopeKind
+        && a.ScopeFeatureId == b.ScopeFeatureId
+        && a.ScopeId == b.ScopeId
+        && a.FeatureKind == b.FeatureKind
+        && a.FeatureTypeId == b.FeatureTypeId
+        && a.GrantedViaExpeditionId == b.GrantedViaExpeditionId;
+
+    /// <summary>
     /// Returns the problem this rule must be refused with, or null when it may be saved.
     /// </summary>
     public static async Task<ProblemHttpResult?> RejectAsync(

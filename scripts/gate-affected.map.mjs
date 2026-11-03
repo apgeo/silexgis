@@ -121,6 +121,9 @@ export const groups = {
     'AccessApiTests', 'AccessHistoryTests', 'AccessModelTests', 'AclAndCavingGroupTests',
     'DocumentAccessApiTests', 'DocumentAccessParityTests', 'ProfileVisibilityTests',
     'ProtectionDepthTests',
+    // The permission-group surface as a whole, a roster write bounded by the rulesets a caving
+    // group is a trustee of, and the duplicate writes answered with a code when they race.
+    'PermissionGroupCrudTests', 'RosterTrusteeRightsBoundTests', 'UniqueViolationRaceTests',
   ],
   caves: [
     'AssociationDisclosureTests', 'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests',
@@ -142,9 +145,13 @@ export const groups = {
     // Caves carry the shipped cave feature type: every creation path, the locks, the filter.
     'CaveFeatureTypeTests',
   ],
-  cavers: ['CaverRosterTests', 'ProfileVisibilityTests'],
+  cavers: [
+    'CaverRosterTests', 'ProfileVisibilityTests', 'RosterFullAdministratorsGuardTests',
+    'RosterTrusteeRightsBoundTests', 'UniqueViolationRaceTests',
+  ],
   cavingGroups: [
     'AclAndCavingGroupTests', 'CavingGroupAnnouncementPaidCapTests', 'CavingGroupMembershipTests',
+    'RosterFullAdministratorsGuardTests', 'RosterTrusteeRightsBoundTests', 'UniqueViolationRaceTests',
   ],
   geoFeatures: [
     'ClosestApproachTests', 'FeatureFilterCompilerTests', 'FeatureHierarchyTests',
@@ -630,12 +637,13 @@ export const crossCutting = {
     'FeatureTests', 'FeatureTypeWriteTests', 'FileAttachmentTests', 'FileImportReviewHoldTests',
     'GeofileTests', 'HistoryRestoreTests', 'HypsometryTests', 'ImmichPhotoLibraryTests',
     'MapBackgroundDocumentChoiceTests', 'MapViewTests', 'NotificationHealthTests',
-    'PhotoGalleryTests', 'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests',
-    'PhotoLibraryBrowseEndpointTests', 'PhotoLibraryEndpointTests',
-    'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests', 'PlacePointProtectionTests',
-    'PlacePointWriteTests', 'PlaceStationTests', 'PublicTripMomentPicturesTests',
-    'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests', 'ReportTemplateTests',
-    'ResLinkApiTests', 'SavedFilterTests', 'SpeleolocTripImportTests',
+    'PermissionGroupCrudTests', 'PhotoGalleryTests', 'PhotoImportTests',
+    'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
+    'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',
+    'PlacePointProtectionTests', 'PlacePointWriteTests', 'PlaceStationTests',
+    'PublicTripMomentPicturesTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
+    'ReportTemplateTests', 'ResLinkApiTests', 'RosterFullAdministratorsGuardTests',
+    'RosterTrusteeRightsBoundTests', 'SavedFilterTests', 'SpeleolocTripImportTests',
     'SpeologieCatalogueTests', 'StagedImportTests', 'SurveyCompilationTests',
     'SurveyModelReadingTests', 'SurveyModelTests', 'SurveySourceTests',
     'SurveyUploadPipelineTests', 'SurveyUploadPreferenceTests', 'SurveyUploadPublicLinkTests',

@@ -101,6 +101,8 @@ export function userAdminProblem(error: unknown, t: TFunction): string {
       return t('admin.users.problems.alreadyEnterable');
     case 'user.cannot_reset_own_two_factor':
       return t('admin.users.problems.cannotResetOwnTwoFactor');
+    case 'user.cannot_change_own_review_mark':
+      return t('admin.users.problems.cannotChangeOwnReviewMark');
     case 'user.two_factor_not_enabled':
       return t('admin.users.problems.twoFactorNotEnabled');
     case 'access_entry.exceeds_own_rights':

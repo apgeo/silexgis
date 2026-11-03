@@ -29,6 +29,13 @@ public static class PermissionGroupEndpoints
     public const string NameTakenCode = "permission_group.name_taken";
     public const string DenyFullAdministratorsCode = "permission_group.deny_full_administrators";
 
+    // A group is unique on its name and on its slug, and either can be the one PostgreSQL
+    // reports first; a trustee is unique per group, kind and id.
+    private static readonly string[] GroupIdentityIndexes = ["ix_permission_groups_name", "ix_permission_groups_slug"];
+
+    private static readonly string[] MemberIdentityIndex =
+        ["ix_permission_group_members_permission_group_id_member_kind_me"];
+
     public static RouteGroupBuilder MapPermissionGroupEndpoints(this RouteGroupBuilder api)
     {
         var groups = api.MapGroup("/permission-groups").WithTags("PermissionGroups");
@@ -198,7 +205,15 @@ public static class PermissionGroupEndpoints
             Description = request.Description,
         };
         db.PermissionGroups.Add(group);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (UniqueViolations.IsOn(e, GroupIdentityIndexes))
+        {
+            // Another create of the same name passed the check above at the same moment.
+            return ApiProblems.BadRequest(NameTakenCode, "A permission group with this name already exists.");
+        }
 
         return TypedResults.Created($"/api/v1/permission-groups/{group.Id}",
             new PermissionGroupDto(group.Id, group.Name, group.Slug, group.Description,
@@ -236,9 +251,32 @@ public static class PermissionGroupEndpoints
             return ApiProblems.Conflict(ProtectedCode, "This permission group cannot be renamed.");
         }
 
-        group.Name = request.Name.Trim();
+        // The same clash the create refuses, measured against every other group: the name is
+        // unique, and a name that comes to the same slug as another group's would read as that
+        // group wherever the slug stands for it.
+        var name = request.Name.Trim();
+        var slug = Tag.Slugify(name);
+        if (slug.Length == 0)
+        {
+            return ApiProblems.BadRequest("permission_group.name_invalid",
+                "The name must contain letters or digits.");
+        }
+
+        if (await db.PermissionGroups.AnyAsync(g => g.Id != id && (g.Slug == slug || g.Name == name), ct))
+        {
+            return ApiProblems.BadRequest(NameTakenCode, "A permission group with this name already exists.");
+        }
+
+        group.Name = name;
         group.Description = request.Description;
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (UniqueViolations.IsOn(e, GroupIdentityIndexes))
+        {
+            return ApiProblems.BadRequest(NameTakenCode, "A permission group with this name already exists.");
+        }
 
         var dto = await Project(db.PermissionGroups.AsNoTracking().Where(g => g.Id == id), db).FirstAsync(ct);
         return TypedResults.Ok(dto);
@@ -352,8 +390,7 @@ public static class PermissionGroupEndpoints
         }
 
         var current = await db.AccessEntries.Where(e => e.PermissionGroupId == id).ToListAsync(ct);
-        db.AccessEntries.RemoveRange(current);
-        db.AccessEntries.AddRange(staged);
+        AccessEntryMapping.StageReplace(db, current, staged);
         await db.SaveChangesAsync(ct);
 
         var saved = await db.AccessEntries.AsNoTracking()
@@ -464,7 +501,7 @@ public static class PermissionGroupEndpoints
 
         // Adding a trustee hands them everything the ruleset grants, so the same
         // no-amplification bound that governs rules governs this.
-        if (await ExceedsOwnRightsAsync(db, ctx, id, ct))
+        if (await ExceedsOwnRightsAsync(db, ctx, id, exempt: null, ct))
         {
             return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
         }
@@ -478,7 +515,15 @@ public static class PermissionGroupEndpoints
                 MemberKind = request.MemberKind,
                 MemberId = request.MemberId,
             });
-            await db.SaveChangesAsync(ct);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException e) when (UniqueViolations.IsOn(e, MemberIdentityIndex))
+            {
+                // Another request added the same trustee at the same moment. Adding one who is
+                // already there answers as the check above does: the trustee is there.
+            }
         }
 
         return TypedResults.NoContent();
@@ -567,10 +612,16 @@ public static class PermissionGroupEndpoints
     /// <summary>
     /// Whether this ruleset grants anything the caller does not already hold. Adding a
     /// trustee is exactly as powerful as writing the rules themselves, so it carries the
-    /// same bound.
+    /// same bound — and so does filling a caving group that is a trustee (see
+    /// <see cref="TrusteeRightsBound"/>), which is why the loop lives in one place.
     /// </summary>
-    private static async Task<bool> ExceedsOwnRightsAsync(
-        SilexGisDbContext db, AccessContext ctx, Guid permissionGroupId, CancellationToken ct)
+    /// <param name="exempt">Entries the asking write may pass on regardless; none when null.</param>
+    internal static async Task<bool> ExceedsOwnRightsAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        Guid permissionGroupId,
+        Func<AccessEntry, bool>? exempt,
+        CancellationToken ct)
     {
         if (ctx.IsFullAdmin)
         {
@@ -582,6 +633,11 @@ public static class PermissionGroupEndpoints
             .ToListAsync(ct);
         foreach (var entry in entries)
         {
+            if (exempt?.Invoke(entry) == true)
+            {
+                continue;
+            }
+
             var facts = await AccessEntryMapping.AnchorFactsAsync(db, entry, ct);
             if (AccessEntryRules.ExceededActions(ctx, entry.ToSnapshot(), facts) != AccessAction.None)
             {

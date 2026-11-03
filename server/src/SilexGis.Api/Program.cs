@@ -322,6 +322,9 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // and for the same reason — and gated where tracking gates a survey: a cave's whole station
     // vocabulary leaves in one piece or not at all.
     builder.Services.AddScoped<ITripSurveyStations, SilexGis.Api.Features.TripTracking.TripSurveyStationReads>();
+    // The roster and caving-group writes ask whether filling a trustee caving group hands an
+    // account more than the caller holds; the permission area answers with its own rule judgement.
+    builder.Services.AddScoped<ITrusteeRightsBound, SilexGis.Api.Features.Permissions.TrusteeRightsBound>();
     // Why a published page was refused and how much the published surface is read, for the
     // operator: a log event and counters, and nothing in any response. One for the application's
     // lifetime because it owns the counters.
