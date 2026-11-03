@@ -188,7 +188,10 @@ public sealed class UniqueViolationRaceTests : IAsyncLifetime, IDisposable, ICla
 
         var pending = send();
         var blocked = false;
-        for (var attempt = 0; attempt < 400 && !pending.IsCompleted; attempt++)
+        // Bounded by time, not by a count of polls: on a loaded machine running eight test
+        // processes a request has been seen taking more than twenty seconds to reach its insert.
+        var deadline = DateTime.UtcNow.AddSeconds(90);
+        while (DateTime.UtcNow < deadline && !pending.IsCompleted)
         {
             var waiting = await other.Database.SqlQueryRaw<long>(
                 "SELECT count(*) AS \"Value\" FROM pg_stat_activity "
