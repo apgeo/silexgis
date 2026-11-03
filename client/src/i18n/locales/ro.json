@@ -3049,6 +3049,13 @@
     "deleteConfirm": "Elimini această persoană din listă?",
     "deleteRefused": "Persoana nu a putut fi eliminată.",
     "deleteRefusedCamp": "Persoana este pe lista unei tabere și nu poate fi eliminată cât timp rămâne acolo. Dacă este o înregistrare duplicat, unific-o în loc.",
+    "rosterProblems": {
+      "grantsFullAdmin": "Doar un administrator deplin poate face asta: contul acestei persoane ar deveni administrator deplin.",
+      "revokesFullAdmin": "Doar un administrator deplin poate face asta: un cont și-ar pierde drepturile de administrator deplin.",
+      "exceedsOwnRights": "Nu poți face asta: contul acestei persoane ar primi drepturi pe care tu nu le ai.",
+      "memberRaced": "Altcineva a adăugat această persoană în grup în același moment. Reîncarcă grupul și încearcă din nou.",
+      "lastFullAdmin": "Instalarea ar rămâne fără un administrator deplin care se poate autentifica."
+    },
     "heldByTrips": {
       "title": "{{name}} nu poate fi eliminat(ă) încă",
       "intro": "Persoana apare încă în ture, așa că înregistrarea ei nu poate fi eliminată. Fiecare tură de mai jos arată ce o ține acolo.",
@@ -3412,6 +3419,7 @@
     "protected": "Protejat",
     "seeded": "Predefinit",
     "nameTaken": "Există deja un grup de permisiuni cu această denumire.",
+    "nameInvalid": "Denumirea trebuie să conțină litere sau cifre.",
     "lastFullAdmin": "Refuzat: nu ar mai rămâne niciun administrator deplin activ care să se poată autentifica.",
     "exceedsOwnRights": "Refuzat: o regulă nu poate acorda drepturi pe care nu le deții tu.",
     "rulesTab": "Reguli",
@@ -4631,6 +4639,7 @@
         "notFound": "Acest cont nu mai există.",
         "invalid": "Verifică numele și adresa.",
         "forbidden": "Nu ai dreptul să faci acest lucru.",
+        "cannotChangeOwnReviewMark": "Dacă încărcările tale au nevoie de verificare decide un alt administrator.",
         "cannotResetOwnTwoFactor": "Propriul al doilea factor îl gestionezi din setările de securitate.",
         "twoFactorNotEnabled": "Acest cont nu are activ niciun al doilea factor, deci nu este nimic de resetat.",
         "fullAdministratorAccount": "Doar un administrator deplin poate bloca, debloca, șterge sau reseta al doilea factor al contului unui administrator deplin."

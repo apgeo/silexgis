@@ -186,14 +186,13 @@ export function useAnnounceToCavingGroup(cavingGroupId: string) {
 export function useRemoveCavingGroupMember(cavingGroupId: string) {
   const invalidate = useInvalidateCavingGroupRoster(cavingGroupId);
   return useMutation({
-    mutationFn: async (caverId: string) => {
-      const { error, response } = await api.DELETE('/api/v1/caving-groups/{id}/members/{caverId}', {
-        params: { path: { id: cavingGroupId, caverId } },
-      });
-      if (error !== undefined) {
-        throw new Error(`API error ${response.status}`);
-      }
-    },
+    // The refusal's code travels, so the page can say why somebody could not be taken out.
+    mutationFn: (caverId: string) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/caving-groups/{id}/members/{caverId}', {
+          params: { path: { id: cavingGroupId, caverId } },
+        }),
+      ),
     onSuccess: () => invalidate(),
   });
 }
@@ -287,14 +286,7 @@ export function useLinkCaverAccount(id: string) {
 export function useUnlinkCaverAccount(id: string) {
   const invalidate = useInvalidateCavers();
   return useMutation({
-    mutationFn: async () => {
-      const { error, response } = await api.DELETE('/api/v1/cavers/{id}/account-link', {
-        params: { path: { id } },
-      });
-      if (error !== undefined) {
-        throw new Error(`API error ${response.status}`);
-      }
-    },
+    mutationFn: () => unwrapVoid(api.DELETE('/api/v1/cavers/{id}/account-link', { params: { path: { id } } })),
     onSuccess: () => invalidate(),
   });
 }

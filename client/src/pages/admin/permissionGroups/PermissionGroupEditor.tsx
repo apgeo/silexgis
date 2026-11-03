@@ -9,7 +9,7 @@ import {
   type AccessCatalog,
   type PermissionGroup,
 } from '../../../api/hooks.ts';
-import { ApiError } from '../../../api/client.ts';
+import { permissionGroupNameProblem } from './permissionGroupProblems.ts';
 import MembersTab from './MembersTab.tsx';
 import PreviewTab from './PreviewTab.tsx';
 import RulesTab from './RulesTab.tsx';
@@ -42,11 +42,7 @@ export default function PermissionGroupEditor({ group, catalog, open, onClose }:
       await updateGroup.mutateAsync({ name: values.name, description: values.description ?? null });
       message.success(t('common.saved'));
     } catch (error) {
-      message.error(
-        error instanceof ApiError && error.code === 'permission_group.name_taken'
-          ? t('permissionGroups.nameTaken')
-          : t('common.saveFailed'),
-      );
+      message.error(permissionGroupNameProblem(error, t));
     }
   };
 

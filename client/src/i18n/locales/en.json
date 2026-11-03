@@ -3049,6 +3049,13 @@
     "deleteConfirm": "Remove this person from the roster?",
     "deleteRefused": "This person could not be removed.",
     "deleteRefusedCamp": "This person is on a camp's roster and cannot be removed while they are. If this is a duplicate entry, merge it instead.",
+    "rosterProblems": {
+      "grantsFullAdmin": "Only a full administrator can do this: it would make this person's account a full administrator.",
+      "revokesFullAdmin": "Only a full administrator can do this: it would take full administration away from an account.",
+      "exceedsOwnRights": "You cannot do this: it would give this person's account rights you do not hold yourself.",
+      "memberRaced": "Somebody else added this person to the group at the same moment. Reload the group and try again.",
+      "lastFullAdmin": "This would leave the installation without a full administrator who can sign in."
+    },
     "heldByTrips": {
       "title": "{{name}} cannot be removed yet",
       "intro": "Trips still name this person, so their entry cannot be removed. Each trip below says what holds them there.",
@@ -3412,6 +3419,7 @@
     "protected": "Protected",
     "seeded": "Built-in",
     "nameTaken": "A permission group with this name already exists.",
+    "nameInvalid": "The name must contain letters or digits.",
     "lastFullAdmin": "Refused: this would leave no active Full Administrator able to sign in.",
     "exceedsOwnRights": "Refused: a rule cannot hand out rights you do not hold yourself.",
     "rulesTab": "Rules",
@@ -4618,6 +4626,7 @@
         "notFound": "This account no longer exists.",
         "invalid": "Check the name and the address.",
         "forbidden": "You are not allowed to do this.",
+        "cannotChangeOwnReviewMark": "Another administrator decides whether your uploads need review.",
         "cannotResetOwnTwoFactor": "You manage your own second factor from your security settings.",
         "twoFactorNotEnabled": "This account has no second factor switched on, so there is nothing to reset.",
         "fullAdministratorAccount": "Only a full administrator can lock, unlock, delete or reset the second factor of a full administrator's account."
