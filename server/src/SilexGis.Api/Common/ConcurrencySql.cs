@@ -56,30 +56,36 @@ public static class ConcurrencySql
         "SELECT xmin::text::bigint FROM trip_logs WHERE id = @id AND deleted_at IS NULL";
 
     /// <summary>
-    /// A live trip's version, taking the row's lock until the surrounding transaction ends. A
-    /// writer that holds the lock and then finds the version it was shown is still the current
-    /// one knows nobody else's write can land before its own commits; a writer that waited behind
-    /// another reads the version that one left. Needs a transaction on the context.
+    /// The row's version, taking its lock until the surrounding transaction ends, or null when
+    /// the row does not exist (a deleted trip counts as absent). Under the default isolation a
+    /// statement that waited for another writer's lock reads the version that writer committed,
+    /// not the one it started from. Needs a transaction on the context.
     /// </summary>
-    public static async Task<long?> LockLiveTripLogVersionAsync(
-        SilexGisDbContext db, Guid id, CancellationToken ct) =>
+    public static async Task<long?> LockVersionAsync(
+        SilexGisDbContext db, VersionedTable table, Guid id, CancellationToken ct) =>
         await db.Database.GetDbConnection().QuerySingleOrDefaultAsync<long?>(
             new CommandDefinition(
-                LiveTripLogVersion + " FOR UPDATE",
+                VersionSql(table) + " FOR UPDATE",
                 new { id },
                 transaction: db.Database.CurrentTransaction?.GetDbTransaction(),
                 cancellationToken: ct));
+
+    // xid has no direct integer cast; text round-trip is the documented conversion.
+    private static string VersionSql(VersionedTable table) =>
+        table == VersionedTable.TripLogs
+            ? LiveTripLogVersion
+            : $"SELECT xmin::text::bigint FROM {Tables[table]} WHERE id = @id";
 
     /// <summary>Current row version, or null when the row does not exist.</summary>
     public static async Task<long?> VersionAsync(
         SilexGisDbContext db, VersionedTable table, Guid id, CancellationToken ct)
     {
-        // xid has no direct integer cast; text round-trip is the documented conversion.
-        var sql = table == VersionedTable.TripLogs
-            ? LiveTripLogVersion
-            : $"SELECT xmin::text::bigint FROM {Tables[table]} WHERE id = @id";
         return await db.Database.GetDbConnection().QuerySingleOrDefaultAsync<long?>(
-            new CommandDefinition(sql, new { id }, cancellationToken: ct));
+            new CommandDefinition(
+                VersionSql(table),
+                new { id },
+                transaction: db.Database.CurrentTransaction?.GetDbTransaction(),
+                cancellationToken: ct));
     }
 
     /// <summary>

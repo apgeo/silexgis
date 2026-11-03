@@ -743,7 +743,8 @@ public static class SurveyModelEndpoints
             return ApiProblems.Forbidden();
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.SurveyModels, model.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.SurveyModels, model.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -752,6 +753,7 @@ public static class SurveyModelEndpoints
         model.Description = request.Description;
         model.SurveyedAt = request.SurveyedAt;
         await db.SaveChangesAsync(ct);
+        await hold.AnswerAsync(ct);
         return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
     }
 
@@ -928,7 +930,8 @@ public static class SurveyModelEndpoints
             return ApiProblems.Forbidden();
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.SurveyModels, model.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.SurveyModels, model.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -1016,14 +1019,12 @@ public static class SurveyModelEndpoints
         // The mark moves on to the newest model of the kind that is left, so the cave stays
         // represented by something named rather than by a fallback rule. Promotion is a separate
         // statement after the removal is saved, for the per-statement index check, and the two
-        // share a transaction so a failure between them leaves the cave with its old model.
-        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
-        {
-            db.SurveyModels.Remove(model);
-            await db.SaveChangesAsync(ct);
-            await SurveyModelCurrency.PromoteSuccessorAsync(db, model.CaveFeatureId, model.Format, ct);
-            await transaction.CommitAsync(ct);
-        }
+        // share the transaction the model's hold opened, so a failure between them — or anywhere
+        // in the removal above — leaves the cave with its old model.
+        db.SurveyModels.Remove(model);
+        await db.SaveChangesAsync(ct);
+        await SurveyModelCurrency.PromoteSuccessorAsync(db, model.CaveFeatureId, model.Format, ct);
+        await hold.CommitAsync(ct);
 
         return TypedResults.NoContent();
     }

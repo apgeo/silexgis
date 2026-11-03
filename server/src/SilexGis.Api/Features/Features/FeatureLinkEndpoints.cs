@@ -72,9 +72,18 @@ public static class FeatureLinkEndpoints
                 : ApiProblems.NotFound("feature.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
+        }
+
+        // The hold read the row again; who may change it is decided on what it holds now.
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, feature, ct)).Allowed)
+        {
+            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
+                ? ApiProblems.Forbidden()
+                : ApiProblems.NotFound("feature.not_found");
         }
 
         if (request.Links.Any(l => l.ToId == id))
@@ -148,6 +157,11 @@ public static class FeatureLinkEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        // The version is the feature row's, which the feature's own read hands out; filed there, it is
+        // the one the next write on the feature carries. Filed under this route's path instead, no
+        // read would ever replace it, and the first change made anywhere else would leave every later
+        // save here refused as stale.
+        await hold.AnswerAsync(ct, $"/api/v1/features/{feature.Id}");
         return TypedResults.Ok(await LinksViewAsync(db, protection, ctx, id, ct));
     }
 

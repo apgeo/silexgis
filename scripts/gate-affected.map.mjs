@@ -314,7 +314,10 @@ export const groups = {
   about: ['ApiSmokeTests', 'ResponseCompressionTests', 'TestClassDisposalTests', 'TestModeTests'],
   // How a database the old migration chain built is moved onto the baseline; a change to
   // persistence or the migrations selects the whole suite anyway, so this group only names it.
-  migrationBaseline: ['MigrationBaselineTests', 'RasterPinsAsLinksMigrationTests', 'SurveyModelRemovalsMigrationTests'],
+  migrationBaseline: [
+    'MigrationBaselineTests', 'RasterPinsAsLinksMigrationTests', 'SurveyModelRemovalsMigrationTests',
+    'UsableLookupIndexesMigrationTests', 'PostBaselineMigrationRowsTests',
+  ],
   audit: [
     'AccessHistoryTests', 'HistoryTests', 'AuditClientAddressTests', 'ChangeAttributionTests',
     // Large shapes kept beside an edit, and put back from it.

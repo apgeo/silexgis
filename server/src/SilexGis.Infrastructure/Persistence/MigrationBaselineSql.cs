@@ -8,7 +8,13 @@ namespace SilexGis.Infrastructure.Persistence;
 /// <remarks>
 /// Written out by the migration tool from those steps as an idempotent script: each block runs only
 /// when its step is missing from the history, so a database already further along skips what it
-/// has. Kept verbatim; it is never edited, only replaced when the accepted range changes.
+/// has. Kept as the tool wrote it but for one change: the tool closes each step's transaction with
+/// <c>COMMIT; START TRANSACTION;</c>, and those two lines are taken out. The script runs inside the
+/// one transaction the adoption opens, and a COMMIT in it would commit the first step on its own,
+/// so a failure in the second step or in the history rewrite would leave the first step's table
+/// behind with no baseline recorded. Each block is guarded by its step's history row, so the
+/// script needs no transaction boundaries of its own. Never edited otherwise, only replaced when
+/// the accepted range changes.
 /// </remarks>
 internal static class MigrationBaselineSql
 {
@@ -54,9 +60,6 @@ internal static class MigrationBaselineSql
             VALUES ('20261016090838_SavedFilters', '10.0.9');
             END IF;
         END $EF$;
-        COMMIT;
-
-        START TRANSACTION;
 
         DO $EF$
         BEGIN

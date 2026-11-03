@@ -365,6 +365,13 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         });
         update.StatusCode.ShouldBe(HttpStatusCode.OK);
 
+        // The read hands out the version the update answered, so a client re-reading after somebody
+        // else's change holds the version its next save or delete carries.
+        var ownRead = await editor.GetAsync($"/api/v1/geofiles/{id}");
+        ownRead.StatusCode.ShouldBe(HttpStatusCode.OK);
+        ownRead.Headers.ETag.ShouldNotBeNull("a versioned geofile's read hands out its version");
+        ownRead.Headers.ETag!.Tag.ShouldBe(update.Headers.ETag!.Tag);
+
         var visible = await GetJsonAsync(outsider, $"/api/v1/geofiles/{id}");
         visible.GetProperty("name").GetString().ShouldBe("Shared Notes");
         visible.GetProperty("style").GetProperty("stroke").GetString().ShouldBe("#ff0000");

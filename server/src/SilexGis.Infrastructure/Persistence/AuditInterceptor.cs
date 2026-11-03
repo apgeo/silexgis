@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -248,18 +249,40 @@ public sealed class AuditInterceptor(ICurrentUser currentUser, IRequestOrigin or
     // Geometry (and anything else STJ can't represent) is stored as text in the diff — or, past
     // a few kilobytes of text, as a position-free summary (AuditGeometry says why). Enums
     // are stored as their camelCase name — matching how the API serializes them everywhere
-    // else — so the history UI shows "private → public", not "0 → 3".
+    // else — so the history UI shows "private → public", not "0 → 3". A list of ids, numbers,
+    // names or enum values is stored as its values joined by commas (each one the way it would
+    // be stored on its own), so "3,5 → 3,5,8" rather than the list's CLR type name on both sides.
+    // Only lists of such plain values: a byte array is a hash or a blob that has no place in a
+    // readable diff, and a list of objects (recorded points, loops) may carry positions.
     private static object? Plain(object? value) => value switch
     {
         null => null,
         Geometry geometry => AuditGeometry.Record(geometry),
         Enum e => JsonNamingPolicy.CamelCase.ConvertName(e.ToString()),
-        Guid[] ids => string.Join(',', ids),
-        string[] values => string.Join(',', values),
         string or bool or Guid or DateTimeOffset or DateOnly => value,
         _ when value.GetType().IsPrimitive || value is decimal => value,
+        System.Collections.IEnumerable items when ListOfPlainValues(value.GetType()) =>
+            string.Join(',', items.Cast<object?>().Select(i => Convert.ToString(Plain(i), CultureInfo.InvariantCulture))),
         _ => value.ToString(),
     };
+
+    private static bool ListOfPlainValues(Type type)
+    {
+        var element = type.IsArray
+            ? type.GetElementType()
+            : type.GetInterfaces().Concat([type])
+                .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                ?.GetGenericArguments()[0];
+        if (element is null)
+        {
+            return false;
+        }
+
+        element = Nullable.GetUnderlyingType(element) ?? element;
+        return element.IsEnum
+            || (element.IsPrimitive && element != typeof(byte) && element != typeof(sbyte))
+            || element == typeof(decimal) || element == typeof(string) || element == typeof(Guid);
+    }
 }
 
 /// <summary>

@@ -305,7 +305,18 @@ public static class EventSeriesEndpoints
         // One save for the whole set, so the change is one act in the trail as it is to the person
         // who asked for it, and a failure anywhere in it leaves the series exactly as it was.
         await db.SaveChangesAsync(ct);
+
+        // The versions the edit produced, read inside its own transaction so that they cannot be a
+        // later writer's: the anchor's own and its run's, the pair the event's read hands out, filed
+        // under the event's path because that is where its next write looks for them.
+        var anchorVersion = await ConcurrencySql.VersionAsync(db, VersionedTable.Events, anchor.Id, ct);
+        await EmitSeriesVersionAsync(http, db, access, ctx, anchor, ct);
         await transaction.CommitAsync(ct);
+        if (anchorVersion is not null)
+        {
+            http.Response.Headers.ETag = $"\"{anchorVersion}\"";
+            http.Response.Headers.ContentLocation = $"/api/v1/events/{anchor.Id}";
+        }
 
         return TypedResults.Ok(new EventSeriesEditResultDto
         {
@@ -368,7 +379,8 @@ public static class EventSeriesEndpoints
 
         // Offered but not required, the way it is on every delete here: a list deletes a row it
         // never loaded a version of.
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Events, anchor.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Events, anchor.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -407,6 +419,7 @@ public static class EventSeriesEndpoints
 
         db.Events.RemoveRange(doomed);
         await db.SaveChangesAsync(ct);
+        await hold.CommitAsync(ct);
 
         return TypedResults.Ok(new EventSeriesDeleteResultDto
         {

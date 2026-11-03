@@ -26,19 +26,25 @@ public sealed class AttachmentConfiguration : IEntityTypeConfiguration<Attachmen
         builder.HasOne<Feature>().WithMany().HasForeignKey(x => x.FeatureId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.AddedBy).OnDelete(DeleteBehavior.SetNull);
 
-        builder.HasIndex(x => x.FeatureId);
+        // Every index here carries a model name: a second unnamed HasIndex over the same properties
+        // would not add the partial unique index below but turn this plain lookup into it, leaving
+        // a listing of an object's attachments, and the cascade when a feature is purged, to read
+        // the whole table.
+        builder.HasIndex(x => x.FeatureId, "ix_attachments_feature_id")
+            .HasDatabaseName("ix_attachments_feature_id");
         // The polymorphic target has no FK by design; lookups are by (type, id).
-        builder.HasIndex(x => new { x.EntityType, x.EntityId });
+        builder.HasIndex(x => new { x.EntityType, x.EntityId }, "ix_attachments_entity_type_entity_id")
+            .HasDatabaseName("ix_attachments_entity_type_entity_id");
         builder.HasIndex(x => x.FileId);
 
         // One headline picture per object, enforced rather than agreed. Two of them is a state
         // nothing downstream can resolve, and it would resolve itself differently on every
         // query. Two indexes because the target is a feature or the polymorphic pair, and a
         // single index over both would let one of each coexist.
-        builder.HasIndex(x => x.FeatureId).IsUnique()
+        builder.HasIndex(x => x.FeatureId, "ux_attachments_primary_feature").IsUnique()
             .HasFilter("is_primary and feature_id is not null")
             .HasDatabaseName("ux_attachments_primary_feature");
-        builder.HasIndex(x => new { x.EntityType, x.EntityId }).IsUnique()
+        builder.HasIndex(x => new { x.EntityType, x.EntityId }, "ux_attachments_primary_entity").IsUnique()
             .HasFilter("is_primary and entity_id is not null")
             .HasDatabaseName("ux_attachments_primary_entity");
     }

@@ -288,7 +288,10 @@ public static class EntranceAltitudeEndpoints
             return ApiProblems.Forbidden();
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Features, entrance.Id, ct) is { } stale)
+        // The cave first, as every write that reaches both a cave and its entrance takes them.
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Features, entrance.Id, ct, containerId: cave.Id);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -341,6 +344,11 @@ public static class EntranceAltitudeEndpoints
 
         await writer.SyncCaveMirrorAsync(cave.Id, ct);
         await db.SaveChangesAsync(ct);
+        // The version is the feature row's, which the feature's own read hands out; filed there, it is
+        // the one the next write on the feature carries. Filed under this route's path instead, no
+        // read would ever replace it, and the first change made anywhere else would leave every later
+        // save here refused as stale.
+        await hold.AnswerAsync(ct, $"/api/v1/features/{entrance.Id}");
 
         return TypedResults.Ok(EntranceEndpoints.ToDto(
             feature, entrance, exact: true, accessOptions.Value.LocationGridMeters));

@@ -910,18 +910,24 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("AddedBy")
                         .HasDatabaseName("ix_attachments_added_by");
 
-                    b.HasIndex("FeatureId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_attachments_primary_feature")
-                        .HasFilter("is_primary and feature_id is not null");
-
                     b.HasIndex("FileId")
                         .HasDatabaseName("ix_attachments_file_id");
 
-                    b.HasIndex("EntityType", "EntityId")
+                    b.HasIndex(new[] { "EntityType", "EntityId" }, "ix_attachments_entity_type_entity_id")
+                        .HasDatabaseName("ix_attachments_entity_type_entity_id");
+
+                    b.HasIndex(new[] { "FeatureId" }, "ix_attachments_feature_id")
+                        .HasDatabaseName("ix_attachments_feature_id");
+
+                    b.HasIndex(new[] { "EntityType", "EntityId" }, "ux_attachments_primary_entity")
                         .IsUnique()
                         .HasDatabaseName("ux_attachments_primary_entity")
                         .HasFilter("is_primary and entity_id is not null");
+
+                    b.HasIndex(new[] { "FeatureId" }, "ux_attachments_primary_feature")
+                        .IsUnique()
+                        .HasDatabaseName("ux_attachments_primary_feature")
+                        .HasFilter("is_primary and feature_id is not null");
 
                     b.ToTable("attachments", null, t =>
                         {
@@ -2005,17 +2011,20 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_centerlines");
 
-                    b.HasIndex("CaveFeatureId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_centerlines_default_per_cave")
-                        .HasFilter("is_default");
-
                     b.HasIndex("SurveyModelId")
                         .HasDatabaseName("ix_centerlines_survey_model_id");
 
                     b.HasIndex("Id", "Kind")
                         .IsUnique()
                         .HasDatabaseName("ix_centerlines_id_kind");
+
+                    b.HasIndex(new[] { "CaveFeatureId" }, "ix_centerlines_cave_feature_id")
+                        .HasDatabaseName("ix_centerlines_cave_feature_id");
+
+                    b.HasIndex(new[] { "CaveFeatureId" }, "ix_centerlines_default_per_cave")
+                        .IsUnique()
+                        .HasDatabaseName("ix_centerlines_default_per_cave")
+                        .HasFilter("is_default");
 
                     b.ToTable("centerlines", null, t =>
                         {
@@ -3098,10 +3107,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("CavingGroupId")
                         .HasDatabaseName("ix_features_caving_group_id");
 
-                    b.HasIndex("DeletedAt")
-                        .HasDatabaseName("ix_features_deleted_at")
-                        .HasFilter("deleted_at IS NULL");
-
                     b.HasIndex("Kind")
                         .HasDatabaseName("ix_features_kind");
 
@@ -3118,6 +3123,10 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("FeatureTypeId", "Kind")
                         .HasDatabaseName("ix_features_feature_type_id_kind");
+
+                    b.HasIndex(new[] { "DeletedAt" }, "ix_features_deleted_at_not_null")
+                        .HasDatabaseName("ix_features_deleted_at_not_null")
+                        .HasFilter("deleted_at IS NOT NULL");
 
                     b.HasIndex(new[] { "Geom" }, "ix_features_geom")
                         .HasDatabaseName("ix_features_geom");
@@ -3244,14 +3253,17 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_feature_hierarchy_edges");
 
-                    b.HasIndex("ChildId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_feature_hierarchy_edges_primary")
-                        .HasFilter("is_primary");
-
                     b.HasIndex("ParentId", "ChildId")
                         .IsUnique()
                         .HasDatabaseName("ix_feature_hierarchy_edges_parent_id_child_id");
+
+                    b.HasIndex(new[] { "ChildId" }, "ix_feature_hierarchy_edges_child_id")
+                        .HasDatabaseName("ix_feature_hierarchy_edges_child_id");
+
+                    b.HasIndex(new[] { "ChildId" }, "ix_feature_hierarchy_edges_primary")
+                        .IsUnique()
+                        .HasDatabaseName("ix_feature_hierarchy_edges_primary")
+                        .HasFilter("is_primary");
 
                     b.ToTable("feature_hierarchy_edges", null, t =>
                         {
@@ -6761,6 +6773,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex(new[] { "ProtectedAcknowledgedBy" }, "ix_survey_upload_public_links_protected_acknowledged_by")
                         .HasDatabaseName("ix_survey_upload_public_links_protected_acknowledged_by");
 
+                    b.HasIndex(new[] { "SurveyUploadId" }, "ix_survey_upload_public_links_survey_upload_id")
+                        .HasDatabaseName("ix_survey_upload_public_links_survey_upload_id");
+
                     b.HasIndex(new[] { "SurveyUploadId" }, "ux_survey_upload_public_links_live")
                         .IsUnique()
                         .HasDatabaseName("ux_survey_upload_public_links_live")
@@ -7037,6 +7052,9 @@ namespace SilexGis.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_taggings_tag_id_entity_type_entity_id")
                         .HasFilter("entity_type IS NOT NULL");
+
+                    b.HasIndex(new[] { "TagId" }, "ix_taggings_tag_id")
+                        .HasDatabaseName("ix_taggings_tag_id");
 
                     b.ToTable("taggings", null, t =>
                         {
