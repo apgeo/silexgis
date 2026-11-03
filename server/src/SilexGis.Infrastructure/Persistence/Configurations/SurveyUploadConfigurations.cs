@@ -178,6 +178,10 @@ public sealed class SurveyUploadPublicLinkConfiguration : IEntityTypeConfigurati
             .HasDatabaseName("ux_survey_upload_public_links_live")
             .IsUnique()
             .HasFilter("revoked_at IS NULL");
+        // Revoked links stay, so the live index above cannot find them all: this one serves the
+        // cascade when an upload is removed, and a listing of an upload's links.
+        builder.HasIndex(x => x.SurveyUploadId, "ix_survey_upload_public_links_survey_upload_id")
+            .HasDatabaseName("ix_survey_upload_public_links_survey_upload_id");
         builder.HasIndex(x => x.CreatedBy, "ix_survey_upload_public_links_created_by")
             .HasDatabaseName("ix_survey_upload_public_links_created_by");
 

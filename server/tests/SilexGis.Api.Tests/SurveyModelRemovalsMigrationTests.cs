@@ -8,7 +8,6 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
-using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -57,48 +56,47 @@ public sealed class SurveyModelRemovalsMigrationTests : IAsyncLifetime, IClassFi
         var kept = Guid.CreateVersion7();
         var removed = Guid.CreateVersion7();
         var batch = Guid.CreateVersion7();
-        await using (var db = Context(connectionString))
+        // Written by SQL against the step's own columns, not through today's model: a later step
+        // that adds a column to one of these tables would otherwise break the insert.
+        var caveType = $"invented-{Guid.NewGuid():N}"[..20];
+        var sql = new System.Text.StringBuilder();
+        sql.AppendLine(MigrationFixtureSql.User(owner, "migration-owner"));
+        sql.AppendLine($$"""
+            INSERT INTO cave_types (code, name, sort_order, created_at, updated_at)
+            VALUES ('{{caveType}}', 'invented', 990, now(), now());
+            INSERT INTO features (id, kind, category, name, owner_user_id, visibility, location_protected,
+                is_protected_effective, created_at, updated_at)
+            VALUES ('{{cave}}', {{(short)FeatureKind.Cave}}, 0, 'Pestera 1', '{{owner}}', 0, false, false, now(), now());
+            INSERT INTO caves (id, cave_type_id, exploration_status, is_show_cave, entrance_count)
+            SELECT '{{cave}}', id, 0, false, 0 FROM cave_types WHERE code = '{{caveType}}';
+            """);
+        foreach (var (id, name, format, current) in new[]
+                 {
+                     (kept, "Sistemul", SurveyModelFormat.Lox, true),
+                     (removed, "Varianta", SurveyModelFormat.Survex3d, false),
+                 })
         {
-            db.Users.Add(new SilexGisUser { Id = owner, UserName = "migration-owner", Email = "migration-owner@example.invalid" });
-            var caveType = new CaveType { Code = $"invented-{Guid.NewGuid():N}"[..20], Name = "invented" };
-            db.CaveTypes.Add(caveType);
-            await db.SaveChangesAsync();
-            db.Features.Add(new Feature
-            {
-                Id = cave, Kind = FeatureKind.Cave, Name = "Pestera 1", OwnerUserId = owner,
-                Cave = new Cave { Id = cave, CaveTypeId = caveType.Id },
-            });
-            foreach (var (id, name, format, current) in new[]
-                     {
-                         (kept, "Sistemul", SurveyModelFormat.Lox, true),
-                         (removed, "Varianta", SurveyModelFormat.Survex3d, false),
-                     })
-            {
-                var file = Guid.CreateVersion7();
-                var document = Guid.CreateVersion7();
-                var version = Guid.CreateVersion7();
-                db.Documents.Add(new Document { Id = document, Title = name, OwnerUserId = owner });
-                db.DocumentVersions.Add(new DocumentVersion { Id = version, DocumentId = document, VersionNumber = 1, IsCurrent = true });
-                db.StoredFiles.Add(new StoredFile
-                {
-                    Id = file, DocumentVersionId = version, StoragePath = $"invented/{file:N}.lox", OriginalName = $"{name}.lox",
-                    MimeType = "application/octet-stream", Sha256 = new string('b', 64), Kind = FileKind.Survey, SizeBytes = 12,
-                });
-                db.SurveyModels.Add(new SurveyModel
-                {
-                    Id = id, CaveFeatureId = cave, Name = name, FileId = file, Format = format, IsCurrent = current,
-                });
-            }
-
-            db.ImportBatches.Add(new ImportBatch { Id = batch, ConfirmedByUserId = owner, Source = ImportSource.DeviceSync });
-            await db.SaveChangesAsync();
+            var file = Guid.CreateVersion7();
+            sql.AppendLine(MigrationFixtureSql.DocumentWithFile(
+                owner, Guid.CreateVersion7(), Guid.CreateVersion7(), file, name, (short)FileKind.Survey, $"{name}.lox"));
+            sql.AppendLine($"""
+                INSERT INTO survey_models (id, cave_feature_id, name, file_id, format, is_current, created_at, updated_at)
+                VALUES ('{id}', '{cave}', '{name}', '{file}', {(short)format}, {(current ? "true" : "false")}, now(), now());
+                """);
         }
 
+        sql.AppendLine($"""
+            INSERT INTO import_batches (id, confirmed_by_user_id, source, mode, created_count, attached_count,
+                skipped_count, created_at, updated_at)
+            VALUES ('{batch}', '{owner}', {(short)ImportSource.DeviceSync}, 0, 0, 0, 0, now(), now());
+            """);
+
         // A line of an upload, written the way the step before stored lines.
-        await ExecuteAsync(connectionString, $$"""
+        sql.AppendLine($$"""
             INSERT INTO import_batch_items (import_batch_id, action, source_properties, attachment_ids)
             VALUES ('{{batch}}', {{(short)ImportDecisionAction.Create}}, '{}', '[]');
             """);
+        await ExecuteAsync(connectionString, sql.ToString());
 
         await using (var db = Context(connectionString))
         {
