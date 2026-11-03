@@ -7275,6 +7275,7 @@
       "unavailable": "The catalogue could not be reached. It is a small volunteer-run service — try again in a moment.",
       "rejected": "The catalogue rejected the request. This is a fault in this application rather than something you can fix.",
       "searchTooBroad": "Give a name to search for, a county, or both.",
+      "searchTooDeep": "This search has more results than can be paged through. Narrow it with a county or a longer name.",
       "caveNotFound": "The catalogue no longer publishes that cave.",
       "selectionTooLarge": "Too many caves were chosen for one import. Bring them in smaller batches — each one can be undone on its own.",
       "importFailed": "The import could not be completed."

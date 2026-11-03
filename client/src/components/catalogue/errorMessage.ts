@@ -24,6 +24,8 @@ export function speologieErrorMessage(error: unknown, t: (key: string) => string
       return t('speologie.errors.rejected');
     case 'speologie.search_too_broad':
       return t('speologie.errors.searchTooBroad');
+    case 'speologie.search_too_deep':
+      return t('speologie.errors.searchTooDeep');
     case 'speologie.cave_not_found':
       return t('speologie.errors.caveNotFound');
     default:

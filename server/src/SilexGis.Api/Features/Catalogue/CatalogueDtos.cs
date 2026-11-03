@@ -260,6 +260,27 @@ public sealed class SpeologieImportValidator : AbstractValidator<SpeologieImport
             .Must(pair => pair.Value?.Latitude is not { } lat || lat is >= -90 and <= 90)
             .When(x => x.Decisions is not null)
             .WithMessage("A latitude is between -90 and 90.");
+
+        // "1" and "01" are the same catalogue cave. Two decisions for it would leave which one
+        // wins to the order a dictionary happens to keep, so the request is refused instead.
+        RuleFor(x => x.Decisions)
+            .Must(HasOneDecisionPerCave)
+            .When(x => x.Decisions is not null)
+            .WithMessage("Each cave takes one decision; two keys name the same catalogue id.");
+    }
+
+    private static bool HasOneDecisionPerCave(IReadOnlyDictionary<string, SpeologieDecisionDto>? decisions)
+    {
+        var ids = new HashSet<int>();
+        foreach (var key in decisions!.Keys)
+        {
+            if (int.TryParse(key, out var id) && !ids.Add(id))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool IsPlacedOrUnplaced(SpeologieDecisionDto d) =>

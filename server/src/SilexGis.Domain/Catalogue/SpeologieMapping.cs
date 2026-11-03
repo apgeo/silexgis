@@ -105,7 +105,7 @@ public static class SpeologieMapping
     private const int AddressMax = 200;
     private const int BasinMax = 100;
     private const int ProtectionClassMax = 50;
-    private const int WebsiteMax = 500;
+    private const int WebsiteMax = 255;
 
     /// <summary>
     /// Translates one record. <paramref name="maxDescriptionChars"/> bounds the converted
