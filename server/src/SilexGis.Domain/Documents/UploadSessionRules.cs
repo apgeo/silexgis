@@ -58,6 +58,12 @@ public static class UploadSessionRules
     /// <summary>Refusal: the pieces add up to more than the file was said to be.</summary>
     public const string OverflowCode = "upload.size_mismatch";
 
+    /// <summary>
+    /// Refusal: a piece that does not say how long it is. Without the length the server cannot
+    /// tell a whole piece from one a dropped connection cut short.
+    /// </summary>
+    public const string LengthRequiredCode = "upload.length_required";
+
     /// <summary>Refusal: fewer bytes arrived than the file was said to hold.</summary>
     public const string IncompleteCode = "upload.incomplete";
 

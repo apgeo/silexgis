@@ -66,6 +66,13 @@ public enum PictureVerdict
     /// as "this library may be unable to reach its originals".
     /// </summary>
     NotAPicture = 4,
+
+    /// <summary>
+    /// The library declined to serve this one picture — it does not have it, it is busy, or it is
+    /// failing — and said so with a plain error rather than with a drawing. Fails this request and
+    /// closes nothing: none of these is the answer the dangerous case produces.
+    /// </summary>
+    Failed = 5,
 }
 
 /// <summary>
@@ -162,6 +169,17 @@ public static class PhotoLibraryHttp
             return PictureVerdict.WrongRendering;
         }
 
+        if (!response.IsSuccessStatusCode && !placeholder && IsPerRequestFailure(response.StatusCode))
+        {
+            // A refused or missing asset, a rate limit or a server or proxy error, stated as an
+            // error (one of these libraries answers an unknown or deleted asset with 400). The
+            // dangerous answer is a drawing carrying success; a plain error status is not it, and
+            // treating it as it would let one deleted asset, one restart behind a proxy, or one
+            // made-up reference from any account close pictures for everybody until an operator
+            // noticed.
+            return PictureVerdict.Failed;
+        }
+
         var isPicture = response.IsSuccessStatusCode
             && mediaType is not null
             && mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
@@ -169,4 +187,12 @@ public static class PhotoLibraryHttp
 
         return isPicture ? PictureVerdict.Picture : PictureVerdict.NotAPicture;
     }
+
+    private static bool IsPerRequestFailure(HttpStatusCode status) =>
+        status is HttpStatusCode.BadRequest
+            or HttpStatusCode.NotFound
+            or HttpStatusCode.Gone
+            or HttpStatusCode.RequestTimeout
+            or HttpStatusCode.TooManyRequests
+        || (int)status >= 500;
 }

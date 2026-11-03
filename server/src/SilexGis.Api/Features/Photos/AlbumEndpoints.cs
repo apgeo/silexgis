@@ -65,6 +65,12 @@ public sealed class AlbumWriteRequestValidator : AbstractValidator<AlbumWriteReq
         RuleFor(x => x.SubjectEntityId).NotNull()
             .When(x => !string.IsNullOrWhiteSpace(x.SubjectEntityType))
             .WithMessage("A subject needs both a type and an id.");
+
+        // The reverse half too: an id with no type would otherwise be dropped in silence and the
+        // album saved with no subject, which the caller has no way to notice.
+        RuleFor(x => x.SubjectEntityType).NotEmpty()
+            .When(x => x.SubjectEntityId is not null)
+            .WithMessage("A subject needs both a type and an id.");
     }
 }
 
@@ -95,6 +101,15 @@ public static class AlbumEndpoints
 {
     public const string NotFoundCode = "album.not_found";
     public const string WriteForbiddenCode = "album.write_forbidden";
+
+    /// <summary>The album names a subject that does not exist or that the caller cannot read.</summary>
+    public const string SubjectNotFoundCode = "album.subject_not_found";
+
+    /// <summary>One request named more pictures than an album add accepts.</summary>
+    public const string TooManyItemsCode = "album.too_many_items";
+
+    /// <summary>The most pictures one request may add to an album — the bulk route's ceiling.</summary>
+    public const int MaxItemsPerRequest = PhotoBulkRequestValidator.MaxDocuments;
 
     public static RouteGroupBuilder MapAlbumEndpoints(this RouteGroupBuilder api)
     {
@@ -188,6 +203,7 @@ public static class AlbumEndpoints
         AlbumWriteRequest request,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -222,6 +238,11 @@ public static class AlbumEndpoints
         if (problem is not null)
         {
             return problem;
+        }
+
+        if (!await MayNameSubjectAsync(db, access, ctx, subjectType, subjectFeatureId ?? subjectId, ct))
+        {
+            return ApiProblems.NotFound(SubjectNotFoundCode);
         }
 
         var album = new Album
@@ -282,6 +303,17 @@ public static class AlbumEndpoints
         if (problem is not null)
         {
             return problem;
+        }
+
+        // Asked only when the subject changes, for the reason the club binding is: re-saving an
+        // album under the subject it already has is not a fresh act of naming one.
+        var subjectChanged = subjectType != album.SubjectEntityType
+            || subjectId != album.SubjectEntityId
+            || subjectFeatureId != album.SubjectFeatureId;
+        if (subjectChanged
+            && !await MayNameSubjectAsync(db, access, ctx, subjectType, subjectFeatureId ?? subjectId, ct))
+        {
+            return ApiProblems.NotFound(SubjectNotFoundCode);
         }
 
         album.Title = request.Title.Trim();
@@ -353,6 +385,13 @@ public static class AlbumEndpoints
             return TypedResults.Unauthorized();
         }
 
+        // Bounded like the bulk route: one statement decides the list, but its size is still the caller's.
+        if (documentIds.Count > MaxItemsPerRequest)
+        {
+            return ApiProblems.BadRequest(
+                TooManyItemsCode, $"At most {MaxItemsPerRequest} photographs in one request.");
+        }
+
         if (await AlbumAccess.ReadableAsync(db, access, ctx, id, ct) is null)
         {
             return ApiProblems.NotFound(NotFoundCode);
@@ -363,18 +402,12 @@ public static class AlbumEndpoints
             return ApiProblems.Forbidden(WriteForbiddenCode);
         }
 
-        var readable = new List<Guid>();
-        foreach (var documentId in documentIds.Distinct())
-        {
-            var document = await db.Documents.AsNoTracking().FirstOrDefaultAsync(d => d.Id == documentId, ct);
-            var content = document is null ? null : await DocumentQueries.CurrentFileAsync(db, documentId, ct);
-            if (document is not null
-                && content is not null
-                && await DocumentAccessRules.CanReadAsync(db, access, ctx, document, content.File, ct))
-            {
-                readable.Add(documentId);
-            }
-        }
+        // Only photographs the caller may read, decided over the whole list in one statement: an
+        // album counts and shows images, so anything else added here would be an item nobody can
+        // see and nothing can remove from the gallery. Kept in the order the ids were given.
+        var distinct = documentIds.Distinct().ToList();
+        var readableIds = (await PhotographReads.ReadableAmongAsync(db, ctx, distinct, ct)).ToHashSet();
+        var readable = distinct.Where(readableIds.Contains).ToList();
 
         try
         {
@@ -579,6 +612,22 @@ public static class AlbumEndpoints
     /// <summary>SHA-256 of a share token, base64url — the only form ever stored.</summary>
     internal static string HashToken(string token) =>
         Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+    /// <summary>
+    /// Whether this caller may hang an album on this subject: it has to exist and be readable to
+    /// them. A subject they cannot read is answered exactly as one that does not exist, so the
+    /// route says nothing about which ids are real — and an id naming nothing is a coded refusal
+    /// rather than a foreign-key failure at save.
+    /// </summary>
+    private static async Task<bool> MayNameSubjectAsync(
+        SilexGisDbContext db,
+        IAccessService access,
+        AccessContext ctx,
+        AttachedEntityType? subjectType,
+        Guid? subjectId,
+        CancellationToken ct) =>
+        subjectId is not { } id
+        || await FileAccessRules.CanReadTargetAsync(db, access, ctx, new AttachmentTarget(subjectType, id), ct);
 
     /// <summary>The album's subject, split into the feature half and the polymorphic pair.</summary>
     private static (AttachedEntityType? Type, Guid? Id, Guid? FeatureId, ProblemHttpResult? Problem)

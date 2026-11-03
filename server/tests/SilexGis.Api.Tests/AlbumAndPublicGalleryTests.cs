@@ -296,6 +296,245 @@ public sealed class AlbumAndPublicGalleryTests : IAsyncLifetime, IDisposable, IC
         (await anonymous.GetAsync("/api/v1/albums")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    /// <summary>
+    /// Every route that changes an album takes write on it, and one the caller cannot read is
+    /// answered as one that does not exist. The refusals change nothing, and the album's owner is
+    /// let through every one of the same requests.
+    /// </summary>
+    [Fact]
+    public async Task Changing_an_album_takes_write_on_it_and_an_unreadable_one_is_not_found()
+    {
+        var readable = await CreateAlbumAsync(Visibility.Authenticated);
+        var hidden = await CreateAlbumAsync(Visibility.Private);
+        var first = await UploadPhotoAsync(owner, "matrix-first.png");
+        var second = await UploadPhotoAsync(owner, "matrix-second.png");
+        await AddAsync(readable, first, second);
+        await AddAsync(hidden, first, second);
+
+        // The member reads the one album and not the other: the precondition of each half.
+        (await member.GetAsync($"/api/v1/albums/{readable}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await member.GetAsync($"/api/v1/albums/{hidden}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        foreach (var (albumId, status, code) in new[]
+        {
+            (hidden, HttpStatusCode.NotFound, "album.not_found"),
+            (readable, HttpStatusCode.Forbidden, "album.write_forbidden"),
+        })
+        {
+            foreach (var (name, write) in AlbumWrites(albumId, first, second))
+            {
+                using var refused = await write(member);
+                var body = await refused.Content.ReadAsStringAsync();
+                refused.StatusCode.ShouldBe(status, $"{name}: {body}");
+                CodeOf(body).ShouldBe(code, name);
+            }
+
+            (await AlbumOrderAsync(albumId)).ShouldBe([first, second]);
+        }
+
+        foreach (var (name, write) in AlbumWrites(readable, first, second))
+        {
+            using var allowed = await write(owner);
+            allowed.IsSuccessStatusCode.ShouldBeTrue($"{name}: {await allowed.Content.ReadAsStringAsync()}");
+        }
+
+        (await owner.GetAsync($"/api/v1/albums/{readable}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>The writes on one album, in an order the album's owner can carry out one after another.</summary>
+    private static IEnumerable<(string Name, Func<HttpClient, Task<HttpResponseMessage>> Write)> AlbumWrites(
+        Guid albumId, Guid first, Guid second) =>
+    [
+        ("update", client => client.PutAsJsonAsync($"/api/v1/albums/{albumId}", AlbumBody("Renamed album"))),
+        ("add items", client => client.PostAsJsonAsync($"/api/v1/albums/{albumId}/items", new[] { first })),
+        ("reorder", client => client.PostAsJsonAsync($"/api/v1/albums/{albumId}/reorder", new
+        {
+            documentId = second,
+            afterDocumentId = (Guid?)null,
+        })),
+        ("cover", client => client.PutAsync($"/api/v1/albums/{albumId}/cover?documentId={first}", null)),
+        ("remove item", client => client.DeleteAsync($"/api/v1/albums/{albumId}/items/{second}")),
+        ("delete", client => client.DeleteAsync($"/api/v1/albums/{albumId}")),
+    ];
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public async Task An_album_needs_a_title(string? title)
+    {
+        var created = await owner.PostAsJsonAsync("/api/v1/albums", AlbumBody(title));
+        created.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await created.Content.ReadAsStringAsync());
+
+        var albumId = await CreateAlbumAsync();
+        var updated = await owner.PutAsJsonAsync($"/api/v1/albums/{albumId}", AlbumBody(title));
+        updated.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await updated.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task An_album_title_is_at_most_two_hundred_characters()
+    {
+        (await owner.PostAsJsonAsync("/api/v1/albums", AlbumBody(new string('t', 201))))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await owner.PostAsJsonAsync("/api/v1/albums", AlbumBody(new string('t', 200))))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    /// <summary>
+    /// A link for signed-in callers only is minted, and the anonymous route answers it exactly as it
+    /// answers an unknown token. A mode that is not one of the two is refused.
+    /// </summary>
+    [Fact]
+    public async Task A_sign_in_only_link_is_not_opened_by_the_anonymous_route_and_an_unknown_mode_is_refused()
+    {
+        var albumId = await CreateAlbumAsync();
+        await AddAsync(albumId, await UploadPhotoAsync(owner, "sign-in-only.png"));
+
+        var minted = await owner.PostAsync($"/api/v1/albums/{albumId}/share?mode=requiresLogin", null);
+        var payload = await minted.Content.ReadAsStringAsync();
+        minted.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        var share = JsonDocument.Parse(payload).RootElement;
+        share.GetProperty("mode").GetString().ShouldBe("requiresLogin");
+
+        (await anonymous.GetAsync($"/api/v1/public/albums/{share.GetProperty("token").GetString()}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        (await owner.PostAsync($"/api/v1/albums/{albumId}/share?mode=everybody", null))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task A_link_to_a_deleted_album_opens_nothing()
+    {
+        var albumId = await CreateAlbumAsync();
+        await AddAsync(albumId, await UploadPhotoAsync(owner, "deleted-album.png"));
+        var token = await ShareAsync(albumId);
+        (await anonymous.GetAsync($"/api/v1/public/albums/{token}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await owner.DeleteAsync($"/api/v1/albums/{albumId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await anonymous.GetAsync($"/api/v1/public/albums/{token}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// A shared album shows pictures only: a document that is not one, put in the album by some
+    /// path other than the items route (which refuses it), is left out of the shared answer.
+    /// </summary>
+    [Fact]
+    public async Task A_shared_album_shows_pictures_and_leaves_out_a_document_that_is_not_one()
+    {
+        var albumId = await CreateAlbumAsync();
+        var photo = await UploadPhotoAsync(owner, "shown.png");
+        await AddAsync(albumId, photo);
+        var notes = await InsertDocumentAsync(albumId, image: false);
+        await InsertItemsAsync(albumId, [notes], firstSortOrder: 100);
+
+        var shared = await anonymous.GetFromJsonAsync<JsonElement>($"/api/v1/public/albums/{await ShareAsync(albumId)}");
+
+        PhotoIdsOf(shared).ShouldBe([photo]);
+    }
+
+    /// <summary>
+    /// A shared album answers its first two hundred pictures in the album's order and no more: the
+    /// cut is made on the album's items, before anything is drawn.
+    /// </summary>
+    [Fact]
+    public async Task A_shared_album_answers_at_most_two_hundred_pictures()
+    {
+        var albumId = await CreateAlbumAsync();
+        var fillers = new List<Guid>();
+        for (var i = 0; i < 200; i++)
+        {
+            fillers.Add(await InsertDocumentAsync(albumId, image: true));
+        }
+
+        await InsertItemsAsync(albumId, fillers, firstSortOrder: 0);
+        var last = await UploadPhotoAsync(owner, "two-hundred-and-first.png");
+        await InsertItemsAsync(albumId, [last], firstSortOrder: 10_000);
+
+        var shared = await anonymous.GetFromJsonAsync<JsonElement>($"/api/v1/public/albums/{await ShareAsync(albumId)}");
+
+        var shown = PhotoIdsOf(shared);
+        shown.Count.ShouldBe(200);
+        shown.ShouldBe(fillers);
+        shown.ShouldNotContain(last);
+    }
+
+    /// <summary>
+    /// What a link shows today of a picture whose own audience narrowed after it was shared: it is
+    /// still shown, because the link answers the album's items and not each picture's audience.
+    /// Pinned as current behaviour — who may mint a link, and what it may then show, is a decision
+    /// still to be taken, and this test is the one to change when it is.
+    /// </summary>
+    [Fact]
+    public async Task A_picture_made_private_after_its_album_was_shared_is_still_shown_by_the_link()
+    {
+        var albumId = await CreateAlbumAsync();
+        var photo = await UploadPhotoAsync(owner, "narrowed-after.png");
+        await SetVisibilityAsync(photo, "authenticated");
+        await AddAsync(albumId, photo);
+        var token = await ShareAsync(albumId);
+
+        await SetVisibilityAsync(photo, "private");
+
+        PhotoIdsOf(await anonymous.GetFromJsonAsync<JsonElement>($"/api/v1/public/albums/{token}"))
+            .ShouldBe([photo]);
+    }
+
+    private static List<Guid> PhotoIdsOf(JsonElement sharedAlbum) =>
+    [
+        .. sharedAlbum.GetProperty("photos").EnumerateArray().Select(p => p.GetProperty("documentId").GetGuid()),
+    ];
+
+    /// <summary>A document written straight to the database, with a current file that is or is not a picture.</summary>
+    private async Task<Guid> InsertDocumentAsync(Guid albumId, bool image)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var ownerId = await db.Albums.AsNoTracking().Where(a => a.Id == albumId).Select(a => a.OwnerUserId).SingleAsync();
+        var document = new Document { Title = $"Inserted {Guid.NewGuid():N}"[..20], OwnerUserId = ownerId };
+        db.Documents.Add(document);
+        var version = new DocumentVersion { DocumentId = document.Id, VersionNumber = 1, IsCurrent = true, UploadedBy = ownerId };
+        db.DocumentVersions.Add(version);
+        db.StoredFiles.Add(new StoredFile
+        {
+            DocumentVersionId = version.Id,
+            StoragePath = Guid.NewGuid().ToString("N"),
+            OriginalName = image ? "inserted.png" : "inserted.txt",
+            MimeType = image ? "image/png" : "text/plain",
+            SizeBytes = 1,
+            Sha256 = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
+            Kind = image ? FileKind.Image : FileKind.Other,
+        });
+        await db.SaveChangesAsync();
+        return document.Id;
+    }
+
+    private async Task InsertItemsAsync(Guid albumId, IReadOnlyList<Guid> documentIds, int firstSortOrder)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        for (var i = 0; i < documentIds.Count; i++)
+        {
+            db.AlbumItems.Add(new AlbumItem { AlbumId = albumId, DocumentId = documentIds[i], SortOrder = firstSortOrder + i });
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private static object AlbumBody(string? title) => new
+    {
+        title,
+        description = (string?)null,
+        visibility = "private",
+        cavingGroupId = (Guid?)null,
+        subjectEntityType = (string?)null,
+        subjectEntityId = (Guid?)null,
+    };
+
+    private static string? CodeOf(string body) =>
+        JsonDocument.Parse(body).RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
+
     private async Task<Guid> CreateAlbumAsync(Visibility visibility = Visibility.Private)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/albums", new

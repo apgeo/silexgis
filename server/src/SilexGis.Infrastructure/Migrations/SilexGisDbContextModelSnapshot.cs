@@ -8882,9 +8882,17 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("attach_feature_id");
 
+                    b.Property<short?>("AttachRole")
+                        .HasColumnType("smallint")
+                        .HasColumnName("attach_role");
+
                     b.Property<Guid?>("CabinetId")
                         .HasColumnType("uuid")
                         .HasColumnName("cabinet_id");
+
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -8958,6 +8966,10 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("CabinetId")
                         .HasDatabaseName("ix_upload_sessions_cabinet_id");
+
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_upload_sessions_caving_group_id")
+                        .HasFilter("caving_group_id is not null");
 
                     b.HasIndex("ExpiresAt")
                         .HasDatabaseName("ix_upload_sessions_expires_at");

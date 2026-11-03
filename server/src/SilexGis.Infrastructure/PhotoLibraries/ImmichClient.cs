@@ -202,6 +202,9 @@ public sealed class ImmichClient(
 
     private long lastFailureTicks;
 
+    /// <summary>Moved by every <see cref="Forget"/>, so a reading that began before one is not kept.</summary>
+    private int forgetCount;
+
     private ImmichOptions Options => options.Value;
 
     public PhotoLibrarySource Source => PhotoLibrarySource.Immich;
@@ -1139,14 +1142,24 @@ public sealed class ImmichClient(
                 return held;
             }
 
+            // Taken before the read, so a Forget that lands while the read is streaming wins: the
+            // reading is still handed to whoever asked for it, but it is not kept, and a stopped
+            // library's positions do not become resident again behind the brake.
+            var forgottenBefore = Volatile.Read(ref forgetCount);
             try
             {
                 var read = await ReadMarkersAsync(ct);
-                snapshot = read;
+                if (Volatile.Read(ref forgetCount) == forgottenBefore)
+                {
+                    snapshot = read;
+                }
+
                 return read;
             }
-            catch
+            catch (Exception) when (!ct.IsCancellationRequested)
             {
+                // A read the caller abandoned says nothing about the library, so it does not start
+                // the back-off: one closed tab would otherwise refuse every viewport for its length.
                 Interlocked.Exchange(ref lastFailureTicks, DateTime.UtcNow.Ticks);
                 throw;
             }
@@ -1321,7 +1334,9 @@ public sealed class ImmichClient(
     {
         await EnsureUsableAsync(ct);
 
-        if (!PhotoLibraryHttp.IsSafeReference(reference))
+        // This library names every asset with a UUID, so anything else is refused here rather than
+        // sent: it would only come back as an error, and a made-up reference costs no request.
+        if (!PhotoLibraryHttp.IsSafeReference(reference) || !Guid.TryParseExact(reference, "D", out _))
         {
             throw new PhotoLibraryException(
                 PhotoLibraryException.RejectedCode,
@@ -1379,6 +1394,13 @@ public sealed class ImmichClient(
                 throw new PhotoLibraryException(
                     PhotoLibraryException.RejectedCode,
                     "The photo library does not serve the rendering this installation asked for.");
+
+            case PictureVerdict.Failed:
+                var failedStatus = (int)response.StatusCode;
+                response.Dispose();
+                throw new PhotoLibraryException(
+                    PhotoLibraryException.UnavailableCode,
+                    $"The photo library could not serve this picture (it answered {failedStatus}).");
 
             default:
                 var status = (int)response.StatusCode;
@@ -1486,6 +1508,7 @@ public sealed class ImmichClient(
     /// </remarks>
     public void Forget()
     {
+        Interlocked.Increment(ref forgetCount);
         snapshot = null;
         health.Clear();
     }

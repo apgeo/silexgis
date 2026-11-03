@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
@@ -31,6 +32,8 @@ public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClass
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
+    private readonly string connectionString;
+    private string ownerEmail = null!;
 
     private HttpClient owner = null!;   // Editor — uploads, administers the tree
     private HttpClient member = null!;  // an ordinary member: adds documents, edits their own
@@ -40,18 +43,16 @@ public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClass
     public UploadDestinationTests(PostgresFixture postgres)
     {
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-updest-{Guid.NewGuid():N}");
-        factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
-        {
-            ["Files:Root"] = filesRoot,
-            ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
-        });
+        connectionString = postgres.ConnectionString;
+        factory = new SilexGisApiFactory(connectionString, Settings());
     }
 
     public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"dest-own-{suffix}@t.local");
-        owner = await AuthHelper.BearerClientAsync(factory, $"dest-own-{suffix}@t.local");
+        ownerEmail = $"dest-own-{suffix}@t.local";
+        ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, ownerEmail);
+        owner = await AuthHelper.BearerClientAsync(factory, ownerEmail);
 
         // An ordinary member rather than a second Editor, because an Editor holds read and
         // write over every document in the installation — against which "may not write this
@@ -66,6 +67,12 @@ public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClass
             AccessAction.Read | AccessAction.Write,
             AccessScopeKind.Own);
     }
+
+    private Dictionary<string, string?> Settings() => new()
+    {
+        ["Files:Root"] = filesRoot,
+        ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+    };
 
     public ValueTask DisposeAsync()
     {
@@ -281,6 +288,73 @@ public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClass
             .StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
+    /// <summary>
+    /// An upload hung on an object without naming a role takes the role its kind gives it there
+    /// — a file that is not a picture is a document — rather than "other" for everything.
+    /// </summary>
+    [Fact]
+    public async Task An_attachment_made_at_upload_without_a_role_takes_the_role_its_kind_gives_it()
+    {
+        var caveId = await CreateCaveAsync();
+        var fileId = await UploadAsync(owner, "notes.txt", attachEntityType: "feature", attachEntityId: caveId);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.Attachments.AsNoTracking().Where(a => a.FileId == fileId && a.FeatureId == caveId)
+            .Select(a => a.Role).SingleAsync()).ShouldBe(AttachmentRole.Document);
+    }
+
+    /// <summary>
+    /// A folder drop mirrors its folders as shelves, and a file whose mirrored shelf the
+    /// uploader may not file into is refused. The shelf made for it must not be created anyway
+    /// by the save that writes the drop's report line on the same unit of work.
+    /// </summary>
+    [Fact]
+    public async Task A_folder_drop_refused_filing_leaves_no_shelf_behind_it()
+    {
+        var shelf = await CreateCabinetAsync($"Drop {Guid.NewGuid():N}"[..24]);
+        var restricted = await CreateCabinetAsync("Restricted", shelf);
+        await GrantAsync(memberId, AccessDomain.Documents, AccessAction.Write, AccessScopeKind.Cabinet, shelf);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.AccessEntries.Add(new AccessEntry
+            {
+                SubjectKind = AccessSubjectKind.User,
+                SubjectId = memberId,
+                Domain = AccessDomain.Documents,
+                Actions = AccessAction.Write,
+                Effect = AccessEffect.Deny,
+                ScopeKind = AccessScopeKind.Cabinet,
+                ScopeId = restricted,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var opened = await member.PostAsJsonAsync("/api/v1/upload-batches", new { label = "Folder drop" });
+        opened.StatusCode.ShouldBe(HttpStatusCode.Created, await opened.Content.ReadAsStringAsync());
+        var batch = (await ReadJsonAsync(opened)).GetProperty("id").GetGuid();
+
+        var refused = await PostUploadAsync(
+            member, "x.txt",
+            $"?cabinetId={shelf}&relativePath={Uri.EscapeDataString("Restricted/new/x.txt")}&batchId={batch}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await refused.Content.ReadAsStringAsync());
+        (await ShelvesNamedAsync("new", restricted)).ShouldBe(0);
+
+        // The same member, the same drop, a folder beside the denied one: the shelf is made and
+        // the file filed on it — the refusal above was the deny, not a broken drop.
+        var open = await CreateCabinetAsync("Open", shelf);
+        await UploadAsync(member, "y.txt", cabinetId: shelf, relativePath: "Open/new/y.txt", batchId: batch);
+        (await ShelvesNamedAsync("new", open)).ShouldBe(1);
+    }
+
+    private async Task<int> ShelvesNamedAsync(string name, Guid parentId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Cabinets.AsNoTracking().CountAsync(c => c.ParentId == parentId && c.Name == name);
+    }
+
     [Fact]
     public async Task Everything_in_one_drop_carries_the_drops_reference_and_its_tag()
     {
@@ -343,6 +417,135 @@ public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClass
         // Closing twice states the same fact, so a retried "done" is not an error.
         (await owner.PostAsync($"/api/v1/upload-batches/{batch}/close", null))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// Naming a drop after a tag that does not exist yet coins it, and tags are one vocabulary
+    /// the whole installation shares — so that takes the right to create tags, exactly as
+    /// tagging an object with a new name does. Naming an existing tag takes nothing.
+    /// </summary>
+    [Fact]
+    public async Task Opening_a_drop_under_a_new_tag_name_takes_the_right_to_coin_tags()
+    {
+        // The ordinary member may upload but holds no right to create tags.
+        var coined = $"coin-{Guid.NewGuid():N}"[..14];
+        var before = await ListBatchIdsAsync(member);
+        var refused = await member.PostAsJsonAsync("/api/v1/upload-batches", new { label = "Scans", tagName = coined });
+        refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await refused.Content.ReadAsStringAsync());
+        (await ReadCodeAsync(refused)).ShouldBe(CreateRules.ForbiddenCode);
+        (await TagCountAsync(coined)).ShouldBe(0);
+
+        // Nor was a drop opened on the way to the refusal.
+        (await ListBatchIdsAsync(member)).ShouldBe(before, ignoreOrder: true);
+
+        // An existing tag is applied, not coined, so the same member may name it.
+        var existingName = $"have-{Guid.NewGuid():N}"[..14];
+        var existingId = await CreateTagAsync(existingName);
+        var reused = await member.PostAsJsonAsync("/api/v1/upload-batches", new { label = "Scans", tagName = existingName });
+        reused.StatusCode.ShouldBe(HttpStatusCode.Created, await reused.Content.ReadAsStringAsync());
+        (await ReadJsonAsync(reused)).GetProperty("tagId").GetInt64().ShouldBe(existingId);
+        (await TagCountAsync(existingName)).ShouldBe(1);
+
+        // The owner, who may create tags, coins the new one — the refusal was the rule.
+        var allowed = await owner.PostAsJsonAsync("/api/v1/upload-batches", new { label = "Scans", tagName = coined });
+        allowed.StatusCode.ShouldBe(HttpStatusCode.Created, await allowed.Content.ReadAsStringAsync());
+        (await TagCountAsync(coined)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// Drops opened at the same moment under one new tag name all open, and the tag exists once:
+    /// a loser of the race on the unique slug adopts the winner's tag instead of failing.
+    /// </summary>
+    [Fact]
+    public async Task Drops_opened_at_once_under_one_new_tag_name_all_open_and_share_one_tag()
+    {
+        var tagName = $"race-{Guid.NewGuid():N}"[..14];
+
+        // Fired without awaiting, so the look-ups land inside each other's insert window. A
+        // sequential series would take the found-it branch and prove nothing.
+        var responses = await Task.WhenAll(Enumerable.Range(0, 6).Select(_ =>
+            owner.PostAsJsonAsync("/api/v1/upload-batches", new { label = "Race", tagName })));
+
+        var tagIds = new List<long>();
+        foreach (var response in responses)
+        {
+            var payload = await response.Content.ReadAsStringAsync();
+            response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+            tagIds.Add(JsonDocument.Parse(payload).RootElement.GetProperty("tagId").GetInt64());
+        }
+
+        (await TagCountAsync(tagName)).ShouldBe(1);
+        tagIds.Distinct().Count().ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The race made to happen every time: another writer coins the tag after this request looked
+    /// for it and before its own insert. The insert then collides on the tag's unique identity, and
+    /// the drop still opens, carrying the tag the other writer made.
+    /// </summary>
+    [Fact]
+    public async Task A_drop_whose_new_tag_is_coined_by_someone_else_mid_request_adopts_that_tag()
+    {
+        var tagName = $"mid-{Guid.NewGuid():N}"[..14];
+        var coinFirst = new CoinTheSameTagFirst(tagName);
+        using var host = new SilexGisApiFactory(connectionString, Settings(), services =>
+            services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(coinFirst)));
+        using var client = await AuthHelper.BearerClientAsync(host, ownerEmail);
+
+        var response = await client.PostAsJsonAsync("/api/v1/upload-batches", new { label = "Mid-request", tagName });
+        var payload = await response.Content.ReadAsStringAsync();
+
+        coinFirst.CoinedTagId.ShouldNotBeNull("the other writer never ran, so no race was made");
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        JsonDocument.Parse(payload).RootElement.GetProperty("tagId").GetInt64().ShouldBe(coinFirst.CoinedTagId.Value);
+        (await TagCountAsync(tagName)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The list of drops is the caller's own and a full administrator sees everybody's; somebody
+    /// else's drop cannot be closed or read item by item; none of it answers without an account.
+    /// </summary>
+    [Fact]
+    public async Task The_list_of_drops_is_the_callers_own_and_another_users_drop_is_absent()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"dest-adm-{suffix}@t.local");
+        using var admin = await AuthHelper.BearerClientAsync(factory, $"dest-adm-{suffix}@t.local");
+        using var anonymous = factory.CreateClient();
+
+        var ownersDrop = await OpenBatchAsync(label: "Owner's");
+        var membersResponse = await member.PostAsJsonAsync("/api/v1/upload-batches", new { label = "Member's" });
+        membersResponse.StatusCode.ShouldBe(HttpStatusCode.Created, await membersResponse.Content.ReadAsStringAsync());
+        var membersDrop = (await ReadJsonAsync(membersResponse)).GetProperty("id").GetGuid();
+
+        var ownersList = await ListBatchIdsAsync(owner);
+        ownersList.ShouldContain(ownersDrop);
+        ownersList.ShouldNotContain(membersDrop);
+
+        var membersList = await ListBatchIdsAsync(member);
+        membersList.ShouldContain(membersDrop);
+        membersList.ShouldNotContain(ownersDrop);
+
+        var adminsList = await ListBatchIdsAsync(admin);
+        adminsList.ShouldContain(ownersDrop);
+        adminsList.ShouldContain(membersDrop);
+
+        // Somebody else's drop is absent, not forbidden, on every route that names it — and it
+        // stays open, because the refused close changed nothing.
+        (await member.PostAsync($"/api/v1/upload-batches/{ownersDrop}/close", null))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await member.GetAsync($"/api/v1/upload-batches/{ownersDrop}/items"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var stillOpen = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/upload-batches/{ownersDrop}");
+        stillOpen.GetProperty("status").GetString().ShouldBe("open");
+        (await owner.GetAsync($"/api/v1/upload-batches/{ownersDrop}/items"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await anonymous.GetAsync("/api/v1/upload-batches")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.PostAsJsonAsync("/api/v1/upload-batches", new { label = "Nobody's" }))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.PostAsync($"/api/v1/upload-batches/{ownersDrop}/close", null))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -600,6 +803,20 @@ public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClass
         return tag.Id;
     }
 
+    private async Task<int> TagCountAsync(string name)
+    {
+        var slug = Tag.Slugify(name);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Tags.AsNoTracking().CountAsync(t => t.Slug == slug);
+    }
+
+    private static async Task<List<Guid>> ListBatchIdsAsync(HttpClient client)
+    {
+        var page = await client.GetFromJsonAsync<JsonElement>("/api/v1/upload-batches?pageSize=500");
+        return [.. page.GetProperty("items").EnumerateArray().Select(b => b.GetProperty("id").GetGuid())];
+    }
+
     private async Task<Guid> CreateCaveAsync()
     {
         long caveTypeId;
@@ -646,6 +863,42 @@ public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClass
             ScopeId = scopeId,
         });
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Just before a save that inserts the named tag, inserts that same tag on a connection of its
+    /// own and commits it — the other writer of a race, placed exactly between the request's look-up
+    /// and its insert. Fires once.
+    /// </summary>
+    private sealed class CoinTheSameTagFirst(string tagName) : SaveChangesInterceptor
+    {
+        private int fired;
+
+        public long? CoinedTagId { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context is { } context
+                && context.ChangeTracker.Entries<Tag>().Any(e => e.State == EntityState.Added && e.Entity.Name == tagName)
+                && Interlocked.Exchange(ref fired, 1) == 0)
+            {
+                var added = context.ChangeTracker.Entries<Tag>().First(e => e.Entity.Name == tagName).Entity;
+                var options = new DbContextOptionsBuilder<SilexGisDbContext>()
+                    .UseNpgsql(context.Database.GetConnectionString(), npgsql => npgsql.UseNetTopologySuite())
+                    .UseSnakeCaseNamingConvention()
+                    .UseOpenIddict()
+                    .Options;
+                await using var other = new SilexGisDbContext(options);
+                var tag = new Tag { Name = added.Name, Slug = added.Slug };
+                other.Tags.Add(tag);
+                await other.SaveChangesAsync(cancellationToken);
+                CoinedTagId = tag.Id;
+            }
+
+            return result;
+        }
     }
 
     private static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response) =>

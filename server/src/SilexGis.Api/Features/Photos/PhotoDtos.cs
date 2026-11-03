@@ -184,6 +184,13 @@ public sealed class PhotoBulkRequestValidator : AbstractValidator<PhotoBulkReque
             .WithMessage($"At most {MaxDocuments} photographs in one request.");
         RuleFor(x => x.Visibility).IsInEnum();
 
+        // An attachment target is a pair. An id alone names no world to look it up in, and a
+        // type alone names nothing to attach to.
+        RuleFor(x => x.AttachEntityType).NotEmpty().When(x => x.AttachEntityId is not null)
+            .WithMessage("Name the target's type as well as its id ('feature' for any feature).");
+        RuleFor(x => x.AttachEntityId).NotNull().When(x => !string.IsNullOrWhiteSpace(x.AttachEntityType))
+            .WithMessage("Name the target's id as well as its type.");
+
         // A request asking for nothing would report success having done nothing, which reads as
         // a defect rather than as a no-op.
         RuleFor(x => x)

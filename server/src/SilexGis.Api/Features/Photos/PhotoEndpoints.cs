@@ -41,6 +41,18 @@ public static class PhotoEndpoints
     public const string NotAPhotographCode = "photo.not_a_photograph";
     public const string PublishForbiddenCode = "photo.publish_forbidden";
 
+    /// <summary>
+    /// A bulk attachment target that does not exist or that the caller may not read — the same
+    /// code the attachment routes answer, because it is the same question.
+    /// </summary>
+    public const string AttachTargetNotFoundCode = "attachment.entity_not_found";
+
+    /// <summary>A bulk request named a tag that does not exist (or no longer does).</summary>
+    public const string TagNotFoundCode = "tag.not_found";
+
+    /// <summary>A picture belonging to no club cannot be given club visibility.</summary>
+    public const string CavingGroupRequiredCode = "photo.caving_group_required";
+
     public static RouteGroupBuilder MapPhotoEndpoints(this RouteGroupBuilder api)
     {
         var photos = api.MapGroup("/photos").WithTags("Photos");
@@ -326,11 +338,25 @@ public static class PhotoEndpoints
                              select new { file.Sha256, Document = document })
             .ToListAsync(ct);
 
+        // Projected once for every member of every group — the position decision is per caller
+        // and over the whole set anyway — and then dealt back out into the groups.
+        var groupsOfMembers = members.GroupBy(m => m.Sha256).Where(g => g.Count() > 1).ToList();
+        var projected = await ProjectAsync(
+            db,
+            ctx,
+            tokens,
+            disclosure,
+            [.. groupsOfMembers.SelectMany(g => g).Select(m => m.Document).DistinctBy(d => d.Id)],
+            ct);
+        var byDocument = projected.ToDictionary(p => p.DocumentId);
+
         var result = new List<PhotoDuplicateGroupDto>();
-        foreach (var group in members.GroupBy(m => m.Sha256).Where(g => g.Count() > 1))
+        foreach (var group in groupsOfMembers)
         {
-            var photos = await ProjectAsync(
-                db, ctx, tokens, disclosure, [.. group.Select(m => m.Document)], ct);
+            List<PhotoDto> photos =
+            [
+                .. group.Select(m => byDocument.GetValueOrDefault(m.Document.Id)).OfType<PhotoDto>(),
+            ];
             if (photos.Count > 1)
             {
                 result.Add(new PhotoDuplicateGroupDto(group.Key, photos));
@@ -425,50 +451,106 @@ public static class PhotoEndpoints
             return TypedResults.Unauthorized();
         }
 
+        // Keyed on the id, which is what makes the attachment happen, rather than on the type:
+        // an id with no type would otherwise reach the attach step as "a feature" having been
+        // asked nothing. A blank type does not parse, so it is refused here as well as by the
+        // validator.
         AttachedEntityType? attachType = null;
-        if (!string.IsNullOrWhiteSpace(request.AttachEntityType))
+        if (request.AttachEntityId is { } targetId)
         {
-            if (request.AttachEntityId is not { } targetId
-                || !AttachmentTargets.TryParse(request.AttachEntityType, out attachType))
+            if (!AttachmentTargets.TryParse(request.AttachEntityType, out attachType))
             {
                 return ApiProblems.BadRequest("attachment.entity_type_unknown");
             }
 
             // Attaching hands the picture to everyone who can read the target, so it takes write
             // on the target — asked once for the whole request, because it does not vary by
-            // picture.
+            // picture. A target the caller may not read is answered exactly as one that does not
+            // exist, so the route says nothing about which ids are real.
             var target = new AttachmentTarget(attachType, targetId);
             if (!await FileAccessRules.CanWriteTargetAsync(db, access, ctx, target, ct))
             {
-                return ApiProblems.Forbidden();
+                return await FileAccessRules.CanReadTargetAsync(db, access, ctx, target, ct)
+                    ? ApiProblems.Forbidden()
+                    : ApiProblems.NotFound(AttachTargetNotFoundCode);
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(request.AttachEntityType))
+        {
+            return ApiProblems.BadRequest("attachment.entity_type_unknown");
+        }
+
+        // Asked once, before any picture is touched: a tag deleted while the gallery had it on
+        // screen is a refusal naming the tag, not a foreign-key failure that rolls back every
+        // other picture as a server error.
+        var addTagIds = (request.AddTagIds ?? []).Distinct().ToList();
+        if (addTagIds.Count > 0)
+        {
+            var known = await db.Tags.AsNoTracking()
+                .Where(t => addTagIds.Contains(t.Id))
+                .Select(t => t.Id)
+                .ToListAsync(ct);
+            if (known.Count != addTagIds.Count)
+            {
+                return ApiProblems.BadRequest(
+                    TagNotFoundCode,
+                    $"No tag {string.Join(", ", addTagIds.Except(known))}.");
             }
         }
 
+        // The album routes' own split: an album the caller cannot read is answered as one that
+        // does not exist, and only a readable one says that writing it is what is missing.
         if (request.AddToAlbumId is { } albumId
             && !await AlbumAccess.CanWriteAsync(db, access, ctx, albumId, ct))
         {
-            return ApiProblems.Forbidden(AlbumEndpoints.WriteForbiddenCode);
+            return await AlbumAccess.ReadableAsync(db, access, ctx, albumId, ct) is null
+                ? ApiProblems.NotFound(AlbumEndpoints.NotFoundCode)
+                : ApiProblems.Forbidden(AlbumEndpoints.WriteForbiddenCode);
         }
 
         var changed = new List<Guid>();
         var refused = new Dictionary<Guid, string>();
 
-        foreach (var documentId in request.DocumentIds.Distinct())
+        // Filing a picture into an album changes the album, not the picture, so it takes what the
+        // album's own items route takes: write on the album (asked above) and read on the picture.
+        // Anything else in the request changes the picture itself and takes write on it.
+        var changesThePhotographs = ChangesThePhotographs(request);
+
+        // Everything the walk below needs is read for the whole request up front — which ids are
+        // readable photographs, their documents and current files, the taggings and attachments
+        // already there — so a five-hundred-picture request costs a handful of statements plus the
+        // write decision for each picture, rather than ten statements a picture.
+        var ids = request.DocumentIds.Distinct().ToList();
+        var readableIds = await PhotographReads.ReadableAmongAsync(db, ctx, ids, ct);
+        var work = await BulkWorkAsync(db, request, addTagIds, readableIds, attachType, ct);
+
+        foreach (var documentId in ids)
         {
-            var subject = await ReadableAsync(db, access, ctx, documentId, ct);
-            if (subject is null)
+            // Never an existence oracle: unreadable is answered as absent.
+            if (!work.Documents.TryGetValue(documentId, out var subject))
             {
-                // Never an existence oracle: unreadable is answered as absent.
                 continue;
             }
 
-            if (!await WritableAsync(db, access, ctx, subject, ct))
+            var file = work.CurrentFiles.GetValueOrDefault(documentId);
+            if (changesThePhotographs
+                && !await DocumentAccessRules.CanWriteAsync(db, access, ctx, subject, file, ct))
             {
                 refused[documentId] = WriteForbiddenCode;
                 continue;
             }
 
-            await ApplyAsync(db, request, subject, attachType, ctx.UserId, ct);
+            // Club visibility means "the club this belongs to may read it". On a picture that
+            // belongs to no club it would be a band that admits nobody, silently — the document
+            // update route refuses it for the same reason. The bulk request names no club, so a
+            // picture without one is refused rather than hidden from everybody.
+            if (request.Visibility == Visibility.CavingGroup && subject.CavingGroupId is null)
+            {
+                refused[documentId] = CavingGroupRequiredCode;
+                continue;
+            }
+
+            Apply(db, request, addTagIds, subject, file, work, attachType, ctx.UserId);
             changed.Add(documentId);
         }
 
@@ -509,28 +591,99 @@ public static class PhotoEndpoints
         return TypedResults.Ok(new PhotoBulkResultDto(changed, refused));
     }
 
-    /// <summary>Applies one bulk request to one photograph. Tracked, not saved.</summary>
-    private static async Task ApplyAsync(
+    /// <summary>What a bulk request reads before it walks its photographs, read once for all of them.</summary>
+    private sealed record BulkWork(
+        IReadOnlyDictionary<Guid, Document> Documents,
+        IReadOnlyDictionary<Guid, StoredFile> CurrentFiles,
+        HashSet<(long TagId, Guid FileId)> Tagged,
+        ILookup<Guid, Tagging> Removable,
+        HashSet<Guid> AttachedFiles);
+
+    private static async Task<BulkWork> BulkWorkAsync(
         SilexGisDbContext db,
         PhotoBulkRequest request,
-        Document document,
+        IReadOnlyList<long> addTagIds,
+        IReadOnlyCollection<Guid> readableIds,
         AttachedEntityType? attachType,
-        Guid userId,
         CancellationToken ct)
     {
-        var file = await DocumentQueries.FilesOfCurrentVersion(db, document.Id).FirstOrDefaultAsync(ct);
+        var ids = readableIds.ToList();
 
+        // Tracked only when the request changes the document row itself; otherwise read as data.
+        var documentRows = request.Delete == true || request.Visibility is not null
+            ? db.Documents.Where(d => ids.Contains(d.Id))
+            : db.Documents.AsNoTracking().Where(d => ids.Contains(d.Id));
+        var documents = await documentRows.ToDictionaryAsync(d => d.Id, ct);
+
+        // The file a document serves is the first of its current revision. Tracked, because a
+        // rotation is written on it.
+        var files = await (from file in db.StoredFiles
+                           join version in db.DocumentVersions.AsNoTracking()
+                               on file.DocumentVersionId equals version.Id
+                           where version.IsCurrent && ids.Contains(version.DocumentId)
+                           select new { version.DocumentId, File = file })
+            .ToListAsync(ct);
+        var currentFiles = files
+            .GroupBy(f => f.DocumentId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(f => f.File.CreatedAt).ThenBy(f => f.File.Id).First().File);
+        var fileIds = currentFiles.Values.Select(f => (Guid?)f.Id).ToList();
+
+        var tagged = new HashSet<(long, Guid)>();
+        if (addTagIds.Count > 0 && fileIds.Count > 0)
+        {
+            var existing = await db.Taggings.AsNoTracking()
+                .Where(t => t.EntityType == AttachedEntityType.StoredFile
+                    && fileIds.Contains(t.EntityId)
+                    && addTagIds.Contains(t.TagId))
+                .Select(t => new { t.TagId, FileId = t.EntityId!.Value })
+                .ToListAsync(ct);
+            tagged = [.. existing.Select(t => (t.TagId, t.FileId))];
+        }
+
+        var removing = request.RemoveTagIds ?? [];
+        var removable = (removing.Count > 0 && fileIds.Count > 0
+                ? await db.Taggings
+                    .Where(t => removing.Contains(t.TagId)
+                        && t.EntityType == AttachedEntityType.StoredFile
+                        && fileIds.Contains(t.EntityId))
+                    .ToListAsync(ct)
+                : [])
+            .ToLookup(t => t.EntityId!.Value);
+
+        var attached = new HashSet<Guid>();
+        if (request.AttachEntityId is { } targetId && fileIds.Count > 0)
+        {
+            var attachedFiles = await db.Attachments.AsNoTracking()
+                .Where(a => fileIds.Contains(a.FileId)
+                    && (attachType == null ? a.FeatureId == targetId : a.EntityId == targetId))
+                .Select(a => a.FileId)
+                .ToListAsync(ct);
+            attached = [.. attachedFiles];
+        }
+
+        return new BulkWork(documents, currentFiles, tagged, removable, attached);
+    }
+
+    /// <summary>Applies one bulk request to one photograph. Tracked, not saved.</summary>
+    private static void Apply(
+        SilexGisDbContext db,
+        PhotoBulkRequest request,
+        IReadOnlyList<long> addTagIds,
+        Document document,
+        StoredFile? file,
+        BulkWork work,
+        AttachedEntityType? attachType,
+        Guid userId)
+    {
         if (request.Delete == true)
         {
-            var tracked = await db.Documents.FirstAsync(d => d.Id == document.Id, ct);
-            tracked.MarkDeleted(DateTimeOffset.UtcNow, userId);
+            document.MarkDeleted(DateTimeOffset.UtcNow, userId);
             return;
         }
 
         if (request.Visibility is { } visibility)
         {
-            var tracked = await db.Documents.FirstAsync(d => d.Id == document.Id, ct);
-            tracked.Visibility = visibility;
+            document.Visibility = visibility;
         }
 
         if (file is null)
@@ -543,14 +696,9 @@ public static class PhotoEndpoints
             file.OrientationQuarterTurns = PhotoOrientation.Rotate(file.OrientationQuarterTurns, turns);
         }
 
-        foreach (var tagId in request.AddTagIds ?? [])
+        foreach (var tagId in addTagIds)
         {
-            var already = await db.Taggings.AnyAsync(
-                t => t.TagId == tagId
-                    && t.EntityType == AttachedEntityType.StoredFile
-                    && t.EntityId == file.Id,
-                ct);
-            if (!already)
+            if (work.Tagged.Add((tagId, file.Id)))
             {
                 db.Taggings.Add(new Tagging
                 {
@@ -562,35 +710,19 @@ public static class PhotoEndpoints
             }
         }
 
-        var removing = request.RemoveTagIds ?? [];
-        if (removing.Count > 0)
-        {
-            var going = await db.Taggings
-                .Where(t => removing.Contains(t.TagId)
-                    && t.EntityType == AttachedEntityType.StoredFile
-                    && t.EntityId == file.Id)
-                .ToListAsync(ct);
-            db.Taggings.RemoveRange(going);
-        }
+        db.Taggings.RemoveRange(work.Removable[file.Id]);
 
-        if (request.AttachEntityId is { } targetId)
+        if (request.AttachEntityId is { } targetId && work.AttachedFiles.Add(file.Id))
         {
-            var already = await db.Attachments.AnyAsync(
-                a => a.FileId == file.Id
-                    && (attachType == null ? a.FeatureId == targetId : a.EntityId == targetId),
-                ct);
-            if (!already)
+            db.Attachments.Add(new Attachment
             {
-                db.Attachments.Add(new Attachment
-                {
-                    FileId = file.Id,
-                    FeatureId = attachType is null ? targetId : null,
-                    EntityType = attachType,
-                    EntityId = attachType is null ? null : targetId,
-                    Role = AttachmentRole.PhotoSurface,
-                    AddedBy = userId,
-                });
-            }
+                FileId = file.Id,
+                FeatureId = attachType is null ? targetId : null,
+                EntityType = attachType,
+                EntityId = attachType is null ? null : targetId,
+                Role = AttachmentRole.PhotoSurface,
+                AddedBy = userId,
+            });
         }
     }
 
@@ -616,6 +748,15 @@ public static class PhotoEndpoints
             ? document
             : null;
     }
+
+    /// <summary>Whether a bulk request changes the photographs themselves, not only an album.</summary>
+    private static bool ChangesThePhotographs(PhotoBulkRequest request) =>
+        request.AddTagIds is { Count: > 0 }
+        || request.RemoveTagIds is { Count: > 0 }
+        || request.Visibility is not null
+        || request.RotateQuarterTurns is not null
+        || request.AttachEntityId is not null
+        || request.Delete == true;
 
     private static async Task<bool> WritableAsync(
         SilexGisDbContext db, IAccessService access, AccessContext ctx, Document document, CancellationToken ct)

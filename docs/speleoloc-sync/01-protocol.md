@@ -943,7 +943,13 @@ Send the bytes in order, each piece as the raw request body:
 ```
 PUT /api/v1/files/uploads/{id}?offset=0
 Content-Type: application/octet-stream
+Content-Length: 8388608
 ```
+
+Every piece carries its `Content-Length`; one sent without it (chunked transfer encoding) is refused
+with `411 upload.length_required` and nothing of it is kept, because without the length a piece a
+dropped connection cut short looks exactly like a whole one. A piece cut short is never kept either:
+the file stays where it was, and the client sends that piece again from `receivedBytes`.
 
 Each answer says how far the file has got. A piece the server already holds is answered `200` again,
 so a piece whose answer was lost can simply be sent again; a piece that does not continue the file is

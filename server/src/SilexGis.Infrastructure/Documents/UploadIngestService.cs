@@ -247,6 +247,67 @@ public sealed class UploadIngestService(
         ArgumentNullException.ThrowIfNull(ctx);
         ArgumentNullException.ThrowIfNull(destination);
 
+        // Every caller saves again on this same context afterwards — the batch line, the next
+        // file of an archive — so whatever this call staged and did not commit has to be taken
+        // back out when the file is not stored. Left tracked, a shelf mirrored for a file that
+        // was then refused filing is created anyway by the next save, and the rows of a file
+        // whose save failed are re-sent by it, failing it too and ending a whole archive walk.
+        // Work the caller had pending before this call is left as it was.
+        var pendingBefore = db.ChangeTracker.Entries()
+            .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .Select(e => e.Entity)
+            .ToHashSet(ReferenceEqualityComparer.Instance);
+        var kept = false;
+        try
+        {
+            var outcome = await RecordCoreAsync(content, ctx, destination, uploadBatchId, allowDuplicate, ct);
+            kept = outcome.Outcome == UploadItemOutcome.Stored;
+            return outcome;
+        }
+        finally
+        {
+            if (!kept)
+            {
+                UndoStaged(pendingBefore);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Takes back out of the change tracker everything staged since <paramref name="pendingBefore"/>
+    /// was taken: new rows are forgotten, changed or removed ones are put back as they were read.
+    /// </summary>
+    private void UndoStaged(HashSet<object> pendingBefore)
+    {
+        foreach (var entry in db.ChangeTracker.Entries().ToList())
+        {
+            if (pendingBefore.Contains(entry.Entity))
+            {
+                continue;
+            }
+
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    entry.State = EntityState.Detached;
+                    break;
+                case EntityState.Modified:
+                case EntityState.Deleted:
+                    entry.CurrentValues.SetValues(entry.OriginalValues);
+                    entry.State = EntityState.Unchanged;
+                    break;
+            }
+        }
+    }
+
+    private async Task<IngestOutcome> RecordCoreAsync(
+        StoredContent content,
+        AccessContext ctx,
+        UploadDestination destination,
+        Guid? uploadBatchId,
+        bool allowDuplicate,
+        CancellationToken ct)
+    {
         // Asked before anything is created, and it decides two quite different things: whether
         // to refuse this upload, and — when the answer is "there is a copy but you may not see
         // it" — whether to leave a record for somebody who can.
@@ -309,7 +370,7 @@ public sealed class UploadIngestService(
         }
 
         await ApplyTagsAsync(stored.File.Id, defaults.TagIds, uploadBatchId, ctx.UserId, ct);
-        AttachIfAsked(stored.File.Id, destination, ctx.UserId);
+        await AttachIfAskedAsync(stored.File, destination, ctx.UserId, ct);
 
         await db.SaveChangesAsync(ct);
 
@@ -464,7 +525,8 @@ public sealed class UploadIngestService(
     /// established that this person may write the target — that check needs the request, which
     /// this does not have.
     /// </remarks>
-    private void AttachIfAsked(Guid fileId, UploadDestination destination, Guid userId)
+    private async Task AttachIfAskedAsync(
+        StoredFile file, UploadDestination destination, Guid userId, CancellationToken ct)
     {
         if (!destination.HasAttachment)
         {
@@ -473,13 +535,37 @@ public sealed class UploadIngestService(
 
         db.Attachments.Add(new Attachment
         {
-            FileId = fileId,
+            FileId = file.Id,
             FeatureId = destination.AttachFeatureId,
             EntityType = destination.AttachFeatureId is null ? destination.AttachEntityType : null,
             EntityId = destination.AttachFeatureId is null ? destination.AttachEntityId : null,
-            Role = destination.AttachRole ?? AttachmentRole.Other,
+            Role = destination.AttachRole ?? await DefaultRoleAsync(file.Kind, destination.AttachFeatureId, ct),
             AddedBy = userId,
         });
+    }
+
+    /// <summary>
+    /// The role a file takes when the upload named none: decided by what the file is and what it
+    /// hangs on, by the same rule a phone's unnamed links follow — a picture on an entrance is a
+    /// picture of the entrance, one inside a cave is a picture of the inside, anything that is
+    /// not a picture is a document.
+    /// </summary>
+    private async Task<AttachmentRole> DefaultRoleAsync(FileKind fileKind, Guid? featureId, CancellationToken ct)
+    {
+        if (featureId is not { } id)
+        {
+            return LinkRoleDefaults.For(fileKind, LinkTargetNature.Other);
+        }
+
+        var feature = await (from f in db.Features.AsNoTracking()
+                             where f.Id == id
+                             join t in db.FeatureTypes.AsNoTracking() on f.FeatureTypeId equals (long?)t.Id into types
+                             from t in types.DefaultIfEmpty()
+                             select new { f.Kind, Code = t == null ? null : t.Code })
+            .FirstOrDefaultAsync(ct);
+        return LinkRoleDefaults.For(
+            fileKind,
+            feature is null ? LinkTargetNature.Other : LinkRoleDefaults.NatureOf(feature.Kind, feature.Code));
     }
 
     /// <summary>

@@ -188,7 +188,7 @@ public sealed class DocumentWriteService(
         {
             DocumentVersionId = documentVersionId,
             StoragePath = content.StoragePath,
-            OriginalName = content.OriginalName,
+            OriginalName = FileFormats.FitFileName(content.OriginalName),
             MimeType = Fit(content.MimeType, FileFormats.MaxMediaTypeLength),
             SizeBytes = content.SizeBytes,
             Sha256 = content.Sha256,
