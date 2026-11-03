@@ -447,6 +447,9 @@ export function useSetTripTracking() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.tripTrackingPlaces(variables.tripLogId),
       });
+      // The trip itself: the arrangement is a change to the trip and moves its version, so a trip
+      // page, form or callout control still holding the old one has to read again before it saves.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tripLog(variables.tripLogId) });
       // Handed back rather than started and forgotten, as on the trip's own writes: the next
       // configuration change is checked against the version this one produced, and only a read
       // records a version. Without the wait, a second save a moment later is refused as a
