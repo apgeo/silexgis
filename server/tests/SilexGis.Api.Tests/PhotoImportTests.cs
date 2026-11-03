@@ -626,6 +626,67 @@ public sealed class PhotoImportTests : IAsyncLifetime, IDisposable, IClassFixtur
         theirs.GetProperty("fileIds").GetArrayLength().ShouldBe(0);
     }
 
+    /// <summary>
+    /// A place that becomes a cave plus its first entrance, with an entrance type this
+    /// installation does not have, fails whole: the cave it would have begun is not left in the
+    /// registry on no batch line, where undo cannot reach it, and the other place still lands.
+    /// </summary>
+    [Fact]
+    public async Task A_cave_whose_entrance_type_is_missing_leaves_no_cave_behind()
+    {
+        var broken = await UploadAsync("IMG_9801.jpg", At(45.810000, 25.810000, Noon));
+        var whole = await UploadAsync("IMG_9802.jpg", At(45.830000, 25.830000, Noon.AddMinutes(30)));
+        var items = Items(await PreviewAsync(editor, [broken, whole]));
+        var brokenKey = items.Single(i => Members(i).Contains(broken)).GetProperty("key").GetGuid();
+        var wholeKey = items.Single(i => Members(i).Contains(whole)).GetProperty("key").GetGuid();
+
+        var commit = await CommitAsync(editor, [broken, whole], [brokenKey, wholeKey], new Dictionary<string, object>
+        {
+            [brokenKey.ToString()] = new
+            {
+                action = "create", kind = "cave", name = $"Halfmade {tag}", entranceTypeCode = $"missing-{tag}",
+            },
+            [wholeKey.ToString()] = new { action = "create", kind = "cave", name = $"Whole {tag}" },
+        });
+
+        commit.GetProperty("batch").GetProperty("createdCount").GetInt32().ShouldBe(1);
+        commit.GetProperty("failures").EnumerateArray().Single()
+            .GetProperty("code").GetString().ShouldBe("photo_import.type_unknown");
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.Features.IgnoreQueryFilters().CountAsync(f => f.Name == $"Halfmade {tag}")).ShouldBe(0);
+        (await db.Features.CountAsync(f => f.Kind == FeatureKind.Cave && f.Name == $"Whole {tag}")).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The review saves itself as somebody works, and a second tab does too: several first saves
+    /// arriving together all find no review yet. Each is answered, and one review is left.
+    /// </summary>
+    [Fact]
+    public async Task Two_first_saves_of_one_photo_review_at_once_both_succeed()
+    {
+        var reviewerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"pi-tabs-{tag}@t.local");
+        using var reviewer = await AuthHelper.BearerClientAsync(factory, $"pi-tabs-{tag}@t.local");
+
+        var saves = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
+            reviewer.PutAsJsonAsync("/api/v1/photo-import/session", new
+            {
+                fileIds = Array.Empty<Guid>(),
+                options = DefaultOptions(),
+                decisions = new Dictionary<string, object>(),
+            })));
+
+        foreach (var save in saves)
+        {
+            save.StatusCode.ShouldBe(HttpStatusCode.OK, await save.Content.ReadAsStringAsync());
+        }
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.PhotoImportSessions.CountAsync(s => s.UserId == reviewerId)).ShouldBe(1);
+    }
+
     // ---------- helpers ----------
 
     private async Task<JsonElement> PreviewAsync(

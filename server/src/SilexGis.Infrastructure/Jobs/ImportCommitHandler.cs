@@ -105,6 +105,16 @@ public sealed class ImportCommitHandler(
             ? null
             : await ruleSets.ResolveAsync(ctx, payload.TermRuleSetId, ct);
 
+        // The confirmation was made against these rules: run without them, every row a rule
+        // claimed would lose its kind and every name its stripping, and the batch would land
+        // looking complete. A set deleted (or no longer readable) since then fails the job.
+        if (payload.TermRuleSetId is not null && ruleSet is null)
+        {
+            throw new ImportCommitException(
+                "term_rules.not_found",
+                "The rule set this confirmation was classified with is no longer available.");
+        }
+
         var options = ImportJson.Deserialize<ImportOptions>(payload.Options)
             ?? throw new InvalidOperationException("The import options are not readable.");
         var decisions = ImportJson.Deserialize<Dictionary<long, ImportDecision>>(payload.Decisions)
