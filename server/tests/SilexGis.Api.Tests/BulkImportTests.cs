@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
@@ -227,6 +228,65 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable, IClassFixture
         }
     }
 
+    /// <summary>
+    /// A file whose save fails is a fact about that file, like one that cannot be read: the walk
+    /// files the rest and the drop ends completed with the failure named. The save here fails
+    /// every time it is attempted, as a row the database will not take does — so anything of the
+    /// failed file left staged is re-sent by the next save on the walk and fails that one too.
+    /// </summary>
+    [Fact]
+    public async Task A_file_whose_save_fails_is_named_failed_and_the_rest_of_the_archive_still_lands()
+    {
+        var tinyRoot = Path.Combine(TestScratch.Root, $"silexgis-test-savefail-{Guid.NewGuid():N}");
+        var refuse = new RefuseSavingAFileNamed("breaks.txt");
+        using var failingFactory = new SilexGisApiFactory(
+            connectionString,
+            new Dictionary<string, string?>
+            {
+                ["Files:Root"] = tinyRoot,
+                ["Keys:Path"] = Path.Combine(tinyRoot, "keys"),
+                // Same reason as the shared factory above: this test drives the handler itself.
+                ["Jobs:PollSeconds"] = "0",
+            },
+            services => services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(refuse)));
+
+        var email = $"savefail-{Guid.NewGuid():N}"[..17] + "@t.local";
+        await AuthHelper.CreateUserAsync(failingFactory, GlobalRoles.Admin, email);
+        using var client = await AuthHelper.BearerClientAsync(failingFactory, email);
+
+        try
+        {
+            var run = Guid.NewGuid();
+            var archive = Zip(
+                ("first.txt", $"the first file {run}"),
+                ("breaks.txt", $"the file whose save fails {run}"),
+                ("last.txt", $"the last file {run}"));
+
+            var batchId = await ExpandAsync(archive, cabinetId: null, client: client, api: failingFactory);
+
+            refuse.Refusals.ShouldBeGreaterThan(0, "the save never failed, so nothing was tested");
+
+            var batch = await client.GetFromJsonAsync<JsonElement>($"/api/v1/upload-batches/{batchId}");
+            batch.GetProperty("status").GetString().ShouldBe("completed");
+            batch.GetProperty("storedCount").GetInt32().ShouldBe(2);
+            batch.GetProperty("failedCount").GetInt32().ShouldBe(1);
+
+            var items = await client.GetFromJsonAsync<JsonElement>($"/api/v1/upload-batches/{batchId}/items");
+            var lines = items.GetProperty("items").EnumerateArray()
+                .ToDictionary(i => i.GetProperty("sourcePath").GetString()!, i => i.GetProperty("outcome").GetString());
+            lines["first.txt"].ShouldBe("stored");
+            lines["breaks.txt"].ShouldBe("failed");
+            lines["last.txt"].ShouldBe("stored");
+        }
+        finally
+        {
+            if (Directory.Exists(tinyRoot))
+            {
+                Directory.Delete(tinyRoot, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public async Task A_directory_the_operator_allowed_is_imported_with_its_folders_mirrored()
     {
@@ -383,6 +443,32 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable, IClassFixture
 
         var job = await QueuedJob.RunAsync(api.Services, jobs[0].Id);
         return JsonDocument.Parse(job.Payload).RootElement.GetProperty("batchId").GetGuid();
+    }
+
+    /// <summary>
+    /// Fails every save that would insert a stored file of the given name — each attempt, not only
+    /// the first, as a row the database refuses is refused again when it is re-sent.
+    /// </summary>
+    private sealed class RefuseSavingAFileNamed(string originalName) : SaveChangesInterceptor
+    {
+        private int refusals;
+
+        public int Refusals => Volatile.Read(ref refusals);
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context is { } context
+                && context.ChangeTracker.Entries<StoredFile>()
+                    .Any(e => e.State == EntityState.Added && e.Entity.OriginalName == originalName))
+            {
+                Interlocked.Increment(ref refusals);
+                throw new InvalidOperationException($"Refused for the test: a save carrying {originalName}.");
+            }
+
+            return new(result);
+        }
     }
 
     /// <summary>An in-memory archive with the given entries.</summary>
