@@ -195,13 +195,22 @@ public static class GeofileEndpoints
 
     private static async Task<Results<Ok<GeofileDto>, ProblemHttpResult>> GetAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
         var (geofile, problem) = await LoadReadableAsync(id, db, access, accessAccessor, ct);
-        return problem is not null ? problem : TypedResults.Ok(geofile!.ToDto());
+        if (problem is not null)
+        {
+            return problem;
+        }
+
+        // The update answers the version it produced; the read hands out the same one, so that a
+        // client re-reading after somebody else's change holds the version its next write needs.
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.Geofiles, geofile!.Id, ct);
+        return TypedResults.Ok(geofile.ToDto());
     }
 
     private static async Task<Results<Ok<GeofileStatusDto>, ProblemHttpResult>> GetStatusAsync(
@@ -238,9 +247,18 @@ public static class GeofileEndpoints
                 : ApiProblems.NotFound("geofile.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Geofiles, geofile.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Geofiles, geofile.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
+        }
+
+        // The hold read the row again; who may change it is decided on what it holds now.
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, geofile, ct)).Allowed)
+        {
+            return (await access.DecideAsync(ctx, AccessAction.Read, geofile, ct)).Allowed
+                ? ApiProblems.Forbidden()
+                : ApiProblems.NotFound("geofile.not_found");
         }
 
         if (request.CavingGroupId is not null
@@ -255,6 +273,7 @@ public static class GeofileEndpoints
         geofile.CavingGroupId = request.CavingGroupId;
         geofile.Visibility = request.Visibility;
         await db.SaveChangesAsync(ct);
+        await hold.AnswerAsync(ct);
         return TypedResults.Ok(geofile.ToDto());
     }
 

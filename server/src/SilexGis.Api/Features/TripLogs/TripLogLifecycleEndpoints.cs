@@ -56,18 +56,17 @@ public static partial class TripLogEndpoints
                 : ApiProblems.NotFound("trip_log.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, required: true) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, required: true);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
 
         ApplyCallout(trip, request);
         await db.SaveChangesAsync(ct);
+        await hold.AnswerAsync(ct, TripPath(trip.Id));
 
         var arranged = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
-        // The trip's version after this write, filed against the trip's own path rather than this
-        // route's, since that is where the next write on the trip will look for it.
-        await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, TripPath(trip.Id));
         return TypedResults.Ok(arranged[0]);
     }
 
@@ -201,7 +200,8 @@ public static partial class TripLogEndpoints
                 : ApiProblems.NotFound("trip_log.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, required: true) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, required: true);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -261,11 +261,11 @@ public static partial class TripLogEndpoints
         }
 
         await db.SaveChangesAsync(ct);
-
-        var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
         // The version the move produced, filed against the trip's own path: a page that moved the
         // trip and then edits it is editing the version the move made.
-        await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, TripPath(trip.Id));
+        await hold.AnswerAsync(ct, TripPath(trip.Id));
+
+        var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
         return TypedResults.Ok(items[0]);
     }
 

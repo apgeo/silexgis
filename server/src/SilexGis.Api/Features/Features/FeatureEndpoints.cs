@@ -378,7 +378,8 @@ public static class FeatureEndpoints
                 "Caves, entrances and centerlines are edited through their typed endpoints.");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct, required: true) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct, required: true);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -468,7 +469,7 @@ public static class FeatureEndpoints
         }
 
         await db.SaveChangesAsync(ct);
-        await Concurrency.EmitETagAsync(http, db, VersionedTable.Features, feature.Id, ct);
+        await hold.AnswerAsync(ct);
 
         var parents = await PrimaryChainAsync(db, ctx, feature, ct);
         return TypedResults.Ok(feature.ToDto(
@@ -503,7 +504,8 @@ public static class FeatureEndpoints
                 : ApiProblems.NotFound("feature.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -520,6 +522,7 @@ public static class FeatureEndpoints
 
         // The soft delete stamps rows immediately, but its audit entries ride the context.
         await db.SaveChangesAsync(ct);
+        await hold.CommitAsync(ct);
         return TypedResults.NoContent();
     }
 

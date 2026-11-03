@@ -192,6 +192,18 @@ public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable, IClassFi
         accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await accepted.Content.ReadAsStringAsync());
         Title(await BySeriesAsync(owner, seriesId), ids[3])!.ShouldContain("Whole run renamed");
 
+        // The edit answers the versions it produced — the anchor's and its run's, filed under the
+        // event — so a second edit a moment later carries them without a read in between.
+        accepted.Content.Headers.ContentLocation!.OriginalString.ShouldBe($"/api/v1/events/{ids[1]}");
+        var afterEdit = await owner.GetAsync($"/api/v1/events/{ids[1]}");
+        accepted.Headers.ETag!.Tag.ShouldBe(afterEdit.Headers.ETag!.Tag);
+        var answeredRun = accepted.Headers.GetValues("X-Series-Version").Single();
+        answeredRun.ShouldBe(afterEdit.Headers.GetValues("X-Series-Version").Single());
+        (await owner.PutWithIfMatchAsync(
+                $"/api/v1/events/{ids[1]}/series/following", Body("Whole run renamed again", start.AddDays(7)),
+                answeredRun))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
         // An occurrence before the anchor is not in the run the edit writes, so a change to it
         // leaves the anchor's run version where it was.
         var laterRead = await owner.GetAsync($"/api/v1/events/{ids[2]}");

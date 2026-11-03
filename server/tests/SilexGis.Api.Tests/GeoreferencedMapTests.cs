@@ -150,8 +150,12 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable, IClassF
         update.StatusCode.ShouldBe(HttpStatusCode.OK, updated);
         JsonDocument.Parse(updated).RootElement.GetProperty("caveFeatureId").GetGuid().ShouldBe(caveFeatureId);
 
-        // The owner still sees it; others don't — not in lists, not by id.
-        (await owner.GetAsync($"/api/v1/georeferenced-maps/{id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        // The owner still sees it; others don't — not in lists, not by id. The owner's read hands
+        // out the version the update answered, so a re-read refreshes what the next save carries.
+        var ownRead = await owner.GetAsync($"/api/v1/georeferenced-maps/{id}");
+        ownRead.StatusCode.ShouldBe(HttpStatusCode.OK);
+        ownRead.Headers.ETag.ShouldNotBeNull("a versioned map's read hands out its version");
+        ownRead.Headers.ETag!.Tag.ShouldBe(update.Headers.ETag!.Tag);
         (await outsider.GetAsync($"/api/v1/georeferenced-maps/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await MapIdsOfCaveAsync(outsider, caveFeatureId)).ShouldNotContain(id);
 

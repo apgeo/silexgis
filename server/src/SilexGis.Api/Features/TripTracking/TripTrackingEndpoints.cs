@@ -629,7 +629,8 @@ public static class TripTrackingEndpoints
 
         // Two coordinators can both hold the tracking panel; the config write rides the
         // trip's version like every other trip-level arrangement.
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.TripLogs, trip!.Id, ct, required: true) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.TripLogs, trip!.Id, ct, required: true);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -774,6 +775,14 @@ public static class TripTrackingEndpoints
             return ApiProblems.Conflict(TrackingProblemCodes.ConcurrentWrite, "Another tracking write landed first — reload and retry.");
         }
 
+        // The watch's arrangement is its own table, so saving it leaves the trip's row — and with it
+        // the version this write was checked against — where it was. Stamped here, inside the hold,
+        // the version moves with the write, and a second coordinator still holding the old one is
+        // refused instead of passing the same check and writing over the first.
+        await db.TripLogs
+            .Where(x => x.Id == tripLogId)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.UpdatedAt, clock.GetUtcNow()), ct);
+        await hold.AnswerAsync(ct);
         return await GetAsync(
             tripLogId, http, db, access, protection, accessAccessor, options, clock, userAccessor, ct);
     }

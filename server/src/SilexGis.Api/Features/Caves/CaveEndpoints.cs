@@ -501,7 +501,8 @@ public static class CaveEndpoints
                 : ApiProblems.NotFound("cave.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct, required: true) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct, required: true);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -556,7 +557,7 @@ public static class CaveEndpoints
         }
 
         await db.SaveChangesAsync(ct);
-        await Concurrency.EmitETagAsync(http, db, VersionedTable.Features, feature.Id, ct);
+        await hold.AnswerAsync(ct);
         var parents = await ParentsAsync(db, ctx, feature.Id, ct);
         return TypedResults.Ok(feature.ToDto(cave, exact, accessOptions.Value.LocationGridMeters, parents));
     }
@@ -585,7 +586,8 @@ public static class CaveEndpoints
                 : ApiProblems.NotFound("cave.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -594,6 +596,7 @@ public static class CaveEndpoints
         // so a later restore undoes exactly this deletion.
         await writer.SoftDeleteAsync(feature.Id, ct);
         await db.SaveChangesAsync(ct);
+        await hold.CommitAsync(ct);
         return TypedResults.NoContent();
     }
 

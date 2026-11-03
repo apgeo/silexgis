@@ -213,6 +213,7 @@ public static class GeoreferencedMapEndpoints
 
     private static async Task<Results<Ok<GeoreferencedMapDto>, ProblemHttpResult>> GetAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
         IAccessService access,
@@ -234,6 +235,9 @@ public static class GeoreferencedMapEndpoints
             return ApiProblems.NotFound("georeferenced_map.not_found");
         }
 
+        // The update answers the version it produced; the read hands out the same one, so that a
+        // client re-reading after somebody else's change holds the version its next write needs.
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.GeoreferencedMaps, map.Id, ct);
         return TypedResults.Ok(map.ToDto(tokens));
     }
 
@@ -261,9 +265,18 @@ public static class GeoreferencedMapEndpoints
                 : ApiProblems.NotFound("georeferenced_map.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.GeoreferencedMaps, map.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.GeoreferencedMaps, map.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
+        }
+
+        // The hold read the row again; who may change it is decided on what it holds now.
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, map, ct)).Allowed)
+        {
+            return (await access.DecideAsync(ctx, AccessAction.Read, map, ct)).Allowed
+                ? ApiProblems.Forbidden()
+                : ApiProblems.NotFound("georeferenced_map.not_found");
         }
 
         if (request.CavingGroupId is not null
@@ -294,6 +307,7 @@ public static class GeoreferencedMapEndpoints
         map.CavingGroupId = request.CavingGroupId;
         map.Visibility = request.Visibility;
         await db.SaveChangesAsync(ct);
+        await hold.AnswerAsync(ct);
         return TypedResults.Ok(map.ToDto(tokens));
     }
 

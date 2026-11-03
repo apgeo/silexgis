@@ -244,8 +244,11 @@ public static class EntranceEndpoints
         }
 
         // The feature row is the aggregate's version token — one ETag for name, geometry and
-        // the entrance attributes alike.
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Features, entrance.Id, ct) is { } stale)
+        // the entrance attributes alike. The cave is taken first: this write refreshes the cave's
+        // point, and a write on the cave restamps its entrances, so both take the cave first.
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Features, entrance.Id, ct, containerId: cave.Id);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -293,6 +296,11 @@ public static class EntranceEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        // The version is the feature row's, which the feature's own read hands out; filed there, it is
+        // the one the next write on the feature carries. Filed under this route's path instead, no
+        // read would ever replace it, and the first change made anywhere else would leave every later
+        // save here refused as stale.
+        await hold.AnswerAsync(ct, $"/api/v1/features/{entrance.Id}");
 
         // Mask the response to the caller's own view (mirrors the list rule): after the guard
         // restored the precise stored values, returning them exact would leak them.
@@ -327,7 +335,9 @@ public static class EntranceEndpoints
             return ApiProblems.Forbidden();
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Features, entrance.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Features, entrance.Id, ct, containerId: cave.Id);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -335,6 +345,7 @@ public static class EntranceEndpoints
         await writer.SoftDeleteAsync(entrance.Id, ct);
         await writer.SyncCaveMirrorAsync(cave.Id, ct);
         await db.SaveChangesAsync(ct);
+        await hold.CommitAsync(ct);
         return TypedResults.NoContent();
     }
 
