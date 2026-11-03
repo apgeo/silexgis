@@ -44,8 +44,11 @@ import { TerrainMemoryNote } from './TerrainBakeLimits.tsx';
  */
 const MAX_RASTER_BYTES = 512 * 1024 * 1024;
 
-/** The extensions the pipeline will try to open; anything else is a wasted upload. */
-const RASTER_EXTENSIONS = ['.asc', '.dem', '.hgt', '.img', '.tif', '.tiff'];
+/**
+ * The extensions an upload takes; anything else is a wasted upload. An ASCII grid is read only
+ * from a server directory: it names its position in a separate .prj file one upload cannot carry.
+ */
+const RASTER_EXTENSIONS = ['.dem', '.hgt', '.img', '.tif', '.tiff'];
 
 /**
  * How many finished builds the extension picker offers, newest first — its own page rather than
@@ -187,7 +190,8 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
     const attribution = (submitted.attribution ?? '').trim();
     const licence = (submitted.licence ?? '').trim() || null;
     const named = (submitted.directory ?? '').trim();
-    const wantsCoverage = submitted.fetchCoverage ?? emptyValues.fetchCoverage;
+    // An extension never obtains the coverage again: its base holds it, and the server refuses.
+    const wantsCoverage = base ? false : (submitted.fetchCoverage ?? emptyValues.fetchCoverage);
     // An extension's depth and heights are the base's, read off the base rather than off the
     // form: the heights fields sit in a panel that is closed by default, and a closed panel's
     // fields are not part of what the form reports.
@@ -305,7 +309,7 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
 
         <Typography.Title level={5}>{t('terrain.form.sources')}</Typography.Title>
         <Form.Item name="fetchCoverage" valuePropName="checked" style={{ marginBottom: 8 }}>
-          <Checkbox>{t('terrain.form.fetchCoverage')}</Checkbox>
+          <Checkbox disabled={!!base}>{t('terrain.form.fetchCoverage')}</Checkbox>
         </Form.Item>
         <Typography.Paragraph type="secondary">
           {t('terrain.form.fetchCoverageHint')}

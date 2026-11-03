@@ -212,6 +212,7 @@
       "directoryUnavailable": "That directory cannot be read from: it is not there, or it is not one this installation may read.",
       "noRoots": "This installation reads rasters from no directory on the server.",
       "rasterUnsupported": "That file is not an elevation raster this installation reads.",
+      "rasterNeedsSidecar": "An ASCII grid names its position only in a separate .prj file, which one upload cannot carry. Convert it to a GeoTIFF, or ask the operator to place the grid and its .prj in a server directory.",
       "rasterSizeInvalid": "That file is empty, or larger than an upload may be.",
       "rasterUnplaceable": "An elevation tile says where it is only by what it is called, in the form N45E024.hgt for the square whose corner is 45°N 24°E. That file's name does not say which square it covers, so nothing can place it on the earth. Rename it to the square it covers, or send it in a format that carries its own position.",
       "extentInvalid": "That rectangle is not a rectangle on the Earth. Draw it again.",
@@ -232,7 +233,9 @@
       "baseNotPublished": "The build to extend has no tiles where terrain is served from any more. Start a fresh build over the whole area instead.",
       "baseDepthDiffers": "An extension is built to the depth of the build it extends; the addition cannot re-mesh the tiles already there at another one.",
       "baseDatumDiffers": "An extension measures its heights the way the build it extends does; two datums in one pyramid meet in a step along the join.",
-      "beingExtended": "Another build that extends this one has not finished and still reads its tiles. Remove it once that build has stopped."
+      "beingExtended": "Another build that extends this one has not finished and still reads its tiles. Remove it once that build has stopped.",
+      "baseInUse": "A finished build extends this one and reads its heights from it outside the rasters it added. Remove that build first.",
+      "baseFetchCoverage": "A build that extends another does not obtain the open coverage again: the build it extends already holds it."
     },
     "derivatives": {
       "title": "Ground pictures",
