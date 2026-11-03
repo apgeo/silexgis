@@ -616,9 +616,12 @@ public static class PhotoEndpoints
         var documents = await documentRows.ToDictionaryAsync(d => d.Id, ct);
 
         // The file a document serves is the first of its current revision. Tracked, because a
-        // rotation is written on it.
+        // rotation is written on it — so no part of this query may say AsNoTracking: EF Core takes
+        // it from anywhere in the expression for the whole query, and marking only the joined
+        // revisions untracked would untrack the files with them and drop every turn at the save.
+        // Only the files are projected as entities, so the revisions are not tracked regardless.
         var files = await (from file in db.StoredFiles
-                           join version in db.DocumentVersions.AsNoTracking()
+                           join version in db.DocumentVersions
                                on file.DocumentVersionId equals version.Id
                            where version.IsCurrent && ids.Contains(version.DocumentId)
                            select new { version.DocumentId, File = file })
