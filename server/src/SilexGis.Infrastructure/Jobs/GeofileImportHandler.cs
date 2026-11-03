@@ -30,6 +30,21 @@ public sealed class GeofileImportHandler(
     // so the screens watching the import keep showing "importing" while another attempt is due.
     public bool RetriesPassingFailures => true;
 
+    /// <summary>An import given up by the queue stops reading "importing".</summary>
+    public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
+    {
+        if (AbandonedJob.PayloadOf<GeofileImportPayload>(job) is not { } payload)
+        {
+            return;
+        }
+
+        await db.Geofiles
+            .Where(g => g.Id == payload.GeofileId && g.ImportStatus == GeofileImportStatus.Importing)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(g => g.ImportStatus, GeofileImportStatus.Failed)
+                .SetProperty(g => g.ImportError, AbandonedJob.Reason), ct);
+    }
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var payload = JsonSerializer.Deserialize<GeofileImportPayload>(job.Payload, JsonSerializerOptions.Web)

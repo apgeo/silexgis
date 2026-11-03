@@ -90,6 +90,8 @@ export const groups = {
   photos: [
     'AlbumAndPublicGalleryTests', 'ExpeditionPhotographTests', 'PhotoBytesProtectionTests',
     'PhotoGalleryTests', 'PhotoImportTests',
+    // The frame a photograph is placed on, read from its header, against a full decode.
+    'PhotoFrameReadingTests',
     // A capped photo window counts only photos its caller may be told the position of.
     'HiddenRowCapTests',
   ],
@@ -106,7 +108,7 @@ export const groups = {
   ],
   notifications: [
     'AccountEmailTests', 'AdminMessagingTests', 'CavingGroupAnnouncementPaidCapTests',
-    'EmailVerificationTests', 'NotificationConfigTests', 'NotificationDeliveryTests',
+    'EmailVerificationTests', 'MessageTransportTimeoutTests', 'NotificationConfigTests', 'NotificationDeliveryTests',
     'NotificationInboxTests', 'NotificationQuietHoursTests', 'NotificationTargetKindCoverageTests', 'SmsNotificationChannelTests',
     'TripPlanNotificationTests',
     // Who is told that an upload waits for review, and that it was decided; and who looks after
@@ -181,7 +183,7 @@ export const groups = {
     // Bytes a phone stages through the same transfer routes, the sweep and the quota over them.
     'SyncStagedUploadTests',
   ],
-  geofiles: ['GeofileTests', 'JobFailureRecordingTests', 'PagedListOrderTests'],
+  geofiles: ['GeofileTests', 'JobFailureRecordingTests', 'PagedListOrderTests', 'UploadedGeodataDriverTests', 'ImportedCoordinatesTests'],
   georeferencedMaps: ['GeoreferencedMapTests', 'FilterWorldConformanceTests', 'FilterWorldListParityTests'],
   history: ['AccessHistoryTests', 'ChangeAttributionTests', 'HistoryRestoreTests', 'HistoryTests', 'SyncUndoTests'],
   imports: [
@@ -205,6 +207,8 @@ export const groups = {
     'TextExtractionPipelineTests', 'TripCalloutSweepTests',
     // A job run is a change set of its own, done for the account that queued it.
     'ChangeAttributionTests',
+    // A job's lease, its renewal, the sweep that takes lost jobs back, and the attempt ceiling.
+    'JobLeaseTests',
   ],
   map: [
     'CaveMeshesInViewTests', 'ExpeditionMapTests', 'GeoJsonGeometryTests', 'PerformanceTests',

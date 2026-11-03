@@ -396,6 +396,44 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         status.GetProperty("importError").GetString().ShouldNotBeNullOrWhiteSpace();
     }
 
+    /// <summary>
+    /// A few lines of the raster library's "virtual" vector XML, uploaded under a track log's
+    /// name, used to be opened as what they are rather than as what they were accepted as — and
+    /// read the server file they name into the uploader's features. The table they name here is
+    /// one the test writes beside the stored files, standing in for any file the server holds.
+    /// </summary>
+    [Fact]
+    public async Task A_virtual_document_uploaded_as_a_track_log_is_refused_and_stores_nothing_it_names()
+    {
+        var marker = "server-only-" + Guid.NewGuid().ToString("N");
+        Directory.CreateDirectory(filesRoot);
+        var serverOnly = Path.Combine(filesRoot, "server-only.csv");
+        await File.WriteAllTextAsync(serverOnly, $"x,y,secret\n25.1,46.1,{marker}\n");
+        var document = $"""
+            <OGRVRTDataSource>
+              <OGRVRTLayer name="tracks">
+                <SrcDataSource relativeToVRT="0">{serverOnly}</SrcDataSource>
+                <SrcLayer>server-only</SrcLayer>
+                <GeometryType>wkbPoint</GeometryType>
+                <LayerSRS>EPSG:4326</LayerSRS>
+                <GeometryField encoding="PointFromColumns" x="x" y="y"/>
+              </OGRVRTLayer>
+            </OGRVRTDataSource>
+            """;
+
+        var geofile = await UploadAsync(editor, "track.gpx", Encoding.UTF8.GetBytes(document));
+        var id = geofile.GetProperty("id").GetGuid();
+
+        var status = await WaitForImportAsync(editor, id, expectFailure: true);
+        status.GetProperty("importStatus").GetString().ShouldBe("failed");
+        status.GetProperty("importError").GetString().ShouldNotBeNullOrWhiteSpace();
+        status.GetRawText().ShouldNotContain(marker);
+
+        using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.GeofileFeatures.CountAsync(f => f.GeofileId == id)).ShouldBe(0);
+    }
+
     // ---- helpers ----
 
     private static MultipartFormDataContent BuildForm(string fileName, byte[] bytes)

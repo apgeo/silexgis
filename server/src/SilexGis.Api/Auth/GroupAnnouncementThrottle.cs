@@ -24,7 +24,7 @@ namespace SilexGis.Api.Auth;
 /// reaching into the account store itself.
 /// </para>
 /// </remarks>
-public sealed class GroupAnnouncementThrottle(UserManager<SilexGisUser> userManager)
+public sealed class GroupAnnouncementThrottle(UserManager<SilexGisUser> userManager, TimeProvider clock)
 {
     public async Task<bool> TooSoonAsync(Guid senderId)
     {
@@ -35,19 +35,19 @@ public sealed class GroupAnnouncementThrottle(UserManager<SilexGisUser> userMana
         // signed in.
         return account is not null
             && await SendThrottle.TooSoonAsync(
-                userManager, account, SendThrottle.GroupAnnouncementInterval, SendThrottle.GroupAnnouncement);
+                userManager, account, SendThrottle.GroupAnnouncementInterval, SendThrottle.GroupAnnouncement, clock);
     }
 
     /// <summary>
-    /// Stamped before the fan-out rather than after. A save that reports a failure may still have
-    /// committed, and somebody retrying a "failure" in a loop is exactly the case this bounds.
+    /// Stamped with the fan-out, inside the caller's transaction when it has one, so the marker and
+    /// the work it bounds commit together.
     /// </summary>
     public async Task MarkSentAsync(Guid senderId)
     {
         var account = await userManager.FindByIdAsync(senderId.ToString());
         if (account is not null)
         {
-            await SendThrottle.MarkSentAsync(userManager, account, SendThrottle.GroupAnnouncement);
+            await SendThrottle.MarkSentAsync(userManager, account, SendThrottle.GroupAnnouncement, clock);
         }
     }
 }

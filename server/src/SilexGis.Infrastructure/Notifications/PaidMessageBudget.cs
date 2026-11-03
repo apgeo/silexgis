@@ -142,9 +142,10 @@ public static class PaidMessageBudget
                 ct) ?? 0;
 
         // Accepted and not yet turned into notifications at all: everybody it still has to reach,
-        // at what the sender was measured against when it was accepted.
+        // at what the sender was measured against when it was accepted. One the queue has given
+        // up on will reach nobody, and costs nothing.
         var unexpanded = await db.CavingGroupAnnouncements
-            .Where(a => a.ExpandedAt == null && a.CreatedAt >= since)
+            .Where(a => a.ExpandedAt == null && a.FailedAt == null && a.CreatedAt >= since)
             .SumAsync(
                 a => (int?)(a.RecipientCount * (a.SegmentsPerCopy > TextMessageSegments.Unrendered
                     ? a.SegmentsPerCopy

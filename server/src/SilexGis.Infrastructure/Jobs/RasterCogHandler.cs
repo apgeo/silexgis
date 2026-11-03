@@ -31,6 +31,21 @@ public sealed class RasterCogHandler(
 {
     public string Kind => ProcessingJobKinds.RasterCog;
 
+    /// <summary>A conversion given up by the queue stops reading "processing".</summary>
+    public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
+    {
+        if (AbandonedJob.PayloadOf<RasterCogPayload>(job) is not { } payload)
+        {
+            return;
+        }
+
+        await db.GeoreferencedMaps
+            .Where(m => m.Id == payload.GeoreferencedMapId && m.Status == RasterStatus.Processing)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(m => m.Status, RasterStatus.Failed)
+                .SetProperty(m => m.ProcessingError, AbandonedJob.Reason), ct);
+    }
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var payload = JsonSerializer.Deserialize<RasterCogPayload>(job.Payload, JsonSerializerOptions.Web)

@@ -53,6 +53,21 @@ public sealed class SurveyMeshHandler(
     // attempt is due.
     public bool RetriesPassingFailures => true;
 
+    /// <summary>A reading given up by the queue stops reading "processing".</summary>
+    public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
+    {
+        if (AbandonedJob.PayloadOf<SurveyMeshPayload>(job) is not { } payload)
+        {
+            return;
+        }
+
+        await db.SurveyModels
+            .Where(m => m.Id == payload.SurveyModelId && m.Status == SurveyModelStatus.Processing)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(m => m.Status, SurveyModelStatus.Failed)
+                .SetProperty(m => m.ProcessingError, AbandonedJob.Reason), ct);
+    }
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var payload = JsonSerializer.Deserialize<SurveyMeshPayload>(job.Payload, JsonSerializerOptions.Web)

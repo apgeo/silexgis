@@ -537,8 +537,19 @@ internal static class ExpeditionReportEndpoints
         var plates = new List<ExpeditionReportPlate>(rows.Count);
         foreach (var row in rows)
         {
-            var rendering = await thumbnails.GetOrCreateAsync(
-                row.File.Id, row.File.StoragePath, PlateSize, ct, row.File.OrientationQuarterTurns);
+            // A picture that cannot be drawn — damaged, or declaring more pixels than may be
+            // decoded — is left out rather than failing the document for every reader of it.
+            string rendering;
+            try
+            {
+                rendering = await thumbnails.GetOrCreateAsync(
+                    row.File.Id, row.File.StoragePath, PlateSize, ct, row.File.OrientationQuarterTurns);
+            }
+            catch (ImageMagick.MagickException)
+            {
+                continue;
+            }
+
             var caption = new[]
             {
                 string.IsNullOrWhiteSpace(row.Details?.Caption) ? row.Document.Title : row.Details!.Caption,

@@ -81,7 +81,8 @@ public static class SendThrottle
         SilexGisUser user,
         TwoFactorMethod method,
         TimeSpan interval,
-        string purpose)
+        string purpose,
+        TimeProvider? clock = null)
     {
         var stored = await userManager.GetAuthenticationTokenAsync(user, Provider, Bucket(method, purpose));
         if (stored is null || !long.TryParse(stored, CultureInfo.InvariantCulture, out var lastUnix))
@@ -89,7 +90,7 @@ public static class SendThrottle
             return false;
         }
 
-        return DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(lastUnix) < interval;
+        return Now(clock) - DateTimeOffset.FromUnixTimeSeconds(lastUnix) < interval;
     }
 
     /// <summary>
@@ -97,7 +98,11 @@ public static class SendThrottle
     /// purpose alone. Kept apart from the method-keyed buckets by the separator those carry.
     /// </summary>
     public static async Task<bool> TooSoonAsync(
-        UserManager<SilexGisUser> userManager, SilexGisUser user, TimeSpan interval, string purpose)
+        UserManager<SilexGisUser> userManager,
+        SilexGisUser user,
+        TimeSpan interval,
+        string purpose,
+        TimeProvider? clock = null)
     {
         var stored = await userManager.GetAuthenticationTokenAsync(user, Provider, purpose);
         if (stored is null || !long.TryParse(stored, CultureInfo.InvariantCulture, out var lastUnix))
@@ -105,24 +110,34 @@ public static class SendThrottle
             return false;
         }
 
-        return DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(lastUnix) < interval;
+        return Now(clock) - DateTimeOffset.FromUnixTimeSeconds(lastUnix) < interval;
     }
 
     public static Task MarkSentAsync(
-        UserManager<SilexGisUser> userManager, SilexGisUser user, string purpose) =>
+        UserManager<SilexGisUser> userManager, SilexGisUser user, string purpose, TimeProvider? clock = null) =>
         userManager.SetAuthenticationTokenAsync(
             user,
             Provider,
             purpose,
-            DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
+            Now(clock).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
 
     public static Task MarkSentAsync(
-        UserManager<SilexGisUser> userManager, SilexGisUser user, TwoFactorMethod method, string purpose) =>
+        UserManager<SilexGisUser> userManager,
+        SilexGisUser user,
+        TwoFactorMethod method,
+        string purpose,
+        TimeProvider? clock = null) =>
         userManager.SetAuthenticationTokenAsync(
             user,
             Provider,
             Bucket(method, purpose),
-            DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
+            Now(clock).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
+
+    /// <summary>
+    /// The application's clock where a caller passes it, the system's otherwise — the callers that
+    /// do not yet take the injected clock read the same instant they always did.
+    /// </summary>
+    private static DateTimeOffset Now(TimeProvider? clock) => (clock ?? TimeProvider.System).GetUtcNow();
 
     /// <summary>
     /// Each purpose is throttled on its own. Sharing one bucket would let setting a method up make

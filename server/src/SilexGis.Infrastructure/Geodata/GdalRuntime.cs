@@ -20,7 +20,16 @@ public static class GdalRuntime
     private static readonly Lock Gate = new();
     private static bool configured;
 
-    /// <summary>Registers the drivers and settles where the library may write while it works.</summary>
+    /// <summary>
+    /// The one file name the network file systems are allowed to open: not a path under any of
+    /// their prefixes, so no request through them can match it.
+    /// </summary>
+    public const string NetworkFileSystemsOff = "network-file-systems-are-off";
+
+    /// <summary>
+    /// Registers the drivers, settles where the library may write while it works, and switches
+    /// off its network file systems.
+    /// </summary>
     public static void Configure()
     {
         lock (Gate)
@@ -46,6 +55,25 @@ public static class GdalRuntime
             // for the duration; see the terrain raster preparer, whose intermediates are measured in
             // gigabytes and belong beside the build rather than on the container's own layer.
             Gdal.SetConfigOption("CPL_TMPDIR", Path.GetTempPath());
+
+            // The library can read files over the network through its /vsicurl/ family of
+            // file systems (and the cloud-storage ones built on it), and a document it opens may
+            // name such a path as a source. Nothing in this application reads a raster or a layer
+            // from an address: every file it hands the library is one it holds on its own disk.
+            // So the only way those file systems would ever be used is a file somebody uploaded
+            // naming an address, making the server fetch from wherever it can reach, its own
+            // private network included. They are switched off by allowing them exactly one file
+            // name, and one that no address can have.
+            Gdal.SetConfigOption("CPL_VSIL_CURL_ALLOWED_FILENAME", NetworkFileSystemsOff);
+
+            // The library's other virtual file systems — /vsizip/, /vsitar/, /vsigzip/, /vsimem/,
+            // /vsisubfile/, /vsistdin/ and the rest — are left on, on purpose. They reach nothing
+            // beyond the machine, and the only way an upload could steer a read through one is a
+            // driver that follows a path written inside a document. The drivers that do (the
+            // virtual raster and vector formats) are never offered an upload: each upload is opened
+            // only with the drivers of the format it was accepted as, and none of those reads a
+            // path from content. The one virtual path that is used is /vsizip/, which the readers
+            // build themselves to look inside an uploaded shapefile archive or KMZ.
 
             configured = true;
         }
