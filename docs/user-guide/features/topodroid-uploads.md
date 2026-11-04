@@ -184,13 +184,17 @@ Whoever opens it sees:
 
 - the survey's title, the **name** of the cave, and when the upload was sent;
 - the same progress bar and stages;
-- the results that can be opened or downloaded.
+- the results that can be opened or downloaded;
+- **the compiler's log**: its last lines on the page, and the whole log to download — after a
+  compile that failed, where it says what went wrong, as after one that worked.
 
 ### What the public link never shows
 
 - **The TopoDroid archive or the Therion source files.**
-- **The log**, the team, the station names.
-- **Where the cave is.** The page names the cave and nothing about its position.
+- The team.
+- **Where the cave is.** The page names the cave and gives no position of its own. The results
+  themselves — the model and the drawings — and the compiler's log, which can name stations and
+  repeat the survey's fixed point, are for whoever holds the link: that is what the link is for.
 
 ### What the link is, and is not
 

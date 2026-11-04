@@ -89,6 +89,11 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
   const when = (value: string | null) => (value ? new Date(value).toLocaleString(i18n.language) : '—');
   const unsettled = surveyUploadUnsettled(upload.status);
   const canRerun = canWrite && (upload.status === 'succeeded' || upload.status === 'failed');
+  // The log is drawn in two places: in full among the results, to every reader the server lists it
+  // to, and its tail in a card of its own to those who may write the cave.
+  const logShown =
+    upload.artefacts.some((a) => a.kind === 'log' && a.contentUrl !== null) ||
+    (canWrite && !!upload.logTail);
 
   const view = {
     status: upload.status,
@@ -142,7 +147,7 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
 
       <Flex vertical gap={16}>
         <Card size="small" title={t('surveyUploads.page.progressTitle')}>
-          <SurveyUploadProgressPanel view={view} />
+          <SurveyUploadProgressPanel view={view} logShown={logShown} />
         </Card>
 
         <PublicLinkCard upload={upload} canWrite={canWrite} />

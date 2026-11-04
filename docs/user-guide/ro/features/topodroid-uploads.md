@@ -187,13 +187,17 @@ Cine îl deschide vede:
 
 - titlul topografiei, **numele** peșterii și momentul trimiterii;
 - aceeași bară de progres și aceleași etape;
-- rezultatele care pot fi deschise sau descărcate.
+- rezultatele care pot fi deschise sau descărcate;
+- **jurnalul compilatorului**: ultimele lui rânduri pe pagină și tot jurnalul de descărcat — după o
+  compilare eșuată, unde spune ce nu a mers, ca și după una reușită.
 
 ### Ce nu arată niciodată linkul public
 
 - **Arhiva TopoDroid sau fișierele sursă Therion.**
-- **Jurnalul**, echipa, numele stațiilor.
-- **Unde se află peștera.** Pagina numește peștera și nu spune nimic despre poziția ei.
+- Echipa.
+- **Unde se află peștera.** Pagina numește peștera și nu dă nicio poziție a ei. Rezultatele
+  însele — modelul și desenele — și jurnalul compilatorului, care poate numi stații și poate repeta
+  punctul fix al topografiei, sunt pentru cine are linkul: pentru asta există linkul.
 
 ### Ce este linkul și ce nu este
 

@@ -14,7 +14,7 @@ import { SURVEY_UPLOAD_REQUEST_ERROR_KEYS, SURVEY_UPLOAD_RUN_ERROR_KEYS } from '
  * and the results.
  */
 
-function show(view: Partial<SurveyUploadProgressView> & Pick<SurveyUploadProgressView, 'status'>) {
+function show(view: Partial<SurveyUploadProgressView> & Pick<SurveyUploadProgressView, 'status'>, logShown = true) {
   const full: SurveyUploadProgressView = {
     progress: 0,
     message: null,
@@ -25,7 +25,7 @@ function show(view: Partial<SurveyUploadProgressView> & Pick<SurveyUploadProgres
   };
   return render(
     <MemoryRouter>
-      <SurveyUploadProgressPanel view={full} />
+      <SurveyUploadProgressPanel view={full} logShown={logShown} />
     </MemoryRouter>,
   );
 }
@@ -71,6 +71,21 @@ describe('the progress view', () => {
 
     expect(screen.getByTestId('survey-upload-error')).toHaveTextContent('not a TopoDroid survey archive');
     expect(screen.getByTestId('survey-upload-error-code')).toHaveTextContent('survey_pipeline.archive_invalid');
+  });
+
+  it('points a failed compile to the log only when the page draws one', () => {
+    const failed = {
+      status: 'failed' as const,
+      progress: 60,
+      error: { code: 'survey_pipeline.compile_failed', message: null },
+      stages: surveyUploadStageStates({ status: 'failed', stage: 'compile' }),
+    };
+    show(failed);
+    expect(screen.getByTestId('survey-upload-error')).toHaveTextContent('The log below says where.');
+    cleanup();
+    show(failed, false);
+    expect(screen.getByTestId('survey-upload-error')).toHaveTextContent('Therion could not compile the survey.');
+    expect(screen.getByTestId('survey-upload-error')).not.toHaveTextContent('below');
   });
 
   it('falls back to the server sentence for a code it has no wording for', () => {

@@ -4,9 +4,10 @@
 // the link from the status page.
 //
 // The anonymous answer is limited by the server to the survey title, the cave's *name* only, the
-// upload moment, status, stages, progress, message, error and the artefacts that can be opened. It
-// never carries the archive, the Therion sources, the log, the team, station names, a cave id or a
-// coordinate, so the page built from it has nothing to hide.
+// upload moment, status, stages, progress, message, error, the artefacts that can be opened and the
+// compiler's log (its tail, and where to download the whole of it). It never carries the archive,
+// the Therion sources, the team, a cave id or a coordinate of its own, so the page built from it
+// has nothing to hide: the log is the holder's to read, like the model it was compiled into.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../client.ts';
 import type { components } from '../schema';
@@ -82,6 +83,17 @@ export interface PublicResultView {
   error: { code: string; message: string | null } | null;
   stages: StageProgress[];
   artefacts: SurveyUploadArtefactView[];
+  /** The last lines the compiler wrote; null before a compile. */
+  logTail: string | null;
+  /** The compiler's whole log, downloaded from a route of the same link; null when there is none. */
+  log: PublicSurveyLog | null;
+}
+
+/** The whole log of a run, as the public answer offers it. */
+export interface PublicSurveyLog {
+  name: string;
+  sizeBytes: number;
+  url: string;
 }
 
 /**
@@ -104,6 +116,8 @@ export function publicResultView(answer: PublicSurveyUpload): PublicResultView {
     error: answer.error,
     stages,
     artefacts: answer.artefacts,
+    logTail: answer.logTail ?? null,
+    log: answer.log ?? null,
   };
 }
 

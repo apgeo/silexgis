@@ -5172,7 +5172,9 @@
     "signInRequiredHint": "Whoever made it chose to show these results to the installation's accounts only. Sign in and you come back to this page.",
     "signIn": "Sign in",
     "loadFailed": "The result could not be loaded.",
-    "caveAndVersion": "{{cave}} — uploaded {{when}}"
+    "caveAndVersion": "{{cave}} — uploaded {{when}}",
+    "downloadLog": "Download the whole log",
+    "logDownloadFailed": "The log could not be downloaded. Please try again."
   },
   "publicTrip": {
     "notFoundTitle": "Nothing to show for this link",
@@ -6688,6 +6690,7 @@
       "sourceInvalid": "A Therion source could not be read.",
       "compilerUnavailable": "The compiler could not be reached. The files are archived; run the upload again later.",
       "compileFailed": "Therion could not compile the survey. The log below says where.",
+      "compileFailedNoLog": "Therion could not compile the survey.",
       "compileTimeout": "Compiling took longer than this server allows.",
       "outputMissing": "The compilation did not produce a result that was asked for.",
       "crsUnknown": "Stored, but not read into stations: the survey is fixed in a coordinate system this server does not know.",

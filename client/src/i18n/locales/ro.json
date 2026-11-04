@@ -5185,7 +5185,9 @@
     "signInRequiredHint": "Cine l-a făcut a ales să arate aceste rezultate doar conturilor instalării. Autentifică-te și revii la această pagină.",
     "signIn": "Autentificare",
     "loadFailed": "Rezultatul nu a putut fi încărcat.",
-    "caveAndVersion": "{{cave}} — încărcat {{when}}"
+    "caveAndVersion": "{{cave}} — încărcat {{when}}",
+    "downloadLog": "Descarcă tot jurnalul",
+    "logDownloadFailed": "Jurnalul nu a putut fi descărcat. Încearcă din nou."
   },
   "publicTrip": {
     "notFoundTitle": "Nimic de arătat pentru acest link",
@@ -6701,6 +6703,7 @@
       "sourceInvalid": "O sursă Therion nu a putut fi citită.",
       "compilerUnavailable": "Compilatorul nu a putut fi contactat. Fișierele sunt arhivate; rulează încărcarea din nou mai târziu.",
       "compileFailed": "Therion nu a putut compila topografia. Jurnalul de mai jos arată unde.",
+      "compileFailedNoLog": "Therion nu a putut compila topografia.",
       "compileTimeout": "Compilarea a durat mai mult decât permite acest server.",
       "outputMissing": "Compilarea nu a produs un rezultat care fusese cerut.",
       "crsUnknown": "Salvat, dar necitit în stații: topografia este fixată într-un sistem de coordonate pe care acest server nu îl cunoaște.",

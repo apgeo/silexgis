@@ -1599,8 +1599,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The public page of an upload's results: its survey title, the cave's name, the run's progress and the files it produced. 401 survey_upload.public_link_sign_in_required for a link made for the organization, read without signing in. */
+        /** The public page of an upload's results: its survey title, the cave's name, the run's progress, the files it produced and the compiler's log. 401 survey_upload.public_link_sign_in_required for a link made for the organization, read without signing in. */
         get: operations["publicSurveyUpload"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/survey-uploads/{token}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The compiler's whole log of the upload behind a public link, as a text file to save. Opens and refuses exactly as the page does; 404 survey_upload.public_log_not_found when the link opens and the upload has no log. */
+        get: operations["publicSurveyUploadLog"];
         put?: never;
         post?: never;
         delete?: never;
@@ -13852,6 +13869,8 @@ export interface components {
             message: null | string;
             error: null | components["schemas"]["PublicSurveyUploadErrorDto"];
             artefacts: components["schemas"]["PublicSurveyUploadArtefactDto"][];
+            logTail: null | string;
+            log: null | components["schemas"]["PublicSurveyUploadLogDto"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -13860,6 +13879,12 @@ export interface components {
         PublicSurveyUploadErrorDto: {
             code: string;
             message: null | string;
+        };
+        PublicSurveyUploadLogDto: {
+            name: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            url: string;
         };
         PublicSurveyUploadStageDto: {
             stage: components["schemas"]["SurveyUploadStage"];
@@ -21639,6 +21664,53 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PublicSurveyUploadDto"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    publicSurveyUploadLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {
