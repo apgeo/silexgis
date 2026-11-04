@@ -418,6 +418,10 @@ public sealed class SyncUploadRequestValidator : AbstractValidator<SyncUploadReq
     /// <summary>The longest note on one scan.</summary>
     private const int TripNoteMax = 4_000;
 
+    // Below the deepest sea floor and above the highest summit, with room to spare either way.
+    private const decimal MinAltitude = -12_000m;
+    private const decimal MaxAltitude = 9_000m;
+
     /// <summary>The largest pixel coordinate a pin may carry: far beyond any picture, short of overflow.</summary>
     private const int PinPixelMax = 1_000_000;
 
@@ -613,6 +617,17 @@ public sealed class SyncUploadRequestValidator : AbstractValidator<SyncUploadReq
             row.RuleFor(r => r.CaveTypeCode).MaximumLength(50);
             row.RuleFor(r => r.EntranceTypeCode).MaximumLength(50);
             row.RuleFor(r => r.PositionQuality).IsInEnum().When(r => r.PositionQuality is not null);
+
+            // Altitude lands in a fixed-width decimal column, and a point's third ordinate is lifted
+            // into it when no altitude is sent. A value out of that column's reach — an altitude
+            // sent in millimetres, say — would fail the batch in the database on every retry, so
+            // both are held to the range a place on Earth can have.
+            row.RuleFor(r => r.Altitude).InclusiveBetween(MinAltitude, MaxAltitude).When(r => r.Altitude is not null);
+            row.RuleFor(r => r.Geometry)
+                .Must(g => g?.ToGeometryOrNull()?.Coordinate is not { Z: var z }
+                    || double.IsNaN(z)
+                    || (z >= (double)MinAltitude && z <= (double)MaxAltitude))
+                .WithMessage($"A position's height must lie between {MinAltitude} and {MaxAltitude} metres.");
 
             // The property document is stored as given and never interpreted, so the only thing
             // worth asserting about it is that it is a document at all — a bare number would be

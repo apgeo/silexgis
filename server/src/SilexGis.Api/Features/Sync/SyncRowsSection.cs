@@ -336,6 +336,15 @@ internal sealed class SyncRowsSection(
 
         if (row.BaseRevision is null)
         {
+            // A removal with no revision is not a resent create, and answering it "unchanged" would
+            // tell the phone the row is already gone here while it stays: the phone drops its copy
+            // and the row comes back at its next download. Answered as a removal arbitrated
+            // against a revision the phone does not hold, so it sends the removal again with it.
+            if (row.Deleted)
+            {
+                return Answer(Conflict(row.Id, existing.UpdatedAt));
+            }
+
             // A create whose row is already here: the device sent it before and did not hear the
             // answer. Writing it again would overwrite whatever has happened to the row since,
             // with no revision to arbitrate against, so nothing is written.
@@ -369,14 +378,21 @@ internal sealed class SyncRowsSection(
             return await ApplyCreateAsync(run, proposal, ct);
         }
 
+        // Locked before it is compared, and compared on what the locking statement read: another
+        // upload that has written this row and not yet committed is waited for here, and its
+        // committed revision is what this one is arbitrated against.
+        var standing = await SyncRevisionSql.HoldAsync(db, SyncRevisionTable.Features, row.Id, proposal.BaseRevision!.Value, ct);
+        if (!standing.Holds)
+        {
+            return new SyncApplied(Conflict(row.Id, standing.Revision), null);
+        }
+
         var existing = proposal.Act == SyncRowAct.Delete
             ? await db.Features.AsNoTracking().IgnoreQueryFilters().FirstOrDefaultAsync(f => f.Id == row.Id, ct)
             : await db.Features.IgnoreQueryFilters().FirstOrDefaultAsync(f => f.Id == row.Id, ct);
-        if (existing is null
-            || existing.DeletedAt is not null
-            || !SameRevision(existing.UpdatedAt, proposal.BaseRevision!.Value))
+        if (existing is null)
         {
-            return new SyncApplied(Conflict(row.Id, existing?.UpdatedAt), null);
+            return new SyncApplied(Conflict(row.Id, null), null);
         }
 
         if (proposal.Act == SyncRowAct.Delete)
@@ -645,7 +661,7 @@ internal sealed class SyncRowsSection(
             OwnerUserId = run.Access.UserId,
             CavingGroupId = run.Set.CavingGroupId,
             Visibility = run.Set.UploadVisibility,
-            ClientUpdatedAt = row.ClientUpdatedAt,
+            ClientUpdatedAt = SyncTimes.Utc(row.ClientUpdatedAt),
         };
         IReadOnlyList<ParentSpec> parents = proposal.ContainerId is { } containerId
             ? [new ParentSpec(containerId, IsPrimary: true)]
@@ -780,9 +796,24 @@ internal sealed class SyncRowsSection(
         else if (existing.Kind == FeatureKind.Generic && exact && row.Geometry is not null)
         {
             writesPosition = true;
-            if (row.Geometry.ToGeometryOrNull() is null)
+            if (row.Geometry.ToGeometryOrNull() is not { } geom)
             {
                 return Answer(Refuse(row.Id, "sync.geometry_invalid", "That geometry could not be read."));
+            }
+
+            // The kind's accepted shapes, the same rule a create and a browser edit are held to: an
+            // area turned into a point, or a point-only place given a line, breaks everything that
+            // measures or contains by it, and no database check stands behind a generic kind.
+            var accepted = await run.Db.FeatureTypes.AsNoTracking()
+                .Where(t => t.Id == existing.FeatureTypeId)
+                .Select(t => t.AcceptedGeometryClasses)
+                .FirstOrDefaultAsync(ct);
+            if (GeometryClasses.Of(geom) is not { } geometryClass
+                || accepted is null
+                || !accepted.Contains(geometryClass))
+            {
+                return Answer(Refuse(row.Id, "sync.geometry_invalid",
+                    $"This kind does not accept a {geom.GeometryType}."));
             }
         }
 
@@ -850,7 +881,7 @@ internal sealed class SyncRowsSection(
             feature.Description = row.Description;
         }
 
-        feature.ClientUpdatedAt = row.ClientUpdatedAt;
+        feature.ClientUpdatedAt = SyncTimes.Utc(row.ClientUpdatedAt);
 
         // The property document goes in unguarded, and that is safe only because no coordinate is
         // ever allowed into it. It is handed to every reader of a row with no protection filter
@@ -874,7 +905,15 @@ internal sealed class SyncRowsSection(
             if (feature.Kind == FeatureKind.CaveEntrance && proposal.WritesPosition)
             {
                 var entrance = await db.CaveEntrances.FirstAsync(e => e.Id == feature.Id, ct);
-                entrance.PositionQuality = row.PositionQuality ?? PositionQuality.Unknown;
+
+                // Only when sent: an upload is a partial write, and no route hands the quality to
+                // a phone, so a phone that does not state one cannot be echoing the stored value —
+                // writing a default here would downgrade a surveyed position on every rename.
+                if (row.PositionQuality is { } quality)
+                {
+                    entrance.PositionQuality = quality;
+                }
+
                 if (row.Geometry?.ToGeometryOrNull() is Point point)
                 {
                     entrance.Altitude = AltitudeOf(row, point);

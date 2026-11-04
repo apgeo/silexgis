@@ -357,6 +357,10 @@ export const groups = {
     'ContractManifestTests', 'SpeleoLocClientRegistrationTests', 'SpeleoLocDevSeedTests',
     'SyncAdministratorReadTests', 'SyncAuthTests', 'SyncDocumentStreamTests', 'SyncPageSizeTests',
     'SyncProtocolTests', 'SyncSetTests', 'SyncStreamPagingTests', 'SyncUploadSectionTests', 'SyncUploadTests',
+    // Two uploads raced over one row: the arbitration under overlap, not in sequence.
+    'SyncUploadRaceTests',
+    // A download paged between a late-committing write and a later-stamped one.
+    'SyncLateCommitTests',
     'SyncPeopleTests', 'SyncSettingsTests', 'SyncStagedUploadTests',
     // A phone user a phone names without describing, recorded nameless.
     'SyncNamelessPhoneUserTests',

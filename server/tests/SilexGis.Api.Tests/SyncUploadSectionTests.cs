@@ -72,6 +72,54 @@ public sealed class SyncUploadSectionTests : IAsyncLifetime, IDisposable, IClass
     }
 
     [Fact]
+    public async Task A_height_out_of_any_place_on_earths_reach_is_refused_as_a_request_and_a_real_one_is_written()
+    {
+        var caveId = Guid.CreateVersion7();
+        object Entrance(Guid id, double? altitude, double[] coordinates) => new
+        {
+            id,
+            kind = "caveEntrance",
+            parentId = caveId,
+            baseRevision = (DateTimeOffset?)null,
+            deleted = false,
+            name = "Intrare",
+            entranceTypeCode = "natural",
+            isMain = true,
+            geometry = new { type = "Point", coordinates },
+            altitude,
+        };
+
+        // Sent in millimetres, as one phone build did: the column cannot hold it, and the batch
+        // would fail in the database on every retry instead of being told what is wrong.
+        foreach (var refused in new[]
+        {
+            Entrance(Guid.CreateVersion7(), 123_456_789, [24.5, 45.5]),
+            Entrance(Guid.CreateVersion7(), null, [24.5, 45.5, 123_456_789]),
+        })
+        {
+            var response = await owner.PostAsJsonAsync($"/api/v1/sync/sets/{set}/upload", new
+            {
+                batchId = Guid.CreateVersion7(),
+                contractVersion = 1,
+                rows = new[] { Cave(caveId, "deep"), refused },
+            });
+            await ShouldBeRefusedAsync(response, HttpStatusCode.BadRequest, "validation.failed");
+        }
+
+        var entranceId = Guid.CreateVersion7();
+        var answer = await UploadAsync(new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            rows = new[] { Cave(caveId, "deep"), Entrance(entranceId, null, [24.5, 45.5, 1_234.5]) },
+        });
+        answer.GetProperty("rows")[1].GetProperty("status").GetString().ShouldBe("created");
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.CaveEntrances.AsNoTracking().SingleAsync(e => e.Id == entranceId)).Altitude.ShouldBe(1_234.5m);
+    }
+
+    [Fact]
     public async Task The_item_ceiling_bounds_the_whole_upload_and_an_upload_over_it_writes_nothing()
     {
         var overBatch = Guid.CreateVersion7();
@@ -183,6 +231,154 @@ public sealed class SyncUploadSectionTests : IAsyncLifetime, IDisposable, IClass
             row.GetProperty("revision").GetDateTimeOffset()
                 .ShouldBe(first.GetProperty("rows")[0].GetProperty("revision").GetDateTimeOffset());
         }
+    }
+
+    [Fact]
+    public async Task An_entrance_renamed_without_a_position_or_a_quality_keeps_the_ones_it_has()
+    {
+        var caveId = Guid.CreateVersion7();
+        var entranceId = Guid.CreateVersion7();
+        var created = await UploadAsync(new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            rows = new object[]
+            {
+                Cave(caveId, "surveyed"),
+                new
+                {
+                    id = entranceId, kind = "caveEntrance", parentId = caveId, baseRevision = (DateTimeOffset?)null,
+                    deleted = false, name = "Intrare", entranceTypeCode = "natural", isMain = true,
+                    geometry = new { type = "Point", coordinates = new[] { 24.51, 45.51, 812.5 } },
+                    positionQuality = "Gps",
+                },
+            },
+        });
+        var revision = created.GetProperty("rows")[1].GetProperty("revision").GetDateTimeOffset();
+        var before = await EntranceAsync(entranceId);
+        before.Quality.ShouldBe(PositionQuality.Gps, "the fixture stores a surveyed position");
+
+        // The owner, who sees the position exactly, renames it on the phone: no geometry, no
+        // quality, because no route ever handed the quality to the phone to send back.
+        var renamed = await UploadAsync(new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            rows = new object[]
+            {
+                new
+                {
+                    id = entranceId, kind = "caveEntrance", baseRevision = revision, deleted = false,
+                    name = "Intrarea nouă", entranceTypeCode = "natural", isMain = true,
+                },
+            },
+        });
+        renamed.GetProperty("rows")[0].GetProperty("status").GetString().ShouldBe("updated");
+
+        var after = await EntranceAsync(entranceId);
+        after.Name.ShouldBe("Intrarea nouă");
+        after.Quality.ShouldBe(PositionQuality.Gps);
+        after.Altitude.ShouldBe(before.Altitude);
+        after.Point.ShouldBe(before.Point);
+    }
+
+    [Fact]
+    public async Task A_place_sent_with_a_shape_its_kind_does_not_accept_is_refused_and_keeps_its_own()
+    {
+        var caveId = Guid.CreateVersion7();
+        var placeId = Guid.CreateVersion7();
+        var created = await UploadAsync(new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            rows = new object[]
+            {
+                Cave(caveId, "with a place"),
+                new
+                {
+                    id = placeId, kind = "generic", parentId = caveId, baseRevision = (DateTimeOffset?)null,
+                    deleted = false, name = "Chamber", featureTypeCode = "cave_place", isMain = false,
+                    geometry = new { type = "Point", coordinates = new[] { 24.52, 45.52 } },
+                },
+            },
+        });
+        var revision = created.GetProperty("rows")[1].GetProperty("revision").GetDateTimeOffset();
+
+        // A place is a point; the same request through the browser answers that the kind refuses
+        // a line.
+        object Edit(object geometry, string name) => new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            rows = new object[]
+            {
+                new { id = placeId, kind = "generic", baseRevision = revision, deleted = false, name, isMain = false, geometry },
+            },
+        };
+        var refused = await UploadAsync(Edit(
+            new { type = "LineString", coordinates = new[] { new[] { 24.52, 45.52 }, new[] { 24.53, 45.53 } } }, "Chamber as a line"));
+        var row = refused.GetProperty("rows")[0];
+        row.GetProperty("status").GetString().ShouldBe("rejected");
+        row.GetProperty("code").GetString().ShouldBe("sync.geometry_invalid");
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var stored = await db.Features.AsNoTracking().SingleAsync(f => f.Id == placeId);
+            stored.Geom.ShouldBeOfType<NetTopologySuite.Geometries.Point>();
+            stored.Name.ShouldBe("Chamber");
+        }
+
+        // The shape the kind takes is written from the same revision.
+        var moved = await UploadAsync(Edit(new { type = "Point", coordinates = new[] { 24.54, 45.54 } }, "Chamber moved"));
+        moved.GetProperty("rows")[0].GetProperty("status").GetString().ShouldBe("updated");
+    }
+
+    [Fact]
+    public async Task A_removal_sent_without_a_revision_is_told_the_revision_and_removes_the_row_when_sent_with_it()
+    {
+        var caveId = Guid.CreateVersion7();
+        var revision = (await UploadAsync(new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            rows = new[] { Cave(caveId, "to remove") },
+        })).GetProperty("rows")[0].GetProperty("revision").GetDateTimeOffset();
+
+        object Removal(DateTimeOffset? baseRevision) => new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            rows = new[] { new { id = caveId, kind = "cave", baseRevision, deleted = true, isMain = false } },
+        };
+
+        // Answered "unchanged", the phone would take the row for already gone here and drop it,
+        // while it stays and comes back at the next download.
+        var bare = (await UploadAsync(Removal(null))).GetProperty("rows")[0];
+        bare.GetProperty("status").GetString().ShouldBe("conflict");
+        bare.GetProperty("revision").GetDateTimeOffset().ShouldBe(revision);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Features.AsNoTracking().AnyAsync(f => f.Id == caveId)).ShouldBeTrue();
+        }
+
+        (await UploadAsync(Removal(revision))).GetProperty("rows")[0].GetProperty("status").GetString().ShouldBe("deleted");
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Features.AsNoTracking().AnyAsync(f => f.Id == caveId)).ShouldBeFalse();
+        }
+    }
+
+    private async Task<(string? Name, PositionQuality Quality, decimal? Altitude, string Point)> EntranceAsync(Guid id)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var entrance = await db.CaveEntrances.AsNoTracking().SingleAsync(e => e.Id == id);
+        var feature = await db.Features.AsNoTracking().SingleAsync(f => f.Id == id);
+        var point = (NetTopologySuite.Geometries.Point)feature.Geom!;
+        return (feature.Name, entrance.PositionQuality, entrance.Altitude, $"{point.X} {point.Y} {point.Z}");
     }
 
     private static object Cave(Guid id, string name) => new

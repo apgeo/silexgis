@@ -71,13 +71,20 @@ public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable, IClassFixtu
     [Fact]
     public async Task Every_sync_route_refuses_a_caller_with_no_token()
     {
+        // The phone's whole surface: the sync slice, the phone-user roster it feeds, and the
+        // staging routes a phone sends its bytes through before an upload names them.
+        string[] prefixes = ["/api/v1/sync", "/api/v1/phone-users", "/api/v1/files/uploads"];
         var routes = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
-            .Where(e => e.RoutePattern.RawText?.StartsWith("/api/v1/sync", StringComparison.Ordinal) == true)
+            .Where(e => prefixes.Any(p => e.RoutePattern.RawText?.StartsWith(p, StringComparison.Ordinal) == true))
             .ToList();
 
-        // If this ever reads zero the test below proves nothing, so it is stated as a fact.
-        routes.Count.ShouldBeGreaterThanOrEqualTo(8);
+        // Counted exactly, per prefix, so a route that drops out of the walk — a prefix changed, a
+        // group mapped somewhere else — fails here rather than leaving the walk below to prove
+        // less than it claims. A route added on purpose raises the count with it.
+        routes.Count(r => r.RoutePattern.RawText!.StartsWith("/api/v1/sync", StringComparison.Ordinal)).ShouldBe(15);
+        routes.Count(r => r.RoutePattern.RawText!.StartsWith("/api/v1/phone-users", StringComparison.Ordinal)).ShouldBe(3);
+        routes.Count(r => r.RoutePattern.RawText!.StartsWith("/api/v1/files/uploads", StringComparison.Ordinal)).ShouldBe(5);
 
         foreach (var route in routes)
         {
