@@ -27,6 +27,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
+    private readonly string connectionString;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];
 
     private HttpClient me = null!;
@@ -35,6 +36,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
 
     public AccountSettingsTests(PostgresFixture postgres)
     {
+        connectionString = postgres.ConnectionString;
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-account-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
@@ -388,6 +390,220 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
         var unknown = await me.PutAsJsonAsync("/api/v1/me/avatar", new { preset = "dragon" });
         unknown.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await ProblemCodeAsync(unknown)).ShouldBe("validation.failed");
+    }
+
+    /// <summary>
+    /// The avatar's type is what its bytes are, not what the upload calls itself: text and SVG
+    /// under a PNG name are refused, and a real picture is stored as the format it really is.
+    /// </summary>
+    [Fact]
+    public async Task Avatar_is_judged_by_its_bytes_rather_than_its_name_and_declared_type()
+    {
+        using (var text = BuildForm("face.png", "not an image at all"u8.ToArray(), "image/png"))
+        {
+            var refused = await me.PostAsync("/api/v1/me/avatar", text);
+            refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await ProblemCodeAsync(refused)).ShouldBe("me.avatar_invalid");
+        }
+
+        var svg = """<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8"/></svg>"""u8;
+        using (var drawing = BuildForm("face.png", svg.ToArray(), "image/png"))
+        {
+            var refused = await me.PostAsync("/api/v1/me/avatar", drawing);
+            refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await ProblemCodeAsync(refused)).ShouldBe("me.avatar_invalid");
+        }
+
+        // Binary that matches no picture format and does not read as text either: the bytes name
+        // no image, so the declared type is not allowed to stand in for them.
+        var noFormat = new byte[64];
+        for (var i = 0; i < noFormat.Length; i++)
+        {
+            noFormat[i] = (byte)(i % 2 == 0 ? 0x00 : 0xFF);
+        }
+        using (var binary = BuildForm("face.png", noFormat, "image/png"))
+        {
+            var refused = await me.PostAsync("/api/v1/me/avatar", binary);
+            refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await ProblemCodeAsync(refused)).ShouldBe("me.avatar_invalid");
+        }
+
+        (await GetMeAsync(me)).GetProperty("avatarUrl").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // A PNG that calls itself a JPEG is still a picture, and is filed as the PNG it is.
+        using var misnamed = BuildForm("face.jpg", MakePng(32, 32), "image/jpeg");
+        var accepted = await me.PostAsync("/api/v1/me/avatar", misnamed);
+        accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await accepted.Content.ReadAsStringAsync());
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var avatarFileId = await db.Users.Where(u => u.Id == myId).Select(u => u.AvatarFileId).FirstAsync();
+        (await db.StoredFiles.AsNoTracking().Where(f => f.Id == avatarFileId!.Value).Select(f => f.MimeType).FirstAsync())
+            .ShouldBe("image/png");
+    }
+
+    /// <summary>
+    /// A club id that names no caving group is a coded refusal, not a database error, and the
+    /// rest of the profile is left as it was; a real group is saved.
+    /// </summary>
+    [Fact]
+    public async Task A_club_that_names_no_caving_group_is_refused_and_a_real_one_is_saved()
+    {
+        (await me.PutAsJsonAsync("/api/v1/me", ProfileBody(firstName: "Before")))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var refused = await me.PutAsJsonAsync("/api/v1/me", ProfileBody(firstName: "After", cavingClubId: Guid.NewGuid()));
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        (await ProblemCodeAsync(refused)).ShouldBe("me.caving_club_unknown");
+        (await GetMeAsync(me)).GetProperty("firstName").GetString().ShouldBe("Before");
+
+        var club = new CavingGroup { Name = $"Club {suffix}", Slug = $"me-club-{suffix}" };
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.CavingGroups.Add(club);
+            await db.SaveChangesAsync();
+        }
+
+        var saved = await me.PutAsJsonAsync("/api/v1/me", ProfileBody(firstName: "After", cavingClubId: club.Id));
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+        var profile = await GetMeAsync(me);
+        profile.GetProperty("firstName").GetString().ShouldBe("After");
+        profile.GetProperty("cavingClubId").GetGuid().ShouldBe(club.Id);
+    }
+
+    /// <summary>
+    /// The client writes interface preferences on a timer. A preference write that lands between
+    /// an own-account save's read of the account and its write must not fail that save.
+    /// </summary>
+    /// <remarks>
+    /// The interleaving is forced rather than hoped for: an interceptor on a host of this test's
+    /// own sends a real preference write from inside each save, after the account was read. Each
+    /// such write used to move the account row's concurrency stamp, so the profile, language and
+    /// avatar saves all answered 500 and lost the user's edit.
+    /// </remarks>
+    [Fact]
+    public async Task Own_account_saves_survive_a_preference_write_landing_between_read_and_write()
+    {
+        var between = new WriteBetweenReadAndSave();
+        using var host = new SilexGisApiFactory(connectionString, new Dictionary<string, string?>
+        {
+            ["Files:Root"] = filesRoot,
+            ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+        }, services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(between));
+        });
+        using var mine = await AuthHelper.BearerClientAsync(host, MyEmail);
+        using var timer = await AuthHelper.BearerClientAsync(host, MyEmail);
+
+        var n = 0;
+        async Task<HttpResponseMessage> WithPreferenceWriteAsync(Func<Task<HttpResponseMessage>> save)
+        {
+            var theme = $"t-{++n}";
+            between.Arm(async () =>
+                (await timer.PatchAsJsonAsync("/api/v1/me/preferences/", new { preferences = new { appearance = new { theme } } }))
+                    .StatusCode.ShouldBe(HttpStatusCode.OK));
+            var response = await save();
+            between.Fired.ShouldBeTrue("the preference write never ran inside the save");
+            return response;
+        }
+
+        var profile = await WithPreferenceWriteAsync(() => mine.PutAsJsonAsync("/api/v1/me", ProfileBody(firstName: "Raced")));
+        profile.StatusCode.ShouldBe(HttpStatusCode.OK, await profile.Content.ReadAsStringAsync());
+
+        var locale = await WithPreferenceWriteAsync(() => mine.PutAsJsonAsync("/api/v1/me/locale", new { language = "ro" }));
+        locale.StatusCode.ShouldBe(HttpStatusCode.OK, await locale.Content.ReadAsStringAsync());
+
+        var preset = await WithPreferenceWriteAsync(() => mine.PutAsJsonAsync("/api/v1/me/avatar", new { preset = "bat" }));
+        preset.StatusCode.ShouldBe(HttpStatusCode.OK, await preset.Content.ReadAsStringAsync());
+
+        // Both writers' work is kept: the saves and the last preference written.
+        var after = await GetMeAsync(mine);
+        after.GetProperty("firstName").GetString().ShouldBe("Raced");
+        after.GetProperty("avatarPreset").GetString().ShouldBe("bat");
+        var preferences = await (await mine.GetAsync("/api/v1/me/preferences/")).Content.ReadFromJsonAsync<JsonElement>();
+        preferences.GetProperty("preferences").GetProperty("appearance").GetProperty("theme").GetString().ShouldBe($"t-{n}");
+    }
+
+    /// <summary>
+    /// Saves made through the identity user manager write the whole account row back, with every
+    /// column it loaded. A preference write that lands between that load and the save must still
+    /// be stored afterwards, not replaced by the document the save had read.
+    /// </summary>
+    /// <remarks>
+    /// The password change is the user-manager path with the widest window (two password hashes);
+    /// the same full-row write is behind the enrolment and phone codes, email change and two-factor
+    /// switches, so what this asserts holds for all of them.
+    /// </remarks>
+    [Fact]
+    public async Task A_preference_written_during_a_user_manager_save_is_kept()
+    {
+        var between = new WriteBetweenReadAndSave();
+        using var host = new SilexGisApiFactory(connectionString, new Dictionary<string, string?>
+        {
+            ["Files:Root"] = filesRoot,
+            ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+        }, services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(between));
+        });
+        using var mine = await AuthHelper.BearerClientAsync(host, MyEmail);
+        using var timer = await AuthHelper.BearerClientAsync(host, MyEmail);
+
+        (await timer.PatchAsJsonAsync("/api/v1/me/preferences/", new { preferences = new { appearance = new { theme = "before" } } }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        between.Arm(async () =>
+            (await timer.PatchAsJsonAsync("/api/v1/me/preferences/", new { preferences = new { appearance = new { theme = "during" } } }))
+                .StatusCode.ShouldBe(HttpStatusCode.OK));
+        var changed = await mine.PutAsJsonAsync("/api/v1/me/password", new
+        {
+            currentPassword = AuthHelper.Password,
+            newPassword = "a-new-long-password-1",
+        });
+        between.Fired.ShouldBeTrue("the preference write never ran inside the save");
+        changed.StatusCode.ShouldBe(HttpStatusCode.NoContent, await changed.Content.ReadAsStringAsync());
+
+        using var scope = host.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var stored = await db.Users.AsNoTracking().Where(u => u.Id == myId).Select(u => u.UiPreferences).FirstAsync();
+        JsonDocument.Parse(stored).RootElement.GetProperty("appearance").GetProperty("theme").GetString().ShouldBe("during");
+    }
+
+    /// <summary>
+    /// Runs one armed action inside the next save that writes an account row — after the row was
+    /// read, before it is written. One-shot, so the action's own saves do not run it again.
+    /// </summary>
+    private sealed class WriteBetweenReadAndSave : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        private Func<Task>? armed;
+
+        public bool Fired { get; private set; }
+
+        public void Arm(Func<Task> action)
+        {
+            Fired = false;
+            armed = action;
+        }
+
+        public override async ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
+            Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            var writesAccount = eventData.Context?.ChangeTracker.Entries<SilexGis.Infrastructure.Identity.SilexGisUser>()
+                .Any(e => e.State == EntityState.Modified) ?? false;
+            if (writesAccount && Interlocked.Exchange(ref armed, null) is { } action)
+            {
+                await action();
+                Fired = true;
+            }
+
+            return result;
+        }
     }
 
     [Fact]
@@ -895,11 +1111,12 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
         (await reauthenticated.GetAsync("/api/v1/me")).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    // A preferences write moves the account row's concurrency stamp. Written while the password
-    // change is between loading the account and saving it (the window is the time spent hashing,
-    // tens of milliseconds), that used to refuse a valid change as "me.password_invalid". The
-    // interleaving cannot be forced from outside, so a few writes, as the client's debounce would
-    // make them, are spread across the change: before the retry this failed on most runs.
+    // A preferences write used to move the account row's concurrency stamp (it no longer does).
+    // Written while the password change was between loading the account and saving it (the window
+    // is the time spent hashing, tens of milliseconds), that refused a valid change as
+    // "me.password_invalid". The interleaving cannot be forced from outside, so a few writes, as
+    // the client's debounce would make them, are spread across the change: before the retry this
+    // failed on most runs.
     [Fact]
     public async Task Password_change_survives_preference_writes_landing_around_it()
     {
