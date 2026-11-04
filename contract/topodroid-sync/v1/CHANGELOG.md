@@ -31,6 +31,21 @@ turns every future addition into an outage of its own making.
 
 ---
 
+## 2026-11-04 — the compiler's log on the public page
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — two members are added
+to the public page's answer and one route is added beside it; nothing a device sends or reads
+changes meaning.
+
+- Added public page members `logTail` (the last lines the compiler wrote, as the status answer's
+  `logTail`; `null` before a compile) and `log { name, sizeBytes, url }` (the whole log, after a
+  failed compile as after one that worked; `null` when there is none).
+- Added route `GET /api/v1/public/survey-uploads/{token}/log` (`log.url`): the whole log as a
+  `text/plain` attachment, opened and refused exactly as the page is.
+- Rewritten: `12-public-link`, `12b-public-link-compiled` (the added members).
+- Codes: added `survey_upload.public_log_not_found` (404, the log route only, for a link that opens
+  on an upload with no log).
+
 ## 2026-10-27 — the account's link defaults in the capabilities
 
 **Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one member is added

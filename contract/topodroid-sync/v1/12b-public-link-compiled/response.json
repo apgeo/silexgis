@@ -63,6 +63,12 @@
       "contentUrl": "/api/v1/files/<uuid-12>/content?token=<token>"
     }
   ],
+  "logTail": "invented tail",
+  "log": {
+    "name": "pestera_inventata-<version-stamp>.log",
+    "sizeBytes": 254,
+    "url": "/api/v1/public/survey-uploads/<public-token>/log"
+  },
   "createdAt": "<timestamp>",
   "finishedAt": "<timestamp>"
 }

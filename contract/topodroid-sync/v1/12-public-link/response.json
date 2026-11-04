@@ -38,6 +38,8 @@
   "message": "Archived and read. Not compiled: this server has no survey compiler.",
   "error": null,
   "artefacts": [],
+  "logTail": null,
+  "log": null,
   "createdAt": "<timestamp>",
   "finishedAt": "<timestamp>"
 }
