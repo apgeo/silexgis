@@ -122,16 +122,16 @@ public static class SyncRasterEndpoints
                 ContentChangedAt = pictureAt != null && pictureAt > pinsChangedAt ? pictureAt.Value : pinsChangedAt,
             };
         live = SyncStreamPaging.After(live, ByChange, opening.From);
-        var liveRows = await SyncStreamPaging.Probe(live, ByChange, opening.Size).ToListAsync(ct);
+        var liveRows = await SyncStreamPaging.Probe(live, ByChange, opening).ToListAsync(ct);
 
         var goneRows = SyncStreamPaging.Probe(
             SyncStreamPaging.After((await GoneAsync(db, handed, opening.From, ct)).AsQueryable(), ByGone, opening.From),
             ByGone,
-            opening.Size).ToList();
+            opening).ToList();
 
         var pinsGone = PinsGone(db, handed);
         pinsGone = SyncStreamPaging.After(pinsGone, ByPinGone, opening.From);
-        var pinsGoneRows = await SyncStreamPaging.Probe(pinsGone, ByPinGone, opening.Size).ToListAsync(ct);
+        var pinsGoneRows = await SyncStreamPaging.Probe(pinsGone, ByPinGone, opening).ToListAsync(ct);
 
         var cut = SyncStreamPaging.Cut(
             opening,
