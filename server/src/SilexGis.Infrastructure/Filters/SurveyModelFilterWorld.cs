@@ -81,20 +81,8 @@ public sealed class SurveyModelFilterWorld(
     }
 
     private static Expression<Func<SurveyModel, bool>> Compile(
-        FilterNode? node, IReadOnlyDictionary<ConditionNode, Guid[]> positions) => node switch
-    {
-        null => _ => true,
-        AllOfNode all => all.Of.Count == 0
-            ? _ => true
-            : all.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.And(right)),
-        // An OR of nothing matches nothing, so clearing the last choice narrows rather than widens.
-        AnyOfNode any => any.Of.Count == 0
-            ? _ => false
-            : any.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.Or(right)),
-        NotNode not => Compile(not.Of, positions).Not(),
-        ConditionNode condition => Leaf(condition, positions),
-        _ => throw new InvalidOperationException($"No compiler arm for {node.GetType().Name}."),
-    };
+        FilterNode? node, IReadOnlyDictionary<ConditionNode, Guid[]> positions) =>
+        FilterTree.Compile<SurveyModel>(node, condition => Leaf(condition, positions));
 
     private static Expression<Func<SurveyModel, bool>> Leaf(
         ConditionNode condition, IReadOnlyDictionary<ConditionNode, Guid[]> positions) => condition.Field switch

@@ -70,19 +70,8 @@ public sealed class DocumentFilterWorld(SilexGisDbContext db) : FilterWorld<Docu
         WorldQuery query, CancellationToken ct) =>
         ValueTask.FromResult(Compile(query.Where));
 
-    private static Expression<Func<Document, bool>> Compile(FilterNode? node) => node switch
-    {
-        null => _ => true,
-        AllOfNode all => all.Of.Count == 0
-            ? _ => true
-            : all.Of.Select(Compile).Aggregate((left, right) => left.And(right)),
-        AnyOfNode any => any.Of.Count == 0
-            ? _ => false
-            : any.Of.Select(Compile).Aggregate((left, right) => left.Or(right)),
-        NotNode not => Compile(not.Of).Not(),
-        ConditionNode condition => Leaf(condition),
-        _ => throw new InvalidOperationException($"No compiler arm for {node.GetType().Name}."),
-    };
+    private static Expression<Func<Document, bool>> Compile(FilterNode? node) =>
+        FilterTree.Compile<Document>(node, Leaf);
 
     private static Expression<Func<Document, bool>> Leaf(ConditionNode condition) => condition.Field switch
     {

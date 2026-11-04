@@ -295,6 +295,88 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
             .ShouldBe(["Edge"]);
     }
 
+    /// <summary>
+    /// An empty group means on features what it means in every other world — all of nothing is
+    /// every row, any of nothing is none — rather than failing to compile. Validation refuses empty
+    /// groups, so this is the answer a caller that skipped validation would get, and it must never be
+    /// a widening "everything" for an OR.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_group_means_what_it_means_in_every_other_world()
+    {
+        await SeedCorpusAsync();
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var compiler = new FeatureFilterCompiler(db);
+        var corpus = db.Features.AsNoTracking().Where(f => f.Name!.EndsWith(tag));
+
+        (await corpus.Where(compiler.Compile(new AllOfNode([]))).CountAsync()).ShouldBe(3);
+        (await corpus.Where(compiler.Compile(new AnyOfNode([]))).CountAsync()).ShouldBe(0);
+        (await corpus.Where(compiler.Compile(new NotNode(new AnyOfNode([])))).CountAsync()).ShouldBe(3);
+    }
+
+    /// <summary>
+    /// What a person types is the text they look for, never a pattern: <c>%</c> and <c>_</c> match
+    /// themselves, and a backslash — last or not — is a character like any other rather than an
+    /// escape the database refuses. The same over a column (the name) and over a typed property,
+    /// for each operator that matches text.
+    /// </summary>
+    [Fact]
+    public async Task Text_conditions_match_percent_underscore_and_backslash_literally()
+    {
+        var ownerId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Editor, $"fc-like-{tag}@t.local");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var sinkhole = await db.FeatureTypes.AsNoTracking()
+            .Where(t => t.Code == FeatureTypeSeeds.Sinkhole).Select(t => t.Id).SingleAsync();
+
+        foreach (var (label, value) in new[]
+                 {
+                     ("Under", "C_1"), ("Letter", "CX1"), ("Percent", "50% off"), ("Plain", "50 off"),
+                     ("Slash", "back\\"), ("Slashed", "back\\slash"),
+                 })
+        {
+            Rootless(db, sinkhole, ownerId, $"{tag} {label} {value}",
+                properties: System.Text.Json.JsonSerializer.Serialize(new { label = value }));
+        }
+
+        await db.SaveChangesAsync();
+        var compiler = new FeatureFilterCompiler(db);
+
+        async Task<List<string>> Matching(string field, FilterOp op, string value)
+        {
+            var predicate = compiler.Compile(new ConditionNode(field, op, [new TextValue(value)]));
+            return await db.Features.AsNoTracking()
+                .Where(predicate)
+                .Where(f => f.Name!.StartsWith(tag))
+                .OrderBy(f => f.Name)
+                .Select(f => f.Name!)
+                .ToListAsync();
+        }
+
+        static List<string> Labels(IEnumerable<string> names) =>
+            [.. names.Select(n => n.Split(' ')[1])];
+
+        var name = FeatureFilterFields.Name;
+        var property = $"{FeatureFilterFields.PropertyPrefix}{FeatureTypeSeeds.Sinkhole}:label";
+
+        Labels(await Matching(name, FilterOp.Equals, $"{tag} Under C_1")).ShouldBe(["Under"]);
+        Labels(await Matching(name, FilterOp.Contains, "50%")).ShouldBe(["Percent"]);
+        Labels(await Matching(name, FilterOp.StartsWith, $"{tag} Under C_")).ShouldBe(["Under"]);
+        Labels(await Matching(name, FilterOp.Equals, $"{tag} Slash back\\")).ShouldBe(["Slash"]);
+        Labels(await Matching(name, FilterOp.Contains, "back\\")).ShouldBe(["Slash", "Slashed"]);
+        Labels(await Matching(name, FilterOp.StartsWith, $"{tag} Slash back\\")).ShouldBe(["Slash"]);
+
+        Labels(await Matching(property, FilterOp.Equals, "C_1")).ShouldBe(["Under"]);
+        Labels(await Matching(property, FilterOp.Contains, "0%")).ShouldBe(["Percent"]);
+        Labels(await Matching(property, FilterOp.StartsWith, "C_")).ShouldBe(["Under"]);
+        Labels(await Matching(property, FilterOp.Equals, "back\\")).ShouldBe(["Slash"]);
+        Labels(await Matching(property, FilterOp.Contains, "k\\")).ShouldBe(["Slash", "Slashed"]);
+        Labels(await Matching(property, FilterOp.StartsWith, "back\\s")).ShouldBe(["Slashed"]);
+    }
+
     [Fact]
     public async Task A_date_property_is_compared_by_the_day_the_bound_names_wherever_it_was_picked()
     {
@@ -410,16 +492,30 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
         // Not "everything", which is what an unresolved condition would silently become if the
         // absent case were treated as "no constraint". An anchor the caller may not place is a
         // real answer — nothing — and it must not widen the result.
+        //
+        // Asked over rows that exist, so the empty answer is the condition's doing and not an empty
+        // table's: the corpus is there, and the same condition resolved to those rows finds them.
+        await SeedCorpusAsync();
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var compiler = new FeatureFilterCompiler(db);
+        var corpus = db.Features.AsNoTracking().Where(f => f.Name != null && f.Name.EndsWith(tag));
+        var all = await corpus.CountAsync();
+        all.ShouldBeGreaterThan(0);
 
         var condition = new ConditionNode(
             FeatureFilterFields.Position, FilterOp.Within, [new NumberValue(200), new PointValue(23.5, 46.5)]);
 
-        var count = await db.Features.AsNoTracking().Where(compiler.Compile(condition)).CountAsync();
+        // Resolved to every corpus row: the leaf reads the set it is handed.
+        var everyRow = new Dictionary<ConditionNode, ResolvedSpatial> { [condition] = new(corpus.Select(f => f.Id)) };
+        (await corpus.Where(compiler.Compile(condition, everyRow)).CountAsync()).ShouldBe(all);
 
-        count.ShouldBe(0);
+        // Resolved to nothing — the resolver's own marker for an anchor the caller may not use —
+        // and not resolved at all: neither widens to the corpus.
+        var nothing = new Dictionary<ConditionNode, ResolvedSpatial> { [condition] = new(null) };
+        (await corpus.Where(compiler.Compile(condition, nothing)).CountAsync()).ShouldBe(0);
+        (await corpus.Where(compiler.Compile(condition)).CountAsync()).ShouldBe(0);
+        (await corpus.Where(compiler.Compile(new NotNode(new NotNode(condition)), nothing)).CountAsync()).ShouldBe(0);
     }
 
     // ---------- the measured columns ----------
