@@ -237,6 +237,63 @@ public sealed class MapFilterTests : IAsyncLifetime, IDisposable, IClassFixture<
 
     // ---------- the feature layer ----------
 
+    /// <summary>
+    /// The feature layer's category narrows to the features of that category and to nothing else;
+    /// a category or a kinds list the application has no word for is refused with its code rather
+    /// than dropped, which would hand back every feature in the window.
+    /// </summary>
+    [Fact]
+    public async Task The_feature_layer_narrows_by_category_and_refuses_words_it_does_not_have()
+    {
+        long peakTypeId;
+        FeatureCategory areaCategory, peakCategory;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            peakTypeId = await db.FeatureTypes.Where(t => t.Code == "peak").Select(t => t.Id).SingleAsync();
+            areaCategory = await db.FeatureTypes.Where(t => t.Id == karstAreaTypeId).Select(t => t.Category).SingleAsync();
+            peakCategory = await db.FeatureTypes.Where(t => t.Id == peakTypeId).Select(t => t.Category).SingleAsync();
+        }
+
+        // Two kinds of the seeded catalogue that sit in different categories, or this proves nothing.
+        areaCategory.ShouldNotBe(peakCategory);
+
+        var area = await CreateAreaAsync(Name("category area"), BaseLon + 0.03, BaseLat + 0.03);
+        var created = await author.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name = Name("category peak"),
+            featureTypeId = peakTypeId,
+            geometry = new { type = "Point", coordinates = new[] { BaseLon + 0.031, BaseLat + 0.031 } },
+            visibility = "authenticated",
+            locationProtected = false,
+        });
+        var createdPayload = await created.Content.ReadAsStringAsync();
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, createdPayload);
+        var peak = JsonDocument.Parse(createdPayload).RootElement.GetProperty("id").GetGuid();
+
+        var all = Ids(await FeaturesAsync(clubmate, FixtureWindow, string.Empty));
+        all.ShouldContain(area);
+        all.ShouldContain(peak);
+
+        var areas = Ids(await FeaturesAsync(clubmate, FixtureWindow, $"&category={areaCategory.ToString().ToLowerInvariant()}"));
+        areas.ShouldContain(area);
+        areas.ShouldNotContain(peak);
+        var peaks = Ids(await FeaturesAsync(clubmate, FixtureWindow, $"&category={peakCategory.ToString().ToLowerInvariant()}"));
+        peaks.ShouldContain(peak);
+        peaks.ShouldNotContain(area);
+
+        await ShouldRefuseAsync(
+            await clubmate.GetAsync($"/api/v1/map/features?bbox={FixtureWindow}&category=bogus"),
+            HttpStatusCode.BadRequest, "map.invalid_category");
+        await ShouldRefuseAsync(
+            await clubmate.GetAsync($"/api/v1/map/features?bbox={FixtureWindow}&kinds=bogus"),
+            HttpStatusCode.BadRequest, "map.invalid_kinds");
+        await ShouldRefuseAsync(
+            await clubmate.GetAsync($"/api/v1/map/features?bbox={FixtureWindow}&kinds=generic,bogus"),
+            HttpStatusCode.BadRequest, "map.invalid_kinds");
+    }
+
     [Fact]
     public async Task The_feature_layer_keeps_the_features_a_filter_selects()
     {
