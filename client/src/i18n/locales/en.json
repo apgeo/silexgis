@@ -6679,7 +6679,8 @@
       "title": "Results",
       "empty": "Nothing was produced.",
       "download": "Download",
-      "view": "View"
+      "view": "View",
+      "log": "Compiler's log"
     },
     "problems": {
       "filesMissing": "A file of this upload is no longer in the server's store. Ask the administrator to restore it, then run the upload again.",

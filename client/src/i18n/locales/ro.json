@@ -6692,7 +6692,8 @@
       "title": "Rezultate",
       "empty": "Nu s-a produs nimic.",
       "download": "Descarcă",
-      "view": "Vezi"
+      "view": "Vezi",
+      "log": "Jurnalul compilatorului"
     },
     "problems": {
       "filesMissing": "Un fișier al acestei încărcări nu mai este în depozitul serverului. Cere administratorului să-l restaureze, apoi rulează încărcarea din nou.",
