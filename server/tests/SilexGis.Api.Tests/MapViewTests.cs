@@ -3,11 +3,14 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
+using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
 
@@ -22,6 +25,7 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable, IClassFixture<Po
     private HttpClient owner = null!;
     private HttpClient outsider = null!;
     private Guid outsiderId;
+    private Guid ownerId;
 
     public MapViewTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
@@ -29,7 +33,7 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable, IClassFixture<Po
     public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"mv-own-{suffix}@t.local");
+        ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"mv-own-{suffix}@t.local");
         // A regular user: Editors hold domain-wide map-view rights now, so the private-view
         // invisibility below needs a caller with nothing but grants.
         outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"mv-out-{suffix}@t.local");
@@ -43,11 +47,9 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         // Create two views; the second claims "home" and must steal it from the first.
         var first = await CreateAsync("Overview", isHome: true);
         var second = await CreateAsync("Detail area", isHome: true);
-        var list = await owner.GetFromJsonAsync<JsonElement>("/api/v1/map-views/");
-        var items = list.EnumerateArray().ToList();
-        items.Single(x => x.GetProperty("isHome").GetBoolean())
-            .GetProperty("id").GetGuid().ShouldBe(second);
-        _ = first;
+        // Asked of this test's own views only: an Editor's list holds every Editor's views, so
+        // a home another test sets would otherwise be counted here.
+        (await HomesAsync(owner, first, second)).ShouldBe([second]);
 
         // Private views are invisible to others.
         (await ViewIdsAsync(outsider)).ShouldNotContain(second);
@@ -123,6 +125,204 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         (await ViewIdsAsync(outsider)).ShouldNotContain(viewId);
         (await outsider.PutAsJsonAsync($"/api/v1/map-views/{viewId}", ViewBody("Renamed again", isHome: false)))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// Who may change, remove or publish a view, pinned route by route: a caller with Read only
+    /// is told the view exists but may not be changed or published (403) and is not told it
+    /// can be deleted or unpublished (404); a caller with no grant learns nothing (404). Each
+    /// refusal is followed by the owner doing the same thing, so the refusal is about the
+    /// caller and not about a route that refuses everybody.
+    /// </summary>
+    [Fact]
+    public async Task Only_the_rights_a_caller_holds_open_each_write_on_a_view()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"mv-read-{suffix}@t.local");
+        using var reader = await AuthHelper.BearerClientAsync(factory, $"mv-read-{suffix}@t.local");
+        var view = await CreateAsync("Matrix view", isHome: false);
+        await ReplaceViewAccessRulesAsync(owner, view, [(readerId, AccessAction.Read)]);
+        (await ViewIdsAsync(reader)).ShouldContain(view);
+        (await ViewIdsAsync(outsider)).ShouldNotContain(view);
+
+        async Task RefusedAsync(HttpClient caller, HttpStatusCode expected, string what)
+        {
+            (await caller.PutAsJsonAsync($"/api/v1/map-views/{view}", ViewBody("Renamed", isHome: false)))
+                .StatusCode.ShouldBe(expected, $"{what} PUT");
+            (await caller.PostAsync($"/api/v1/map-views/{view}/share", null))
+                .StatusCode.ShouldBe(expected, $"{what} share");
+            (await caller.DeleteAsync($"/api/v1/map-views/{view}/share"))
+                .StatusCode.ShouldBe(HttpStatusCode.NotFound, $"{what} unshare");
+            (await caller.DeleteAsync($"/api/v1/map-views/{view}"))
+                .StatusCode.ShouldBe(HttpStatusCode.NotFound, $"{what} DELETE");
+        }
+
+        await RefusedAsync(reader, HttpStatusCode.Forbidden, "Read grantee");
+        await RefusedAsync(outsider, HttpStatusCode.NotFound, "no grant");
+
+        // Nothing the refused calls asked for happened.
+        var stored = (await ViewsAsync(owner)).Single(v => v.GetProperty("id").GetGuid() == view);
+        stored.GetProperty("name").GetString().ShouldBe("Matrix view");
+        (stored.TryGetProperty("shareToken", out var token) && token.ValueKind != JsonValueKind.Null).ShouldBeFalse();
+
+        (await owner.PutAsJsonAsync($"/api/v1/map-views/{view}", ViewBody("Renamed", isHome: false)))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.PostAsync($"/api/v1/map-views/{view}/share", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        // A Read grantee still cannot unpublish what the owner published.
+        (await reader.DeleteAsync($"/api/v1/map-views/{view}/share")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await owner.DeleteAsync($"/api/v1/map-views/{view}/share")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await owner.DeleteAsync($"/api/v1/map-views/{view}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await ViewIdsAsync(owner)).ShouldNotContain(view);
+    }
+
+    [Fact]
+    public async Task A_view_with_no_name_a_name_too_long_or_a_config_that_is_not_an_object_is_refused()
+    {
+        var name = $"Valid {Guid.NewGuid():N}"[..20];
+        var view = await CreateAsync(name, isHome: false);
+
+        var bodies = new (string What, JsonObject Body)[]
+        {
+            ("an empty name", Body(string.Empty, new JsonObject { ["zoom"] = 12 })),
+            ("a 201-character name", Body(new string('n', 201), new JsonObject { ["zoom"] = 12 })),
+            ("a config that is an array", Body(name, new JsonArray(1, 2))),
+        };
+        foreach (var (what, body) in bodies)
+        {
+            (await owner.PostAsJsonAsync("/api/v1/map-views/", body)).StatusCode
+                .ShouldBe(HttpStatusCode.BadRequest, $"create with {what}");
+            (await owner.PutAsJsonAsync($"/api/v1/map-views/{view}", body)).StatusCode
+                .ShouldBe(HttpStatusCode.BadRequest, $"update with {what}");
+        }
+
+        // A name exactly at the limit is accepted, and the refused updates changed nothing.
+        (await owner.PostAsJsonAsync("/api/v1/map-views/", Body(new string('n', 200), new JsonObject { ["zoom"] = 12 })))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await ViewsAsync(owner)).Single(v => v.GetProperty("id").GetGuid() == view)
+            .GetProperty("name").GetString().ShouldBe(name);
+
+        static JsonObject Body(string name, JsonNode config) => new()
+        {
+            ["name"] = name,
+            ["description"] = null,
+            ["config"] = config,
+            ["isHome"] = false,
+            ["cavingGroupId"] = null,
+            ["visibility"] = "private",
+        };
+    }
+
+    [Fact]
+    public async Task A_view_bound_to_a_caving_group_the_caller_is_not_in_is_refused()
+    {
+        // Two real clubs: the owner belongs to one and not to the other, so the refusal below is
+        // about membership, not about a group that does not exist.
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        Guid ownClub, otherClub;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var own = new CavingGroup { Name = $"MV own club {suffix}", Slug = $"mv-own-club-{suffix}" };
+            var other = new CavingGroup { Name = $"MV other club {suffix}", Slug = $"mv-other-club-{suffix}" };
+            db.CavingGroups.AddRange(own, other);
+            await db.SaveChangesAsync();
+            await RosterHelper.AddMemberAsync(db, own.Id, ownerId);
+            ownClub = own.Id;
+            otherClub = other.Id;
+        }
+
+        var name = $"Bound {suffix}";
+        var body = FilteredViewBody(name, null);
+
+        // Create: the club the owner is not in is refused and nothing is stored; the owner's own
+        // club is accepted.
+        body["cavingGroupId"] = otherClub.ToString();
+        var refused = await owner.PostAsJsonAsync("/api/v1/map-views/", body);
+        refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString()
+            .ShouldBe(CavingGroupBindingRules.ForbiddenCode);
+        (await ViewsAsync(owner)).ShouldNotContain(v => v.GetProperty("name").GetString() == name);
+
+        body["cavingGroupId"] = ownClub.ToString();
+        var created = await owner.PostAsJsonAsync("/api/v1/map-views/", body);
+        var createdText = await created.Content.ReadAsStringAsync();
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, createdText);
+        var id = JsonDocument.Parse(createdText).RootElement.GetProperty("id").GetGuid();
+
+        // Update: re-binding to the club the owner is not in is refused and the stored group
+        // stays; an update that keeps the owner's own club goes through.
+        body["cavingGroupId"] = otherClub.ToString();
+        var rebind = await owner.PutAsJsonAsync($"/api/v1/map-views/{id}", body);
+        rebind.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await rebind.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString()
+            .ShouldBe(CavingGroupBindingRules.ForbiddenCode);
+        (await ViewsAsync(owner)).Single(v => v.GetProperty("id").GetGuid() == id)
+            .GetProperty("cavingGroupId").GetGuid().ShouldBe(ownClub);
+
+        body["cavingGroupId"] = ownClub.ToString();
+        body["description"] = "kept in its club";
+        var kept = await owner.PutAsJsonAsync($"/api/v1/map-views/{id}", body);
+        kept.StatusCode.ShouldBe(HttpStatusCode.OK, await kept.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// One home per owner holds when the owner saves several homes at the same moment — two tabs,
+    /// a double click — not only when the saves arrive one after the other.
+    /// </summary>
+    [Fact]
+    public async Task Homes_saved_at_the_same_moment_still_leave_the_owner_one_home()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var ids = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(i => CreateAsync($"Parallel home {i} {suffix}", isHome: true)));
+
+        (await HomesAsync(owner, ids)).Count.ShouldBe(1);
+
+        // And moving home in parallel afterwards keeps it at one as well.
+        await Task.WhenAll(ids.Select(async (id, i) =>
+        {
+            var moved = await owner.PutAsJsonAsync($"/api/v1/map-views/{id}", ViewBody($"Parallel home {i} {suffix}", isHome: true));
+            moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+        }));
+        (await HomesAsync(owner, ids)).Count.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// "Home" is the owner's choice and theirs alone: a grantee with Write who edits someone
+    /// else's view cannot make it the owner's home, cannot take the owner's home away by
+    /// sending <c>isHome:false</c>, and does not lose their own home by editing another
+    /// person's view with <c>isHome:true</c>.
+    /// </summary>
+    [Fact]
+    public async Task A_grantee_editing_a_view_changes_nobodys_home()
+    {
+        var ownersHome = await CreateAsync("Owner home", isHome: true);
+        var shared = await CreateAsync("Owner shared", isHome: false);
+        var granteesHome = await CreateAsAsync(outsider, "Grantee home", isHome: true);
+
+        // Positive case first: the grantee really can edit the shared view, so whatever the
+        // homes say afterwards is the edit's doing, not a refusal's.
+        await ReplaceViewAccessRulesAsync(owner, shared, [(outsiderId, AccessAction.Read | AccessAction.Write)]);
+        var asHome = await outsider.PutAsJsonAsync($"/api/v1/map-views/{shared}", ViewBody("Renamed as home", isHome: true));
+        asHome.StatusCode.ShouldBe(HttpStatusCode.OK, await asHome.Content.ReadAsStringAsync());
+
+        (await HomesAsync(owner, ownersHome, shared)).ShouldBe([ownersHome]);
+        (await HomesAsync(outsider, granteesHome, shared)).ShouldBe([granteesHome]);
+
+        var notHome = await outsider.PutAsJsonAsync($"/api/v1/map-views/{shared}", ViewBody("Renamed again", isHome: false));
+        notHome.StatusCode.ShouldBe(HttpStatusCode.OK, await notHome.Content.ReadAsStringAsync());
+        await ReplaceViewAccessRulesAsync(owner, ownersHome, [(outsiderId, AccessAction.Read | AccessAction.Write)]);
+        var ownersHomeEdited = await outsider.PutAsJsonAsync($"/api/v1/map-views/{ownersHome}", ViewBody("Owner home renamed", isHome: false));
+        ownersHomeEdited.StatusCode.ShouldBe(HttpStatusCode.OK, await ownersHomeEdited.Content.ReadAsStringAsync());
+
+        (await HomesAsync(owner, ownersHome, shared)).ShouldBe([ownersHome]);
+        (await HomesAsync(outsider, granteesHome)).ShouldBe([granteesHome]);
+
+        // The owner still moves their own home, and moving it clears only their own.
+        var moved = await owner.PutAsJsonAsync($"/api/v1/map-views/{shared}", ViewBody("Owner shared", isHome: true));
+        moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+        (await HomesAsync(owner, ownersHome, shared)).ShouldBe([shared]);
+        (await HomesAsync(outsider, granteesHome)).ShouldBe([granteesHome]);
     }
 
     /// <summary>
@@ -278,6 +478,22 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
+
+    private static async Task<Guid> CreateAsAsync(HttpClient client, string name, bool isHome)
+    {
+        var response = await client.PostAsJsonAsync("/api/v1/map-views/", ViewBody(name, isHome));
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>Which of the named views the caller's list marks as home, in the order named.</summary>
+    private static async Task<List<Guid>> HomesAsync(HttpClient client, params Guid[] among) =>
+        [.. (await ViewsAsync(client))
+            .Where(x => x.GetProperty("isHome").GetBoolean())
+            .Select(x => x.GetProperty("id").GetGuid())
+            .Where(among.Contains)
+            .OrderBy(id => Array.IndexOf(among, id))];
 
     private static async Task<List<Guid>> ViewIdsAsync(HttpClient client)
     {
