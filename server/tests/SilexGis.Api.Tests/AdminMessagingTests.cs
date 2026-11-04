@@ -375,6 +375,96 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable, IClassFix
             .GetProperty("code").GetString().ShouldBe("admin.sms_test_too_soon");
     }
 
+    /// <summary>
+    /// Resetting a message in a language the catalogue does not carry is refused like saving one,
+    /// and leaves the rewrites that do exist alone.
+    /// </summary>
+    /// <remarks>
+    /// The store files every language under the one it falls back to, so an unchecked "de" used
+    /// to land on English: the reset answered 204 and the English rewrite was gone.
+    /// </remarks>
+    [Fact]
+    public async Task Resetting_a_message_in_an_unknown_language_leaves_the_english_rewrite_alone()
+    {
+        var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+        var key = MessageTemplateCatalog.EmailTwoFactorCode;
+        var saved = await admin.PutAsJsonAsync(
+            $"/api/v1/admin/message-templates/{key}/en",
+            new { subject = "Club code", body = "Code {code}, {expiresMinutes} minutes." });
+        saved.StatusCode.ShouldBe(HttpStatusCode.NoContent, await saved.Content.ReadAsStringAsync());
+
+        var unknown = await admin.DeleteAsync($"/api/v1/admin/message-templates/{key}/de");
+        unknown.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await unknown.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("admin.template_locale_unknown");
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.MessageTemplates.CountAsync(t => t.Key == key && t.Locale == "en")).ShouldBe(1);
+        }
+
+        // The language the rewrite was saved in still resets it.
+        (await admin.DeleteAsync($"/api/v1/admin/message-templates/{key}/en"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    /// <summary>
+    /// A switched-off channel may be saved half filled, and a text field the form leaves null is
+    /// stored blank rather than failing the save.
+    /// </summary>
+    [Fact]
+    public async Task A_switched_off_channel_saved_with_its_text_fields_null_is_stored_blank()
+    {
+        var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+
+        var mail = await admin.PutAsJsonAsync("/api/v1/admin/settings/mail", new
+        {
+            enabled = false,
+            host = (string?)null,
+            port = 587,
+            security = "auto",
+            username = (string?)null,
+            password = (string?)null,
+            fromAddress = (string?)null,
+            fromName = (string?)null,
+            replyTo = (string?)null,
+            timeoutSeconds = 30,
+            acceptInvalidCertificate = false,
+        });
+        mail.StatusCode.ShouldBe(HttpStatusCode.OK, await mail.Content.ReadAsStringAsync());
+
+        var sms = await admin.PutAsJsonAsync("/api/v1/admin/settings/sms", SmsWithNulls(enabled: false));
+        sms.StatusCode.ShouldBe(HttpStatusCode.OK, await sms.Content.ReadAsStringAsync());
+
+        var stored = JsonDocument.Parse(await sms.Content.ReadAsStringAsync()).RootElement;
+        stored.GetProperty("mail").GetProperty("host").GetString().ShouldBe(string.Empty);
+        stored.GetProperty("mail").GetProperty("fromAddress").GetString().ShouldBe(string.Empty);
+        stored.GetProperty("mail").GetProperty("fromName").GetString().ShouldBe(string.Empty);
+        stored.GetProperty("sms").GetProperty("url").GetString().ShouldBe(string.Empty);
+        stored.GetProperty("sms").GetProperty("contentType").GetString().ShouldBe(string.Empty);
+        stored.GetProperty("sms").GetProperty("bodyTemplate").GetString().ShouldBe(string.Empty);
+
+        // Switched on, the missing address is what the validator refuses.
+        var enabled = await admin.PutAsJsonAsync("/api/v1/admin/settings/sms", SmsWithNulls(enabled: true));
+        enabled.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await enabled.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("validation.failed");
+    }
+
+    private static object SmsWithNulls(bool enabled) => new
+    {
+        enabled,
+        url = (string?)null,
+        method = "POST",
+        contentType = (string?)null,
+        bodyTemplate = (string?)null,
+        headers = (Dictionary<string, string>?)null,
+        authHeader = (string?)null,
+        from = (string?)null,
+        timeoutSeconds = 15,
+    };
+
     private static SecuritySettingsBody Policy() => new(false, true, true, true, false, 5, 60);
 
     private static object Mail(string? password, string fromName = "SilexGIS") => new
