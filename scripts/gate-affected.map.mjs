@@ -228,9 +228,9 @@ export const groups = {
     'GrantScaleMeasurementTests',
   ],
   // A shared view's page and the data its link draws for nobody in particular.
-  mapViews: ['MapViewTests', 'SharedViewDataTests'],
+  mapViews: ['MapViewTests', 'SharedViewDataTests', 'SharedViewRateLimitTests'],
   // The installation's own basemap: its download, and the catalogue entry it publishes.
-  basemap: ['BasemapDownloadTests', 'MapLayerKindTests'],
+  basemap: ['BasemapDownloadTests', 'MapLayerKindTests', 'PmtilesCliExtractorTests'],
   // The one statement deciding which protected rows a caller's window holds, on the position
   // each caller is shown: every route that reads a window through it, and the plan pins on it.
   windowMembership: [
@@ -629,13 +629,13 @@ export const crossCutting = {
     'FeatureHierarchyTests', 'FeatureLinkTests', 'FeatureRestoreTests', 'FeatureShareTests',
     'FeatureTests', 'FeatureTypeWriteTests', 'FileAttachmentTests', 'FileImportReviewHoldTests',
     'GeofileTests', 'HistoryRestoreTests', 'HypsometryTests', 'ImmichPhotoLibraryTests',
-    'MapBackgroundDocumentChoiceTests', 'MapViewTests', 'NotificationHealthTests',
-    'PhotoGalleryTests', 'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests',
-    'PhotoLibraryBrowseEndpointTests', 'PhotoLibraryEndpointTests',
-    'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests', 'PlacePointProtectionTests',
-    'PlacePointWriteTests', 'PlaceStationTests', 'PublicTripMomentPicturesTests',
-    'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests', 'ReportTemplateTests',
-    'ResLinkApiTests', 'SavedFilterTests', 'SpeleolocTripImportTests',
+    'MapBackgroundDocumentChoiceTests', 'MapLayerKindTests', 'MapViewTests',
+    'NotificationHealthTests', 'PhotoGalleryTests', 'PhotoImportTests',
+    'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
+    'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',
+    'PlacePointProtectionTests', 'PlacePointWriteTests', 'PlaceStationTests',
+    'PublicTripMomentPicturesTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
+    'ReportTemplateTests', 'ResLinkApiTests', 'SavedFilterTests', 'SpeleolocTripImportTests',
     'SpeologieCatalogueTests', 'StagedImportTests', 'SurveyCompilationTests',
     'SurveyModelReadingTests', 'SurveyModelTests', 'SurveySourceTests',
     'SurveyUploadPipelineTests', 'SurveyUploadPreferenceTests', 'SurveyUploadPublicLinkTests',
