@@ -170,6 +170,33 @@ the cave the moment they arrive, and removing them is done where they are listed
 
 ---
 
+## The page of results
+
+Once a run has ended, **View results** on the status page — and on the public link's page — opens
+one page with everything the survey produced, at the same address with `/view` added. It works at
+phone width too.
+
+- **At the top**, the survey's title and cave, **Copy link**, and a way into SilexGIS. *Copy link*
+  copies the upload's public link when it has one — anybody holding it can open the results — and
+  otherwise this page's own address, which opens only for accounts allowed to see the upload. On the
+  signed-in page the button opens the cave; on a public link's page a signed-in reader who may see
+  the upload gets **Open in SilexGIS**, and anybody else is offered to sign in.
+- **The 3D model**, in two tabs: the embedded viewer, and the same file in LochViewer (on trial).
+- **Map and geodata**: on the signed-in page, when the survey was placed in the world (it has a fixed
+  point or a coordinate system), the centreline to download as **KML**, **GeoJSON** or **GPX**, and a
+  map with the centreline over the installation's default background (OpenTopoMap when there is
+  none). A survey that could not be placed says so instead. **A public link's page never shows a map
+  or geodata**: those are the cave's position, and they are shown only inside SilexGIS, to accounts
+  allowed to see the cave's exact position.
+- **Figures from the compiler**: surveyed length, length after loop adjustment, plan and vertical
+  length, depth, north–south and east–west extent, stations, shots, loops and the average loop error,
+  with a chart of each loop's closure error. Only sizes — never station names or positions.
+- **The cave's survey analyses** (signed-in page only): the cave's statistics, network, orientation
+  and depth profile. They are measured over the survey the cave is currently drawn from, which can be
+  another upload than this one.
+
+---
+
 ## The public link
 
 When the switch under **Settings → Survey uploads** is on and the installation allows it, a

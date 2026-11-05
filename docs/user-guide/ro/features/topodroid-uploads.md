@@ -172,6 +172,35 @@ topografice* ale peșterii.
 
 ---
 
+## Pagina de rezultate
+
+După ce o rulare s-a încheiat, **Vezi rezultatele** de pe pagina de stare — și de pe pagina linkului
+public — deschide o singură pagină cu tot ce a produs ridicarea, la aceeași adresă cu `/view` adăugat.
+Merge și pe lățimea unui telefon.
+
+- **Sus**, titlul ridicării și peștera, **Copiază linkul** și drumul către SilexGIS. *Copiază linkul*
+  copiază linkul public al încărcării când are unul — oricine îl are poate deschide rezultatele — și
+  altfel adresa acestei pagini, care se deschide doar pentru conturile care au voie să vadă
+  încărcarea. Pe pagina din aplicație butonul deschide peștera; pe pagina unui link public, un cititor
+  autentificat care are voie să vadă încărcarea primește **Deschide în SilexGIS**, iar oricui altcuiva
+  i se oferă autentificarea.
+- **Modelul 3D**, în două file: vizualizatorul integrat și același fișier în LochViewer (în probă).
+- **Hartă și date geospațiale**: pe pagina din aplicație, când ridicarea a fost așezată în lume (are un
+  punct fix sau un sistem de coordonate), linia centrală de descărcat ca **KML**, **GeoJSON** sau
+  **GPX** și o hartă cu linia centrală peste fundalul implicit al instalării (OpenTopoMap când nu
+  există unul). O ridicare care nu a putut fi așezată spune asta. **Pagina unui link public nu arată
+  niciodată hartă sau date geospațiale**: acestea sunt poziția peșterii și se arată doar în SilexGIS,
+  conturilor care au voie să vadă poziția exactă a peșterii.
+- **Cifre de la compilator**: lungimea topografiată, lungimea după compensarea buclelor, lungimea în
+  plan și cea verticală, denivelarea, extinderea nord–sud și est–vest, stațiile, vizele, buclele și
+  eroarea medie de închidere, cu un grafic al erorii fiecărei bucle. Doar mărimi — niciodată nume de
+  stații sau poziții.
+- **Analizele topografiei peșterii** (doar în aplicație): statisticile, rețeaua, orientarea și profilul
+  de adâncime ale peșterii. Sunt măsurate pe ridicarea după care e desenată acum peștera, care poate fi
+  altă încărcare decât aceasta.
+
+---
+
 ## Linkul public
 
 Când comutatorul din **Setări → Încărcări de topografii** e pornit și instalarea permite, o încărcare

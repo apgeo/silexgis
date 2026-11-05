@@ -104,6 +104,8 @@ result screen, which opens them with its access key:
 | `survey_upload.public_link_sign_in_required` | 401 | `GET /api/v1/public/survey-uploads/{token}` and `…/{token}/log` | the link opens for the installation's signed-in accounts only (`audience: organization`) and the reader is not signed in — an access key does not count. Asked only of a link that would otherwise open; ask the reader to sign in on the web. `11-errors/public-link-sign-in-required` |
 | `survey_upload.public_link_not_found` | 404 | `GET /api/v1/public/survey-uploads/{token}` and `…/{token}/log` | **one answer for everything**: an invented, malformed, withdrawn or replaced token, a cave protected now, an installation that turned links off, an upload or cave that is gone. `11-errors/public-link-not-found` |
 | `survey_upload.public_log_not_found` | 404 | `GET /api/v1/public/survey-uploads/{token}/log` | the link opens, but the upload has no compiler's log: it was not compiled, or its compile wrote none. Asked only of a link that opens, so it says nothing about a token that would not. |
+| `survey_upload.not_georeferenced` | 404 | `GET /api/v1/survey-uploads/{id}/geodata` (web only) | the run placed no line in the world — the survey has no fixed point and no coordinate system — or the line is withheld from this reader by a protection of its own, answered the same way |
+| `survey_upload.geodata_format_unsupported` | 400 | `GET /api/v1/survey-uploads/{id}/geodata` (web only) | `format` is not `kml`, `geojson` or `gpx` |
 
 ## How a processing run ended *(row)*
 

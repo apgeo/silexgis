@@ -31,6 +31,20 @@ turns every future addition into an outage of its own making.
 
 ---
 
+## 2026-11-05 — a page of results on the web, beside the contract
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — nothing a device sends
+or reads changes; no recording was written or rewritten.
+
+- The web pages a tool opens (`statusPageUrl`, `publicLink.url`) link to a page of results at the same
+  address with `/view` added; a tool may open it directly.
+- Added web-only routes that are not part of this contract: `GET /api/v1/public/survey-uploads/{token}/figures`
+  (decided exactly as the public page), and, signed in, `GET /api/v1/survey-uploads/{id}/figures`,
+  `…/{id}/geodata` and `…/by-public-link/{token}`. An access key is refused on the signed-in ones with
+  the existing `403 auth.access_key_not_accepted`.
+- New codes, on those web routes only: `survey_upload.not_georeferenced` (404) and
+  `survey_upload.geodata_format_unsupported` (400).
+
 ## 2026-11-04 — the compiler's log on the public page
 
 **Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — two members are added

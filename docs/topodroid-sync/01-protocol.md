@@ -300,3 +300,16 @@ installation that turned links off. The one other answer is
 opens the address in the browser, where the page asks the reader to sign in.
 `contentUrl`s are short-lived; read the page again for fresh ones. Public pages are rate-limited per
 address (`429` with `Retry-After`).
+
+**The page of results.** Both web pages a tool opens — `statusPageUrl` and `publicLink.url` — offer
+*View results*, a page that shows the survey's model in two viewers, what the compiler measured and,
+on the signed-in page only, a map of the survey and its centreline as KML, GeoJSON or GPX. It lives at
+the same address with `/view` added (`…/uploads/<id>/view`, `/p/survey/<token>/view`); a tool may open
+either directly. It reads two routes a tool does not need and that are **not part of this contract**
+(no recording, no version): `GET /api/v1/public/survey-uploads/{token}/figures` — the compiler's
+figures behind a link, decided exactly as the page is, sizes only (lengths, ranges, station and shot
+counts, loop closures), never a station or a position — and, signed in, `GET
+/api/v1/survey-uploads/{id}/figures` (which also says, as `placed`, whether there is a line to map) and `…/{id}/geodata?format=kml|geojson|gpx`. An access key is
+refused on the signed-in ones (`403 auth.access_key_not_accepted`). **The public page has no map and
+no geodata**: the survey's line in the world is positions, and the public page carries no position of
+the cave's own.
