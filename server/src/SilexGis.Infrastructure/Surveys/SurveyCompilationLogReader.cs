@@ -87,10 +87,10 @@ public sealed class SurveyCompilationLogReader
     }
 
     /// <summary>
-    /// The sizes one compilation log reports — lengths, ranges, counts and loop closures — or null
-    /// for text that is not a compilation log at all. Positions the log also prints (the stations
-    /// at each extreme and their absolute values, the stations each loop runs through) are left
-    /// behind here, so nothing that reads this can pass them on.
+    /// The figures one compilation log reports — lengths, ranges with the stations and absolute
+    /// values at their ends, counts, loop closures with the stations they run through, the
+    /// coordinate system and declinations the compiler worked with — or null for text that is not a
+    /// compilation log at all. Who may be shown them is the caller's decision, not this reader's.
     /// </summary>
     public SurveyLogFigures? ReadFigures(string? fileName, string? text)
     {
@@ -107,6 +107,10 @@ public sealed class SurveyCompilationLogReader
             CompilationSeconds = summary.CompilationTimeSeconds,
             ErrorCount = summary.Errors.Count(),
             WarningCount = summary.Warnings.Count(),
+            OutputCoordinateSystem = summary.OutputCoordinateSystem,
+            MeridianConvergenceDeg = summary.MeridianConvergence,
+            Declinations = [.. summary.Declinations.Select(d => new SurveyLogDeclination(d.Date, d.Degrees))],
+            HasNoControlPoints = summary.HasNoControlPoints,
             StationCount = summary.StationCount,
             ShotCount = summary.ShotCount,
             ConnectedComponents = summary.ConnectedComponents,
@@ -114,15 +118,20 @@ public sealed class SurveyCompilationLogReader
             TotalLengthAdjustedM = summary.TotalLengthAdjusted,
             PlanLengthM = summary.PlanLength,
             VerticalLengthM = summary.VerticalLength,
-            VerticalRangeM = summary.VerticalRange?.Length,
-            NorthSouthRangeM = summary.NorthSouthRange?.Length,
-            EastWestRangeM = summary.EastWestRange?.Length,
+            VerticalRange = ExtentOf(summary.VerticalRange),
+            NorthSouthRange = ExtentOf(summary.NorthSouthRange),
+            EastWestRange = ExtentOf(summary.EastWestRange),
             LoopCount = summary.LoopCount,
             AverageLoopErrorPercent = summary.AverageLoopErrorPercent,
             Loops = [.. summary.LoopErrors.Select(row =>
-                new SurveyLogLoop(row.RelativeErrorPercent, row.AbsoluteError, row.TotalLength, row.StationCount))],
+                new SurveyLogLoop(
+                    row.RelativeErrorPercent, row.AbsoluteError, row.TotalLength, row.StationCount,
+                    row.ErrorX, row.ErrorY, row.ErrorZ, row.Stations.Trim()))],
         };
     }
+
+    private static SurveyLogExtent? ExtentOf(TherionLogRange? range) =>
+        range is null ? null : new SurveyLogExtent(range.Length, range.FromStation, range.FromValue, range.ToStation, range.ToValue);
 
     // Mapped member by member rather than cast: a stored outcome means whatever this application's
     // enum meant on the day it was written, and a library that renumbers its own vocabulary must not

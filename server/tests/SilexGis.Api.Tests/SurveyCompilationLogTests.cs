@@ -188,15 +188,20 @@ public class SurveyCompilationLogTests
         """;
 
     [Fact]
-    public void A_logs_figures_are_its_sizes_and_none_of_its_stations_or_positions()
+    public void A_logs_figures_are_everything_it_states_stations_and_positions_included()
     {
-        var text = "therion 6.3.4 (2025-04-08)\nreading source files ... done\n" + InventedStatistics + "\ncompilation time: 1 sec\n";
+        var text = "therion 6.3.4 (2025-04-08)\nreading source files ... done\n"
+            + "output coordinate system: EPSG:31700\nmeridian convergence (deg): -1.2345\n"
+            + InventedStatistics + "\ncompilation time: 1 sec\n";
 
         var figures = Reader.ReadFigures("therion.log", text).ShouldNotBeNull();
 
         figures.Outcome.ShouldBe(SurveyCompilationOutcome.Succeeded);
         figures.CompilerVersion.ShouldBe("6.3.4");
         figures.CompilationSeconds.ShouldBe(1);
+        figures.OutputCoordinateSystem.ShouldBe("EPSG:31700");
+        figures.MeridianConvergenceDeg.ShouldBe(-1.2345);
+        figures.HasNoControlPoints.ShouldBeFalse();
         figures.StationCount.ShouldBe(42);
         figures.ShotCount.ShouldBe(57);
         figures.ConnectedComponents.ShouldBe(1);
@@ -207,15 +212,14 @@ public class SurveyCompilationLogTests
         figures.LoopCount.ShouldBe(2);
         figures.AverageLoopErrorPercent.ShouldBe(1.00);
 
-        // Each range is its length; the heights and grid coordinates of its two ends are not kept.
-        figures.VerticalRangeM.ShouldBe(61.20);
-        figures.NorthSouthRangeM.ShouldBe(120.00);
-        figures.EastWestRangeM.ShouldBe(80.50);
-        figures.Loops.ShouldBe([new SurveyLogLoop(1.20, 0.3, 25.0, 6), new SurveyLogLoop(0.80, 0.2, 25.0, 5)]);
-
-        // No member is able to carry a station name or a position: the only words are the version.
-        typeof(SurveyLogFigures).GetProperties().Where(p => p.PropertyType == typeof(string)).Select(p => p.Name).ShouldBe(["CompilerVersion"]);
-        typeof(SurveyLogLoop).GetProperties().Where(p => p.PropertyType == typeof(string)).ShouldBeEmpty();
+        // Each range with the stations at its ends and their absolute values, as the log prints them.
+        figures.VerticalRange.ShouldBe(new SurveyLogExtent(61.20, "1.17@inventata", 1234.50, "1.23@inventata", 1173.30));
+        figures.NorthSouthRange.ShouldBe(new SurveyLogExtent(120.00, "1.4@inventata", 5040123.00, "1.9@inventata", 5040003.00));
+        figures.EastWestRange.ShouldBe(new SurveyLogExtent(80.50, "1.11@inventata", 412345.00, "1.2@inventata", 412264.50));
+        figures.Loops.ShouldBe([
+            new SurveyLogLoop(1.20, 0.3, 25.0, 6, 0.1, 0.2, 0.1, "1.1@inventata - 1.2@inventata - 1.1@inventata"),
+            new SurveyLogLoop(0.80, 0.2, 25.0, 5, 0.1, 0.1, 0.1, "1.3@inventata - 1.4@inventata - 1.3@inventata"),
+        ]);
     }
 
     [Fact]

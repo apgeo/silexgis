@@ -22,15 +22,16 @@ using SilexGis.Infrastructure.Surveys;
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// What a page of one upload's results reads beside its status: the compiler's figures, signed in
-/// and through a public link; the survey's line work in the world's coordinates, signed in only and
-/// on the line's own exact-position check; and the way from a public link to the same upload in the
-/// application, for a signed-in reader the upload answers.
+/// What a page of one upload's results reads beside its status: the compiler's figures and the
+/// upload's own survey measured, signed in and through a public link; the survey's line work in the
+/// world's coordinates, signed in on the line's own exact-position check and through the public
+/// link as what the upload's own files place; and the way from a public link to the same upload in
+/// the application, for a signed-in reader the upload answers.
 /// </summary>
 /// <remarks>
 /// The survey is genuine TopoDroid output of an invented survey, compiled by a stand-in compiler
-/// whose log carries invented statistics. The line placed in the world is invented too. Nothing here
-/// is a real cave.
+/// whose log carries invented statistics. The line placed in the world and the legs measured are
+/// invented too. Nothing here is a real cave.
 /// </remarks>
 public sealed class SurveyUploadViewerTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
@@ -96,30 +97,38 @@ public sealed class SurveyUploadViewerTests : IAsyncLifetime, IDisposable, IClas
     // ---- figures ----
 
     [Fact]
-    public async Task The_figures_are_the_compilers_sizes_and_name_no_station_and_no_position()
+    public async Task The_figures_are_everything_the_compilers_log_states()
     {
         var (id, _) = await SendCompiledAsync($"Figuri {suffix}");
 
         var response = await owner.GetAsync($"{Uploads}/{id}/figures");
         var text = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.OK, text);
-        var figures = JsonDocument.Parse(text).RootElement.GetProperty("compiler");
+        var root = JsonDocument.Parse(text).RootElement;
+        var figures = root.GetProperty("compiler");
 
         figures.GetProperty("outcome").GetString().ShouldBe("succeeded");
         figures.GetProperty("stationCount").GetInt32().ShouldBe(42);
         figures.GetProperty("shotCount").GetInt32().ShouldBe(57);
         figures.GetProperty("totalLengthM").GetDouble().ShouldBe(312.40);
-        figures.GetProperty("verticalRangeM").GetDouble().ShouldBe(61.20);
         figures.GetProperty("loopCount").GetInt32().ShouldBe(2);
-        figures.GetProperty("loops").GetArrayLength().ShouldBe(2);
-        JsonDocument.Parse(text).RootElement.GetProperty("placed").GetBoolean().ShouldBeFalse();
+        root.GetProperty("placed").GetBoolean().ShouldBeFalse();
+        // The stand-in compiler's model is not a file that can be read, so nothing was measured.
+        root.GetProperty("analyses").ValueKind.ShouldBe(JsonValueKind.Null);
 
-        // The log names the stations at each extreme and their absolute height and grid position,
-        // and the stations each loop runs through. None of it is passed on.
-        foreach (var leak in new[] { "inventata", "1234.5", "1173.3", "5040123", "412345" })
-        {
-            text.ShouldNotContain(leak, Case.Insensitive, leak);
-        }
+        // Each extent with the stations at its ends and their absolute values, and each loop with
+        // the stations it runs through — what the log the reader may already download says.
+        var vertical = figures.GetProperty("verticalRange");
+        vertical.GetProperty("lengthM").GetDouble().ShouldBe(61.20);
+        vertical.GetProperty("fromStation").GetString().ShouldBe("1.17@inventata");
+        vertical.GetProperty("fromValueM").GetDouble().ShouldBe(1234.50);
+        vertical.GetProperty("toStation").GetString().ShouldBe("1.23@inventata");
+        vertical.GetProperty("toValueM").GetDouble().ShouldBe(1173.30);
+        figures.GetProperty("northSouthRange").GetProperty("fromValueM").GetDouble().ShouldBe(5040123.00);
+        figures.GetProperty("eastWestRange").GetProperty("fromValueM").GetDouble().ShouldBe(412345.00);
+        var loop = figures.GetProperty("loops")[0];
+        loop.GetProperty("stations").GetString().ShouldBe("1.1@inventata - 1.2@inventata - 1.1@inventata");
+        loop.GetProperty("errorYM").GetDouble().ShouldBe(0.2);
     }
 
     [Fact]
@@ -191,9 +200,12 @@ public sealed class SurveyUploadViewerTests : IAsyncLifetime, IDisposable, IClas
         var response = await anonymous.GetAsync($"{Public}/{token}/figures");
         var text = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.OK, text);
-        JsonDocument.Parse(text).RootElement.GetProperty("compiler").GetProperty("totalLengthM").GetDouble().ShouldBe(312.40);
-        JsonDocument.Parse(text).RootElement.GetProperty("placed").ValueKind.ShouldBe(JsonValueKind.Null);
-        text.ShouldNotContain("inventata", Case.Insensitive);
+        var compiler = JsonDocument.Parse(text).RootElement.GetProperty("compiler");
+        compiler.GetProperty("totalLengthM").GetDouble().ShouldBe(312.40);
+        // The whole figures, as the log the link already serves states them.
+        compiler.GetProperty("verticalRange").GetProperty("fromStation").GetString().ShouldBe("1.17@inventata");
+        compiler.GetProperty("verticalRange").GetProperty("fromValueM").GetDouble().ShouldBe(1234.50);
+        JsonDocument.Parse(text).RootElement.GetProperty("placed").GetBoolean().ShouldBeFalse();
         text.ShouldNotContain(id.ToString(), Case.Insensitive);
 
         var invented = await anonymous.GetAsync($"{Public}/not-a-real-token-{suffix}/figures");
@@ -207,28 +219,89 @@ public sealed class SurveyUploadViewerTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
-    public async Task A_public_link_carries_no_line_work_and_closes_its_figures_when_the_cave_is_protected()
+    public async Task A_public_link_serves_the_line_its_files_place_in_every_offered_format()
     {
-        var (id, caveId) = await SendCompiledAsync($"Fara harta {suffix}");
+        var (id, caveId) = await SendCompiledAsync($"Harta publica {suffix}");
         await PlaceLineAsync(id, caveId);
         var token = await TokenAsync(id);
 
         using var anonymous = factory.CreateClient();
+        (await anonymous.GetFromJsonAsync<JsonElement>($"{Public}/{token}/figures")).GetProperty("placed").GetBoolean().ShouldBeTrue();
 
-        // There is no public route to the line: the page has always carried no position of the
-        // cave's own, and the line is nothing but positions.
-        (await anonymous.GetAsync($"{Public}/{token}/geodata")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        foreach (var path in new[] { $"{Public}/{token}", $"{Public}/{token}/figures" })
-        {
-            var body = await (await anonymous.GetAsync(path)).Content.ReadAsStringAsync();
-            body.ShouldNotContain("45.53", Case.Sensitive, path);
-            body.ShouldNotContain("25.46", Case.Sensitive, path);
-            body.ShouldNotContain("\"coordinates\"", Case.Sensitive, path);
-        }
+        var geojson = await anonymous.GetAsync($"{Public}/{token}/geodata");
+        geojson.StatusCode.ShouldBe(HttpStatusCode.OK, await geojson.Content.ReadAsStringAsync());
+        geojson.Content.Headers.ContentType!.MediaType.ShouldBe("application/geo+json");
+        var feature = JsonDocument.Parse(await geojson.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("features").EnumerateArray().Single();
+        var first = feature.GetProperty("geometry").GetProperty("coordinates")[0][0];
+        first[0].GetDouble().ShouldBe(Lon, 1e-9);
+        first[1].GetDouble().ShouldBe(Lat, 1e-9);
+        feature.GetProperty("properties").GetProperty("name").GetString().ShouldBe($"Harta publica {suffix}");
 
-        // An ordinary link's figures stop with its page the moment the cave is protected.
+        var kml = await anonymous.GetAsync($"{Public}/{token}/geodata?format=kml");
+        kml.StatusCode.ShouldBe(HttpStatusCode.OK);
+        kml.Content.Headers.ContentType!.MediaType.ShouldBe("application/vnd.google-earth.kml+xml");
+        kml.Content.Headers.ContentDisposition!.FileNameStar.ShouldEndWith(".kml");
+
+        var gpx = await anonymous.GetAsync($"{Public}/{token}/geodata?format=gpx");
+        gpx.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await gpx.Content.ReadAsStringAsync()).ShouldContain("<gpx", Case.Insensitive);
+
+        var unsupported = await anonymous.GetAsync($"{Public}/{token}/geodata?format=dwg");
+        unsupported.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await CodeAsync(unsupported)).ShouldBe("survey_upload.geodata_format_unsupported");
+
+        // Nothing about the cave's own record rides along: not its id, not a page in the application.
+        (await geojson.Content.ReadAsStringAsync()).ShouldNotContain(caveId.ToString(), Case.Insensitive);
+    }
+
+    [Fact]
+    public async Task A_public_links_line_work_opens_and_refuses_exactly_as_its_page_does()
+    {
+        var (id, caveId) = await SendCompiledAsync($"Linie publica {suffix}");
+        await PlaceLineAsync(id, caveId);
+        var token = await TokenAsync(id);
+        using var anonymous = factory.CreateClient();
+
+        // An invented token is refused before its format is judged, so a bad format says nothing.
+        var invented = await anonymous.GetAsync($"{Public}/invented-{suffix}/geodata?format=dwg");
+        invented.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await CodeAsync(invented)).ShouldBe("survey_upload.public_link_not_found");
+
+        // An ordinary link's line work stops with its page the moment the cave is protected, and
+        // comes back with it.
         await SetProtectedAsync(caveId, true);
+        var protectedCave = await anonymous.GetAsync($"{Public}/{token}/geodata");
+        protectedCave.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await CodeAsync(protectedCave)).ShouldBe("survey_upload.public_link_not_found");
         (await anonymous.GetAsync($"{Public}/{token}/figures")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        await SetProtectedAsync(caveId, false);
+        (await anonymous.GetAsync($"{Public}/{token}/geodata")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await owner.DeleteAsync($"{Uploads}/{id}/public-link")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var withdrawn = await anonymous.GetAsync($"{Public}/{token}/geodata?format=kml");
+        withdrawn.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await CodeAsync(withdrawn)).ShouldBe("survey_upload.public_link_not_found");
+
+        var (orgId, orgCave) = await SendCompiledAsync($"Linie organizatie {suffix}", publicLink: new { audience = "organization" });
+        await PlaceLineAsync(orgId, orgCave);
+        var orgToken = await TokenAsync(orgId);
+        var refused = await anonymous.GetAsync($"{Public}/{orgToken}/geodata");
+        refused.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await CodeAsync(refused)).ShouldBe("survey_upload.public_link_sign_in_required");
+        (await reader.GetAsync($"{Public}/{orgToken}/geodata")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_public_link_to_a_run_that_placed_no_line_says_so()
+    {
+        var (id, _) = await SendCompiledAsync($"Publica neplasata {suffix}");
+        var token = await TokenAsync(id);
+        using var anonymous = factory.CreateClient();
+
+        var response = await anonymous.GetAsync($"{Public}/{token}/geodata?format=gpx");
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await CodeAsync(response)).ShouldBe("survey_upload.not_georeferenced");
     }
 
     [Fact]
@@ -243,6 +316,63 @@ public sealed class SurveyUploadViewerTests : IAsyncLifetime, IDisposable, IClas
         (await CodeAsync(refused)).ShouldBe("survey_upload.public_link_sign_in_required");
 
         (await reader.GetAsync($"{Public}/{token}/figures")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    // ---- the upload's own survey measured ----
+
+    [Fact]
+    public async Task The_analyses_measure_the_uploads_own_survey_not_the_one_the_cave_is_drawn_from()
+    {
+        // Two uploads of one cave. The first is the cave's current survey: one short leg.
+        // The second, not current, runs further north and deeper over two legs.
+        var (firstId, caveId) = await SendCompiledAsync($"Prima {suffix}");
+        var (secondId, _) = await SendCompiledAsync($"A doua {suffix}", cave: new { id = caveId });
+        var firstModel = await SeedLegsAsync(firstId, isCurrent: true, (0.0001, 0.0, -2.0));
+        var secondModel = await SeedLegsAsync(secondId, isCurrent: false, (0.0, 0.0003, -10.0), (0.0, 0.0003, -10.0));
+        await SeedTopologyAsync(secondModel, nodes: 3);
+
+        var cave = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/statistics");
+        cave.GetProperty("surveyModelId").GetGuid().ShouldBe(firstModel);
+        var caveLength = cave.GetProperty("indices").GetProperty("totalLengthM").GetDouble();
+
+        var analyses = (await owner.GetFromJsonAsync<JsonElement>($"{Uploads}/{secondId}/figures")).GetProperty("analyses");
+        analyses.GetProperty("surveyModelId").GetGuid().ShouldBe(secondModel);
+        analyses.GetProperty("hasAltitudes").GetBoolean().ShouldBeTrue();
+        var length = analyses.GetProperty("statistics").GetProperty("indices").GetProperty("totalLengthM").GetDouble();
+        length.ShouldBeGreaterThan(60);
+        length.ShouldBeGreaterThan(caveLength * 4);
+        analyses.GetProperty("statistics").GetProperty("indices").GetProperty("verticalExtentM").GetDouble().ShouldBe(20, 0.01);
+        analyses.GetProperty("orientation").GetProperty("segmentCount").GetInt32().ShouldBe(2);
+        analyses.GetProperty("orientation").GetProperty("dip").ValueKind.ShouldBe(JsonValueKind.Object);
+        analyses.GetProperty("depthProfile").GetProperty("deepestM").GetDouble().ShouldBe(20, 0.01);
+        analyses.GetProperty("depthProfile").GetProperty("samples").GetArrayLength().ShouldBeGreaterThan(0);
+        analyses.GetProperty("topology").GetProperty("nodeCount").GetInt32().ShouldBe(3);
+
+        // The first upload's own page measures the first upload, which has no network figures.
+        var own = (await owner.GetFromJsonAsync<JsonElement>($"{Uploads}/{firstId}/figures")).GetProperty("analyses");
+        own.GetProperty("surveyModelId").GetGuid().ShouldBe(firstModel);
+        own.GetProperty("statistics").GetProperty("indices").GetProperty("totalLengthM").GetDouble().ShouldBe(caveLength, 0.01);
+        own.GetProperty("topology").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task A_public_link_and_a_reader_without_the_exact_position_get_the_analyses_as_the_page_does()
+    {
+        var (id, caveId) = await SendCompiledAsync($"Analize publice {suffix}");
+        var model = await SeedLegsAsync(id, isCurrent: false, (0.0002, 0.0, -5.0));
+        var token = await TokenAsync(id);
+
+        using var anonymous = factory.CreateClient();
+        var shown = (await anonymous.GetFromJsonAsync<JsonElement>($"{Public}/{token}/figures")).GetProperty("analyses");
+        shown.GetProperty("surveyModelId").GetGuid().ShouldBe(model);
+        shown.GetProperty("depthProfile").GetProperty("deepestM").GetDouble().ShouldBe(5, 0.01);
+
+        // A signed-in reader who may not see the cave's survey is told the upload does not exist.
+        (await reader.GetAsync($"{Uploads}/{id}/figures")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // And the link's figures close with its page when the cave is protected.
+        await SetProtectedAsync(caveId, true);
+        (await anonymous.GetAsync($"{Public}/{token}/figures")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     // ---- line work ----
@@ -337,7 +467,7 @@ public sealed class SurveyUploadViewerTests : IAsyncLifetime, IDisposable, IClas
     // ---- helpers ----
 
     /// <summary>Sends a compiled survey of a cave the upload makes, runs it, and answers the upload and its cave.</summary>
-    private async Task<(Guid Id, Guid CaveId)> SendCompiledAsync(string title, object? publicLink = null, object? pipeline = null)
+    private async Task<(Guid Id, Guid CaveId)> SendCompiledAsync(string title, object? publicLink = null, object? pipeline = null, object? cave = null)
     {
         var files = new (string Name, byte[] Bytes)[]
         {
@@ -352,6 +482,7 @@ public sealed class SurveyUploadViewerTests : IAsyncLifetime, IDisposable, IClas
             client = new { name = "TopoDroid", version = "6.5.34" },
             surveyTitle = title,
             surveyName = "pestera_inventata",
+            cave,
             publicLink,
             pipeline,
             files = files.Select(f => new
@@ -403,6 +534,59 @@ public sealed class SurveyUploadViewerTests : IAsyncLifetime, IDisposable, IClas
             firstBecomesDefault: false);
         await db.SaveChangesAsync();
         return feature.Id;
+    }
+
+    /// <summary>
+    /// Writes the legs the run's compiled model would have been read into, each leg given as its
+    /// step east and north in degrees and its rise in metres from where the last one ended, and
+    /// marks the model read. The stand-in compiler's model is not a file that can be read.
+    /// </summary>
+    private async Task<Guid> SeedLegsAsync(Guid uploadId, bool isCurrent, params (double East, double North, double Rise)[] legs)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var modelId = await db.SurveyUploadFiles.AsNoTracking()
+            .Where(f => f.SurveyUploadId == uploadId && f.Output == "lox" && f.SurveyModelId != null)
+            .Select(f => f.SurveyModelId!.Value)
+            .SingleAsync();
+        await db.SurveyModels.Where(m => m.Id == modelId)
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.Status, SurveyModelStatus.Ready).SetProperty(m => m.IsCurrent, isCurrent));
+
+        var geometries = NtsGeometryServices.Instance.CreateGeometryFactory(4326);
+        var (x, y, z) = (Lon, Lat, 1000.0);
+        var station = 0;
+        foreach (var (east, north, rise) in legs)
+        {
+            var from = new CoordinateZ(x, y, z);
+            (x, y, z) = (x + east, y + north, z + rise);
+            db.SurveyShots.Add(new SurveyShot
+            {
+                SurveyModelId = modelId,
+                FromStationName = $"{station}",
+                ToStationName = $"{station + 1}",
+                Geom = geometries.CreateLineString([from, new CoordinateZ(x, y, z)]),
+                LengthM = 1,
+            });
+            station++;
+        }
+
+        await db.SaveChangesAsync();
+        return modelId;
+    }
+
+    private async Task SeedTopologyAsync(Guid modelId, int nodes)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.SurveyTopologies.Add(new SurveyTopology
+        {
+            SurveyModelId = modelId,
+            NodeCount = nodes,
+            EdgeCount = nodes - 1,
+            ComponentCount = 1,
+            ComputedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
     }
 
     private async Task<string> TokenAsync(Guid id)

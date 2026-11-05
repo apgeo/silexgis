@@ -1633,8 +1633,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** What the compiler's log of the upload behind a public link says about the survey: sizes, counts and loop closures, never a position. Opens and refuses exactly as the page does. */
+        /** What the compiler's log of the upload behind a public link says about the survey, whether the run placed it, and the upload's own survey measured. Opens and refuses exactly as the page does. */
         get: operations["publicSurveyUploadFigures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/survey-uploads/{token}/geodata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The line work of the upload behind a public link, in WGS 84, as GeoJSON, KML or GPX (`format`, default geojson): the line the upload's own model was read into. Opens and refuses exactly as the page does; 404 survey_upload.not_georeferenced when the run placed no line in the world. */
+        get: operations["publicSurveyUploadGeodata"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8690,7 +8707,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** What the compiler's log of an upload's run says about the survey: lengths, ranges, counts and loop closures, never a position. On the upload's own terms. */
+        /** What the compiler's log of an upload's run says about the survey, and the upload's own survey measured: shape, network, orientation and depth profile. On the upload's own terms. */
         get: operations["surveyUploadFigures"];
         put?: never;
         post?: never;
@@ -15134,6 +15151,21 @@ export interface components {
             version: null | string;
             outputs: string[];
         };
+        SurveyLogDeclinationDto: {
+            date: string;
+            /** Format: double */
+            degrees: number;
+        };
+        SurveyLogExtentDto: {
+            /** Format: double */
+            lengthM: number;
+            fromStation: string;
+            /** Format: double */
+            fromValueM: number;
+            toStation: string;
+            /** Format: double */
+            toValueM: number;
+        };
         SurveyLogFiguresDto: {
             outcome: components["schemas"]["SurveyCompilationOutcome"];
             compilerVersion: null | string;
@@ -15143,6 +15175,11 @@ export interface components {
             errorCount: number;
             /** Format: int32 */
             warningCount: number;
+            outputCoordinateSystem: null | string;
+            /** Format: double */
+            meridianConvergenceDeg: null | number;
+            declinations: components["schemas"]["SurveyLogDeclinationDto"][];
+            hasNoControlPoints: boolean;
             /** Format: int32 */
             stationCount: null | number;
             /** Format: int32 */
@@ -15157,12 +15194,9 @@ export interface components {
             planLengthM: null | number;
             /** Format: double */
             verticalLengthM: null | number;
-            /** Format: double */
-            verticalRangeM: null | number;
-            /** Format: double */
-            northSouthRangeM: null | number;
-            /** Format: double */
-            eastWestRangeM: null | number;
+            verticalRange: null | components["schemas"]["SurveyLogExtentDto"];
+            northSouthRange: null | components["schemas"]["SurveyLogExtentDto"];
+            eastWestRange: null | components["schemas"]["SurveyLogExtentDto"];
             /** Format: int32 */
             loopCount: null | number;
             /** Format: double */
@@ -15178,6 +15212,13 @@ export interface components {
             lengthM: number;
             /** Format: int32 */
             stationCount: number;
+            /** Format: double */
+            errorXM: number;
+            /** Format: double */
+            errorYM: number;
+            /** Format: double */
+            errorZM: number;
+            stations: string;
         };
         SurveyLoopErrorDto: {
             /** Format: int32 */
@@ -15321,6 +15362,15 @@ export interface components {
             isEntrance: boolean;
             isFixed: boolean;
         };
+        SurveyUploadAnalysesDto: {
+            /** Format: uuid */
+            surveyModelId: string;
+            hasAltitudes: boolean;
+            statistics: components["schemas"]["SurveyUploadStatisticsDto"];
+            orientation: components["schemas"]["SurveyUploadOrientationDto"];
+            depthProfile: components["schemas"]["SurveyUploadDepthProfileDto"];
+            topology: null | components["schemas"]["SurveyUploadTopologyDto"];
+        };
         SurveyUploadArtefactDto: {
             kind: string;
             name: string;
@@ -15379,6 +15429,31 @@ export interface components {
         SurveyUploadCompilerDto: {
             version: string;
         };
+        SurveyUploadDepthProfileDto: {
+            basis: components["schemas"]["SurveySegmentBasis"];
+            hasAltitudes: boolean;
+            /** Format: double */
+            passageLengthM: number;
+            /** Format: double */
+            highestM: null | number;
+            /** Format: double */
+            lowestM: null | number;
+            /** Format: double */
+            deepestM: null | number;
+            samples: components["schemas"]["SurveyUploadDepthSampleDto"][];
+        };
+        SurveyUploadDepthSampleDto: {
+            /** Format: double */
+            distanceAlongM: number;
+            /** Format: double */
+            altitudeM: number;
+            /** Format: double */
+            depthM: number;
+            /** Format: int32 */
+            pathIndex: null | number;
+            /** Format: int32 */
+            segmentIndex: number;
+        };
         SurveyUploadDto: {
             /** Format: uuid */
             id: string;
@@ -15419,7 +15494,8 @@ export interface components {
         };
         SurveyUploadFiguresDto: {
             compiler: null | components["schemas"]["SurveyLogFiguresDto"];
-            placed: null | boolean;
+            placed: boolean;
+            analyses: null | components["schemas"]["SurveyUploadAnalysesDto"];
         };
         SurveyUploadFileDeclaration: {
             name: string;
@@ -15528,6 +15604,18 @@ export interface components {
             documentsVisibility: null | components["schemas"]["Visibility"];
             publicLink?: null | components["schemas"]["SurveyUploadPublicLinkRequest"];
         };
+        SurveyUploadOrientationDto: {
+            basis: components["schemas"]["SurveySegmentBasis"];
+            hasAltitudes: boolean;
+            /** Format: int32 */
+            segmentCount: number;
+            /** Format: double */
+            totalLengthM: number;
+            byCount: components["schemas"]["OrientationMeasure"];
+            byLength: components["schemas"]["OrientationMeasure"];
+            bins: components["schemas"]["OrientationBin"][];
+            dip: null | components["schemas"]["DipSummary"];
+        };
         SurveyUploadPageDto: {
             items: components["schemas"]["SurveyUploadListItemDto"][];
             /** Format: int32 */
@@ -15579,6 +15667,12 @@ export interface components {
         SurveyUploadStage: "archive" | "unpack" | "scaffold" | "compile" | "store" | "read";
         /** @enum {unknown} */
         SurveyUploadStageState: "pending" | "active" | "done" | "failed" | "skipped";
+        SurveyUploadStatisticsDto: {
+            basis: components["schemas"]["SurveySegmentBasis"];
+            hasAltitudes: boolean;
+            indices: components["schemas"]["CaveIndexSummary"];
+            paths: components["schemas"]["PathSinuosity"][];
+        };
         /** @enum {unknown} */
         SurveyUploadStatus: "receiving" | "queued" | "running" | "succeeded" | "failed" | "abandoned";
         SurveyUploadSurveyDto: {
@@ -15587,6 +15681,70 @@ export interface components {
             /** Format: date */
             date: null | string;
             team: null | string;
+        };
+        SurveyUploadTopologyDto: {
+            /** Format: int32 */
+            droppedShotCount: null | number;
+            /** Format: int32 */
+            mergedStationCount: null | number;
+            /** Format: int32 */
+            nodeCount: number;
+            /** Format: int32 */
+            edgeCount: number;
+            /** Format: int32 */
+            componentCount: number;
+            /** Format: int32 */
+            reducedNodeCount: number;
+            /** Format: int32 */
+            reducedEdgeCount: number;
+            /** Format: int32 */
+            reducedComponentCount: number;
+            /** Format: int32 */
+            cyclomaticNumber: number;
+            /** Format: int32 */
+            extremityCount: number;
+            /** Format: int32 */
+            junctionCount: number;
+            /** Format: double */
+            alpha: null | number;
+            /** Format: double */
+            beta: null | number;
+            /** Format: double */
+            gamma: null | number;
+            /** Format: double */
+            meanDegree: null | number;
+            /** Format: double */
+            degreeStandardDeviation: null | number;
+            /** Format: double */
+            degreeCoefficientOfVariation: null | number;
+            /** Format: double */
+            correlationOfVertexDegree: null | number;
+            /** Format: int32 */
+            branchCount: number;
+            /** Format: int32 */
+            loopingBranchCount: number;
+            /** Format: double */
+            meanBranchLengthM: null | number;
+            /** Format: double */
+            branchLengthCoefficientOfVariation: null | number;
+            /** Format: double */
+            minBranchLengthM: null | number;
+            /** Format: double */
+            maxBranchLengthM: null | number;
+            /** Format: double */
+            lengthEntropy: null | number;
+            /** Format: double */
+            orientationEntropy: null | number;
+            /** Format: double */
+            meanTortuosity: null | number;
+            /** Format: double */
+            averageShortestPathLength: null | number;
+            /** Format: double */
+            centralPointDominance: null | number;
+            /** Format: double */
+            averageClusteringCoefficient: null | number;
+            /** Format: date-time */
+            computedAt: string;
         };
         SurveyUploadUploaderDto: {
             /** Format: uuid */
@@ -21880,6 +22038,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SurveyUploadFiguresDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    publicSurveyUploadGeodata: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Unauthorized */
