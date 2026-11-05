@@ -153,6 +153,7 @@ public static partial class SurveyUploadEndpoints
             .WithSummary("Abandons an upload still receiving files. The files already sent stay archived.");
 
         MapPublicLinkEndpoints(api);
+        MapViewerEndpoints(api);
         return api;
     }
 

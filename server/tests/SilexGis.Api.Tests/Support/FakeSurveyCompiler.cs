@@ -31,6 +31,12 @@ internal sealed partial class FakeSurveyCompiler(bool logSaysFailed = false, par
     /// <summary>The word every output it writes starts with, so two compilers' outputs differ.</summary>
     public string Word { get; init; } = "invented";
 
+    /// <summary>
+    /// Lines written into the log just before it ends, as Therion writes its survey statistics and
+    /// loop errors; null for a log with none.
+    /// </summary>
+    public string? StatisticsBlock { get; init; }
+
     /// <summary>How many compiles were asked of it.</summary>
     public int Calls => calls;
 
@@ -73,6 +79,11 @@ internal sealed partial class FakeSurveyCompiler(bool logSaysFailed = false, par
         if (logSaysFailed)
         {
             log.Append("error: invented failure -- an invented reason\n");
+        }
+
+        if (StatisticsBlock is { } statistics)
+        {
+            log.Append(statistics.ReplaceLineEndings("\n").TrimEnd('\n')).Append('\n');
         }
 
         log.Append("compilation time: 1 sec\n");

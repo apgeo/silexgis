@@ -1626,6 +1626,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/survey-uploads/{token}/figures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the compiler's log of the upload behind a public link says about the survey: sizes, counts and loop closures, never a position. Opens and refuses exactly as the page does. */
+        get: operations["publicSurveyUploadFigures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -8666,6 +8683,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-uploads/{id}/figures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the compiler's log of an upload's run says about the survey: lengths, ranges, counts and loop closures, never a position. On the upload's own terms. */
+        get: operations["surveyUploadFigures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/{id}/geodata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The upload's survey line work in WGS 84, as GeoJSON, KML or GPX (`format`, default geojson), on the upload's own terms and the line's own exact-position check. 404 survey_upload.not_georeferenced when the run placed no line in the world. */
+        get: operations["surveyUploadGeodata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/by-public-link/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** For a signed-in reader of a public link: the same upload's page and its cave's in the application, when the link opens and the reader may see the upload on its own terms. Otherwise the link's ordinary 404. */
+        get: operations["surveyUploadByPublicLink"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -15066,6 +15134,51 @@ export interface components {
             version: null | string;
             outputs: string[];
         };
+        SurveyLogFiguresDto: {
+            outcome: components["schemas"]["SurveyCompilationOutcome"];
+            compilerVersion: null | string;
+            /** Format: int32 */
+            compilationSeconds: null | number;
+            /** Format: int32 */
+            errorCount: number;
+            /** Format: int32 */
+            warningCount: number;
+            /** Format: int32 */
+            stationCount: null | number;
+            /** Format: int32 */
+            shotCount: null | number;
+            /** Format: int32 */
+            connectedComponents: null | number;
+            /** Format: double */
+            totalLengthM: null | number;
+            /** Format: double */
+            totalLengthAdjustedM: null | number;
+            /** Format: double */
+            planLengthM: null | number;
+            /** Format: double */
+            verticalLengthM: null | number;
+            /** Format: double */
+            verticalRangeM: null | number;
+            /** Format: double */
+            northSouthRangeM: null | number;
+            /** Format: double */
+            eastWestRangeM: null | number;
+            /** Format: int32 */
+            loopCount: null | number;
+            /** Format: double */
+            averageLoopErrorPercent: null | number;
+            loops: components["schemas"]["SurveyLogLoopDto"][];
+        };
+        SurveyLogLoopDto: {
+            /** Format: double */
+            relativeErrorPercent: number;
+            /** Format: double */
+            absoluteErrorM: number;
+            /** Format: double */
+            lengthM: number;
+            /** Format: int32 */
+            stationCount: number;
+        };
         SurveyLoopErrorDto: {
             /** Format: int32 */
             ordinal: number;
@@ -15304,6 +15417,10 @@ export interface components {
             code: string;
             message: null | string;
         };
+        SurveyUploadFiguresDto: {
+            compiler: null | components["schemas"]["SurveyLogFiguresDto"];
+            placed: null | boolean;
+        };
         SurveyUploadFileDeclaration: {
             name: string;
             /** Format: int64 */
@@ -15341,6 +15458,10 @@ export interface components {
         SurveyUploadFileRole: "archive" | "therionSource" | "therionSketch" | "other" | "generatedConfig" | "output" | "log";
         /** @enum {unknown} */
         SurveyUploadFileStatus: "declared" | "received" | "stored" | "refused";
+        SurveyUploadInAppDto: {
+            statusPageUrl: string;
+            caveUrl: string;
+        };
         /** @enum {unknown} */
         SurveyUploadLinkAudience: "public" | "organization";
         SurveyUploadListFileDto: {
@@ -21711,6 +21832,55 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    publicSurveyUploadFigures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadFiguresDto"];
+                };
             };
             /** @description Unauthorized */
             401: {
@@ -42394,6 +42564,135 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyUploadFigures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadFiguresDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyUploadGeodata: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyUploadByPublicLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadInAppDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
