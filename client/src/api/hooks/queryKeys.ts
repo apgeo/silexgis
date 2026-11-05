@@ -370,4 +370,5 @@ export const queryKeys = {
   surveyUploadGeodata: (id: string) => ['survey-uploads', 'geodata', id] as const,
   surveyUploadByPublicLink: (token: string) => ['survey-uploads', 'by-public-link', token] as const,
   publicSurveyUploadFigures: (token: string) => ['public-survey-uploads', token, 'figures'] as const,
+  publicSurveyUploadGeodata: (token: string) => ['public-survey-uploads', token, 'geodata'] as const,
 };

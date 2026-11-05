@@ -2,6 +2,7 @@
 import { Card, Descriptions, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 
+import type { components } from '../../api/schema';
 import { caveHasMeasurableSurvey, useCaveTopology, useSurveyModels } from '../../api/hooks.ts';
 
 /**
@@ -31,7 +32,6 @@ import { caveHasMeasurableSurvey, useCaveTopology, useSurveyModels } from '../..
  * </p>
  */
 export default function CaveTopologyPanel({ caveId }: { caveId: string }) {
-  const { t } = useTranslation();
   // Shares the cave page's existing list rather than adding a request. Two jobs: it turns the
   // upload these figures came from into the name the reader sees in that list, and it says whether
   // there is anything to measure at all — a cave with no read line plot is asked nothing, because
@@ -49,6 +49,25 @@ export default function CaveTopologyPanel({ caveId }: { caveId: string }) {
   // measured to be empty for however long it is on screen.
   if (isError || !data) return null;
 
+  const answeringModel = data.surveyModelId
+    ? (models?.find((model) => model.id === data.surveyModelId)?.name ?? data.surveyModelId)
+    : null;
+
+  return <SurveyTopologyView data={data} answeringModel={answeringModel} />;
+}
+
+/** What the network panel draws: a cave's current survey or one survey upload's own. */
+export type SurveyTopologyViewData = components['schemas']['SurveyUploadTopologyDto'];
+
+export function SurveyTopologyView({
+  data,
+  answeringModel = null,
+}: {
+  data: SurveyTopologyViewData;
+  /** The upload the figures came from, named where a reader needs telling; null names none. */
+  answeringModel?: string | null;
+}) {
+  const { t } = useTranslation();
   const dash = '—';
   const metres = (value: number | null | undefined) =>
     typeof value === 'number' ? t('trips.metres', { value: Math.round(value * 10) / 10 }) : dash;
@@ -266,9 +285,6 @@ export default function CaveTopologyPanel({ caveId }: { caveId: string }) {
   // Which of the cave's uploads produced these figures. Named where the name is known, and by its
   // identifier otherwise — a corrected re-export is a new upload rather than a replacement, so two
   // sets of numbers about one cave describe the same passage only if they came from the same one.
-  const answeringModel = data.surveyModelId
-    ? (models?.find((model) => model.id === data.surveyModelId)?.name ?? data.surveyModelId)
-    : null;
 
   return (
     <Card size="small" title={t('statistics.topology.title')} style={{ marginTop: 16 }}>

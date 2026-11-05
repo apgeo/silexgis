@@ -6,26 +6,29 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   isSignInRequiredPublicLink,
   isUnknownPublicLink,
+  publicSurveyUploadGeodataUrl,
   publicSurveyViewerPath,
   surveyUploadUnsettled,
   surveyUploadViewerPath,
   usePublicSurveyUpload,
   usePublicSurveyUploadFigures,
+  usePublicSurveyUploadLineWork,
   useSurveyUploadByPublicLink,
   viewerModelOf,
 } from '../../api/hooks.ts';
 import { useAuth } from '../../auth/auth.tsx';
 import Button from '../../components/Button.tsx';
-import SurveyResultViewer from '../../components/surveyUploads/viewer/SurveyResultViewer.tsx';
+import SurveyResultViewer, { type SurveyGeoState } from '../../components/surveyUploads/viewer/SurveyResultViewer.tsx';
 
 /**
- * One upload's results behind its public link: the model in both viewers and what the compiler
- * measured, for somebody who was handed the link.
+ * One upload's results behind its public link, for somebody who was handed the link: the model in
+ * both viewers, the map of the survey's line with its KML, GeoJSON and GPX downloads, what the
+ * compiler measured, and the upload's own survey measured.
  *
  * Drawn from the same answers as the link's progress page, so a link that is wrong, withdrawn or no
- * longer allowed answers here exactly as there. There is no map and no geodata: the public page
- * carries no position of the cave's own, and the server offers this page no route to the survey's
- * line in the world — the page says so rather than leaving a gap.
+ * longer allowed answers here exactly as there. Everything here comes out of the upload's own files,
+ * which the link already hands out; the map's background is the fallback one, because the
+ * installation's map catalogue is a signed-in route this page does not ask.
  *
  * "Open in SilexGIS" is offered to a signed-in reader whom the upload answers on its own terms; the
  * server says which, and names the upload's place only then. A reader who is not signed in is
@@ -39,6 +42,10 @@ export default function PublicSurveyViewerPage() {
   const { data: view, isPending, error } = usePublicSurveyUpload(token);
   const settled = !!view && !surveyUploadUnsettled(view.status);
   const figures = usePublicSurveyUploadFigures(token, settled);
+  // Asked for only when the figures say the run placed a line, so a survey that was never placed
+  // is not one more refused request.
+  const placed = figures.data?.placed === true;
+  const lineWork = usePublicSurveyUploadLineWork(token, settled && placed);
   const inApp = useSurveyUploadByPublicLink(token, !!user && !!view);
   const here = location.pathname + location.search + location.hash;
 
@@ -82,6 +89,23 @@ export default function PublicSurveyViewerPage() {
     );
   }
 
+  const geo: SurveyGeoState = !settled || figures.isPending
+    ? { kind: 'loading' }
+    : figures.isError || lineWork.isError
+      ? { kind: 'failed' }
+      : !placed
+        ? { kind: 'unplaced' }
+        : lineWork.data
+          ? {
+              kind: 'shown',
+              lineWork: lineWork.data,
+              downloadUrl: (format) => publicSurveyUploadGeodataUrl(token, format),
+              catalogue: false,
+            }
+          : lineWork.isPending
+            ? { kind: 'loading' }
+            : { kind: 'unplaced' };
+
   const pageUrl = new URL(publicSurveyViewerPath(`/p/survey/${encodeURIComponent(token)}`), window.location.origin).toString();
 
   const openInApp = !user ? (
@@ -109,7 +133,8 @@ export default function PublicSurveyViewerPage() {
         isPending: settled ? figures.isPending : false,
         isError: figures.isError,
       }}
-      geo={{ kind: 'withheld' }}
+      analyses={figures.data?.analyses}
+      geo={geo}
       openInApp={openInApp}
       navigation={
         <Link to={`/p/survey/${encodeURIComponent(token)}`} data-testid="survey-viewer-progress-link">

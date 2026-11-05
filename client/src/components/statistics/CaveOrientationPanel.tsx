@@ -2,6 +2,7 @@
 import { Card, Col, Empty, Row, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 
+import type { components } from '../../api/schema';
 import { useCaveOrientation } from '../../api/hooks.ts';
 import DipHistogram from './DipHistogram.tsx';
 import RoseDiagram from './RoseDiagram.tsx';
@@ -29,12 +30,26 @@ import SurveyBasisNote from './SurveyBasisNote.tsx';
  * </p>
  */
 export default function CaveOrientationPanel({ caveId }: { caveId: string }) {
-  const { t } = useTranslation();
   const { data, isLoading, isError } = useCaveOrientation(caveId);
 
   // Refused for this reader, or refused because the cave's exact position is closed to them —
   // the server answers both the same way on purpose, and a panel of blanks would misreport it.
   if (isError) return null;
+
+  return <SurveyOrientationView data={data} isLoading={isLoading} />;
+}
+
+/** What the orientation panel draws: a cave's current survey or one survey upload's own. */
+export type SurveyOrientationViewData = components['schemas']['SurveyUploadOrientationDto'];
+
+export function SurveyOrientationView({
+  data,
+  isLoading = false,
+}: {
+  data: SurveyOrientationViewData | undefined;
+  isLoading?: boolean;
+}) {
+  const { t } = useTranslation();
 
   const body = () => {
     if (isLoading || !data) return <Empty description={t('statistics.orientation.loading')} />;

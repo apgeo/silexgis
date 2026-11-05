@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// The page of one upload's results: the compiler's figures, the survey's line work placed in the
-// world, the model the viewers draw, and the addresses the page is shared and reached by.
+// The page of one upload's results: the compiler's figures and the upload's own survey measured,
+// the survey's line work placed in the world, the model the viewers draw, and the addresses the
+// page is shared and reached by.
 //
-// The line work is asked for on the signed-in route only. A public link has no route to it: its
-// page carries no position of the cave's own, and the server decides that, not this file.
+// Both the signed-in page and a public link's page ask for the same things, each on its own route:
+// the signed-in one by the upload's id, the public one by the link's token. What either may be
+// shown is the server's decision, not this file's.
 import { useQuery } from '@tanstack/react-query';
 import { api, ApiError, readJson } from '../client.ts';
 import type { components } from '../schema';
@@ -17,6 +19,8 @@ import { surveyUploadLinkHref } from './surveyUploads.ts';
 export type SurveyUploadFigures = components['schemas']['SurveyUploadFiguresDto'];
 export type SurveyLogFigures = components['schemas']['SurveyLogFiguresDto'];
 export type SurveyLogLoop = components['schemas']['SurveyLogLoopDto'];
+export type SurveyLogExtent = components['schemas']['SurveyLogExtentDto'];
+export type SurveyUploadAnalyses = components['schemas']['SurveyUploadAnalysesDto'];
 
 /** The formats the line work is offered in, in the order the page lists them. */
 export const SURVEY_GEODATA_FORMATS = ['kml', 'geojson', 'gpx'] as const;
@@ -44,6 +48,11 @@ export function publicSurveyViewerPath(publicLinkUrl: string): string {
 /** Where the line work downloads from, in one format. */
 export function surveyUploadGeodataUrl(id: string, format: SurveyGeodataFormat): string {
   return `/api/v1/survey-uploads/${encodeURIComponent(id)}/geodata?format=${format}`;
+}
+
+/** Where the line work behind a public link downloads from, in one format. */
+export function publicSurveyUploadGeodataUrl(token: string, format: SurveyGeodataFormat): string {
+  return `/api/v1/public/survey-uploads/${encodeURIComponent(token)}/geodata?format=${format}`;
 }
 
 /** What the two survey viewers need of a model: where its file is, a name and which format it is. */
@@ -100,11 +109,24 @@ export function usePublicSurveyUploadFigures(token: string | undefined, enabled 
  * cache an answer the finished run contradicts.
  */
 export function useSurveyUploadLineWork(id: string | undefined, enabled: boolean) {
+  return useLineWork(queryKeys.surveyUploadGeodata(id ?? ''), () => surveyUploadGeodataUrl(id!, 'geojson'), !!id && enabled);
+}
+
+/** The same through a public link: the line the upload's own files place. */
+export function usePublicSurveyUploadLineWork(token: string | undefined, enabled: boolean) {
+  return useLineWork(
+    queryKeys.publicSurveyUploadGeodata(token ?? ''),
+    () => publicSurveyUploadGeodataUrl(token!, 'geojson'),
+    !!token && enabled,
+  );
+}
+
+function useLineWork(queryKey: readonly unknown[], url: () => string, enabled: boolean) {
   return useQuery({
-    queryKey: queryKeys.surveyUploadGeodata(id ?? ''),
+    queryKey,
     queryFn: async (): Promise<SurveyLineWork | null> => {
       try {
-        return await readJson<SurveyLineWork>(surveyUploadGeodataUrl(id!, 'geojson'));
+        return await readJson<SurveyLineWork>(url());
       } catch (error) {
         if (error instanceof ApiError && error.status === 404 && error.code === NOT_GEOREFERENCED) {
           return null;
@@ -112,7 +134,7 @@ export function useSurveyUploadLineWork(id: string | undefined, enabled: boolean
         throw error;
       }
     },
-    enabled: !!id && enabled,
+    enabled,
     retry: retryUnlessRefused,
   });
 }

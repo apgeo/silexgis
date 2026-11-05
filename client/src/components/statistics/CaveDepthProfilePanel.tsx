@@ -3,6 +3,7 @@ import { Card, Col, Empty, Row, Statistic, Typography } from 'antd';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { components } from '../../api/schema';
 import { useCaveDepthProfile } from '../../api/hooks/karstProfiles.ts';
 import { EnvelopeChart } from './DistributionCharts.tsx';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
@@ -19,8 +20,22 @@ import SurveyBasisNote from './SurveyBasisNote.tsx';
  * </p>
  */
 export default function CaveDepthProfilePanel({ caveId }: { caveId: string }) {
-  const { t } = useTranslation();
   const { data, isLoading, isError } = useCaveDepthProfile(caveId);
+  if (isError) return null;
+  return <SurveyDepthProfileView data={data} isLoading={isLoading} />;
+}
+
+/** What the depth profile panel draws: a cave's current survey or one survey upload's own. */
+export type SurveyDepthProfileViewData = components['schemas']['SurveyUploadDepthProfileDto'];
+
+export function SurveyDepthProfileView({
+  data,
+  isLoading = false,
+}: {
+  data: SurveyDepthProfileViewData | undefined;
+  isLoading?: boolean;
+}) {
+  const { t } = useTranslation();
 
   const series = useMemo(() => {
     const samples = data?.samples ?? [];
@@ -45,8 +60,6 @@ export default function CaveDepthProfilePanel({ caveId }: { caveId: string }) {
       }),
     [metres, series, t],
   );
-
-  if (isError) return null;
 
   const body = () => {
     if (isLoading || !data) return <Empty description={t('depthProfile.loading')} />;

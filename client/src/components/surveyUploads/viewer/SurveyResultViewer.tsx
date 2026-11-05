@@ -6,11 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { downloadFile } from '../../../api/download.ts';
 import {
   SURVEY_GEODATA_FORMATS,
-  surveyUploadGeodataUrl,
   useMapLayers,
   type SurveyGeodataFormat,
   type SurveyLineWork,
   type SurveyLogFigures,
+  type SurveyUploadAnalyses,
   type ViewerModel,
 } from '../../../api/hooks.ts';
 import { DOWNLOAD_BUTTON } from '../../../theme.ts';
@@ -18,17 +18,20 @@ import Button from '../../Button.tsx';
 import SurveyModelTabs from '../../caveview/SurveyModelTabs.tsx';
 import SurveyLineMap from './SurveyLineMap.tsx';
 import SurveyLogFiguresView from './SurveyLogFiguresView.tsx';
+import SurveyUploadAnalysesView from './SurveyUploadAnalysesView.tsx';
 import { useFirstAddress } from './useFirstAddress.ts';
 
 /** What the page can say about the survey's place in the world. */
 export type SurveyGeoState =
   | { kind: 'loading' }
-  /** The run placed the survey, and this reader may be shown where. */
-  | { kind: 'shown'; uploadId: string; lineWork: SurveyLineWork }
+  /**
+   * The run placed the survey, and this reader may be shown where. `catalogue` says whether the
+   * page may ask for the installation's map catalogue for its background — a signed-in route, which
+   * a public link's page must not ask; without it the map draws its fallback background.
+   */
+  | { kind: 'shown'; lineWork: SurveyLineWork; downloadUrl: (format: SurveyGeodataFormat) => string; catalogue: boolean }
   /** The run placed no line in the world (no fixed point, no coordinate system). */
   | { kind: 'unplaced' }
-  /** A public link's page: it carries no position of the cave's own. */
-  | { kind: 'withheld' }
   | { kind: 'failed' };
 
 export interface SurveyResultViewerProps {
@@ -45,21 +48,20 @@ export interface SurveyResultViewerProps {
   /** The model the viewers draw, or null when the run produced none. */
   model: ViewerModel | null;
   figures: { data: SurveyLogFigures | null | undefined; isPending: boolean; isError: boolean };
+  /** The upload's own survey measured; asked for with the figures, so pending and failing with them. */
+  analyses: SurveyUploadAnalyses | null | undefined;
   geo: SurveyGeoState;
-  /** What a page adds under the figures — the cave's own analyses, for a signed-in reader. */
-  children?: ReactNode;
   /** Above the title: a breadcrumb or a way back. */
   navigation?: ReactNode;
 }
 
 /**
  * One survey's results in one place: the header with its link and the way into the application,
- * the model in both viewers, where it lies, and what the compiler measured.
+ * the model in both viewers, where it lies, what the compiler measured, and the upload's own survey
+ * measured — its shape, network, orientation and depth profile.
  *
  * Shared by the signed-in page and a public link's page, which differ only in what they hand it —
- * this component decides nothing about who may see what. A public link's page hands it no line work
- * and says so (`withheld`); the server is what keeps the coordinates off that page, not the
- * absence of a map here.
+ * this component decides nothing about who may see what; the server does, route by route.
  *
  * The model's address is a short-lived signed link that each read of the upload renews. The first
  * address seen for a model is kept, so a page that reads the upload again does not tear down and
@@ -74,8 +76,8 @@ export default function SurveyResultViewer({
   openInApp,
   model,
   figures,
+  analyses,
   geo,
-  children,
   navigation,
 }: SurveyResultViewerProps) {
   const { t, i18n } = useTranslation();
@@ -141,7 +143,7 @@ export default function SurveyResultViewer({
           )}
         </Card>
 
-        {children}
+        {!figures.isPending && !figures.isError && <SurveyUploadAnalysesView analyses={analyses} />}
       </Flex>
     </main>
   );
@@ -155,7 +157,10 @@ function GeoCard({ geo }: { geo: SurveyGeoState }) {
       {geo.kind === 'loading' ? (
         <Skeleton active paragraph={{ rows: 2 }} />
       ) : geo.kind === 'shown' ? (
-        <PlacedSurvey uploadId={geo.uploadId} lineWork={geo.lineWork} />
+        <Flex vertical gap={12}>
+          <GeodataDownloads downloadUrl={geo.downloadUrl} />
+          {geo.catalogue ? <CatalogueMap lineWork={geo.lineWork} /> : <SurveyLineMap lineWork={geo.lineWork} layers={undefined} />}
+        </Flex>
       ) : (
         <Typography.Text type="secondary" data-testid={`survey-viewer-geo-${geo.kind}`}>
           {t(`surveyViewer.map.${geo.kind}`)}
@@ -166,24 +171,19 @@ function GeoCard({ geo }: { geo: SurveyGeoState }) {
 }
 
 /**
- * The downloads and the map of a placed survey. The installation's map catalogue is asked for only
- * here: it is a signed-in route, and a public link's page, which never gets this far, must not ask.
+ * The map of a placed survey over the installation's own default background. The catalogue is
+ * asked for only here: it is a signed-in route, and a public link's page must not ask.
  */
-function PlacedSurvey({ uploadId, lineWork }: { uploadId: string; lineWork: SurveyLineWork }) {
+function CatalogueMap({ lineWork }: { lineWork: SurveyLineWork }) {
   const { data: layers, isPending } = useMapLayers();
-  return (
-    <Flex vertical gap={12}>
-      <GeodataDownloads uploadId={uploadId} />
-      {isPending ? (
-        <Skeleton.Node active style={{ width: '100%', height: 360 }} />
-      ) : (
-        <SurveyLineMap lineWork={lineWork} layers={layers} />
-      )}
-    </Flex>
+  return isPending ? (
+    <Skeleton.Node active style={{ width: '100%', height: 360 }} />
+  ) : (
+    <SurveyLineMap lineWork={lineWork} layers={layers} />
   );
 }
 
-function GeodataDownloads({ uploadId }: { uploadId: string }) {
+function GeodataDownloads({ downloadUrl }: { downloadUrl: (format: SurveyGeodataFormat) => string }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [saving, setSaving] = useState<SurveyGeodataFormat | null>(null);
@@ -191,7 +191,7 @@ function GeodataDownloads({ uploadId }: { uploadId: string }) {
   const save = async (format: SurveyGeodataFormat) => {
     setSaving(format);
     try {
-      await downloadFile(surveyUploadGeodataUrl(uploadId, format));
+      await downloadFile(downloadUrl(format));
     } catch {
       message.error(t('surveyViewer.map.downloadFailed'));
     } finally {

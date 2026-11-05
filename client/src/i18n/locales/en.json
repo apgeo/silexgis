@@ -8653,7 +8653,6 @@
       },
       "downloadFailed": "The file could not be downloaded",
       "unplaced": "This survey has no fixed point or coordinate system, so it could not be placed on a map.",
-      "withheld": "The map and the geodata files are shown only in SilexGIS, to accounts allowed to see the cave's exact position.",
       "failed": "The survey's place on the map could not be loaded."
     },
     "figures": {
@@ -8685,11 +8684,21 @@
       "loopChart": "Loop closure errors",
       "loopAxis": "Loop",
       "loopErrorAxis": "Error (%)",
-      "loopTooltip": "Loop {{n}}: {{percent}} % — {{error}} m over {{length}} m, {{stations}} stations"
+      "loopTooltip": "Loop {{n}}: {{percent}} % — {{error}} m over {{length}} m, {{stations}} stations",
+      "extentEnds": "from {{from}} ({{fromValue}} m) to {{to}} ({{toValue}} m)",
+      "degrees": "{{value}}°",
+      "coordinateSystem": "Coordinate system",
+      "meridianConvergence": "Meridian convergence",
+      "declinations": "Magnetic declinations",
+      "noControlPoints": "The survey has no fixed point: the compiler chose one, so its heights and coordinates are relative, not the terrain's.",
+      "loopError": "Error",
+      "loopLength": "Length",
+      "loopStations": "Stations"
     },
-    "cave": {
-      "title": "The cave's survey analyses",
-      "note": "Measured over the survey the cave is currently drawn from, which may be another upload than this one."
+    "analyses": {
+      "title": "This upload's survey analysed",
+      "note": "Measured over the survey in this upload's own files, not the survey the cave is currently drawn from.",
+      "none": "This upload's survey was not read into shots: it could not be placed on a map, or its reading has not finished."
     }
   }
 }

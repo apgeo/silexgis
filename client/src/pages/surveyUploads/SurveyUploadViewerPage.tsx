@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { ArrowLeftOutlined, ExportOutlined } from '@ant-design/icons';
-import { Alert, Breadcrumb, Flex, Skeleton, Typography } from 'antd';
+import { Alert, Breadcrumb, Flex, Skeleton } from 'antd';
 import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
   surveyResultShare,
+  surveyUploadGeodataUrl,
   surveyUploadUnsettled,
   useSurveyUpload,
   useSurveyUploadFigures,
@@ -13,15 +14,11 @@ import {
   viewerModelOf,
 } from '../../api/hooks.ts';
 import Button from '../../components/Button.tsx';
-import CaveDepthProfilePanel from '../../components/statistics/CaveDepthProfilePanel.tsx';
-import CaveOrientationPanel from '../../components/statistics/CaveOrientationPanel.tsx';
-import CaveStatisticsPanel from '../../components/statistics/CaveStatisticsPanel.tsx';
-import CaveTopologyPanel from '../../components/statistics/CaveTopologyPanel.tsx';
 import SurveyResultViewer, { type SurveyGeoState } from '../../components/surveyUploads/viewer/SurveyResultViewer.tsx';
 
 /**
  * One upload's results for a signed-in reader: the model in both viewers, where the survey lies,
- * what the compiler measured, and the cave's own analyses beneath.
+ * what the compiler measured, and this upload's own survey measured beneath.
  *
  * The page asks for the upload by its id alone, and the server decides whether this account may
  * see it — the same "not found" as the status page for an address that is made up or foreign. The
@@ -70,7 +67,12 @@ export default function SurveyUploadViewerPage() {
       : !placed
         ? { kind: 'unplaced' }
         : lineWork.data
-          ? { kind: 'shown', uploadId: upload.id, lineWork: lineWork.data }
+          ? {
+              kind: 'shown',
+              lineWork: lineWork.data,
+              downloadUrl: (format) => surveyUploadGeodataUrl(upload.id, format),
+              catalogue: true,
+            }
           : lineWork.isPending
             ? { kind: 'loading' }
             : { kind: 'unplaced' };
@@ -90,6 +92,7 @@ export default function SurveyUploadViewerPage() {
         isPending: settled ? figures.isPending : false,
         isError: figures.isError,
       }}
+      analyses={figures.data?.analyses}
       geo={geo}
       openInApp={
         <Link to={upload.cave.url} data-testid="survey-viewer-open-in-app">
@@ -112,17 +115,7 @@ export default function SurveyUploadViewerPage() {
           </Link>
         </Flex>
       }
-    >
-      <Flex vertical gap={12} data-testid="survey-viewer-cave-analyses">
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          {t('surveyViewer.cave.title')}
-        </Typography.Title>
-        <Typography.Text type="secondary">{t('surveyViewer.cave.note')}</Typography.Text>
-        <CaveStatisticsPanel caveId={upload.cave.id} />
-        <CaveTopologyPanel caveId={upload.cave.id} />
-        <CaveOrientationPanel caveId={upload.cave.id} />
-        <CaveDepthProfilePanel caveId={upload.cave.id} />
-      </Flex>
-    </SurveyResultViewer>
+    />
+
   );
 }

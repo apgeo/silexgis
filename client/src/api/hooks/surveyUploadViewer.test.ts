@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import {
+  publicSurveyUploadGeodataUrl,
   publicSurveyViewerPath,
   surveyUploadGeodataUrl,
   surveyUploadViewerPath,
@@ -17,6 +18,7 @@ describe('the page of results', () => {
 
   it('downloads the line work in the format asked for', () => {
     expect(surveyUploadGeodataUrl('u-1', 'kml')).toBe('/api/v1/survey-uploads/u-1/geodata?format=kml');
+    expect(publicSurveyUploadGeodataUrl('a/b', 'gpx')).toBe('/api/v1/public/survey-uploads/a%2Fb/geodata?format=gpx');
   });
 });
 

@@ -2,6 +2,7 @@
 import { Alert, Card, Col, Descriptions, Empty, Row, Statistic, Table, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 
+import type { components } from '../../api/schema';
 import { useCaveSurveyStatistics, useSurveyModels, type MorphometryComparison } from '../../api/hooks.ts';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
 
@@ -30,7 +31,6 @@ import SurveyBasisNote from './SurveyBasisNote.tsx';
  * </p>
  */
 export default function CaveStatisticsPanel({ caveId }: { caveId: string }) {
-  const { t } = useTranslation();
   const { data, isLoading, isError } = useCaveSurveyStatistics(caveId);
   // The cave's page already lists its surveys, so this shares that query rather than adding a
   // request: it is here only to turn the model this answer came from into the name the reader
@@ -40,6 +40,35 @@ export default function CaveStatisticsPanel({ caveId }: { caveId: string }) {
   // A cave the caller may not read — or may read but not place exactly — is refused, and then a
   // panel of blanks would be a claim about the cave rather than about the reader's access.
   if (isError) return null;
+
+  // Which of the cave's uploads answered. Named where the name is known, and by its identifier
+  // otherwise — a reader comparing today's figures with the ones they wrote down last week has to
+  // be able to tell a changed survey from a changed choice of survey.
+  const answeringModel = data?.surveyModelId
+    ? (models?.find((model) => model.id === data.surveyModelId)?.name ?? data.surveyModelId)
+    : null;
+
+  return <SurveyStatisticsView data={data} isLoading={isLoading} answeringModel={answeringModel} />;
+}
+
+/**
+ * What the statistics panel draws, from figures already in hand: a cave's current survey, with its
+ * record beside it, or one survey upload's own, which has no record to set against.
+ */
+export type SurveyStatisticsViewData = components['schemas']['SurveyUploadStatisticsDto'] &
+  Partial<{ length: MorphometryComparison; depth: MorphometryComparison; declaredDisagrees: boolean }>;
+
+export function SurveyStatisticsView({
+  data,
+  isLoading = false,
+  answeringModel = null,
+}: {
+  data: SurveyStatisticsViewData | undefined;
+  isLoading?: boolean;
+  /** The upload the figures came from, named where a reader needs telling; null names none. */
+  answeringModel?: string | null;
+}) {
+  const { t } = useTranslation();
 
   const dash = '—';
   const metres = (value: number | null | undefined) =>
@@ -75,13 +104,6 @@ export default function CaveStatisticsPanel({ caveId }: { caveId: string }) {
   // of rows in the middle of the page.
   const shownPaths = (data?.paths ?? []).slice(0, 5);
 
-  // Which of the cave's uploads answered. Named where the name is known, and by its identifier
-  // otherwise — a reader comparing today's figures with the ones they wrote down last week has to
-  // be able to tell a changed survey from a changed choice of survey.
-  const answeringModel = data?.surveyModelId
-    ? (models?.find((model) => model.id === data.surveyModelId)?.name ?? data.surveyModelId)
-    : null;
-
   const comparison = (label: string, subject: MorphometryComparison | undefined) => ({
     key: label,
     label,
@@ -113,7 +135,7 @@ export default function CaveStatisticsPanel({ caveId }: { caveId: string }) {
         ))}
       </Row>
 
-      {data && (
+      {data?.length && data.depth && (
         <Descriptions
           size="small"
           column={{ xs: 1, sm: 1, md: 2 }}

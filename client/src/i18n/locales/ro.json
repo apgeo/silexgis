@@ -8657,7 +8657,7 @@
     },
     "map": {
       "title": "Hartă și date geospațiale",
-      "label": "Harta liniei centrale a ridicării",
+      "label": "Harta liniei centrale a topografiei",
       "downloads": "Linia centrală ca",
       "format": {
         "kml": "KML",
@@ -8665,9 +8665,8 @@
         "gpx": "GPX"
       },
       "downloadFailed": "Fișierul nu a putut fi descărcat",
-      "unplaced": "Această ridicare nu are un punct fix sau un sistem de coordonate, deci nu a putut fi așezată pe hartă.",
-      "withheld": "Harta și fișierele geospațiale sunt arătate doar în SilexGIS, conturilor care au voie să vadă poziția exactă a peșterii.",
-      "failed": "Poziția ridicării pe hartă nu a putut fi încărcată."
+      "unplaced": "Această topografie nu are un punct fix sau un sistem de coordonate, deci nu a putut fi așezată pe hartă.",
+      "failed": "Poziția topografiei pe hartă nu a putut fi încărcată."
     },
     "figures": {
       "title": "Cifre de la compilator",
@@ -8698,11 +8697,21 @@
       "loopChart": "Erori de închidere a buclelor",
       "loopAxis": "Buclă",
       "loopErrorAxis": "Eroare (%)",
-      "loopTooltip": "Bucla {{n}}: {{percent}} % — {{error}} m pe {{length}} m, {{stations}} stații"
+      "loopTooltip": "Bucla {{n}}: {{percent}} % — {{error}} m pe {{length}} m, {{stations}} stații",
+      "extentEnds": "de la {{from}} ({{fromValue}} m) la {{to}} ({{toValue}} m)",
+      "degrees": "{{value}}°",
+      "coordinateSystem": "Sistem de coordonate",
+      "meridianConvergence": "Convergența meridianelor",
+      "declinations": "Declinații magnetice",
+      "noControlPoints": "Topografia nu are niciun punct fix: compilatorul a ales unul, așa că altitudinile și coordonatele sunt relative, nu ale terenului.",
+      "loopError": "Eroare",
+      "loopLength": "Lungime",
+      "loopStations": "Stații"
     },
-    "cave": {
-      "title": "Analizele topografiei peșterii",
-      "note": "Măsurate pe ridicarea după care este desenată acum peștera, care poate fi altă încărcare decât aceasta."
+    "analyses": {
+      "title": "Analiza topografiei din această încărcare",
+      "note": "Măsurată pe topografia din fișierele acestei încărcări, nu pe cea după care este desenată acum peștera.",
+      "none": "Topografia acestei încărcări nu a fost citită în vize: nu a putut fi plasată pe hartă sau citirea ei nu s-a încheiat."
     }
   }
 }
