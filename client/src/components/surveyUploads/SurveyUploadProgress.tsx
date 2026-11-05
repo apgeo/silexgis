@@ -3,6 +3,7 @@ import { Alert, Flex, Progress, Steps, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { StageProgress, SurveyUploadArtefactView, SurveyUploadStatus } from '../../api/hooks.ts';
 import SurveyUploadArtefacts from './SurveyUploadArtefacts.tsx';
+import { currentStageIndex } from './currentStage.ts';
 import { surveyUploadRunErrorText } from './surveyUploadProblems.ts';
 
 /** What the view needs from either answer — the signed-in status or the public envelope. */
@@ -24,6 +25,7 @@ const STEP_STATUS = {
   failed: 'error',
   skipped: 'wait',
 } as const;
+
 
 /**
  * How far a run has got: the bar, the stages each with their own state, what the server last said,
@@ -60,6 +62,7 @@ export default function SurveyUploadProgressPanel({
       <Steps
         size="small"
         data-testid="survey-upload-stages"
+        current={currentStageIndex(view.stages)}
         items={view.stages.map(({ stage, state }) => ({
           title: <span data-testid={`survey-upload-stage-${stage}`}>{t(`surveyUploads.stages.${stage}`)}</span>,
           status: STEP_STATUS[state],

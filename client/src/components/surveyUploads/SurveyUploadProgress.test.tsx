@@ -7,6 +7,7 @@ import en from '../../i18n/locales/en.json';
 import ro from '../../i18n/locales/ro.json';
 import { surveyUploadStageStates } from '../../api/hooks.ts';
 import SurveyUploadProgressPanel, { type SurveyUploadProgressView } from './SurveyUploadProgress.tsx';
+import { currentStageIndex } from './currentStage.ts';
 import { SURVEY_UPLOAD_REQUEST_ERROR_KEYS, SURVEY_UPLOAD_RUN_ERROR_KEYS } from './surveyUploadProblems.ts';
 
 /**
@@ -131,6 +132,42 @@ describe('the progress view', () => {
 
     expect(screen.getAllByRole('link', { name: 'Download' })).toHaveLength(1);
     expect(screen.getByTestId('survey-upload-artefact-error')).toHaveTextContent(en.surveyUploads.problems.outputMissing);
+  });
+
+  it('draws every finished step of a successful run alike, the first not lit up as the current one', () => {
+    const { container } = show({
+      status: 'succeeded',
+      progress: 100,
+      stages: surveyUploadStageStates({ status: 'succeeded', stage: 'read' }),
+    });
+
+    const steps = Array.from(container.querySelectorAll('.ant-steps-item'));
+    expect(steps.length).toBeGreaterThan(1);
+    expect(steps.every((step) => step.classList.contains('ant-steps-item-finish'))).toBe(true);
+    expect(container.querySelector('.ant-steps-item-active')).toBeNull();
+  });
+
+  it('marks the step a running upload is on as the current one, and no other', () => {
+    const { container } = show({
+      status: 'running',
+      progress: 40,
+      stages: surveyUploadStageStates({ status: 'running', stage: 'scaffold' }),
+    });
+
+    const active = container.querySelectorAll('.ant-steps-item-active');
+    expect(active).toHaveLength(1);
+    expect(active[0]).toHaveTextContent('Preparing the compilation');
+  });
+});
+
+describe('the current step', () => {
+  it('is the first step neither finished nor passed over', () => {
+    expect(currentStageIndex([{ state: 'done' }, { state: 'skipped' }, { state: 'active' }, { state: 'pending' }])).toBe(2);
+    expect(currentStageIndex([{ state: 'done' }, { state: 'failed' }, { state: 'pending' }])).toBe(1);
+  });
+
+  it('is past the last step once every step has finished', () => {
+    expect(currentStageIndex([{ state: 'done' }, { state: 'skipped' }, { state: 'done' }])).toBe(3);
   });
 });
 
