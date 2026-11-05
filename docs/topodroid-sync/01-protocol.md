@@ -317,4 +317,7 @@ compiled model and the compiler's log, which place every station; so the public 
 map, the geodata downloads and the compiler's figures whole — station names, absolute heights and
 grid coordinates included. It is derived from this upload's files alone: the cave record's own
 position (its stored entrance, which may be protected), its other surveys and other caves are not on
-it, and no other route is widened.
+it, and no other route is widened. Signed in, the same things follow exactly the terms of the
+upload's sent files: an account that may open and download them gets the map, the geodata and the
+figures too, with no further check of the centreline itself; one the upload does not answer gets
+the files' own `404 survey_upload.not_found`.

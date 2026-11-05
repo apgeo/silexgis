@@ -204,7 +204,10 @@ already download the compiled model and the compiler's log, which contain all of
 what comes from this upload's own files — never the cave's recorded entrance position or anything
 else from the cave's record, which stay protected as everywhere else in SilexGIS. Withdrawing the
 link, or protecting the cave when the link was made without acknowledging protection, closes all of
-it at once.
+it at once. Inside SilexGIS the same holds: anybody allowed to open and download this upload's sent
+files sees the map, the downloads and the figures. The analyses are never compared with the length
+and depth recorded for the cave: an upload may cover only part of the cave, or be an older or newer
+partial survey.
 
 ---
 

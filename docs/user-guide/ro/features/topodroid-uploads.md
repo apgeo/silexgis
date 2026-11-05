@@ -206,7 +206,11 @@ cifrele cu numele stațiilor, altitudinile și coordonatele. Cine are linkul poa
 compilat și jurnalul compilatorului, care le conțin pe toate. Arată doar ce provine din fișierele
 acestei încărcări — niciodată poziția înregistrată a intrării peșterii sau altceva din fișa peșterii,
 care rămân protejate ca peste tot în SilexGIS. Retragerea linkului, sau protejarea peșterii când
-linkul a fost făcut fără confirmarea protecției, le închide pe toate deodată.
+linkul a fost făcut fără confirmarea protecției, le închide pe toate deodată. În SilexGIS e la fel:
+oricine are voie să deschidă și să descarce fișierele trimise în această încărcare vede harta,
+descărcările și cifrele. Analizele nu sunt comparate niciodată cu lungimea și adâncimea înregistrate
+pentru peșteră: o încărcare poate acoperi doar o parte a peșterii sau poate fi o topografie parțială
+mai veche ori mai nouă.
 
 ---
 
