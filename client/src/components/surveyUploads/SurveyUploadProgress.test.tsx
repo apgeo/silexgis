@@ -111,6 +111,10 @@ describe('the progress view', () => {
     expect(screen.getAllByRole('link', { name: 'Download' })).toHaveLength(2);
     expect(screen.getAllByRole('link', { name: 'View' })).toHaveLength(1);
     expect(screen.getByText('Therion 3D model (.lox)')).toBeInTheDocument();
+    // On a fill of their own, so they stand out of the card in the dark theme as in the light one.
+    for (const download of screen.getAllByRole('link', { name: 'Download' })) {
+      expect(download).toHaveClass('ant-btn-variant-filled');
+    }
   });
 
   it('lists an output that was asked for and not produced with its reason and no download', () => {

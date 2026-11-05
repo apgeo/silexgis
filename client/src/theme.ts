@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { CSSProperties } from 'react';
-import { theme, type ThemeConfig } from 'antd';
+import { theme, type ButtonProps, type ThemeConfig } from 'antd';
 import type { Appearance } from './stores/uiPrefsStore.ts';
 
 // All theming through antd tokens — no scattered inline styles.
@@ -242,6 +242,17 @@ export const calendarListBodyHeight: Record<'record' | 'agenda', number> = {
   record: 564,
   agenda: 780,
 };
+
+/**
+ * How a download among a run's results is drawn: the library's filled button, which sits on a dim
+ * fill of its own rather than on the page's background.
+ *
+ * The outlined default is a hairline on the card in the dark theme, and a row of results is mostly
+ * words and tags, so the one thing to press disappeared into it. The fill comes from the theme's
+ * own fill tokens, so it is a little lighter than the card in the dark theme and a little darker in
+ * the light one, and the words keep the ordinary text colour, which reads on both.
+ */
+export const DOWNLOAD_BUTTON = { color: 'default', variant: 'filled' } as const satisfies Pick<ButtonProps, 'color' | 'variant'>;
 
 /** Whether the operating system is currently asking for a dark interface. */
 export function prefersDark(): boolean {

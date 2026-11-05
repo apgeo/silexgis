@@ -26,6 +26,7 @@ import SurveyUploadProgressPanel from '../../components/surveyUploads/SurveyUplo
 import MakePublicLinkDialog from '../../components/surveyUploads/MakePublicLinkDialog.tsx';
 import OlderVersionsWarning from '../../components/surveyUploads/OlderVersionsWarning.tsx';
 import { surveyUploadRequestErrorText } from '../../components/surveyUploads/surveyUploadProblems.ts';
+import { DOWNLOAD_BUTTON } from '../../theme.ts';
 
 /**
  * The place a run is watched: where it is, what it said, what it produced, and what can be done
@@ -200,7 +201,7 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
                 key: 'download',
                 render: (_, file) =>
                   file.contentUrl ? (
-                    <Button size="small" icon={<DownloadOutlined />} href={file.contentUrl} target="_blank" rel="noreferrer">
+                    <Button size="small" {...DOWNLOAD_BUTTON} icon={<DownloadOutlined />} href={file.contentUrl} target="_blank" rel="noreferrer">
                       {t('surveyUploads.artefacts.download')}
                     </Button>
                   ) : null,

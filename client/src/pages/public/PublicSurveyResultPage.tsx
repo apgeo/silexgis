@@ -15,6 +15,7 @@ import {
   type PublicResultView,
 } from '../../api/hooks.ts';
 import { useAuth } from '../../auth/auth.tsx';
+import { DOWNLOAD_BUTTON } from '../../theme.ts';
 
 /**
  * The page behind a survey upload's public link: how far the run has got and what it produced,
@@ -152,6 +153,7 @@ function LogCard({ view }: { view: PublicResultView }) {
           <Flex gap={8} align="center" wrap>
             <Button
               size="small"
+              {...DOWNLOAD_BUTTON}
               icon={<DownloadOutlined />}
               loading={saving}
               onClick={() => void save()}
