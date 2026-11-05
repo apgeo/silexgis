@@ -25,7 +25,7 @@ import { useFirstAddress } from './useFirstAddress.ts';
 export type SurveyGeoState =
   | { kind: 'loading' }
   /**
-   * The run placed the survey, and this reader may be shown where. `catalogue` says whether the
+   * The run placed the survey, and the page has its line. `catalogue` says whether the
    * page may ask for the installation's map catalogue for its background — a signed-in route, which
    * a public link's page must not ask; without it the map draws its fallback background.
    */

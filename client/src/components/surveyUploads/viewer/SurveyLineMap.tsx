@@ -17,8 +17,8 @@ import { defaultBasemap, OPEN_TOPO_MAP } from './basemap.ts';
 /**
  * A survey's line work drawn over a map of where it lies, fitted to the line.
  *
- * The line is whatever the server handed this page, and it hands it only to a reader allowed the
- * cave's exact position; nothing here decides what may be shown. The map is built once per line
+ * The line is whatever the server handed this page — to whoever may open the upload's sent files,
+ * or holds its public link; nothing here decides what may be shown. The map is built once per line
  * and background and torn down with the page, so it holds no drawing context while nobody looks.
  */
 export default function SurveyLineMap({

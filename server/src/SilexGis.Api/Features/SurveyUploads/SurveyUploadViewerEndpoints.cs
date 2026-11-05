@@ -23,8 +23,7 @@ namespace SilexGis.Api.Features.SurveyUploads;
 /// a compiler printed.
 /// </param>
 /// <param name="Placed">
-/// Whether the run placed the survey in the world where this reader may be shown it — whether the
-/// line work route has a line to give them.
+/// Whether the run placed the survey in the world — whether the line work route has a line to give.
 /// </param>
 /// <param name="Analyses">
 /// The upload's own survey measured: its shape, its network, which way it runs and its depth along
@@ -280,8 +279,15 @@ public static partial class SurveyUploadEndpoints
     /// </para>
     ///
     /// <para>
-    /// A signed-in reader is served on the survey terms every upload route answers on — Read on the
-    /// cave and its exact position — and the line additionally on its own exact-position check.
+    /// <para>
+    /// <b>Signed in, the same rule: whoever may open the upload's sent files gets what derives from
+    /// them.</b> The figures, the line work and whether the run placed it follow exactly the terms the
+    /// upload and its sent files answer on — Read on the cave and its exact position — and nothing
+    /// more is asked of them: in particular not the line's own protection as a feature, because the
+    /// line is the same information the sent files and the compiled model already carry. What is
+    /// stored about the cave itself — its entrance, its other surveys, its centrelines as features —
+    /// is untouched by this and stays behind the ordinary protection on its own routes.
+    /// </para>
     /// </para>
     /// </summary>
     private static void MapViewerEndpoints(RouteGroupBuilder api)
@@ -298,7 +304,7 @@ public static partial class SurveyUploadEndpoints
             .Produces(StatusCodes.Status200OK, contentType: "application/geo+json")
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .WithSummary("The upload's survey line work in WGS 84, as GeoJSON, KML or GPX (`format`, default geojson), on the upload's own terms and the line's own exact-position check. 404 survey_upload.not_georeferenced when the run placed no line in the world.");
+            .WithSummary("The upload's survey line work in WGS 84, as GeoJSON, KML or GPX (`format`, default geojson), on the terms the upload's sent files answer on, and no other. 404 survey_upload.not_georeferenced when the run placed no line in the world.");
 
         uploads.MapGet("/by-public-link/{token}", InAppAsync)
             .WithName("surveyUploadByPublicLink")
@@ -350,7 +356,7 @@ public static partial class SurveyUploadEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        var placed = await ShownLineWorkAsync(db, protection, ctx, found.Upload.Id, ct) is not null;
+        var placed = await UploadLineWorkAsync(db, found.Upload.Id, ct) is not null;
         return TypedResults.Ok(new SurveyUploadFiguresDto(
             await FiguresOfAsync(db, fileStore, reader, found.Upload.Id, ct),
             placed,
@@ -405,7 +411,7 @@ public static partial class SurveyUploadEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (await ShownLineWorkAsync(db, protection, ctx, found.Upload.Id, ct) is not { } line)
+        if (await UploadLineWorkAsync(db, found.Upload.Id, ct) is not { } line)
         {
             return ApiProblems.NotFound(NotGeoreferencedCode);
         }
@@ -437,7 +443,7 @@ public static partial class SurveyUploadEndpoints
         }
 
         // The line the upload's own model was read into, with no further check of the line as a
-        // feature: it is what the files the link hands out already place.
+        // feature: it is what the files the link hands out already place — as on the signed-in route.
         if (await UploadLineWorkAsync(db, found.Upload.Id, ct) is not { } line)
         {
             return ApiProblems.NotFound(NotGeoreferencedCode);
@@ -673,21 +679,7 @@ public static partial class SurveyUploadEndpoints
         return [.. models.OrderBy(m => m.Output == "lox" ? 0 : 1).Select(m => m.Model).Distinct()];
     }
 
-    private sealed record UploadLineWork(Guid FeatureId, Geometry Geometry, decimal? LengthM);
-
-    /// <summary>
-    /// The run's line work as this reader may be shown it, or null. The upload's terms already ask
-    /// for the cave's exact position; the line is a feature of its own and asks again, so a line
-    /// that sits under a protection the cave does not share is still withheld — whole, because a
-    /// line cannot be blurred into a safe version of itself — and withheld exactly as a run that
-    /// placed no line is answered, so nothing says whether there was one.
-    /// </summary>
-    private static async Task<UploadLineWork?> ShownLineWorkAsync(
-        SilexGisDbContext db, FeatureProtection protection, AccessContext ctx, Guid uploadId, CancellationToken ct)
-    {
-        var line = await UploadLineWorkAsync(db, uploadId, ct);
-        return line is not null && (await protection.ExactViewIdsAsync(ctx, [line.FeatureId], ct)).Count > 0 ? line : null;
-    }
+    private sealed record UploadLineWork(Geometry Geometry, decimal? LengthM);
 
     /// <summary>
     /// The line the run's own model was read into, placed in the world, or null when it placed none:
@@ -725,7 +717,7 @@ public static partial class SurveyUploadEndpoints
             .OrderBy(m => m.Output == "lox" ? 0 : 1)
             .Select(m => lines.FirstOrDefault(l => l.Model == m.Model))
             .FirstOrDefault(l => l is not null);
-        return chosen is null ? null : new UploadLineWork(chosen.Id, chosen.Skeleton ?? chosen.Geom!, chosen.LengthM);
+        return chosen is null ? null : new UploadLineWork(chosen.Skeleton ?? chosen.Geom!, chosen.LengthM);
     }
 
     /// <summary>A survey title as a file name: letters, digits, dashes and underscores, never empty.</summary>

@@ -22,7 +22,7 @@ import SurveyResultViewer, { type SurveyGeoState } from '../../components/survey
  *
  * The page asks for the upload by its id alone, and the server decides whether this account may
  * see it — the same "not found" as the status page for an address that is made up or foreign. The
- * line work is asked for on the upload's own terms, which already require the cave's exact position.
+ * line work follows the same terms as the upload's sent files: whoever may open those gets it.
  *
  * "Copy link" copies the public link's page when the upload has one, which anybody holding it may
  * open; otherwise this page's own address, which opens only for an account the upload answers.
@@ -33,7 +33,7 @@ export default function SurveyUploadViewerPage() {
   const { data: upload, isPending, error, refetch } = useSurveyUpload(uploadId);
   const settled = !!upload && !surveyUploadUnsettled(upload.status);
   const figures = useSurveyUploadFigures(uploadId, settled);
-  // Asked for only when the figures say there is a line this reader may be shown, so a survey that
+  // Asked for only when the figures say the run placed a line, so a survey that
   // was never placed is not one more refused request.
   const placed = figures.data?.placed === true;
   const lineWork = useSurveyUploadLineWork(uploadId, settled && placed);

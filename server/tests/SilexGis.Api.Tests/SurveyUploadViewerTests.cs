@@ -42,6 +42,10 @@ public sealed class SurveyUploadViewerTests : IAsyncLifetime, IDisposable, IClas
     private const double Lon = 25.4611;
     private const double Lat = 45.5322;
 
+    /// <summary>Where the cave's own record is placed: invented, and far from the survey's line.</summary>
+    private const double CaveLon = 23.8765;
+    private const double CaveLat = 46.1234;
+
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];
@@ -167,24 +171,33 @@ public sealed class SurveyUploadViewerTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
-    public async Task A_reader_who_may_read_the_cave_sees_the_figures_and_one_who_may_not_place_it_does_not()
+    public async Task A_reader_who_may_open_the_sent_files_gets_what_derives_from_them_and_one_who_may_not_gets_the_files_refusal()
     {
         var (id, caveId) = await SendCompiledAsync($"Citita {suffix}");
         await PlaceLineAsync(id, caveId);
         await AllowAsync(readerId, AccessAction.Read);
 
-        // Read on an unprotected cave is the whole of the survey terms.
+        // Read on an unprotected cave opens the upload and its sent files, and with them the
+        // figures and the line work.
+        var status = await reader.GetFromJsonAsync<JsonElement>($"{Uploads}/{id}");
+        status.GetProperty("files").EnumerateArray().ShouldContain(f => f.GetProperty("contentUrl").ValueKind == JsonValueKind.String);
         (await reader.GetAsync($"{Uploads}/{id}/figures")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await reader.GetAsync($"{Uploads}/{id}/geodata")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // Protected, and the reader without the exact position: the upload is not there for them.
+        // Protected, and the reader without the exact position: the upload and its files are not
+        // there for them, and neither is anything derived from them — with the files' own refusal.
         await SetProtectedAsync(caveId, true);
-        (await reader.GetAsync($"{Uploads}/{id}/figures")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        var geodata = await reader.GetAsync($"{Uploads}/{id}/geodata");
-        geodata.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await geodata.Content.ReadAsStringAsync()).ShouldNotContain(Lon.ToString(System.Globalization.CultureInfo.InvariantCulture)[..5]);
+        var files = await reader.GetAsync($"{Uploads}/{id}");
+        files.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var refusal = await CodeAsync(files);
+        foreach (var path in new[] { $"{Uploads}/{id}/figures", $"{Uploads}/{id}/geodata", $"{Uploads}/{id}/geodata?format=kml" })
+        {
+            var response = await reader.GetAsync(path);
+            response.StatusCode.ShouldBe(HttpStatusCode.NotFound, path);
+            (await CodeAsync(response)).ShouldBe(refusal, path);
+        }
 
-        // The owner, who places it, still does.
+        // The owner, who may open the files, still gets the line.
         (await owner.GetAsync($"{Uploads}/{id}/geodata")).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
@@ -421,21 +434,66 @@ public sealed class SurveyUploadViewerTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
-    public async Task A_line_under_a_protection_of_its_own_is_withheld_as_if_never_placed()
+    public async Task A_reader_who_may_open_the_sent_files_gets_the_line_though_the_line_is_protected_on_its_own()
     {
         var (id, caveId) = await SendCompiledAsync($"Linie protejata {suffix}");
         var lineId = await PlaceLineAsync(id, caveId);
         await AllowAsync(readerId, AccessAction.Read);
-        (await reader.GetAsync($"{Uploads}/{id}/geodata")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // The cave stays open; the line itself is protected and the reader holds no exact position.
+        // The cave stays open; the line as a feature is protected and the reader holds no exact
+        // position of it. The line work is the same information as the sent files the reader may
+        // download, so it follows their terms and not the feature's.
         await SetProtectedAsync(lineId, true);
-        var withheld = await reader.GetAsync($"{Uploads}/{id}/geodata");
-        withheld.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await CodeAsync(withheld)).ShouldBe("survey_upload.not_georeferenced");
-        // And the page is told there is nothing to place, as for a run that placed nothing.
-        (await reader.GetFromJsonAsync<JsonElement>($"{Uploads}/{id}/figures")).GetProperty("placed").GetBoolean().ShouldBeFalse();
-        (await owner.GetFromJsonAsync<JsonElement>($"{Uploads}/{id}/figures")).GetProperty("placed").GetBoolean().ShouldBeTrue();
+        var geodata = await reader.GetAsync($"{Uploads}/{id}/geodata?format=kml");
+        geodata.StatusCode.ShouldBe(HttpStatusCode.OK, await geodata.Content.ReadAsStringAsync());
+        (await reader.GetFromJsonAsync<JsonElement>($"{Uploads}/{id}/figures")).GetProperty("placed").GetBoolean().ShouldBeTrue();
+
+        // The line as a feature of the cave, on its ordinary route, keeps its protection.
+        var feature = await reader.GetAsync($"/api/v1/features/{lineId}");
+        if (feature.StatusCode == HttpStatusCode.OK)
+        {
+            var text = await feature.Content.ReadAsStringAsync();
+            text.ShouldNotContain(Lon.ToString("0.0000", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        else
+        {
+            feature.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        }
+    }
+
+    [Fact]
+    public async Task The_caves_own_stored_position_stays_protected_on_its_own_routes()
+    {
+        var (id, caveId) = await SendCompiledAsync($"Pozitia pesterii {suffix}");
+        await PlaceLineAsync(id, caveId);
+        await AllowAsync(readerId, AccessAction.Read);
+
+        // The cave's own recorded position, far from the survey's line, protected.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var point = NtsGeometryServices.Instance.CreateGeometryFactory(4326).CreatePoint(new Coordinate(CaveLon, CaveLat));
+            await db.Features.Where(f => f.Id == caveId).ExecuteUpdateAsync(s => s.SetProperty(f => f.Geom, (Geometry)point));
+        }
+
+        await SetProtectedAsync(caveId, true);
+        // A link made knowing the cave is protected, as the uploader may make one.
+        var token = await TokenAsync(id, allowProtected: true);
+        var exact = CaveLon.ToString("0.0000", System.Globalization.CultureInfo.InvariantCulture);
+
+        // The cave's own route never hands this reader the exact point.
+        var cave = await reader.GetAsync($"/api/v1/features/{caveId}");
+        (await cave.Content.ReadAsStringAsync()).ShouldNotContain(exact);
+
+        // The link made knowing the cave is protected still serves the survey's line, and nothing
+        // it serves carries the cave's own position.
+        using var anonymous = factory.CreateClient();
+        foreach (var path in new[] { $"{Public}/{token}", $"{Public}/{token}/figures", $"{Public}/{token}/geodata" })
+        {
+            var response = await anonymous.GetAsync(path);
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, path);
+            (await response.Content.ReadAsStringAsync()).ShouldNotContain(exact, Case.Sensitive, path);
+        }
     }
 
     // ---- from a public link into the application ----
@@ -587,6 +645,14 @@ public sealed class SurveyUploadViewerTests : IAsyncLifetime, IDisposable, IClas
             ComputedAt = DateTime.UtcNow,
         });
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>Mints a fresh link acknowledging protection, as the uploader may for a protected cave.</summary>
+    private async Task<string> TokenAsync(Guid id, bool allowProtected)
+    {
+        var minted = await owner.PostAsJsonAsync($"{Uploads}/{id}/public-link", new { allowProtected });
+        minted.StatusCode.ShouldBe(HttpStatusCode.Created, await minted.Content.ReadAsStringAsync());
+        return (await minted.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("url").GetString()!["/p/survey/".Length..];
     }
 
     private async Task<string> TokenAsync(Guid id)

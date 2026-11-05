@@ -8724,7 +8724,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The upload's survey line work in WGS 84, as GeoJSON, KML or GPX (`format`, default geojson), on the upload's own terms and the line's own exact-position check. 404 survey_upload.not_georeferenced when the run placed no line in the world. */
+        /** The upload's survey line work in WGS 84, as GeoJSON, KML or GPX (`format`, default geojson), on the terms the upload's sent files answer on, and no other. 404 survey_upload.not_georeferenced when the run placed no line in the world. */
         get: operations["surveyUploadGeodata"];
         put?: never;
         post?: never;
