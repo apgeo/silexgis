@@ -185,19 +185,28 @@ Merge și pe lățimea unui telefon.
   autentificat care are voie să vadă încărcarea primește **Deschide în SilexGIS**, iar oricui altcuiva
   i se oferă autentificarea.
 - **Modelul 3D**, în două file: vizualizatorul integrat și același fișier în LochViewer (în probă).
-- **Hartă și date geospațiale**: pe pagina din aplicație, când ridicarea a fost așezată în lume (are un
-  punct fix sau un sistem de coordonate), linia centrală de descărcat ca **KML**, **GeoJSON** sau
-  **GPX** și o hartă cu linia centrală peste fundalul implicit al instalării (OpenTopoMap când nu
-  există unul). O ridicare care nu a putut fi așezată spune asta. **Pagina unui link public nu arată
-  niciodată hartă sau date geospațiale**: acestea sunt poziția peșterii și se arată doar în SilexGIS,
-  conturilor care au voie să vadă poziția exactă a peșterii.
+- **Hartă și date geospațiale**: când topografia a fost așezată în lume (are un punct fix sau un
+  sistem de coordonate), linia centrală de descărcat ca **KML**, **GeoJSON** sau **GPX** și o hartă cu
+  linia centrală — pe pagina din aplicație peste fundalul implicit al instalării (OpenTopoMap când nu
+  există unul), pe pagina unui link public peste OpenTopoMap. O topografie care nu a putut fi așezată
+  spune asta.
 - **Cifre de la compilator**: lungimea topografiată, lungimea după compensarea buclelor, lungimea în
-  plan și cea verticală, denivelarea, extinderea nord–sud și est–vest, stațiile, vizele, buclele și
-  eroarea medie de închidere, cu un grafic al erorii fiecărei bucle. Doar mărimi — niciodată nume de
-  stații sau poziții.
-- **Analizele topografiei peșterii** (doar în aplicație): statisticile, rețeaua, orientarea și profilul
-  de adâncime ale peșterii. Sunt măsurate pe ridicarea după care e desenată acum peștera, care poate fi
-  altă încărcare decât aceasta.
+  plan și cea verticală, denivelarea, extinderea nord–sud și est–vest cu stația de la fiecare capăt și
+  altitudinea, nordul sau estul ei, stațiile, vizele, buclele și eroarea medie de închidere, sistemul de
+  coordonate și declinațiile magnetice folosite, un grafic al erorii fiecărei bucle și un tabel al
+  buclelor cu stațiile prin care trec. Când topografia nu are niciun punct fix, pagina spune că
+  altitudinile și coordonatele ei sunt relative.
+- **Analiza topografiei din această încărcare**: statisticile, rețeaua, orientarea și profilul de
+  adâncime, măsurate pe topografia din această încărcare — nu pe cea după care este desenată acum
+  peștera, care poate fi altă încărcare. O topografie care nu a putut fi așezată pe hartă, sau a cărei
+  citire nu s-a încheiat, nu are ce analiza, iar pagina spune asta.
+
+**Ce arată un link public.** Pagina unui link public arată tot ce e mai sus: harta, descărcările și
+cifrele cu numele stațiilor, altitudinile și coordonatele. Cine are linkul poate deja descărca modelul
+compilat și jurnalul compilatorului, care le conțin pe toate. Arată doar ce provine din fișierele
+acestei încărcări — niciodată poziția înregistrată a intrării peșterii sau altceva din fișa peșterii,
+care rămân protejate ca peste tot în SilexGIS. Retragerea linkului, sau protejarea peșterii când
+linkul a fost făcut fără confirmarea protecției, le închide pe toate deodată.
 
 ---
 

@@ -302,14 +302,19 @@ opens the address in the browser, where the page asks the reader to sign in.
 address (`429` with `Retry-After`).
 
 **The page of results.** Both web pages a tool opens — `statusPageUrl` and `publicLink.url` — offer
-*View results*, a page that shows the survey's model in two viewers, what the compiler measured and,
-on the signed-in page only, a map of the survey and its centreline as KML, GeoJSON or GPX. It lives at
-the same address with `/view` added (`…/uploads/<id>/view`, `/p/survey/<token>/view`); a tool may open
-either directly. It reads two routes a tool does not need and that are **not part of this contract**
-(no recording, no version): `GET /api/v1/public/survey-uploads/{token}/figures` — the compiler's
-figures behind a link, decided exactly as the page is, sizes only (lengths, ranges, station and shot
-counts, loop closures), never a station or a position — and, signed in, `GET
-/api/v1/survey-uploads/{id}/figures` (which also says, as `placed`, whether there is a line to map) and `…/{id}/geodata?format=kml|geojson|gpx`. An access key is
-refused on the signed-in ones (`403 auth.access_key_not_accepted`). **The public page has no map and
-no geodata**: the survey's line in the world is positions, and the public page carries no position of
-the cave's own.
+*View results*, a page that shows the survey's model in two viewers, a map of the survey with its
+centreline as KML, GeoJSON or GPX, what the compiler measured, and the upload's own survey analysed
+(statistics, network, orientation, depth profile). It lives at the same address with `/view` added
+(`…/uploads/<id>/view`, `/p/survey/<token>/view`); a tool may open either directly. It reads routes a
+tool does not need and that are **not part of this contract** (no recording, no version):
+`GET /api/v1/public/survey-uploads/{token}/figures` and `…/{token}/geodata?format=kml|geojson|gpx`,
+decided exactly as the public page is, and, signed in, `GET /api/v1/survey-uploads/{id}/figures` and
+`…/{id}/geodata?format=`. The figures say, as `placed`, whether there is a line to map. An access key
+is refused on the signed-in ones (`403 auth.access_key_not_accepted`).
+
+**A public link shows what the upload's own files contain.** Whoever holds the link already has the
+compiled model and the compiler's log, which place every station; so the public page also shows the
+map, the geodata downloads and the compiler's figures whole — station names, absolute heights and
+grid coordinates included. It is derived from this upload's files alone: the cave record's own
+position (its stored entrance, which may be protected), its other surveys and other caves are not on
+it, and no other route is widened.

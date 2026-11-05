@@ -31,6 +31,22 @@ turns every future addition into an outage of its own making.
 
 ---
 
+## 2026-11-05 — the public page of results shows the map, the geodata and the whole figures
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — nothing a device sends
+or reads changes; no recording was written or rewritten.
+
+- A public link's page of results now shows everything the upload's own files contain: the map of
+  the survey's centreline with its KML, GeoJSON and GPX downloads, and the compiler's figures whole
+  (the stations at each extent with their absolute heights and grid positions, the stations of each
+  loop, the coordinate system and declinations). The cave record's own position is not on it.
+- Added a web-only route that is not part of this contract: `GET /api/v1/public/survey-uploads/{token}/geodata?format=kml|geojson|gpx`,
+  decided exactly as the public page. `survey_upload.not_georeferenced` (404) and
+  `survey_upload.geodata_format_unsupported` (400) now also answer there.
+- The figures routes (public and signed in) answer `placed` as `true`/`false` on both, the whole
+  figures, and `analyses`: the upload's own survey measured (statistics, network, orientation, depth
+  profile) rather than the survey the cave is currently drawn from.
+
 ## 2026-11-05 — a page of results on the web, beside the contract
 
 **Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — nothing a device sends

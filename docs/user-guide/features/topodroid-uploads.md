@@ -182,18 +182,29 @@ phone width too.
   signed-in page the button opens the cave; on a public link's page a signed-in reader who may see
   the upload gets **Open in SilexGIS**, and anybody else is offered to sign in.
 - **The 3D model**, in two tabs: the embedded viewer, and the same file in LochViewer (on trial).
-- **Map and geodata**: on the signed-in page, when the survey was placed in the world (it has a fixed
-  point or a coordinate system), the centreline to download as **KML**, **GeoJSON** or **GPX**, and a
-  map with the centreline over the installation's default background (OpenTopoMap when there is
-  none). A survey that could not be placed says so instead. **A public link's page never shows a map
-  or geodata**: those are the cave's position, and they are shown only inside SilexGIS, to accounts
-  allowed to see the cave's exact position.
+- **Map and geodata**: when the survey was placed in the world (it has a fixed point or a coordinate
+  system), the centreline to download as **KML**, **GeoJSON** or **GPX**, and a map with the
+  centreline — on the signed-in page over the installation's default background (OpenTopoMap when
+  there is none), on a public link's page over OpenTopoMap. A survey that could not be placed says so
+  instead.
 - **Figures from the compiler**: surveyed length, length after loop adjustment, plan and vertical
-  length, depth, north–south and east–west extent, stations, shots, loops and the average loop error,
-  with a chart of each loop's closure error. Only sizes — never station names or positions.
-- **The cave's survey analyses** (signed-in page only): the cave's statistics, network, orientation
-  and depth profile. They are measured over the survey the cave is currently drawn from, which can be
-  another upload than this one.
+  length, depth, north–south and east–west extent with the station at each end and its height,
+  northing or easting, stations, shots, loops and the average loop error, the coordinate system and
+  the magnetic declinations used, a chart of each loop's closure error and a table of the loops with
+  the stations they run through. When the survey has no fixed point the page says its heights and
+  coordinates are relative.
+- **This upload's survey analysed**: statistics, network, orientation and depth profile, measured over
+  this upload's own survey — not over the survey the cave is currently drawn from, which can be
+  another upload. A survey that could not be placed, or whose reading has not finished, has nothing to
+  analyse, and the page says so.
+
+**What a public link shows.** A public link's page shows everything above: the map, the downloads
+and the figures with their station names, heights and grid coordinates. Whoever holds the link can
+already download the compiled model and the compiler's log, which contain all of it. It shows only
+what comes from this upload's own files — never the cave's recorded entrance position or anything
+else from the cave's record, which stay protected as everywhere else in SilexGIS. Withdrawing the
+link, or protecting the cave when the link was made without acknowledging protection, closes all of
+it at once.
 
 ---
 
