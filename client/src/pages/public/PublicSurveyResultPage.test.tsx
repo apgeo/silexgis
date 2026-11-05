@@ -150,6 +150,17 @@ describe('PublicSurveyResultPage', () => {
     expect(screen.queryByTestId('public-survey-log')).toBeNull();
   });
 
+  it('offers the page of results once the run has ended, and not while it runs', () => {
+    view = failedCompile({ status: 'succeeded', progress: 100, error: null });
+    show();
+    expect(screen.getByTestId('public-survey-open-viewer')).toHaveAttribute('href', '/p/survey/abc/view');
+    cleanup();
+
+    view = failedCompile({ status: 'running', progress: 40, error: null });
+    show();
+    expect(screen.queryByTestId('public-survey-open-viewer')).toBeNull();
+  });
+
   it('says the link does not work, without a retry, when the server knows no such link', () => {
     failure = new ApiError(404, 'survey_upload.not_found');
     show();

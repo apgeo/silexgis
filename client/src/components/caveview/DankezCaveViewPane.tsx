@@ -4,7 +4,7 @@ import { Alert, Flex, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import type { SurveyModelInfo } from '../../api/hooks.ts';
+import type { ViewerModel } from '../../api/hooks.ts';
 import {
   DANKEZ_CAVEVIEW_PAGE,
   readViewerEvent,
@@ -13,7 +13,7 @@ import {
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
 
 interface DankezCaveViewPaneProps {
-  model: SurveyModelInfo;
+  model: ViewerModel;
   height: string;
 }
 

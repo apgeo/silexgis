@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { DownloadOutlined, ExportOutlined, ReloadOutlined } from '@ant-design/icons';
+import { BarChartOutlined, DownloadOutlined, ExportOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Alert, App, Breadcrumb, Card, Descriptions, Empty, Flex, Popconfirm, Skeleton, Table, Tag, Typography } from 'antd';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -13,6 +13,7 @@ import {
   useCaveSurveys,
   surveyUploadStageStates,
   surveyUploadUnsettled,
+  surveyUploadViewerPath,
   useCaveSummary,
   useRefreshCaveWhenUploadSettles,
   useRerunSurveyUpload,
@@ -134,6 +135,14 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
             {t('surveyUploads.page.version', { when: when(upload.version) })}
           </Typography.Text>
         </Flex>
+        <Flex gap={8} wrap>
+        {!unsettled && (
+          <Link to={surveyUploadViewerPath(upload.statusPageUrl)} data-testid="survey-upload-open-viewer">
+            <Button type="primary" icon={<BarChartOutlined />}>
+              {t('surveyViewer.open')}
+            </Button>
+          </Link>
+        )}
         {canRerun && (
           <Button
             icon={<ReloadOutlined />}
@@ -144,6 +153,7 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
             {t('surveyUploads.page.rerun')}
           </Button>
         )}
+        </Flex>
       </Flex>
 
       <Flex vertical gap={16}>

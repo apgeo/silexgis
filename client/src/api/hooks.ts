@@ -41,4 +41,5 @@ export * from './hooks/recordings.ts';
 export * from './hooks/accessKeys.ts';
 export * from './hooks/surveyUploads.ts';
 export * from './hooks/surveyUploadPublicLinks.ts';
+export * from './hooks/surveyUploadViewer.ts';
 export { useInvalidateHistory } from './hooks/shared.ts';

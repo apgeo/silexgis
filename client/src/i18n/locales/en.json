@@ -8622,5 +8622,74 @@
         "empty": "Nothing to read."
       }
     }
+  },
+  "surveyViewer": {
+    "open": "View results",
+    "header": {
+      "caveAndVersion": "{{cave}} · version of {{when}}",
+      "copyLink": "Copy link",
+      "copied": "Link copied",
+      "copyFailed": "The link could not be copied",
+      "sharesPublic": "The copied link is this upload's public link: anybody holding it can open these results.",
+      "sharesInApp": "The copied link opens this page in SilexGIS, for accounts allowed to see this upload.",
+      "openCave": "Open the cave in SilexGIS",
+      "openInApp": "Open in SilexGIS",
+      "signInToOpen": "Sign in to open in SilexGIS",
+      "backToStatus": "Upload status",
+      "backToProgress": "Upload progress"
+    },
+    "model": {
+      "title": "3D model",
+      "none": "This run produced no 3D model."
+    },
+    "map": {
+      "title": "Map and geodata",
+      "label": "Map of the survey's centreline",
+      "downloads": "Centreline as",
+      "format": {
+        "kml": "KML",
+        "geojson": "GeoJSON",
+        "gpx": "GPX"
+      },
+      "downloadFailed": "The file could not be downloaded",
+      "unplaced": "This survey has no fixed point or coordinate system, so it could not be placed on a map.",
+      "withheld": "The map and the geodata files are shown only in SilexGIS, to accounts allowed to see the cave's exact position.",
+      "failed": "The survey's place on the map could not be loaded."
+    },
+    "figures": {
+      "title": "Figures from the compiler",
+      "none": "The compiler wrote no figures for this run.",
+      "failed": "The figures could not be loaded.",
+      "outcome": {
+        "succeeded": "Compiled",
+        "succeededWithWarnings": "Compiled with warnings",
+        "failed": "Compilation failed"
+      },
+      "compiler": "Therion {{version}}",
+      "metres": "{{value}} m",
+      "percent": "{{value}} %",
+      "totalLength": "Surveyed length",
+      "adjustedLength": "Length after loop adjustment",
+      "planLength": "Plan length",
+      "verticalLength": "Vertical length of shots",
+      "verticalRange": "Depth (vertical range)",
+      "northSouthRange": "North–south extent",
+      "eastWestRange": "East–west extent",
+      "stations": "Stations",
+      "shots": "Shots",
+      "components": "Unconnected parts",
+      "loops": "Loops",
+      "averageLoopError": "Average loop error",
+      "errors": "Errors",
+      "warnings": "Warnings",
+      "loopChart": "Loop closure errors",
+      "loopAxis": "Loop",
+      "loopErrorAxis": "Error (%)",
+      "loopTooltip": "Loop {{n}}: {{percent}} % — {{error}} m over {{length}} m, {{stations}} stations"
+    },
+    "cave": {
+      "title": "The cave's survey analyses",
+      "note": "Measured over the survey the cave is currently drawn from, which may be another upload than this one."
+    }
   }
 }

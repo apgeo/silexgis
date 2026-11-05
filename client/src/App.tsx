@@ -115,6 +115,8 @@ const CoordinateConverterPage = lazy(() => import('./pages/tools/CoordinateConve
 const SyncSettingsPage = lazy(() => import('./pages/settings/SyncSettingsPage.tsx'));
 const PublicSurveyResultPage = lazy(() => import('./pages/public/PublicSurveyResultPage.tsx'));
 const SurveyUploadStatusPage = lazy(() => import('./pages/surveyUploads/SurveyUploadStatusPage.tsx'));
+const SurveyUploadViewerPage = lazy(() => import('./pages/surveyUploads/SurveyUploadViewerPage.tsx'));
+const PublicSurveyViewerPage = lazy(() => import('./pages/public/PublicSurveyViewerPage.tsx'));
 const AccessKeysSettingsPage = lazy(() => import('./pages/settings/AccessKeysSettingsPage.tsx'));
 const SurveyUploadSettingsPage = lazy(() => import('./pages/settings/SurveyUploadSettingsPage.tsx'));
 const AdvancedSettingsPage = lazy(() => import('./pages/settings/AdvancedSettingsPage.tsx'));
@@ -176,6 +178,10 @@ export const routes: RouteObject[] = guarded([
   // answer behind it is a closed envelope (title, cave name, progress, files), and a wrong,
   // withdrawn or no-longer-permitted token is answered exactly like an invented one.
   { path: '/p/survey/:token', element: <Loadable><PublicSurveyResultPage /></Loadable> },
+  // The same link's results in one place: the model in both viewers and the compiler's figures.
+  // Decided by the same answers as the page above; it carries no map, as that page carries no
+  // position of the cave's own.
+  { path: '/p/survey/:token/view', element: <Loadable><PublicSurveyViewerPage /></Loadable> },
   {
     element: <RequireAuth />,
     children: [
@@ -200,6 +206,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/caves/:id', element: <Loadable><CaveDetailPage /></Loadable> },
           { path: '/caves/:id/edit', element: <Loadable><CaveFormPage /></Loadable> },
           { path: '/caves/:caveId/surveys/:surveyId/uploads/:uploadId', element: <Loadable><SurveyUploadStatusPage /></Loadable> },
+          { path: '/caves/:caveId/surveys/:surveyId/uploads/:uploadId/view', element: <Loadable><SurveyUploadViewerPage /></Loadable> },
           { path: '/features', element: <Loadable><FeatureListPage /></Loadable> },
           { path: '/features/deleted', element: <Loadable><DeletedFeaturesPage /></Loadable> },
           { path: '/features/:id', element: <Loadable><FeatureDetailPage /></Loadable> },

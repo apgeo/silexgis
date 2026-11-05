@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { DownloadOutlined } from '@ant-design/icons';
+import { BarChartOutlined, DownloadOutlined } from '@ant-design/icons';
 import { Alert, App, Card, Flex, Skeleton, Typography } from 'antd';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import Button from '../../components/Button.tsx';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import SurveyUploadProgressPanel from '../../components/surveyUploads/SurveyUploadProgress.tsx';
@@ -11,6 +11,8 @@ import { downloadFile } from '../../api/download.ts';
 import {
   isSignInRequiredPublicLink,
   isUnknownPublicLink,
+  publicSurveyViewerPath,
+  surveyUploadUnsettled,
   usePublicSurveyUpload,
   type PublicResultView,
 } from '../../api/hooks.ts';
@@ -101,6 +103,15 @@ export default function PublicSurveyResultPage() {
             })}
           </Typography.Text>
         </Flex>
+        {!surveyUploadUnsettled(view.status) && token && (
+          <Flex>
+            <Link to={publicSurveyViewerPath(`/p/survey/${encodeURIComponent(token)}`)} data-testid="public-survey-open-viewer">
+              <Button type="primary" icon={<BarChartOutlined />}>
+                {t('surveyViewer.open')}
+              </Button>
+            </Link>
+          </Flex>
+        )}
         <Card size="small" title={t('surveyUploads.page.progressTitle')}>
           <SurveyUploadProgressPanel view={view} logShown={hasLog(view)} />
         </Card>

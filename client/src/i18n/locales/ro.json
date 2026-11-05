@@ -8635,5 +8635,74 @@
         "empty": "Nu este nimic de citit."
       }
     }
+  },
+  "surveyViewer": {
+    "open": "Vezi rezultatele",
+    "header": {
+      "caveAndVersion": "{{cave}} · versiunea din {{when}}",
+      "copyLink": "Copiază linkul",
+      "copied": "Linkul a fost copiat",
+      "copyFailed": "Linkul nu a putut fi copiat",
+      "sharesPublic": "Linkul copiat este linkul public al acestei încărcări: oricine îl are poate deschide aceste rezultate.",
+      "sharesInApp": "Linkul copiat deschide această pagină în SilexGIS, pentru conturile care au voie să vadă această încărcare.",
+      "openCave": "Deschide peștera în SilexGIS",
+      "openInApp": "Deschide în SilexGIS",
+      "signInToOpen": "Autentifică-te pentru a deschide în SilexGIS",
+      "backToStatus": "Starea încărcării",
+      "backToProgress": "Progresul încărcării"
+    },
+    "model": {
+      "title": "Model 3D",
+      "none": "Această rulare nu a produs un model 3D."
+    },
+    "map": {
+      "title": "Hartă și date geospațiale",
+      "label": "Harta liniei centrale a ridicării",
+      "downloads": "Linia centrală ca",
+      "format": {
+        "kml": "KML",
+        "geojson": "GeoJSON",
+        "gpx": "GPX"
+      },
+      "downloadFailed": "Fișierul nu a putut fi descărcat",
+      "unplaced": "Această ridicare nu are un punct fix sau un sistem de coordonate, deci nu a putut fi așezată pe hartă.",
+      "withheld": "Harta și fișierele geospațiale sunt arătate doar în SilexGIS, conturilor care au voie să vadă poziția exactă a peșterii.",
+      "failed": "Poziția ridicării pe hartă nu a putut fi încărcată."
+    },
+    "figures": {
+      "title": "Cifre de la compilator",
+      "none": "Compilatorul nu a scris cifre pentru această rulare.",
+      "failed": "Cifrele nu au putut fi încărcate.",
+      "outcome": {
+        "succeeded": "Compilată",
+        "succeededWithWarnings": "Compilată cu avertismente",
+        "failed": "Compilarea a eșuat"
+      },
+      "compiler": "Therion {{version}}",
+      "metres": "{{value}} m",
+      "percent": "{{value}} %",
+      "totalLength": "Lungime topografiată",
+      "adjustedLength": "Lungime după compensarea buclelor",
+      "planLength": "Lungime în plan",
+      "verticalLength": "Lungimea verticală a vizelor",
+      "verticalRange": "Denivelare (interval vertical)",
+      "northSouthRange": "Extindere nord–sud",
+      "eastWestRange": "Extindere est–vest",
+      "stations": "Stații",
+      "shots": "Vize",
+      "components": "Părți neconectate",
+      "loops": "Bucle",
+      "averageLoopError": "Eroarea medie de închidere",
+      "errors": "Erori",
+      "warnings": "Avertismente",
+      "loopChart": "Erori de închidere a buclelor",
+      "loopAxis": "Buclă",
+      "loopErrorAxis": "Eroare (%)",
+      "loopTooltip": "Bucla {{n}}: {{percent}} % — {{error}} m pe {{length}} m, {{stations}} stații"
+    },
+    "cave": {
+      "title": "Analizele topografiei peșterii",
+      "note": "Măsurate pe ridicarea după care este desenată acum peștera, care poate fi altă încărcare decât aceasta."
+    }
   }
 }

@@ -366,4 +366,8 @@ export const queryKeys = {
   surveyUpload: (id: string) => ['survey-uploads', 'detail', id] as const,
   caveSurveys: (caveId: string) => ['survey-uploads', 'cave', caveId] as const,
   publicSurveyUpload: (token: string) => ['public-survey-uploads', token] as const,
+  surveyUploadFigures: (id: string) => ['survey-uploads', 'figures', id] as const,
+  surveyUploadGeodata: (id: string) => ['survey-uploads', 'geodata', id] as const,
+  surveyUploadByPublicLink: (token: string) => ['survey-uploads', 'by-public-link', token] as const,
+  publicSurveyUploadFigures: (token: string) => ['public-survey-uploads', token, 'figures'] as const,
 };
