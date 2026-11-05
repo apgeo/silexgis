@@ -15,6 +15,8 @@ export interface SurveyUploadProgressView {
   artefacts: readonly SurveyUploadArtefactView[];
 }
 
+const COMPILE_FAILED = 'survey_pipeline.compile_failed';
+
 const STEP_STATUS = {
   done: 'finish',
   active: 'process',
@@ -28,18 +30,30 @@ const STEP_STATUS = {
  * how it ended, and what it produced.
  *
  * Shared by the signed-in status page and the public result page so the two cannot drift apart —
- * everything here is allowed to be shown to someone with only the link. The log, the input files
- * and the team are not part of it and are drawn by the signed-in page alone.
+ * everything here is allowed to be shown to someone with only the link. The log is drawn by each
+ * page under this panel, and the input files and the team by the signed-in page alone; `logShown`
+ * says whether the page draws a log, so a failed compile's sentence points to one only when it is
+ * there to read.
  *
  * Stages are drawn as the steps themselves so a run that stopped early leaves the later ones
  * plainly unvisited. The bar never animates by itself: an animation promises a rate the server
  * does not give.
  */
-export default function SurveyUploadProgressPanel({ view }: { view: SurveyUploadProgressView }) {
+export default function SurveyUploadProgressPanel({
+  view,
+  logShown,
+}: {
+  view: SurveyUploadProgressView;
+  logShown: boolean;
+}) {
   const { t } = useTranslation();
   const failed = view.status === 'failed';
   const succeeded = view.status === 'succeeded';
-  const errorText = view.error ? surveyUploadRunErrorText(view.error.code, t) : null;
+  const errorText = !view.error
+    ? null
+    : view.error.code === COMPILE_FAILED && !logShown
+      ? t('surveyUploads.problems.compileFailedNoLog')
+      : surveyUploadRunErrorText(view.error.code, t);
 
   return (
     <Flex vertical gap={16} data-testid="survey-upload-progress">

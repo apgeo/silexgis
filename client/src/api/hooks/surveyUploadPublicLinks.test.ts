@@ -19,12 +19,26 @@ const envelope = (over: Partial<PublicSurveyUpload> = {}): PublicSurveyUpload =>
   message: 'Archived and read.',
   error: null,
   artefacts: [],
+  logTail: null,
+  log: null,
   createdAt: '2026-10-25T01:32:00Z',
   finishedAt: '2026-10-25T01:33:00Z',
   ...over,
 });
 
 describe('publicResultView', () => {
+  it('carries the compiler’s log tail and the whole log’s address through to the page', () => {
+    const view = publicResultView(
+      envelope({
+        logTail: 'error: invented failure',
+        log: { name: 'invented.log', sizeBytes: 12, url: '/api/v1/public/survey-uploads/abc/log' },
+      }),
+    );
+    expect(view.logTail).toBe('error: invented failure');
+    expect(view.log).toEqual({ name: 'invented.log', sizeBytes: 12, url: '/api/v1/public/survey-uploads/abc/log' });
+    expect(publicResultView(envelope()).log).toBeNull();
+  });
+
   it('reads the title, the cave name and the progress off the envelope', () => {
     const view = publicResultView(envelope());
     expect(view).toMatchObject({ title: 'Invented survey', caveName: 'Invented cave', progress: 100, status: 'succeeded' });

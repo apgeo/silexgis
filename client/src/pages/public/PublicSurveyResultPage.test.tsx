@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { App } from 'antd';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -22,15 +23,20 @@ vi.mock('../../api/hooks.ts', async () => {
 const signIn = vi.fn(async () => {});
 vi.mock('../../auth/auth.tsx', () => ({ useAuth: () => ({ signIn }) }));
 
+const downloadFile = vi.fn(async (_url: string) => {});
+vi.mock('../../api/download.ts', () => ({ downloadFile: (url: string) => downloadFile(url) }));
+
 const { default: PublicSurveyResultPage } = await import('./PublicSurveyResultPage.tsx');
 
 function show() {
   return render(
-    <MemoryRouter initialEntries={['/p/survey/abc']}>
-      <Routes>
-        <Route path="/p/survey/:token" element={<PublicSurveyResultPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <App>
+      <MemoryRouter initialEntries={['/p/survey/abc']}>
+        <Routes>
+          <Route path="/p/survey/:token" element={<PublicSurveyResultPage />} />
+        </Routes>
+      </MemoryRouter>
+    </App>,
   );
 }
 
@@ -39,7 +45,28 @@ afterEach(() => {
   view = undefined;
   failure = undefined;
   signIn.mockClear();
+  downloadFile.mockReset().mockResolvedValue(undefined);
 });
+
+function failedCompile(over: Partial<PublicResultView> = {}): PublicResultView {
+  return {
+    title: 'Invented survey',
+    caveName: 'Invented cave',
+    version: '2026-10-25T10:15:00Z',
+    status: 'failed',
+    progress: 60,
+    message: null,
+    error: { code: 'survey_pipeline.compile_failed', message: null },
+    stages: [
+      { stage: 'archive', state: 'done' },
+      { stage: 'compile', state: 'failed' },
+    ],
+    artefacts: [],
+    logTail: 'error: invented failure -- an invented reason',
+    log: { name: 'invented_2026-10-25_101500.log', sizeBytes: 2048, url: '/api/v1/public/survey-uploads/abc/log' },
+    ...over,
+  };
+}
 
 describe('PublicSurveyResultPage', () => {
   it('draws the title, the cave name, the stages and the files that can be opened', () => {
@@ -56,6 +83,8 @@ describe('PublicSurveyResultPage', () => {
         { stage: 'unpack', state: 'done' },
       ],
       artefacts: [{ kind: 'plan-pdf', name: 'plan.pdf', sizeBytes: 1024, contentUrl: '/files/plan' }],
+      logTail: null,
+      log: null,
     };
     show();
     expect(screen.getByText('Invented survey')).toBeTruthy();
@@ -78,14 +107,47 @@ describe('PublicSurveyResultPage', () => {
       artefacts: [],
       createdAt: '2026-10-25T10:15:00Z',
       finishedAt: null,
+      logTail: null,
+      log: null,
       // Not part of the envelope type: what a wrong server might add.
-      logTail: 'invented-log-line',
       team: 'Invented Team Member',
       files: [{ name: 'invented-source.th' }],
     } as Parameters<typeof publicResultView>[0]);
-    expect(JSON.stringify(view)).not.toContain('invented-log-line');
     expect(JSON.stringify(view)).not.toContain('Invented Team Member');
     expect(JSON.stringify(view)).not.toContain('invented-source.th');
+  });
+
+  it('shows a failed compile its log underneath, as the sentence says, and saves the whole log when asked', async () => {
+    view = failedCompile();
+    show();
+    expect(screen.getByTestId('survey-upload-error').textContent).toContain('The log below says where.');
+    expect(screen.getByTestId('public-survey-log-tail').textContent).toBe('error: invented failure -- an invented reason');
+    expect(screen.getByTestId('public-survey-log').textContent).toContain('invented_2026-10-25_101500.log');
+    fireEvent.click(screen.getByTestId('public-survey-log-download'));
+    await waitFor(() => expect(downloadFile).toHaveBeenCalledWith('/api/v1/public/survey-uploads/abc/log'));
+  });
+
+  it('says so when the whole log could not be saved', async () => {
+    downloadFile.mockRejectedValue(new Error('refused'));
+    view = failedCompile();
+    show();
+    fireEvent.click(screen.getByTestId('public-survey-log-download'));
+    expect(await screen.findByText('The log could not be downloaded. Please try again.')).toBeTruthy();
+  });
+
+  it('shows the log of a run that succeeded too', () => {
+    view = failedCompile({ status: 'succeeded', progress: 100, error: null, logTail: 'compilation time: 1 sec' });
+    show();
+    expect(screen.getByTestId('public-survey-log-tail').textContent).toBe('compilation time: 1 sec');
+    expect(screen.getByTestId('public-survey-log-download')).toBeTruthy();
+  });
+
+  it('points to no log underneath when the run left none to show', () => {
+    view = failedCompile({ logTail: null, log: null });
+    show();
+    expect(screen.getByTestId('survey-upload-error').textContent).toContain('Therion could not compile the survey.');
+    expect(screen.getByTestId('survey-upload-error').textContent).not.toContain('below');
+    expect(screen.queryByTestId('public-survey-log')).toBeNull();
   });
 
   it('says the link does not work, without a retry, when the server knows no such link', () => {

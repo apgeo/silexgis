@@ -893,6 +893,32 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable, IClassFixtur
         }
     }
 
+    [Fact]
+    public async Task A_merge_moves_the_duplicates_photograph_credits_to_the_person_kept()
+    {
+        var keptId = await CreateCaverAsync($"Credit kept {suffix}");
+        var duplicateId = await CreateCaverAsync($"Credit duplicate {suffix}");
+        Guid photoId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var photo = ConformanceSeeds.Photograph(db, $"Credited {suffix}", keeperId, Visibility.Public);
+            db.PhotoDetails.Add(new PhotoDetails { DocumentId = photo.Id, PhotographerCaverId = duplicateId });
+            await db.SaveChangesAsync();
+            photoId = photo.Id;
+        }
+
+        var merged = await keeper.PostAsJsonAsync($"/api/v1/cavers/{keptId}/merge", new { sourceCaverId = duplicateId });
+        merged.StatusCode.ShouldBe(HttpStatusCode.OK, await merged.Content.ReadAsStringAsync());
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.PhotoDetails.AsNoTracking().SingleAsync(p => p.DocumentId == photoId))
+                .PhotographerCaverId.ShouldBe(keptId);
+        }
+    }
+
     // ---- helpers ----
 
     private async Task<Guid> CreateCaverAsync(

@@ -35,7 +35,11 @@ export default function SurveyUploadArtefacts({ artefacts }: { artefacts: readon
     <Flex vertical gap={8} data-testid="survey-upload-artefacts">
       {artefacts.map((artefact) => (
         <Flex key={`${artefact.kind}:${artefact.name}`} align="center" gap={8} wrap>
-          <Tag>{t(`surveyUploads.outputs.${artefact.kind}`, { defaultValue: artefact.kind })}</Tag>
+          <Tag>
+            {artefact.kind === 'log'
+              ? t('surveyUploads.artefacts.log')
+              : t(`surveyUploads.outputs.${artefact.kind}`, { defaultValue: artefact.kind })}
+          </Tag>
           <Typography.Text>{artefact.name}</Typography.Text>
           {artefact.sizeBytes !== null && (
             <Typography.Text type="secondary">{formatSize(artefact.sizeBytes)}</Typography.Text>

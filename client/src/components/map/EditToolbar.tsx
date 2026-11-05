@@ -154,14 +154,15 @@ export default function EditToolbar({ controller, mayModify = true, rightsPendin
     controller.setMode(state.mode === mode && mode !== 'draw' ? 'none' : mode, shape, typeId);
   };
 
+  // The controller's mode change is announced to MapPage, which sets its own state. It has to run
+  // here in the handler: inside a state updater it would run whenever React computes the update,
+  // which can be during this component's render, and React refuses a parent's update from there.
   const toggleMeasure = (type: 'line' | 'polygon') => {
-    setMeasure((current) => {
-      const next = current === type ? null : type;
-      if (next) {
-        controller.setMode('none');
-      }
-      return next;
-    });
+    const next = measure === type ? null : type;
+    if (next) {
+      controller.setMode('none');
+    }
+    setMeasure(next);
   };
 
   const save = async () => {

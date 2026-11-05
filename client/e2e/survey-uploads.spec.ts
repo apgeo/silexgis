@@ -59,6 +59,51 @@ test.describe('survey uploads', () => {
     await expect(page.getByTestId('survey-upload-link-audience-tag')).toHaveText('Signed-in accounts only');
   });
 
+  test('a compiled run lists its log among the results, and pressing it saves the log', async ({ page }) => {
+    await login(page);
+    const upload = await seedUpload(page, `E2E Log ${Date.now()}`);
+
+    // This suite's server has no compiler, so the run's log is added to the real status answer;
+    // that its address opens for every reader it is listed to is the server's own test.
+    const logUrl = '/api/v1/e2e-stub/survey-upload-log';
+    await page.route(`**/api/v1/survey-uploads/${upload.id}`, async (route) => {
+      const answer = await (await route.fetch()).json();
+      answer.artefacts = [
+        ...answer.artefacts,
+        {
+          kind: 'log',
+          name: 'pestera_inventata-20261104T101500Z.log',
+          sizeBytes: 64,
+          contentUrl: logUrl,
+          surveyModelId: null,
+          documentId: null,
+          sourceId: null,
+          viewUrl: null,
+          modelStatus: null,
+          error: null,
+        },
+      ];
+      await route.fulfill({ json: answer });
+    });
+    await page.context().route(`**${logUrl}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/x-therion-log',
+        headers: { 'Content-Disposition': "attachment; filename*=UTF-8''pestera_inventata-20261104T101500Z.log" },
+        body: 'therion 6.3.4\ncompilation time: 1 sec\n',
+      }),
+    );
+
+    await gotoRoute(page, upload.statusPageUrl);
+    const row = page.getByTestId('survey-upload-artefacts').locator(':scope > div').filter({ hasText: '.log' });
+    await expect(row).toContainText("Compiler's log");
+    // The link opens a tab of its own, which turns into the download; the browser reports it on
+    // the page the link was pressed on.
+    const saved = page.waitForEvent('download');
+    await row.getByRole('link', { name: 'Download' }).click();
+    expect((await saved).suggestedFilename()).toBe('pestera_inventata-20261104T101500Z.log');
+  });
+
   test('an address that names no upload says so', async ({ page, consoleErrors }) => {
     consoleErrors.allow(
       /Failed to load resource: .*404/,

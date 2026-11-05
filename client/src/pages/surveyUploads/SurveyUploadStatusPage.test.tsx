@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -125,6 +125,44 @@ describe('the upload status page', () => {
     upload = made({ logTail: 'leaked' });
     show();
     expect(screen.queryByTestId('survey-upload-log-tail')).toBeNull();
+  });
+
+  it('lists a failed compile’s log among the results, named, with a download that opens its address, to a writer and a reader alike', () => {
+    const failed = {
+      status: 'failed' as const,
+      stage: 'compile' as const,
+      progress: 60,
+      message: null,
+      error: { code: 'survey_pipeline.compile_failed', message: null },
+      compile: true,
+      artefacts: [
+        {
+          kind: 'log',
+          name: 'inv1-20261025T101500Z.log',
+          sizeBytes: 2048,
+          contentUrl: '/api/v1/files/f-log/content?token=invented',
+          surveyModelId: null,
+          documentId: null,
+          sourceId: 'src-log',
+          viewUrl: null,
+          modelStatus: null,
+          error: null,
+        },
+      ],
+    };
+    for (const writer of [true, false]) {
+      canWrite = writer;
+      upload = made({ ...failed, logTail: writer ? 'error: invented failure' : null });
+      show();
+      const row = screen.getByText('inv1-20261025T101500Z.log').parentElement!;
+      expect(row).toHaveTextContent("Compiler's log");
+      const download = within(row).getByRole('link', { name: 'Download' });
+      expect(download).toHaveAttribute('href', '/api/v1/files/f-log/content?token=invented');
+      expect(download).toHaveAttribute('target', '_blank');
+      // The sentence points below, where the log is.
+      expect(screen.getByTestId('survey-upload-error')).toHaveTextContent('The log below says where.');
+      cleanup();
+    }
   });
 
   it('offers no run-again while the upload is still running, and no delete ever', () => {

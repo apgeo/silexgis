@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,6 +43,7 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];
+    private readonly SwitchingCompiler compiler = new(new FakeSurveyCompiler());
 
     private HttpClient owner = null!;
     private Guid ownerId;
@@ -60,7 +62,7 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
             services =>
             {
                 JobWorkers.RemoveFrom(services);
-                services.Replace(ServiceDescriptor.Singleton<ISurveyCompiler>(new FakeSurveyCompiler()));
+                services.Replace(ServiceDescriptor.Singleton<ISurveyCompiler>(compiler));
             });
     }
 
@@ -112,15 +114,16 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
         kinds.ShouldContain("plan-pdf");
         kinds.ShouldNotContain(SurveyUploadArtefacts.LogKind);
 
-        // Nothing that names the cave or the upload, the party, the sent files or the compiler's
-        // words: the members are the envelope's own, and no identifier of either appears anywhere.
+        // Nothing that names the cave or the upload, the party or the sent files: the members are
+        // the envelope's own, and no identifier of either appears anywhere. The compiler's log is
+        // the holder's to read, through members of its own.
         page.EnumerateObject().Select(p => p.Name).ShouldBe(
-            ["survey", "cave", "version", "status", "stage", "stages", "progress", "message", "error", "artefacts", "createdAt", "finishedAt"]);
+            ["survey", "cave", "version", "status", "stage", "stages", "progress", "message", "error", "artefacts", "logTail", "log", "createdAt", "finishedAt"]);
         text.ShouldNotContain(caveId.ToString(), Case.Insensitive);
         text.ShouldNotContain(id.ToString(), Case.Insensitive);
         text.ShouldNotContain("pestera_inventata.zip");
         text.ShouldNotContain("pestera_inventata.th\"");
-        foreach (var member in new[] { "logTail", "team", "files", "latitude", "longitude", "coordinates", "geom", "fix" })
+        foreach (var member in new[] { "team", "files", "latitude", "longitude", "coordinates", "geom", "fix" })
         {
             text.ShouldNotContain($"\"{member}\"", Case.Sensitive, member);
         }
@@ -613,6 +616,142 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
         (await uploader.GetAsync($"{Uploads}/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task A_failed_compile_shows_its_log_tail_on_the_public_page_and_the_whole_log_downloads_without_an_account()
+    {
+        compiler.Current = new FakeSurveyCompiler(logSaysFailed: true);
+        var (id, _) = await SendCompiledAsync($"Esuata {suffix}", failing: true);
+        var token = await TokenAsync(id);
+
+        using var anonymous = factory.CreateClient();
+        var page = await anonymous.GetFromJsonAsync<JsonElement>($"{Public}/{token}");
+        page.GetProperty("status").GetString().ShouldBe("failed");
+        page.GetProperty("error").GetProperty("code").GetString().ShouldBe("survey_pipeline.compile_failed");
+        page.GetProperty("artefacts").GetArrayLength().ShouldBe(0);
+        page.GetProperty("logTail").GetString().ShouldBe("invented tail");
+        var log = page.GetProperty("log");
+        log.GetProperty("name").GetString().ShouldEndWith(".log");
+        var url = log.GetProperty("url").GetString()!;
+        url.ShouldBe($"{Public}/{token}/log");
+
+        var download = await anonymous.GetAsync(url);
+        download.StatusCode.ShouldBe(HttpStatusCode.OK, await download.Content.ReadAsStringAsync());
+        download.Content.Headers.ContentType!.MediaType.ShouldBe("text/plain");
+        download.Content.Headers.ContentDisposition!.DispositionType.ShouldBe("attachment");
+        download.Content.Headers.ContentDisposition.FileNameStar.ShouldBe(log.GetProperty("name").GetString());
+        var text = await download.Content.ReadAsStringAsync();
+        text.ShouldContain("error: invented failure");
+        ((long)Encoding.UTF8.GetByteCount(text)).ShouldBe(log.GetProperty("sizeBytes").GetInt64());
+    }
+
+    [Fact]
+    public async Task A_successful_compile_shows_its_log_beside_the_results_and_a_run_that_compiled_nothing_has_none()
+    {
+        var (id, _) = await SendCompiledAsync($"Reusita {suffix}");
+        var token = await TokenAsync(id);
+        using var anonymous = factory.CreateClient();
+        var page = await anonymous.GetFromJsonAsync<JsonElement>($"{Public}/{token}");
+        page.GetProperty("status").GetString().ShouldBe("succeeded");
+        page.GetProperty("logTail").GetString().ShouldBe("invented tail");
+        var download = await anonymous.GetAsync(page.GetProperty("log").GetProperty("url").GetString());
+        download.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await download.Content.ReadAsStringAsync()).ShouldContain("compilation time");
+
+        // Not compiled: the link opens and says it has no log, and the log route says so too.
+        var (plain, _) = await SendCompiledAsync($"Necompilata {suffix}", pipeline: new { compile = false });
+        var plainToken = await TokenAsync(plain);
+        var plainPage = await anonymous.GetFromJsonAsync<JsonElement>($"{Public}/{plainToken}");
+        plainPage.GetProperty("status").GetString().ShouldBe("succeeded");
+        plainPage.GetProperty("logTail").ValueKind.ShouldBe(JsonValueKind.Null);
+        plainPage.GetProperty("log").ValueKind.ShouldBe(JsonValueKind.Null);
+        var none = await anonymous.GetAsync($"{Public}/{plainToken}/log");
+        none.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await CodeAsync(none)).ShouldBe("survey_upload.public_log_not_found");
+    }
+
+    [Fact]
+    public async Task The_log_route_opens_and_refuses_exactly_as_the_page_does()
+    {
+        compiler.Current = new FakeSurveyCompiler(logSaysFailed: true);
+        using var anonymous = factory.CreateClient();
+
+        // Withdrawn: the one 404 of an invented token, on the page and on its log alike.
+        var (withdrawn, _) = await SendCompiledAsync($"Jurnal retras {suffix}", failing: true);
+        var withdrawnToken = await TokenAsync(withdrawn);
+        (await anonymous.GetAsync($"{Public}/{withdrawnToken}/log")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.DeleteAsync($"{Uploads}/{withdrawn}/public-link")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        foreach (var path in new[] { $"{Public}/{withdrawnToken}", $"{Public}/{withdrawnToken}/log", $"{Public}/{SurveyUploadPublicLinks.NewToken()}/log" })
+        {
+            var refused = await anonymous.GetAsync(path);
+            refused.StatusCode.ShouldBe(HttpStatusCode.NotFound, path);
+            (await CodeAsync(refused)).ShouldBe(SurveyUploadEndpointsCodes.NotFound, path);
+        }
+
+        // Made for the organization: an anonymous reader and a device key are asked to sign in on
+        // both, and a signed-in account with no right on the cave reads both.
+        var (org, _) = await SendCompiledAsync(
+            $"Jurnal organizatie {suffix}", newCave: new { visibility = "private" }, publicLink: new { audience = "organization" }, failing: true);
+        var orgToken = await TokenAsync(org);
+        using var device = AuthHelper.AccessKeyClient(factory, await AuthHelper.CreateAccessKeyAsync(owner, "TopoDroid log phone"));
+        foreach (var caller in new[] { anonymous, device })
+        {
+            var asked = await caller.GetAsync($"{Public}/{orgToken}/log");
+            asked.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+            (await CodeAsync(asked)).ShouldBe("survey_upload.public_link_sign_in_required");
+        }
+
+        var email = $"supub-log-{suffix}@t.local";
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, email);
+        using var member = await AuthHelper.BearerClientAsync(factory, email);
+        (await member.GetFromJsonAsync<JsonElement>($"{Public}/{orgToken}")).GetProperty("logTail").GetString().ShouldBe("invented tail");
+        (await member.GetAsync($"{Public}/{orgToken}/log")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A cave protected after an ordinary link was made: closed on both at once, open on both
+        // again when the protection is lifted.
+        var (ordinary, ordinaryCave) = await SendCompiledAsync($"Jurnal protejat dupa {suffix}", failing: true);
+        var ordinaryToken = await TokenAsync(ordinary);
+        await SetProtectedAsync(ordinaryCave, true);
+        (await anonymous.GetAsync($"{Public}/{ordinaryToken}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var closed = await anonymous.GetAsync($"{Public}/{ordinaryToken}/log");
+        closed.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await CodeAsync(closed)).ShouldBe(SurveyUploadEndpointsCodes.NotFound);
+        await SetProtectedAsync(ordinaryCave, false);
+        (await anonymous.GetAsync($"{Public}/{ordinaryToken}/log")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Protected with the uploader's acknowledgement: the page opens, and so does its log.
+        var (acknowledged, _) = await SendCompiledAsync(
+            $"Jurnal protejat cu acord {suffix}", newCave: new { locationProtected = true }, publicLink: new { allowProtected = true }, failing: true);
+        var acknowledgedToken = await TokenAsync(acknowledged);
+        (await anonymous.GetAsync($"{Public}/{acknowledgedToken}/log")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Inside_the_application_every_reader_the_log_is_listed_to_can_open_it_and_only_a_writer_reads_its_tail()
+    {
+        compiler.Current = new FakeSurveyCompiler(logSaysFailed: true);
+        var (id, _) = await SendCompiledAsync($"Jurnal in aplicatie {suffix}", newCave: new { visibility = "public" }, failing: true);
+        var email = $"supub-reader-{suffix}@t.local";
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, email);
+        using var reader = await AuthHelper.BearerClientAsync(factory, email);
+
+        foreach (var (caller, writer) in new[] { (owner, true), (reader, false) })
+        {
+            var status = await caller.GetFromJsonAsync<JsonElement>($"{Uploads}/{id}");
+            status.GetProperty("logTail").ValueKind.ShouldBe(writer ? JsonValueKind.String : JsonValueKind.Null);
+            var log = status.GetProperty("artefacts").EnumerateArray().Single(a => a.GetProperty("kind").GetString() == SurveyUploadArtefacts.LogKind);
+            var url = log.GetProperty("contentUrl").GetString();
+            url.ShouldNotBeNull();
+
+            // The address is followed the way a browser follows a link: no account on the request.
+            using var browser = factory.CreateClient();
+            var opened = await browser.GetAsync(url);
+            opened.StatusCode.ShouldBe(HttpStatusCode.OK, $"writer: {writer}");
+            opened.Content.Headers.ContentDisposition!.DispositionType.ShouldBe("attachment");
+            opened.Content.Headers.ContentDisposition.FileNameStar.ShouldBe(log.GetProperty("name").GetString());
+            (await opened.Content.ReadAsStringAsync()).ShouldContain("error: invented failure");
+        }
+    }
+
     // ---- helpers ----
 
     /// <summary>Error codes this suite expects, named once.</summary>
@@ -623,7 +762,13 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
 
     /// <summary>Sends a compiled survey of a cave the upload makes, runs it, and answers the upload and its cave.</summary>
     private async Task<(Guid Id, Guid CaveId)> SendCompiledAsync(
-        string title, object? newCave = null, HttpClient? client = null, object? publicLink = null, object? cave = null)
+        string title,
+        object? newCave = null,
+        HttpClient? client = null,
+        object? publicLink = null,
+        object? cave = null,
+        object? pipeline = null,
+        bool failing = false)
     {
         client ??= owner;
         var files = new (string Name, byte[] Bytes)[]
@@ -642,6 +787,7 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
             surveyTitle = title,
             surveyName = "pestera_inventata",
             publicLink,
+            pipeline,
             files = files.Select(f => new
             {
                 name = f.Name,
@@ -665,7 +811,17 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
 
         var complete = await client.PostAsync($"{Uploads}/{id}/complete", null);
         complete.StatusCode.ShouldBe(HttpStatusCode.Accepted, await complete.Content.ReadAsStringAsync());
-        await RunPipelineAsync(id);
+        if (failing)
+        {
+            // A run that ends failed is recorded on the upload; the job carrying it reports the failure too.
+            await Should.ThrowAsync<Exception>(RunPipelineAsync(id));
+            (await client.GetFromJsonAsync<JsonElement>($"{Uploads}/{id}")).GetProperty("status").GetString().ShouldBe("failed");
+        }
+        else
+        {
+            await RunPipelineAsync(id);
+        }
+
         return (id, caveId);
     }
 
@@ -738,5 +894,19 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
         }
 
         await QueuedJob.RunAsync(factory.Services, jobId);
+    }
+
+    /// <summary>The compiler this suite's host asks, changed by a test that wants another one.</summary>
+    private sealed class SwitchingCompiler(ISurveyCompiler current) : ISurveyCompiler
+    {
+        public ISurveyCompiler Current { get; set; } = current;
+
+        public bool IsAvailable => Current.IsAvailable;
+
+        public string? Version => Current.Version;
+
+        public Task<SurveyCompileResult> CompileAsync(
+            SurveyCompileRequest request, IProgress<SurveyCompileProgress> progress, CancellationToken ct) =>
+            Current.CompileAsync(request, progress, ct);
     }
 }

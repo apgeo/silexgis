@@ -140,6 +140,74 @@ public sealed class CavingGroupMembershipTests : IAsyncLifetime, IDisposable, IC
         (await MembershipExistsAsync(groupId, caverId)).ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task Saving_a_members_role_unchanged_tells_them_nothing_and_changing_it_tells_them_once()
+    {
+        var groupId = await CreateGroupAsync("Role notices");
+        var caverId = await JoinAsync(groupId, memberId, CavingGroupRole.Member);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.Notifications.Where(n => n.RecipientUserId == memberId).ExecuteDeleteAsync();
+        }
+
+        var same = await manager.PostAsJsonAsync($"/api/v1/caving-groups/{groupId}/members", new { caverId, role = "member" });
+        same.StatusCode.ShouldBe(HttpStatusCode.OK, await same.Content.ReadAsStringAsync());
+        (await NoticeCountAsync(memberId)).ShouldBe(0);
+
+        var changed = await manager.PostAsJsonAsync($"/api/v1/caving-groups/{groupId}/members", new { caverId, role = "admin" });
+        changed.StatusCode.ShouldBe(HttpStatusCode.OK, await changed.Content.ReadAsStringAsync());
+        (await NoticeCountAsync(memberId)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Renaming_a_group_onto_another_groups_name_is_refused_and_frees_its_old_name()
+    {
+        var takenId = await CreateGroupAsync("Taken name");
+        var renamedId = await CreateGroupAsync("Old name");
+
+        var clash = await manager.PutAsJsonAsync($"/api/v1/caving-groups/{renamedId}", new
+        {
+            name = $"Taken name {suffix}",
+            description = (string?)null,
+            website = (string?)null,
+        });
+        clash.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await clash.Content.ReadAsStringAsync());
+        (await CodeAsync(clash)).ShouldBe("caving_group.name_taken");
+
+        // A spelling that differs only in case comes to the same slug and is the same name.
+        var sameSlug = await manager.PutAsJsonAsync($"/api/v1/caving-groups/{renamedId}", new
+        {
+            name = $"TAKEN NAME {suffix}",
+            description = (string?)null,
+            website = (string?)null,
+        });
+        sameSlug.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await sameSlug.Content.ReadAsStringAsync());
+
+        var renamed = await manager.PutAsJsonAsync($"/api/v1/caving-groups/{renamedId}", new
+        {
+            name = $"New name {suffix}",
+            description = (string?)null,
+            website = (string?)null,
+        });
+        renamed.StatusCode.ShouldBe(HttpStatusCode.OK, await renamed.Content.ReadAsStringAsync());
+        var body = JsonDocument.Parse(await renamed.Content.ReadAsStringAsync()).RootElement;
+        body.GetProperty("slug").GetString().ShouldBe($"new-name-{suffix}");
+
+        // The old name is free again, and the group that kept its name is untouched.
+        _ = await CreateGroupAsync("Old name");
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.CavingGroups.AsNoTracking().SingleAsync(g => g.Id == takenId)).Name.ShouldBe($"Taken name {suffix}");
+    }
+
+    private async Task<int> NoticeCountAsync(Guid userId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Notifications.CountAsync(n => n.RecipientUserId == userId);
+    }
+
     private async Task<Guid> CreateGroupAsync(string tag)
     {
         var created = await manager.PostAsJsonAsync("/api/v1/caving-groups", new

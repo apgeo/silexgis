@@ -3049,6 +3049,13 @@
     "deleteConfirm": "Remove this person from the roster?",
     "deleteRefused": "This person could not be removed.",
     "deleteRefusedCamp": "This person is on a camp's roster and cannot be removed while they are. If this is a duplicate entry, merge it instead.",
+    "rosterProblems": {
+      "grantsFullAdmin": "Only a full administrator can do this: it would make this person's account a full administrator.",
+      "revokesFullAdmin": "Only a full administrator can do this: it would take full administration away from an account.",
+      "exceedsOwnRights": "You cannot do this: it would give this person's account rights you do not hold yourself.",
+      "memberRaced": "Somebody else added this person to the group at the same moment. Reload the group and try again.",
+      "lastFullAdmin": "This would leave the installation without a full administrator who can sign in."
+    },
     "heldByTrips": {
       "title": "{{name}} cannot be removed yet",
       "intro": "Trips still name this person, so their entry cannot be removed. Each trip below says what holds them there.",
@@ -3412,6 +3419,7 @@
     "protected": "Protected",
     "seeded": "Built-in",
     "nameTaken": "A permission group with this name already exists.",
+    "nameInvalid": "The name must contain letters or digits.",
     "lastFullAdmin": "Refused: this would leave no active Full Administrator able to sign in.",
     "exceedsOwnRights": "Refused: a rule cannot hand out rights you do not hold yourself.",
     "rulesTab": "Rules",
@@ -4618,6 +4626,7 @@
         "notFound": "This account no longer exists.",
         "invalid": "Check the name and the address.",
         "forbidden": "You are not allowed to do this.",
+        "cannotChangeOwnReviewMark": "Another administrator decides whether your uploads need review.",
         "cannotResetOwnTwoFactor": "You manage your own second factor from your security settings.",
         "twoFactorNotEnabled": "This account has no second factor switched on, so there is nothing to reset.",
         "fullAdministratorAccount": "Only a full administrator can lock, unlock, delete or reset the second factor of a full administrator's account."
@@ -5163,7 +5172,9 @@
     "signInRequiredHint": "Whoever made it chose to show these results to the installation's accounts only. Sign in and you come back to this page.",
     "signIn": "Sign in",
     "loadFailed": "The result could not be loaded.",
-    "caveAndVersion": "{{cave}} — uploaded {{when}}"
+    "caveAndVersion": "{{cave}} — uploaded {{when}}",
+    "downloadLog": "Download the whole log",
+    "logDownloadFailed": "The log could not be downloaded. Please try again."
   },
   "publicTrip": {
     "notFoundTitle": "Nothing to show for this link",
@@ -6668,7 +6679,8 @@
       "title": "Results",
       "empty": "Nothing was produced.",
       "download": "Download",
-      "view": "View"
+      "view": "View",
+      "log": "Compiler's log"
     },
     "problems": {
       "filesMissing": "A file of this upload is no longer in the server's store. Ask the administrator to restore it, then run the upload again.",
@@ -6679,6 +6691,7 @@
       "sourceInvalid": "A Therion source could not be read.",
       "compilerUnavailable": "The compiler could not be reached. The files are archived; run the upload again later.",
       "compileFailed": "Therion could not compile the survey. The log below says where.",
+      "compileFailedNoLog": "Therion could not compile the survey.",
       "compileTimeout": "Compiling took longer than this server allows.",
       "outputMissing": "The compilation did not produce a result that was asked for.",
       "crsUnknown": "Stored, but not read into stations: the survey is fixed in a coordinate system this server does not know.",

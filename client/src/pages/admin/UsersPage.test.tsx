@@ -351,7 +351,7 @@ describe('UsersPage', () => {
       'permission_group.last_full_admin', 'user.cannot_lock_self', 'user.cannot_delete_self',
       'user.email_taken', 'user.already_enterable', 'user.not_found', 'validation.failed',
       'access.create_forbidden', 'user.cannot_reset_own_two_factor', 'user.two_factor_not_enabled',
-      'access_entry.exceeds_own_rights',
+      'access_entry.exceeds_own_rights', 'user.cannot_change_own_review_mark',
     ];
     const generic = t('common.saveFailed');
     for (const code of codes) {

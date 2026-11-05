@@ -3049,6 +3049,13 @@
     "deleteConfirm": "Elimini această persoană din listă?",
     "deleteRefused": "Persoana nu a putut fi eliminată.",
     "deleteRefusedCamp": "Persoana este pe lista unei tabere și nu poate fi eliminată cât timp rămâne acolo. Dacă este o înregistrare duplicat, unific-o în loc.",
+    "rosterProblems": {
+      "grantsFullAdmin": "Doar un administrator deplin poate face asta: contul acestei persoane ar deveni administrator deplin.",
+      "revokesFullAdmin": "Doar un administrator deplin poate face asta: un cont și-ar pierde drepturile de administrator deplin.",
+      "exceedsOwnRights": "Nu poți face asta: contul acestei persoane ar primi drepturi pe care tu nu le ai.",
+      "memberRaced": "Altcineva a adăugat această persoană în grup în același moment. Reîncarcă grupul și încearcă din nou.",
+      "lastFullAdmin": "Instalarea ar rămâne fără un administrator deplin care se poate autentifica."
+    },
     "heldByTrips": {
       "title": "{{name}} nu poate fi eliminat(ă) încă",
       "intro": "Persoana apare încă în ture, așa că înregistrarea ei nu poate fi eliminată. Fiecare tură de mai jos arată ce o ține acolo.",
@@ -3412,6 +3419,7 @@
     "protected": "Protejat",
     "seeded": "Predefinit",
     "nameTaken": "Există deja un grup de permisiuni cu această denumire.",
+    "nameInvalid": "Denumirea trebuie să conțină litere sau cifre.",
     "lastFullAdmin": "Refuzat: nu ar mai rămâne niciun administrator deplin activ care să se poată autentifica.",
     "exceedsOwnRights": "Refuzat: o regulă nu poate acorda drepturi pe care nu le deții tu.",
     "rulesTab": "Reguli",
@@ -4631,6 +4639,7 @@
         "notFound": "Acest cont nu mai există.",
         "invalid": "Verifică numele și adresa.",
         "forbidden": "Nu ai dreptul să faci acest lucru.",
+        "cannotChangeOwnReviewMark": "Dacă încărcările tale au nevoie de verificare decide un alt administrator.",
         "cannotResetOwnTwoFactor": "Propriul al doilea factor îl gestionezi din setările de securitate.",
         "twoFactorNotEnabled": "Acest cont nu are activ niciun al doilea factor, deci nu este nimic de resetat.",
         "fullAdministratorAccount": "Doar un administrator deplin poate bloca, debloca, șterge sau reseta al doilea factor al contului unui administrator deplin."
@@ -5176,7 +5185,9 @@
     "signInRequiredHint": "Cine l-a făcut a ales să arate aceste rezultate doar conturilor instalării. Autentifică-te și revii la această pagină.",
     "signIn": "Autentificare",
     "loadFailed": "Rezultatul nu a putut fi încărcat.",
-    "caveAndVersion": "{{cave}} — încărcat {{when}}"
+    "caveAndVersion": "{{cave}} — încărcat {{when}}",
+    "downloadLog": "Descarcă tot jurnalul",
+    "logDownloadFailed": "Jurnalul nu a putut fi descărcat. Încearcă din nou."
   },
   "publicTrip": {
     "notFoundTitle": "Nimic de arătat pentru acest link",
@@ -6681,7 +6692,8 @@
       "title": "Rezultate",
       "empty": "Nu s-a produs nimic.",
       "download": "Descarcă",
-      "view": "Vezi"
+      "view": "Vezi",
+      "log": "Jurnalul compilatorului"
     },
     "problems": {
       "filesMissing": "Un fișier al acestei încărcări nu mai este în depozitul serverului. Cere administratorului să-l restaureze, apoi rulează încărcarea din nou.",
@@ -6692,6 +6704,7 @@
       "sourceInvalid": "O sursă Therion nu a putut fi citită.",
       "compilerUnavailable": "Compilatorul nu a putut fi contactat. Fișierele sunt arhivate; rulează încărcarea din nou mai târziu.",
       "compileFailed": "Therion nu a putut compila topografia. Jurnalul de mai jos arată unde.",
+      "compileFailedNoLog": "Therion nu a putut compila topografia.",
       "compileTimeout": "Compilarea a durat mai mult decât permite acest server.",
       "outputMissing": "Compilarea nu a produs un rezultat care fusese cerut.",
       "crsUnknown": "Salvat, dar necitit în stații: topografia este fixată într-un sistem de coordonate pe care acest server nu îl cunoaște.",

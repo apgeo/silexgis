@@ -351,6 +351,14 @@ public static class CaverEndpoints
                 ct);
         }
 
+        // Deleting the person cascades their memberships. Where those reach Full
+        // Administrators, the linked account loses full administration with them — the same
+        // change the unlink and the member removal reserve to full administrators.
+        if (await fullAdminGuard.ReservedToFullAdministratorsAsync(ctx, caver.UserId, [id], [], ct))
+        {
+            return ApiProblems.Forbidden(FullAdminGuard.RevokesFullAdminCode);
+        }
+
         // Deleting the person cascades their memberships, which can sever an account's
         // only path into Full Administrators.
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
@@ -479,6 +487,7 @@ public static class CaverEndpoints
         IUserContextAccessor userAccessor,
         IAccessContextAccessor accessAccessor,
         FullAdminGuard fullAdminGuard,
+        ITrusteeRightsBound trusteeBound,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -523,13 +532,30 @@ public static class CaverEndpoints
         // A membership is a grant path, so attaching an account to a person whose caving
         // groups reach Full Administrators hands over the escape hatch. Reserved to
         // people who already hold it — otherwise roster-keeping would be a route to it.
-        if (!ctx.IsFullAdmin && await fullAdminGuard.CaverReachesFullAdministratorsAsync(id, ct))
+        if (await fullAdminGuard.ReservedToFullAdministratorsAsync(ctx, request.UserId, [id], [], ct))
         {
             return ApiProblems.Forbidden(FullAdminGuard.GrantsFullAdminCode);
         }
 
+        // And every other ruleset this person's caving groups are trustees of comes with the
+        // link: the keeper has to hold those rules to hand them on.
+        if (await trusteeBound.ExceedsCallerAsync(ctx, request.UserId, [id], [], ct))
+        {
+            return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
+        }
+
         caver.UserId = request.UserId;
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (UniqueViolations.IsOn(e, "ix_cavers_user_id"))
+        {
+            // Another request linked the same account to somebody else at the same moment; the
+            // unique index refused the second, and it is the refusal the check above gives.
+            return ApiProblems.BadRequest(
+                "caver.account_already_linked", "That account already belongs to someone in the roster.");
+        }
 
         var projected = await ProjectAsync(db, user, ctx, [caver], ct);
         return TypedResults.Ok(projected[0]);
@@ -562,7 +588,14 @@ public static class CaverEndpoints
         }
 
         // Unlinking moves rights: the account loses everything that flowed through this
-        // person's memberships — including, possibly, its Full Administrators reach.
+        // person's memberships — including, possibly, its Full Administrators reach. Taking the
+        // escape hatch away from somebody is as much a change to who holds it as handing it
+        // over, so that case is reserved the same way the link is.
+        if (await fullAdminGuard.ReservedToFullAdministratorsAsync(ctx, caver.UserId, [id], [], ct))
+        {
+            return ApiProblems.Forbidden(FullAdminGuard.RevokesFullAdminCode);
+        }
+
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         caver.UserId = null;
         await db.SaveChangesAsync(ct);
@@ -589,6 +622,7 @@ public static class CaverEndpoints
         IUserContextAccessor userAccessor,
         IAccessContextAccessor accessAccessor,
         FullAdminGuard fullAdminGuard,
+        ITrusteeRightsBound trusteeBound,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -608,15 +642,6 @@ public static class CaverEndpoints
             return ApiProblems.BadRequest("caver.merge_self", "A person cannot be merged into themselves.");
         }
 
-        // A merge repoints memberships onto the survivor, so folding in a person whose
-        // caving groups reach Full Administrators would hand the survivor's account the
-        // escape hatch — the same grant the account-link guard reserves.
-        if (!ctx.IsFullAdmin
-            && await fullAdminGuard.CaverReachesFullAdministratorsAsync(request.SourceCaverId, ct))
-        {
-            return ApiProblems.Forbidden(FullAdminGuard.GrantsFullAdminCode);
-        }
-
         var target = await db.Cavers.FirstOrDefaultAsync(c => c.Id == id, ct);
         var source = await db.Cavers.FirstOrDefaultAsync(c => c.Id == request.SourceCaverId, ct);
         if (target is null || source is null)
@@ -630,6 +655,23 @@ public static class CaverEndpoints
         {
             return ApiProblems.BadRequest(
                 "caver.merge_two_accounts", "Both entries have an account. Detach one before merging.");
+        }
+
+        // The survivor ends up with both entries' memberships and with whichever account either
+        // carried, so that account gains the other entry's grant paths: the target's when the
+        // account comes from the duplicate, the duplicate's when it is already the target's.
+        // Either way it is an account link to a person, and it is reserved the same way the link
+        // is when those paths reach Full Administrators.
+        var survivingAccount = target.UserId ?? source.UserId;
+        var gainedFrom = target.UserId is not null ? source.Id : target.Id;
+        if (await fullAdminGuard.ReservedToFullAdministratorsAsync(ctx, survivingAccount, [gainedFrom], [], ct))
+        {
+            return ApiProblems.Forbidden(FullAdminGuard.GrantsFullAdminCode);
+        }
+
+        if (await trusteeBound.ExceedsCallerAsync(ctx, survivingAccount, [gainedFrom], [], ct))
+        {
+            return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
         }
 
         // Everything the duplicate holds on a trip moves with it, deleted trips included — here
@@ -836,6 +878,16 @@ public static class CaverEndpoints
         foreach (var phoneUser in phoneUsers)
         {
             phoneUser.CaverId = target.Id;
+        }
+
+        // The photographs credited to the duplicate are the survivor's photographs. The credit's
+        // foreign key empties itself when its person is removed — right for a person deleted from
+        // the roster, whose credit has nobody left to name — so without this the removal below
+        // would erase every credit the duplicate held, and nothing could put them back.
+        var credited = await db.PhotoDetails.Where(p => p.PhotographerCaverId == source.Id).ToListAsync(ct);
+        foreach (var photo in credited)
+        {
+            photo.PhotographerCaverId = target.Id;
         }
 
         target.UserId ??= source.UserId;

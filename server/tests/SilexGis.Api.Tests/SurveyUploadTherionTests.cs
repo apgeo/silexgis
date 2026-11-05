@@ -27,12 +27,14 @@ namespace SilexGis.Api.Tests;
 [Trait("Category", "Therion")]
 public sealed class SurveyUploadTherionTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
+    private readonly PostgresFixture postgres;
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];
 
     public SurveyUploadTherionTests(PostgresFixture postgres)
     {
+        this.postgres = postgres;
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-sutherion-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
@@ -77,46 +79,7 @@ public sealed class SurveyUploadTherionTests : IAsyncLifetime, IDisposable, ICla
         capabilities.GetProperty("compiler").GetProperty("available").GetBoolean().ShouldBeTrue();
         capabilities.GetProperty("compiler").GetProperty("version").GetString()!.ShouldStartWith("therion ");
 
-        // TopoDroid's default export: sketches and fix written as comments, which the compile
-        // copy makes live because the sketches came too.
-        string[] names = ["pestera_inventata.zip", "pestera_inventata.th", "pestera_inventata-1p.th2", "pestera_inventata-1s.th2"];
-        var opened = await client.PostAsJsonAsync("/api/v1/survey-uploads", new
-        {
-            source = "topodroid",
-            client = new { name = "TopoDroid", version = "6.5.34" },
-            surveyTitle = $"Pestera Inventata {suffix}",
-            surveyName = "pestera_inventata",
-            files = names.Select(n => new
-            {
-                name = n,
-                size = Fixture(n).LongLength,
-                role = n.EndsWith(".zip", StringComparison.Ordinal) ? "archive"
-                    : n.EndsWith(".th2", StringComparison.Ordinal) ? "therionSketch" : "therionSource",
-            }),
-        });
-        opened.StatusCode.ShouldBe(HttpStatusCode.Created, await opened.Content.ReadAsStringAsync());
-        var id = (await opened.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
-        foreach (var name in names)
-        {
-            var content = new ByteArrayContent(Fixture(name));
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-            (await client.PutAsync($"/api/v1/survey-uploads/{id}/files/{name}", content)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        }
-
-        (await client.PostAsync($"/api/v1/survey-uploads/{id}/complete", null)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
-
-        long jobId;
-        await using (var scope = factory.Services.CreateAsyncScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-            jobId = (await db.ProcessingJobs.AsNoTracking()
-                    .Where(j => j.Kind == ProcessingJobKinds.SurveyUploadPipeline && j.Status == ProcessingJobStatus.Queued)
-                    .ToListAsync())
-                .Single(j => JsonSerializer.Deserialize<SurveyUploadPipelinePayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyUploadId == id)
-                .Id;
-        }
-
-        await QueuedJob.RunAsync(factory.Services, jobId);
+        var id = await UploadAndRunAsync(factory, client);
 
         var status = await client.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
         status.GetProperty("status").GetString().ShouldBe("succeeded", status.ToString());
@@ -177,6 +140,47 @@ public sealed class SurveyUploadTherionTests : IAsyncLifetime, IDisposable, ICla
     }
 
     [TherionFact]
+    public async Task The_invented_TopoDroid_survey_compiles_end_to_end_through_the_compiler_service()
+    {
+        // The installation's service mode: the project travels to the compiler service as a tar and
+        // its outputs come back. The scaffold makes the folder the outputs go to and leaves it empty.
+        var local = new LocalSurveyCompiler(
+            Options.Create(new SurveyCompilerOptions { Mode = SurveyCompilerOptions.ModeLocal, TimeoutSeconds = 120 }),
+            NullLogger<LocalSurveyCompiler>.Instance);
+        await using var service = await TherionServiceHarness.StartAsync(local);
+        var remote = new ServiceSurveyCompiler(
+            service,
+            Options.Create(new SurveyCompilerOptions { Mode = SurveyCompilerOptions.ModeService, Url = "http://therion:3100", TimeoutSeconds = 120 }),
+            NullLogger<ServiceSurveyCompiler>.Instance);
+        var root = Path.Combine(filesRoot, "service-mode");
+        using var host = new SilexGisApiFactory(
+            postgres.ConnectionString,
+            new Dictionary<string, string?>
+            {
+                ["Files:Root"] = root,
+                ["Keys:Path"] = Path.Combine(root, "keys"),
+                ["SurveyCompiler:Mode"] = SurveyCompilerOptions.ModeService,
+                ["SurveyCompiler:Url"] = "http://therion:3100",
+                ["SurveyCompiler:TimeoutSeconds"] = "120",
+            },
+            services =>
+            {
+                JobWorkers.RemoveFrom(services);
+                services.Replace(ServiceDescriptor.Singleton<ISurveyCompiler>(remote));
+            });
+        await AuthHelper.CreateUserAsync(host, GlobalRoles.Editor, $"sutherion-svc-{suffix}@t.local");
+        using var client = await AuthHelper.BearerClientAsync(host, $"sutherion-svc-{suffix}@t.local");
+
+        var id = await UploadAndRunAsync(host, client);
+
+        var status = await client.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        status.GetProperty("status").GetString().ShouldBe("succeeded", status.ToString());
+        status.GetProperty("artefacts").EnumerateArray().Select(a => a.GetProperty("kind").GetString())
+            .ShouldBe(["3d", "lox", "plan-pdf", "extended-pdf", SurveyUploadArtefacts.LogKind], ignoreOrder: true);
+        service.Leftovers().ShouldBeEmpty();
+    }
+
+    [TherionFact]
     public async Task The_sandbox_lets_the_compiler_read_the_project_and_nothing_outside_it()
     {
         var root = Path.Combine(filesRoot, "sandbox");
@@ -215,6 +219,53 @@ public sealed class SurveyUploadTherionTests : IAsyncLifetime, IDisposable, ICla
         // What is in the project is read (the positive case); what is outside it is not there.
         (await CompileReadingAsync(Path.Combine(project, "th", "inside.th"))).ShouldContain(Inside);
         (await CompileReadingAsync(Path.Combine(outside, "outside.th"))).ShouldNotContain(Outside);
+    }
+
+    /// <summary>
+    /// Sends TopoDroid's default export of the invented survey — sketches and fix written as
+    /// comments, which the compile copy makes live because the sketches came too — and runs it.
+    /// </summary>
+    private static async Task<Guid> UploadAndRunAsync(SilexGisApiFactory host, HttpClient client)
+    {
+        string[] names = ["pestera_inventata.zip", "pestera_inventata.th", "pestera_inventata-1p.th2", "pestera_inventata-1s.th2"];
+        var opened = await client.PostAsJsonAsync("/api/v1/survey-uploads", new
+        {
+            source = "topodroid",
+            client = new { name = "TopoDroid", version = "6.5.34" },
+            surveyTitle = $"Pestera Inventata {Guid.NewGuid():N}",
+            surveyName = "pestera_inventata",
+            files = names.Select(n => new
+            {
+                name = n,
+                size = Fixture(n).LongLength,
+                role = n.EndsWith(".zip", StringComparison.Ordinal) ? "archive"
+                    : n.EndsWith(".th2", StringComparison.Ordinal) ? "therionSketch" : "therionSource",
+            }),
+        });
+        opened.StatusCode.ShouldBe(HttpStatusCode.Created, await opened.Content.ReadAsStringAsync());
+        var id = (await opened.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        foreach (var name in names)
+        {
+            var content = new ByteArrayContent(Fixture(name));
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+            (await client.PutAsync($"/api/v1/survey-uploads/{id}/files/{name}", content)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        (await client.PostAsync($"/api/v1/survey-uploads/{id}/complete", null)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+
+        long jobId;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            jobId = (await db.ProcessingJobs.AsNoTracking()
+                    .Where(j => j.Kind == ProcessingJobKinds.SurveyUploadPipeline && j.Status == ProcessingJobStatus.Queued)
+                    .ToListAsync())
+                .Single(j => JsonSerializer.Deserialize<SurveyUploadPipelinePayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyUploadId == id)
+                .Id;
+        }
+
+        await QueuedJob.RunAsync(host.Services, jobId);
+        return id;
     }
 
     private static byte[] Fixture(string name) =>

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
+using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Auth;
 using SilexGis.Domain.Entities;
@@ -16,8 +17,11 @@ namespace SilexGis.Api.Features.SurveyUploads;
 /// <summary>The public page of an upload's results, as anybody holding its link reads it — or, for a link made for the organization, any signed-in account.</summary>
 /// <remarks>
 /// Self-contained and shared with nothing: it is not the signed-in status answer with members
-/// blanked, because that one carries the cave's id, the party, the uploaded files and the log, and
-/// keeping the two shapes apart by construction is what keeps those off this page.
+/// blanked, because that one carries the cave's id, the party and the uploaded files, and keeping
+/// the two shapes apart by construction is what keeps those off this page. The compiler's log is
+/// on it: its words can name stations and repeat the survey's fixed point, but whoever holds the
+/// link already has the compiled model, which places every station, and the log is where a failed
+/// compile says why.
 /// </remarks>
 /// <param name="Survey">The survey, by its title.</param>
 /// <param name="Cave">The cave, by its name only.</param>
@@ -28,7 +32,9 @@ namespace SilexGis.Api.Features.SurveyUploads;
 /// <param name="Progress">0–100.</param>
 /// <param name="Message">What the run is doing now, in words.</param>
 /// <param name="Error">Why the run failed, when it did.</param>
-/// <param name="Artefacts">What the run produced, to download — never its log.</param>
+/// <param name="Artefacts">What the run produced, to download. The log is not among them: it has <paramref name="Log"/>.</param>
+/// <param name="LogTail">The last lines the compiler wrote, as the signed-in status page shows them; null before a compile.</param>
+/// <param name="Log">The compiler's whole log, to download, once a compile has written one.</param>
 /// <param name="CreatedAt">When the upload was opened.</param>
 /// <param name="FinishedAt">When the last run finished.</param>
 public sealed record PublicSurveyUploadDto(
@@ -42,11 +48,22 @@ public sealed record PublicSurveyUploadDto(
     string? Message,
     PublicSurveyUploadErrorDto? Error,
     IReadOnlyList<PublicSurveyUploadArtefactDto> Artefacts,
+    string? LogTail,
+    PublicSurveyUploadLogDto? Log,
     DateTimeOffset CreatedAt,
     DateTimeOffset? FinishedAt);
 
 /// <summary>The survey a public page is about.</summary>
 public sealed record PublicSurveyUploadSurveyDto(string Title);
+
+/// <summary>The compiler's log of the run, downloaded through the page's own link.</summary>
+/// <param name="Name">The log's file name, which carries the version stamp.</param>
+/// <param name="SizeBytes">The log's size.</param>
+/// <param name="Url">
+/// Where to download it: a route of the same link, which decides on every read exactly as the page
+/// does — a link withdrawn or closed since answers there as it does here.
+/// </param>
+public sealed record PublicSurveyUploadLogDto(string Name, long SizeBytes, string Url);
 
 /// <summary>The cave a public page is about, by name and nothing else.</summary>
 public sealed record PublicSurveyUploadCaveDto(string Name);
@@ -86,6 +103,7 @@ public static partial class SurveyUploadEndpoints
     public const string PublicLinkForbiddenCode = "survey_upload.public_link_forbidden";
     public const string PublicLinkProtectedCode = "survey_upload.public_link_refused_protected";
     public const string PublicLinkSignInRequiredCode = "survey_upload.public_link_sign_in_required";
+    public const string PublicLogNotFoundCode = "survey_upload.public_log_not_found";
 
     /// <summary>
     /// Making and withdrawing an upload's public link by hand, and the public page itself. The first
@@ -126,8 +144,26 @@ public static partial class SurveyUploadEndpoints
             .RequireRateLimiting(PublicSurveyUploadRateLimits.PolicyName)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .WithSummary("The public page of an upload's results: its survey title, the cave's name, the run's progress and the files it produced. 401 survey_upload.public_link_sign_in_required for a link made for the organization, read without signing in.");
+            .WithSummary("The public page of an upload's results: its survey title, the cave's name, the run's progress, the files it produced and the compiler's log. 401 survey_upload.public_link_sign_in_required for a link made for the organization, read without signing in.");
+
+        // The page's log in another form, so it is opened by the very decision the page is, on
+        // every read: a delivery address minted when the page was read would outlive a withdrawal.
+        api.MapGet("/public/survey-uploads/{token}/log", PublicLogAsync)
+            .WithTags("SurveyUploads")
+            .WithName("publicSurveyUploadLog")
+            .AllowAnonymous()
+            .RequireRateLimiting(PublicSurveyUploadRateLimits.PolicyName)
+            .Produces(StatusCodes.Status200OK, contentType: "text/plain")
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("The compiler's whole log of the upload behind a public link, as a text file to save. Opens and refuses exactly as the page does; 404 survey_upload.public_log_not_found when the link opens and the upload has no log.");
     }
+
+    /// <summary>
+    /// What the log is answered as. Plain text whatever Therion wrote it in, so a browser shows or
+    /// saves it as text rather than offering it to whatever program claims the compiler's own type.
+    /// </summary>
+    private const string PublicLogContentType = "text/plain; charset=utf-8";
 
     private static async Task<Results<Created<SurveyUploadPublicLinkDto>, UnauthorizedHttpResult, ProblemHttpResult>> MintPublicLinkAsync(
         Guid id,
@@ -225,31 +261,19 @@ public static partial class SurveyUploadEndpoints
         IFileAccessTokenService tokens,
         CancellationToken ct)
     {
-        if (await links.ResolveAsync(token, ct) is not { } found)
+        var (opened, refusal) = await OpenPublicLinkAsync(token, links, accessAccessor, ct);
+        if (opened is not { } found)
         {
-            return ApiProblems.NotFound(PublicLinkNotFoundCode);
+            return refusal!;
         }
 
-        var (upload, cave, audience) = found;
-
-        // Any signed-in account of this installation will do; nothing is asked of its rights on the
-        // cave, because holding the address is what the link grants. A personal access key is never
-        // a signed-in caller here: its principal is taken away on a route that needs no account.
-        if (audience != SurveyUploadLinkAudience.Public
-            && !SurveyUploadPublicLinks.Admits(audience, signedIn: await accessAccessor.GetAsync(ct) is not null))
-        {
-            return TypedResults.Problem(
-                detail: "This link opens for the installation's signed-in accounts only; sign in to read it.",
-                statusCode: StatusCodes.Status401Unauthorized,
-                extensions: new Dictionary<string, object?> { ["code"] = PublicLinkSignInRequiredCode });
-        }
+        var (upload, cave) = found;
         var title = await db.CaveSurveys.AsNoTracking()
             .Where(s => s.Id == upload.CaveSurveyId)
             .Select(s => s.Title)
             .FirstOrDefaultAsync(ct) ?? upload.SurveyTitle;
 
-        // What the run produced, minus its log: the compiler's words over the caver's files name
-        // stations and quote fixed coordinates.
+        // What the run produced. The log is listed apart, with an address of this link's own.
         var outputs = await db.SurveyUploadFiles.AsNoTracking()
             .Where(f => f.SurveyUploadId == upload.Id
                 && f.Role == SurveyUploadFileRole.Output
@@ -267,6 +291,7 @@ public static partial class SurveyUploadEndpoints
             })
             .ToList();
 
+        var log = await PublicLogFileAsync(db, upload.Id, ct);
         var compile = ReadOptions(upload).Compile;
         return TypedResults.Ok(new PublicSurveyUploadDto(
             new PublicSurveyUploadSurveyDto(title),
@@ -280,7 +305,82 @@ public static partial class SurveyUploadEndpoints
             upload.Message,
             upload.ErrorCode is { } code ? new PublicSurveyUploadErrorDto(code, upload.ErrorMessage) : null,
             artefacts,
+            upload.LogTail,
+            log is null ? null : new PublicSurveyUploadLogDto(log.Name, log.SizeBytes, PublicLogUrl(token)),
             upload.CreatedAt,
             upload.FinishedAt));
     }
+
+    private static async Task<Results<PhysicalFileHttpResult, ProblemHttpResult>> PublicLogAsync(
+        string token,
+        SilexGisDbContext db,
+        SurveyUploadPublicLinkService links,
+        IAccessContextAccessor accessAccessor,
+        IFileStore fileStore,
+        CancellationToken ct)
+    {
+        var (opened, refusal) = await OpenPublicLinkAsync(token, links, accessAccessor, ct);
+        if (opened is not { } found)
+        {
+            return refusal!;
+        }
+
+        if (await PublicLogFileAsync(db, found.Upload.Id, ct) is not { } log)
+        {
+            return ApiProblems.NotFound(PublicLogNotFoundCode);
+        }
+
+        return TypedResults.PhysicalFile(
+            fileStore.GetAbsolutePath(log.StoragePath),
+            contentType: PublicLogContentType,
+            fileDownloadName: log.Name,
+            enableRangeProcessing: true);
+    }
+
+    /// <summary>
+    /// The upload and cave a public link opens for this caller now, or the answer to give instead —
+    /// the one decision the page and its log share. Every refusal but one is the 404 an invented
+    /// token gets. Any signed-in account of this installation opens a link made for the
+    /// organization; nothing is asked of its rights on the cave, because holding the address is
+    /// what the link grants. A personal access key is never a signed-in caller here: its principal
+    /// is taken away on a route that needs no account.
+    /// </summary>
+    private static async Task<((SurveyUpload Upload, Feature Cave)? Opened, ProblemHttpResult? Refusal)> OpenPublicLinkAsync(
+        string token, SurveyUploadPublicLinkService links, IAccessContextAccessor accessAccessor, CancellationToken ct)
+    {
+        if (await links.ResolveAsync(token, ct) is not { } found)
+        {
+            return (null, ApiProblems.NotFound(PublicLinkNotFoundCode));
+        }
+
+        var (upload, cave, audience) = found;
+        if (audience != SurveyUploadLinkAudience.Public
+            && !SurveyUploadPublicLinks.Admits(audience, signedIn: await accessAccessor.GetAsync(ct) is not null))
+        {
+            return (null, TypedResults.Problem(
+                detail: "This link opens for the installation's signed-in accounts only; sign in to read it.",
+                statusCode: StatusCodes.Status401Unauthorized,
+                extensions: new Dictionary<string, object?> { ["code"] = PublicLinkSignInRequiredCode }));
+        }
+
+        return ((upload, cave), null);
+    }
+
+    private sealed record PublicLogFile(string Name, long SizeBytes, string StoragePath);
+
+    /// <summary>The current revision of the upload's stored log — the uploaded file, not a rendition of it — or null.</summary>
+    private static Task<PublicLogFile?> PublicLogFileAsync(SilexGisDbContext db, Guid uploadId, CancellationToken ct) =>
+        (from file in db.SurveyUploadFiles.AsNoTracking()
+         join version in db.DocumentVersions.AsNoTracking() on file.DocumentId equals version.DocumentId
+         join stored in db.StoredFiles.AsNoTracking() on version.Id equals stored.DocumentVersionId
+         where file.SurveyUploadId == uploadId
+             && file.Role == SurveyUploadFileRole.Log
+             && file.Status == SurveyUploadFileStatus.Stored
+             && version.IsCurrent
+             && stored.ConvertedFromFileId == null
+         orderby file.CreatedAt
+         select new PublicLogFile(file.Name, stored.SizeBytes, stored.StoragePath))
+        .FirstOrDefaultAsync(ct);
+
+    private static string PublicLogUrl(string token) => $"/api/v1/public/survey-uploads/{Uri.EscapeDataString(token)}/log";
 }

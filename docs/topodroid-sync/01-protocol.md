@@ -278,11 +278,21 @@ smaller shape:
 | `status`, `stage`, `progress`, `message` | as in the status answer |
 | `stages[]` | `{ stage, state }` for all six stages, `state` ∈ `pending`, `active`, `done`, `failed`, `skipped` |
 | `error` | `{ code, message }` when failed |
-| `artefacts[]` | `{ kind, name, sizeBytes, contentUrl }` — the outputs stored; never the log, never an output that was not produced (`12b-public-link-compiled`) |
+| `artefacts[]` | `{ kind, name, sizeBytes, contentUrl }` — the outputs stored; never an output that was not produced, and not the log, which has members of its own (`12b-public-link-compiled`) |
+| `logTail` | the last lines the compiler wrote, as the status answer's `logTail`; null before a compile |
+| `log` | `{ name, sizeBytes, url }` — the compiler's whole log, once a compile wrote one, after a failed compile as after one that worked; null otherwise |
 | `createdAt`, `finishedAt` | the upload's times |
 
-It never carries the archive, the Therion sources, the log, the party, a station name, the cave's
-id or any coordinate. **Every refusal is the same `404 survey_upload.public_link_not_found`**, an
+`log.url` is `GET /api/v1/public/survey-uploads/{token}/log`, a route of the same link: it decides
+on every read exactly as the page does (the same `404` for a withdrawn, invented or no-longer-open
+link, the same `401` for an `organization` link read without signing in) and answers the log as a
+`text/plain` attachment. A link that opens on an upload with no log answers
+`404 survey_upload.public_log_not_found` there.
+
+It never carries the archive, the Therion sources, the party, a station name, the cave's id or any
+coordinate. The log is the compiler's own words over the survey and can quote a station or the
+survey's fixed point; it is shown because whoever holds the link already has the compiled model,
+which places every station anyway (owner decision, 2026-11-04). **Every refusal is the same `404 survey_upload.public_link_not_found`**, an
 invented token's: a withdrawn link, a cave protected since an ordinary link was made, an
 installation that turned links off. The one other answer is
 `401 survey_upload.public_link_sign_in_required`, for an `organization` link read without signing in

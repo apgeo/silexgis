@@ -26,6 +26,13 @@ public sealed record SurveyProjectTarReading(IReadOnlyList<string> Files, byte[]
 /// devices or anything else a tar can describe — each at a relative path that stays inside the
 /// destination, never over a file already there, within a byte and an entry budget. Packing takes
 /// ordinary files only, too, so a link in a project directory is never followed to what it names.
+/// <para>
+/// A project's directories travel as entries of their own, empty ones included: the project is
+/// built with the folders its configuration writes its outputs into, Therion writes into them and
+/// does not make them, and a folder that held no file yet would otherwise not exist on the far side.
+/// Unpacking makes such a directory under the same rules as a file — inside the destination, never
+/// over a file already there.
+/// </para>
 /// </remarks>
 public static class SurveyProjectTar
 {
@@ -72,14 +79,44 @@ public static class SurveyProjectTar
     }
 
     /// <summary>
+    /// The directories under <paramref name="root"/>, relative to it with forward slashes, parents
+    /// before their children, leaving out any directory named <paramref name="skipDirectory"/> at the
+    /// top, what is under it, and anything that is a link.
+    /// </summary>
+    public static IReadOnlyList<string> DirectoriesUnder(string root, string? skipDirectory = null)
+    {
+        var full = Path.GetFullPath(root);
+        var found = new List<string>();
+        Walk(new DirectoryInfo(full));
+        found.Sort(StringComparer.Ordinal);
+        return found;
+
+        void Walk(DirectoryInfo directory)
+        {
+            foreach (var child in directory.EnumerateDirectories())
+            {
+                if (child.LinkTarget is not null || (skipDirectory is not null && child.Name == skipDirectory && directory.FullName == full))
+                {
+                    continue;
+                }
+
+                found.Add(Path.GetRelativePath(full, child.FullName).Replace('\\', '/'));
+                Walk(child);
+            }
+        }
+    }
+
+    /// <summary>
     /// Writes a tar of <paramref name="files"/> (relative to <paramref name="root"/>) to
     /// <paramref name="destination"/>, with <paramref name="manifest"/> first under
     /// <paramref name="manifestName"/> when one is given. A listed directory is written as the
-    /// ordinary files under it; a listed path that is missing or a link is left out.
+    /// ordinary files under it; a listed path that is missing or a link is left out. The
+    /// <paramref name="directories"/> are written first, each as a directory entry of its own, so
+    /// that an empty one arrives too.
     /// </summary>
     public static async Task WriteAsync(
         Stream destination, string root, IEnumerable<string> files, CancellationToken ct,
-        string? manifestName = null, byte[]? manifest = null)
+        string? manifestName = null, byte[]? manifest = null, IEnumerable<string>? directories = null)
     {
         var full = Path.GetFullPath(root);
         await using var writer = new TarWriter(destination, TarEntryFormat.Pax, leaveOpen: true);
@@ -88,6 +125,16 @@ public static class SurveyProjectTar
         {
             using var body = new MemoryStream(manifest, writable: false);
             await writer.WriteEntryAsync(new PaxTarEntry(TarEntryType.RegularFile, manifestName) { DataStream = body }, ct);
+        }
+
+        foreach (var directory in directories ?? [])
+        {
+            var name = SafeName(directory) ?? throw new SurveyProjectTarException($"'{directory}' is not a path inside the project.");
+            var source = new DirectoryInfo(Path.Combine(full, name));
+            if (source.Exists && source.LinkTarget is null)
+            {
+                await writer.WriteEntryAsync(new PaxTarEntry(TarEntryType.Directory, name + "/"), ct);
+            }
         }
 
         var written = new HashSet<string>(StringComparer.Ordinal);
@@ -114,7 +161,7 @@ public static class SurveyProjectTar
     }
 
     /// <summary>
-    /// Unpacks the ordinary files of a tar stream into <paramref name="destination"/>, refusing the
+    /// Unpacks the ordinary files and directories of a tar stream into <paramref name="destination"/>, refusing the
     /// whole stream at the first entry that is not an ordinary file or directory, names a path
     /// outside the destination or one already there, or passes either budget. The entry named
     /// <paramref name="manifestName"/>, when given, is handed back instead of written.
@@ -141,6 +188,13 @@ public static class SurveyProjectTar
 
             if (entry.EntryType is TarEntryType.Directory)
             {
+                var folder = InsideOrRefuse(root, entry.Name);
+                if (File.Exists(folder))
+                {
+                    throw new SurveyProjectTarException($"'{entry.Name}' is already there.");
+                }
+
+                Directory.CreateDirectory(folder);
                 continue;
             }
 
@@ -174,12 +228,7 @@ public static class SurveyProjectTar
                 continue;
             }
 
-            var path = Path.GetFullPath(Path.Combine(root, name));
-            if (!path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            {
-                throw new SurveyProjectTarException($"'{entry.Name}' is not a path inside the project.");
-            }
-
+            var path = InsideOrRefuse(root, entry.Name);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             try
             {
@@ -198,6 +247,19 @@ public static class SurveyProjectTar
         }
 
         return new SurveyProjectTarReading(files, manifest);
+    }
+
+    /// <summary>The full path an entry names under <paramref name="root"/>, refusing one that is not inside it.</summary>
+    private static string InsideOrRefuse(string root, string entryName)
+    {
+        var name = SafeName(entryName) ?? throw new SurveyProjectTarException($"'{entryName}' is not a path inside the project.");
+        var path = Path.GetFullPath(Path.Combine(root, name));
+        if (!path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            throw new SurveyProjectTarException($"'{entryName}' is not a path inside the project.");
+        }
+
+        return path;
     }
 
     /// <summary>
