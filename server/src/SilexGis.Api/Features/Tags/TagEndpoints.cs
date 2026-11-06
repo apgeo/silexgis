@@ -89,8 +89,9 @@ public static class TagEndpoints
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search}%";
-            query = query.Where(x => EF.Functions.ILike(EF.Functions.Unaccent(x.Name), EF.Functions.Unaccent(pattern)));
+            var pattern = LikePatterns.Containing(search);
+            query = query.Where(x =>
+                EF.Functions.ILike(EF.Functions.Unaccent(x.Name), EF.Functions.Unaccent(pattern), LikePatterns.Escape));
         }
 
         var tags = await query.OrderBy(x => x.Name).Take(100)

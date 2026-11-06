@@ -238,6 +238,19 @@ public sealed class DocumentContentSearchTests : IAsyncLifetime, IDisposable, IC
     }
 
     [Fact]
+    public async Task A_page_number_too_large_to_have_an_offset_is_an_empty_page_not_a_failure()
+    {
+        await WaitForExtractionAsync(await UploadAsync("depasit.txt", $"Pagina departe. {nonce}"));
+
+        // Ten to a page, so this page's first row would lie past the largest offset a 32-bit
+        // number holds; the page is simply past the end, like any other page past the end.
+        var far = await ReadJsonAsync(await owner.GetAsync($"/api/v1/search?q={nonce}&documentPage=300000000"));
+        far.GetProperty("documents").GetProperty("items").GetArrayLength().ShouldBe(0);
+
+        (await SearchDocumentsAsync(owner, nonce, page: 1)).Items.ShouldHaveSingleItem();
+    }
+
+    [Fact]
     public async Task The_section_keeps_the_shape_the_rest_of_the_search_has()
     {
         var response = await owner.GetAsync($"/api/v1/search?q={nonce}");
