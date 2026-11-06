@@ -69,6 +69,146 @@ public sealed class SurveyUploadTherionTests : IAsyncLifetime, IDisposable, ICla
         }
     }
 
+    [Fact]
+    public void A_compiler_that_answers_its_version_question_with_silence_is_given_up_on_in_time()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "Stands in for the compiler with a shell script.");
+        Directory.CreateDirectory(filesRoot);
+
+        // A program that prints nothing and does not exit, and one that also fills its error pipe
+        // first: either held the probe for as long as it ran.
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        SandboxedTherionRunner.ProbeVersion(Script("silent", "exec sleep 60"), TimeSpan.FromSeconds(1)).ShouldBeNull();
+        clock.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(15));
+        clock.Restart();
+        SandboxedTherionRunner.ProbeVersion(
+                Script("noisy", "head -c 200000 /dev/zero >&2\nexec sleep 60"), TimeSpan.FromSeconds(1))
+            .ShouldBeNull();
+        clock.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(15));
+
+        // And one that answers is still heard, with its error output read past.
+        SandboxedTherionRunner.ProbeVersion(
+                Script("answers", "head -c 200000 /dev/zero >&2\necho 'therion 6.3.4 (2025-04-08)'"), TimeSpan.FromSeconds(10))
+            .ShouldBe("therion 6.3.4");
+    }
+
+    [Fact]
+    public void The_sandbox_command_shares_nothing_binds_the_system_read_only_and_carries_none_of_the_servers_settings()
+    {
+        // Stand-ins for the server's own settings, which hold the database password.
+        var setting = $"SILEXGIS_SANDBOX_PROBE_{suffix}";
+        var connection = $"ConnectionStrings__SandboxProbe{suffix}";
+        Environment.SetEnvironmentVariable(setting, "invented");
+        Environment.SetEnvironmentVariable(connection, "Host=invented");
+        try
+        {
+            var options = new SurveyCompilerOptions();
+            var project = Path.Combine(filesRoot, "project");
+            var scratch = Path.Combine(project, SandboxedTherionRunner.ScratchDirectoryName);
+            var timeout = TimeSpan.FromMinutes(10);
+            var therion = new System.Diagnostics.ProcessStartInfo("/usr/bin/therion") { RedirectStandardOutput = true };
+            therion.ArgumentList.Add("upload.thconfig");
+
+            var sandboxed = new SandboxedTherionRunner("/usr/bin/therion", "/usr/bin/bwrap", options)
+                .Wrap(therion, project, scratch, timeout);
+            List<string> command = [sandboxed.FileName, .. sandboxed.ArgumentList];
+            var bwrap = command.IndexOf("/usr/bin/bwrap");
+            bwrap.ShouldBeGreaterThanOrEqualTo(0, string.Join(' ', command));
+            var inside = command[(bwrap + 1)..^2];
+
+            // No network, no other process, no inherited environment, and gone with the server.
+            foreach (var flag in (string[])["--unshare-all", "--die-with-parent", "--new-session", "--clearenv"])
+            {
+                inside.ShouldContain(flag);
+            }
+
+            inside.ShouldNotContain("--share-net");
+
+            // The system read-only; the project and its scratch directory the only places it can
+            // write, and the project the directory it starts in.
+            ShouldContainRun(inside, "--ro-bind", "/usr", "/usr");
+            ShouldContainRun(inside, "--chdir", project);
+            var writable = inside.Select((argument, at) => (argument, at))
+                .Where(a => a.argument is "--bind" or "--bind-try" or "--dev-bind" or "--dev-bind-try")
+                .Select(a => (inside[a.at + 1], inside[a.at + 2]))
+                .ToList();
+            writable.ShouldBe([(project, project), (scratch, "/tmp")], ignoreOrder: true);
+            // What the sandbox's environment is given is a fixed list, none of it the server's.
+            inside.Select((argument, at) => (argument, at))
+                .Where(a => a.argument == "--setenv")
+                .Select(a => inside[a.at + 1])
+                .ShouldBe(["PATH", "HOME", "TMPDIR", "TEXMFVAR", "LANG"], ignoreOrder: true);
+
+            // The compiler is what the sandbox runs, with its own arguments, and its output is
+            // read as it was asked to be.
+            command[^2..].ShouldBe(["/usr/bin/therion", "upload.thconfig"]);
+            sandboxed.RedirectStandardOutput.ShouldBeTrue();
+            sandboxed.UseShellExecute.ShouldBeFalse();
+
+            // The limits wrap the sandbox, where this machine has the programs that set them.
+            if (ExecutableSearch.OnPath("prlimit") is { } prlimit)
+            {
+                command[0].ShouldBe(prlimit);
+                command.IndexOf("--as=" + options.MemoryCap.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                    .ShouldBeInRange(1, bwrap - 1);
+                command.IndexOf("--fsize=" + options.OutputFileCap.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                    .ShouldBeInRange(1, bwrap - 1);
+                command.ShouldContain(a => a.StartsWith("--cpu=", StringComparison.Ordinal));
+            }
+
+            if (ExecutableSearch.OnPath("timeout") is { } stopper)
+            {
+                command.IndexOf(stopper).ShouldBeInRange(0, bwrap - 1);
+                command.IndexOf("--kill-after=10").ShouldBeInRange(1, bwrap - 1);
+            }
+
+            // Sandboxed or not, nothing of the server's own settings reaches the child.
+            var direct = new SandboxedTherionRunner("/usr/bin/therion", null, options).Wrap(therion, project, scratch, timeout);
+            direct.ArgumentList.ShouldNotContain("--unshare-all");
+            direct.Environment["HOME"].ShouldBe(scratch);
+            direct.Environment["TMPDIR"].ShouldBe(scratch);
+            foreach (var start in (System.Diagnostics.ProcessStartInfo[])[sandboxed, direct])
+            {
+                start.Environment.Keys.ShouldNotContain(k =>
+                    k.StartsWith("SILEXGIS", StringComparison.OrdinalIgnoreCase)
+                    || k.StartsWith("ConnectionStrings", StringComparison.OrdinalIgnoreCase));
+                if (!OperatingSystem.IsWindows())
+                {
+                    start.Environment["PATH"].ShouldBe("/usr/bin:/bin");
+                }
+            }
+
+            if (!OperatingSystem.IsWindows())
+            {
+                sandboxed.Environment.Keys.ShouldBe(["PATH", "LANG"], ignoreOrder: true);
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(setting, null);
+            Environment.SetEnvironmentVariable(connection, null);
+        }
+    }
+
+    /// <summary>Asserts that <paramref name="run"/> appears in <paramref name="arguments"/> as consecutive items.</summary>
+    private static void ShouldContainRun(List<string> arguments, params string[] run)
+    {
+        var found = Enumerable.Range(0, Math.Max(0, arguments.Count - run.Length + 1))
+            .Any(at => arguments.Skip(at).Take(run.Length).SequenceEqual(run));
+        found.ShouldBeTrue($"{string.Join(' ', run)} in {string.Join(' ', arguments)}");
+    }
+
+    private string Script(string name, string body)
+    {
+        var path = Path.Combine(filesRoot, name);
+        File.WriteAllText(path, "#!/bin/sh\n" + body + "\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        return path;
+    }
+
     [TherionFact]
     public async Task The_invented_TopoDroid_survey_compiles_end_to_end_in_the_sandbox()
     {

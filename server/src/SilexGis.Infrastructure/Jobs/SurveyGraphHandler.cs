@@ -171,6 +171,10 @@ public sealed class SurveyGraphHandler(
             // holding neither the old answer nor the new one.
             await using (var tx = await db.Database.BeginTransactionAsync(ct))
             {
+                // Before anything is looked at, so that a second model of this cave being read at
+                // the same moment waits here and then sees whether this one made the cave's shape.
+                await SurveyGraphSql.TakeCaveCenterlineLockAsync(db, model.CaveFeatureId, ct);
+
                 // Whatever a previous read of this file left behind. Issued as statements of their
                 // own rather than as tracked deletes, because loading tens of thousands of rows in
                 // order to mark them deleted costs more than the read that produced them.

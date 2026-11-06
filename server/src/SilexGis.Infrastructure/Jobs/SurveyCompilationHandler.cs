@@ -60,6 +60,59 @@ public sealed class SurveyCompilationHandler(
     // is about to be repeated.
     public bool RetriesPassingFailures => true;
 
+    /// <summary>
+    /// A reading given up by the queue stops reading "pending", and is closed the way an unreadable
+    /// log is: no figures and no loops left standing under a record that says it read nothing.
+    /// </summary>
+    /// <remarks>
+    /// A record goes back to pending whenever a corrected revision of its log is archived, and that
+    /// queues a reading of its own beside any still running. When such a newer reading is waiting,
+    /// the record is left to it: closing it here would show "unreadable" over a log that is about
+    /// to be read. Direct statements rather than a tracked save, because this runs inside the
+    /// sweep's transaction and on its context, where the jobs being given up are tracked.
+    /// </remarks>
+    public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
+    {
+        if (AbandonedJob.PayloadOf<SurveyCompilationPayload>(job) is not { } payload)
+        {
+            return;
+        }
+
+        var others = await db.ProcessingJobs.AsNoTracking()
+            .Where(j => j.Kind == Kind && j.Id != job.Id
+                && (j.Status == ProcessingJobStatus.Queued || j.Status == ProcessingJobStatus.Running))
+            .ToListAsync(ct);
+        if (others.Any(j => AbandonedJob.PayloadOf<SurveyCompilationPayload>(j)?.SurveyCompilationId
+                == payload.SurveyCompilationId))
+        {
+            return;
+        }
+
+        var closed = await db.SurveyCompilations
+            .Where(c => c.Id == payload.SurveyCompilationId && c.Status == SurveyCompilationStatus.Pending)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.Status, SurveyCompilationStatus.Unreadable)
+                .SetProperty(c => c.ReadError, AbandonedJob.Reason)
+                .SetProperty(c => c.Outcome, (SilexGis.Domain.Surveys.SurveyCompilationOutcome?)null)
+                .SetProperty(c => c.IncompleteStage, (string?)null)
+                .SetProperty(c => c.ReadAt, (DateTimeOffset?)null)
+                .SetProperty(c => c.CompilerVersion, (string?)null)
+                .SetProperty(c => c.CompilerReleaseDate, (string?)null)
+                .SetProperty(c => c.CompilationSeconds, (int?)null)
+                .SetProperty(c => c.ErrorCount, (int?)null)
+                .SetProperty(c => c.WarningCount, (int?)null)
+                .SetProperty(c => c.LoopCount, (int?)null)
+                .SetProperty(c => c.AverageLoopErrorPercent, (double?)null)
+                .SetProperty(c => c.TotalLengthM, (double?)null)
+                .SetProperty(c => c.TotalLengthAdjustedM, (double?)null), ct);
+        if (closed > 0)
+        {
+            await db.SurveyCompilationLoops
+                .Where(l => l.SurveyCompilationId == payload.SurveyCompilationId)
+                .ExecuteDeleteAsync(ct);
+        }
+    }
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var payload = JsonSerializer.Deserialize<SurveyCompilationPayload>(job.Payload, JsonSerializerOptions.Web)

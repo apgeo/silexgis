@@ -263,6 +263,13 @@ internal sealed class SyncDocumentsSection(
 
         if (row.BaseRevision is null)
         {
+            // A removal with no revision is not a resent create: answered "unchanged" the phone
+            // would drop a row that stays here. It is told the revision to remove against instead.
+            if (row.Deleted)
+            {
+                return Answer(Conflict(row.Id, existing.UpdatedAt));
+            }
+
             // A create resent after its answer was lost: nothing is written over what has happened
             // to the document since.
             return Answer(Ok(row.Id, SyncRowStatus.Unchanged, existing.UpdatedAt));
@@ -333,12 +340,19 @@ internal sealed class SyncDocumentsSection(
             return await ApplyCreateAsync(run, proposal, ct);
         }
 
-        var document = await db.Documents.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.Id == row.Id, ct);
-        if (document is null
-            || document.DeletedAt is not null
-            || !SameRevision(document.UpdatedAt, proposal.BaseRevision!.Value))
+        // Locked before it is compared, and compared on what the locking statement read: another
+        // upload that has written this row and not yet committed is waited for here, and its
+        // committed revision is what this one is arbitrated against.
+        var standing = await SyncRevisionSql.HoldAsync(db, SyncRevisionTable.Documents, row.Id, proposal.BaseRevision!.Value, ct);
+        if (!standing.Holds)
         {
-            return new SyncApplied(Conflict(row.Id, document?.UpdatedAt), null);
+            return new SyncApplied(Conflict(row.Id, standing.Revision), null);
+        }
+
+        var document = await db.Documents.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.Id == row.Id, ct);
+        if (document is null)
+        {
+            return new SyncApplied(Conflict(row.Id, null), null);
         }
 
         switch (proposal.Act)

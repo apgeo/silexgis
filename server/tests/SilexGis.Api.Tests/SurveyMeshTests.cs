@@ -245,6 +245,41 @@ public class SurveyMeshTests
     }
 
     [Fact]
+    public void A_projected_mesh_is_written_in_ground_metres_like_the_stations_it_belongs_with()
+    {
+        var converter = new SurveyMeshConverter(new ProjCoordinateProjector());
+        using var output = new MemoryStream();
+
+        // One face whose first edge runs a kilometre along the grid's east axis, in UTM zone 35N.
+        var result = converter.Convert(
+            Stl([((359500, 5042100, 0), (360500, 5042100, 0), (359500, 5042110, 0))]),
+            new SurveySourceDeclaration(SourceEpsg: 32635, null, null, OriginHeightM: 1100),
+            output);
+
+        // A transverse Mercator grid metre is 1 / k ground metres, with k = k0 (1 + (Δλ cos φ)² / 2)
+        // to far better than a millimetre per kilometre this close to the central meridian (27° E).
+        var deltaLambda = (27.0 - result.AnchorLongitude) * Math.PI / 180;
+        var cosPhi = Math.Cos(result.AnchorLatitude * Math.PI / 180);
+        var k = 0.9996 * (1 + (Math.Pow(deltaLambda * cosPhi, 2) / 2));
+        var (a, b) = FirstTwoVertices(output.ToArray());
+        var edge = Math.Sqrt(Math.Pow(b.X - a.X, 2) + Math.Pow(b.Z - a.Z, 2));
+
+        // About 16 cm longer than the grid says: the gap a line plot's stations are corrected by.
+        edge.ShouldBe(1000 / k, tolerance: 0.01);
+    }
+
+    [Fact]
+    public void A_corner_that_is_not_a_finite_number_is_refused_as_a_fault_of_the_file()
+    {
+        Should.Throw<SurveySourceException>(() => StlReader.Read(Stl([
+                ((0, 0, 0), (10, 0, 0), (0, 10, 0)),
+                ((0, 0, 0), (float.NaN, 0, 0), (0, 10, 0)),
+            ])))
+            .Message.ShouldContain("Triangle 2");
+        Should.Throw<SurveySourceException>(() => StlReader.Read(Stl([((0, 0, 0), (float.PositiveInfinity, 0, 0), (0, 10, 0))])));
+    }
+
+    [Fact]
     public void A_coordinate_system_this_installation_cannot_resolve_is_refused()
     {
         var converter = new SurveyMeshConverter(new ProjCoordinateProjector());
@@ -318,6 +353,21 @@ public class SurveyMeshTests
         BinaryPrimitives.WriteSingleLittleEndian(target, corner.X);
         BinaryPrimitives.WriteSingleLittleEndian(target[4..], corner.Y);
         BinaryPrimitives.WriteSingleLittleEndian(target[8..], corner.Z);
+    }
+
+    /// <summary>The first two vertices of a written mesh, in glTF axes (X east, Y up, Z south).</summary>
+    private static ((float X, float Y, float Z) A, (float X, float Y, float Z) B) FirstTwoVertices(byte[] glb)
+    {
+        var jsonLength = (int)BinaryPrimitives.ReadUInt32LittleEndian(glb.AsSpan(12));
+        using var json = ReadJsonChunk(glb);
+        var view = json.RootElement.GetProperty("accessors")[1].GetProperty("bufferView").GetInt32();
+        var offset = json.RootElement.GetProperty("bufferViews")[view].GetProperty("byteOffset").GetInt32();
+        var at = 20 + jsonLength + 8 + offset;
+        (float X, float Y, float Z) Vertex(int i) => (
+            BinaryPrimitives.ReadSingleLittleEndian(glb.AsSpan(at + (i * 12))),
+            BinaryPrimitives.ReadSingleLittleEndian(glb.AsSpan(at + (i * 12) + 4)),
+            BinaryPrimitives.ReadSingleLittleEndian(glb.AsSpan(at + (i * 12) + 8)));
+        return (Vertex(0), Vertex(1));
     }
 
     private static JsonDocument ReadJsonChunk(byte[] glb)

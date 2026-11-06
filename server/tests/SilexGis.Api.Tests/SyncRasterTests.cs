@@ -392,6 +392,91 @@ public sealed class SyncRasterTests : IAsyncLifetime, IDisposable, IClassFixture
     }
 
     [Fact]
+    public async Task Two_overlapping_edits_of_one_map_or_one_pin_from_one_revision_land_once_and_the_other_is_a_conflict()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var placeA = await CreatePlaceAsync(cave, locationProtected: false);
+        var placeB = await CreatePlaceAsync(cave, locationProtected: false);
+        var set = await CreateSetAsync(uploader, [cave], clubId);
+        var contestedMap = Guid.CreateVersion7();
+        var stallMap = Guid.CreateVersion7();
+        var contestedPin = Guid.CreateVersion7();
+        var stallPin = Guid.CreateVersion7();
+        var created = await UploadAsync(
+            uploader, set,
+            maps: [await NewMapAsync(contestedMap, cave, "Contested", "planView"), await NewMapAsync(stallMap, cave, "Stall", "planView")],
+            pins: [Pin(contestedPin, contestedMap, placeA, 10, 10), Pin(stallPin, stallMap, placeA, 10, 10)]);
+
+        // The map: the first upload edits the contested map and parks on the stall map, which
+        // another connection holds; the second edits the contested map from the same revision.
+        var mapRevision = Revision(created, "rasterMaps", contestedMap);
+        await using (var stall = await RowStall.HoldAsync(factory, "raster_maps", stallMap))
+        {
+            var firstUpload = PostAsync(uploader, set, maps:
+            [
+                NewMapRow(contestedMap, cave, "The first phone's plan", "planView", baseRevision: mapRevision),
+                NewMapRow(stallMap, cave, "Stall, renamed", "planView", baseRevision: Revision(created, "rasterMaps", stallMap)),
+            ]);
+            await stall.WaitForWaitersAsync(1, firstUpload);
+            var secondUpload = PostAsync(uploader, set, maps:
+                [NewMapRow(contestedMap, cave, "The second phone's plan", "planView", baseRevision: mapRevision)]);
+            await stall.WaitForWaitersAsync(2, secondUpload);
+            await stall.ReleaseAsync();
+
+            var won = await AnswerOf(await firstUpload);
+            var lost = await AnswerOf(await secondUpload);
+            Statuses(won, "rasterMaps").ShouldBe(["updated", "updated"]);
+            Statuses(lost, "rasterMaps").ShouldBe(["conflict"]);
+            Revision(lost, "rasterMaps", contestedMap).ShouldBe(Revision(won, "rasterMaps", contestedMap));
+        }
+
+        // The pin: a pin's edit takes its map first and then the pin, an order of its own.
+        var pinRevision = Revision(created, "rasterPins", contestedPin);
+        await using (var stall = await RowStall.HoldAsync(factory, "res_links", stallPin))
+        {
+            var firstUpload = PostAsync(uploader, set, pins:
+            [
+                Pin(contestedPin, contestedMap, placeB, 21, 21, baseRevision: pinRevision),
+                Pin(stallPin, stallMap, placeB, 22, 22, baseRevision: Revision(created, "rasterPins", stallPin)),
+            ]);
+            await stall.WaitForWaitersAsync(1, firstUpload);
+            var secondUpload = PostAsync(uploader, set, pins:
+                [Pin(contestedPin, contestedMap, placeA, 99, 99, baseRevision: pinRevision)]);
+            await stall.WaitForWaitersAsync(2, secondUpload);
+            await stall.ReleaseAsync();
+
+            var won = await AnswerOf(await firstUpload);
+            var lost = await AnswerOf(await secondUpload);
+            Statuses(won, "rasterPins").ShouldBe(["updated", "updated"]);
+            Statuses(lost, "rasterPins").ShouldBe(["conflict"]);
+            Revision(lost, "rasterPins", contestedPin).ShouldBe(Revision(won, "rasterPins", contestedPin));
+        }
+
+        var page = await GetPageAsync(uploader, $"/api/v1/sync/sets/{set}/rasters");
+        Map(page, contestedMap).GetProperty("title").GetString().ShouldBe("The first phone's plan");
+        var pin = Map(page, contestedMap).GetProperty("pins").EnumerateArray()
+            .Single(p => p.GetProperty("id").GetGuid() == contestedPin);
+        pin.GetProperty("x").GetInt32().ShouldBe(21);
+    }
+
+    private static Task<HttpResponseMessage> PostAsync(
+        HttpClient client, Guid set, IReadOnlyList<object>? maps = null, IReadOnlyList<object>? pins = null) =>
+        client.PostAsJsonAsync($"/api/v1/sync/sets/{set}/upload", new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            rasterMaps = maps,
+            rasterPins = pins,
+        });
+
+    private static async Task<JsonElement> AnswerOf(HttpResponseMessage response)
+    {
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement.Clone();
+    }
+
+    [Fact]
     public async Task Rows_that_cannot_be_written_are_refused_with_their_own_codes_and_nothing_is_stored()
     {
         var cave = await CreateCaveAsync(locationProtected: false);

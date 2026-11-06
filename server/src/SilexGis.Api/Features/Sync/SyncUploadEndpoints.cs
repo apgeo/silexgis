@@ -301,6 +301,20 @@ public static class SyncUploadEndpoints
                 ? TypedResults.Ok(stored)
                 : ApiProblems.Conflict("sync.batch_conflict", "That batch is already being applied. Send it again.");
         }
+        catch (Exception e) when (IsRowCollision(e))
+        {
+            // A row this upload creates under the device's identifier was created meanwhile by
+            // another upload still in flight when this one looked — the same rows resent under a
+            // new batch identifier while the first attempt was still being applied. This upload's
+            // insert waited for that one and then found the identifier taken. Nothing is kept, and
+            // the phone is told what it is told when the same batch arrives twice at once: send it
+            // again, when the row is found already here and answered "unchanged".
+            await transaction.RollbackAsync(ct);
+            db.ChangeTracker.Clear();
+            return ApiProblems.Conflict(
+                "sync.batch_conflict",
+                "A row in this batch was being created by another upload at the same time. Send it again.");
+        }
         catch (FeatureWriteException e)
         {
             // An item-level refusal is answered per item; reaching here means the write service
@@ -528,6 +542,19 @@ public static class SyncUploadEndpoints
     /// Whether a failed save is the same batch arriving twice, rather than any other constraint.
     /// Matched on the index by name so a different violation is not reported as a resend.
     /// </summary>
+    /// <summary>
+    /// A primary key taken by a concurrent create. Every row a phone creates is keyed by the
+    /// identifier the phone minted, so two uploads carrying the same row can race to insert it;
+    /// identifiers this server mints itself never collide.
+    /// </summary>
+    private static bool IsRowCollision(Exception e) =>
+        e is DbUpdateException { InnerException: PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: { } constraint,
+        } }
+        && constraint.StartsWith("pk_", StringComparison.Ordinal);
+
     private static bool IsBatchCollision(Exception e) =>
         e is DbUpdateException { InnerException: PostgresException
         {

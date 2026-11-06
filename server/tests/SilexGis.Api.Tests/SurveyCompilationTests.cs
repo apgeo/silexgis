@@ -224,6 +224,71 @@ public sealed class SurveyCompilationTests : IAsyncLifetime, IDisposable, IClass
     }
 
     [Fact]
+    public async Task A_reading_the_queue_gives_up_on_leaves_the_record_unreadable_rather_than_pending_for_good()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        _ = await ArchiveLogAsync(caveId, "compilation.log", LogText());
+        (await OneAsync(owner, caveId)).GetProperty("status").GetString().ShouldBe("pending");
+
+        // The process reading the log died under it on the last attempt the queue allows.
+        var jobId = await ReadingJobOfAsync(caveId);
+        await StaleJobSweep.LoseOnLastAttemptAsync(factory.Services, jobId);
+        await StaleJobSweep.SweepAsync(factory.Services, ProcessingJobKinds.SurveyCompilation);
+
+        var record = await OneAsync(owner, caveId);
+        record.GetProperty("status").GetString().ShouldBe("unreadable");
+        record.GetProperty("readError").GetString()
+            .ShouldBe("It was interrupted on every attempt it was allowed, and was stopped.");
+        record.GetProperty("outcome").ValueKind.ShouldBe(JsonValueKind.Null);
+        record.GetProperty("loops").GetArrayLength().ShouldBe(0);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.ProcessingJobs.AsNoTracking().SingleAsync(j => j.Id == jobId)).Status
+            .ShouldBe(ProcessingJobStatus.Failed);
+    }
+
+    [Fact]
+    public async Task A_reading_given_up_while_a_newer_one_is_queued_leaves_the_record_to_the_newer_one()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        _ = await ArchiveLogAsync(caveId, "compilation.log", LogText());
+        var lost = await ReadingJobOfAsync(caveId);
+
+        // A corrected revision queued a second reading of the same record while the first was
+        // still running; the first is then given up. The record is the newer reading's to settle.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var payload = await db.ProcessingJobs.Where(j => j.Id == lost).Select(j => j.Payload).SingleAsync();
+            db.ProcessingJobs.Add(new ProcessingJob { Kind = ProcessingJobKinds.SurveyCompilation, Payload = payload });
+            await db.SaveChangesAsync();
+        }
+
+        await StaleJobSweep.LoseOnLastAttemptAsync(factory.Services, lost);
+        await StaleJobSweep.SweepAsync(factory.Services, ProcessingJobKinds.SurveyCompilation);
+
+        (await OneAsync(owner, caveId)).GetProperty("status").GetString().ShouldBe("pending");
+
+        // And the newer reading, when it runs, reads it.
+        await RunReadingAsync(caveId);
+        (await OneAsync(owner, caveId)).GetProperty("status").GetString().ShouldBe("read");
+    }
+
+    /// <summary>The reading job archiving a cave's log queued.</summary>
+    private async Task<long> ReadingJobOfAsync(Guid caveId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var id = await db.SurveyCompilations.Where(c => c.CaveFeatureId == caveId).Select(c => c.Id).SingleAsync();
+        var jobs = await db.ProcessingJobs.AsNoTracking()
+            .Where(j => j.Kind == ProcessingJobKinds.SurveyCompilation && j.Status == ProcessingJobStatus.Queued)
+            .ToListAsync();
+        return jobs.Single(j =>
+            JsonSerializer.Deserialize<SurveyCompilationPayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyCompilationId == id).Id;
+    }
+
+    [Fact]
     public async Task An_archived_source_that_is_not_a_log_gets_no_compilation_record()
     {
         var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
