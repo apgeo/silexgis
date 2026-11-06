@@ -55,7 +55,8 @@ export const groups = {
   events: [
     'EventAccessDomainTests', 'EventAuthoringTests', 'EventInvitationTests',
     'EventLifecycleTests', 'EventPolymorphicTests', 'EventReminderSweepTests',
-    'EventSeriesBulkTests', 'EventSeriesTests', 'TripInvitationSubjectTests',
+    'EventSeriesBulkTests', 'EventSeriesHouseDayTests', 'EventSeriesTests',
+    'TripInvitationSubjectTests',
   ],
   expeditions: [
     'ExpeditionDeleteCleanupTests',
