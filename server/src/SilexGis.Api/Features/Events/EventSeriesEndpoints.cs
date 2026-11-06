@@ -283,6 +283,28 @@ public static class EventSeriesEndpoints
 
                 moved.Add((row, DateOnly.FromDayNumber((int)number)));
             }
+
+            // The rule the generator holds a create and a re-spacing to: an occurrence still
+            // running on the day the next begins. A move keeps the gaps between the rows, so what
+            // can make two run into each other is the length the edit gives every one of them.
+            // A pair that already ran into each other before the edit — somebody moved one
+            // occurrence onto its neighbour by hand — is left to be, so that a run in that state
+            // can still be retitled; the edit is refused only for a collision it would create.
+            for (var i = 1; i < moved.Count; i++)
+            {
+                var (previous, previousStart) = moved[i - 1];
+                var (next, nextStart) = moved[i];
+                var collides = previousStart.DayNumber + span >= nextStart.DayNumber;
+                var collidedBefore = (previous.EndDate ?? previous.StartDate) >= next.StartDate;
+                if (collides && !collidedBefore)
+                {
+                    return ApiProblems.BadRequest(
+                        EventRecurrence.OverlappingCode,
+                        $"Each occurrence would run {span + 1} days, so the one beginning on "
+                        + $"{previousStart:yyyy-MM-dd} would still be running when the next begins on "
+                        + $"{nextStart:yyyy-MM-dd}. Nothing was moved. Make the event shorter.");
+                }
+            }
         }
 
         foreach (var (row, start) in moved)

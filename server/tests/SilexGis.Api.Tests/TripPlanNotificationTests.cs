@@ -151,6 +151,39 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
+    /// Somebody who answered a trip nobody asked them on already has a row, but has never been
+    /// asked. The first asking afterwards is still the first: it sends the invitation, and it tells
+    /// whoever can open the trip's cave that the person asked cannot. Asking once more sends neither
+    /// again.
+    /// </summary>
+    [Fact]
+    public async Task Asking_somebody_who_already_answered_unasked_sends_the_first_asking_once()
+    {
+        var caveName = $"Peștera Nechemată {Guid.NewGuid():N}"[..34];
+        var caveId = await CreateCaveAsync(caveName, keeper);
+        await GrantCaveReadAsync(caveId, organiserId);
+
+        var trip = await CreatePlanAsync("Answered before asked", caveId);
+        await ProposeAsync(trip);
+        await GrantReadAsync(trip, mateId);
+        (await mate.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        (await mate.PutAsJsonAsync(
+                $"/api/v1/trip-logs/{trip}/invitations/{mateCaver}/response",
+                new { response = "maybe", note = (string?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await NoticesForAsync(mateId, MessageTemplateCatalog.NotifyTripPlanInvitation)).ShouldBeEmpty();
+        (await CaveNoticesForAsync(keeperId, caveId)).ShouldBeEmpty();
+
+        (await InviteAsync(organiser, trip, mateCaver)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await InviteAsync(organiser, trip, mateCaver)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await NoticesForAsync(mateId, MessageTemplateCatalog.NotifyTripPlanInvitation)).Count.ShouldBe(1);
+        (await CaveNoticesForAsync(keeperId, caveId)).Count.ShouldBe(1);
+        (await NoticesForAsync(strangerId, MessageTemplateCatalog.NotifyTripPlanInvitation)).ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// Somebody in the directory with no account is asked without error and told nothing: there is
     /// nowhere to tell them. The person beside them who holds an account is told, so the test is
     /// about the account and not about the invitation failing.

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Features.TripLogs;
@@ -53,8 +55,13 @@ public sealed class TripPromotionTests : IAsyncLifetime, IDisposable, IClassFixt
     /// <summary>People in the directory with no account between them, which is most of a club.</summary>
     private readonly List<Guid> cavers = [];
 
+    private readonly FailTheVersionStamp failStamp = new();
+
     public TripPromotionTests(PostgresFixture postgres) =>
-        factory = new SilexGisApiFactory(postgres.ConnectionString);
+        factory = new SilexGisApiFactory(
+            postgres.ConnectionString,
+            configureServices: services => services.ConfigureDbContext<SilexGisDbContext>(
+                options => options.AddInterceptors(failStamp)));
 
     public async ValueTask InitializeAsync()
     {
@@ -386,6 +393,63 @@ public sealed class TripPromotionTests : IAsyncLifetime, IDisposable, IClassFixt
             },
             fresh!);
         informed.StatusCode.ShouldBe(HttpStatusCode.OK, await informed.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// The rows a promotion writes and the version move that protects them are one act: when the
+    /// move fails, the rows are not left behind without it. Left behind, they would sit under a
+    /// version a stale full-roster edit still matches, and that edit would delete them.
+    /// </summary>
+    [Fact]
+    public async Task A_promotion_whose_version_move_fails_writes_nobody()
+    {
+        var trip = await CreatePlanAsync("Version move fails", maxParticipants: null);
+
+        (await AnswerAsync(trip, cavers[0], "yes")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await AnswerAsync(trip, cavers[1], "yes")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await MoveAsync(trip, "done");
+
+        failStamp.Trip = trip;
+        HttpResponseMessage failed;
+        try
+        {
+            failed = await organiser.PostAsync(PromotePath(trip), null);
+        }
+        finally
+        {
+            failStamp.Trip = null;
+        }
+
+        failed.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        (await RosterAsync(trip)).ShouldBeEmpty();
+
+        // Asked again with nothing in the way, the same promotion writes both.
+        (await PromoteAsync(organiser, trip)).GetProperty("promoted").GetInt32().ShouldBe(2);
+        (await RosterAsync(trip)).Count.ShouldBe(2);
+    }
+
+    /// <summary>
+    /// Fails the statement that stamps one trip's row with a new update time, standing in for a
+    /// connection lost between a promotion's rows and its version move.
+    /// </summary>
+    private sealed class FailTheVersionStamp : DbCommandInterceptor
+    {
+        public Guid? Trip { get; set; }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Trip is { } id
+                && command.CommandText.TrimStart().StartsWith("UPDATE trip_logs", StringComparison.OrdinalIgnoreCase)
+                && command.CommandText.Contains("updated_at", StringComparison.OrdinalIgnoreCase)
+                && command.Parameters.Cast<DbParameter>().Any(p => p.Value is Guid g && g == id))
+            {
+                throw new InvalidOperationException("The trip's version move was made to fail.");
+            }
+
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
     }
 
     // ---- helpers

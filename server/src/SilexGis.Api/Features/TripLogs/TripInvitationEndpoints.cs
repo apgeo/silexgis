@@ -242,6 +242,11 @@ public static class TripInvitationEndpoints
 
         var invitation = existing ?? new TripInvitation { TripLogId = tripLogId, CaverId = request.CaverId };
 
+        // Asked before the stamps below fill it in. A row can exist without ever having been
+        // asked — somebody who saw the trip and answered it on their own — and the first time
+        // they are actually asked is still the first asking.
+        var firstAsking = invitation.InvitedAt is null;
+
         // First asked wins on both stamps: asking a second time is a reminder, and a record of
         // when somebody was asked that moved every time they were nudged would answer the wrong
         // question about how long they have had to reply.
@@ -251,6 +256,10 @@ public static class TripInvitationEndpoints
         if (existing is null)
         {
             db.TripInvitations.Add(invitation);
+        }
+
+        if (firstAsking)
+        {
             // Only the first asking is worth a message, and it is queued before the save so that
             // one exists only if the asking committed. The trip's state is not consulted: being
             // asked is somebody's deliberate act with this person in mind, unlike a name arriving
@@ -581,6 +590,7 @@ public static class TripInvitationEndpoints
     private static async Task<Results<Ok<TripPromotionDto>, UnauthorizedHttpResult, ProblemHttpResult>>
         PromoteAsync(
             Guid tripLogId,
+            HttpContext http,
             SilexGisDbContext db,
             IAccessService access,
             IAccessContextAccessor accessAccessor,
@@ -616,6 +626,19 @@ public static class TripInvitationEndpoints
             return ApiProblems.Conflict(
                 PromoteTooEarlyCode,
                 "A trip's list of people records who was on it, so it is written once the trip has happened.");
+        }
+
+        // The trip's row is held from here to the answer, in one transaction with everything this
+        // writes. The rows written below and the version move that protects them are then one
+        // act: a full-roster save holds the same row, so it either finished before the answers
+        // are read here or waits and then finds the version moved, and nothing is left written
+        // under a version a stale save still matches. Offered rather than required, because the
+        // button carries no version; a caller who does send one is held to it.
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.TripLogs, tripLogId, ct);
+        if (hold.Refusal is { } stale)
+        {
+            return stale;
         }
 
         var rows = await db.TripInvitations.AsNoTracking()
@@ -706,6 +729,8 @@ public static class TripInvitationEndpoints
         await db.TripLogs
             .Where(x => x.Id == tripLogId)
             .ExecuteUpdateAsync(u => u.SetProperty(x => x.UpdatedAt, DateTimeOffset.UtcNow), ct);
+
+        await hold.AnswerAsync(ct, $"/api/v1/trip-logs/{tripLogId}");
 
         return TypedResults.Ok(new TripPromotionDto
         {
