@@ -45,6 +45,13 @@ public sealed class DemSamplerTests : IDisposable
 
     private const int LongitudeLatitude = 4326;
 
+    /// <summary>A pixel binary floating point holds exactly, for tests about exact edges.</summary>
+    private const double ExactPixel = 1.0 / 1024;
+
+    private static double ExactColumn(int x) => West + ((x + 0.5) * ExactPixel);
+
+    private static double ExactRow(int y) => North - ((y + 0.5) * ExactPixel);
+
     /// <summary>
     /// A directory of real published elevation rasters, if this machine has been pointed at one.
     /// </summary>
@@ -167,6 +174,93 @@ public sealed class DemSamplerTests : IDisposable
 
         answer.Outcome.ShouldBe(DemSampleOutcome.NoData);
         answer.ElevationM.ShouldBeNull();
+    }
+
+    /// <summary>
+    /// The outer half-pixel of a raster is covered ground, read as its edge pixel, and the outer
+    /// edge itself is inside: a point exactly on it is answered, and one a hair beyond is not.
+    /// </summary>
+    /// <remarks>
+    /// The edge tests use a pixel that binary floating point holds exactly, so "exactly on the
+    /// edge" and "exactly on a pixel centre" are the points asked about rather than their nearest
+    /// neighbours a rounding error away.
+    /// </remarks>
+    [Fact]
+    public void The_rim_of_a_raster_reads_as_its_edge_pixel_up_to_and_including_its_outer_edge()
+    {
+        var coverage = Coverage(Raster("rim.tif", Height, pixel: ExactPixel));
+
+        // A quarter-pixel in from the west edge: between the edge and the first pixel centre, where
+        // there is no western neighbour, so the edge pixel is the whole answer.
+        var rim = One(coverage, new DemSamplePoint(West + (0.25 * ExactPixel), ExactRow(5)));
+        rim.Outcome.ShouldBe(DemSampleOutcome.Sampled);
+        rim.ElevationM!.Value.ShouldBe(Height(0, 5), 0.001);
+
+        var onWest = One(coverage, new DemSamplePoint(West, ExactRow(5)));
+        onWest.Outcome.ShouldBe(DemSampleOutcome.Sampled);
+        onWest.ElevationM!.Value.ShouldBe(Height(0, 5), 0.001);
+
+        var east = West + (16 * ExactPixel);
+        var onEast = One(coverage, new DemSamplePoint(east, ExactRow(5)));
+        onEast.Outcome.ShouldBe(DemSampleOutcome.Sampled);
+        onEast.ElevationM!.Value.ShouldBe(Height(15, 5), 0.001);
+
+        var onNorth = One(coverage, new DemSamplePoint(ExactColumn(3), North));
+        onNorth.Outcome.ShouldBe(DemSampleOutcome.Sampled);
+        onNorth.ElevationM!.Value.ShouldBe(Height(3, 0), 0.001);
+
+        One(coverage, new DemSamplePoint(east + 1e-9, ExactRow(5))).Outcome
+            .ShouldBe(DemSampleOutcome.OutsideCoverage);
+        One(coverage, new DemSamplePoint(West - 1e-9, ExactRow(5))).Outcome
+            .ShouldBe(DemSampleOutcome.OutsideCoverage);
+    }
+
+    /// <summary>
+    /// Two rasters of one resolution that meet along an edge both hold a point on it, and the first
+    /// listed answers with its own edge pixel; a point just past the edge is the second's alone.
+    /// </summary>
+    [Fact]
+    public void A_point_on_the_edge_two_rasters_share_is_answered_by_the_first_listed()
+    {
+        var seam = West + (16 * ExactPixel);
+        var western = Describe(Raster("western.tif", Height, pixel: ExactPixel));
+        var eastern = Describe(Raster("eastern.tif", (x, y) => 5000f + x + y, pixel: ExactPixel, west: seam));
+        var coverage = new TerrainCoverage([western, eastern], TerrainHeightDatum.Orthometric, 0);
+
+        var onSeam = One(coverage, new DemSamplePoint(seam, ExactRow(5)));
+        onSeam.Outcome.ShouldBe(DemSampleOutcome.Sampled);
+        onSeam.ElevationM!.Value.ShouldBe(Height(15, 5), 0.001);
+
+        var reversed = new TerrainCoverage([eastern, western], TerrainHeightDatum.Orthometric, 0);
+        One(reversed, new DemSamplePoint(seam, ExactRow(5))).ElevationM!.Value.ShouldBe(5005, 0.001);
+
+        var past = One(coverage, new DemSamplePoint(seam + (0.5 * ExactPixel), ExactRow(5)));
+        past.ElevationM!.Value.ShouldBe(5005, 0.001);
+    }
+
+    /// <summary>
+    /// A hole beside a point that sits exactly on a pixel centre contributes nothing to it — its
+    /// weight is zero — so the point is answered with that pixel's height rather than as no data.
+    /// </summary>
+    [Fact]
+    public void A_hole_beside_a_pixel_centre_does_not_take_its_height_away()
+    {
+        var coverage = Coverage(Raster(
+            "holed-centre.tif",
+            (x, y) => x == 8 ? (float)TerrainRasterPreparation.VoidValue : Height(x, y),
+            pixel: ExactPixel));
+
+        var centre = One(coverage, new DemSamplePoint(ExactColumn(7), ExactRow(5)));
+        centre.Outcome.ShouldBe(DemSampleOutcome.Sampled);
+        centre.ElevationM!.Value.ShouldBe(Height(7, 5), 0.001);
+
+        // The same from the other side of the hole, where the void is the western neighbour.
+        One(coverage, new DemSamplePoint(ExactColumn(9), ExactRow(5))).ElevationM!.Value
+            .ShouldBe(Height(9, 5), 0.001);
+
+        // And a little off the centre towards the hole, where it does weigh in, is no data.
+        One(coverage, new DemSamplePoint(ExactColumn(7) + (ExactPixel / 8), ExactRow(5))).Outcome
+            .ShouldBe(DemSampleOutcome.NoData);
     }
 
     [Fact]
@@ -452,8 +546,10 @@ public sealed class DemSamplerTests : IDisposable
     /// </para>
     /// <para>
     /// Written here rather than committed: it is a few megabytes of arithmetic, and the whole
-    /// point is that what it holds is known by construction. Its own low resolution is the reason
-    /// the tolerance below is loose — the conversion resamples a three-arc-second grid.
+    /// point is that what it holds is known by construction. The plane is steep — two metres per
+    /// column, three per row — so that a raster registered half a pixel out, by its area rather
+    /// than by its sample points, answers a metre or more away, and the tolerance is well inside
+    /// that: interpolation over a plane is exact, so resampling costs nothing measurable.
     /// </para>
     /// </remarks>
     [Fact]
@@ -467,7 +563,7 @@ public sealed class DemSamplerTests : IDisposable
 
         // A plane rising to the east and falling to the north, so that reading rows or bytes the
         // wrong way round answers a different number rather than the same one.
-        static short At(int column, int row) => (short)(500 + (column / 4) - (row / 8));
+        static short At(int column, int row) => (short)(1000 + (2 * column) - (3 * row));
 
         var bytes = new byte[side * side * 2];
         for (var row = 0; row < side; row++)
@@ -497,7 +593,12 @@ public sealed class DemSamplerTests : IDisposable
         var answer = One(coverage, point);
 
         answer.Outcome.ShouldBe(DemSampleOutcome.Sampled);
-        answer.ElevationM!.Value.ShouldBe(At(300, 300), 2);
+        answer.ElevationM!.Value.ShouldBe(At(300, 300), 0.25);
+
+        // And between samples, where the plane says exactly what lies there.
+        var between = One(coverage, new DemSamplePoint(25 + (600.5 * degree), 46 - (400.5 * degree)));
+        between.Outcome.ShouldBe(DemSampleOutcome.Sampled);
+        between.ElevationM!.Value.ShouldBe(1000 + (2 * 600.5) - (3 * 400.5), 0.25);
     }
 
     /// <summary>

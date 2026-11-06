@@ -118,6 +118,7 @@ public static class MePreferenceEndpoints
 
     public const string TooLargeCode = "preferences.too_large";
     public const string InvalidCode = "preferences.invalid";
+    public const string BusyCode = "preferences.busy";
 
     /// <summary>How often a merge is retried when another write to the same account landed first.</summary>
     private const int MergeAttempts = 3;
@@ -126,6 +127,7 @@ public static class MePreferenceEndpoints
         UiPreferencesWriteRequest request,
         IUserContextAccessor userAccessor,
         SilexGisDbContext db,
+        TimeProvider clock,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -135,14 +137,17 @@ public static class MePreferenceEndpoints
         }
 
         var patch = JsonNode.Parse(request.Preferences.GetRawText());
-        for (var attempt = 1; ; attempt++)
+        for (var attempt = 1; attempt <= MergeAttempts; attempt++)
         {
-            var account = await db.Users.FirstAsync(u => u.Id == user.UserId, ct);
+            var stored = await db.Users.AsNoTracking()
+                .Where(u => u.Id == user.UserId)
+                .Select(u => u.UiPreferences)
+                .FirstAsync(ct);
             string merged;
             try
             {
                 merged = UiPreferencesWriteRequestValidator.Written(
-                    JsonMergePatch.Apply(JsonNode.Parse(account.UiPreferences), patch)!);
+                    JsonMergePatch.Apply(JsonNode.Parse(stored), patch)!);
             }
             catch (Exception e) when (e is ArgumentException or InvalidOperationException)
             {
@@ -156,20 +161,25 @@ public static class MePreferenceEndpoints
                 return ApiProblems.BadRequest(TooLargeCode, "Preferences are too large.");
             }
 
-            account.UiPreferences = merged;
-            // The account row's concurrency stamp is what makes two merges at once safe: each
-            // write moves it, so the later of two writes that read the same document is refused
-            // and merges again over what the earlier one stored, instead of writing over it.
-            account.ConcurrencyStamp = Guid.NewGuid().ToString();
-            try
+            // Written only if the document is still the one this merge read, so the later of two
+            // merges that read the same document merges again over what the earlier one stored
+            // instead of writing over it. The check is on the document itself and deliberately
+            // not on the account row's concurrency stamp: the client writes these on a timer, and
+            // moving the stamp on every write made each profile, language or avatar save that had
+            // read the account a moment earlier fail as a concurrency conflict. Those other saves
+            // leave this column out of their UPDATE (the entity configuration says so), so one
+            // that loaded the account before this write cannot put the old document back.
+            var written = await db.Users
+                .Where(u => u.Id == user.UserId && u.UiPreferences == stored)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(x => x.UiPreferences, merged)
+                    .SetProperty(x => x.UpdatedAt, clock.GetUtcNow()), ct);
+            if (written == 1)
             {
-                await db.SaveChangesAsync(ct);
                 return TypedResults.Ok(new UiPreferencesDto(JsonSerializer.Deserialize<JsonElement>(merged)));
             }
-            catch (DbUpdateConcurrencyException) when (attempt < MergeAttempts)
-            {
-                db.ChangeTracker.Clear();
-            }
         }
+
+        return ApiProblems.Conflict(BusyCode, "Preferences were being written elsewhere; try again.");
     }
 }

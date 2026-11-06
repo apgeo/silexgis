@@ -8,10 +8,11 @@ import type { RasterMapInfo } from '../../api/hooks.ts';
 import { worldToken } from '../../filters/worldList.ts';
 import type { FilterNode } from '../../filters/types.ts';
 
-const { queryCalls, updateSpy, listCalls } = vi.hoisted(() => ({
+const { queryCalls, updateSpy, listCalls, can } = vi.hoisted(() => ({
   queryCalls: [] as { body: unknown; enabled: boolean }[],
   updateSpy: vi.fn(),
   listCalls: [] as Record<string, unknown>[],
+  can: { value: true },
 }));
 
 const hit = (id: string, title: string) =>
@@ -42,7 +43,7 @@ const raster = (caveFeatureId: string | null): RasterMapInfo => ({
 let rows: RasterMapInfo[] = [];
 
 vi.mock('../../api/hooks.ts', () => ({
-  useCan: () => true,
+  useCan: () => can.value,
   useRasterMaps: (params: Record<string, unknown>) => (listCalls.push(params), { data: { items: rows, page: 1, pageSize: 20, totalItems: rows.length }, isFetching: false, isError: false }),
   useUploadRasterMap: () => ({ mutateAsync: vi.fn() }),
   useDeleteRasterMap: () => ({ mutateAsync: vi.fn() }),
@@ -176,5 +177,40 @@ describe('RasterMapsTab — the list filter', () => {
     const wrongWorld = worldToken('geofile', kindIs('gpx'))!;
     mountAt(`&filter=${wrongWorld}`);
     expect(listCalls.at(-1)?.filter).toBeUndefined();
+  });
+});
+
+describe('RasterMapsTab — without the right to change maps', () => {
+  afterEach(() => {
+    cleanup();
+    can.value = true;
+  });
+
+  function mount() {
+    rows = [raster(null)];
+    const { container } = render(
+      <MemoryRouter>
+        <App>
+          <RasterMapsTab />
+        </App>
+      </MemoryRouter>,
+    );
+    return container;
+  }
+
+  it('offers the edit, delete and upload controls to an account that may use them', () => {
+    const container = mount();
+    expect(container.querySelector('.anticon-edit')).not.toBeNull();
+    expect(container.querySelector('.anticon-delete')).not.toBeNull();
+    expect(container.querySelector('.ant-upload-drag')).not.toBeNull();
+  });
+
+  it('offers none of them to an account that may only read', () => {
+    can.value = false;
+    const container = mount();
+    expect(screen.getByText('Harta 1')).toBeTruthy();
+    expect(container.querySelector('.anticon-edit')).toBeNull();
+    expect(container.querySelector('.anticon-delete')).toBeNull();
+    expect(container.querySelector('.ant-upload-drag')).toBeNull();
   });
 });

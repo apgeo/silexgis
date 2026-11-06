@@ -3,6 +3,7 @@ using System.Text;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 using SilexGis.Domain.Import;
+using SilexGis.Domain.Import.TripCsv;
 
 namespace SilexGis.Infrastructure.Geodata;
 
@@ -23,9 +24,43 @@ public static class DelimitedVectorReader
     /// <summary>Guard on a hand-made file: a row this wide is a parse gone wrong, not data.</summary>
     private const int MaxColumns = 512;
 
+    /// <summary>
+    /// The largest delimited file read. The whole file is decoded before a row is split — strict
+    /// UTF-8 is an exact test only over complete text — so a read holds the bytes and their text
+    /// together, about three times the file; this keeps that bounded. A spreadsheet of positions
+    /// this size is several hundred thousand rows, far beyond anything typed or exported by hand.
+    /// </summary>
+    public const long MaxBytes = 64L * 1024 * 1024;
+
+    /// <summary>The most data rows read from one delimited file, for the same reason.</summary>
+    public const int MaxRows = 500_000;
+
+    /// <summary>How many of the header's columns the "no coordinates" message names.</summary>
+    internal const int ColumnsNamedInMessage = 20;
+
+    /// <summary>How much of one column's heading the message keeps.</summary>
+    internal const int ColumnNameLengthInMessage = 60;
+
+    /// <summary>
+    /// The header as the "no coordinates" message names it. A spreadsheet can carry hundreds of
+    /// columns, and the message is stored on the geofile in a bounded column, so it names the
+    /// first few, each cut short, and says how many more there are; the full list is what the
+    /// geofile's columns route answers.
+    /// </summary>
+    private static string ColumnsFound(IReadOnlyList<string> header)
+    {
+        var named = header
+            .Take(ColumnsNamedInMessage)
+            .Select(h => h.Length <= ColumnNameLengthInMessage ? h : h[..ColumnNameLengthInMessage] + "…");
+        var list = string.Join(", ", named);
+        return header.Count <= ColumnsNamedInMessage
+            ? list
+            : $"{list} and {header.Count - ColumnsNamedInMessage} more (the geofile's column list names them all)";
+    }
+
     public static VectorDataset Read(string absolutePath, DelimitedSourceOptions? options)
     {
-        var lines = ReadRows(absolutePath, options?.Delimiter);
+        var lines = ReadRows(absolutePath, options?.Delimiter, options?.Encoding);
         if (lines.Header.Count == 0)
         {
             throw new VectorIOException("The file has no header row.");
@@ -43,7 +78,7 @@ public static class DelimitedVectorReader
             // into something the importer can act on without opening the file in a text editor.
             throw new VectorIOException(
                 "No coordinate columns were recognised. Name the latitude and longitude columns and read the "
-                + $"file again. Columns found: {string.Join(", ", lines.Header)}.");
+                + $"file again. Columns found: {ColumnsFound(lines.Header)}.");
         }
 
         var wktReader = new WKTReader();
@@ -88,8 +123,9 @@ public static class DelimitedVectorReader
     }
 
     /// <summary>The header of a delimited file, for a screen that asks which column is which.</summary>
-    public static IReadOnlyList<string> ReadHeader(string absolutePath, string? delimiter) =>
-        ReadRows(absolutePath, delimiter, headerOnly: true).Header;
+    public static IReadOnlyList<string> ReadHeader(
+        string absolutePath, string? delimiter, TripCsvEncoding? encoding = null) =>
+        ReadRows(absolutePath, delimiter, encoding, headerOnly: true).Header;
 
     private static Geometry? ParseWkt(WKTReader reader, string? value)
     {
@@ -154,13 +190,21 @@ public static class DelimitedVectorReader
     }
 
     private static (List<string> Header, List<List<string>> Rows) ReadRows(
-        string absolutePath, string? delimiter, bool headerOnly = false)
+        string absolutePath, string? delimiter, TripCsvEncoding? encoding, bool headerOnly = false)
     {
         // Detected rather than assumed: UTF-8 is the common case, but a file saved out of a
-        // Romanian Excel is often Windows-1250 or -1252, and reading those as UTF-8 turns every
-        // diacritic into a replacement character — which the term folding would then quietly
-        // fail to match.
-        using var reader = new StreamReader(absolutePath, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        // Romanian Excel is Windows-1250 with no byte-order mark, and reading that as UTF-8 does
+        // not fail - every diacritic becomes a replacement character, in the column names the
+        // term folding then quietly fails to match and in every stored property. So the whole
+        // file is decoded through the shared ladder (a mark, then strict UTF-8, then a guess
+        // between the Central European code pages) before a single row is split. The whole file
+        // rather than a prefix, because strict UTF-8 is only an exact test over complete text: a
+        // cut taken mid-sequence would read as not-UTF-8, and a prefix of plain ASCII says
+        // nothing about the accented rows after it. The header-only read decodes the same way,
+        // so the columns a picker offers are spelled exactly as the import will match them. An
+        // encoding the uploader named is used as named, without detection.
+        var text = TripCsvEncodings.Decode(ReadBounded(absolutePath), encoding).Text;
+        using var reader = new StringReader(text);
         var firstLine = reader.ReadLine();
         if (firstLine is null)
         {
@@ -189,11 +233,32 @@ public static class DelimitedVectorReader
                     continue;
                 }
 
+                if (rows.Count == MaxRows)
+                {
+                    throw new VectorIOException(
+                        $"The file holds more than {MaxRows:N0} data rows; at most that many are read. "
+                        + "Split it into smaller files.");
+                }
+
                 rows.Add(SplitRow(line, separator).Fields);
             }
         }
 
         return (header, rows);
+    }
+
+    /// <summary>The file's bytes, refused before they are read when there are more than are read.</summary>
+    private static byte[] ReadBounded(string absolutePath)
+    {
+        var length = new FileInfo(absolutePath).Length;
+        if (length > MaxBytes)
+        {
+            throw new VectorIOException(
+                $"The file is {length / (1024 * 1024)} MB; a delimited file is read up to "
+                + $"{MaxBytes / (1024 * 1024)} MB. Split it into smaller files.");
+        }
+
+        return File.ReadAllBytes(absolutePath);
     }
 
     /// <summary>
@@ -203,11 +268,11 @@ public static class DelimitedVectorReader
     /// <c>45°42'36"N</c> carries one quote mark in an unquoted field, and counting would read
     /// it as an unterminated string and swallow the next row.
     /// </summary>
-    private static string? ReadLogicalLine(StreamReader reader, char separator) =>
+    private static string? ReadLogicalLine(TextReader reader, char separator) =>
         reader.ReadLine() is { } line ? CompleteRecord(reader, line, separator) : null;
 
     /// <summary>Reads on until the record is closed, or the file ends.</summary>
-    private static string CompleteRecord(StreamReader reader, string firstLine, char separator)
+    private static string CompleteRecord(TextReader reader, string firstLine, char separator)
     {
         var builder = new StringBuilder(firstLine);
         while (!SplitRow(builder.ToString(), separator).Complete)

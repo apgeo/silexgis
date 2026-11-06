@@ -18,8 +18,11 @@ import { gotoRoute, login, confirmOk } from './helpers.ts';
 //     service running against the same directories the application writes to. That service is a
 //     container sharing a volume with the containerised application, while this suite drives an
 //     application run straight from a build output on the developer's own disk — the two never meet.
-//     So that leg is not covered here; what covers it is the server-side tests that run the phases
-//     themselves, against the real tool.
+//     So that leg is not covered here, and it is not covered by the server-side tests either:
+//     those run every phase, but the tile maker in them is a stand-in that writes a made-up pyramid
+//     into the handover directory. The supervisor's flags are tested against such a stand-in and
+//     the pyramid check against pyramids the tests fabricate, so neither is ever tested against the
+//     real tool's output. A real bake is proved only by running the worker image by hand.
 
 /** The map the rectangle is drawn on. It opens over Braşov, so anything near its middle is land. */
 const AREA_MAP = '[data-testid="terrain-area-map"]';

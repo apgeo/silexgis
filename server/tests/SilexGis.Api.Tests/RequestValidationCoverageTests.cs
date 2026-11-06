@@ -37,8 +37,6 @@ public sealed class RequestValidationCoverageTests : IClassFixture<PostgresFixtu
         // validator bounds it.
         "POST /api/v1/filters/query",
         "POST /api/v1/filters/resolve",
-        // Re-importing a geodata file with new options.
-        "POST /api/v1/geofiles/{id:guid}/reimport",
     };
 
     /// <summary>

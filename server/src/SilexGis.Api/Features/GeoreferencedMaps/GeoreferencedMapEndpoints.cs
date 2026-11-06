@@ -63,6 +63,17 @@ public sealed class GeoreferencedMapUpdateRequestValidator : AbstractValidator<G
         RuleFor(x => x.DefaultOpacity).InclusiveBetween(0, 1);
         RuleFor(x => x.MinZoom).InclusiveBetween(0, 24).When(x => x.MinZoom is not null);
         RuleFor(x => x.MaxZoom).InclusiveBetween(0, 24).When(x => x.MaxZoom is not null);
+        RuleFor(x => x.MaxZoom).GreaterThanOrEqualTo(x => x.MinZoom!.Value)
+            .When(x => x.MinZoom is not null && x.MaxZoom is not null)
+            .WithMessage("The largest zoom cannot be below the smallest.");
+        RuleFor(x => x.MapKind).IsInEnum();
+        RuleFor(x => x.Visibility).IsInEnum();
+
+        // Club visibility says "the club this belongs to may read it", so it needs a club to
+        // name; without one it would be a band that admits nobody, silently.
+        RuleFor(x => x.CavingGroupId).NotNull()
+            .When(x => x.Visibility == Visibility.CavingGroup)
+            .WithMessage("Caving-group visibility needs a caving group.");
     }
 }
 
@@ -70,6 +81,15 @@ public static class GeoreferencedMapEndpoints
 {
     /// <summary>Rasters are big; scanned map sheets regularly exceed the default body limit.</summary>
     private const long MaxUploadBytes = RasterUploadLimits.MaxRasterBytes;
+
+    /// <summary>What the stored-file row holds of the uploaded file's own name.</summary>
+    private const int MaxOriginalNameLength = 255;
+
+    /// <summary>What the map row holds of its display name; the update rule allows the same.</summary>
+    private const int MaxNameLength = 200;
+
+    private static string Clipped(string value, int length) =>
+        value.Length <= length ? value : value[..(char.IsHighSurrogate(value[length - 1]) ? length - 1 : length)];
 
     public static RouteGroupBuilder MapGeoreferencedMapEndpoints(this RouteGroupBuilder api)
     {
@@ -131,6 +151,16 @@ public static class GeoreferencedMapEndpoints
             return ApiProblems.BadRequest("georeferenced_map.size_invalid", "The file is empty or exceeds 512 MB.");
         }
 
+        // Checked before the blob is written: a name the stored-file row cannot hold would
+        // otherwise fail the save after the bytes are on disk, answering 500 and leaving a file
+        // nothing names.
+        if (Path.GetFileName(file.FileName).Length > MaxOriginalNameLength)
+        {
+            return ApiProblems.BadRequest(
+                "georeferenced_map.file_name_too_long",
+                $"The file name is longer than {MaxOriginalNameLength} characters; rename the file and upload it again.");
+        }
+
         string storagePath;
         await using (var content = file.OpenReadStream())
         {
@@ -143,7 +173,9 @@ public static class GeoreferencedMapEndpoints
             sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(saved, ct));
         }
 
-        var name = Path.GetFileNameWithoutExtension(file.FileName);
+        // The display name is only a starting point the owner can edit, so a long one is cut to
+        // what the column holds rather than refused.
+        var name = Clipped(Path.GetFileNameWithoutExtension(file.FileName), MaxNameLength);
         var stored = documents.Create(
             new StoredContent(
                 storagePath, Path.GetFileName(file.FileName), "image/tiff", file.Length, sha256, FileKind.Raster),
@@ -332,9 +364,15 @@ public static class GeoreferencedMapEndpoints
                 : ApiProblems.NotFound("georeferenced_map.not_found");
         }
 
-        // Stored files (upload + COG) are immutable and stay; only the catalog entry goes.
+        // Stored files (upload + COG) are immutable and stay; only the catalog entry goes, with
+        // the rows that point at it by kind and id — files attached to it, tags on it, and its
+        // place in a relation. Those have no foreign key, so nothing else removes them, and they
+        // go in one transaction with the map so a failed save leaves the map whole.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await PolymorphicRowCleanup.RemoveRowsPointingAtAsync(db, AttachedEntityType.GeoreferencedMap, [map.Id], ct);
         db.GeoreferencedMaps.Remove(map);
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return TypedResults.NoContent();
     }
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Identity;
@@ -37,6 +38,15 @@ public sealed class SilexGisUserConfiguration : IEntityTypeConfiguration<SilexGi
         // An empty string is not valid jsonb, so this column's type-default is wrong for a row
         // that does not name it.
         builder.Property(x => x.UiPreferences).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+
+        // The interface preferences have exactly one writer after the row exists: the preference
+        // merge, a conditional bulk update that the client fires on a timer. Every other save of
+        // an account leaves the column out of its UPDATE. That matters for the identity user
+        // manager, which marks every column of the row modified and writes back what it loaded;
+        // without this, a password change, a sent code or a two-factor switch would silently put
+        // back a preference document that a timer write had replaced in the meantime. Bulk
+        // updates are not affected by this setting.
+        builder.Property(x => x.UiPreferences).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
 
         // Used when checking whether a file is somebody's avatar; most rows have none.
         builder.HasIndex(x => x.AvatarFileId).HasFilter("avatar_file_id IS NOT NULL");

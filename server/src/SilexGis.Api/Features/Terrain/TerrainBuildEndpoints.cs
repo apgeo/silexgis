@@ -171,7 +171,7 @@ public sealed record TerrainBuildSourceRequest(
 /// build covers it and the base's ground together; the base stays as it is.
 /// <para>
 /// The depth must be the base's: the addition cannot re-mesh the tiles already there at another
-/// one. Obtaining coverage is off unless asked for, because the base already holds it, and the
+/// one. Obtaining coverage is off, and asking for it is refused, because the base already holds it, and the
 /// heights are measured from whatever the base's are.
 /// </para>
 /// </param>
@@ -278,6 +278,12 @@ public static class TerrainBuildEndpoints
     /// <summary>The file sent is not one the raster tools here will open.</summary>
     public const string RasterUnsupportedCode = "terrain_build.raster_unsupported";
 
+    /// <summary>
+    /// The upload is a raster format that names its position only in a sidecar file one upload
+    /// cannot carry.
+    /// </summary>
+    public const string RasterNeedsSidecarCode = "terrain_build.raster_needs_sidecar";
+
     /// <summary>The file sent is empty, or larger than one raster may be.</summary>
     public const string RasterSizeInvalidCode = "terrain_build.raster_size_invalid";
 
@@ -363,10 +369,27 @@ public static class TerrainBuildEndpoints
     /// <remarks>
     /// Only while the extension is unfinished: it copies the base's pyramid when it bakes and puts
     /// the base's coverage back from the base's own manifest after, and both read the published
-    /// base. A finished extension needs nothing from its base, and deleting the base then only
-    /// clears the record of where the extension started.
+    /// base. A finished extension answers with <see cref="BaseInUseCode"/> instead.
     /// </remarks>
     public const string BeingExtendedCode = "terrain_build.being_extended";
+
+    /// <summary>
+    /// The build is the base of a finished extension, which still reads its heights from it.
+    /// </summary>
+    /// <remarks>
+    /// An extension prepares only the rasters it adds; heights anywhere else on its ground — a
+    /// probe, a profile, an entrance's altitude, the overburden over a passage — are read from the
+    /// prepared rasters of the builds it extends. The pyramid tiles were copied and do not need the
+    /// base, but those rasters do, and they are removed with the base's folder. So the base stays
+    /// until the extension goes. A failed or called-off extension never baked and reads nothing
+    /// from it, and does not hold it.
+    /// </remarks>
+    public const string BaseInUseCode = "terrain_build.base_in_use";
+
+    /// <summary>
+    /// An extension asked to obtain the open coverage again, which its base already holds.
+    /// </summary>
+    public const string BaseFetchCoverageCode = "terrain_build.base_fetch_coverage";
 
     /// <summary>
     /// The largest single raster that may be sent through the browser.
@@ -505,6 +528,19 @@ public static class TerrainBuildEndpoints
         // Coverage is obtained unless the request says otherwise — except for an extension, whose
         // base already holds it: obtained again it would be meshed again over the whole area, which
         // is the full re-bake an extension exists to avoid.
+        //
+        // Asked for explicitly on an extension, it is refused rather than honoured: the cells would
+        // be chosen from the build's whole rectangle, which for an extension is the union of the
+        // base's ground and the patch, so a small survey on a large region would download and mesh
+        // the entire region again.
+        if (baseBuild is not null && request.FetchCoverage == true)
+        {
+            return ApiProblems.BadRequest(
+                BaseFetchCoverageCode,
+                "A build that adds rasters to another does not obtain the open coverage again: the "
+                + "build it adds to already holds it. Leave obtaining coverage off.");
+        }
+
         var fetchCoverage = request.FetchCoverage ?? baseBuild is null;
         var declared = new List<TerrainBuildSource>();
         foreach (var source in request.Sources ?? [])
@@ -803,11 +839,23 @@ public static class TerrainBuildEndpoints
             return ApiProblems.Forbidden(ForbiddenCode);
         }
 
-        if (!TerrainRasterFiles.IsRaster(file.FileName))
+        // A grid that states its position only in a sidecar file is a format this installation
+        // reads — from a server directory, where the pair stays together — so it is told apart
+        // from a file that is no elevation raster at all, and the answer says what to do instead.
+        if (TerrainRasterFiles.NeedsSidecar(file.FileName))
+        {
+            return ApiProblems.BadRequest(
+                RasterNeedsSidecarCode,
+                "An ASCII grid (.asc) says where it is only in a separate .prj file, which a single "
+                + "upload cannot carry. Convert it to a GeoTIFF, or place the grid and its .prj in a "
+                + "directory on the server the operator has listed.");
+        }
+
+        if (!TerrainRasterFiles.IsUploadable(file.FileName))
         {
             return ApiProblems.BadRequest(
                 RasterUnsupportedCode,
-                $"Elevation is read from {string.Join(", ", TerrainRasterFiles.Accepted)}.");
+                $"Elevation is read from {string.Join(", ", TerrainRasterFiles.AcceptedForUpload)}.");
         }
 
         if (file.Length <= 0 || file.Length > MaxRasterUploadBytes)
@@ -1204,7 +1252,14 @@ public static class TerrainBuildEndpoints
 
         // Stamped again by the check when the run gets there. Kept across the wait it would be a
         // version for tiles that may just have been discarded, offered to the screen as drawable.
-        build.PyramidVersion = null;
+        // The exception is a pyramid that is already at its served address: nothing here or in the
+        // run discards it, the run only records it as finished, and the check that would stamp the
+        // version again never runs — so clearing it would leave a finished build nothing can draw,
+        // activate, run again or extend.
+        if (!workspace.HasPublishedPyramid(id))
+        {
+            build.PyramidVersion = null;
+        }
 
         db.ProcessingJobs.Add(new ProcessingJob
         {
@@ -1302,6 +1357,19 @@ public static class TerrainBuildEndpoints
                 $"Another build ({TerrainPyramid.PublishedName(extendedBy)}) is adding rasters to "
                 + "this one and has not finished; it still needs this build's tiles. Wait for it "
                 + "to stop, whichever way it stops, and then this build can be removed.");
+        }
+
+        var readThrough = await db.TerrainBuilds
+            .Where(b => b.BaseBuildId == id && b.Status == TerrainBuildStatus.Succeeded)
+            .Select(b => b.Id)
+            .FirstOrDefaultAsync(ct);
+        if (readThrough != Guid.Empty)
+        {
+            return ApiProblems.Conflict(
+                BaseInUseCode,
+                $"Another build ({TerrainPyramid.PublishedName(readThrough)}) adds rasters to this "
+                + "one and reads its heights from this build everywhere outside the rasters it "
+                + "added. Remove that build first, and then this one can be removed.");
         }
 
         db.TerrainBuilds.Remove(build);

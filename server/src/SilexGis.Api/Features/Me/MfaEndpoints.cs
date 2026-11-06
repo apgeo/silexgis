@@ -173,6 +173,7 @@ public static class MfaEndpoints
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
         IMessageDispatcher dispatcher,
+        TimeProvider clock,
         CancellationToken ct)
     {
         var user = await userManager.GetUserAsync(principal);
@@ -205,7 +206,7 @@ public static class MfaEndpoints
             return blocked;
         }
 
-        if (await SendThrottle.TooSoonAsync(userManager, user, parsed, policy, SendThrottle.Enrolment))
+        if (await SendThrottle.TooSoonAsync(userManager, user, parsed, policy, SendThrottle.Enrolment, clock))
         {
             return ApiProblems.BadRequest(
                 "auth.mfa_resend_too_soon", "A code was just sent. Wait a moment before asking for another.");
@@ -219,7 +220,7 @@ public static class MfaEndpoints
             return ApiProblems.BadRequest("auth.mfa_send_failed", "The code could not be sent.");
         }
 
-        await SendThrottle.MarkSentAsync(userManager, user, parsed, SendThrottle.Enrolment);
+        await SendThrottle.MarkSentAsync(userManager, user, parsed, SendThrottle.Enrolment, clock);
         return TypedResults.Ok(new MfaChallengeDto(Destination(user, parsed) ?? string.Empty, lifetime));
     }
 

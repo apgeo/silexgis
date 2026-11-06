@@ -342,7 +342,11 @@ export const groups = {
     'AdminMessagingTests', 'CavingGroupAnnouncementPaidCapTests', 'NotificationDeliveryTests',
     'SmsNotificationChannelTests',
   ],
-  sms: ['AdminTestSendRateLimitTests', 'MfaAndRateLimitTests', 'PhoneCredentialTests', 'TwoFactorChannelTests'],
+  sms: [
+    'AdminTestSendRateLimitTests', 'MfaAndRateLimitTests', 'PhoneCredentialTests', 'TwoFactorChannelTests',
+    // The per-account send cooldowns measured on the application's clock rather than the system's.
+    'SendThrottleClockTests',
+  ],
   surveys: [
     'CaveOverburdenTests', 'CaveSystemFiguresTests', 'CaveDepthProfileTests', 'EntranceAltitudeTests', 'CavePassageShapeTests', 'CaveSurveyStatisticsTests',
     'HypsometryTests', 'KarstnetGoldenTests', 'StructureComparisonTests',
@@ -442,7 +446,7 @@ export const groups = {
     'TerrainDerivativeApiTests', 'TerrainDerivativeRegistryTests', 'TerrainDerivativeTests',
     'TerrainMapConfigTests', 'TerrainOptionsTests', 'TerrainPipelineRegistrationTests',
     'TerrainPreparePhaseTests', 'AreaTerrainStatisticsTests', 'TerrainProbeTests', 'TerrainProfileTests', 'TerrainPublishPhaseTests',
-    'TerrainRasterIndexTests', 'TerrainRasterPreparationTests', 'TerrainSourceTests',
+    'TerrainRasterIndexTests', 'TerrainRasterPreparationTests', 'TerrainRasterTokenServiceTests', 'TerrainSourceTests',
     'TerrainTileUploadTests', 'TerrainUploadSweepTests', 'TerrainValidatePhaseTests',
   ],
 };
@@ -639,9 +643,9 @@ export const crossCutting = {
     'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
     'FeatureHierarchyTests', 'FeatureLinkTests', 'FeatureRestoreTests', 'FeatureShareTests',
     'FeatureTests', 'FeatureTypeWriteTests', 'FileAttachmentTests', 'FileImportReviewHoldTests',
-    'GeofileTests', 'HistoryRestoreTests', 'HypsometryTests', 'ImmichPhotoLibraryTests',
-    'MapBackgroundDocumentChoiceTests', 'MapLayerKindTests', 'MapViewTests',
-    'NotificationHealthTests', 'PermissionGroupCrudTests', 'PhotoGalleryTests',
+    'GeofileTests', 'GeoreferencedMapTests', 'HistoryRestoreTests', 'HypsometryTests',
+    'ImmichPhotoLibraryTests', 'MapBackgroundDocumentChoiceTests', 'MapLayerKindTests',
+    'MapViewTests', 'NotificationHealthTests', 'PermissionGroupCrudTests', 'PhotoGalleryTests',
     'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
     'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',
     'PlacePointProtectionTests', 'PlacePointWriteTests', 'PlaceStationTests',

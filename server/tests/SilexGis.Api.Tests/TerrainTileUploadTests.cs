@@ -83,13 +83,18 @@ public sealed class TerrainTileUploadTests : IDisposable
         var grid = new double[6];
         raster.GetGeoTransform(grid);
 
-        // The tile's samples sit on their corners, so the outer half-pixel of the grid falls outside
-        // the square the name describes. Compared against the degree it covers, to a tolerance well
-        // under one pixel.
-        grid[0].ShouldBe(24.0, 0.001);
-        grid[3].ShouldBe(46.0, 0.001);
-        (grid[0] + (grid[1] * raster.RasterXSize)).ShouldBe(25.0, 0.001);
-        (grid[3] + (grid[5] * raster.RasterYSize)).ShouldBe(45.0, 0.001);
+        // The tile's samples sit on their corners — the first and last of 1201 samples are the
+        // whole-degree lines themselves — so the grid's outer edge lies half a pixel beyond the
+        // square the name describes. Asserted exactly: a raster registered by its area instead,
+        // the commonest mistake with these tiles, is off by that half pixel, about 1.5 m on the
+        // ground and 0.0004° — inside any tolerance loose enough to "allow for rounding".
+        var pixel = 1.0 / (Side - 1);
+        grid[1].ShouldBe(pixel, 1e-12);
+        grid[5].ShouldBe(-pixel, 1e-12);
+        grid[0].ShouldBe(24.0 - (pixel / 2), 1e-9);
+        grid[3].ShouldBe(46.0 + (pixel / 2), 1e-9);
+        (grid[0] + (grid[1] * raster.RasterXSize)).ShouldBe(25.0 + (pixel / 2), 1e-9);
+        (grid[3] + (grid[5] * raster.RasterYSize)).ShouldBe(45.0 - (pixel / 2), 1e-9);
 
         raster.RasterXSize.ShouldBe(Side);
         raster.RasterYSize.ShouldBe(Side);
