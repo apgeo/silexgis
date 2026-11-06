@@ -112,7 +112,7 @@ result screen, which opens them with its access key:
 | `survey_pipeline.files_missing` | `archive` | an archived file is no longer in the server's store — an operator matter; the upload can be run again once it is restored |
 | `survey_pipeline.archive_invalid` | `unpack` | the archive is not a TopoDroid survey archive: no `manifest`, `manifest` not the first entry, no SQL dump at its root, a database version older than 21, an entry name that leaves the archive, an encrypted entry, or not a ZIP at all. `08-status-failed` |
 | `survey_pipeline.archive_too_large` | `unpack` | over 10,000 entries, more unpacked bytes than the installation allows, or an entry that inflates suspiciously (over 200:1) |
-| `survey_pipeline.unexpected` | any | a defect on the server; its log holds the detail |
+| `survey_pipeline.unexpected` | any | a defect on the server; its log holds the detail. Also what a run is failed with when the server lost it on every attempt it allows (the process running it died each time): `stage` and `progress` stay where it had got to, and it can be run again |
 
 Sent by a server that compiles: `survey_pipeline.source_missing` (compiling asked for, no `.th`
 sent), `survey_pipeline.source_invalid` (more than one `.th`, or a survey that reads a file not sent

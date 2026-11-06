@@ -72,7 +72,55 @@ public sealed class SurveyUploadPipelineHandler(
     /// <summary>How often a running compile's progress is written to the status row.</summary>
     private static readonly TimeSpan ProgressInterval = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// What the uploader is told when the queue gave the run up: its runner was lost on every
+    /// attempt it was allowed, so nothing about the survey was decided.
+    /// </summary>
+    public const string GivenUpMessage =
+        "The run was interrupted on every attempt it was allowed, and was stopped. The files are archived; it can be run again.";
+
     public string Kind => ProcessingJobKinds.SurveyUploadPipeline;
+
+    /// <summary>
+    /// A run given up by the queue fails its upload, where it had got to, and tells the uploader —
+    /// the notice a failed run sends, because the job names no requester and the queue's own notice
+    /// therefore reaches nobody.
+    /// </summary>
+    /// <remarks>
+    /// Coded as a defect on the server rather than as anything about the survey: the runner died,
+    /// and the sweep's log line is where the detail is. The notice is queued on the sweep's own
+    /// context, without a save of its own, so it commits with the stop and the job — or, if this
+    /// hook fails, goes with them. The lost run's working directory is not reachable from here; it
+    /// was under the compiler's work directory of a process that is gone.
+    /// </remarks>
+    public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
+    {
+        if (AbandonedJob.PayloadOf<SurveyUploadPipelinePayload>(job) is not { } payload)
+        {
+            return;
+        }
+
+        // A run asked for again after this one wrote its verdict and then lost its runner — the
+        // upload was finished, so a rerun was allowed — is queued beside it, and the upload's
+        // queued state is that run's. Failing it here would drop the run somebody asked for and
+        // show them a failure of the one before.
+        var others = await db.ProcessingJobs.AsNoTracking()
+            .Where(j => j.Kind == Kind && j.Id != job.Id
+                && (j.Status == ProcessingJobStatus.Queued || j.Status == ProcessingJobStatus.Running))
+            .ToListAsync(ct);
+        if (others.Any(j => AbandonedJob.PayloadOf<SurveyUploadPipelinePayload>(j)?.SurveyUploadId == payload.SurveyUploadId))
+        {
+            return;
+        }
+
+        if (!await SurveyUploadWrites.GiveUpAsync(db, payload.SurveyUploadId, SurveyPipelineFailures.Unexpected, GivenUpMessage, ct))
+        {
+            return;
+        }
+
+        var upload = await db.SurveyUploads.AsNoTracking().FirstAsync(u => u.Id == payload.SurveyUploadId, ct);
+        await QueueNoticeAsync(upload, succeeded: false, ct);
+    }
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
@@ -210,34 +258,40 @@ public sealed class SurveyUploadPipelineHandler(
         {
             // Whatever a failed stage left half-added must not ride along with the notice's save.
             db.ChangeTracker.Clear();
-            var caveName = await db.Features.AsNoTracking()
-                .Where(f => f.Id == upload.CaveFeatureId)
-                .Select(f => f.Name)
-                .FirstOrDefaultAsync(CancellationToken.None);
-            var title = await db.CaveSurveys.AsNoTracking()
-                .Where(s => s.Id == upload.CaveSurveyId)
-                .Select(s => s.Title)
-                .FirstOrDefaultAsync(CancellationToken.None) ?? upload.SurveyTitle;
-
-            NotificationQueue.Enqueue(
-                db,
-                upload.RequestedBy,
-                NotificationCategory.JobCompleted,
-                succeeded ? MessageTemplateCatalog.NotifySurveyUploadSucceeded : MessageTemplateCatalog.NotifySurveyUploadFailed,
-                new Dictionary<string, string>
-                {
-                    ["surveyTitle"] = title,
-                    ["caveName"] = caveName ?? string.Empty,
-                    ["url"] = SurveyUploadLinks.StatusPage(upload.CaveFeatureId, upload.CaveSurveyId, upload.Id),
-                },
-                NotificationTargetKind.Feature,
-                upload.CaveFeatureId);
+            await QueueNoticeAsync(upload, succeeded, CancellationToken.None);
             await db.SaveChangesAsync(CancellationToken.None);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
             logger.LogWarning(e, "Could not queue the notice for survey upload {UploadId}", upload.Id);
         }
+    }
+
+    /// <summary>The uploader's notice, added to the context for the caller's save to write.</summary>
+    private async Task QueueNoticeAsync(SurveyUpload upload, bool succeeded, CancellationToken ct)
+    {
+        var caveName = await db.Features.AsNoTracking()
+            .Where(f => f.Id == upload.CaveFeatureId)
+            .Select(f => f.Name)
+            .FirstOrDefaultAsync(ct);
+        var title = await db.CaveSurveys.AsNoTracking()
+            .Where(s => s.Id == upload.CaveSurveyId)
+            .Select(s => s.Title)
+            .FirstOrDefaultAsync(ct) ?? upload.SurveyTitle;
+
+        NotificationQueue.Enqueue(
+            db,
+            upload.RequestedBy,
+            NotificationCategory.JobCompleted,
+            succeeded ? MessageTemplateCatalog.NotifySurveyUploadSucceeded : MessageTemplateCatalog.NotifySurveyUploadFailed,
+            new Dictionary<string, string>
+            {
+                ["surveyTitle"] = title,
+                ["caveName"] = caveName ?? string.Empty,
+                ["url"] = SurveyUploadLinks.StatusPage(upload.CaveFeatureId, upload.CaveSurveyId, upload.Id),
+            },
+            NotificationTargetKind.Feature,
+            upload.CaveFeatureId);
     }
 
     /// <summary>

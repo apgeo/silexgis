@@ -307,17 +307,33 @@ public static partial class SurveyUploadEndpoints
                 missing);
         }
 
-        upload.Status = SurveyUploadStatus.Queued;
-        upload.Stage = null;
-        upload.Progress = 0;
-        upload.Message = null;
-        Queue(db, upload);
-        await CloseBatchAsync(db, upload.UploadBatchId, now, ct);
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            // Another completion of the same upload may have got here first, between the status
+            // read above and now. The row decides; the one that finds the upload no longer
+            // receiving is a repeat, and is answered as one with where the upload now stands.
+            if (!await SurveyUploadWrites.HoldReceivingAsync(db, upload.Id, ct))
+            {
+                await transaction.RollbackAsync(ct);
+                await db.Entry(upload).ReloadAsync(ct);
+                return upload.Status == SurveyUploadStatus.Abandoned
+                    ? ApiProblems.Conflict(NotReceivingCode, "This upload was abandoned; open a new one.")
+                    : Accepted(await ToDtoAsync(db, tokens, links, options.Value, upload, found.Cave, writable: true, ct));
+            }
 
-        // The public link is made with the completion, in the same save, by whoever completes it:
-        // the cave's protection is known by now, a cave the upload made included.
-        await links.MintAtCompletionAsync(access, ctx, upload, found.Cave, ct);
-        await db.SaveChangesAsync(ct);
+            upload.Status = SurveyUploadStatus.Queued;
+            upload.Stage = null;
+            upload.Progress = 0;
+            upload.Message = null;
+            Queue(db, upload);
+            await CloseBatchAsync(db, upload.UploadBatchId, now, ct);
+
+            // The public link is made with the completion, in the same save, by whoever completes
+            // it: the cave's protection is known by now, a cave the upload made included.
+            await links.MintAtCompletionAsync(access, ctx, upload, found.Cave, ct);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
 
         return Accepted(await ToDtoAsync(db, tokens, links, options.Value, upload, found.Cave, writable: true, ct));
     }
@@ -435,10 +451,28 @@ public static partial class SurveyUploadEndpoints
         // Only the session ends. What arrived stays archived: it is the caver's survey, and
         // taking it away is an act of its own on the cave page.
         var now = clock.GetUtcNow();
-        upload.Status = SurveyUploadStatus.Abandoned;
-        upload.FinishedAt = now;
-        await CloseBatchAsync(db, upload.UploadBatchId, now, ct);
-        await db.SaveChangesAsync(ct);
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            // A completion may have queued the run between the status read above and now; the
+            // row decides, as it does between two completions, and the later writer finds the
+            // upload no longer receiving instead of writing over what the other committed.
+            if (!await SurveyUploadWrites.HoldReceivingAsync(db, upload.Id, ct))
+            {
+                await transaction.RollbackAsync(ct);
+                await db.Entry(upload).ReloadAsync(ct);
+                return upload.Status == SurveyUploadStatus.Abandoned
+                    ? TypedResults.NoContent()
+                    : ApiProblems.Conflict(
+                        NotReceivingCode, "Every file of this upload arrived; a completed upload is not abandoned, and it cannot be deleted yet.");
+            }
+
+            upload.Status = SurveyUploadStatus.Abandoned;
+            upload.FinishedAt = now;
+            await CloseBatchAsync(db, upload.UploadBatchId, now, ct);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+
         return TypedResults.NoContent();
     }
 
