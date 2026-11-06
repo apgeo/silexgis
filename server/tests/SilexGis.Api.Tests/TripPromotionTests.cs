@@ -468,7 +468,15 @@ public sealed class TripPromotionTests : IAsyncLifetime, IDisposable, IClassFixt
         (await RosterAsync(trip)).ShouldBeEmpty();
 
         // The same promotion on the trip once it is finished again writes the one who said yes.
-        await MoveAsync(trip, "done");
+        // Put back the way it was taken away: planning climbs one rung at a time, and the climb is
+        // not what this is about.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TripLogs.Where(x => x.Id == trip)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.State, ActivityState.Done));
+        }
+
         (await PromoteAsync(organiser, trip)).GetProperty("promoted").GetInt32().ShouldBe(1);
     }
 

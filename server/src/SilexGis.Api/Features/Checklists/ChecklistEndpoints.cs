@@ -227,15 +227,6 @@ public static class ChecklistEndpoints
                 : ApiProblems.NotFound(NotFoundCode);
         }
 
-        // Re-binding on update moves rights exactly as binding on create does: being allowed to
-        // write a row is not consent to hand it to a club.
-        if (request.CavingGroupId is { } requested
-            && requested != list.CavingGroupId
-            && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.Checklists, requested))
-        {
-            return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
-        }
-
         // The rewrite is whole: every line the request does not name is taken off, and every
         // trip's confirmation of it with it. Made from an old reading, it would take off the lines
         // somebody added since, so it is held to the version it was read at when it names one.
@@ -248,10 +239,19 @@ public static class ChecklistEndpoints
             return stale;
         }
 
-        // Decided again on the row as held: its audience and owner may have changed meanwhile.
+        // Decided again on the row as held: its audience, owner and club may have changed meanwhile.
         if (!(await access.DecideAsync(ctx, AccessAction.Write, list, ct)).Allowed)
         {
             return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        // Re-binding on update moves rights exactly as binding on create does: being allowed to
+        // write a row is not consent to hand it to a club.
+        if (request.CavingGroupId is { } requested
+            && requested != list.CavingGroupId
+            && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.Checklists, requested))
+        {
+            return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
         Apply(list, request);
