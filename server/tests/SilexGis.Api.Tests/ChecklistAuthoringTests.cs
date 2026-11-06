@@ -324,6 +324,130 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
     /// what the client is handed and reading it any other way here would test a shape nobody
     /// receives.
     /// </summary>
+    /// <summary>
+    /// A caller with no account reaches none of a list's routes, and the answer is the same for a
+    /// list that exists as for one that does not.
+    /// </summary>
+    /// <remarks>
+    /// The update and delete handlers carry their own "no caller" branch beside the group's
+    /// authorisation; this is what pins the answer either way, against a real list whose owner
+    /// reads it in the same test.
+    /// </remarks>
+    [Fact]
+    public async Task A_caller_with_no_account_reads_rewrites_and_deletes_nothing()
+    {
+        var list = await CreateAsync($"Not for strangers {suffix}", "Permit obtained");
+        (await owner.GetAsync($"/api/v1/checklists/{list.Id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync($"/api/v1/checklists/{list.Id}")).StatusCode
+            .ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.PutAsJsonAsync($"/api/v1/checklists/{list.Id}", Body("Taken", [])))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.DeleteAsync($"/api/v1/checklists/{list.Id}")).StatusCode
+            .ShouldBe(HttpStatusCode.Unauthorized);
+
+        var after = await owner.GetFromJsonAsync<ChecklistPayload>($"/api/v1/checklists/{list.Id}");
+        after!.Title.ShouldBe(list.Title);
+        after.Items.Select(x => x.Text).ShouldBe(["Permit obtained"]);
+    }
+
+    /// <summary>
+    /// More lines than a list may hold is refused whole on a rewrite, as it is on a create.
+    /// </summary>
+    [Fact]
+    public async Task A_rewrite_with_more_lines_than_a_list_may_hold_is_refused_and_changes_nothing()
+    {
+        var list = await CreateAsync($"Bounded {suffix}", "Permit obtained");
+
+        var refused = await owner.PutAsJsonAsync($"/api/v1/checklists/{list.Id}", new
+        {
+            title = list.Title,
+            visibility = (int)Visibility.Private,
+            items = Enumerable.Range(1, 201).Select(i => new { text = $"Line {i}" }).ToArray(),
+        });
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var exactly = await owner.PutAsJsonAsync($"/api/v1/checklists/{list.Id}", new
+        {
+            title = list.Title,
+            visibility = (int)Visibility.Private,
+            items = Enumerable.Range(1, 200).Select(i => new { text = $"Line {i}" }).ToArray(),
+        });
+        exactly.StatusCode.ShouldBe(HttpStatusCode.OK, await exactly.Content.ReadAsStringAsync());
+        (await exactly.Content.ReadFromJsonAsync<ChecklistPayload>())!.Items.Count.ShouldBe(200);
+    }
+
+    /// <summary>
+    /// A line naming a line of somebody else's list is a new line here, and the other list's line
+    /// — and its text — is left exactly as it was.
+    /// </summary>
+    /// <remarks>
+    /// The id is how a rewrite keeps the confirmations made against a line, so it is only ever
+    /// looked up among this list's own lines. Looking it up anywhere else would let one author
+    /// move, reword or take over a line of a list they may not write.
+    /// </remarks>
+    [Fact]
+    public async Task A_line_naming_another_lists_line_is_a_new_line_and_the_other_list_is_untouched()
+    {
+        var theirs = await CreateAsync($"Theirs {suffix}", "Rope checked");
+        var mine = await CreateAsync($"Mine {suffix}", "Permit obtained");
+        var foreignLine = theirs.Items.Single().Id;
+
+        var rewritten = await owner.PutAsJsonAsync(
+            $"/api/v1/checklists/{mine.Id}",
+            Body(mine.Title, [(foreignLine, "Borrowed line")]));
+        rewritten.StatusCode.ShouldBe(HttpStatusCode.OK, await rewritten.Content.ReadAsStringAsync());
+        var line = (await rewritten.Content.ReadFromJsonAsync<ChecklistPayload>())!.Items.ShouldHaveSingleItem();
+        line.Id.ShouldNotBe(foreignLine);
+        line.Text.ShouldBe("Borrowed line");
+
+        var other = await owner.GetFromJsonAsync<ChecklistPayload>($"/api/v1/checklists/{theirs.Id}");
+        other!.Items.ShouldHaveSingleItem().Id.ShouldBe(foreignLine);
+        other.Items.Single().Text.ShouldBe("Rope checked");
+    }
+
+    /// <summary>
+    /// Naming one line twice in one rewrite is refused, and the list is left as it was.
+    /// </summary>
+    /// <remarks>
+    /// One row cannot stand in two places of one list. Accepted, the answer would list the line
+    /// twice while the store held it once, at whichever place came last.
+    /// </remarks>
+    [Fact]
+    public async Task A_rewrite_naming_one_line_twice_is_refused_and_changes_nothing()
+    {
+        var list = await CreateAsync($"Twice {suffix}", "Permit obtained", "Rope checked");
+        var first = list.Items.Single(x => x.Text == "Permit obtained").Id;
+
+        var refused = await owner.PutAsJsonAsync(
+            $"/api/v1/checklists/{list.Id}",
+            Body(list.Title, [(first, "Permit obtained"), (first, "Permit obtained again")]));
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+
+        var after = await owner.GetFromJsonAsync<ChecklistPayload>($"/api/v1/checklists/{list.Id}");
+        after!.Items.OrderBy(x => x.SortOrder).Select(x => x.Text).ShouldBe(["Permit obtained", "Rope checked"]);
+    }
+
+    private async Task<ChecklistPayload> CreateAsync(string title, params string[] lines)
+    {
+        var created = await owner.PostAsJsonAsync("/api/v1/checklists", new
+        {
+            title,
+            visibility = (int)Visibility.Private,
+            items = lines.Select(text => new { text }).ToArray(),
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        return (await created.Content.ReadFromJsonAsync<ChecklistPayload>())!;
+    }
+
+    private static object Body(string title, (Guid? Id, string Text)[] lines) => new
+    {
+        title,
+        visibility = (int)Visibility.Private,
+        items = lines.Select(line => new { id = line.Id, text = line.Text }).ToArray(),
+    };
+
     private sealed record ChecklistPayload(
         Guid Id,
         string Title,
