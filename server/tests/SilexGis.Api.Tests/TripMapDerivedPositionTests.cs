@@ -291,11 +291,15 @@ public sealed class TripMapDerivedPositionTests : IAsyncLifetime, IDisposable, I
     /// A narrowing the layer does not have a word for is refused with a code, never dropped: a
     /// layer that quietly ignored half a filter would draw the answer to a question nobody asked.
     /// </summary>
-    [Fact]
-    public async Task An_unknown_filter_word_is_refused_with_a_code()
+    [Theory]
+    [InlineData("states=nonsense")]
+    [InlineData("visibilities=nonsense")]
+    [InlineData("types=nonsense")]
+    [InlineData("visibilities=authenticated,nonsense")]
+    public async Task An_unknown_filter_word_is_refused_with_a_code(string narrowing)
     {
         var response = await reader.GetAsync(
-            $"/api/v1/map/trip-logs?bbox={NearBbox}&from={PlacedDay}&to={PlacedDay}&states=nonsense");
+            $"/api/v1/map/trip-logs?bbox={NearBbox}&from={PlacedDay}&to={PlacedDay}&{narrowing}");
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
         var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;

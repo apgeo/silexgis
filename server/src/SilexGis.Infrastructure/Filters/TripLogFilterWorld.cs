@@ -103,21 +103,8 @@ public sealed class TripLogFilterWorld(
     }
 
     private static Expression<Func<TripLog, bool>> Compile(
-        FilterNode? node, IReadOnlyDictionary<ConditionNode, Guid[]> positions) => node switch
-    {
-        null => _ => true,
-        AllOfNode all => all.Of.Count == 0
-            ? _ => true
-            : all.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.And(right)),
-        // An OR of nothing matches nothing, which is the reading that keeps "any of these" from
-        // widening to everything when a person clears the last choice out of a group.
-        AnyOfNode any => any.Of.Count == 0
-            ? _ => false
-            : any.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.Or(right)),
-        NotNode not => Compile(not.Of, positions).Not(),
-        ConditionNode condition => Leaf(condition, positions),
-        _ => throw new InvalidOperationException($"No compiler arm for {node.GetType().Name}."),
-    };
+        FilterNode? node, IReadOnlyDictionary<ConditionNode, Guid[]> positions) =>
+        FilterTree.Compile<TripLog>(node, condition => Leaf(condition, positions));
 
     private static Expression<Func<TripLog, bool>> Leaf(
         ConditionNode condition, IReadOnlyDictionary<ConditionNode, Guid[]> positions) => condition.Field switch

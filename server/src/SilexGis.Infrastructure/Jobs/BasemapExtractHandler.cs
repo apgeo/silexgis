@@ -72,6 +72,8 @@ public sealed class BasemapExtractHandler(
         string? partial = null;
         try
         {
+            // Called off between the worker taking it and here: nothing is fetched at all.
+            calledOff.ThrowIfCancellationRequested();
             var build = payload.Build ?? await LatestAsync(linked.Token);
             if (!SelfHostedBasemap.IsBuild(build))
             {
@@ -132,7 +134,7 @@ public sealed class BasemapExtractHandler(
         }
         finally
         {
-            cancellation.Forget(job.Id);
+            cancellation.Finish(job.Id);
         }
     }
 

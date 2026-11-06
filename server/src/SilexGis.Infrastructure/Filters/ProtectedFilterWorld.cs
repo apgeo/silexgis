@@ -84,21 +84,8 @@ public abstract class ProtectedFilterWorld<TEntity> : FilterWorld<TEntity>
         ValueTask.FromResult(PositionConditions.None);
 
     private Expression<Func<TEntity, bool>> Compile(
-        FilterNode? node, IReadOnlyDictionary<ConditionNode, Guid[]> positions) => node switch
-    {
-        null => _ => true,
-        AllOfNode all => all.Of.Count == 0
-            ? _ => true
-            : all.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.And(right)),
-        // An OR of nothing matches nothing: clearing the last choice out of a group narrows to
-        // nothing rather than quietly widening to everything.
-        AnyOfNode any => any.Of.Count == 0
-            ? _ => false
-            : any.Of.Select(n => Compile(n, positions)).Aggregate((left, right) => left.Or(right)),
-        NotNode not => Compile(not.Of, positions).Not(),
-        ConditionNode condition => Leaf(condition, positions),
-        _ => throw new InvalidOperationException($"No compiler arm for {node.GetType().Name}."),
-    };
+        FilterNode? node, IReadOnlyDictionary<ConditionNode, Guid[]> positions) =>
+        FilterTree.Compile<TEntity>(node, condition => Leaf(condition, positions));
 
     private static Expression<Func<TEntity, bool>> RowIn(Guid[] ids) => e => ids.Contains(e.Id);
 

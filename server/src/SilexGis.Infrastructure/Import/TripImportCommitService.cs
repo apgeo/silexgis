@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
@@ -24,11 +25,20 @@ internal static class TripImportRowRefusal
         TripWriteException x => x.Code,
         FeatureWriteException x => x.Code,
         TripImportCommitException x => x.Code,
+        DbUpdateException => ValueTooLongCode,
         _ => "trip_import.row_failed",
     };
 
-    public static string Reason(this Exception e) =>
-        e is FeatureWriteException x ? string.Join("; ", x.Errors) : e.Message;
+    public static string Reason(this Exception e) => e switch
+    {
+        FeatureWriteException x => string.Join("; ", x.Errors),
+        // The database's own message names the column type and nothing of the row; this says
+        // what the reader can act on.
+        DbUpdateException => "A value in this row is longer than the registry keeps.",
+        _ => e.Message,
+    };
+
+    public const string ValueTooLongCode = "trip_import.value_too_long";
 }
 
 /// <summary>One row of the sheet that could not be recorded, and why.</summary>
@@ -278,7 +288,8 @@ public sealed class TripImportCommitService(
                     into.Extra.AddRange(recorded.Take(recorded.Count - 1));
                 }
             }
-            catch (Exception e) when (e is TripWriteException or FeatureWriteException or TripImportCommitException)
+            catch (Exception e) when (e is TripWriteException or FeatureWriteException or TripImportCommitException
+                || IsValueTooLong(e))
             {
                 await transaction.RollbackToSavepointAsync(savepoint, ct);
 
@@ -756,6 +767,15 @@ public sealed class TripImportCommitService(
             throw new TripImportCommitException(refusal.Code, refusal.Message);
         }
     }
+
+    /// <summary>
+    /// A row's text past the width of the column it lands in (a title, a location note, a name
+    /// of a place the row invents). The sheet's own values are not bounded on the way in, so the
+    /// first place that knows is the row's save, inside its savepoint — which makes it the row's
+    /// refusal rather than the confirmation's.
+    /// </summary>
+    private static bool IsValueTooLong(Exception e) =>
+        e is DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.StringDataRightTruncation } };
 
     /// <summary>
     /// Where the unit of work stood before a row started, so a row that fails part-way can be

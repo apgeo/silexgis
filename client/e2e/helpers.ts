@@ -721,3 +721,31 @@ export async function openCaveFromRegistry(page: Page, name: string) {
   await page.getByPlaceholder('Search name or toponym…').fill(name);
   await page.getByText(name).click();
 }
+
+/**
+ * Searches the feature list for a name and waits for the server's answer to that exact search,
+ * then asserts the answer is empty and the table shows no row for it. An empty or still-loading
+ * table satisfies "no rows" on its own, so a check written only against the table passes before
+ * the search has run — and passes for an undo that took nothing back.
+ */
+export async function searchFindsNoFeature(page: Page, name: string) {
+  // The search reaches the list's address as a filter document first and the request carries
+  // that same document, so the answer to wait for is the one asked under the address the page
+  // shows. Before anything is typed the address has no filter, so the first load never matches.
+  const answered = page.waitForResponse(
+    (response) => {
+      const url = new URL(response.url());
+      const shown = new URL(page.url()).searchParams.get('filter');
+      return response.request().method() === 'GET'
+        && url.pathname.replace(/\/$/, '') === '/api/v1/features'
+        && shown !== null
+        && url.searchParams.get('filter') === shown;
+    },
+    { timeout: 20_000 },
+  );
+  await page.getByPlaceholder('Search by name').fill(name);
+  const response = await answered;
+  expect(response.ok()).toBe(true);
+  expect((await response.json()).items).toEqual([]);
+  await expect(page.getByRole('row', { name: new RegExp(name) })).toHaveCount(0);
+}

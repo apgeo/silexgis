@@ -74,6 +74,40 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         (await client.PostAsJsonAsync("/api/v1/filters/query",
             new FilterQueryRequest(About("feature")))).StatusCode
             .ShouldBe(HttpStatusCode.Unauthorized);
+        (await client.PostAsJsonAsync("/api/v1/filters/resolve",
+            new FilterResolveRequest("feature", [Guid.NewGuid()]))).StatusCode
+            .ShouldBe(HttpStatusCode.Unauthorized);
+
+        // The same three questions from a signed-in caller are answered, so the refusals above are
+        // about the missing sign-in and not about a route that refuses everybody.
+        using var viewer = await ClientAsync(GlobalRoles.Viewer, "fe-anon-pos");
+        (await viewer.GetAsync("/api/v1/filters/vocabulary")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.PostAsJsonAsync("/api/v1/filters/query",
+            new FilterQueryRequest(About("feature")))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.PostAsJsonAsync("/api/v1/filters/resolve",
+            new FilterResolveRequest("feature", [Guid.NewGuid()]))).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Theory]
+    [InlineData(int.MaxValue, 25)]
+    [InlineData(100_000_000, 25)]
+    [InlineData(int.MaxValue, 500)]
+    [InlineData(5_000_000, 1)]
+    public async Task A_page_far_past_the_end_is_an_empty_page_and_never_an_error(int page, int pageSize)
+    {
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
+        await SeedAsync(ownerId, Visibility.Public, 2);
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-far");
+
+        var response = await client.PostAsJsonAsync("/api/v1/filters/query",
+            new FilterQueryRequest(About("feature", Named(tag)), Page: page, PageSize: pageSize), Wire);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<FilterQueryResponse>(Wire);
+        var world = body.ShouldNotBeNull().Worlds.ShouldHaveSingleItem();
+        world.Hits.ShouldBeEmpty();
+        // The rows exist and are counted, so the empty page is the page's doing, not the filter's.
+        world.Total.ShouldBe(2);
     }
 
     [Fact]
@@ -488,6 +522,13 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
     {
         var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
         await SeedAsync(ownerId, Visibility.Private, 3);
+
+        // The owner's question finds all three, so the outsider's empty answer below is about who
+        // is asking and not about a filter that matches nothing.
+        using var owner = await ClientAsync(GlobalRoles.Editor, "fe-outsider-own", OwnerEmail);
+        var own = (await QueryAsync(owner, About("feature", Named(tag)))).Worlds.ShouldHaveSingleItem();
+        own.Hits.Count.ShouldBe(3);
+        own.Total.ShouldBe(3);
 
         using var client = await ClientAsync(GlobalRoles.Viewer, "fe-outsider");
         var body = await QueryAsync(client, About("feature", Named(tag)));

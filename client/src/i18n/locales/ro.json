@@ -7301,6 +7301,7 @@
       "unavailable": "Catalogul nu a putut fi contactat. Este un serviciu mic, întreținut de voluntari — încearcă din nou peste puțin timp.",
       "rejected": "Catalogul a respins cererea. Este o eroare a acestei aplicații, nu ceva ce poți remedia.",
       "searchTooBroad": "Dă o denumire de căutat, un județ, sau ambele.",
+      "searchTooDeep": "Căutarea are mai multe rezultate decât se pot răsfoi. Restrânge-o cu un județ sau cu o denumire mai lungă.",
       "caveNotFound": "Catalogul nu mai publică acea peșteră.",
       "selectionTooLarge": "Au fost alese prea multe peșteri pentru un singur import. Adu-le în loturi mai mici — fiecare poate fi anulat separat.",
       "importFailed": "Importul nu a putut fi finalizat."

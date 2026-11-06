@@ -215,6 +215,61 @@ public sealed class CaveExternalIdTests : IAsyncLifetime, IDisposable, IClassFix
             .ShouldBeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);
     }
 
+    /// <summary>
+    /// The far end failing in each of the ways it can is a refusal with the lookup's own code,
+    /// and an answer that is merely odd is read for what it holds.
+    /// </summary>
+    /// <remarks>
+    /// The register's search has changed its envelope before and can again; a reader that broke
+    /// on a different key, or that failed a screen over a page that is not JSON, would turn the
+    /// far end's housekeeping into this application's outage. And an answer is read whole into
+    /// memory, so it is bounded far above anything a search for one name returns.
+    /// </remarks>
+    [Fact]
+    public async Task The_far_end_failing_is_a_coded_refusal_and_an_odd_answer_is_read_for_what_it_holds()
+    {
+        var caveId = await CreateCaveAsync($"XID Odd {tag}");
+
+        // Their side unwell, and nobody there at all: both are the same refusal, with a code.
+        upstream.Answers("""{"message":"maintenance"}""", HttpStatusCode.ServiceUnavailable);
+        await ShouldBeUnreachableAsync(caveId);
+        upstream.IsUnreachable();
+        await ShouldBeUnreachableAsync(caveId);
+
+        // A body past any search answer's size is refused rather than read into memory whole.
+        upstream.Answers("{\"results\":[{\"id\":\"1\",\"name\":\"" + new string('x', 2 * 1024 * 1024) + "\"}]}");
+        await ShouldBeUnreachableAsync(caveId);
+
+        // A page that is not JSON offers nothing, and fails nothing.
+        upstream.Answers("<html>not json</html>");
+        (await CandidatesAsync(caveId)).ShouldBeEmpty();
+
+        // A bare array under no envelope, with a numeric identifier and the same one twice: read,
+        // and offered once.
+        upstream.Answers("""[{"id":41,"name":"Prima"},{"id":41,"name":"Prima again"},{"_id":"42","title":"A doua"}]""");
+        (await CandidatesAsync(caveId)).ShouldBe(["41", "42"]);
+
+        // Another envelope key the register has used.
+        upstream.Answers("""{"entrances":[{"entranceId":"43","caveName":"A treia"}]}""");
+        (await CandidatesAsync(caveId)).ShouldBe(["43"]);
+
+        async Task ShouldBeUnreachableAsync(Guid id)
+        {
+            var response = await editor.PostAsync(LookupUrl(id), null);
+            var text = await response.Content.ReadAsStringAsync();
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, text);
+            (await ReadAsync(response)).GetProperty("code").GetString().ShouldBe(GrottocenterClient.UnreachableCode);
+        }
+
+        async Task<string?[]> CandidatesAsync(Guid id)
+        {
+            var response = await editor.PostAsync(LookupUrl(id), null);
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+            return [.. (await ReadAsync(response)).GetProperty("candidates").EnumerateArray()
+                .Select(c => c.GetProperty("externalId").GetString())];
+        }
+    }
+
     // ---- fixture ----
 
     private static string ListUrl(Guid caveId) => $"/api/v1/caves/{caveId}/external-ids";
@@ -284,6 +339,8 @@ public sealed class CaveExternalIdTests : IAsyncLifetime, IDisposable, IClassFix
         private readonly List<string> requests = [];
 
         private string body = """{"results":[]}""";
+        private HttpStatusCode status = HttpStatusCode.OK;
+        private bool unreachable;
 
         public IReadOnlyList<string> Requests
         {
@@ -296,7 +353,15 @@ public sealed class CaveExternalIdTests : IAsyncLifetime, IDisposable, IClassFix
             }
         }
 
-        public void Answers(string json) => body = json;
+        public void Answers(string json, HttpStatusCode answeredWith = HttpStatusCode.OK)
+        {
+            body = json;
+            status = answeredWith;
+            unreachable = false;
+        }
+
+        /// <summary>Behaves as a host nobody answers on, until the next answer is set.</summary>
+        public void IsUnreachable() => unreachable = true;
 
         public void Reset()
         {
@@ -314,7 +379,12 @@ public sealed class CaveExternalIdTests : IAsyncLifetime, IDisposable, IClassFix
                 requests.Add(request.RequestUri!.ToString());
             }
 
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            if (unreachable)
+            {
+                throw new HttpRequestException("connection refused");
+            }
+
+            return Task.FromResult(new HttpResponseMessage(status)
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json"),
             });

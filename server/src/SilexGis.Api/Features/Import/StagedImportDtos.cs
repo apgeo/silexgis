@@ -240,6 +240,10 @@ public sealed class ImportCommitRequestValidator : AbstractValidator<ImportCommi
     {
         RuleFor(x => x.Options).NotNull().SetValidator(new ImportOptionsValidator()!);
         RuleFor(x => x.Selection).NotNull();
+
+        // A reviewed confirmation of no rows would queue a job that records an empty batch.
+        // Without review the selection is the rules' to make, so the caller sends none.
+        RuleFor(x => x.Selection).NotEmpty().When(x => !x.WithoutReview);
     }
 }
 
