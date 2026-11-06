@@ -333,7 +333,7 @@ public static class CenterlineEndpoints
             return ApiProblems.Forbidden();
         }
 
-        await writes.DeleteCenterlineAsync(id, ct);
+        await writes.DeleteFeatureAsync(id, ct);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }

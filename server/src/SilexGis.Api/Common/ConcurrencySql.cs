@@ -23,6 +23,7 @@ public enum VersionedTable
     Files,
     Expeditions,
     Events,
+    Checklists,
 }
 
 /// <summary>
@@ -43,6 +44,7 @@ public static class ConcurrencySql
             [VersionedTable.Files] = "files",
             [VersionedTable.Expeditions] = "expeditions",
             [VersionedTable.Events] = "events",
+            [VersionedTable.Checklists] = "checklists",
         };
 
     /// <summary>

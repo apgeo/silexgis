@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 using Shouldly;
@@ -52,8 +53,14 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
             },
             // Workers off: the graph-extraction job would otherwise pick up the placeholder survey
             // file below, fail to read it, and rewrite the station rows these tests seed.
-            JobWorkers.RemoveFrom);
+            services =>
+            {
+                JobWorkers.RemoveFrom(services);
+                services.ConfigureDbContext<SilexGisDbContext>(o => o.AddInterceptors(holdReports));
+            });
     }
+
+    private readonly HoldUntilTwoAddReports holdReports = new();
 
     public async ValueTask InitializeAsync()
     {
@@ -116,6 +123,43 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
         // The depth rows landed on the station 50 m below the entrance, in the words the viewer
         // uses — a name stored in any other spelling is a marker that silently never appears.
         (await StoredNamesAsync(trip)).ShouldBe(["upper.2", "upper.2"]);
+    }
+
+    /// <summary>
+    /// A double click on Import, or a proxy repeating a slow request: two commits of one sheet at
+    /// once. Both are held at their save until the other has arrived too or a few seconds have
+    /// passed, so each has read the log before either wrote, if the route lets them. The log ends
+    /// with the sheet's reports once each, never twice.
+    /// </summary>
+    [Fact]
+    public async Task Two_commits_of_one_sheet_at_once_write_each_report_once()
+    {
+        var trip = await ArmedTripAsync();
+
+        holdReports.Armed = true;
+        HttpResponseMessage[] answers;
+        try
+        {
+            answers = await Task.WhenAll(
+                owner.PostAsJsonAsync(
+                    $"/api/v1/trip-logs/{trip}/tracking/csv-import/commit", new { text = Sheet }),
+                owner.PostAsJsonAsync(
+                    $"/api/v1/trip-logs/{trip}/tracking/csv-import/commit", new { text = Sheet }));
+        }
+        finally
+        {
+            holdReports.Armed = false;
+        }
+
+        var created = 0;
+        foreach (var answer in answers)
+        {
+            answer.StatusCode.ShouldBe(HttpStatusCode.OK, await answer.Content.ReadAsStringAsync());
+            created += (await BodyAsync(answer)).GetProperty("created").GetInt32();
+        }
+
+        created.ShouldBe(6);
+        (await EventCountAsync(trip)).ShouldBe(6);
     }
 
     [Fact]
@@ -2297,5 +2341,57 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
             .OrderBy(e => e.RecordedAt).ThenBy(e => e.Id)
             .Select(e => e.ViewerStationName!)
             .ToListAsync();
+    }
+
+    /// <summary>
+    /// Holds every save that adds a report until two such saves are waiting, then lets both go;
+    /// bounded, so a save that never gets company goes on alone after a few seconds instead of
+    /// hanging the run.
+    /// </summary>
+    private sealed class HoldUntilTwoAddReports : SaveChangesInterceptor
+    {
+        private readonly object gate = new();
+        private TaskCompletionSource both = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int arrived;
+        private volatile bool armed;
+
+        public bool Armed
+        {
+            get => armed;
+            set
+            {
+                lock (gate)
+                {
+                    armed = value;
+                    arrived = 0;
+                    both = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+            }
+        }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (armed
+                && eventData.Context is { } context
+                && context.ChangeTracker.Entries<TripPositionEvent>().Any(e => e.State == EntityState.Added))
+            {
+                Task wait;
+                lock (gate)
+                {
+                    if (++arrived >= 2)
+                    {
+                        both.TrySetResult();
+                    }
+
+                    wait = both.Task;
+                }
+
+                await Task.WhenAny(wait, Task.Delay(TimeSpan.FromSeconds(5), cancellationToken));
+            }
+
+            return result;
+        }
     }
 }

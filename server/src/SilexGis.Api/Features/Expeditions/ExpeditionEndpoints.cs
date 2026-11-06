@@ -130,9 +130,10 @@ public static class ExpeditionEndpoints
         // mention as the camp somebody is looking for.
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search.Trim()}%";
-            query = query.Where(x =>
-                EF.Functions.ILike(EF.Functions.Unaccent(x.Name), EF.Functions.Unaccent(pattern)));
+            // Read literally: a "%" or "_" somebody typed is part of the name they are after.
+            var pattern = LikePatterns.Containing(search.Trim());
+            query = query.Where(x => EF.Functions.ILike(
+                EF.Functions.Unaccent(x.Name), EF.Functions.Unaccent(pattern), LikePatterns.Escape));
         }
 
         var (p, size) = Paging.Normalize(page, pageSize);

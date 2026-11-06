@@ -159,9 +159,10 @@ public static class EventEndpoints
         // passing mention as the event somebody is looking for.
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search.Trim()}%";
-            query = query.Where(x =>
-                EF.Functions.ILike(EF.Functions.Unaccent(x.Title), EF.Functions.Unaccent(pattern)));
+            // Read literally: a "%" or "_" somebody typed is part of the title they are after.
+            var pattern = LikePatterns.Containing(search.Trim());
+            query = query.Where(x => EF.Functions.ILike(
+                EF.Functions.Unaccent(x.Title), EF.Functions.Unaccent(pattern), LikePatterns.Escape));
         }
 
         var (p, size) = Paging.Normalize(page, pageSize);

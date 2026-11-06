@@ -299,8 +299,10 @@ internal sealed class TripLogListing
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var pattern = $"%{filter.Search}%";
-            query = query.Where(x => EF.Functions.ILike(EF.Functions.Unaccent(x.Title), EF.Functions.Unaccent(pattern)));
+            // Read literally: a "%" or "_" somebody typed is part of the title they are after.
+            var pattern = LikePatterns.Containing(filter.Search);
+            query = query.Where(x => EF.Functions.ILike(
+                EF.Functions.Unaccent(x.Title), EF.Functions.Unaccent(pattern), LikePatterns.Escape));
         }
 
         return query;

@@ -169,7 +169,7 @@ public static class SearchEndpoints
         }
 
         var term = q.Trim();
-        var pattern = $"%{term}%";
+        var pattern = LikePatterns.Containing(term);
 
         // One query over the supertype covers every kind. The supertype vector indexes
         // name + description; caves additionally carry their own vector on the subtype row
@@ -190,12 +190,12 @@ public static class SearchEndpoints
                 EF.Property<NpgsqlTsVector>(f, "SearchVector")
                     .Matches(EF.Functions.PlainToTsQuery("simple", EF.Functions.Unaccent(term)))
                 // Substring fallback for partial words the tsquery would not match.
-                || (f.Name != null && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern)))
+                || (f.Name != null && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern), LikePatterns.Escape))
                 || (f.Cave != null
                     && (EF.Property<NpgsqlTsVector>(f.Cave, "SearchVector")
                             .Matches(EF.Functions.PlainToTsQuery("simple", EF.Functions.Unaccent(term)))
                         || (f.Cave.IdentificationCode != null
-                            && EF.Functions.ILike(f.Cave.IdentificationCode, pattern)))))
+                            && EF.Functions.ILike(f.Cave.IdentificationCode, pattern, LikePatterns.Escape)))))
             .OrderBy(f => f.Name)
             .Take(FeatureLimit)
             .Select(f => new { f.Id, f.Kind, f.Name, f.FeatureTypeId, f.AncestorIds })
@@ -237,8 +237,8 @@ public static class SearchEndpoints
         // only free text to match.
         var trips = await db.TripLogs.AsNoTracking()
             .VisibleTo(ctx, AccessDomain.TripLogs)
-            .Where(x => EF.Functions.ILike(EF.Functions.Unaccent(x.Title), EF.Functions.Unaccent(pattern))
-                || (x.Description != null && EF.Functions.ILike(EF.Functions.Unaccent(x.Description), EF.Functions.Unaccent(pattern))))
+            .Where(x => EF.Functions.ILike(EF.Functions.Unaccent(x.Title), EF.Functions.Unaccent(pattern), LikePatterns.Escape)
+                || (x.Description != null && EF.Functions.ILike(EF.Functions.Unaccent(x.Description), EF.Functions.Unaccent(pattern), LikePatterns.Escape)))
             .OrderByDescending(x => x.TripDate)
             .Take(TripLimit)
             .Select(x => new SearchTripItemDto(x.Id, x.Title, x.TripDate))
@@ -253,8 +253,8 @@ public static class SearchEndpoints
         // wrote it.
         var expeditions = await db.Expeditions.AsNoTracking()
             .VisibleTo(ctx, AccessDomain.Expeditions)
-            .Where(x => EF.Functions.ILike(EF.Functions.Unaccent(x.Name), EF.Functions.Unaccent(pattern))
-                || (x.Description != null && EF.Functions.ILike(EF.Functions.Unaccent(x.Description), EF.Functions.Unaccent(pattern))))
+            .Where(x => EF.Functions.ILike(EF.Functions.Unaccent(x.Name), EF.Functions.Unaccent(pattern), LikePatterns.Escape)
+                || (x.Description != null && EF.Functions.ILike(EF.Functions.Unaccent(x.Description), EF.Functions.Unaccent(pattern), LikePatterns.Escape)))
             .OrderByDescending(x => x.StartDate)
             .ThenByDescending(x => x.Id)
             .Take(ExpeditionLimit)
@@ -280,7 +280,11 @@ public static class SearchEndpoints
         // matched and is withheld, not with the twenty rows returned, so a common word typed by a
         // caller who may read almost nothing is the expensive case and stays expensive: capping it
         // would make whether a document is found depend on how many others happened to match.
-        var page = Math.Max(1, documentPage ?? 1);
+        // The page number is the caller's and the offset is computed from it in 32 bits, so a
+        // large enough number would wrap into a negative offset the database refuses. Held at the
+        // last page whose offset still fits, anything beyond is answered as the page past the end
+        // it is.
+        var page = Math.Clamp(documentPage ?? 1, 1, int.MaxValue / DocumentPageSize);
         var withheldMatches = await DocumentContentSql.WithheldMatchIdsAsync(
             db, ctx, term, includeSuperseded ?? false, ct);
         var reached = await DocumentAccessRules.ReachedByAttachmentAsync(db, ctx, withheldMatches, ct);

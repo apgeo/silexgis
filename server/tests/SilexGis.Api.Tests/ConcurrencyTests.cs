@@ -8,6 +8,8 @@ using Shouldly;
 using SilexGis.Api.Common;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -330,6 +332,81 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
     }
 
     /// <summary>
+    /// Two saves of one generic feature, carrying the same version and overlapping in time: exactly
+    /// one lands, the other is refused as stale and writes nothing.
+    /// </summary>
+    /// <remarks>
+    /// Sent side by side, two requests can simply run one after the other, and the test then proves
+    /// only the sequential replay. Here both are made to overlap: another connection holds the
+    /// feature's row without changing it (so its version stays the one both saves carry), and both
+    /// requests are sent and left until the database reports each of them waiting on that row. A
+    /// check that compares the version before holding the row has let both through by then; each
+    /// then writes in turn and both answer 200, the second silently replacing the first. A check
+    /// that holds the row from the comparison to the commit lets the first through, and the second,
+    /// reading the row only once the first has committed, finds a version it does not carry.
+    /// </remarks>
+    [Fact]
+    public async Task Two_feature_saves_holding_one_version_at_once_land_exactly_one()
+    {
+        long sinkholeTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            sinkholeTypeId = await db.FeatureTypes.Where(t => t.Code == "sinkhole").Select(t => t.Id).SingleAsync();
+        }
+
+        var created = await owner.PostAsJsonAsync("/api/v1/features", GenericBody("Twice Saved Sinkhole v1", sinkholeTypeId));
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var featureId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var etag = await FeatureETagAsync(featureId);
+
+        await using var parkingScope = factory.Services.CreateAsyncScope();
+        var parker = parkingScope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        // The waits are watched from a connection of their own: inside the parking transaction the
+        // database answers every read of its activity from the snapshot its first read took.
+        await using var watchingScope = factory.Services.CreateAsyncScope();
+        var watcher = watchingScope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        HttpResponseMessage[] answers;
+        await using (var parking = await parker.Database.BeginTransactionAsync())
+        {
+            // A row lock is not a change: the row keeps the version both saves were handed.
+            (await parker.Database.SqlQuery<Guid>(
+                    $"SELECT id AS \"Value\" FROM features WHERE id = {featureId} FOR UPDATE").ToListAsync())
+                .Count.ShouldBe(1);
+            (await FeatureETagAsync(featureId)).ShouldBe(etag);
+
+            var saveA = owner.PutWithIfMatchAsync(
+                $"/api/v1/features/{featureId}", GenericBody("Twice Saved Sinkhole by A", sinkholeTypeId), etag);
+            var saveB = owner.PutWithIfMatchAsync(
+                $"/api/v1/features/{featureId}", GenericBody("Twice Saved Sinkhole by B", sinkholeTypeId), etag);
+            await LockWaitersAsync(watcher, 2, saveA);
+            saveB.IsCompleted.ShouldBeFalse("both saves must be in flight before either may write");
+
+            await parking.CommitAsync();
+            answers = await Task.WhenAll(saveA, saveB);
+        }
+
+        answers.Select(a => a.StatusCode).OrderBy(s => (int)s).ToArray()
+            .ShouldBe([HttpStatusCode.OK, HttpStatusCode.PreconditionFailed],
+                string.Join(" / ", await Task.WhenAll(answers.Select(a => a.Content.ReadAsStringAsync()))));
+        var loser = answers.Single(a => a.StatusCode == HttpStatusCode.PreconditionFailed);
+        (await loser.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("concurrency.version_mismatch");
+
+        var winner = answers.Single(a => a.StatusCode == HttpStatusCode.OK);
+        var winnersName = (await winner.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("name").GetString();
+        winnersName.ShouldBeOneOf("Twice Saved Sinkhole by A", "Twice Saved Sinkhole by B");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Features.AsNoTracking().Where(f => f.Id == featureId).Select(f => f.Name).SingleAsync())
+                .ShouldBe(winnersName, "the refused save must write nothing over the winner's");
+        }
+
+        winner.Headers.ETag!.Tag.ShouldBe(await FeatureETagAsync(featureId));
+    }
+
+    /// <summary>
     /// A last-write-wins save — no precondition sent — raced by another writer is applied to the
     /// row as the other writer left it, and answers what is stored.
     /// </summary>
@@ -419,6 +496,201 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
         flip.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, await flip.Content.ReadAsStringAsync());
         (await flip.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("code").GetString().ShouldBe("concurrency.version_mismatch");
+    }
+
+    /// <summary>
+    /// The uniform feature address keeps the same contract as a kind's own: a full edit names the
+    /// version it was loaded at, a delete that names an old version is refused and removes
+    /// nothing, and one that names the current version — of a generic feature, or of an entrance,
+    /// whose delete also holds its cave — goes through.
+    /// </summary>
+    [Fact]
+    public async Task The_feature_address_needs_a_precondition_to_edit_and_refuses_a_stale_delete()
+    {
+        long sinkholeTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            sinkholeTypeId = await db.FeatureTypes.Where(t => t.Code == "sinkhole").Select(t => t.Id).SingleAsync();
+        }
+
+        var created = await owner.PostAsJsonAsync("/api/v1/features", GenericBody("Preconditioned Sinkhole", sinkholeTypeId));
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var featureId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        var noHeader = await owner.PutAsJsonAsync(
+            $"/api/v1/features/{featureId}", GenericBody("Preconditioned Sinkhole v2", sinkholeTypeId));
+        noHeader.StatusCode.ShouldBe(HttpStatusCode.PreconditionRequired);
+        (await noHeader.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("concurrency.if_match_required");
+
+        var loaded = await FeatureETagAsync(featureId);
+        var edited = await owner.PutWithIfMatchAsync(
+            $"/api/v1/features/{featureId}", GenericBody("Preconditioned Sinkhole v2", sinkholeTypeId), loaded);
+        edited.StatusCode.ShouldBe(HttpStatusCode.OK, await edited.Content.ReadAsStringAsync());
+
+        var stale = await DeleteWithIfMatchAsync($"/api/v1/features/{featureId}", loaded);
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+        (await stale.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("concurrency.version_mismatch");
+        (await owner.GetAsync($"/api/v1/features/{featureId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await DeleteWithIfMatchAsync($"/api/v1/features/{featureId}", await FeatureETagAsync(featureId)))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // An entrance, whose delete at this address also holds and rewrites its cave.
+        var caveId = await CreateCaveAsync("Preconditioned Entrance Cave");
+        var entrance = await owner.PostAsJsonAsync(
+            $"/api/v1/caves/{caveId}/entrances", EntranceBody("Doomed", 25.83, 45.93, surveyedAt: null));
+        entrance.StatusCode.ShouldBe(HttpStatusCode.Created, await entrance.Content.ReadAsStringAsync());
+        var entranceId = (await entrance.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var entranceLoaded = await FeatureETagAsync(entranceId);
+        (await owner.PutWithIfMatchAsync(
+            $"/api/v1/cave-entrances/{entranceId}", EntranceBody("Renamed", 25.83, 45.93, surveyedAt: null), entranceLoaded))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await DeleteWithIfMatchAsync($"/api/v1/features/{entranceId}", entranceLoaded))
+            .StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}"))
+            .GetProperty("entranceCount").GetInt32().ShouldBe(1);
+        (await DeleteWithIfMatchAsync($"/api/v1/features/{entranceId}", await FeatureETagAsync(entranceId)))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}"))
+            .GetProperty("entranceCount").GetInt32().ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A cave's entrance count and main entrance are worked out from the entrances every earlier
+    /// writer committed, not from the ones the writer happened to see before it waited.
+    /// </summary>
+    /// <remarks>
+    /// Another writer removes the cave's only entrance and holds the cave while a second writer, in
+    /// a transaction of its own, adds one. The second reads the entrances while the removal is not
+    /// yet committed; worked out from that read, it stores two entrances and keeps the removed one
+    /// as the cave's anchor. Holding the cave before reading makes it wait and read again: one
+    /// entrance, which is the new one and the cave's main.
+    /// </remarks>
+    [Fact]
+    public async Task An_entrance_added_while_another_writer_removes_one_leaves_the_cave_counted_right()
+    {
+        var caveId = await CreateCaveAsync("Mirror Race Cave");
+        var first = await owner.PostAsJsonAsync(
+            $"/api/v1/caves/{caveId}/entrances", EntranceBody("First", 25.84, 45.94, surveyedAt: null));
+        first.StatusCode.ShouldBe(HttpStatusCode.Created, await first.Content.ReadAsStringAsync());
+        var firstId = (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        await using var parkingScope = factory.Services.CreateAsyncScope();
+        var parker = parkingScope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await using var watchingScope = factory.Services.CreateAsyncScope();
+        var watcher = watchingScope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        Guid addedId;
+        await using (var parking = await parker.Database.BeginTransactionAsync())
+        {
+            (await parker.Database.ExecuteSqlAsync(
+                $"UPDATE features SET deleted_at = now() WHERE id = {firstId}")).ShouldBe(1);
+            // Both rows the mirror writes are held, so the adding writer waits whichever it reaches first.
+            _ = await parker.Database.SqlQuery<Guid>(
+                $"SELECT id AS \"Value\" FROM features WHERE id = {caveId} FOR UPDATE").ToListAsync();
+            _ = await parker.Database.SqlQuery<Guid>(
+                $"SELECT id AS \"Value\" FROM caves WHERE id = {caveId} FOR UPDATE").ToListAsync();
+
+            var adding = Task.Run(async () =>
+            {
+                await using var scope = factory.Services.CreateAsyncScope();
+                var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+                var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+                var ownerId = await db.Features.Where(f => f.Id == caveId).Select(f => f.OwnerUserId).SingleAsync();
+                await using var transaction = await db.Database.BeginTransactionAsync();
+                var feature = new Feature
+                {
+                    Name = "Added meanwhile",
+                    Geom = new NetTopologySuite.Geometries.Point(25.85, 45.95) { SRID = 4326 },
+                    OwnerUserId = ownerId,
+                };
+                await writer.CreateEntranceAsync(
+                    feature,
+                    new CaveEntrance { CaveFeatureId = caveId, EntranceTypeId = entranceTypeId, IsMain = false });
+                await db.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return feature.Id;
+            });
+
+            await LockWaitersAsync(watcher, 1, adding.ContinueWith(_ => new HttpResponseMessage(HttpStatusCode.OK)));
+            await parking.CommitAsync();
+            addedId = await adding;
+        }
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Caves.AsNoTracking().Where(c => c.Id == caveId).Select(c => c.EntranceCount).SingleAsync())
+                .ShouldBe(1);
+            (await db.CaveEntrances.AsNoTracking().Where(e => e.CaveFeatureId == caveId && e.IsMain)
+                    .Select(e => e.Id).ToListAsync())
+                .ShouldBe([addedId]);
+            (await scope.ServiceProvider.GetRequiredService<FeatureIntegrityVerifier>().VerifyAsync())
+                .Where(p => p.FeatureId == caveId).ShouldBeEmpty();
+        }
+    }
+
+    /// <summary>
+    /// Two entrances of one cave both marked main — what two writers each adding a cave's first
+    /// entrance used to leave — is reported by the integrity check, and the next write that works
+    /// out the cave's mirror leaves one: an entrance being added as main takes the role, as its
+    /// writer asked; among stored ones the older would.
+    /// </summary>
+    [Fact]
+    public async Task A_cave_with_two_main_entrances_is_reported_and_the_next_mirror_keeps_one()
+    {
+        var caveId = await CreateCaveAsync("Two Mains Cave");
+        var first = await owner.PostAsJsonAsync(
+            $"/api/v1/caves/{caveId}/entrances", EntranceBody("Older", 25.86, 45.96, surveyedAt: null));
+        first.StatusCode.ShouldBe(HttpStatusCode.Created, await first.Content.ReadAsStringAsync());
+        var olderId = (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var second = await owner.PostAsJsonAsync(
+            $"/api/v1/caves/{caveId}/entrances", EntranceBody("Younger", 25.87, 45.97, surveyedAt: null));
+        second.StatusCode.ShouldBe(HttpStatusCode.Created, await second.Content.ReadAsStringAsync());
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.CaveEntrances.Where(e => e.CaveFeatureId == caveId)
+                .ExecuteUpdateAsync(s => s.SetProperty(e => e.IsMain, true))).ShouldBe(2);
+            (await scope.ServiceProvider.GetRequiredService<FeatureIntegrityVerifier>().VerifyAsync())
+                .Where(p => p.FeatureId == caveId).Select(p => p.Check).ShouldContain("main_entrance");
+        }
+
+        Guid addedId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+            var ownerId = await db.Features.Where(f => f.Id == caveId).Select(f => f.OwnerUserId).SingleAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var feature = new Feature
+            {
+                Name = "Added as main",
+                Geom = new NetTopologySuite.Geometries.Point(25.88, 45.98) { SRID = 4326 },
+                OwnerUserId = ownerId,
+            };
+            await writer.CreateEntranceAsync(
+                feature, new CaveEntrance { CaveFeatureId = caveId, EntranceTypeId = entranceTypeId, IsMain = true });
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            addedId = feature.Id;
+        }
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.CaveEntrances.AsNoTracking().Where(e => e.CaveFeatureId == caveId && e.IsMain)
+                    .Select(e => e.Id).ToListAsync())
+                .ShouldBe([addedId]);
+            addedId.ShouldNotBe(olderId);
+            (await db.Caves.AsNoTracking().Where(c => c.Id == caveId).Select(c => c.EntranceCount).SingleAsync())
+                .ShouldBe(3);
+            (await scope.ServiceProvider.GetRequiredService<FeatureIntegrityVerifier>().VerifyAsync())
+                .Where(p => p.FeatureId == caveId).ShouldBeEmpty();
+        }
     }
 
     /// <summary>Waits until the database reports <paramref name="count"/> statements waiting on a lock.</summary>
