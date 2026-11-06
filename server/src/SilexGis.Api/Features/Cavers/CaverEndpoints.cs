@@ -124,8 +124,11 @@ public static class CaverEndpoints
     private static bool CanKeepRoster(AccessContext ctx) => CaverDirectory.CanKeepRoster(ctx);
 
     /// <summary>
-    /// The domain check for the roster. A rule may be scoped to a single person, so the object
-    /// level is consulted whenever an id is in hand; without one the check is domain-wide.
+    /// The domain check for the roster. Rules on the roster are domain-wide: the roster is not a
+    /// domain whose rules may name a single person (a rule scoped to one object is refused when it
+    /// is written), so passing an id changes nothing today — no stored rule can match it at the
+    /// object level. It is passed so that the check would weigh such a rule if the roster ever
+    /// admitted one, not because any can exist now.
     /// </summary>
     private static bool Holds(AccessContext? ctx, AccessAction action, Guid? caverId = null) =>
         AccessEvaluator.Decide(
