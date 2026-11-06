@@ -24,6 +24,7 @@ export const TERRAIN_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'terrain_build.directory_unavailable': 'terrain.problems.directoryUnavailable',
   'import.no_roots_configured': 'terrain.problems.noRoots',
   'terrain_build.raster_unsupported': 'terrain.problems.rasterUnsupported',
+  'terrain_build.raster_needs_sidecar': 'terrain.problems.rasterNeedsSidecar',
   'terrain_build.raster_size_invalid': 'terrain.problems.rasterSizeInvalid',
   'terrain_build.raster_unplaceable': 'terrain.problems.rasterUnplaceable',
   'terrain_build.extent_invalid': 'terrain.problems.extentInvalid',
@@ -38,6 +39,8 @@ export const TERRAIN_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'terrain_build.base_depth_differs': 'terrain.problems.baseDepthDiffers',
   'terrain_build.base_datum_differs': 'terrain.problems.baseDatumDiffers',
   'terrain_build.being_extended': 'terrain.problems.beingExtended',
+  'terrain_build.base_in_use': 'terrain.problems.baseInUse',
+  'terrain_build.base_fetch_coverage': 'terrain.problems.baseFetchCoverage',
   'terrain_build.active': 'terrain.problems.active',
   'terrain_build.running': 'terrain.problems.running',
   // Calling a build off and running a stopped one again.

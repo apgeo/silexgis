@@ -147,9 +147,9 @@ public static class MeCredentialEndpoints
 
         var result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
 
-        // The account row's concurrency stamp moves on every write to the account, and the client
-        // writes interface preferences on a timer, so one can land between loading the user above
-        // and saving the new hash. Identity reports that as a concurrency failure, which would
+        // The account row's concurrency stamp moves on every write Identity makes to the account
+        // (a sign-in counting a failure, an address, phone or second-factor change from another
+        // tab), so one can land between loading the user above and saving the new hash. Identity reports that as a concurrency failure, which would
         // reach the caller as a refused password change although nothing about it was wrong. So
         // the change is tried again from a freshly loaded user (and a freshly queued alert, as the
         // cleared tracker drops the first) a few times before a failure is believed.

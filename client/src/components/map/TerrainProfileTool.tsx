@@ -101,7 +101,7 @@ export default function TerrainProfileTool() {
         >
           {armed && <Typography.Text type="secondary">{t('terrainProfile.drawHint')}</Typography.Text>}
           {profile.isPending && <Spin />}
-          {profile.isError && <Alert type="warning" showIcon message={t('terrainProfile.failed')} />}
+          {profile.isError && <Alert type="warning" showIcon title={t('terrainProfile.failed')} />}
           {data && !data.hasTerrain && <Empty description={t('terrainProfile.noTerrainBuilt')} />}
           {data && data.hasTerrain && data.readCount === 0 && (
             <Empty description={t('terrainProfile.noCoverage')} />

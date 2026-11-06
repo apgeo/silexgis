@@ -41,7 +41,7 @@ public static class GeofileEndpoints
             .WithSummary("Metadata update (Write permission); the uploaded file is immutable.");
         geofiles.MapGet("/{id:guid}/columns", GetColumnsAsync)
             .WithSummary("Header of a delimited upload, so a wrong coordinate-column guess can be corrected.");
-        geofiles.MapPost("/{id:guid}/reimport", ReimportAsync)
+        geofiles.MapPost("/{id:guid}/reimport", ReimportAsync).WithValidation<GeofileReimportRequest>()
             .WithSummary("Re-reads the upload, optionally with corrected source options (Write permission).");
         geofiles.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes a geofile with its imported features and stored file.");
@@ -64,6 +64,15 @@ public static class GeofileEndpoints
         [".wkt"] = GeofileFormat.Wkt,
         [".wkb"] = GeofileFormat.Wkb,
     };
+
+    /// <summary>What the stored-file row holds of the uploaded file's own name.</summary>
+    private const int MaxOriginalNameLength = 255;
+
+    /// <summary>What the geofile row holds of its display name; the update rule allows the same.</summary>
+    private const int MaxNameLength = 200;
+
+    private static string Clipped(string value, int length) =>
+        value.Length <= length ? value : value[..(char.IsHighSurrogate(value[length - 1]) ? length - 1 : length)];
 
     /// <summary>Extensions whose real format is decided by looking inside the archive.</summary>
     private static readonly string[] ArchiveExtensions = [".zip", ".kmz"];
@@ -102,6 +111,16 @@ public static class GeofileEndpoints
                 $"Unsupported file extension '{extension}'. Supported: {string.Join(", ", FormatByExtension.Keys)}.");
         }
 
+        // Checked before the blob is written: a name the stored-file row cannot hold would
+        // otherwise fail the save after the bytes are on disk, answering 500 and leaving a file
+        // nothing names.
+        if (Path.GetFileName(file.FileName).Length > MaxOriginalNameLength)
+        {
+            return ApiProblems.BadRequest(
+                "geofile.file_name_too_long",
+                $"The file name is longer than {MaxOriginalNameLength} characters; rename the file and upload it again.");
+        }
+
         // Persist the blob, then hash it from disk (uploads can be large; no buffering).
         string storagePath;
         await using (var content = file.OpenReadStream())
@@ -122,7 +141,9 @@ public static class GeofileEndpoints
             format = ArchiveFormatSniffer.Detect(fileStore.GetAbsolutePath(storagePath)) ?? format;
         }
 
-        var name = Path.GetFileNameWithoutExtension(file.FileName);
+        // The display name is only a starting point the owner can edit, so a long one is cut to
+        // what the column holds rather than refused.
+        var name = Clipped(Path.GetFileNameWithoutExtension(file.FileName), MaxNameLength);
         var storedFile = documents.Create(
             new StoredContent(
                 storagePath,
@@ -312,7 +333,7 @@ public static class GeofileEndpoints
         try
         {
             var columns = DelimitedVectorReader.ReadHeader(
-                fileStore.GetAbsolutePath(file.StoragePath), options?.Delimited?.Delimiter);
+                fileStore.GetAbsolutePath(file.StoragePath), options?.Delimited?.Delimiter, options?.Delimited?.Encoding);
             return TypedResults.Ok(new GeofileColumnsDto(columns));
         }
         catch (Exception e) when (e is VectorIOException or IOException)
@@ -350,6 +371,19 @@ public static class GeofileEndpoints
                 : ApiProblems.NotFound("geofile.not_found");
         }
 
+        // A file already queued or being read is not queued again: two imports of one geofile
+        // would each replace the other's features, and the options of whichever ran last would
+        // win without the caller learning which. The row is held while the queue is asked, so two
+        // requests at the same moment cannot both hear "nothing queued".
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await GeodataSql.LockGeofileAsync(db, geofile.Id, ct);
+        if (await GeodataSql.HasLiveImportAsync(db, geofile.Id, ProcessingJobKinds.GeofileImport, ct))
+        {
+            return ApiProblems.Conflict(
+                "geofile.import_in_progress",
+                "The file is still being read; re-import it once this import has finished.");
+        }
+
         if (request?.SourceOptions is { } sourceOptions)
         {
             geofile.SourceOptions = ImportJson.Serialize(sourceOptions);
@@ -364,6 +398,7 @@ public static class GeofileEndpoints
             RequestedBy = user.UserId,
         });
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return TypedResults.Ok(geofile.ToStatusDto());
     }
@@ -408,16 +443,12 @@ public static class GeofileEndpoints
                 : ApiProblems.NotFound("geofile.not_found");
         }
 
-        // Polymorphic attachment rows have no FK to the geofile — clean them up in the
-        // same transaction as the entity. Resource-link members follow the same
-        // convention: a dead target must not linger in links as a permanent
-        // restricted-looking member.
-        await db.Attachments
-            .Where(a => a.EntityType == AttachedEntityType.Geofile && a.EntityId == geofile.Id)
-            .ExecuteDeleteAsync(ct);
-        await db.ResLinkMembers
-            .Where(m => m.EntityType == AttachedEntityType.Geofile && m.EntityId == geofile.Id)
-            .ExecuteDeleteAsync(ct);
+        // The rows that point at the geofile by kind and id — files attached to it, tags on it,
+        // and its place in a relation — have no foreign key, so nothing removes them unless this
+        // does; a dead target must not linger in links as a permanent restricted-looking member.
+        // They go in one transaction with the geofile, so a save that fails leaves it whole.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await PolymorphicRowCleanup.RemoveRowsPointingAtAsync(db, AttachedEntityType.Geofile, [geofile.Id], ct);
 
         // Imported features cascade with the geofile row; the upload goes explicitly. The
         // geofile owns its upload outright, so the whole document goes — an imported file has
@@ -426,6 +457,7 @@ public static class GeofileEndpoints
         var removed = await documents.DeleteDocumentOfFileAsync(geofile.FileId, ct);
 
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         foreach (var storedFile in removed)
         {

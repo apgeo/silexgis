@@ -212,6 +212,7 @@
       "directoryUnavailable": "Din acel director nu se poate citi: fie nu există, fie nu este unul pe care această instalare are voie să îl citească.",
       "noRoots": "Această instalare nu citește rastre din niciun director de pe server.",
       "rasterUnsupported": "Fișierul nu este un rastru de altitudine pe care această instalare îl citește.",
+      "rasterNeedsSidecar": "O grilă ASCII își indică poziția doar într-un fișier .prj separat, pe care o singură încărcare nu îl poate aduce. Convertește-o în GeoTIFF sau cere operatorului să pună grila și fișierul .prj într-un director de pe server.",
       "rasterSizeInvalid": "Fișierul este gol sau mai mare decât poate fi o încărcare.",
       "rasterUnplaceable": "O dală de altitudine spune unde se află doar prin numele ei, în forma N45E024.hgt pentru pătratul al cărui colț este 45°N 24°E. Numele acestui fișier nu spune ce pătrat acoperă, așa că nimic nu îl poate așeza pe hartă. Redenumește-l după pătratul pe care îl acoperă sau trimite-l într-un format care își poartă singur poziția.",
       "extentInvalid": "Dreptunghiul acela nu este un dreptunghi pe Pământ. Trasează-l din nou.",
@@ -232,7 +233,9 @@
       "baseNotPublished": "Generarea de extins nu mai are dale acolo de unde se servește terenul. Pornește în schimb o generare nouă peste toată zona.",
       "baseDepthDiffers": "O extensie se construiește la adâncimea generării pe care o extinde; adăugarea nu poate re-face dalele deja existente la alta.",
       "baseDatumDiffers": "O extensie își măsoară înălțimile așa cum le măsoară generarea pe care o extinde; două referințe într-o singură piramidă se întâlnesc într-o treaptă de-a lungul îmbinării.",
-      "beingExtended": "O altă generare care o extinde pe aceasta nu s-a terminat și încă îi citește dalele. Șterge-o după ce acea generare s-a oprit."
+      "beingExtended": "O altă generare care o extinde pe aceasta nu s-a terminat și încă îi citește dalele. Șterge-o după ce acea generare s-a oprit.",
+      "baseInUse": "O generare terminată o extinde pe aceasta și îi citește altitudinile în afara rastrelor pe care le-a adăugat. Șterge mai întâi acea generare.",
+      "baseFetchCoverage": "O generare care extinde alta nu mai aduce acoperirea deschisă: generarea extinsă o conține deja."
     },
     "derivatives": {
       "title": "Imagini ale terenului",

@@ -35,6 +35,9 @@ public sealed class TerrainRasterIndexTests : IAsyncLifetime, IDisposable, IClas
     private const double North = 46.1;
     private const double Pixel = 0.001;
 
+    /// <summary>Where an extension's patch lies: clear of the sixteen pixels a base raster spans.</summary>
+    private const double PatchWest = West + 0.05;
+
     /// <summary>The geoid undulation measured over Piatra Craiului, used as a real correction.</summary>
     private const double Undulation = 39.39;
 
@@ -59,7 +62,12 @@ public sealed class TerrainRasterIndexTests : IAsyncLifetime, IDisposable, IClas
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        await db.TerrainBuilds.Where(b => b.Id == seeded).ExecuteDeleteAsync();
+        // Extensions before the builds they extend, newest first, so no row is left naming a base
+        // that has already gone.
+        foreach (var id in Enumerable.Reverse(seeded))
+        {
+            await db.TerrainBuilds.Where(b => b.Id == id).ExecuteDeleteAsync();
+        }
         await factory.DisposeAsync();
         Dispose();
     }
@@ -79,7 +87,7 @@ public sealed class TerrainRasterIndexTests : IAsyncLifetime, IDisposable, IClas
         }
     }
 
-    private Guid seeded;
+    private readonly List<Guid> seeded = [];
 
     [Fact]
     public async Task A_build_with_no_stored_description_is_described_from_disk_and_written_down()
@@ -280,6 +288,116 @@ public sealed class TerrainRasterIndexTests : IAsyncLifetime, IDisposable, IClas
             .ShouldBe(Undulation, 0.001);
     }
 
+    /// <summary>
+    /// Ground only the base covers still has a height when the scene draws an extension of it.
+    /// </summary>
+    /// <remarks>
+    /// An extension prepares only the rasters it adds — the base's ground is not fetched or
+    /// prepared a second time, it reaches the extension's pyramid as copied tiles. So a coverage
+    /// built from the extension's own prepared directory alone covers only the patch, while the
+    /// scene draws the whole region: a probe, a profile or an entrance's altitude anywhere else
+    /// would answer "outside coverage" over ground the picture plainly shows. Both points are read,
+    /// so that a coverage that held only the base would fail here as surely as one that held only
+    /// the patch.
+    /// </remarks>
+    [Fact]
+    public async Task Ground_only_the_base_covers_is_read_through_the_extension_being_drawn()
+    {
+        var baseId = await SeedAsync();
+        Raster(baseId, "regional.tif");
+
+        var extensionId = await SeedAsync(active: true, baseBuildId: baseId);
+        Raster(extensionId, "survey.tif", west: PatchWest, first: 500f);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var index = scope.ServiceProvider.GetRequiredService<TerrainRasterIndex>();
+        var sampler = scope.ServiceProvider.GetRequiredService<IDemSampleService>();
+
+        var coverage = await index.ActiveCoverageAsync(CancellationToken.None);
+
+        var samples = await sampler.SampleAsync(
+            coverage,
+            [
+                new DemSamplePoint(West + (3.5 * Pixel), North - (5.5 * Pixel)),
+                new DemSamplePoint(PatchWest + (3.5 * Pixel), North - (5.5 * Pixel)),
+            ],
+            CancellationToken.None);
+
+        samples[0].Outcome.ShouldBe(DemSampleOutcome.Sampled);
+        samples[0].ElevationM!.Value.ShouldBe(100 + (5 * 16) + 3, 0.001);
+
+        samples[1].Outcome.ShouldBe(DemSampleOutcome.Sampled);
+        samples[1].ElevationM!.Value.ShouldBe(500 + (5 * 16) + 3, 0.001);
+
+        // The base's rows stay the base's: its description is borrowed when the extension is read,
+        // never written down a second time under the extension.
+        (await StoredCountAsync(extensionId)).ShouldBe(1);
+        (await StoredCountAsync(baseId)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// An extension of an extension reads all the way down to the first build of the chain.
+    /// </summary>
+    [Fact]
+    public async Task An_extension_of_an_extension_reads_the_ground_of_the_first_build()
+    {
+        var baseId = await SeedAsync();
+        Raster(baseId, "regional.tif");
+
+        var middleId = await SeedAsync(baseBuildId: baseId);
+        Raster(middleId, "survey.tif", west: PatchWest, first: 500f);
+
+        var topId = await SeedAsync(baseBuildId: middleId);
+        Raster(topId, "second-survey.tif", west: PatchWest + 0.02, first: 900f);
+
+        var coverage = await CoverageAsync(topId);
+
+        coverage.Rasters.Count.ShouldBe(3);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var sampler = scope.ServiceProvider.GetRequiredService<IDemSampleService>();
+        var sample = (await sampler.SampleAsync(
+                coverage,
+                [new DemSamplePoint(West + (3.5 * Pixel), North - (5.5 * Pixel))],
+                CancellationToken.None))
+            .Single();
+
+        sample.Outcome.ShouldBe(DemSampleOutcome.Sampled);
+        sample.ElevationM!.Value.ShouldBe(100 + (5 * 16) + 3, 0.001);
+    }
+
+    /// <summary>
+    /// Where the extension and its base both have ground, the extension's is the answer.
+    /// </summary>
+    /// <remarks>
+    /// The rasters here are of one resolution, so the finest-first ordering the reader applies
+    /// cannot choose between them; what decides is the order the coverage lists them in. An
+    /// extension is made to replace what its base says about the ground it adds — a fresh survey
+    /// over an older model — so its own rasters come first.
+    /// </remarks>
+    [Fact]
+    public async Task Where_an_extension_and_its_base_overlap_the_extension_is_the_answer()
+    {
+        var baseId = await SeedAsync();
+        Raster(baseId, "regional.tif");
+
+        var extensionId = await SeedAsync(baseBuildId: baseId);
+        Raster(extensionId, "survey.tif", first: 500f);
+
+        var coverage = await CoverageAsync(extensionId);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var sampler = scope.ServiceProvider.GetRequiredService<IDemSampleService>();
+        var sample = (await sampler.SampleAsync(
+                coverage,
+                [new DemSamplePoint(West + (3.5 * Pixel), North - (5.5 * Pixel))],
+                CancellationToken.None))
+            .Single();
+
+        sample.Outcome.ShouldBe(DemSampleOutcome.Sampled);
+        sample.ElevationM!.Value.ShouldBe(500 + (5 * 16) + 3, 0.001);
+    }
+
     private string PreparedDirectory(Guid buildId) =>
         Path.Combine(buildRoot, buildId.ToString("N"), "prepared");
 
@@ -307,7 +425,8 @@ public sealed class TerrainRasterIndexTests : IAsyncLifetime, IDisposable, IClas
     private async Task<Guid> SeedAsync(
         TerrainHeightDatum datum = TerrainHeightDatum.Orthometric,
         double geoidHeightM = 0,
-        bool active = false)
+        bool active = false,
+        Guid? baseBuildId = null)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -336,11 +455,12 @@ public sealed class TerrainRasterIndexTests : IAsyncLifetime, IDisposable, IClas
             HeightDatum = datum,
             GeoidHeightM = geoidHeightM,
             IsActive = active,
+            BaseBuildId = baseBuildId,
         };
 
         db.TerrainBuilds.Add(build);
         await db.SaveChangesAsync();
-        seeded = build.Id;
+        seeded.Add(build.Id);
         return build.Id;
     }
 
@@ -348,7 +468,8 @@ public sealed class TerrainRasterIndexTests : IAsyncLifetime, IDisposable, IClas
     /// A prepared raster in this build's prepared directory: the form the preparation step leaves
     /// behind, so what the index reads is what it reads in production.
     /// </summary>
-    private void Raster(Guid buildId, string name)
+    private void Raster(
+        Guid buildId, string name, double west = West, double north = North, float first = 100f)
     {
         GdalBase.ConfigureAll();
         var directory = PreparedDirectory(buildId);
@@ -357,7 +478,7 @@ public sealed class TerrainRasterIndexTests : IAsyncLifetime, IDisposable, IClas
         using var dataset = Gdal.GetDriverByName("GTiff")
             .Create(Path.Combine(directory, name), 16, 16, 1, DataType.GDT_Float32, null);
 
-        dataset.SetGeoTransform([West, Pixel, 0, North, 0, -Pixel]);
+        dataset.SetGeoTransform([west, Pixel, 0, north, 0, -Pixel]);
 
         using (var reference = new SpatialReference(""))
         {
@@ -372,7 +493,7 @@ public sealed class TerrainRasterIndexTests : IAsyncLifetime, IDisposable, IClas
         var pixels = new float[16 * 16];
         for (var i = 0; i < pixels.Length; i++)
         {
-            pixels[i] = 100f + i;
+            pixels[i] = first + i;
         }
 
         band.WriteRaster(0, 0, 16, 16, pixels, 16, 16, 0, 0);

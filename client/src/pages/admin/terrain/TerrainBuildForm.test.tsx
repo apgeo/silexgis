@@ -155,11 +155,17 @@ describe('extending a finished build', () => {
 
   it('takes the depth and the heights from the base, holds them, and names the base when starting', async () => {
     builds = [build({ id: 'b-region-00000000', requestedMaxDepth: 11 })];
-    show();
+    render(
+      <App>
+        <TerrainBuildForm canExecute isFullAdmin />
+      </App>,
+    );
     drawRectangle([25.1, 45.6, 25.2, 45.7]);
 
     const depth = screen.getByTestId('terrain-depth') as HTMLInputElement;
     expect(depth).toBeEnabled();
+    const coverage = screen.getByLabelText(/Obtain coverage/) as HTMLInputElement;
+    expect(coverage).toBeEnabled();
 
     chooseBase('b-region');
 
@@ -168,12 +174,18 @@ describe('extending a finished build', () => {
     expect(depth).toHaveValue('11');
     expect(depth).toBeDisabled();
     expect(screen.getByTestId('terrain-extend-locked')).toHaveTextContent('level 11');
-    // The base already holds the coverage, so it is not obtained again unless asked for.
-    const coverage = screen.getByLabelText(/Obtain coverage/) as HTMLInputElement;
+    // The base already holds the coverage, so it is not obtained again, and cannot be asked for:
+    // the server refuses an extension that asks.
     expect(coverage.checked).toBe(false);
+    expect(coverage).toBeDisabled();
 
-    // Asked for anyway here, so the build has something to add without an upload in this test.
-    fireEvent.click(coverage);
+    // Something of its own to add: a directory on the server, with its credit.
+    fireEvent.change(screen.getByLabelText(/Directory on the server/), {
+      target: { value: '/srv/lidar' },
+    });
+    fireEvent.change(await screen.findByLabelText(/Credit/), {
+      target: { value: 'A county lidar survey' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /Start build/ }));
 
     await vi.waitFor(() => expect(submitMutate).toHaveBeenCalledTimes(1));
@@ -182,7 +194,7 @@ describe('extending a finished build', () => {
     expect(sent.maxDepth).toBe(11);
     expect(sent.heightDatum).toBe('ellipsoidal');
     expect(sent.geoidHeightM).toBe(41.5);
-    expect(sent.fetchCoverage).toBe(true);
+    expect(sent.fetchCoverage).toBe(false);
   });
 
   it('starts a plain build with no base named when the picker is left empty', async () => {

@@ -143,6 +143,27 @@ public sealed class TerrainBuildExtendTests : IAsyncLifetime, IDisposable, IClas
         var nothing = await SubmitAsync(Extension(good, uploaded: null));
         CodeOf(await BodyAsync(nothing)).ShouldBe(TerrainBuildEndpoints.NoSourcesCode);
 
+        // Asked for explicitly, the open coverage is refused: it would be chosen over the union of
+        // the base's ground and the patch, the whole re-bake an extension exists to avoid.
+        var refetch = await SubmitAsync(Extension(good, raster) with { FetchCoverage = true });
+        var refetchBody = await BodyAsync(refetch);
+        refetch.StatusCode.ShouldBe(HttpStatusCode.BadRequest, refetchBody);
+        CodeOf(refetchBody).ShouldBe(TerrainBuildEndpoints.BaseFetchCoverageCode);
+
+        // Said off explicitly, it is the ordinary extension.
+        var explicitOff = await SubmitAsync(Extension(good, raster) with { FetchCoverage = false });
+        var explicitOffBody = await BodyAsync(explicitOff);
+        explicitOff.StatusCode.ShouldBe(HttpStatusCode.Created, explicitOffBody);
+
+        // Stopped, so the pass below is not refused as a second build of the same ground.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var offId = JsonDocument.Parse(explicitOffBody).RootElement.GetProperty("id").GetGuid();
+            await db.TerrainBuilds.Where(b => b.Id == offId).ExecuteUpdateAsync(
+                s => s.SetProperty(b => b.Status, TerrainBuildStatus.Failed));
+        }
+
         // The pass that makes the refusals above mean something.
         var accepted = await SubmitAsync(Extension(good, raster));
         var body = await BodyAsync(accepted);
@@ -327,11 +348,12 @@ public sealed class TerrainBuildExtendTests : IAsyncLifetime, IDisposable, IClas
 
     /// <summary>
     /// A base is kept while an extension of it has not finished, because that extension still
-    /// reads the base's pyramid; afterwards it can go, and the extension only loses the record of
-    /// where it started.
+    /// reads the base's pyramid, and while it has finished, because it reads its heights off the
+    /// patch from the base's prepared rasters, which go with the base's folder. Once the extension
+    /// is gone the base can go too; a failed extension, which never baked, does not hold it.
     /// </summary>
     [Fact]
-    public async Task A_base_cannot_be_deleted_while_an_extension_of_it_is_unfinished_and_can_afterwards()
+    public async Task A_base_cannot_be_deleted_while_an_extension_of_it_is_unfinished_or_finished_and_can_afterwards()
     {
         var baseId = await SeedBaseAsync(checkedWhole: true, published: true, "Copernicus DEM");
         var extensionId = await AcceptedAsync(Extension(baseId, await UploadAsync()));
@@ -344,12 +366,39 @@ public sealed class TerrainBuildExtendTests : IAsyncLifetime, IDisposable, IClas
 
         await FinishAsync(extensionId);
 
+        var stillRead = await operating.DeleteAsync($"/api/v1/terrain/builds/{baseId}");
+        var stillReadBody = await BodyAsync(stillRead);
+        stillRead.StatusCode.ShouldBe(HttpStatusCode.Conflict, stillReadBody);
+        CodeOf(stillReadBody).ShouldBe(TerrainBuildEndpoints.BaseInUseCode);
+        (await ReadAsync(extensionId)).BaseBuildId.ShouldBe(baseId);
+
+        var extensionGone = await operating.DeleteAsync($"/api/v1/terrain/builds/{extensionId}");
+        extensionGone.StatusCode.ShouldBe(HttpStatusCode.NoContent, await BodyAsync(extensionGone));
+
         var allowed = await operating.DeleteAsync($"/api/v1/terrain/builds/{baseId}");
         allowed.StatusCode.ShouldBe(HttpStatusCode.NoContent, await BodyAsync(allowed));
+    }
 
-        var extension = await ReadAsync(extensionId);
-        extension.BaseBuildId.ShouldBeNull();
-        extension.Status.ShouldBe(TerrainBuildStatus.Succeeded);
+    /// <summary>
+    /// An extension that failed before it baked reads nothing from its base, so it does not keep
+    /// the base from being removed; it loses only the record of where it started.
+    /// </summary>
+    [Fact]
+    public async Task A_failed_extension_does_not_hold_its_base()
+    {
+        var baseId = await SeedBaseAsync(checkedWhole: true, published: true, "Copernicus DEM");
+        var extensionId = await AcceptedAsync(Extension(baseId, await UploadAsync()));
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TerrainBuilds.Where(b => b.Id == extensionId).ExecuteUpdateAsync(
+                s => s.SetProperty(b => b.Status, TerrainBuildStatus.Failed));
+        }
+
+        var allowed = await operating.DeleteAsync($"/api/v1/terrain/builds/{baseId}");
+        allowed.StatusCode.ShouldBe(HttpStatusCode.NoContent, await BodyAsync(allowed));
+        (await ReadAsync(extensionId)).BaseBuildId.ShouldBeNull();
     }
 
     /// <summary>

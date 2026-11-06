@@ -68,13 +68,15 @@ public static class SendThrottle
         SilexGisUser user,
         TwoFactorMethod method,
         SecuritySettings policy,
-        string purpose) =>
+        string purpose,
+        TimeProvider clock) =>
         TooSoonAsync(
             userManager,
             user,
             method,
             TimeSpan.FromSeconds(Math.Clamp(policy.TwoFactorResendIntervalSeconds, 0, 600)),
-            purpose);
+            purpose,
+            clock);
 
     public static async Task<bool> TooSoonAsync(
         UserManager<SilexGisUser> userManager,
@@ -82,7 +84,7 @@ public static class SendThrottle
         TwoFactorMethod method,
         TimeSpan interval,
         string purpose,
-        TimeProvider? clock = null)
+        TimeProvider clock)
     {
         var stored = await userManager.GetAuthenticationTokenAsync(user, Provider, Bucket(method, purpose));
         if (stored is null || !long.TryParse(stored, CultureInfo.InvariantCulture, out var lastUnix))
@@ -102,7 +104,7 @@ public static class SendThrottle
         SilexGisUser user,
         TimeSpan interval,
         string purpose,
-        TimeProvider? clock = null)
+        TimeProvider clock)
     {
         var stored = await userManager.GetAuthenticationTokenAsync(user, Provider, purpose);
         if (stored is null || !long.TryParse(stored, CultureInfo.InvariantCulture, out var lastUnix))
@@ -114,7 +116,7 @@ public static class SendThrottle
     }
 
     public static Task MarkSentAsync(
-        UserManager<SilexGisUser> userManager, SilexGisUser user, string purpose, TimeProvider? clock = null) =>
+        UserManager<SilexGisUser> userManager, SilexGisUser user, string purpose, TimeProvider clock) =>
         userManager.SetAuthenticationTokenAsync(
             user,
             Provider,
@@ -126,7 +128,7 @@ public static class SendThrottle
         SilexGisUser user,
         TwoFactorMethod method,
         string purpose,
-        TimeProvider? clock = null) =>
+        TimeProvider clock) =>
         userManager.SetAuthenticationTokenAsync(
             user,
             Provider,
@@ -134,10 +136,11 @@ public static class SendThrottle
             Now(clock).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
 
     /// <summary>
-    /// The application's clock where a caller passes it, the system's otherwise — the callers that
-    /// do not yet take the injected clock read the same instant they always did.
+    /// Always the application's clock, never a fallback to the system's: a marker stamped on one
+    /// clock and read on another measures the gap between the two clocks, not the interval, and a
+    /// caller left on the system clock is invisible to any test that moves the application's.
     /// </summary>
-    private static DateTimeOffset Now(TimeProvider? clock) => (clock ?? TimeProvider.System).GetUtcNow();
+    private static DateTimeOffset Now(TimeProvider clock) => clock.GetUtcNow();
 
     /// <summary>
     /// Each purpose is throttled on its own. Sharing one bucket would let setting a method up make

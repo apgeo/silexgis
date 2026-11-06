@@ -80,6 +80,32 @@ public sealed class GdalScratchDirectoryTests : IDisposable
         Gdal.GetConfigOption("CPL_TMPDIR", null).ShouldBe(before);
     }
 
+    /// <summary>
+    /// The directory is the holder's alone: GDAL work on another thread at the same moment — a map
+    /// conversion, a derivative in another job lane — keeps writing its scratch files where it
+    /// would have, not into the build's workspace that may be deleted under them.
+    /// </summary>
+    [Fact]
+    public void A_scratch_directory_held_on_one_thread_is_not_seen_by_another()
+    {
+        var before = Gdal.GetConfigOption("CPL_TMPDIR", null);
+        var chosen = Path.Combine(root, "chosen-alone");
+        Directory.CreateDirectory(chosen);
+
+        using (GdalScratchDirectory.At(chosen))
+        {
+            // The holder sees it — the positive case that gives the next line its meaning.
+            Gdal.GetConfigOption("CPL_TMPDIR", null).ShouldBe(Path.GetFullPath(chosen));
+
+            string? seenElsewhere = "unset";
+            var other = new Thread(() => seenElsewhere = Gdal.GetConfigOption("CPL_TMPDIR", null));
+            other.Start();
+            other.Join();
+
+            seenElsewhere.ShouldBe(before);
+        }
+    }
+
     /// <remarks>
     /// The container's failure, made to happen anywhere: the setting names a directory that cannot
     /// be written, exactly as it names an unwritable one there. A conversion that honoured it would
