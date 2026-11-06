@@ -169,7 +169,7 @@ export const specs = {
   ],
   // Surveys sent from a field device: the access-key and upload settings, the cave's list of
   // surveys, the status page of one upload and the page behind its public link.
-  surveyUploads: ['access-keys.spec.ts', 'survey-uploads.spec.ts', 'public-survey.spec.ts'],
+  surveyUploads: ['access-keys.spec.ts', 'survey-uploads.spec.ts', 'public-survey.spec.ts', 'survey-viewer.spec.ts'],
   sync: [
     'settings.spec.ts', 'review-queue.spec.ts', 'review-uploader.spec.ts',
     'review-uploader-mobile.spec.ts', 'review-file-import.spec.ts',
