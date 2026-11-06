@@ -37,6 +37,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The command line the survey compiler is sandboxed by is asserted directly by the
+         integration test project, on every machine: the tests that run the real compiler need
+         Therion and bubblewrap installed and are skipped where they are not. -->
+    <InternalsVisibleTo Include="SilexGis.Api.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Dapper" />
     <!-- Converts the pre-2007 binary Word and PowerPoint formats into the packaged ones so the
          reader for those can read them. MIT, and on this framework they pull one shared MIT
