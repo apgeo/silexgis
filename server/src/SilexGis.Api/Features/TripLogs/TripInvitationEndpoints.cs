@@ -242,6 +242,11 @@ public static class TripInvitationEndpoints
 
         var invitation = existing ?? new TripInvitation { TripLogId = tripLogId, CaverId = request.CaverId };
 
+        // Asked before the stamps below fill it in. A row can exist without ever having been
+        // asked — somebody who saw the trip and answered it on their own — and the first time
+        // they are actually asked is still the first asking.
+        var firstAsking = invitation.InvitedAt is null;
+
         // First asked wins on both stamps: asking a second time is a reminder, and a record of
         // when somebody was asked that moved every time they were nudged would answer the wrong
         // question about how long they have had to reply.
@@ -251,6 +256,10 @@ public static class TripInvitationEndpoints
         if (existing is null)
         {
             db.TripInvitations.Add(invitation);
+        }
+
+        if (firstAsking)
+        {
             // Only the first asking is worth a message, and it is queued before the save so that
             // one exists only if the asking committed. The trip's state is not consulted: being
             // asked is somebody's deliberate act with this person in mind, unlike a name arriving
@@ -581,6 +590,7 @@ public static class TripInvitationEndpoints
     private static async Task<Results<Ok<TripPromotionDto>, UnauthorizedHttpResult, ProblemHttpResult>>
         PromoteAsync(
             Guid tripLogId,
+            HttpContext http,
             SilexGisDbContext db,
             IAccessService access,
             IAccessContextAccessor accessAccessor,
@@ -600,22 +610,37 @@ public static class TripInvitationEndpoints
             return ApiProblems.NotFound(TripNotFoundCode);
         }
 
-        var mayWrite = (await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed;
-        if (!TripInvitationRules.MayInvite(user.UserId, mayWrite, ctx.IsFullAdmin))
+        if (await PromoteRefusalAsync(access, ctx, user.UserId, trip, ct) is { } early)
         {
-            return ApiProblems.Forbidden(PromoteForbiddenCode);
+            return early;
         }
 
-        // The two states that mean the afternoon is behind us. Announced is admitted beside
-        // finished because a trip reaches it only through being finished, and refusing there
-        // would leave whoever wrote the trip up before turning the answers into the list of
-        // people with no way back to it — the move out of announced is a move back to the
-        // workshop, which is not a thing to make somebody do to record who went.
-        if (trip.State is not (ActivityState.Done or ActivityState.Published))
+        // The trip's row is held from here to the answer, in one transaction with everything this
+        // writes. The rows written below and the version move that protects them are then one
+        // act: a full-roster save holds the same row, so it either finished before the answers
+        // are read here or waits and then finds the version moved, and nothing is left written
+        // under a version a stale save still matches. Offered rather than required, because the
+        // button carries no version; a caller who does send one is held to it.
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.TripLogs, tripLogId, ct);
+        if (hold.Refusal is { } stale)
         {
-            return ApiProblems.Conflict(
-                PromoteTooEarlyCode,
-                "A trip's list of people records who was on it, so it is written once the trip has happened.");
+            return stale;
+        }
+
+        // Everything decided above was decided on a reading taken before the row was held, and
+        // another write — a move back to planning, a smaller cap, a change of audience — can have
+        // committed in between. The row is read again under the hold and every decision is made
+        // again on it, so the list written is one the trip as it now stands allows.
+        trip = await ReadableTripAsync(db, access, ctx, tripLogId, ct);
+        if (trip is null)
+        {
+            return ApiProblems.NotFound(TripNotFoundCode);
+        }
+
+        if (await PromoteRefusalAsync(access, ctx, user.UserId, trip, ct) is { } late)
+        {
+            return late;
         }
 
         var rows = await db.TripInvitations.AsNoTracking()
@@ -707,6 +732,8 @@ public static class TripInvitationEndpoints
             .Where(x => x.Id == tripLogId)
             .ExecuteUpdateAsync(u => u.SetProperty(x => x.UpdatedAt, DateTimeOffset.UtcNow), ct);
 
+        await hold.AnswerAsync(ct, $"/api/v1/trip-logs/{tripLogId}");
+
         return TypedResults.Ok(new TripPromotionDto
         {
             TripLogId = tripLogId,
@@ -714,6 +741,31 @@ public static class TripInvitationEndpoints
             Promoted = promoted,
             AlreadyNamed = attending.Count - promoted,
         });
+    }
+
+    /// <summary>
+    /// Why this caller may not turn the answers into the list of people now, or null when they
+    /// may. Asked once before the trip's row is held and again on the row as held.
+    /// </summary>
+    private static async Task<ProblemHttpResult?> PromoteRefusalAsync(
+        IAccessService access, AccessContext ctx, Guid userId, TripLog trip, CancellationToken ct)
+    {
+        var mayWrite = (await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed;
+        if (!TripInvitationRules.MayInvite(userId, mayWrite, ctx.IsFullAdmin))
+        {
+            return ApiProblems.Forbidden(PromoteForbiddenCode);
+        }
+
+        // The two states that mean the afternoon is behind us. Announced is admitted beside
+        // finished because a trip reaches it only through being finished, and refusing there
+        // would leave whoever wrote the trip up before turning the answers into the list of
+        // people with no way back to it — the move out of announced is a move back to the
+        // workshop, which is not a thing to make somebody do to record who went.
+        return trip.State is ActivityState.Done or ActivityState.Published
+            ? null
+            : ApiProblems.Conflict(
+                PromoteTooEarlyCode,
+                "A trip's list of people records who was on it, so it is written once the trip has happened.");
     }
 
     /// <summary>

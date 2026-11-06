@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Features.TripLogs;
@@ -53,8 +55,15 @@ public sealed class TripPromotionTests : IAsyncLifetime, IDisposable, IClassFixt
     /// <summary>People in the directory with no account between them, which is most of a club.</summary>
     private readonly List<Guid> cavers = [];
 
+    private readonly FailTheVersionStamp failStamp = new();
+
+    private readonly AfterTheTripIsRead afterRead = new();
+
     public TripPromotionTests(PostgresFixture postgres) =>
-        factory = new SilexGisApiFactory(postgres.ConnectionString);
+        factory = new SilexGisApiFactory(
+            postgres.ConnectionString,
+            configureServices: services => services.ConfigureDbContext<SilexGisDbContext>(
+                options => options.AddInterceptors(failStamp, afterRead)));
 
     public async ValueTask InitializeAsync()
     {
@@ -386,6 +395,143 @@ public sealed class TripPromotionTests : IAsyncLifetime, IDisposable, IClassFixt
             },
             fresh!);
         informed.StatusCode.ShouldBe(HttpStatusCode.OK, await informed.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// The rows a promotion writes and the version move that protects them are one act: when the
+    /// move fails, the rows are not left behind without it. Left behind, they would sit under a
+    /// version a stale full-roster edit still matches, and that edit would delete them.
+    /// </summary>
+    [Fact]
+    public async Task A_promotion_whose_version_move_fails_writes_nobody()
+    {
+        var trip = await CreatePlanAsync("Version move fails", maxParticipants: null);
+
+        (await AnswerAsync(trip, cavers[0], "yes")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await AnswerAsync(trip, cavers[1], "yes")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await MoveAsync(trip, "done");
+
+        failStamp.Trip = trip;
+        HttpResponseMessage failed;
+        try
+        {
+            failed = await organiser.PostAsync(PromotePath(trip), null);
+        }
+        finally
+        {
+            failStamp.Trip = null;
+        }
+
+        failed.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        (await RosterAsync(trip)).ShouldBeEmpty();
+
+        // Asked again with nothing in the way, the same promotion writes both.
+        (await PromoteAsync(organiser, trip)).GetProperty("promoted").GetInt32().ShouldBe(2);
+        (await RosterAsync(trip)).Count.ShouldBe(2);
+    }
+
+    /// <summary>
+    /// A move back to planning that commits between the promotion's first reading of the trip and
+    /// the moment it holds the row is seen: the promotion decides again on the row it holds and
+    /// is refused, instead of writing a list of who went onto a trip that has not happened.
+    /// </summary>
+    [Fact]
+    public async Task A_trip_moved_back_to_planning_while_a_promotion_waits_gets_no_list()
+    {
+        var trip = await CreatePlanAsync("Moved back meanwhile", maxParticipants: null);
+        (await AnswerAsync(trip, cavers[0], "yes")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await MoveAsync(trip, "done");
+
+        afterRead.Trip = trip;
+        afterRead.Then = async () =>
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TripLogs.Where(x => x.Id == trip)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.State, ActivityState.Planned));
+        };
+        HttpResponseMessage late;
+        try
+        {
+            late = await organiser.PostAsync(PromotePath(trip), null);
+        }
+        finally
+        {
+            afterRead.Trip = null;
+            afterRead.Then = null;
+        }
+
+        var body = await late.Content.ReadAsStringAsync();
+        afterRead.Fired.ShouldBeTrue();
+        late.StatusCode.ShouldBe(HttpStatusCode.Conflict, body);
+        body.ShouldContain(TripInvitationEndpoints.PromoteTooEarlyCode);
+        (await RosterAsync(trip)).ShouldBeEmpty();
+
+        // The same promotion on the trip once it is finished again writes the one who said yes.
+        // Put back the way it was taken away: planning climbs one rung at a time, and the climb is
+        // not what this is about.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TripLogs.Where(x => x.Id == trip)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.State, ActivityState.Done));
+        }
+
+        (await PromoteAsync(organiser, trip)).GetProperty("promoted").GetInt32().ShouldBe(1);
+    }
+
+    /// <summary>
+    /// Runs a write of its own, once, right after the first reading of one trip's row, standing in
+    /// for another request that commits between a handler's first look at the trip and its hold.
+    /// </summary>
+    private sealed class AfterTheTripIsRead : DbCommandInterceptor
+    {
+        public Guid? Trip { get; set; }
+
+        public Func<Task>? Then { get; set; }
+
+        public bool Fired { get; private set; }
+
+        public override async ValueTask<DbDataReader> ReaderExecutedAsync(
+            DbCommand command, CommandExecutedEventData eventData, DbDataReader result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Trip is { } id
+                && Then is { } then
+                && command.CommandText.Contains("FROM trip_logs", StringComparison.OrdinalIgnoreCase)
+                && command.Parameters.Cast<DbParameter>().Any(p => p.Value is Guid g && g == id))
+            {
+                Then = null;
+                Fired = true;
+                await then();
+            }
+
+            return await base.ReaderExecutedAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Fails the statement that stamps one trip's row with a new update time, standing in for a
+    /// connection lost between a promotion's rows and its version move.
+    /// </summary>
+    private sealed class FailTheVersionStamp : DbCommandInterceptor
+    {
+        public Guid? Trip { get; set; }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Trip is { } id
+                && command.CommandText.TrimStart().StartsWith("UPDATE trip_logs", StringComparison.OrdinalIgnoreCase)
+                && command.CommandText.Contains("updated_at", StringComparison.OrdinalIgnoreCase)
+                && command.Parameters.Cast<DbParameter>().Any(p => p.Value is Guid g && g == id))
+            {
+                throw new InvalidOperationException("The trip's version move was made to fail.");
+            }
+
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
     }
 
     // ---- helpers
