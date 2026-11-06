@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 using Shouldly;
@@ -39,6 +41,9 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
     private readonly Guid mappedPhoneUser = Guid.CreateVersion7();
     private readonly Guid unmappedPhoneUser = Guid.CreateVersion7();
 
+    private readonly ConversionHooks hooks = new();
+    private readonly HoldBothClaims claims = new();
+
     private HttpClient uploader = null!; // Editor, club member
     private HttpClient colleague = null!; // Editor, club member: creates nothing here, places no guarded cave
     private HttpClient member = null!;   // Viewer, club member: reads the club's trips, changes none
@@ -62,7 +67,11 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
                 ["Files:Root"] = filesRoot,
                 ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
             },
-            JobWorkers.RemoveFrom);
+            services =>
+            {
+                JobWorkers.RemoveFrom(services);
+                services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(hooks, claims));
+            });
     }
 
     public async ValueTask InitializeAsync()
@@ -255,6 +264,50 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
         await ShouldBeTheUploaderAndTheAdministratorsAsync(db, told);
         told.ShouldAllBe(n => n.TargetKind == NotificationTargetKind.TripLog);
         told.ShouldAllBe(n => n.TemplateKey == Domain.Messaging.MessageTemplateCatalog.NotifyTripNeedsAttention);
+    }
+
+    /// <summary>
+    /// A depth the cave has declared the meaning of is placed where the declaration says, as a
+    /// live report at that depth would be. The scan below sits exactly between two stations — the
+    /// tie the test above leaves unresolved — and the cave has declared that depth to be the upper
+    /// of the two, so the trip gets that position and no flag.
+    /// </summary>
+    [Fact]
+    public async Task A_scan_at_a_depth_the_cave_declared_lands_on_the_declared_station()
+    {
+        var (cave, _) = await CaveWithSurveyAsync();
+        var atTie = await CreatePlaceAsync(cave, depth: 35);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.CaveDepthPlaces.Add(new CaveDepthPlace
+            {
+                CaveFeatureId = cave,
+                DepthM = 35m,
+                ViewerStationName = "cave.upper.1",
+                PlaceLabel = "Ledge",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var set = await CreateSetAsync(cave);
+        var recording = Guid.CreateVersion7();
+        var answer = await UploadAsync(
+            set,
+            [Recording(recording, cave, mappedPhoneUser, title: $"Declared {marker}")],
+            [Point(Guid.CreateVersion7(), recording, atTie, 20)]);
+
+        await RunConversionAsync(answer.GetProperty("importBatchId").GetGuid());
+
+        var tripId = await TripOfAsync(recording);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripPositionEvents.AsNoTracking().Where(e => e.TripLogId == tripId)
+                    .Select(e => e.ViewerStationName).ToListAsync())
+                .ShouldBe(["cave.upper.1"]);
+            (await db.TripAttentions.AsNoTracking().AnyAsync(a => a.TripLogId == tripId)).ShouldBeFalse();
+        }
     }
 
     [Fact]
@@ -1121,8 +1174,8 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
 
     /// <summary>
     /// The flag is written against the version it was read at: a clearance prepared before an
-    /// upload raised the flag again fails rather than clearing a reason nobody saw, and the raise
-    /// prepared before a clearance is read again rather than landing on a cleared row.
+    /// upload raised the flag again fails rather than clearing a reason nobody saw. The other half
+    /// — a raise prepared before a clearance — is driven by the two tests after this one.
     /// </summary>
     [Fact]
     public async Task A_flag_written_against_a_stale_reading_fails_instead_of_landing()
@@ -1151,6 +1204,416 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
         current.ClearedAt.ShouldBeNull();
         TripRecordingConversionRules.Parse(current.Reasons).Select(r => r.Code)
             .ShouldContain(TripAttentionReasons.RecordingChangedAfterConversion);
+    }
+
+    /// <summary>
+    /// A clearance that commits between the job's reading of the flag and its save makes that save
+    /// fail; the job reads the flag again, finds it cleared, and raises it again with the change
+    /// counted once — so a change made after somebody looked is never left on a row that reads as
+    /// looked at.
+    /// </summary>
+    [Fact]
+    public async Task A_change_raised_while_somebody_clears_the_flag_is_read_again_and_left_raised()
+    {
+        var (cave, _) = await CaveWithSurveyAsync();
+        var atTie = await CreatePlaceAsync(cave, depth: 35);
+        var set = await CreateSetAsync(cave);
+        var recording = Guid.CreateVersion7();
+        var first = await UploadAsync(
+            set, [Recording(recording, cave, mappedPhoneUser)], [Point(Guid.CreateVersion7(), recording, atTie, 10)]);
+        await RunConversionAsync(first.GetProperty("importBatchId").GetGuid());
+        var tripId = await TripOfAsync(recording);
+        (await AttentionOfAsync(tripId)).ClearedAt.ShouldBeNull();
+
+        hooks.BeforeAttentionSave(1, async () =>
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var row = await db.TripAttentions.SingleAsync(a => a.TripLogId == tripId);
+            row.ClearedAt = DateTimeOffset.UtcNow;
+            row.ClearedByUserId = uploaderId;
+            await db.SaveChangesAsync();
+        });
+        try
+        {
+            var late = await UploadAsync(set, [], [Point(Guid.CreateVersion7(), recording, atTie, 50)]);
+            await RunConversionAsync(late.GetProperty("importBatchId").GetGuid());
+        }
+        finally
+        {
+            hooks.Reset();
+        }
+
+        hooks.AttentionCallbacksRun.ShouldBe(1);
+        var attention = await AttentionOfAsync(tripId);
+        attention.ClearedAt.ShouldBeNull();
+        attention.ClearedByUserId.ShouldBeNull();
+        var reasons = TripRecordingConversionRules.Parse(attention.Reasons);
+        reasons.Single(r => r.Code == TripAttentionReasons.RecordingChangedAfterConversion).Count.ShouldBe(1);
+        reasons.Select(r => r.Code).ShouldContain(TripAttentionReasons.UnresolvedStation);
+    }
+
+    /// <summary>
+    /// Two writers raising the first flag of one trip at once: the second insert loses to the
+    /// first, and the job reads the row the other writer made and merges into it, rather than
+    /// failing or leaving a second row.
+    /// </summary>
+    [Fact]
+    public async Task A_first_flag_raised_by_another_writer_meanwhile_is_merged_into()
+    {
+        var (cave, _) = await CaveWithSurveyAsync();
+        var atFifty = await CreatePlaceAsync(cave, depth: -50);
+        var set = await CreateSetAsync(cave);
+        var recording = Guid.CreateVersion7();
+        var first = await UploadAsync(
+            set, [Recording(recording, cave, mappedPhoneUser)], [Point(Guid.CreateVersion7(), recording, atFifty, 10)]);
+        await RunConversionAsync(first.GetProperty("importBatchId").GetGuid());
+        var tripId = await TripOfAsync(recording);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripAttentions.AsNoTracking().AnyAsync(a => a.TripLogId == tripId)).ShouldBeFalse();
+        }
+
+        var otherWriters = Guid.CreateVersion7().ToString();
+        hooks.BeforeAttentionSave(1, async () =>
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.TripAttentions.Add(new TripAttention
+            {
+                TripLogId = tripId,
+                Reasons = TripRecordingConversionRules.Serialize(
+                    [new TripAttentionReason(TripAttentionReasons.PlaceUnknown, 1, [otherWriters])]),
+                RaisedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        });
+        try
+        {
+            var late = await UploadAsync(set, [], [Point(Guid.CreateVersion7(), recording, atFifty, 50)]);
+            await RunConversionAsync(late.GetProperty("importBatchId").GetGuid());
+        }
+        finally
+        {
+            hooks.Reset();
+        }
+
+        hooks.AttentionCallbacksRun.ShouldBe(1);
+        var attention = await AttentionOfAsync(tripId);
+        attention.ClearedAt.ShouldBeNull();
+        var reasons = TripRecordingConversionRules.Parse(attention.Reasons);
+        reasons.Single(r => r.Code == TripAttentionReasons.PlaceUnknown).PointIds.ShouldBe([otherWriters]);
+        reasons.Single(r => r.Code == TripAttentionReasons.RecordingChangedAfterConversion).Count.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A flag that keeps being changed under the job is not retried for ever: after its last
+    /// attempt the failure escapes, the job reports the recording as not converted, and the flag
+    /// is left as the last writer left it.
+    /// </summary>
+    [Fact]
+    public async Task A_flag_changed_under_every_attempt_gives_up_and_says_so()
+    {
+        var (cave, _) = await CaveWithSurveyAsync();
+        var atTie = await CreatePlaceAsync(cave, depth: 35);
+        var set = await CreateSetAsync(cave);
+        var recording = Guid.CreateVersion7();
+        var first = await UploadAsync(
+            set, [Recording(recording, cave, mappedPhoneUser)], [Point(Guid.CreateVersion7(), recording, atTie, 10)]);
+        await RunConversionAsync(first.GetProperty("importBatchId").GetGuid());
+        var tripId = await TripOfAsync(recording);
+
+        hooks.BeforeAttentionSave(int.MaxValue, async () =>
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var row = await db.TripAttentions.SingleAsync(a => a.TripLogId == tripId);
+            row.ClearedAt = DateTimeOffset.UtcNow;
+            row.ClearedByUserId = uploaderId;
+            await db.SaveChangesAsync();
+        });
+        try
+        {
+            var late = await UploadAsync(set, [], [Point(Guid.CreateVersion7(), recording, atTie, 50)]);
+            await Should.ThrowAsync<InvalidOperationException>(
+                () => RunConversionAsync(late.GetProperty("importBatchId").GetGuid()));
+        }
+        finally
+        {
+            hooks.Reset();
+        }
+
+        hooks.AttentionCallbacksRun.ShouldBe(4);
+        var attention = await AttentionOfAsync(tripId);
+        attention.ClearedAt.ShouldNotBeNull();
+        TripRecordingConversionRules.Parse(attention.Reasons).Select(r => r.Code)
+            .ShouldNotContain(TripAttentionReasons.RecordingChangedAfterConversion);
+    }
+
+    /// <summary>
+    /// An uploader who has lost the right to write trips between the upload and the job gets no
+    /// trip: nothing the refused write staged is left behind, the recording stays unclaimed, and
+    /// once the right is back the same job makes the trip.
+    /// </summary>
+    [Fact]
+    public async Task A_recording_whose_uploader_may_no_longer_write_trips_waits_and_converts_later()
+    {
+        var (cave, _) = await CaveWithSurveyAsync();
+        var atFifty = await CreatePlaceAsync(cave, depth: -50);
+        var set = await CreateSetAsync(cave);
+        var recording = Guid.CreateVersion7();
+        var title = $"Refused {marker}";
+        var answer = await UploadAsync(
+            set,
+            [Recording(recording, cave, mappedPhoneUser, title: title)],
+            [Point(Guid.CreateVersion7(), recording, atFifty, 10)]);
+        var batch = answer.GetProperty("importBatchId").GetGuid();
+
+        long deny;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var entry = new AccessEntry
+            {
+                SubjectKind = AccessSubjectKind.User,
+                SubjectId = uploaderId,
+                Effect = AccessEffect.Deny,
+                Domain = AccessDomain.TripLogs,
+                Actions = AccessAction.Create,
+                ScopeKind = AccessScopeKind.All,
+            };
+            db.AccessEntries.Add(entry);
+            await db.SaveChangesAsync();
+            deny = entry.Id;
+        }
+
+        await RunConversionAsync(batch);
+
+        (await RecordingAsync(recording)).ConvertedTripLogId.ShouldBeNull();
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripLogs.IgnoreQueryFilters().AsNoTracking().CountAsync(t => t.Title == title)).ShouldBe(0);
+            (await db.AuditEntries.AsNoTracking().CountAsync(
+                a => a.ImportBatchId == batch && a.Source == ChangeSource.TripConversion)).ShouldBe(0);
+
+            db.AccessEntries.Remove(await db.AccessEntries.SingleAsync(e => e.Id == deny));
+            await db.SaveChangesAsync();
+        }
+
+        await RunConversionAsync(batch);
+        var tripId = await TripOfAsync(recording);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripLogs.AsNoTracking().CountAsync(t => t.Title == title)).ShouldBe(1);
+            (await db.TripPositionEvents.AsNoTracking().CountAsync(e => e.TripLogId == tripId)).ShouldBe(1);
+        }
+    }
+
+    /// <summary>
+    /// Two conversions of one recording at once — a job re-delivered while the first run is still
+    /// going — both get as far as staging a trip; the claim lets one of them through and rolls the
+    /// other back whole, so the recording has one trip.
+    /// </summary>
+    [Fact]
+    public async Task Two_conversions_of_one_recording_at_once_make_one_trip()
+    {
+        var (cave, _) = await CaveWithSurveyAsync();
+        var atFifty = await CreatePlaceAsync(cave, depth: -50);
+        var set = await CreateSetAsync(cave);
+        var recording = Guid.CreateVersion7();
+        var title = $"Raced {marker}";
+        var answer = await UploadAsync(
+            set,
+            [Recording(recording, cave, mappedPhoneUser, title: title)],
+            [Point(Guid.CreateVersion7(), recording, atFifty, 10)]);
+        var batch = answer.GetProperty("importBatchId").GetGuid();
+
+        async Task<TripRecordingConversionResult> ConvertAsync()
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var converter = scope.ServiceProvider.GetRequiredService<TripRecordingConverter>();
+            return await converter.ConvertAsync(recording, batch, [], convertWithProblems: true);
+        }
+
+        claims.Armed = true;
+        TripRecordingConversionResult[] results;
+        try
+        {
+            results = await Task.WhenAll(ConvertAsync(), ConvertAsync());
+        }
+        finally
+        {
+            claims.Armed = false;
+        }
+
+        claims.Arrived.ShouldBe(2);
+        results.Select(r => r.Outcome).Order().ShouldBe(
+            new[] { TripRecordingConversionOutcome.Converted, TripRecordingConversionOutcome.AlreadyConverted }.Order());
+        await using var check = factory.Services.CreateAsyncScope();
+        var checkDb = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await checkDb.TripLogs.IgnoreQueryFilters().AsNoTracking().CountAsync(t => t.Title == title)).ShouldBe(1);
+        var tripId = await TripOfAsync(recording);
+        (await checkDb.TripPositionEvents.AsNoTracking().CountAsync(e => e.TripLogId == tripId)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// One recording of an upload failing costs the others nothing: the job converts the rest,
+    /// says that one failed, and a second run converts the one that failed without making a
+    /// second trip, or a second round of notices, for any recording the first run finished.
+    /// </summary>
+    [Fact]
+    public async Task One_recording_failing_leaves_the_others_converted_and_a_re_run_repeats_nothing()
+    {
+        var (cave, _) = await CaveWithSurveyAsync();
+        var atTie = await CreatePlaceAsync(cave, depth: 35);
+        var set = await CreateSetAsync(cave);
+        var failing = Guid.CreateVersion7();
+        var flagged = Guid.CreateVersion7();
+        var failingTitle = $"Fails once {marker}";
+        var flaggedTitle = $"Flagged {marker}";
+        var answer = await UploadAsync(
+            set,
+            [
+                Recording(failing, cave, mappedPhoneUser, title: failingTitle),
+                Recording(flagged, cave, mappedPhoneUser, title: flaggedTitle),
+            ],
+            [Point(Guid.CreateVersion7(), failing, atTie, 10), Point(Guid.CreateVersion7(), flagged, atTie, 20)]);
+        var batch = answer.GetProperty("importBatchId").GetGuid();
+
+        hooks.FailTripTitled = failingTitle;
+        try
+        {
+            await Should.ThrowAsync<InvalidOperationException>(() => RunConversionAsync(batch));
+        }
+        finally
+        {
+            hooks.Reset();
+        }
+
+        (await RecordingAsync(failing)).ConvertedTripLogId.ShouldBeNull();
+        var flaggedTrip = await TripOfAsync(flagged);
+        var noticesAfterFirst = await NoticesAboutAsync(flaggedTrip);
+        noticesAfterFirst.ShouldBeGreaterThan(0);
+
+        await RunConversionAsync(batch);
+
+        var failingTrip = await TripOfAsync(failing);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TripLogs.IgnoreQueryFilters().AsNoTracking().CountAsync(t => t.Title == failingTitle)).ShouldBe(1);
+        (await db.TripLogs.IgnoreQueryFilters().AsNoTracking().CountAsync(t => t.Title == flaggedTitle)).ShouldBe(1);
+        (await TripOfAsync(flagged)).ShouldBe(flaggedTrip);
+        (await NoticesAboutAsync(flaggedTrip)).ShouldBe(noticesAfterFirst);
+        (await NoticesAboutAsync(failingTrip)).ShouldBe(noticesAfterFirst);
+    }
+
+    private async Task<int> NoticesAboutAsync(Guid tripId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Notifications.AsNoTracking()
+            .CountAsync(n => n.Category == NotificationCategory.TripNeedsAttention && n.TargetId == tripId);
+    }
+
+    /// <summary>
+    /// Hooks into the saves the conversion makes: one that fails the trip of a chosen title, and
+    /// one that runs another writer's change just before the job saves the trip's flag. The other
+    /// writer's own save passes through untouched.
+    /// </summary>
+    private sealed class ConversionHooks : SaveChangesInterceptor
+    {
+        private readonly AsyncLocal<bool> inCallback = new();
+        private Func<Task>? beforeAttentionSave;
+        private int remaining;
+        private int run;
+
+        public string? FailTripTitled { get; set; }
+
+        public int AttentionCallbacksRun => Volatile.Read(ref run);
+
+        public void BeforeAttentionSave(int times, Func<Task> callback)
+        {
+            remaining = times;
+            run = 0;
+            beforeAttentionSave = callback;
+        }
+
+        public void Reset()
+        {
+            FailTripTitled = null;
+            beforeAttentionSave = null;
+            remaining = 0;
+        }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context is { } context && !inCallback.Value)
+            {
+                if (FailTripTitled is { } title
+                    && context.ChangeTracker.Entries<TripLog>()
+                        .Any(e => e.State == EntityState.Added && e.Entity.Title == title))
+                {
+                    throw new InvalidOperationException("This trip was made to fail.");
+                }
+
+                if (beforeAttentionSave is { } callback
+                    && context.ChangeTracker.Entries<TripAttention>()
+                        .Any(e => e.State is EntityState.Added or EntityState.Modified)
+                    && Interlocked.Decrement(ref remaining) >= 0)
+                {
+                    inCallback.Value = true;
+                    try
+                    {
+                        await callback();
+                        Interlocked.Increment(ref run);
+                    }
+                    finally
+                    {
+                        inCallback.Value = false;
+                    }
+                }
+            }
+
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Holds each conversion at its claim of the recording until both have reached it, so the two
+    /// claims really do meet. Bounded, so a conversion that never gets there lets the other on.
+    /// </summary>
+    private sealed class HoldBothClaims : DbCommandInterceptor
+    {
+        private readonly TaskCompletionSource both = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int arrived;
+
+        public bool Armed { get; set; }
+
+        public int Arrived => Volatile.Read(ref arrived);
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Armed
+                && command.CommandText.Contains("UPDATE trip_recordings", StringComparison.OrdinalIgnoreCase)
+                && command.CommandText.Contains("converted_trip_log_id", StringComparison.OrdinalIgnoreCase))
+            {
+                if (Interlocked.Increment(ref arrived) >= 2)
+                {
+                    both.TrySetResult();
+                }
+
+                await Task.WhenAny(both.Task, Task.Delay(TimeSpan.FromSeconds(5), cancellationToken));
+            }
+
+            return result;
+        }
     }
 
     /// <summary>

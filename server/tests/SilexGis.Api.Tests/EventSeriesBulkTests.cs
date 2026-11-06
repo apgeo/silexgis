@@ -694,6 +694,48 @@ public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
+    /// The occurrences before the anchor are not moved, and a move that carries the anchor onto
+    /// the one before it — here the second of three-day camps pulled back onto the last day of
+    /// the first — is refused whole, by a plain shift and by a re-spacing alike. A day later it
+    /// fits and goes through.
+    /// </summary>
+    [Fact]
+    public async Task A_move_onto_the_occurrence_before_the_run_is_refused_whole()
+    {
+        var day = new DateOnly(2058, 6, 1);
+        var (seriesId, ids) = await SeriesAsync("Camp", day, 3);
+        (await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[0]}/series/following",
+            Body("Camp", day, endDate: day.AddDays(2)))).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var shifted = await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[1]}/series/following",
+            Body("Camp", day.AddDays(2), endDate: day.AddDays(4)));
+        var shiftedPayload = await shifted.Content.ReadAsStringAsync();
+        shifted.StatusCode.ShouldBe(HttpStatusCode.BadRequest, shiftedPayload);
+        shiftedPayload.ShouldContain("event.recurrence_overlapping");
+
+        var respaced = await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[1]}/series/following",
+            Body("Camp", day.AddDays(2), endDate: day.AddDays(4), seriesFrequency: "weekly"));
+        var respacedPayload = await respaced.Content.ReadAsStringAsync();
+        respaced.StatusCode.ShouldBe(HttpStatusCode.BadRequest, respacedPayload);
+        respacedPayload.ShouldContain("event.recurrence_overlapping");
+
+        var untouched = await BySeriesAsync(owner, seriesId);
+        untouched.Select(x => x.GetProperty("startDate").GetString()).OrderBy(x => x)
+            .ShouldBe(["2058-06-01", "2058-06-08", "2058-06-15"]);
+
+        var accepted = await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[1]}/series/following",
+            Body("Camp", day.AddDays(3), endDate: day.AddDays(5)));
+        accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await accepted.Content.ReadAsStringAsync());
+        var after = await BySeriesAsync(owner, seriesId);
+        after.Select(x => x.GetProperty("startDate").GetString()).OrderBy(x => x)
+            .ShouldBe(["2058-06-01", "2058-06-04", "2058-06-11"]);
+    }
+
+    /// <summary>
     /// A re-spacing goes through the generator that wrote the run, so it is refused — whole, with
     /// the generator's own code and nothing written — where the create would have been: here, a
     /// three-day course asked to come round daily.

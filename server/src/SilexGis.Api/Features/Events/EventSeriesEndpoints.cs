@@ -6,6 +6,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Events;
+using SilexGis.Domain.Import.TrackingCsv;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
@@ -307,6 +308,37 @@ public static class EventSeriesEndpoints
             }
         }
 
+        // The occurrences before the anchor are not moved, and a move backwards, or a longer
+        // span, can carry the run onto them: the anchor shifted onto the last evening of the
+        // camp before it is the same collision the rule above refuses between moved rows. Only
+        // the earlier occurrences still running on or after the first new day can be reached.
+        // As above, a pair that already ran into each other before the edit is left to be.
+        var firstNewStart = moved.Min(x => x.Start);
+        var earlier = await db.Events.AsNoTracking()
+            .Where(x => x.SeriesId == seriesId
+                && x.StartDate < anchor.StartDate
+                && (x.EndDate ?? x.StartDate) >= firstNewStart)
+            .OrderBy(x => x.StartDate).ThenBy(x => x.Id)
+            .ToListAsync(ct);
+        foreach (var before in earlier)
+        {
+            var beforeEnd = before.EndDate ?? before.StartDate;
+            foreach (var (row, start) in moved)
+            {
+                var collides = start <= beforeEnd && before.StartDate.DayNumber <= start.DayNumber + span;
+                var collidedBefore = row.StartDate <= beforeEnd
+                    && before.StartDate <= (row.EndDate ?? row.StartDate);
+                if (collides && !collidedBefore)
+                {
+                    return ApiProblems.BadRequest(
+                        EventRecurrence.OverlappingCode,
+                        $"The occurrence beginning on {before.StartDate:yyyy-MM-dd}, which this edit "
+                        + $"does not move, would still be running when a moved one begins on "
+                        + $"{start:yyyy-MM-dd}. Nothing was moved. Pick another day or make the event shorter.");
+                }
+            }
+        }
+
         foreach (var (row, start) in moved)
         {
             // The whole edit is applied first — title, kind, times, place, room, audience — and
@@ -375,6 +407,7 @@ public static class EventSeriesEndpoints
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         TimeProvider clock,
+        IConfiguration configuration,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -407,7 +440,15 @@ public static class EventSeriesEndpoints
             return stale;
         }
 
-        var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+        // The club's calendar day, not Greenwich's: east of UTC, between local midnight and the
+        // offset, last evening's occurrence has already happened where the club is while its day
+        // is still "today" in UTC, and would be deleted with every answer given to it. The zone
+        // is the installation's own, the one named for members who never said where they are; an
+        // installation that named none, or a name that is no zone, keeps UTC.
+        var houseZone = TrackingCsvZones.TryFind(configuration["Notifications:TimeZone"], out var named)
+            ? named
+            : TimeZoneInfo.Utc;
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), houseZone).DateTime);
         var from = anchor.StartDate > today ? anchor.StartDate : today;
 
         // Deliberately not visibility-filtered: this is the set the act would reach, and an

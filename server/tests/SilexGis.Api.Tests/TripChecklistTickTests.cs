@@ -187,6 +187,83 @@ public sealed class TripChecklistTickTests : IAsyncLifetime, IDisposable, IClass
     }
 
     /// <summary>
+    /// A list is rewritten whole, so a rewrite made from an old reading would take off every
+    /// line added since — and with each line, every trip's confirmation of it. The rewrite is
+    /// therefore held to the version it was read at: one organiser adds a line and a trip
+    /// confirms it, the other saves a correction from the list as it was before, and that save
+    /// is refused, leaving the new line and its confirmation standing. The same holds for a
+    /// delete sent against the old reading.
+    /// </summary>
+    [Fact]
+    public async Task A_rewrite_from_an_old_reading_of_the_list_is_refused_and_takes_no_line_with_it()
+    {
+        var tripId = await PlanTripAsync(owner, $"Stale list trip {suffix}");
+        var path = $"/api/v1/checklists/{checklistId}";
+
+        var read = await owner.GetAsync(path);
+        read.StatusCode.ShouldBe(HttpStatusCode.OK, await read.Content.ReadAsStringAsync());
+        var loaded = read.Headers.ETag?.ToString();
+        loaded.ShouldNotBeNull();
+
+        object Rewrite(string firstLine, bool withNewLine)
+        {
+            var items = new List<object>
+            {
+                new { id = (Guid?)itemIds[0], text = firstLine },
+                new { id = (Guid?)itemIds[1], text = "Key collected" },
+                new { id = (Guid?)itemIds[2], text = "Callout arranged" },
+            };
+            if (withNewLine)
+            {
+                items.Add(new { id = (Guid?)null, text = "Rope checked" });
+            }
+
+            return new
+            {
+                title = $"Before we set off {suffix}",
+                description = "What has to be settled before the party leaves.",
+                cavingGroupId = (Guid?)null,
+                visibility = "authenticated",
+                items,
+            };
+        }
+
+        var added = await owner.PutWithIfMatchAsync(path, Rewrite("Permit obtained", withNewLine: true), loaded);
+        var addedBody = await added.Content.ReadAsStringAsync();
+        added.StatusCode.ShouldBe(HttpStatusCode.OK, addedBody);
+        var current = added.Headers.ETag?.ToString();
+        current.ShouldNotBeNull();
+        current.ShouldNotBe(loaded);
+        var newLine = JsonDocument.Parse(addedBody).RootElement.GetProperty("items").EnumerateArray()
+            .Single(x => x.GetProperty("text").GetString() == "Rope checked").GetProperty("id").GetGuid();
+        (await owner.PutAsync(Line(tripId, newLine), null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var stale = await owner.PutWithIfMatchAsync(path, Rewrite("Permit obtianed", withNewLine: false), loaded);
+        var staleBody = await stale.Content.ReadAsStringAsync();
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, staleBody);
+        staleBody.ShouldContain("concurrency.version_mismatch");
+
+        var staleDelete = new HttpRequestMessage(HttpMethod.Delete, path);
+        staleDelete.Headers.TryAddWithoutValidation("If-Match", loaded);
+        (await owner.SendAsync(staleDelete)).StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+
+        var after = await ReadChecklistAsync(owner, tripId);
+        after.GetProperty("total").GetInt32().ShouldBe(4);
+        after.GetProperty("ticked").GetInt32().ShouldBe(1);
+        after.GetProperty("items").EnumerateArray()
+            .Single(x => x.GetProperty("id").GetGuid() == newLine)
+            .GetProperty("ticked").GetBoolean().ShouldBeTrue();
+        after.GetProperty("items")[0].GetProperty("text").GetString().ShouldBe("Permit obtained");
+
+        // The version the rewrite answered is the one the next read hands out, and a save made
+        // from it goes through.
+        var reread = await owner.GetAsync(path);
+        reread.Headers.ETag?.ToString().ShouldBe(current);
+        (await owner.PutWithIfMatchAsync(path, Rewrite("Permit obtained!", withNewLine: false), current))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
     /// The case this suite exists for. Two trips with the same audience, one with nothing
     /// confirmed and one with everything confirmed, are read by exactly the same callers — and a
     /// third trip that really is shut is invisible to the same caller in the same reading, so that

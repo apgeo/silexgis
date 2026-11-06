@@ -145,6 +145,7 @@ public static class ChecklistEndpoints
 
     private static async Task<Results<Ok<ChecklistDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -163,11 +164,13 @@ public static class ChecklistEndpoints
         }
 
         var items = await LinesOfAsync(db, [list.Id], ct);
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.Checklists, list.Id, ct);
         return TypedResults.Ok(ToDto(list, items.GetValueOrDefault(list.Id, [])));
     }
 
     private static async Task<Results<Created<ChecklistDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
         ChecklistWriteRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -197,12 +200,14 @@ public static class ChecklistEndpoints
         db.ChecklistItems.AddRange(lines);
         await db.SaveChangesAsync(ct);
 
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.Checklists, list.Id, ct);
         return TypedResults.Created($"/api/v1/checklists/{list.Id}", ToDto(list, lines));
     }
 
     private static async Task<Results<Ok<ChecklistDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
         Guid id,
         ChecklistWriteRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -231,7 +236,29 @@ public static class ChecklistEndpoints
             return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
+        // The rewrite is whole: every line the request does not name is taken off, and every
+        // trip's confirmation of it with it. Made from an old reading, it would take off the lines
+        // somebody added since, so it is held to the version it was read at when it names one.
+        // Offered rather than required, so a caller that sends none keeps last-write-wins; the
+        // row is held either way, and the lines are read under it.
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Checklists, list.Id, ct);
+        if (hold.Refusal is { } stale)
+        {
+            return stale;
+        }
+
+        // Decided again on the row as held: its audience and owner may have changed meanwhile.
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, list, ct)).Allowed)
+        {
+            return ApiProblems.NotFound(NotFoundCode);
+        }
+
         Apply(list, request);
+
+        // Stamped on every rewrite, so the version moves even when only the lines changed: the
+        // lines are rows of their own and leave the list's row as it was.
+        list.UpdatedAt = DateTimeOffset.UtcNow;
 
         var existing = await db.ChecklistItems.Where(x => x.ChecklistId == list.Id).ToListAsync(ct);
         var kept = new HashSet<Guid>();
@@ -264,11 +291,13 @@ public static class ChecklistEndpoints
         db.ChecklistItems.RemoveRange(existing.Where(x => !kept.Contains(x.Id)));
 
         await db.SaveChangesAsync(ct);
+        await hold.AnswerAsync(ct);
         return TypedResults.Ok(ToDto(list, lines));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -295,9 +324,18 @@ public static class ChecklistEndpoints
         // because a purpose points at it would make an administrator's tidying depend on a
         // reference they may not even be able to see.
         //
-        // The lines go with the list, and the confirmations go with the lines.
+        // The lines go with the list, and the confirmations go with the lines. Held to the version
+        // it was read at when the caller names one, like the rewrite; offered, not required.
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Checklists, list.Id, ct);
+        if (hold.Refusal is { } stale)
+        {
+            return stale;
+        }
+
         db.Checklists.Remove(list);
         await db.SaveChangesAsync(ct);
+        await hold.CommitAsync(ct);
         return TypedResults.NoContent();
     }
 

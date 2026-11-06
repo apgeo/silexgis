@@ -610,22 +610,9 @@ public static class TripInvitationEndpoints
             return ApiProblems.NotFound(TripNotFoundCode);
         }
 
-        var mayWrite = (await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed;
-        if (!TripInvitationRules.MayInvite(user.UserId, mayWrite, ctx.IsFullAdmin))
+        if (await PromoteRefusalAsync(access, ctx, user.UserId, trip, ct) is { } early)
         {
-            return ApiProblems.Forbidden(PromoteForbiddenCode);
-        }
-
-        // The two states that mean the afternoon is behind us. Announced is admitted beside
-        // finished because a trip reaches it only through being finished, and refusing there
-        // would leave whoever wrote the trip up before turning the answers into the list of
-        // people with no way back to it — the move out of announced is a move back to the
-        // workshop, which is not a thing to make somebody do to record who went.
-        if (trip.State is not (ActivityState.Done or ActivityState.Published))
-        {
-            return ApiProblems.Conflict(
-                PromoteTooEarlyCode,
-                "A trip's list of people records who was on it, so it is written once the trip has happened.");
+            return early;
         }
 
         // The trip's row is held from here to the answer, in one transaction with everything this
@@ -639,6 +626,21 @@ public static class TripInvitationEndpoints
         if (hold.Refusal is { } stale)
         {
             return stale;
+        }
+
+        // Everything decided above was decided on a reading taken before the row was held, and
+        // another write — a move back to planning, a smaller cap, a change of audience — can have
+        // committed in between. The row is read again under the hold and every decision is made
+        // again on it, so the list written is one the trip as it now stands allows.
+        trip = await ReadableTripAsync(db, access, ctx, tripLogId, ct);
+        if (trip is null)
+        {
+            return ApiProblems.NotFound(TripNotFoundCode);
+        }
+
+        if (await PromoteRefusalAsync(access, ctx, user.UserId, trip, ct) is { } late)
+        {
+            return late;
         }
 
         var rows = await db.TripInvitations.AsNoTracking()
@@ -739,6 +741,31 @@ public static class TripInvitationEndpoints
             Promoted = promoted,
             AlreadyNamed = attending.Count - promoted,
         });
+    }
+
+    /// <summary>
+    /// Why this caller may not turn the answers into the list of people now, or null when they
+    /// may. Asked once before the trip's row is held and again on the row as held.
+    /// </summary>
+    private static async Task<ProblemHttpResult?> PromoteRefusalAsync(
+        IAccessService access, AccessContext ctx, Guid userId, TripLog trip, CancellationToken ct)
+    {
+        var mayWrite = (await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed;
+        if (!TripInvitationRules.MayInvite(userId, mayWrite, ctx.IsFullAdmin))
+        {
+            return ApiProblems.Forbidden(PromoteForbiddenCode);
+        }
+
+        // The two states that mean the afternoon is behind us. Announced is admitted beside
+        // finished because a trip reaches it only through being finished, and refusing there
+        // would leave whoever wrote the trip up before turning the answers into the list of
+        // people with no way back to it — the move out of announced is a move back to the
+        // workshop, which is not a thing to make somebody do to record who went.
+        return trip.State is ActivityState.Done or ActivityState.Published
+            ? null
+            : ApiProblems.Conflict(
+                PromoteTooEarlyCode,
+                "A trip's list of people records who was on it, so it is written once the trip has happened.");
     }
 
     /// <summary>

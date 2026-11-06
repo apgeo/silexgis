@@ -57,11 +57,13 @@ public sealed class TripPromotionTests : IAsyncLifetime, IDisposable, IClassFixt
 
     private readonly FailTheVersionStamp failStamp = new();
 
+    private readonly AfterTheTripIsRead afterRead = new();
+
     public TripPromotionTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
             configureServices: services => services.ConfigureDbContext<SilexGisDbContext>(
-                options => options.AddInterceptors(failStamp)));
+                options => options.AddInterceptors(failStamp, afterRead)));
 
     public async ValueTask InitializeAsync()
     {
@@ -426,6 +428,78 @@ public sealed class TripPromotionTests : IAsyncLifetime, IDisposable, IClassFixt
         // Asked again with nothing in the way, the same promotion writes both.
         (await PromoteAsync(organiser, trip)).GetProperty("promoted").GetInt32().ShouldBe(2);
         (await RosterAsync(trip)).Count.ShouldBe(2);
+    }
+
+    /// <summary>
+    /// A move back to planning that commits between the promotion's first reading of the trip and
+    /// the moment it holds the row is seen: the promotion decides again on the row it holds and
+    /// is refused, instead of writing a list of who went onto a trip that has not happened.
+    /// </summary>
+    [Fact]
+    public async Task A_trip_moved_back_to_planning_while_a_promotion_waits_gets_no_list()
+    {
+        var trip = await CreatePlanAsync("Moved back meanwhile", maxParticipants: null);
+        (await AnswerAsync(trip, cavers[0], "yes")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await MoveAsync(trip, "done");
+
+        afterRead.Trip = trip;
+        afterRead.Then = async () =>
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TripLogs.Where(x => x.Id == trip)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.State, ActivityState.Planned));
+        };
+        HttpResponseMessage late;
+        try
+        {
+            late = await organiser.PostAsync(PromotePath(trip), null);
+        }
+        finally
+        {
+            afterRead.Trip = null;
+            afterRead.Then = null;
+        }
+
+        var body = await late.Content.ReadAsStringAsync();
+        afterRead.Fired.ShouldBeTrue();
+        late.StatusCode.ShouldBe(HttpStatusCode.Conflict, body);
+        body.ShouldContain(TripInvitationEndpoints.PromoteTooEarlyCode);
+        (await RosterAsync(trip)).ShouldBeEmpty();
+
+        // The same promotion on the trip once it is finished again writes the one who said yes.
+        await MoveAsync(trip, "done");
+        (await PromoteAsync(organiser, trip)).GetProperty("promoted").GetInt32().ShouldBe(1);
+    }
+
+    /// <summary>
+    /// Runs a write of its own, once, right after the first reading of one trip's row, standing in
+    /// for another request that commits between a handler's first look at the trip and its hold.
+    /// </summary>
+    private sealed class AfterTheTripIsRead : DbCommandInterceptor
+    {
+        public Guid? Trip { get; set; }
+
+        public Func<Task>? Then { get; set; }
+
+        public bool Fired { get; private set; }
+
+        public override async ValueTask<DbDataReader> ReaderExecutedAsync(
+            DbCommand command, CommandExecutedEventData eventData, DbDataReader result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Trip is { } id
+                && Then is { } then
+                && command.CommandText.Contains("FROM trip_logs", StringComparison.OrdinalIgnoreCase)
+                && command.Parameters.Cast<DbParameter>().Any(p => p.Value is Guid g && g == id))
+            {
+                Then = null;
+                Fired = true;
+                await then();
+            }
+
+            return await base.ReaderExecutedAsync(command, eventData, result, cancellationToken);
+        }
     }
 
     /// <summary>
