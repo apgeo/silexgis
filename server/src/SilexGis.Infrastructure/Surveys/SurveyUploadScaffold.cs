@@ -78,9 +78,13 @@ public static class SurveyUploadScaffold
             var first = refused[0];
             throw new SurveyPipelineException(
                 SurveyPipelineFailures.SourceInvalid,
-                string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"{first.File}, line {first.Line}: '{first.Command}' names a file that is not part of this upload. A survey may read only the files sent with it, by their bare names."));
+                first.Command == TherionCompileCopy.CodeCommand
+                    ? string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"{first.File}, line {first.Line}: a layout's 'code' block is not accepted in an uploaded survey. The server writes the layout a compile uses itself.")
+                    : string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"{first.File}, line {first.Line}: '{first.Command}' names a file that is not part of this upload. A survey may read only the files sent with it, by their bare names."));
         }
 
         var header = TopodroidSurveyHeaderReader.Read(copy.Text);
