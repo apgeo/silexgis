@@ -45,7 +45,7 @@ public sealed class EventSeriesHouseDayTests : IAsyncLifetime, IDisposable, ICla
     [Fact]
     public async Task Calling_off_the_rest_after_local_midnight_keeps_last_evening()
     {
-        var first = new DateOnly(2030, 6, 8);
+        var first = new DateOnly(2026, 6, 8);
         var created = await PostAsync(new
         {
             title = $"Evening {suffix}",
@@ -57,10 +57,12 @@ public sealed class EventSeriesHouseDayTests : IAsyncLifetime, IDisposable, ICla
         var seriesId = created.GetProperty("seriesId").GetGuid();
         var rows = await BySeriesAsync(seriesId);
         rows.Count.ShouldBe(3);
-        var eighth = rows.Single(x => x.GetProperty("startDate").GetString() == "2030-06-08")
+        var eighth = rows.Single(x => x.GetProperty("startDate").GetString() == "2026-06-08")
             .GetProperty("id").GetGuid();
 
-        clock.Now = new DateTimeOffset(2030, 6, 8, 22, 30, 0, TimeSpan.Zero);
+        // Set back rather than forward: a signed-in caller's token is checked against this clock too,
+        // and one that reads as issued in the future is still good where one that has expired is not.
+        clock.Now = new DateTimeOffset(2026, 6, 8, 22, 30, 0, TimeSpan.Zero);
         var response = await owner.DeleteAsync($"/api/v1/events/{eighth}/series/following");
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
@@ -69,7 +71,7 @@ public sealed class EventSeriesHouseDayTests : IAsyncLifetime, IDisposable, ICla
         result.GetProperty("kept").GetInt32().ShouldBe(1);
 
         (await BySeriesAsync(seriesId)).Select(x => x.GetProperty("startDate").GetString())
-            .ShouldBe(["2030-06-08"]);
+            .ShouldBe(["2026-06-08"]);
     }
 
     private async Task<JsonElement> PostAsync(object body)
