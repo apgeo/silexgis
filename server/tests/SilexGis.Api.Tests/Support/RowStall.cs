@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests.Support;
@@ -45,10 +46,24 @@ public sealed class RowStall : IAsyncDisposable
             "documents" => "SELECT 1 AS \"Value\" FROM documents WHERE id = {0} FOR UPDATE",
             "raster_maps" => "SELECT 1 AS \"Value\" FROM raster_maps WHERE id = {0} FOR UPDATE",
             "res_links" => "SELECT 1 AS \"Value\" FROM res_links WHERE id = {0} FOR UPDATE",
-            _ => throw new ArgumentOutOfRangeException(nameof(table), table, "Not a table a phone edits."),
+            "survey_uploads" => "SELECT 1 AS \"Value\" FROM survey_uploads WHERE id = {0} FOR UPDATE",
+            _ => throw new ArgumentOutOfRangeException(nameof(table), table, "Not a table a phone writes to."),
         };
         (await db.Database.SqlQueryRaw<int>(sql, id).ToListAsync())
             .Count.ShouldBe(1, $"the stall row of {table} must exist and be locked");
+        return new RowStall(scope, db, transaction);
+    }
+
+    /// <summary>
+    /// Takes the lock under which a cave's survey readings decide which centerline is its first,
+    /// until released, so that readings of that cave's models park before they look.
+    /// </summary>
+    public static async Task<RowStall> HoldCaveCenterlinesAsync(SilexGisApiFactory factory, Guid caveFeatureId)
+    {
+        var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var transaction = await db.Database.BeginTransactionAsync();
+        await SurveyGraphSql.TakeCaveCenterlineLockAsync(db, caveFeatureId, CancellationToken.None);
         return new RowStall(scope, db, transaction);
     }
 

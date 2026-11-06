@@ -101,10 +101,18 @@ public sealed class SandboxedTherionRunner
 
     /// <summary>
     /// The compiler's own words about which version it is, such as <c>therion 6.3.4</c>, or null
-    /// when it does not answer. Runs <c>therion --version</c>, which reads no survey.
+    /// when it does not answer within <paramref name="limit"/> (five seconds when not given). Runs
+    /// <c>therion --version</c>, which reads no survey.
     /// </summary>
-    public static string? ProbeVersion(string therionPath)
+    /// <remarks>
+    /// The limit covers the whole conversation, the wait for the first line included: everything
+    /// that reports the compiler's version waits on this one probe, so a program that prints
+    /// nothing and never exits must not hold them all. Its error output is read and dropped, so a
+    /// program that fills that pipe cannot stall either.
+    /// </remarks>
+    public static string? ProbeVersion(string therionPath, TimeSpan? limit = null)
     {
+        var allowed = limit ?? TimeSpan.FromSeconds(5);
         try
         {
             var start = new ProcessStartInfo(therionPath)
@@ -124,9 +132,22 @@ public sealed class SandboxedTherionRunner
                 return null;
             }
 
+            var clock = Stopwatch.StartNew();
+            process.ErrorDataReceived += (_, _) => { };
+            process.BeginErrorReadLine();
             process.StandardInput.Close();
-            var first = process.StandardOutput.ReadLine();
-            if (!process.WaitForExit(5000))
+            var firstLine = process.StandardOutput.ReadLineAsync();
+            if (!firstLine.Wait(allowed))
+            {
+                // Killing it closes the pipe, which ends the read left waiting above.
+                process.Kill(entireProcessTree: true);
+                return null;
+            }
+
+            var first = firstLine.Result;
+            _ = process.StandardOutput.ReadToEndAsync();
+            var left = allowed - clock.Elapsed;
+            if (!process.WaitForExit(left > TimeSpan.Zero ? left : TimeSpan.Zero))
             {
                 process.Kill(entireProcessTree: true);
                 return null;
@@ -136,13 +157,13 @@ public sealed class SandboxedTherionRunner
             var words = (first ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
             return words.Length >= 2 && words[0] == "therion" ? $"therion {words[1]}" : null;
         }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or AggregateException)
         {
             return null;
         }
     }
 
-    private ProcessStartInfo Wrap(ProcessStartInfo therion, string project, string scratch, TimeSpan timeout)
+    internal ProcessStartInfo Wrap(ProcessStartInfo therion, string project, string scratch, TimeSpan timeout)
     {
         var command = new List<string>();
 
@@ -246,7 +267,7 @@ public sealed class SandboxedTherionRunner
     /// belongs to the application is removed: its <c>SILEXGIS__</c> settings, connection strings
     /// and the host's <c>ASPNETCORE_</c>/<c>DOTNET_</c> settings.
     /// </summary>
-    private static void ScrubEnvironment(ProcessStartInfo start)
+    internal static void ScrubEnvironment(ProcessStartInfo start)
     {
         if (!OperatingSystem.IsWindows())
         {

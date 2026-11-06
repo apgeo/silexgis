@@ -96,6 +96,24 @@ public static class SurveyModelReading
     }
 
     /// <summary>
+    /// Queues the reading of a model whose file has just been replaced by a new revision, in the
+    /// caller's unit of work: the model is tracked, and the caller's save writes it and the job
+    /// together. A model that holds a reading keeps saying it is ready while the new file is read,
+    /// for the reason this type's remarks give; one that holds none goes back to waiting. The
+    /// caller has already asked <see cref="OutstandingAsync"/> and found no reading on its way.
+    /// </summary>
+    public static void QueueForNewFile(SilexGisDbContext db, SurveyModel model, Guid? requestedBy)
+    {
+        if (model.Status != SurveyModelStatus.Ready)
+        {
+            model.Status = SurveyModelStatus.Pending;
+            model.ProcessingError = null;
+        }
+
+        db.ProcessingJobs.Add(JobFor(model, requestedBy));
+    }
+
+    /// <summary>
     /// Queues another reading of a model that has been read, or that could not be. Changes nothing
     /// when a reading of it is already queued or running.
     /// </summary>

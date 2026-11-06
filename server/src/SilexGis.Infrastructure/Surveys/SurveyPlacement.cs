@@ -301,6 +301,17 @@ public sealed class SurveyPlacement
     }
 
     /// <summary>
+    /// How long a step between two points of the file is on the ground, in metres: its plan
+    /// scaled from grid metres to ground metres by the same factor <see cref="ToLocal"/> applies,
+    /// its height left as it is. A turn changes no length, so none is applied.
+    /// </summary>
+    public double GroundLength(double dx, double dy, double dz)
+    {
+        var plan = Math.Sqrt((dx * dx) + (dy * dy)) * gridMetreInGroundMetres;
+        return Math.Sqrt((plan * plan) + (dz * dz));
+    }
+
+    /// <summary>
     /// Where a point of the file is in the world: longitude, latitude, and altitude in metres.
     /// </summary>
     public (double Longitude, double Latitude, double AltitudeM) ToWorld(double x, double y, double z)
