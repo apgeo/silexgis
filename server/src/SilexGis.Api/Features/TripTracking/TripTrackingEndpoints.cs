@@ -770,8 +770,12 @@ public static class TripTrackingEndpoints
         }
         catch (DbUpdateException)
         {
-            // Two first-ever config writes raced to insert the same one-per-trip row; the
-            // loser is told to look again rather than being answered with a stack trace.
+            // Two first-ever config writes do not reach this: both take the trip's version hold
+            // (a lock on the trip row) before the watch is read or created, so the second waits
+            // and then fails its precondition with a 412. What can still fail here is a reference
+            // that vanished between the checks above and the save — the chosen survey model
+            // removed in that moment — and the caller is told to look again rather than being
+            // answered with a stack trace.
             return ApiProblems.Conflict(TrackingProblemCodes.ConcurrentWrite, "Another tracking write landed first — reload and retry.");
         }
 

@@ -14,6 +14,7 @@ using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Api.Tests;
 
@@ -1304,6 +1305,62 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
         recipients.ShouldContain(uploaderId);
         recipients.ShouldContain(adminId);
         recipients.ShouldAllBe(r => r == uploaderId || administrators.Contains(r));
+    }
+
+    /// <summary>
+    /// A recording whose cave is gone by the time the job runs, or that is not there at all, becomes
+    /// nothing: no trip, no claim, no notice — and a later run, once the cave is back, converts it.
+    /// </summary>
+    /// <remarks>
+    /// The cave is removed through its deletion marker between the upload and the job, which is
+    /// what a person deleting it in that interval leaves behind. The positive half — the same
+    /// recording made a trip once the cave is restored — is what shows the refusal came from the
+    /// missing cave and not from anything else about the recording.
+    /// </remarks>
+    [Fact]
+    public async Task A_recording_whose_cave_is_gone_or_that_does_not_exist_becomes_nothing()
+    {
+        var (cave, _) = await CaveWithSurveyAsync();
+        var atFifty = await CreatePlaceAsync(cave, depth: -50);
+        var set = await CreateSetAsync(cave);
+        var recording = Guid.CreateVersion7();
+        var answer = await UploadAsync(
+            set,
+            [Recording(recording, cave, mappedPhoneUser, title: $"Gone cave {marker}")],
+            [Point(Guid.CreateVersion7(), recording, atFifty, 30)]);
+        var batch = answer.GetProperty("importBatchId").GetGuid();
+
+        await SetCaveDeletedAsync(cave, deleted: true);
+        await RunConversionAsync(batch);
+        (await RecordingAsync(recording)).ConvertedTripLogId.ShouldBeNull();
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var converter = scope.ServiceProvider.GetRequiredService<TripRecordingConverter>();
+            (await converter.ConvertAsync(recording, batch, [], convertWithProblems: false)).Outcome
+                .ShouldBe(TripRecordingConversionOutcome.Missing);
+            (await converter.ConvertAsync(Guid.CreateVersion7(), batch, [], convertWithProblems: false)).Outcome
+                .ShouldBe(TripRecordingConversionOutcome.Missing);
+
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripLogs.AsNoTracking().CountAsync(t => t.Title == $"Gone cave {marker}")).ShouldBe(0);
+            (await db.Notifications.AsNoTracking().CountAsync(n => n.RecipientUserId == uploaderId
+                && n.TemplateKey == Domain.Messaging.MessageTemplateCatalog.NotifyTripRecordingWaiting)).ShouldBe(0);
+        }
+
+        await SetCaveDeletedAsync(cave, deleted: false);
+        await RunConversionAsync(batch);
+        var trip = await TripOfAsync(recording);
+        (await EventCountAsync(trip)).ShouldBe(1);
+    }
+
+    private async Task SetCaveDeletedAsync(Guid cave, bool deleted)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var row = await db.Features.IgnoreQueryFilters().SingleAsync(f => f.Id == cave);
+        row.DeletedAt = deleted ? DateTimeOffset.UtcNow : null;
+        await db.SaveChangesAsync();
     }
 
     private async Task RunConversionAsync(Guid importBatchId)

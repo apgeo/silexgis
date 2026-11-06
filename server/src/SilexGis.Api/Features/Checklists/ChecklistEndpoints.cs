@@ -67,6 +67,12 @@ public sealed class ChecklistWriteRequestValidator : AbstractValidator<Checklist
             .WithMessage($"A list may hold at most {MaxItems} lines.");
         RuleForEach(x => x.Items).ChildRules(item =>
             item.RuleFor(x => x.Text).NotEmpty().MaximumLength(500));
+        // One stored line stands in one place of one list. Named twice, the rewrite would answer
+        // the line twice while the store kept it once, at whichever place came last.
+        RuleFor(x => x.Items)
+            .Must(items => items is null
+                || items.Where(i => i.Id is not null).GroupBy(i => i.Id).All(g => g.Count() == 1))
+            .WithMessage("A line may appear only once in a list.");
     }
 }
 
