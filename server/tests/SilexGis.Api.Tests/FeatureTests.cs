@@ -7,6 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
 using SilexGis.Infrastructure.Persistence;
 
@@ -397,6 +399,205 @@ public sealed class FeatureTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         nonsense.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await nonsense.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
             .ShouldBe("feature.properties_invalid");
+    }
+
+    [Fact]
+    public async Task An_editor_outside_a_club_edits_its_feature_but_cannot_move_it_to_another_club()
+    {
+        // The owner is an Editor: domain-wide Write over features, and a member of no caving
+        // group. Binding a feature to a club takes membership (or a grant scoped to that
+        // club); keeping the binding a feature already has takes nothing beyond Write.
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var boundClub = new CavingGroup { Name = $"Bound club {suffix}", Slug = $"bound-club-{suffix}" };
+        var foreignClub = new CavingGroup { Name = $"Foreign club {suffix}", Slug = $"foreign-club-{suffix}" };
+        var id = await CreateAsync(owner, Body($"Club sinkhole {suffix}", sinkholeTypeId, "authenticated"));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.CavingGroups.AddRange(boundClub, foreignClub);
+            await db.SaveChangesAsync();
+            await db.Features.Where(f => f.Id == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(f => f.CavingGroupId, boundClub.Id));
+        }
+
+        object Edit(string name, Guid clubId) => new
+        {
+            name,
+            featureTypeId = sinkholeTypeId,
+            geometry = new { type = "Point", coordinates = new[] { 25.4455, 45.5301 } },
+            cavingGroupId = clubId,
+            visibility = "authenticated",
+        };
+
+        // The binding sent back unchanged, as the edit form does: the edit is theirs to make.
+        var renamed = await owner.PutWithIfMatchAsync($"/api/v1/features/{id}", Edit($"Renamed {suffix}", boundClub.Id));
+        renamed.StatusCode.ShouldBe(HttpStatusCode.OK, await renamed.Content.ReadAsStringAsync());
+
+        // Moving it to a club they are not in is refused, and nothing of the edit is written.
+        var moved = await owner.PutWithIfMatchAsync($"/api/v1/features/{id}", Edit($"Moved {suffix}", foreignClub.Id));
+        moved.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await moved.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+            .ShouldBe(CavingGroupBindingRules.ForbiddenCode);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var stored = await db.Features.AsNoTracking().Where(f => f.Id == id)
+                .Select(f => new { f.Name, f.CavingGroupId }).SingleAsync();
+            stored.Name.ShouldBe($"Renamed {suffix}");
+            stored.CavingGroupId.ShouldBe(boundClub.Id);
+        }
+    }
+
+    /// <summary>
+    /// A rule can reach only some types, so turning a feature into another type is a write on a
+    /// row of that type: someone who may edit peaks alone cannot make a peak into a bivouac,
+    /// while someone who may edit both can.
+    /// </summary>
+    [Fact]
+    public async Task A_type_change_is_decided_on_the_type_the_feature_is_turned_into()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        long peakTypeId, bivouacTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            peakTypeId = await db.FeatureTypes.Where(t => t.Code == "peak").Select(t => t.Id).SingleAsync();
+            bivouacTypeId = await db.FeatureTypes.Where(t => t.Code == "bivouac").Select(t => t.Id).SingleAsync();
+        }
+
+        var peaksOnly = await ViewerWithFeatureRightsAsync($"ftpeak-{suffix}@t.local", peakTypeId);
+        var both = await ViewerWithFeatureRightsAsync($"ftboth-{suffix}@t.local", peakTypeId, bivouacTypeId);
+        var id = await CreateAsync(owner, Body($"Typed peak {suffix}", peakTypeId, "authenticated"));
+
+        // Within the type they may edit, the edit is theirs to make.
+        var renamed = await peaksOnly.PutWithIfMatchAsync(
+            $"/api/v1/features/{id}", Body($"Renamed peak {suffix}", peakTypeId, "authenticated"));
+        renamed.StatusCode.ShouldBe(HttpStatusCode.OK, await renamed.Content.ReadAsStringAsync());
+
+        // Into a type they may not edit, it is refused and nothing is written.
+        var converted = await peaksOnly.PutWithIfMatchAsync(
+            $"/api/v1/features/{id}", Body($"Bivouac now {suffix}", bivouacTypeId, "authenticated"));
+        converted.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await converted.Content.ReadAsStringAsync());
+        (await converted.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+            .ShouldBe("feature.type_change_forbidden");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var stored = await db.Features.AsNoTracking().Where(f => f.Id == id)
+                .Select(f => new { f.Name, f.FeatureTypeId }).SingleAsync();
+            stored.Name.ShouldBe($"Renamed peak {suffix}");
+            stored.FeatureTypeId.ShouldBe(peakTypeId);
+        }
+
+        // Someone who may edit both types makes the same change.
+        var allowed = await both.PutWithIfMatchAsync(
+            $"/api/v1/features/{id}", Body($"Bivouac now {suffix}", bivouacTypeId, "authenticated"));
+        allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Features.AsNoTracking().Where(f => f.Id == id).Select(f => f.FeatureTypeId).SingleAsync())
+                .ShouldBe(bivouacTypeId);
+        }
+    }
+
+    /// <summary>
+    /// The geometry a feature keeps is held to the type it is given. A caller without exact view
+    /// sends none back and the stored outline stays, so changing the type to one that accepts
+    /// only points is refused — without naming the shape they were not shown — while a type that
+    /// accepts the outline is not.
+    /// </summary>
+    [Fact]
+    public async Task A_type_change_is_refused_when_the_geometry_the_feature_keeps_does_not_fit_the_new_type()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        long lakeTypeId, peakTypeId, genericTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            lakeTypeId = await db.FeatureTypes.Where(t => t.Code == "lake").Select(t => t.Id).SingleAsync();
+            peakTypeId = await db.FeatureTypes.Where(t => t.Code == "peak").Select(t => t.Id).SingleAsync();
+            genericTypeId = await db.FeatureTypes.Where(t => t.Code == "generic").Select(t => t.Id).SingleAsync();
+        }
+
+        var outline = new
+        {
+            type = "Polygon",
+            coordinates = new[]
+            {
+                new[] { new[] { 25.40, 45.50 }, new[] { 25.41, 45.50 }, new[] { 25.41, 45.51 }, new[] { 25.40, 45.50 } },
+            },
+        };
+        var created = await owner.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name = $"Guarded lake {suffix}",
+            featureTypeId = lakeTypeId,
+            geometry = outline,
+            visibility = "authenticated",
+            locationProtected = true,
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var id = (await created.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
+
+        // An editor of every type who may not see where the lake is.
+        var blind = await ViewerWithFeatureRightsAsync($"ftblind-{suffix}@t.local");
+        object Edit(long typeId) => new
+        {
+            kind = "generic",
+            name = $"Guarded lake {suffix}",
+            featureTypeId = typeId,
+            geometry = (object?)null,
+            visibility = "authenticated",
+            locationProtected = true,
+        };
+
+        var toPeak = await blind.PutWithIfMatchAsync($"/api/v1/features/{id}", Edit(peakTypeId));
+        var refusal = await toPeak.Content.ReadAsStringAsync();
+        toPeak.StatusCode.ShouldBe(HttpStatusCode.BadRequest, refusal);
+        refusal.ShouldContain("feature.geometry_invalid");
+        refusal.ShouldNotContain("Polygon");
+
+        var toGeneric = await blind.PutWithIfMatchAsync($"/api/v1/features/{id}", Edit(genericTypeId));
+        toGeneric.StatusCode.ShouldBe(HttpStatusCode.OK, await toGeneric.Content.ReadAsStringAsync());
+
+        using var check = factory.Services.CreateScope();
+        var stored = await check.ServiceProvider.GetRequiredService<SilexGisDbContext>().Features.AsNoTracking()
+            .Where(f => f.Id == id).Select(f => new { f.FeatureTypeId, f.Geom }).SingleAsync();
+        stored.FeatureTypeId.ShouldBe(genericTypeId);
+        stored.Geom!.GeometryType.ShouldBe("Polygon");
+    }
+
+    /// <summary>
+    /// A Viewer handed Read and Write over features — of the given types only, one rule per type,
+    /// or of every type when none is named.
+    /// </summary>
+    private async Task<HttpClient> ViewerWithFeatureRightsAsync(string email, params long[] typeIds)
+    {
+        var userId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, email);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            long?[] reach = typeIds.Length == 0 ? [null] : [.. typeIds.Select(t => (long?)t)];
+            foreach (var typeId in reach)
+            {
+                db.AccessEntries.Add(new AccessEntry
+                {
+                    SubjectKind = AccessSubjectKind.User,
+                    SubjectId = userId,
+                    Effect = AccessEffect.Allow,
+                    Domain = AccessDomain.Features,
+                    Actions = AccessAction.Read | AccessAction.Write,
+                    ScopeKind = AccessScopeKind.All,
+                    FeatureTypeId = typeId,
+                });
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        return await AuthHelper.BearerClientAsync(factory, email);
     }
 
     private static object Body(

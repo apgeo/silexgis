@@ -149,6 +149,84 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
     }
 
     /// <summary>
+    /// The member names of the archive list, the past track and the live list are exactly these.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>These answers have a reader outside this repository:</b> the club website's journal page
+    /// reads them, live and from an export written out of them. A renamed or dropped member
+    /// regenerates the web client, which then compiles against the new name, while that page goes
+    /// on asking for the old one and silently loses the field. Nothing else in the suite would
+    /// fail, because every other test reads only the members its own claim needs.
+    /// </para>
+    /// <para>
+    /// So the whole set is pinned, top level and one element of every array the scene fills. A
+    /// change to any of these lists is a change to a published contract and is decided with the
+    /// people who run that page first, not made to turn this test green.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_published_archive_and_live_answers_carry_exactly_the_members_the_club_page_reads()
+    {
+        string[] pastListMembers = ["trips", "more"];
+        string[] pastRowMembers =
+        [
+            "tripLogId", "expedition", "title", "tripDate", "tripDateEnd", "closedAt", "participantCount",
+            "playable",
+        ];
+        string[] pastTrackMembers =
+        [
+            "tripLogId", "expedition", "title", "tripDate", "tripDateEnd", "armedAt", "closedAt",
+            "positionsWithheld", "trackTruncated", "model", "teams", "participants", "pictures",
+        ];
+        string[] pastParticipantMembers = ["ordinal", "label", "track", "clubs"];
+        string[] pastFixMembers =
+        [
+            "recordedAt", "teamId", "stationName", "depthM", "positionOnOtherModel", "in", "out", "activity",
+            "note",
+        ];
+        string[] liveListMembers = ["trips", "more"];
+        string[] liveRowMembers =
+        [
+            "tripLogId", "expedition", "title", "tripDate", "tripDateEnd", "state", "armedAt", "closedAt",
+            "expectedReturnAt", "positionsWithheld", "teams", "participants",
+        ];
+        string[] liveParticipantMembers =
+        [
+            "ordinal", "label", "teamId", "stationName", "depthM", "lastRecordedAt", "positionRecordedAt",
+            "positionOnOtherModel", "in", "out", "clubs",
+        ];
+
+        // One cave with a finished trip in its archive and a party underground now: the arrangement
+        // in which all three routes answer with a row, so every element below is a real one.
+        var earlier = await PastTripAsync("Pinned earlier");
+        var current = await PublishedTripAsync("Pinned now", earlier.Cave, earlier.Model);
+
+        var pastList = await ListAsync(current.Token);
+        Members(pastList).ShouldBe(pastListMembers, ignoreOrder: true);
+        var pastRow = pastList.GetProperty("trips").EnumerateArray()
+            .Single(t => t.GetProperty("tripLogId").GetGuid() == earlier.Trip);
+        Members(pastRow).ShouldBe(pastRowMembers, ignoreOrder: true);
+
+        var track = await TrackAsync(current.Token, earlier.Trip);
+        Members(track).ShouldBe(pastTrackMembers, ignoreOrder: true);
+        var participant = track.GetProperty("participants").EnumerateArray().First();
+        Members(participant).ShouldBe(pastParticipantMembers, ignoreOrder: true);
+        Members(participant.GetProperty("track").EnumerateArray().First())
+            .ShouldBe(pastFixMembers, ignoreOrder: true);
+
+        var liveList = await Json(anonymous.GetAsync(LiveList(current.Token)));
+        Members(liveList).ShouldBe(liveListMembers, ignoreOrder: true);
+        var liveRow = liveList.GetProperty("trips").EnumerateArray()
+            .Single(t => t.GetProperty("tripLogId").GetGuid() == current.Trip);
+        Members(liveRow).ShouldBe(liveRowMembers, ignoreOrder: true);
+        Members(liveRow.GetProperty("participants").EnumerateArray().First())
+            .ShouldBe(liveParticipantMembers, ignoreOrder: true);
+
+        static List<string> Members(JsonElement element) => [.. element.EnumerateObject().Select(m => m.Name)];
+    }
+
+    /// <summary>
     /// Outside both windows, and having never existed, are the same answer — byte for byte, on all
     /// three routes.
     /// </summary>

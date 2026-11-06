@@ -12,6 +12,7 @@ using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Persistence.Configurations;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Api.Features.TripTracking;
 
@@ -770,8 +771,13 @@ public static class TripTrackingEndpoints
         }
         catch (DbUpdateException)
         {
-            // Two first-ever config writes raced to insert the same one-per-trip row; the
-            // loser is told to look again rather than being answered with a stack trace.
+            // Two first-ever config writes do not reach this: both take the trip's version hold
+            // (a lock on the trip row) before the watch is read or created, so the second waits
+            // and then fails its precondition with a 412. A survey model removed in the meantime
+            // does not either — the watch names its model by a bare column with no reference to
+            // fail. What is left is the database refusing the row for a reason the checks above
+            // could not see, such as the cave it points at purged for good in that moment; the
+            // caller is told to look again rather than being answered with a stack trace.
             return ApiProblems.Conflict(TrackingProblemCodes.ConcurrentWrite, "Another tracking write landed first — reload and retry.");
         }
 
@@ -1212,28 +1218,13 @@ public static class TripTrackingEndpoints
     }
 
     /// <summary>
-    /// The depths a cave has declared the meaning of — station and name — ordered by depth.
+    /// The depths a cave has declared the meaning of — station and name — ordered by depth. The
+    /// one read every path that places a depth goes through, a phone recording's conversion
+    /// included.
     /// </summary>
-    /// <remarks>
-    /// Only the places that have a depth. A place the cave names without one says nothing about
-    /// any depth, so it is never a candidate for placing a report, recording one, correcting one,
-    /// importing a sheet of them or previewing where a depth would land — every one of which reads
-    /// through here — and the chooser of places a report can be made at, which reads here too,
-    /// offers only places that a depth stands for.
-    /// </remarks>
-    internal static async Task<IReadOnlyList<DeclaredDepthPlaces.Declared>> DeclaredPlacesOfAsync(
-        SilexGisDbContext db, Guid caveFeatureId, CancellationToken ct)
-    {
-        var rows = await db.CaveDepthPlaces.AsNoTracking()
-            .Where(p => p.CaveFeatureId == caveFeatureId)
-            .WithDepth()
-            .OrderBy(p => p.DepthM)
-            .Select(p => new { DepthM = p.DepthM!.Value, p.ViewerStationName, p.PlaceLabel })
-            .ToListAsync(ct);
-
-        return [.. rows.Select(r =>
-            new DeclaredDepthPlaces.Declared(r.DepthM, r.ViewerStationName, r.PlaceLabel))];
-    }
+    internal static Task<IReadOnlyList<DeclaredDepthPlaces.Declared>> DeclaredPlacesOfAsync(
+        SilexGisDbContext db, Guid caveFeatureId, CancellationToken ct) =>
+        CaveDepthPlaceReads.DeclaredOfAsync(db, caveFeatureId, ct);
 
     private static ResolvedPlace Refused(ProblemHttpResult problem) =>
         new(null, null, null, null, null, null, problem);

@@ -180,6 +180,14 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
                     $"stored {cave.EntranceCount}, actual {cave.Entrances.Count}"));
             }
 
+            // One anchor per cave: with two mains the cave's point is whichever the last write
+            // happened to pick, and the check below — which takes the first — cannot see it.
+            var mains = cave.Entrances.Count(e => e.IsMain);
+            if (mains > 1)
+            {
+                problems.Add(new IntegrityProblem("main_entrance", cave.Id, $"{mains} entrances are marked main"));
+            }
+
             var main = cave.Entrances.FirstOrDefault(e => e.IsMain) ?? cave.Entrances.FirstOrDefault();
             var expectedGeom = main?.Geom;
             if ((cave.CaveGeom is null) != (expectedGeom is null)

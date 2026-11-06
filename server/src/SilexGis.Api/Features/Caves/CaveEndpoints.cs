@@ -28,6 +28,9 @@ namespace SilexGis.Api.Features.Caves;
 /// </summary>
 public static class CaveEndpoints
 {
+    public const string CaveTypeUnknownCode = "cave.type_unknown";
+    public const string RockTypeUnknownCode = "cave.rock_type_unknown";
+
     public static RouteGroupBuilder MapCaveEndpoints(this RouteGroupBuilder api)
     {
         var caves = api.MapGroup("/caves").WithTags("Caves");
@@ -422,6 +425,11 @@ public static class CaveEndpoints
             return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
+        if (await UnknownCatalogueIdAsync(db, request, ct) is { } unknown)
+        {
+            return unknown;
+        }
+
         IReadOnlyList<ParentSpec> parents = [];
         var parentFacts = await CreateContext.ParentCreateFactsAsync(
             db, ctx, request.ParentId, request.CavingGroupId, FeatureKind.Cave, ct);
@@ -526,10 +534,24 @@ public static class CaveEndpoints
         // obfuscated values (null address/registry/notes), so ignore any change they
         // submit to those fields — a full-replace PUT would otherwise write the
         // obfuscated echo back over the real data.
+        if (await UnknownCatalogueIdAsync(db, request, ct) is { } unknown)
+        {
+            return unknown;
+        }
+
         var exact = (await protection.ExactViewIdsAsync(ctx, [feature.Id], ct)).Contains(feature.Id);
         var preserved = (cave.ClosestAddress, cave.LandRegistryNumber, cave.LocationNotes);
+        var storedProperties = feature.Properties;
 
         request.Apply(feature, cave);
+
+        // A request that carries no property document says nothing about it, so the stored one
+        // stays. Emptying it instead would erase every club field on the first save from a
+        // client that does not edit them, and leave a document the type's schema never saw.
+        if (request.Properties is not { ValueKind: JsonValueKind.Object })
+        {
+            feature.Properties = storedProperties;
+        }
 
         if (!exact)
         {
@@ -546,10 +568,9 @@ public static class CaveEndpoints
                 await writer.SetLocationProtectedAsync(feature.Id, request.LocationProtected, ct);
             }
 
-            if (request.Properties is { ValueKind: JsonValueKind.Object })
-            {
-                await writer.ValidatePropertiesAsync(feature, ct);
-            }
+            // Every save checks the document it stores, kept or sent, as a create does: it is
+            // what stamps the schema version the stored document is said to satisfy.
+            await writer.ValidatePropertiesAsync(feature, ct);
         }
         catch (FeatureWriteException ex)
         {
@@ -560,6 +581,27 @@ public static class CaveEndpoints
         await hold.AnswerAsync(ct);
         var parents = await ParentsAsync(db, ctx, feature.Id, ct);
         return TypedResults.Ok(feature.ToDto(cave, exact, accessOptions.Value.LocationGridMeters, parents));
+    }
+
+    /// <summary>
+    /// A cave type or rock type id that names no catalogue row, as a coded refusal. Both columns
+    /// are restricting foreign keys, so without this a stale picker value reaches the database
+    /// and comes back as a failed save rather than as something the form can say.
+    /// </summary>
+    private static async Task<ProblemHttpResult?> UnknownCatalogueIdAsync(
+        SilexGisDbContext db, CaveWriteRequest request, CancellationToken ct)
+    {
+        if (!await db.CaveTypes.AnyAsync(t => t.Id == request.CaveTypeId, ct))
+        {
+            return ApiProblems.BadRequest(CaveTypeUnknownCode, "The cave type does not exist.");
+        }
+
+        if (request.RockTypeId is { } rockTypeId && !await db.RockTypes.AnyAsync(t => t.Id == rockTypeId, ct))
+        {
+            return ApiProblems.BadRequest(RockTypeUnknownCode, "The rock type does not exist.");
+        }
+
+        return null;
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(

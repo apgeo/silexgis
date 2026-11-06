@@ -215,6 +215,57 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
             .ShouldAllBe(c => c.GetProperty("stationName").GetString()!.StartsWith("cave.parallel"));
     }
 
+    /// <summary>
+    /// Two coordinators configuring a watch for the first time at the same moment: one write
+    /// lands, the other is told the trip moved, and the trip holds exactly one watch.
+    /// </summary>
+    /// <remarks>
+    /// The first configuration is also the one that creates the trip's one watch row, so the race
+    /// worth pinning is two inserts of that row. Both writes take the trip's version hold — a lock
+    /// on the trip row — before the watch is read or created, so the second waits for the first
+    /// and then fails its precondition against the version the first one moved: a 412 naming the
+    /// version, never a duplicate row, a unique-index failure or a 500. Sent together rather than
+    /// one after the other, so the lock is what decides it whenever the two do overlap.
+    /// </remarks>
+    [Fact]
+    public async Task Two_first_configurations_of_one_watch_at_once_leave_one_watch_and_refuse_the_second()
+    {
+        var (trip, _) = await CreateTripAsync("First arm twice", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripTrackings.CountAsync(x => x.TripLogId == trip)).ShouldBe(0);
+        }
+
+        var held = (await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking")).Headers.ETag!.ToString();
+
+        Task<HttpResponseMessage> ArmWithAsync()
+        {
+            var request = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/trip-logs/{trip}/tracking")
+            {
+                Content = JsonContent.Create(new { state = "armed", surveyModelId = model }),
+            };
+            request.Headers.TryAddWithoutValidation("If-Match", held);
+            return owner.SendAsync(request);
+        }
+
+        var answers = await Task.WhenAll(ArmWithAsync(), ArmWithAsync());
+        var statuses = answers.Select(a => a.StatusCode).ToList();
+        statuses.ShouldBe([HttpStatusCode.OK, HttpStatusCode.PreconditionFailed], ignoreOrder: true);
+        var loser = answers.Single(a => a.StatusCode == HttpStatusCode.PreconditionFailed);
+        (await loser.Content.ReadAsStringAsync()).ShouldContain("concurrency.version_mismatch");
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripTrackings.CountAsync(x => x.TripLogId == trip)).ShouldBe(1);
+        }
+
+        (await StateAsync(owner, trip)).GetProperty("state").GetString().ShouldBe("armed");
+    }
+
     [Fact]
     public async Task A_depth_report_respects_the_trips_filter_because_parallel_shafts_share_depths()
     {

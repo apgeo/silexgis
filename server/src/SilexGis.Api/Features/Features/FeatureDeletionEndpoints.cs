@@ -65,6 +65,10 @@ public sealed record DeletedContainerDto(Guid Id, FeatureKind Kind, string? Name
 /// </remarks>
 internal static class FeatureDeletionEndpoints
 {
+    /// <summary>The kinds a deletion of which can be undone on its own.</summary>
+    private static readonly FeatureKind[] RestorableKinds =
+        [.. Enum.GetValues<FeatureKind>().Where(FeatureDeletionRules.IsRestorableKind)];
+
     public static async Task<Results<Ok<PagedResult<DeletedFeatureDto>>, UnauthorizedHttpResult>> ListAsync(
         SilexGisDbContext db,
         IAccessService access,
@@ -85,9 +89,19 @@ internal static class FeatureDeletionEndpoints
         // it: asked against live rows alone, "who may read this" would find nothing there to
         // answer. This is the row's audience as it stood the moment before it was deleted.
         var past = db.Features.AsNoTracking().IgnoreQueryFilters();
-        var readable = await past
+        var deleted = past
             .Where(f => f.DeletedAt != null)
-            .VisibleTo(ctx, past, db.FeatureSetMembers)
+            .VisibleTo(ctx, past, db.FeatureSetMembers);
+
+        // Only the tops of deletions are candidates, and the database answers which those are: a
+        // row with a deleted container — readable or not, since whether something can be restored
+        // turns on every container it has — went with it or waits for it, and is never offered
+        // by itself. So the rows read here grow with the number of deletions, not with how much
+        // each of them took.
+        var restorableKinds = RestorableKinds;
+        var candidates = await deleted
+            .Where(f => restorableKinds.Contains(f.Kind)
+                && !past.Any(a => a.DeletedAt != null && a.Id != f.Id && f.AncestorIds.Contains(a.Id)))
             .Select(f => new DeletedRow
             {
                 Id = f.Id,
@@ -102,20 +116,13 @@ internal static class FeatureDeletionEndpoints
             })
             .ToListAsync(ct);
 
-        // Which rows are deleted at all, readable or not: whether something can be restored
-        // turns on every container it has, including the ones this caller cannot see.
-        var deletedIds = ctx.IsFullAdmin
-            ? readable.Select(r => r.Id).ToHashSet()
-            : (await past.Where(f => f.DeletedAt != null).Select(f => f.Id).ToListAsync(ct)).ToHashSet();
-
-        var restorable = readable
-            .Where(r => FeatureDeletionRules.IsRestorableKind(r.Kind)
-                && FeatureDeletionRules.DeletedContainers(r.Id, r.AncestorIds, deletedIds.Contains).Count == 0)
-            .ToList();
-        var allowed = await FeatureRestoreRights.MayRestoreAsync(db, access, ctx, [.. restorable.Select(r => r.ToFeature())], ct);
+        // The right to restore is the right to delete, decided by the evaluator on each row's
+        // facts — which the database has no twin of — so it is asked of every candidate, and the
+        // total below counts what this caller may put back rather than what exists.
+        var allowed = await FeatureRestoreRights.MayRestoreAsync(db, access, ctx, [.. candidates.Select(r => r.ToFeature())], ct);
 
         var (p, size) = Paging.Normalize(page, pageSize);
-        var mine = restorable
+        var mine = candidates
             .Where(r => allowed.Contains(r.Id))
             .OrderByDescending(r => r.DeletedAt)
             .ThenByDescending(r => r.Id)
@@ -134,9 +141,16 @@ internal static class FeatureDeletionEndpoints
         var chains = await FeaturePrimaryChains.OfAsync(
             db, ctx, [.. shown.Select(r => new FeaturePrimaryChains.Subject(r.Id, r.AncestorIds))], ct);
 
-        // Counted over the rows this caller could read, so that a number never says more than
-        // the list of the same container did before the deletion.
-        var taken = readable
+        // What went with each deletion on the page, and only those: counted over the rows this
+        // caller could read, so that a number never says more than the list of the same container
+        // did before the deletion.
+        var shownIds = shown.Select(r => r.Id).ToArray();
+        var taken = shownIds.Length == 0
+            ? []
+            : (await deleted
+                .Where(f => !shownIds.Contains(f.Id) && f.AncestorIds.Any(a => shownIds.Contains(a)))
+                .Select(f => new { f.Id, f.Kind, DeletedAt = f.DeletedAt!.Value, f.AncestorIds })
+                .ToListAsync(ct))
             .Select(r => (r.Id, new FeatureDeletionRules.TakenRow(r.Kind, r.DeletedAt, r.AncestorIds)))
             .ToList();
 

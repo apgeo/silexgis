@@ -264,6 +264,16 @@ public static class TrackingCsvImportEndpoints
         FeatureProtection protection, IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor, CancellationToken ct)
     {
+        // One commit per trip at a time, and the log read under that lock. A sheet's rows are
+        // matched to the log on person and instant, which no unique index guards, so two commits
+        // of one sheet that both read the log before either wrote would each add every report — a
+        // double click, or a proxy repeating a slow request. The trip's row is the lock: a second
+        // commit waits here, then reads the log the first one wrote and finds its reports there.
+        // Taken before anything is read, so the plan, its digest and the matching all see the
+        // same log the save is made against.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await ConcurrencySql.LockVersionAsync(db, VersionedTable.TripLogs, tripLogId, ct);
+
         var loaded = await LoadAsync(
             tripLogId, forWriting: true, db, access, protection, accessAccessor, userAccessor, ct);
         if (loaded.Refusal is { } refusal) return refusal;
@@ -448,6 +458,7 @@ public static class TrackingCsvImportEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return TypedResults.Ok(new TrackingCsvCommitDto(
             created, updated, unchanged, skipped, [.. refused.Select(Diagnostic)]));
