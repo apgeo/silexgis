@@ -32,15 +32,14 @@ public sealed class SurveyMeshConverter(ICoordinateProjector projector)
 
         var placement = SurveyPlacement.Resolve(projector, declaration, () => FootprintCentre(mesh.Positions));
 
-        // The vertices are turned here rather than the angle being declared alongside them, so that
-        // nothing downstream has to know to apply it — and so that nothing downstream can apply it
-        // a second time.
-        if (placement.AppliedRotationDeg != 0)
-        {
-            Turn(mesh.Positions, placement);
-        }
+        // The vertices are moved into the placement's local frame here rather than the turn and the
+        // scale being declared alongside them, so that nothing downstream has to know to apply
+        // them — and so that nothing downstream can apply them a second time. It is the same
+        // arithmetic the stations and the walls built from a line plot go through, so a mesh of a
+        // file on a projected grid comes out in ground metres like they do, not in grid metres.
+        ToLocal(mesh.Positions, placement);
 
-        GlbWriter.Write(mesh, placement.Origin, output);
+        GlbWriter.Write(mesh, (0, 0, 0), output);
 
         return new MeshConversionResult(
             placement.Anchor.Longitude,
@@ -53,12 +52,13 @@ public sealed class SurveyMeshConverter(ICoordinateProjector projector)
             read.CoarsestStepM >= StlReader.PrecisionWarningStepM);
     }
 
-    /// <summary>Turns the mesh about its origin, in the horizontal plane.</summary>
-    private static void Turn(double[] positions, SurveyPlacement placement)
+    /// <summary>Writes every vertex as where it is about the anchor, in ground metres.</summary>
+    private static void ToLocal(double[] positions, SurveyPlacement placement)
     {
         for (var i = 0; i < positions.Length; i += 3)
         {
-            (positions[i], positions[i + 1]) = placement.Turn(positions[i], positions[i + 1]);
+            (positions[i], positions[i + 1], positions[i + 2]) =
+                placement.ToLocal(positions[i], positions[i + 1], positions[i + 2]);
         }
     }
 

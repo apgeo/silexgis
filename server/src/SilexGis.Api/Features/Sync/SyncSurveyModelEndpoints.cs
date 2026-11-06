@@ -103,13 +103,13 @@ public static class SyncSurveyModelEndpoints
         var handed = await SyncScope.WithoutWithheldAsync(readable, protection, ctx, ct);
 
         var live = SyncStreamPaging.After(Carried(db, handed), ByChange, opening.From);
-        var liveRows = await SyncStreamPaging.Probe(live, ByChange, opening.Size).AsNoTracking().ToListAsync(ct);
+        var liveRows = await SyncStreamPaging.Probe(live, ByChange, opening).AsNoTracking().ToListAsync(ct);
 
         var goneRows = new List<SyncSurveyModelGone>();
         foreach (var source in Gone(db, ctx, opening.Roots, readable, handed))
         {
             goneRows.AddRange(await SyncStreamPaging.Probe(
-                SyncStreamPaging.After(source, ByGone, opening.From), ByGone, opening.Size).ToListAsync(ct));
+                SyncStreamPaging.After(source, ByGone, opening.From), ByGone, opening).ToListAsync(ct));
         }
 
         var (onModels, onDocuments) = await StationsAsync(db, ctx, handed, ct);
@@ -120,11 +120,11 @@ public static class SyncSurveyModelEndpoints
             stationRows.AddRange(await SyncStreamPaging.Probe(
                 SyncStreamPaging.After(source.Where(s => s.Row.DeletedAt == null), ByStation, opening.From),
                 ByStation,
-                opening.Size).ToListAsync(ct));
+                opening).ToListAsync(ct));
             var removed = source.Where(s => s.Row.DeletedAt != null)
                 .Select(s => new SyncPlaceStationGone { Id = s.Row.Id, At = s.Row.DeletedAt!.Value });
             stationGoneRows.AddRange(await SyncStreamPaging.Probe(
-                SyncStreamPaging.After(removed, ByStationGone, opening.From), ByStationGone, opening.Size).ToListAsync(ct));
+                SyncStreamPaging.After(removed, ByStationGone, opening.From), ByStationGone, opening).ToListAsync(ct));
         }
 
         var cut = SyncStreamPaging.Cut(

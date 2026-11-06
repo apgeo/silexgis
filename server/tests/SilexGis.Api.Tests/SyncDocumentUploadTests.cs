@@ -503,6 +503,48 @@ public sealed class SyncDocumentUploadTests : IAsyncLifetime, IDisposable, IClas
         rowsAnswer.TryGetProperty("documents", out _).ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task Two_overlapping_descriptions_of_one_document_from_one_revision_land_once_and_the_other_is_a_conflict()
+    {
+        var contestedBytes = Corpus.GeotaggedJpeg(45.61, 25.61);
+        var stallBytes = Corpus.GeotaggedJpeg(45.62, 25.62);
+        var contested = Guid.CreateVersion7();
+        var stallId = Guid.CreateVersion7();
+        var created = await UploadAsync(phone, set, Upload(Guid.CreateVersion7(),
+            new { id = contested, title = "Contested", sha256 = Hash(contestedBytes), stagedUploadId = await StageAsync(phone, "c.jpg", contestedBytes) },
+            new { id = stallId, title = "Stall", sha256 = Hash(stallBytes), stagedUploadId = await StageAsync(phone, "s.jpg", stallBytes) }));
+        var revisions = created.GetProperty("documents").EnumerateArray()
+            .ToDictionary(r => r.GetProperty("id").GetGuid(), r => r.GetProperty("revision").GetDateTimeOffset());
+
+        await using var stall = await RowStall.HoldAsync(factory, "documents", stallId);
+        var firstUpload = phone.PostAsJsonAsync($"/api/v1/sync/sets/{set}/upload", Upload(Guid.CreateVersion7(),
+            new { id = contested, baseRevision = revisions[contested], title = "The first phone's title", sha256 = Hash(contestedBytes) },
+            new { id = stallId, baseRevision = revisions[stallId], title = "Stall, renamed", sha256 = Hash(stallBytes) }));
+        await stall.WaitForWaitersAsync(1, firstUpload);
+        var secondUpload = phone.PostAsJsonAsync($"/api/v1/sync/sets/{set}/upload", Upload(Guid.CreateVersion7(),
+            new { id = contested, baseRevision = revisions[contested], title = "The second phone's title", sha256 = Hash(contestedBytes) }));
+        await stall.WaitForWaitersAsync(2, secondUpload);
+        await stall.ReleaseAsync();
+
+        var won = await AnswerOfAsync(await firstUpload);
+        var lost = await AnswerOfAsync(await secondUpload);
+        won.GetProperty("documents").EnumerateArray().Select(r => r.GetProperty("status").GetString())
+            .ShouldBe(["updated", "updated"]);
+        var refused = lost.GetProperty("documents").EnumerateArray().Single();
+        refused.GetProperty("status").GetString().ShouldBe("conflict");
+        refused.GetProperty("revision").GetDateTimeOffset().ShouldBe(
+            won.GetProperty("documents").EnumerateArray().First().GetProperty("revision").GetDateTimeOffset());
+        (await CountAsync(db => db.Documents.Where(d => d.Id == contested).Select(d => d.Title).SingleAsync()))
+            .ShouldBe("The first phone's title");
+    }
+
+    private static async Task<JsonElement> AnswerOfAsync(HttpResponseMessage response)
+    {
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement.Clone();
+    }
+
     private static object Upload(Guid batchId, params object[] documents) =>
         new { batchId, contractVersion = 1, documents };
 

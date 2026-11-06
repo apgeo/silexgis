@@ -77,8 +77,8 @@ public static class SyncDownloadEndpoints
         // the reason given where it is defined.
         live = await SyncScope.WithoutWithheldAsync(live, protection, ctx, ct);
 
-        var liveRows = await SyncStreamPaging.Probe(live, ByChange, opening.Size).ToListAsync(ct);
-        var goneRows = await SyncStreamPaging.Probe(gone, ByChange, opening.Size)
+        var liveRows = await SyncStreamPaging.Probe(live, ByChange, opening).ToListAsync(ct);
+        var goneRows = await SyncStreamPaging.Probe(gone, ByChange, opening)
             .Select(f => new SyncTombstoneDto(f.Id, f.DeletedAt!.Value))
             .ToListAsync(ct);
 

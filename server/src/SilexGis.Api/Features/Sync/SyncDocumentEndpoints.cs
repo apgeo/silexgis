@@ -133,14 +133,14 @@ public static class SyncDocumentEndpoints
         liveScan = SyncStreamPaging.After(liveScan, ByChange, opening.From);
         removed = SyncStreamPaging.After(removed, ByGone, opening.From);
 
-        var featureRows = await SyncStreamPaging.Probe(liveFeature, ByChange, opening.Size).ToListAsync(ct);
-        var recordingRows = await SyncStreamPaging.Probe(liveRecording, ByChange, opening.Size).ToListAsync(ct);
-        var scanRows = await SyncStreamPaging.Probe(liveScan, ByChange, opening.Size).ToListAsync(ct);
-        var removedRows = await SyncStreamPaging.Probe(removed, ByGone, opening.Size).ToListAsync(ct);
+        var featureRows = await SyncStreamPaging.Probe(liveFeature, ByChange, opening).ToListAsync(ct);
+        var recordingRows = await SyncStreamPaging.Probe(liveRecording, ByChange, opening).ToListAsync(ct);
+        var scanRows = await SyncStreamPaging.Probe(liveScan, ByChange, opening).ToListAsync(ct);
+        var removedRows = await SyncStreamPaging.Probe(removed, ByGone, opening).ToListAsync(ct);
         var orphanedRows = SyncStreamPaging.Probe(
-            SyncStreamPaging.After(orphaned.AsQueryable(), ByGone, opening.From), ByGone, opening.Size).ToList();
+            SyncStreamPaging.After(orphaned.AsQueryable(), ByGone, opening.From), ByGone, opening).ToList();
         var objectRows = SyncStreamPaging.Probe(
-            SyncStreamPaging.After(objectsGone.AsQueryable(), ByGone, opening.From), ByGone, opening.Size).ToList();
+            SyncStreamPaging.After(objectsGone.AsQueryable(), ByGone, opening.From), ByGone, opening).ToList();
 
         var cut = SyncStreamPaging.Cut(
             opening,

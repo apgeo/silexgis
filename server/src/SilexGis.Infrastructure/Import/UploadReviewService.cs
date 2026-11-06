@@ -207,6 +207,7 @@ public sealed class UploadReviewService(
         var uploader = await AccessContextResolver.ResolveAsync(db, uploaderId, ct);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await ClaimAsync(standing, ct);
+        var decidedAt = DecisionStamp();
 
         // The field subsets are stamped first, because the applier reads them off the lines it is
         // handed: what the reviewer accepted of a proposal is part of what is written.
@@ -345,14 +346,14 @@ public sealed class UploadReviewService(
         {
             var outcome = outcomes[line.Id];
             line.ReviewDecision = outcome.Accepted ? ImportReviewDecision.Accepted : ImportReviewDecision.Failed;
-            line.DecidedAt = now;
+            line.DecidedAt = decidedAt;
             line.DecidedByUserId = reviewerId;
             line.DecisionNote = chosenSet.Contains(line.Id) ? note : line.DecisionNote;
             line.ReviewFailureCode = outcome.FailureCode;
             line.ReviewFailureDetail = outcome.FailureDetail;
             if (outcome.Accepted)
             {
-                line.AppliedAt = now;
+                line.AppliedAt = decidedAt;
                 if (outcome.Written is { } written)
                 {
                     line.Action = written.Action;
@@ -393,8 +394,8 @@ public sealed class UploadReviewService(
         }
 
         await db.SaveChangesAsync(ct);
-        var batches = await SettleAsync(decided.Select(l => l.ImportBatchId), reviewerId, now, ct);
-        await FinishAsync(decided, batches, sync, now, ct);
+        var batches = await SettleAsync(decided.Select(l => l.ImportBatchId), reviewerId, decidedAt, ct);
+        await FinishAsync(decided, batches, sync, decidedAt, ct);
         await transaction.CommitAsync(ct);
         return new UploadReviewResult(decided, batches);
     }
@@ -405,6 +406,15 @@ public sealed class UploadReviewService(
     /// until the transaction ends, so a second decision — another reviewer, a double click — or a
     /// resend replacing one of them waits, and then finds them decided and claims nothing.
     /// </summary>
+    /// <summary>
+    /// The moment a decision is recorded at, taken once the claim has written inside the decision's
+    /// transaction and never before. A phone reads decisions in the order of this stamp, and a page
+    /// of them stops short of the start of any writing transaction still open — so a stamp taken
+    /// before its transaction had written anything could commit behind a position a phone was
+    /// already handed, and that phone would never learn of the decision.
+    /// </summary>
+    private static DateTimeOffset DecisionStamp() => DateTimeOffset.UtcNow;
+
     private async Task ClaimAsync(IReadOnlyDictionary<long, ImportReviewDecision?> standing, CancellationToken ct)
     {
         var pending = standing.Where(s => s.Value == ImportReviewDecision.Pending).Select(s => s.Key).ToList();
@@ -464,10 +474,10 @@ public sealed class UploadReviewService(
             throw new HeldNotPendingException();
         }
 
-        var now = DateTimeOffset.UtcNow;
         var sync = await settings.GetSyncAsync(ct);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await ClaimAsync(reach.ToDictionary(id => id, _ => (ImportReviewDecision?)ImportReviewDecision.Pending), ct);
+        var now = DecisionStamp();
         var decided = await db.ImportBatchItems.Where(i => reach.Contains(i.Id)).ToListAsync(ct);
         var chosenSet = chosen.ToHashSet();
         foreach (var line in decided)

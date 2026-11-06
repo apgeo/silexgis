@@ -89,6 +89,23 @@ public sealed class SyncOptions
     /// </summary>
     public double DuplicateRadiusMeters { get; set; } = ImportOptions.DefaultDuplicateRadiusMeters;
 
+    /// <summary>
+    /// How long, in milliseconds, a change waits before a download may hand it over, on top of
+    /// the wait every page already makes for writes still in flight. A page never hands out a
+    /// position past a change some unfinished writing transaction could still commit behind it;
+    /// what the database cannot see is the instant between a write stamping its change and that
+    /// write reaching the database — normally milliseconds, longer when every connection is busy —
+    /// and this covers it. The changes are stamped by the application's clock and the wait is
+    /// measured on the database's, so where the two run on different hosts the interval must also
+    /// cover any difference between their clocks. Zero by default, so a phone that downloads
+    /// straight after an edit receives it, as it always has.
+    /// </summary>
+    public int DownloadSettleMilliseconds { get; set; }
+
+    /// <summary>The settle interval, held between nothing and a minute.</summary>
+    public TimeSpan ResolvedDownloadSettle =>
+        TimeSpan.FromMilliseconds(Math.Clamp(DownloadSettleMilliseconds, 0, 60_000));
+
     /// <summary>Announced page ceiling, brought inside a range a client can actually use.</summary>
     public int ResolvedPageSizeMax => Math.Clamp(PageSizeMax, 1, 5000);
 

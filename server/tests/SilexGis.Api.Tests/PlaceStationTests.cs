@@ -349,6 +349,65 @@ public sealed class PlaceStationTests : IAsyncLifetime, IDisposable, IClassFixtu
 
     // ---- reading -------------------------------------------------------------------------------
 
+    [Fact]
+    public async Task Two_overlapping_edits_of_one_mapping_from_one_revision_land_once_and_the_other_is_a_conflict()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var placeA = await CreatePlaceAsync(cave);
+        var placeB = await CreatePlaceAsync(cave);
+        var model = await CreateModelAsync(cave, SurveyModelFormat.Survex3d, "Sistemul");
+        var set = await CreateSetAsync(uploader, [cave], clubId);
+        var contested = Guid.CreateVersion7();
+        var stallId = Guid.CreateVersion7();
+        var created = await UploadAsync(uploader, set, new object[]
+        {
+            new { id = contested, placeId = placeA, surveyModelId = model, station = "sys.1" },
+            new { id = stallId, placeId = placeB, surveyModelId = model, station = "sys.2" },
+        });
+        var revisions = created.GetProperty("placeStations").EnumerateArray()
+            .ToDictionary(r => r.GetProperty("id").GetGuid(), r => r.GetProperty("revision").GetDateTimeOffset());
+
+        // A mapping's edit takes its place first and then the mapping: the first upload parks on
+        // the stall mapping another connection holds, the second waits behind the first.
+        await using var stall = await RowStall.HoldAsync(factory, "res_links", stallId);
+        var firstUpload = PostAsync(uploader, set, new object[]
+        {
+            new { id = contested, baseRevision = revisions[contested], placeId = placeA, surveyModelId = model, station = "sys.first" },
+            new { id = stallId, baseRevision = revisions[stallId], placeId = placeB, surveyModelId = model, station = "sys.2b" },
+        });
+        await stall.WaitForWaitersAsync(1, firstUpload);
+        var secondUpload = PostAsync(uploader, set, new object[]
+        {
+            new { id = contested, baseRevision = revisions[contested], placeId = placeA, surveyModelId = model, station = "sys.second" },
+        });
+        await stall.WaitForWaitersAsync(2, secondUpload);
+        await stall.ReleaseAsync();
+
+        var won = await AnswerOf(await firstUpload);
+        var lost = await AnswerOf(await secondUpload);
+        Statuses(won).ShouldBe(["updated", "updated"]);
+        Statuses(lost).ShouldBe(["conflict"]);
+        Revision(lost).ShouldBe(Revision(won));
+
+        var page = await GetPageAsync(uploader, $"/api/v1/sync/sets/{set}/survey-models");
+        Row(page, "placeStations", contested).GetProperty("station").GetString().ShouldBe("sys.first");
+    }
+
+    private static Task<HttpResponseMessage> PostAsync(HttpClient client, Guid set, IReadOnlyList<object> stations) =>
+        client.PostAsJsonAsync($"/api/v1/sync/sets/{set}/upload", new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            placeStations = stations,
+        });
+
+    private static async Task<JsonElement> AnswerOf(HttpResponseMessage response)
+    {
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement.Clone();
+    }
+
     private static IReadOnlyList<Guid> Ids(JsonElement page, string array) =>
         [.. page.GetProperty(array).EnumerateArray().Select(r => r.GetProperty("id").GetGuid())];
 

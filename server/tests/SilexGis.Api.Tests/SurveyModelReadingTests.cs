@@ -134,6 +134,40 @@ public sealed class SurveyModelReadingTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
+    public async Task Two_models_of_one_cave_read_at_once_give_the_cave_one_default_centerline()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var firstId = await UploadLocalLoxAsync(caveId, NamedRootCave());
+        var secondId = await UploadLocalLoxAsync(caveId, NamedRootCave());
+        var first = (await QueuedForAsync(ProcessingJobKinds.SurveyGraph, firstId)).ShouldHaveSingleItem();
+        var second = (await QueuedForAsync(ProcessingJobKinds.SurveyGraph, secondId)).ShouldHaveSingleItem();
+
+        // Both readings reach the decision about the cave's first centerline while neither has
+        // committed: each is parked on the cave's lock until both are there, then let go.
+        await using (var stall = await RowStall.HoldCaveCenterlinesAsync(factory, caveId))
+        {
+            var reading = Task.WhenAll(
+                Task.Run(() => QueuedJob.RunAsync(factory.Services, first.Id)),
+                Task.Run(() => QueuedJob.RunAsync(factory.Services, second.Id)));
+            await stall.WaitForWaitersAsync(2, reading);
+            await stall.ReleaseAsync();
+            await reading;
+        }
+
+        // Neither reading failed, the cave has a centerline from each and exactly one is its
+        // shape, and the model that shape was read out of is the cave's current one.
+        (await StatusAsync(firstId)).ShouldBe(SurveyModelStatus.Ready);
+        (await StatusAsync(secondId)).ShouldBe(SurveyModelStatus.Ready);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var centerlines = await db.Centerlines.AsNoTracking().Where(c => c.CaveFeatureId == caveId).ToListAsync();
+        centerlines.Count.ShouldBe(2);
+        var shape = centerlines.Where(c => c.IsDefault).ShouldHaveSingleItem();
+        (await db.SurveyModels.AsNoTracking().Where(m => m.CaveFeatureId == caveId && m.IsCurrent).Select(m => (Guid?)m.Id).ToListAsync())
+            .ShouldBe([shape.SurveyModelId]);
+    }
+
+    [Fact]
     public async Task Reading_a_model_again_puts_back_the_root_surveys_name_it_lacked()
     {
         var caveId = await CreateCaveAsync(locationProtected: false);

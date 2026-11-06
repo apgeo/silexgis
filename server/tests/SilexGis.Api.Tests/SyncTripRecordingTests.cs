@@ -83,6 +83,47 @@ public sealed class SyncTripRecordingTests : IAsyncLifetime, IDisposable, IClass
     }
 
     [Fact]
+    public async Task Times_a_phone_writes_in_its_local_offset_are_stored_as_the_same_instant()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var set = await CreateSetAsync(uploader, [cave], clubId);
+        var recording = Guid.CreateVersion7();
+        var point = Guid.CreateVersion7();
+        var local = TimeSpan.FromHours(3);
+        var started = new DateTimeOffset(2026, 9, 12, 11, 0, 0, local);
+
+        object Local(DateTimeOffset? baseRevision, string title) => new
+        {
+            id = recording,
+            baseRevision,
+            caveId = cave,
+            title,
+            startedAt = started,
+            endedAt = started.AddHours(8),
+            clientUpdatedAt = started.AddHours(9),
+            createdByDeviceUserId = Guid.CreateVersion7(),
+        };
+
+        var created = await UploadAsync(set, recordings: [Local(null, "Local clock")], points:
+            [new { id = point, recordingId = recording, placeId = (Guid?)null, scannedAt = started.AddMinutes(30), notes = "scan" }]);
+        Statuses(created, "tripRecordings").ShouldBe(["created"]);
+        Statuses(created, "tripPoints").ShouldBe(["created"]);
+
+        var revision = Result(created, "tripRecordings", recording).GetProperty("revision").GetDateTimeOffset();
+        var edited = await UploadAsync(set, recordings: [Local(revision, "Local clock, edited")]);
+        Statuses(edited, "tripRecordings").ShouldBe(["updated"]);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var stored = await db.TripRecordings.AsNoTracking().IgnoreQueryFilters().SingleAsync(r => r.Id == recording);
+        stored.StartedAt.ShouldBe(started);
+        stored.StartedAt.UtcDateTime.ShouldBe(new DateTime(2026, 9, 12, 8, 0, 0, DateTimeKind.Utc));
+        stored.EndedAt.ShouldBe(started.AddHours(8));
+        (await db.TripRecordingPoints.AsNoTracking().IgnoreQueryFilters().SingleAsync(p => p.Id == point)).ScannedAt
+            .ShouldBe(started.AddMinutes(30));
+    }
+
+    [Fact]
     public async Task A_recording_reaches_another_member_of_its_club_in_a_cave_the_set_hands_them_and_never_in_a_withheld_one()
     {
         var open = await CreateCaveAsync(locationProtected: false);

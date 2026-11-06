@@ -146,9 +146,9 @@ Authorization: Bearer <token>
 That is not an optimisation: a phone loses its connection in a car park and comes back the next
 weekend from a different address, and a server-side session would either have expired or would have
 to be kept per device for ever. Send back the `nextCursor` you were last given and you will get what
-has changed since, in the same order, with nothing repeated. Two limits on "nothing skipped" are
-spelled out below — a changed selection, and a concurrent write — and neither is a detail a client
-can be written without.
+has changed since, in the same order, with nothing repeated. Two cases are spelled out below — a
+changed selection, which ends a cursor, and a concurrent write, which arrives a download late — and
+neither is a detail a client can be written without.
 
 - **Treat `nextCursor` as opaque.** Its contents are the server's business and its shape may change
   between contract versions. A cursor this server did not issue is refused with
@@ -181,13 +181,21 @@ so it arrives first — a whole page earlier at small page sizes. A device must 
 reference it cannot resolve yet, or apply the containment edges in a second pass, rather than
 assuming the parent has already been seen.
 
-**"Nothing skipped" is not absolute under concurrent writes.** The change key is stamped by the
-application as a row is written, which is fractionally before that write commits. A slow write that
-began before a download and committed after it therefore carries a key behind the cursor that
-download handed out, and is not delivered again until something touches the row. It is rare — it
-needs a write whose commit is slow enough to straddle a read — and this document states it rather
-than promising an absolute a client would trust. A device that wants certainty can drop its cursor
-and re-read the set from the beginning periodically; a full read is always correct.
+**A concurrent write is held back rather than skipped, except in a brief window described below; it can arrive one download late.** The change key is
+stamped by the application as a row is written, which is before that write commits — an upload
+batch commits after its last item, an import after its last row. A page therefore never hands out a
+position past a change that an unfinished write could still commit behind it: while any write is in
+flight, changes stamped after that write began are held back, and the page ends before them. They
+arrive on a later download, in order, once the write has finished. The cursor, the fields and the
+paging are unchanged by this; what a client sees is only that `hasMore` can be false while a change
+made a moment ago is not yet in the page, which is what "level with the server as of this read"
+already means. An installation may also hold back changes younger than a fixed interval
+(`SILEXGIS__Sync__DownloadSettleMilliseconds`, off by default), to cover the moment between a write
+stamping its change and reaching the database that the server cannot see. With that interval at
+zero, a write whose change is stamped in that moment — normally a few milliseconds, longer when the
+server is short of database connections — can still land behind a cursor already handed out, and is
+not delivered again until something touches the row. A device that wants certainty can drop its
+cursor and re-read the set from the beginning periodically; a full read is always correct.
 
 ## 4. What a feature row carries
 
@@ -493,7 +501,7 @@ still be refused its deletion — a delete takes the row's whole containment sub
 | `name`, `description` | As stored. `name` is at most 255 characters |
 | `caveTypeCode`, `entranceTypeCode`, `featureTypeCode` | The kind, **by its stable code, never by a numeric id** |
 | `isMain` | For an entrance: whether it is the cave's main one |
-| `geometry`, `altitude`, `positionQuality` | The position, and how it was obtained. `altitude` is kept on every kind that carries a point — it is stored as the point's third ordinate, which is also how it comes back. `positionQuality` is stored only on an entrance, and is not returned by any route |
+| `geometry`, `altitude`, `positionQuality` | The position, and how it was obtained. `altitude` is kept on every kind that carries a point — it is stored as the point's third ordinate, which is also how it comes back. An altitude, or a point's third ordinate, outside −12 000 … 9 000 metres refuses the upload with `400 validation.failed`. `positionQuality` is stored only on an entrance, and is not returned by any route |
 | `properties` | The property document, stored verbatim. Where the device's own identifiers and codes live |
 | `clientUpdatedAt` | When the device believes it last wrote the row. Stored as provenance; **never consulted in the arbitration** |
 

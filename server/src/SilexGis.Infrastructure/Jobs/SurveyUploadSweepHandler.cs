@@ -118,12 +118,26 @@ public sealed class SurveyUploadSweepHandler(
             return;
         }
 
-        var batchIds = expired.Select(u => u.UploadBatchId).ToList();
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // A completion that read the upload just before it expired may have queued its run since
+        // this pass read it. Each upload is held as the completion holds it, and one that is no
+        // longer receiving is left to whoever moved it on rather than closed over their commit.
+        var closing = new List<SurveyUpload>(expired.Count);
+        foreach (var upload in expired)
+        {
+            if (await SurveyUploadWrites.HoldReceivingAsync(db, upload.Id, ct))
+            {
+                closing.Add(upload);
+            }
+        }
+
+        var batchIds = closing.Select(u => u.UploadBatchId).ToList();
         var batches = await db.UploadBatches
             .Where(b => batchIds.Contains(b.Id) && b.Status == UploadBatchStatus.Open)
             .ToListAsync(ct);
 
-        foreach (var upload in expired)
+        foreach (var upload in closing)
         {
             upload.Status = SurveyUploadStatus.Abandoned;
             upload.Message = "Closed: not every file arrived in time. What did arrive is archived.";
@@ -137,6 +151,7 @@ public sealed class SurveyUploadSweepHandler(
         }
 
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
     }
 }
 

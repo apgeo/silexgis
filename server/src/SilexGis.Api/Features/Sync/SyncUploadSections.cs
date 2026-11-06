@@ -402,6 +402,19 @@ internal static class SyncRevisions
 }
 
 /// <summary>
+/// A time a device wrote, as the database stores it. A phone may write its local offset
+/// ("…T21:40:00+03:00") and the JSON reader keeps it; the database driver refuses to write a
+/// non-zero offset to a time-zone-aware column, and inside an upload that refusal is not one item's
+/// failure but the whole batch's, on every retry. The instant is unchanged; only its offset is.
+/// </summary>
+internal static class SyncTimes
+{
+    public static DateTimeOffset Utc(DateTimeOffset value) => value.ToUniversalTime();
+
+    public static DateTimeOffset? Utc(DateTimeOffset? value) => value?.ToUniversalTime();
+}
+
+/// <summary>
 /// How item answers are counted — into the batch's own counters and into the answer's
 /// <c>written</c> and <c>refused</c> — stated once, so the live answer, a resend's answer and the
 /// batch's record cannot count the same upload three different ways.

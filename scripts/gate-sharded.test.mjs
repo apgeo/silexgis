@@ -12,6 +12,7 @@ import {
   quietClasses,
   sharesFor,
   summaryLineOf,
+  therionRequirementOf,
   threadsFor,
   whereApplicationsWereBuilt,
 } from './gate-sharded.mjs';
@@ -228,4 +229,12 @@ test('a run can be of the classes a change selects, and not of those and named o
   assert.equal(parseArguments(['--affected', 'master']).affected, 'master');
   assert.throws(() => parseArguments(['--affected']), /unknown or incomplete/);
   assert.throws(() => parseArguments(['--affected', 'master', '--classes', 'CalendarTests']), /say one of them/);
+});
+
+test('the real-compiler tests are required on Linux unless the environment says otherwise', () => {
+  assert.equal(therionRequirementOf({}, 'linux'), 'require');
+  assert.equal(therionRequirementOf({ SILEXGIS_TEST_THERION: 'skip' }, 'linux'), 'skip');
+  assert.equal(therionRequirementOf({ SILEXGIS_TEST_THERION: 'require' }, 'win32'), 'require');
+  assert.equal(therionRequirementOf({}, 'win32'), undefined);
+  assert.equal(therionRequirementOf({}, 'darwin'), undefined);
 });
