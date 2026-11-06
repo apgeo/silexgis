@@ -196,13 +196,9 @@ public static class MapViewEndpoints
 
         var view = new MapView { Name = request.Name, OwnerUserId = ctx.UserId };
         Apply(view, request);
+        view.IsHome = request.IsHome;
         db.MapViews.Add(view);
-        if (request.IsHome)
-        {
-            await ClearOtherHomesAsync(db, ctx.UserId, view.Id, ct);
-        }
-
-        await db.SaveChangesAsync(ct);
+        await SaveWithHomeAsync(db, view, ownerChoosesHome: true, ct);
         return TypedResults.Created($"/api/v1/map-views/{view.Id}", ToDto(view));
     }
 
@@ -243,12 +239,16 @@ public static class MapViewEndpoints
         }
 
         Apply(view, request);
-        if (request.IsHome)
+        // Home is the owner's own starting point. Somebody else with Write may edit the view,
+        // but what they send for it neither makes the view the owner's home nor takes that away;
+        // the stored value stands.
+        var ownerChoosesHome = view.OwnerUserId == ctx.UserId;
+        if (ownerChoosesHome)
         {
-            await ClearOtherHomesAsync(db, ctx.UserId, view.Id, ct);
+            view.IsHome = request.IsHome;
         }
 
-        await db.SaveChangesAsync(ct);
+        await SaveWithHomeAsync(db, view, ownerChoosesHome, ct);
         return TypedResults.Ok(ToDto(view));
     }
 
@@ -418,18 +418,51 @@ public static class MapViewEndpoints
         view.Name = request.Name;
         view.Description = request.Description;
         view.Config = request.Config.GetRawText();
-        view.IsHome = request.IsHome;
         view.CavingGroupId = request.CavingGroupId;
         view.Visibility = request.Visibility;
     }
 
-    /// <summary>One home view per user.</summary>
-    private static async Task ClearOtherHomesAsync(
-        SilexGisDbContext db, Guid userId, Guid exceptViewId, CancellationToken ct)
+    /// <summary>
+    /// Saves the view, and when its owner makes it their home, clears the owner's other homes in
+    /// the same transaction: one home view per owner, and a save that fails leaves the old home in
+    /// place. Home changes of one owner are taken one at a time, so two saves at once cannot both
+    /// leave a home behind. A save by anybody but the owner never runs the clear: the home value
+    /// it loaded may already be stale, and it is not theirs to change, so it is not written either.
+    /// </summary>
+    private static async Task SaveWithHomeAsync(
+        SilexGisDbContext db, MapView view, bool ownerChoosesHome, CancellationToken ct)
     {
+        if (!ownerChoosesHome)
+        {
+            if (db.Entry(view).State != EntityState.Added)
+            {
+                db.Entry(view).Property(x => x.IsHome).IsModified = false;
+            }
+
+            await db.SaveChangesAsync(ct);
+            return;
+        }
+
+        if (!view.IsHome)
+        {
+            await db.SaveChangesAsync(ct);
+            return;
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await MapViewSql.TakeHomeLockAsync(db, view.OwnerUserId, ct);
         await db.MapViews
-            .Where(x => x.OwnerUserId == userId && x.IsHome && x.Id != exceptViewId)
+            .Where(x => x.OwnerUserId == view.OwnerUserId && x.IsHome && x.Id != view.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsHome, false), ct);
+        if (db.Entry(view).State != EntityState.Added)
+        {
+            // The value loaded before the lock may be stale: a save that ran first can have
+            // cleared this view's home, and a save that sees no change would leave it cleared.
+            db.Entry(view).Property(x => x.IsHome).IsModified = true;
+        }
+
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
     }
 
     private static MapViewDto ToDto(MapView x) => new(

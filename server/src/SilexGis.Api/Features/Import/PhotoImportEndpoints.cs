@@ -285,19 +285,40 @@ public static class PhotoImportEndpoints
         }
 
         var session = await db.PhotoImportSessions.FirstOrDefaultAsync(s => s.UserId == ctx.UserId, ct);
+        var creating = session is null;
         if (session is null)
         {
             session = new PhotoImportSession { UserId = ctx.UserId };
             db.PhotoImportSessions.Add(session);
         }
 
-        session.FileIds = ImportJson.Serialize(request.FileIds);
-        session.Options = ImportJson.Serialize(request.Options);
-        session.Decisions = ImportJson.Serialize(request.Decisions);
-        await db.SaveChangesAsync(ct);
+        Apply(session);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException) when (creating)
+        {
+            // One review per person is a unique index, and the read above does not decide it:
+            // two saves that start before either finishes both read nothing and both insert. The
+            // review saves itself as somebody works and a second tab does too, so this happens.
+            // The loser merges into the winner's row — both carry the same reviewer's decisions,
+            // and the later one is simply the newer reading.
+            db.Entry(session).State = EntityState.Detached;
+            session = await db.PhotoImportSessions.FirstAsync(s => s.UserId == ctx.UserId, ct);
+            Apply(session);
+            await db.SaveChangesAsync(ct);
+        }
 
         return TypedResults.Ok(new PhotoSessionDto(
             request.FileIds, request.Options, request.Decisions, session.UpdatedAt));
+
+        void Apply(PhotoImportSession target)
+        {
+            target.FileIds = ImportJson.Serialize(request.FileIds);
+            target.Options = ImportJson.Serialize(request.Options);
+            target.Decisions = ImportJson.Serialize(request.Decisions);
+        }
     }
 
     // ---------- the drop, grouped ----------

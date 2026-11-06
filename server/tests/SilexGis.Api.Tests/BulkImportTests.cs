@@ -165,6 +165,52 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable, IClassFixture
         lines["survey.txt"].GetProperty("outcome").GetString().ShouldBe("stored");
     }
 
+    /// <summary>
+    /// An entry name written on another machine's terms — a Windows-style climb out of the
+    /// archive, or a rooted name on either platform — names no place inside it, and is refused
+    /// whichever machine reads it, while the rest of the archive still lands.
+    /// </summary>
+    [Fact]
+    public async Task Entry_names_rooted_or_climbing_out_on_either_platforms_terms_are_refused()
+    {
+        var archive = Zip(
+            ("..\\escape.txt", $"climbing out {Guid.NewGuid()}"),
+            ("/abs/rooted.txt", $"rooted {Guid.NewGuid()}"),
+            ("C:\\drive\\rooted.txt", $"drive {Guid.NewGuid()}"),
+            ("kept/survey.txt", $"a survey {Guid.NewGuid()}"));
+        var batchId = await ExpandAsync(archive, cabinetId: null);
+
+        var items = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/upload-batches/{batchId}/items");
+        var lines = items.GetProperty("items").EnumerateArray()
+            .ToDictionary(i => i.GetProperty("sourcePath").GetString()!, i => i);
+
+        foreach (var refused in new[] { "..\\escape.txt", "/abs/rooted.txt", "C:\\drive\\rooted.txt" })
+        {
+            lines[refused].GetProperty("outcome").GetString().ShouldBe("skipped", refused);
+            lines[refused].GetProperty("reason").GetString().ShouldBe(UploadItemReasons.PathRefused, refused);
+        }
+
+        lines["kept/survey.txt"].GetProperty("outcome").GetString().ShouldBe("stored");
+    }
+
+    /// <summary>
+    /// An archive cut off part-way — its directory of entries missing — is not an archive anybody
+    /// can read: the expansion is abandoned with that reason and nothing is kept from it.
+    /// </summary>
+    [Fact]
+    public async Task A_truncated_archive_is_abandoned_as_unreadable_and_stores_nothing()
+    {
+        var whole = Zip(("one.txt", $"first {Guid.NewGuid()}"), ("two.txt", $"second {Guid.NewGuid()}"));
+        var cut = whole[..(whole.Length / 2)];
+
+        var batchId = await ExpandAsync(cut, cabinetId: null);
+
+        var batch = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/upload-batches/{batchId}");
+        batch.GetProperty("status").GetString().ShouldBe("failed");
+        batch.GetProperty("error").GetString().ShouldBe(ArchiveExpansionRules.UnreadableCode);
+        batch.GetProperty("storedCount").GetInt32().ShouldBe(0);
+    }
+
     [Fact]
     public async Task A_second_copy_of_the_same_content_in_one_archive_is_skipped_and_named()
     {
@@ -218,6 +264,9 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable, IClassFixture
             batch.GetProperty("status").GetString().ShouldBe("failed");
             batch.GetProperty("error").GetString().ShouldBeOneOf(
                 ArchiveExpansionRules.TooLargeCode, ArchiveExpansionRules.BombCode);
+
+            // And nothing of it was kept: the one entry is the part past the ceiling.
+            batch.GetProperty("storedCount").GetInt32().ShouldBe(0);
         }
         finally
         {
@@ -310,6 +359,50 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable, IClassFixture
         // The source is never touched: an import that goes wrong is undone by deleting what it
         // created, not by hoping the original is still there.
         File.Exists(Path.Combine(importRoot, "notes.txt")).ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// A link inside an allowed root that leads out of it — to a file, or to a whole directory —
+    /// is not walked: what it points at is somewhere the operator did not allow, however it is
+    /// reached. The real file beside the links is imported, so the walk did run.
+    /// </summary>
+    [Fact]
+    public async Task Links_inside_an_allowed_root_that_lead_out_of_it_are_not_followed()
+    {
+        var run = Guid.NewGuid();
+        var walked = Path.Combine(importRoot, $"walked-{run:N}");
+        Directory.CreateDirectory(walked);
+        await File.WriteAllTextAsync(Path.Combine(walked, "inside.txt"), $"inside {run}");
+
+        var outsideDirectory = Path.Combine(outsideRoot, $"private-{run:N}");
+        Directory.CreateDirectory(outsideDirectory);
+        var outsideFile = Path.Combine(outsideRoot, $"secret-{run:N}.txt");
+        await File.WriteAllTextAsync(outsideFile, $"secret {run}");
+        await File.WriteAllTextAsync(Path.Combine(outsideDirectory, "also-secret.txt"), $"also secret {run}");
+
+        try
+        {
+            File.CreateSymbolicLink(Path.Combine(walked, "file-link.txt"), outsideFile);
+            Directory.CreateSymbolicLink(Path.Combine(walked, "dir-link"), outsideDirectory);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Windows without the privilege refuses to make a link at all, so there is no link for
+            // the walk to meet; said so in the output rather than reported as a pass of the guard.
+            Console.WriteLine($"Link refusal was NOT exercised: this host refuses to create a symbolic link. ({e.GetType().Name})");
+            return;
+        }
+
+        var batchId = await ImportDirectoryAsync(walked, cabinetId: null);
+
+        var batch = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/upload-batches/{batchId}");
+        batch.GetProperty("status").GetString().ShouldBe("completed");
+        batch.GetProperty("storedCount").GetInt32().ShouldBe(1);
+
+        var items = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/upload-batches/{batchId}/items");
+        items.GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("sourcePath").GetString())
+            .ShouldBe(["inside.txt"]);
     }
 
     [Fact]

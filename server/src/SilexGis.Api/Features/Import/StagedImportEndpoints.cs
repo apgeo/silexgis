@@ -122,6 +122,7 @@ public static class StagedImportEndpoints
 
         var session = await db.GeofileImportSessions
             .FirstOrDefaultAsync(s => s.GeofileId == geofile!.Id && s.UserId == ctx.UserId, ct);
+        var creating = session is null;
         if (session is null)
         {
             session = new GeofileImportSession { GeofileId = geofile!.Id, UserId = ctx.UserId };
@@ -130,7 +131,24 @@ public static class StagedImportEndpoints
 
         session.Options = ImportJson.Serialize(request.Options);
         session.Decisions = ImportJson.Serialize(request.Decisions);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException) when (creating)
+        {
+            // One review per person per file is a unique index, and the read above does not
+            // decide it: two saves that start before either finishes both read nothing and both
+            // insert. The review saves itself as somebody works and a second tab does too, so
+            // this happens. The loser merges into the winner's row — both carry the same
+            // reviewer's decisions, and the later one is simply the newer reading.
+            db.Entry(session).State = EntityState.Detached;
+            session = await db.GeofileImportSessions
+                .FirstAsync(s => s.GeofileId == geofile!.Id && s.UserId == ctx.UserId, ct);
+            session.Options = ImportJson.Serialize(request.Options);
+            session.Decisions = ImportJson.Serialize(request.Decisions);
+            await db.SaveChangesAsync(ct);
+        }
 
         var importSettings = await settings.GetImportAsync(ct);
         return TypedResults.Ok(new ImportSessionDto(
@@ -264,7 +282,9 @@ public static class StagedImportEndpoints
         }
 
         var mode = ImportBatchMode.Reviewed;
-        var selection = request.Selection;
+        // A row named twice is one row, here as in the work the queue does: the count checked
+        // against the ceiling and the lines a held confirmation waits on are per row.
+        IReadOnlyList<long> selection = [.. request.Selection.Distinct()];
         if (request.WithoutReview)
         {
             var importSettings = await settings.GetImportAsync(ct);
@@ -279,7 +299,19 @@ public static class StagedImportEndpoints
             // precisely the row nobody has looked at, so creating it unreviewed would be the
             // opposite of what the setting allows.
             var rules = TermRuleSetStore.RulesOf(ruleSet);
-            var (scanned, _, _) = await candidateService.ScanAsync(geofile.Id, rules, request.Options, ct);
+            var (scanned, truncated, _) = await candidateService.ScanAsync(geofile.Id, rules, request.Options, ct);
+
+            // Unreviewed creation works from what the scan read, and a scan that stopped at its
+            // ceiling did not read the rest of the file: creating from it would import a prefix
+            // and call the batch complete, with nothing naming the rows past the ceiling.
+            if (truncated)
+            {
+                return ApiProblems.BadRequest(
+                    "import.too_large_without_review",
+                    "The file has more rows than one review reads, so it cannot be created without review. "
+                    + "Split it, or review it in parts.");
+            }
+
             selection = [.. scanned.Where(c => c.ProposedKind is not null).Select(c => c.SourceId)];
             mode = ImportBatchMode.AutoCreated;
         }

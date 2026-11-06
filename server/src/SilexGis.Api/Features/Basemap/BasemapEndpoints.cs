@@ -284,6 +284,8 @@ public static class BasemapEndpoints
             return SelfHostingOff();
         }
 
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await BasemapSql.TakeSubmissionLockAsync(db, ct);
         if (await Downloads(db).AnyAsync(j => j.Status == ProcessingJobStatus.Queued || j.Status == ProcessingJobStatus.Running, ct))
         {
             return ApiProblems.Conflict(
@@ -314,6 +316,7 @@ public static class BasemapEndpoints
             }, Json),
         });
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return TypedResults.Accepted($"/api/v1/admin/basemap/downloads/{job.Id}", ToDto(job));
     }
@@ -344,6 +347,9 @@ public static class BasemapEndpoints
         }
 
         var before = StateOf(job);
+        // False once the call is known to have reached nothing: the run had already ended, and the
+        // worker simply had not recorded how yet.
+        var reachedRun = true;
         if (job.Status == ProcessingJobStatus.Queued)
         {
             // Not taken yet: it is marked ended, which the worker's claim never picks up.
@@ -357,16 +363,23 @@ public static class BasemapEndpoints
             if (ended == 0)
             {
                 // Taken in the meantime: call it off where it runs.
-                cancellation.Cancel(id);
+                reachedRun = cancellation.Cancel(id);
             }
         }
         else if (job.Status == ProcessingJobStatus.Running)
         {
-            cancellation.Cancel(id);
+            reachedRun = cancellation.Cancel(id);
         }
 
         await db.Entry(job).ReloadAsync(ct);
-        if (before is BasemapDownloadState.Queued or BasemapDownloadState.Running)
+        var after = StateOf(job);
+        if (!reachedRun || after is not (BasemapDownloadState.Running or BasemapDownloadState.Cancelled))
+        {
+            // It ended on its own before the call reached it: nothing was called off, so the
+            // held call is dropped and nothing is recorded as cancelled.
+            cancellation.Forget(id);
+        }
+        else if (before is BasemapDownloadState.Queued or BasemapDownloadState.Running)
         {
             db.Set<AuditEntry>().Add(new AuditEntry
             {

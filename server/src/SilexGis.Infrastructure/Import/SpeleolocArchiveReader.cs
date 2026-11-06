@@ -233,6 +233,16 @@ public sealed class SpeleolocArchiveReader(IFileStore files, IOptions<ImportLimi
         return trips;
     }
 
+    /// <summary>
+    /// Where each read unpacks its scratch copy of the archive's database. Public so that a check
+    /// for copies left behind looks in the directory the reader writes to on every platform,
+    /// rather than in its own reading of the platform's rules.
+    /// </summary>
+    public static string ScratchDirectory => Path.GetTempPath();
+
+    /// <summary>The name every scratch directory of a read starts with.</summary>
+    public const string ScratchPrefix = "silexgis-speleoloc-";
+
     // ---------- opening ----------
 
     /// <summary>
@@ -244,7 +254,7 @@ public sealed class SpeleolocArchiveReader(IFileStore files, IOptions<ImportLimi
     {
         var ceiling = limits.Value.MaxArchiveDatabaseBytes;
         var scratch = Path.Combine(
-            Path.GetTempPath(), $"silexgis-speleoloc-{Guid.CreateVersion7():N}", DatabaseEntryName);
+            ScratchDirectory, $"{ScratchPrefix}{Guid.CreateVersion7():N}", DatabaseEntryName);
         Directory.CreateDirectory(Path.GetDirectoryName(scratch)!);
 
         try
@@ -268,6 +278,12 @@ public sealed class SpeleolocArchiveReader(IFileStore files, IOptions<ImportLimi
                 // review's read hold a lock another's is waiting on.
                 Cache = SqliteCacheMode.Private,
                 ForeignKeys = false,
+                // Every read opens a fresh copy at a path nobody uses twice, so a pool can never
+                // hand the connection back to anyone — it only keeps the file open after the read
+                // is done. Held open, the copy cannot be deleted where the platform refuses to
+                // delete an open file, and where it can be its space stays taken until the pool
+                // prunes it: either way each preview of a large archive would cost its size again.
+                Pooling = false,
             }.ToString());
             connection.Open();
 
@@ -468,6 +484,15 @@ public sealed class SpeleolocArchiveReader(IFileStore files, IOptions<ImportLimi
                 SpeleolocImportCodes.ArchiveUnreadable,
                 $"The archive's database could not be read ({e.SqliteErrorCode}).");
         }
+        catch (Exception e) when (e is OverflowException or InvalidCastException or FormatException)
+        {
+            // SQLite enforces no declared type, so a column can hold a value of any kind and any
+            // width. The readers below take what they are given defensively; this is the net for a
+            // conversion one of them did not foresee, which is a fact about the file all the same.
+            throw new SpeleolocArchiveException(
+                SpeleolocImportCodes.ArchiveUnreadable,
+                "The archive's database holds a value of a kind the device does not write.");
+        }
     }
 
     /// <summary>
@@ -559,10 +584,14 @@ public sealed class SpeleolocArchiveReader(IFileStore files, IOptions<ImportLimi
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
+    /// <summary>
+    /// A count or a flag. Read at the full width SQLite stores and narrowed here, because a column
+    /// declared as a small integer can hold any 64-bit one and a narrowing read would throw on it.
+    /// </summary>
     private static int Count(SqliteDataReader reader, string column)
     {
         var index = reader.GetOrdinal(column);
-        return reader.IsDBNull(index) ? 0 : reader.GetInt32(index);
+        return reader.IsDBNull(index) ? 0 : (int)Math.Clamp(reader.GetInt64(index), int.MinValue, int.MaxValue);
     }
 
     /// <summary>
@@ -579,11 +608,33 @@ public sealed class SpeleolocArchiveReader(IFileStore files, IOptions<ImportLimi
     /// A moment the device recorded as milliseconds since the epoch, UTC. Read as text and parsed
     /// as a 64-bit integer: every one of these is past the 32-bit range, and a reader that let the
     /// width be decided for it turns every timestamp in the archive into January 2038.
+    ///
+    /// <para>
+    /// A number outside the years 1 to 9999 is refused rather than read as no moment at all. No
+    /// device clock writes one, so the file is corrupt or made to be; and a recording or a scan
+    /// quietly given some other date would become a trip on a day nobody went.
+    /// </para>
     /// </summary>
-    private static DateTimeOffset? Moment(SqliteDataReader reader, string column) =>
-        long.TryParse(Text(reader, column), NumberStyles.Integer, CultureInfo.InvariantCulture, out var ms)
-            ? DateTimeOffset.FromUnixTimeMilliseconds(ms)
-            : null;
+    private static DateTimeOffset? Moment(SqliteDataReader reader, string column)
+    {
+        if (!long.TryParse(Text(reader, column), NumberStyles.Integer, CultureInfo.InvariantCulture, out var ms))
+        {
+            return null;
+        }
+
+        if (ms < MinMomentMs || ms > MaxMomentMs)
+        {
+            throw new SpeleolocArchiveException(
+                SpeleolocImportCodes.ArchiveUnreadable,
+                "The archive's database holds a moment outside any calendar.");
+        }
+
+        return DateTimeOffset.FromUnixTimeMilliseconds(ms);
+    }
+
+    private static readonly long MinMomentMs = DateTimeOffset.MinValue.ToUnixTimeMilliseconds();
+
+    private static readonly long MaxMomentMs = DateTimeOffset.MaxValue.ToUnixTimeMilliseconds();
 
     /// <summary>The open database and the scratch copy it is reading, disposed together.</summary>
     private sealed class OpenDatabase(SqliteConnection connection, string scratch) : IDisposable

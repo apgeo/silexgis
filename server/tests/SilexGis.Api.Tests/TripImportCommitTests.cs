@@ -63,12 +63,15 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
     /// here, so a plain "Ana Popescu" seeded by one test is a second person answering to the name
     /// in the next one, and the ambiguity rule under test would fire for the wrong reason.
     /// </summary>
+    private readonly string connectionString;
+
     private string Ana => $"Ana Popescu {tag}";
 
     private string Bogdan => $"Bogdan Ionescu {tag}";
 
     public TripImportCommitTests(PostgresFixture postgres)
     {
+        connectionString = postgres.ConnectionString;
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-files-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
@@ -1021,6 +1024,86 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
         failures[0].GetProperty("line").GetInt32().ShouldBe(4);
         failures[0].GetProperty("code").GetString().ShouldBe("trip_import.row_missing");
         failures[0].GetProperty("reason").GetString().ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task A_row_with_a_value_longer_than_its_column_is_its_own_failure()
+    {
+        var longTitle = new string('t', 300);
+        var sheet =
+            "Nr crt.,Data inceput,Data sfarsit,Titlu\r\n"
+            + $"1,05/03/2024,,{longTitle}\r\n"
+            + $"2,20/05/2024,,Scurt {tag}\r\n";
+        var fileId = await UploadAsync("long.csv", sheet);
+
+        // A title past what the trip keeps reaches the database as a refused write. That is the
+        // row's failure, named with its line, and the rest of the sheet still lands.
+        var result = await CommitAsync(fileId, [2, 3]);
+
+        result.GetProperty("createdTripCount").GetInt32().ShouldBe(1);
+        var failures = result.GetProperty("failures").EnumerateArray().ToList();
+        failures.Count.ShouldBe(1);
+        failures[0].GetProperty("line").GetInt32().ShouldBe(2);
+        failures[0].GetProperty("code").GetString().ShouldBe("trip_import.value_too_long");
+    }
+
+    /// <summary>
+    /// The ceilings one review and one confirmation work to, each answered for what it is: a sheet
+    /// with more rows than a review reads says so, a confirmation of more rows than one records is
+    /// refused with its code, and a file larger than a review reads into memory is refused before
+    /// it is read. Proved through a host whose ceilings are pinned to one row, on the same data.
+    /// </summary>
+    [Fact]
+    public async Task The_review_and_confirmation_ceilings_are_kept_and_named()
+    {
+        var sheet =
+            "Nr crt.,Data inceput,Data sfarsit,Titlu\r\n"
+            + $"1,05/03/2024,,Unu {tag}\r\n"
+            + $"2,06/03/2024,,Doi {tag}\r\n";
+        var fileId = await UploadAsync("two.csv", sheet);
+
+        using var narrow = new SilexGisApiFactory(connectionString, new Dictionary<string, string?>
+        {
+            ["Files:Root"] = filesRoot,
+            ["Import:MaxScanRows"] = "1",
+            ["Import:MaxCommitItems"] = "1",
+        }, JobWorkers.RemoveFrom);
+        using var narrowEditor = await AuthHelper.BearerClientAsync(narrow, $"tic-editor-{tag}@t.local");
+
+        var preview = await narrowEditor.PostAsync(
+            $"/api/v1/trip-imports/{fileId}/preview", Body(new { options = Options() }));
+        var previewBody = await BodyAsync(preview);
+        preview.StatusCode.ShouldBe(HttpStatusCode.OK, previewBody);
+        var read = JsonDocument.Parse(previewBody).RootElement;
+        read.GetProperty("truncated").GetBoolean().ShouldBeTrue();
+        read.GetProperty("rowCount").GetInt32().ShouldBe(1);
+
+        var tooMany = await narrowEditor.PostAsync(
+            $"/api/v1/trip-imports/{fileId}/commit", Body(new { options = Options(), lines = new[] { 2, 3 } }));
+        var tooManyBody = await BodyAsync(tooMany);
+        tooMany.StatusCode.ShouldBe(HttpStatusCode.BadRequest, tooManyBody);
+        CodeOf(tooManyBody).ShouldBe("trip_import.selection_too_large");
+
+        // Past the bytes a review reads: rows of ordinary text, generated here, a little over the
+        // ceiling the reader works to.
+        var ceiling = TripCsvFileReader.MaxBytesFor(1);
+        var big = new StringBuilder("Nr crt.,Data inceput,Data sfarsit,Titlu\r\n");
+        for (var line = 1; big.Length <= ceiling; line++)
+        {
+            big.Append(line).Append(",05/03/2024,,Rand ").Append(tag).Append(' ').Append(line).Append("\r\n");
+        }
+
+        var bigFile = await UploadAsync("big.csv", big.ToString());
+        var tooLarge = await narrowEditor.PostAsync(
+            $"/api/v1/trip-imports/{bigFile}/preview", Body(new { options = Options() }));
+        var tooLargeBody = await BodyAsync(tooLarge);
+        tooLarge.StatusCode.ShouldBe(HttpStatusCode.BadRequest, tooLargeBody);
+        CodeOf(tooLargeBody).ShouldBe("trip_import.file_too_large");
+
+        // Positive half: the same host reads and records one row.
+        var one = await narrowEditor.PostAsync(
+            $"/api/v1/trip-imports/{fileId}/commit", Body(new { options = Options(), lines = new[] { 2 } }));
+        one.StatusCode.ShouldBe(HttpStatusCode.OK, await BodyAsync(one));
     }
 
     /// <summary>

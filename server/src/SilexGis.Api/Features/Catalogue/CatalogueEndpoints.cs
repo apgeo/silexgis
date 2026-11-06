@@ -53,6 +53,14 @@ public static class CatalogueEndpoints
     /// <summary>A search that named neither a term nor a county — refused rather than answered with the whole register.</summary>
     public const string SearchTooBroadCode = "speologie.search_too_broad";
 
+    /// <summary>
+    /// A page this search cannot serve exactly: deeper than the catalogue's one-page reach for a
+    /// term answered under several spellings, or past any offset the catalogue can take at all.
+    /// Refused so that the reader narrows the search, rather than served short or empty, which
+    /// would read as the end of the results while caves remained.
+    /// </summary>
+    public const string SearchTooDeepCode = "speologie.search_too_deep";
+
     /// <summary>The catalogue has no cave under the identifier asked for.</summary>
     public const string CaveNotFoundCode = "speologie.cave_not_found";
 
@@ -185,12 +193,20 @@ public static class CatalogueEndpoints
         SpeologieSearchPage found;
         try
         {
+            // In long arithmetic: an absurd page number must not wrap round to the first page.
             found = await client.SearchAsync(
-                new SpeologieSearchQuery(q, county, (wantedPage - 1) * fetchSize, fetchSize), ct);
+                new SpeologieSearchQuery(q, county, (wantedPage - 1L) * fetchSize, fetchSize), ct);
         }
         catch (SpeologieException e)
         {
             return Unreachable(e);
+        }
+
+        if (found.BeyondReach)
+        {
+            return ApiProblems.BadRequest(
+                SearchTooDeepCode,
+                "This page lies beyond what one search can reach. Narrow the search by county or by a longer term.");
         }
 
         var scanned = found.Items.Count;
@@ -355,6 +371,10 @@ public static class CatalogueEndpoints
             // A key that is not a catalogue id is dropped rather than refused: a stale screen
             // must not be able to make the button unusable.
             .Where(x => x.Parsed && x.Value is not null)
+            // The request validator refuses two keys for one id; a held confirmation is replayed
+            // from what was stored, so the last of them wins here rather than throwing.
+            .GroupBy(x => x.Id)
+            .Select(g => g.Last())
             .ToDictionary(
                 x => x.Id,
                 x => new SpeologieDecision(x.Value.Action, x.Value.CaveTypeCode, x.Value.Longitude, x.Value.Latitude));

@@ -57,6 +57,13 @@ public sealed class GrottocenterClient(
     /// <summary>The far end could not be reached, or answered with a failure.</summary>
     public const string UnreachableCode = "grottocenter.unreachable";
 
+    /// <summary>
+    /// The most of an answer that is read. A search for one name returns a page of candidates a
+    /// few kilobytes long; a megabyte is far past any real one and still small enough that a
+    /// misbehaving far end cannot make one lookup cost this process real memory.
+    /// </summary>
+    private const int MaxAnswerBytes = 1024 * 1024;
+
     /// <summary>Keys an identifier has been seen under, in the order they are tried.</summary>
     private static readonly string[] IdKeys = ["id", "_id", "entranceId", "caveId"];
 
@@ -134,6 +141,9 @@ public sealed class GrottocenterClient(
 
             var client = httpClientFactory.CreateClient(HttpClientName);
             client.Timeout = TimeSpan.FromSeconds(Math.Clamp(Options.TimeoutSeconds, 1, 120));
+            // The answer is buffered whole before it is parsed, so its size would otherwise be the
+            // far end's choice. Past the bound the read fails like an unreachable host does.
+            client.MaxResponseContentBufferSize = MaxAnswerBytes;
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));

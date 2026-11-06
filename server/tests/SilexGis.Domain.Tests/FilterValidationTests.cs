@@ -50,6 +50,13 @@ public class FilterValidationTests
     private static ConditionNode Named(string value) =>
         new("name", FilterOp.Contains, [new TextValue(value)]);
 
+    /// <summary>
+    /// The one code a document is refused with. A refusal "for some reason" passes a test that
+    /// should have caught the wrong reason, and the reason is what the person is shown.
+    /// </summary>
+    private static void RefusedWith(FilterDocument document, string code) =>
+        Validate(document).Select(p => p.Code).Distinct().ShouldBe([code]);
+
     // ---------- what a good document looks like ----------
 
     [Fact]
@@ -195,7 +202,7 @@ public class FilterValidationTests
         // A boolean has nothing to be "between".
         Validate(Over("feature", new ConditionNode(
             "protected", FilterOp.Between, [new BooleanValue(true), new BooleanValue(false)])))
-            .ShouldNotBeEmpty();
+            .ShouldHaveSingleItem().Code.ShouldBe(FilterProblemCodes.OpUnsupported);
     }
 
     [Fact]
@@ -204,18 +211,20 @@ public class FilterValidationTests
         // The reason this is strict: stored JSON tells 4.5 from "4.5", so a quoted number would
         // compile into a condition that matches nothing while looking perfectly correct.
         Validate(Over("feature", new ConditionNode(
-            "depth", FilterOp.Equals, [new TextValue("100")]))).ShouldNotBeEmpty();
+            "depth", FilterOp.Equals, [new TextValue("100")]))).ShouldHaveSingleItem().Code.ShouldBe(FilterProblemCodes.ValueKind);
     }
 
     [Theory]
-    [InlineData(FilterOp.Between, 1)]
-    [InlineData(FilterOp.Between, 3)]
-    [InlineData(FilterOp.IsEmpty, 1)]
-    public void An_operator_given_the_wrong_number_of_values_is_refused(FilterOp op, int count)
+    [InlineData(FilterOp.Between, 1, FilterProblemCodes.ValueCount)]
+    [InlineData(FilterOp.Between, 3, FilterProblemCodes.ValueCount)]
+    [InlineData(FilterOp.IsEmpty, 1, FilterProblemCodes.TakesNoValue)]
+    public void An_operator_given_the_wrong_number_of_values_is_refused(FilterOp op, int count, string code)
     {
         var values = Enumerable.Range(0, count).Select(i => (FilterValue)new NumberValue(i)).ToList();
 
-        Validate(Over("feature", new ConditionNode("depth", op, values))).ShouldNotBeEmpty();
+        var problem = Validate(Over("feature", new ConditionNode("depth", op, values))).ShouldHaveSingleItem();
+        problem.Code.ShouldBe(code);
+        problem.Path.ShouldBe("/scope/0/where");
     }
 
     [Fact]
@@ -223,7 +232,7 @@ public class FilterValidationTests
     {
         Validate(Over("feature", new ConditionNode(
             "depth", FilterOp.Between, [new NumberValue(200), new NumberValue(100)])))
-            .ShouldNotBeEmpty();
+            .ShouldHaveSingleItem().Code.ShouldBe(FilterProblemCodes.RangeReversed);
     }
 
     [Theory]
@@ -238,7 +247,7 @@ public class FilterValidationTests
         // the digits that told it apart from its neighbour and quietly means something else.
         Validate(Over("feature", new ConditionNode(
             "depth", FilterOp.Equals, [new NumberValue(value)])))
-            .ShouldNotBeEmpty();
+            .ShouldHaveSingleItem().Code.ShouldBe(FilterProblemCodes.NumberOutOfRange);
     }
 
     [Fact]
@@ -259,8 +268,8 @@ public class FilterValidationTests
     {
         // Read as "everything" it silently widens a filter; read as "nothing" it silently empties
         // one. Neither reading is one somebody would expect from a group they left blank.
-        Validate(Over("feature", new AllOfNode([]))).ShouldNotBeEmpty();
-        Validate(Over("feature", new AnyOfNode([]))).ShouldNotBeEmpty();
+        RefusedWith(Over("feature", new AllOfNode([])), FilterProblemCodes.EmptyGroup);
+        RefusedWith(Over("feature", new AnyOfNode([])), FilterProblemCodes.EmptyGroup);
     }
 
     [Fact]
@@ -279,7 +288,7 @@ public class FilterValidationTests
             Scope = [new WorldScope("feature", Named("a")), new WorldScope("feature", Named("b"))],
         };
 
-        Validate(document).ShouldNotBeEmpty();
+        RefusedWith(document, FilterProblemCodes.WorldRepeated);
     }
 
     [Fact]
@@ -287,14 +296,32 @@ public class FilterValidationTests
     {
         // Silently falling back would give an arbitrary order, and an arbitrary order paged over
         // reads as rows appearing and vanishing between pages.
-        Validate(Over("document", null, SortKey.Proximity)).ShouldNotBeEmpty();
+        RefusedWith(Over("document", null, SortKey.Proximity), FilterProblemCodes.SortUnsupported);
         Validate(Over("feature", null, SortKey.Proximity)).ShouldBeEmpty();
     }
 
     [Fact]
     public void A_filter_with_no_scope_at_all_is_refused()
     {
-        Validate(new FilterDocument()).ShouldNotBeEmpty();
+        RefusedWith(new FilterDocument(), FilterProblemCodes.NoScope);
+    }
+
+    [Fact]
+    public void A_condition_that_takes_many_values_given_none_is_refused()
+    {
+        // "Is one of" an empty list has no honest meaning either: everything or nothing.
+        RefusedWith(Over("feature", new ConditionNode("typeId", FilterOp.In, [])), FilterProblemCodes.ValueMissing);
+        Validate(Over("feature", new ConditionNode("typeId", FilterOp.In, [new IdValue("cave")]))).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_document_carrying_a_version_newer_than_this_one_is_refused_with_its_own_code()
+    {
+        // Validated as an object rather than read from text: the reader already answers null for
+        // it, and this is what a caller handing the document over directly is told.
+        RefusedWith(
+            Over("feature", Named("a")) with { Version = FilterDocument.CurrentVersion + 1 },
+            FilterProblemCodes.NewerVersion);
     }
 
     // ---------- the guards ----------
@@ -302,33 +329,63 @@ public class FilterValidationTests
     [Fact]
     public void A_document_nested_deeper_than_a_person_could_draw_is_refused()
     {
-        FilterNode tree = Named("deep");
-        for (var i = 0; i < FilterValidation.MaxDepth + 2; i++)
+        // The top of a world's tree is depth one, so a condition inside k groups sits at k + 1:
+        // the deepest accepted holds it in one group fewer than the ceiling.
+        static FilterNode Wrapped(int groups)
         {
-            tree = new AllOfNode([tree]);
+            FilterNode tree = Named("deep");
+            for (var i = 0; i < groups; i++)
+            {
+                tree = new AllOfNode([tree]);
+            }
+
+            return tree;
         }
 
-        Validate(Over("feature", tree)).ShouldNotBeEmpty();
+        Validate(Over("feature", Wrapped(FilterValidation.MaxDepth - 1))).ShouldBeEmpty();
+        RefusedWith(Over("feature", Wrapped(FilterValidation.MaxDepth)), FilterProblemCodes.TooDeep);
+        RefusedWith(Over("feature", Wrapped(FilterValidation.MaxDepth + 2)), FilterProblemCodes.TooDeep);
     }
 
     [Fact]
     public void A_document_with_more_nodes_than_anybody_drew_is_refused()
     {
-        var many = Enumerable.Range(0, FilterValidation.MaxNodes + 10)
-            .Select(i => (FilterNode)Named($"n{i}"))
-            .ToList();
+        // The group counts as a node of its own.
+        static FilterNode Group(int conditions) => new AnyOfNode(
+            [.. Enumerable.Range(0, conditions).Select(i => (FilterNode)Named($"n{i}"))]);
 
-        Validate(Over("feature", new AnyOfNode(many))).ShouldNotBeEmpty();
+        Validate(Over("feature", Group(FilterValidation.MaxNodes - 1))).ShouldBeEmpty();
+        RefusedWith(Over("feature", Group(FilterValidation.MaxNodes)), FilterProblemCodes.TooManyNodes);
+        RefusedWith(Over("feature", Group(FilterValidation.MaxNodes + 10)), FilterProblemCodes.TooManyNodes);
     }
 
     [Fact]
     public void One_condition_holds_a_bounded_number_of_values()
     {
-        var values = Enumerable.Range(0, FilterValidation.MaxValuesPerCondition + 1)
-            .Select(i => (FilterValue)new IdValue(i.ToString()))
-            .ToList();
+        static ConditionNode OneOf(int count) => new("typeId", FilterOp.In,
+            [.. Enumerable.Range(0, count).Select(i => (FilterValue)new IdValue(i.ToString(System.Globalization.CultureInfo.InvariantCulture)))]);
 
-        Validate(Over("feature", new ConditionNode("typeId", FilterOp.In, values))).ShouldNotBeEmpty();
+        Validate(Over("feature", OneOf(FilterValidation.MaxValuesPerCondition))).ShouldBeEmpty();
+        RefusedWith(Over("feature", OneOf(FilterValidation.MaxValuesPerCondition + 1)), FilterProblemCodes.TooManyValues);
+    }
+
+    [Fact]
+    public void A_text_value_is_bounded_and_the_bound_itself_is_accepted()
+    {
+        Validate(Over("feature", Named(new string('a', FilterValidation.MaxTextValueLength)))).ShouldBeEmpty();
+        RefusedWith(Over("feature", Named(new string('a', FilterValidation.MaxTextValueLength + 1))), FilterProblemCodes.TextTooLong);
+    }
+
+    [Fact]
+    public void A_filter_covers_a_bounded_number_of_worlds()
+    {
+        static FilterDocument Worlds(int count) =>
+            new() { Scope = [.. Enumerable.Range(0, count).Select(i => new WorldScope($"world{i}", null))] };
+
+        // At the bound the document is refused for naming worlds this test does not declare, and
+        // never for how many it names.
+        Validate(Worlds(FilterValidation.MaxWorlds)).Select(p => p.Code).ShouldNotContain(FilterProblemCodes.TooManyWorlds);
+        RefusedWith(Worlds(FilterValidation.MaxWorlds + 1), FilterProblemCodes.TooManyWorlds);
     }
 
     // ---------- the document as it travels ----------
