@@ -342,8 +342,8 @@ public static class EntranceEndpoints
             return stale;
         }
 
-        await writer.SoftDeleteAsync(entrance.Id, ct);
-        await writer.SyncCaveMirrorAsync(cave.Id, ct);
+        // The same rule as the uniform feature address: soft delete, then the cave's mirror.
+        await writer.DeleteFeatureAsync(entrance.Id, ct);
         await db.SaveChangesAsync(ct);
         await hold.CommitAsync(ct);
         return TypedResults.NoContent();

@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
 using SilexGis.Infrastructure.Persistence;
 
@@ -180,6 +182,159 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable, IClassFixture
 
         // The deleted row is gone from every read path, and deleting it twice is not found.
         (await owner.DeleteAsync($"/api/v1/centerlines/{firstId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Deleting_the_only_centerline_through_the_feature_address_leaves_the_cave_free_for_another()
+    {
+        // The feature list offers one delete for every kind; for a centerline it must do what
+        // the centerline's own delete does. Deletion is soft and the one-default-per-cave index
+        // does not know about it, so a deleted row still holding the flag would make the next
+        // centerline of the cave collide with a row no read path shows.
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        var only = await UploadAsync(caveId, "only.geojson", GeoJsonLine(25.58, 45.58));
+        var onlyId = only.GetProperty("id").GetGuid();
+        only.GetProperty("isDefault").GetBoolean().ShouldBeTrue();
+
+        (await owner.DeleteAsync($"/api/v1/features/{onlyId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines"))
+            .GetArrayLength().ShouldBe(0);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Centerlines.IgnoreQueryFilters().Where(c => c.Id == onlyId).Select(c => c.IsDefault).SingleAsync())
+                .ShouldBeFalse();
+        }
+
+        // The next upload takes the cave's shape as the first one did.
+        var next = await UploadAsync(caveId, "next.geojson", GeoJsonLine(25.59, 45.59));
+        next.GetProperty("isDefault").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Deleting_the_default_centerline_through_the_feature_address_hands_the_flag_on()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        var first = await UploadAsync(caveId, "first.geojson", GeoJsonLine(25.60, 45.60));
+        var second = await UploadAsync(caveId, "second.geojson", GeoJsonLine(25.61, 45.61));
+        var firstId = first.GetProperty("id").GetGuid();
+        var secondId = second.GetProperty("id").GetGuid();
+
+        (await owner.DeleteAsync($"/api/v1/features/{firstId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var remaining = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines");
+        remaining.GetArrayLength().ShouldBe(1);
+        remaining[0].GetProperty("id").GetGuid().ShouldBe(secondId);
+        remaining[0].GetProperty("isDefault").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_withheld_centerline_is_not_disclosed_by_the_feature_address_delete()
+    {
+        // The reader can read the protected cave but may not see its exact location, so the
+        // centerline does not exist for them — on its feature address as on its own one.
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: true);
+        var created = await UploadAsync(caveId, "guarded.geojson", GeoJsonLine(25.62, 45.62));
+        var centerlineId = created.GetProperty("id").GetGuid();
+
+        (await reader.GetAsync($"/api/v1/features/{centerlineId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.DeleteAsync($"/api/v1/features/{centerlineId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // Every other address of the feature answers the same way, as it does for an id that
+        // names nothing: an edit, its links and a replace of its links.
+        object GenericEdit() => new { name = "Nope", featureTypeId = 1, visibility = "private" };
+        var noLinks = new { links = Array.Empty<object>() };
+        (await reader.PutWithIfMatchAsync($"/api/v1/features/{centerlineId}", GenericEdit()))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/v1/features/{centerlineId}/links")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.PutAsJsonAsync($"/api/v1/features/{centerlineId}/links", noLinks))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // The owner sees it exactly: its links are theirs to read and replace, and an edit at
+        // the generic address is refused for the kind, not for being unknown.
+        (await owner.GetAsync($"/api/v1/features/{centerlineId}/links")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.PutAsJsonAsync($"/api/v1/features/{centerlineId}/links", noLinks))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var ownersEdit = await owner.PutWithIfMatchAsync($"/api/v1/features/{centerlineId}", GenericEdit());
+        ownersEdit.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ownersEdit.Content.ReadAsStringAsync()).ShouldContain("feature.kind_not_generic");
+
+        // The owner sees it exactly and may delete it there.
+        (await owner.GetAsync($"/api/v1/features/{centerlineId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.DeleteAsync($"/api/v1/features/{centerlineId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    /// <summary>
+    /// Deleting an entrance or a centerline rewrites its cave — the main entrance, the count, the
+    /// current survey — so both of its addresses ask for the right to edit the cave. A right to
+    /// delete the child alone, which can outlive the right over its cave, opens neither.
+    /// </summary>
+    [Fact]
+    public async Task Deleting_a_caves_child_at_either_address_needs_the_right_to_edit_the_cave()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        var first = (await UploadAsync(caveId, "first.geojson", GeoJsonLine(25.63, 45.63))).GetProperty("id").GetGuid();
+        var second = (await UploadAsync(caveId, "second.geojson", GeoJsonLine(25.64, 45.64))).GetProperty("id").GetGuid();
+        long entranceTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            entranceTypeId = await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>()
+                .EntranceTypes.Select(t => t.Id).FirstAsync();
+        }
+
+        async Task<Guid> EntranceAsync(double lon, double lat)
+        {
+            var created = await owner.PostAsJsonAsync($"/api/v1/caves/{caveId}/entrances", new
+            {
+                entranceTypeId,
+                isMain = false,
+                geom = new { type = "Point", coordinates = new[] { lon, lat } },
+                positionQuality = "gps",
+            });
+            created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+            return JsonDocument.Parse(await created.Content.ReadAsStringAsync()).RootElement.GetProperty("id").GetGuid();
+        }
+
+        var entranceA = await EntranceAsync(25.631, 45.631);
+        var entranceB = await EntranceAsync(25.632, 45.632);
+
+        // The reader may read and delete these four rows by name, and may not edit the cave.
+        foreach (var child in new[] { first, second, entranceA, entranceB })
+        {
+            await GrantOnObjectAsync(child, AccessAction.Read | AccessAction.Write | AccessAction.Delete);
+        }
+
+        (await reader.DeleteAsync($"/api/v1/features/{first}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await reader.DeleteAsync($"/api/v1/centerlines/{first}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await reader.DeleteAsync($"/api/v1/features/{entranceA}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await reader.DeleteAsync($"/api/v1/cave-entrances/{entranceA}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines")).GetArrayLength().ShouldBe(2);
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}")).GetProperty("entranceCount").GetInt32().ShouldBe(2);
+
+        // The cave's owner deletes the same kinds of row at each address.
+        (await owner.DeleteAsync($"/api/v1/features/{first}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await owner.DeleteAsync($"/api/v1/centerlines/{second}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await owner.DeleteAsync($"/api/v1/features/{entranceA}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await owner.DeleteAsync($"/api/v1/cave-entrances/{entranceB}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}")).GetProperty("entranceCount").GetInt32().ShouldBe(0);
+    }
+
+    private async Task GrantOnObjectAsync(Guid featureId, AccessAction actions)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = readerId,
+            Effect = AccessEffect.Allow,
+            Domain = AccessDomain.Features,
+            Actions = actions,
+            ScopeKind = AccessScopeKind.Object,
+            ScopeFeatureId = featureId,
+        });
+        await db.SaveChangesAsync();
     }
 
     [Fact]

@@ -26,6 +26,9 @@ namespace SilexGis.Api.Features.Features;
 /// </summary>
 public static class FeatureEndpoints
 {
+    /// <summary>A type change refused because the caller may not edit features of the new type.</summary>
+    public const string TypeChangeForbiddenCode = "feature.type_change_forbidden";
+
     public static RouteGroupBuilder MapFeatureEndpoints(this RouteGroupBuilder api)
     {
         var features = api.MapGroup("/features").WithTags("Features");
@@ -117,9 +120,10 @@ public static class FeatureEndpoints
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search}%";
+            var pattern = LikePatterns.Containing(search);
             query = query.Where(f =>
-                f.Name != null && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern)));
+                f.Name != null
+                && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern), LikePatterns.Escape));
         }
 
         // A protected row is in the box by the position this caller is shown — the snapped
@@ -359,7 +363,7 @@ public static class FeatureEndpoints
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var feature = await db.Features.FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (feature is null)
+        if (feature is null || await IsWithheldAsync(protection, ctx, feature, ct))
         {
             return ApiProblems.NotFound("feature.not_found");
         }
@@ -398,8 +402,29 @@ public static class FeatureEndpoints
                 $"Kind '{featureType.Code}' is the type of every {featureType.BoundKind} and of nothing else.");
         }
 
-        if (request.CavingGroupId is not null
-            && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.Features, request.CavingGroupId.Value))
+        // A rule may reach only some types, so the Write decided above, on the row as it is
+        // stored, says nothing about the type it is being turned into: someone who may edit
+        // sinkholes alone would otherwise make a row of a type they may neither create nor edit,
+        // and a type-scoped deny on reading that type would then hide it from everyone else.
+        // Asked on the same row's facts with the new type, so ownership, club, ancestry and set
+        // membership weigh exactly as they did for the old one.
+        if (request.FeatureTypeId != feature.FeatureTypeId)
+        {
+            var asConverted = (await access.FactsOfAsync(feature, ct)) with { FeatureTypeId = request.FeatureTypeId };
+            if (!AccessEvaluator.Decide(ctx, AccessDomain.Features, AccessAction.Write, asConverted).Allowed)
+            {
+                return ApiProblems.Forbidden(
+                    TypeChangeForbiddenCode, "You may not edit features of the type you are changing this one into.");
+            }
+        }
+
+        // Binding is checked only when it changes: the edit form sends the feature's current
+        // club back with every save, and keeping a binding the feature already has asks nothing
+        // beyond the Write decided above — an editor with domain-wide rights who is not in that
+        // club, or an owner who has since left it, still edits the feature.
+        if (request.CavingGroupId is { } club
+            && club != feature.CavingGroupId
+            && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.Features, club))
         {
             return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
@@ -412,14 +437,6 @@ public static class FeatureEndpoints
             {
                 return ApiProblems.BadRequest("feature.geometry_invalid", "Geometry is malformed or invalid.");
             }
-
-            var geometryClass = GeometryClasses.Of(geom);
-            if (geometryClass is null || !featureType.AcceptedGeometryClasses.Contains(geometryClass.Value))
-            {
-                return ApiProblems.BadRequest(
-                    "feature.geometry_invalid",
-                    $"Kind '{featureType.Code}' does not accept {geom.GeometryType} geometries.");
-            }
         }
 
         if (featureType.RequiresParent && !await db.FeatureHierarchyEdges.AnyAsync(e => e.ChildId == feature.Id, ct))
@@ -430,6 +447,23 @@ public static class FeatureEndpoints
         }
 
         var exact = (await protection.ExactViewIdsAsync(ctx, [feature.Id], ct)).Contains(feature.Id);
+
+        // The geometry the row will hold is checked against the type it will have, not only a
+        // geometry the request sent: a caller who was shown none keeps the stored one, and a type
+        // change must not leave an outline under a kind that is only ever a point. The refusal
+        // names the class only to a caller who may see the geometry: to one who was shown a
+        // snapped point, "polygon" would describe the protected shape they were not given.
+        var storedGeom = exact ? geom : feature.Geom;
+        if (storedGeom is not null
+            && (GeometryClasses.Of(storedGeom) is not { } geometryClass
+                || !featureType.AcceptedGeometryClasses.Contains(geometryClass)))
+        {
+            return ApiProblems.BadRequest(
+                "feature.geometry_invalid",
+                exact
+                    ? $"Kind '{featureType.Code}' does not accept {storedGeom.GeometryType} geometries."
+                    : $"Kind '{featureType.Code}' does not accept the geometry this feature holds.");
+        }
 
         feature.Name = request.Name;
         feature.FeatureTypeId = request.FeatureTypeId;
@@ -484,41 +518,59 @@ public static class FeatureEndpoints
         FeatureWriteService writeService,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
+        FeatureProtection protection,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         // No tracking: the soft delete writes directly to the database, and a stale
-        // tracked copy would confuse the cave-mirror recount below.
+        // tracked copy would confuse the cave-mirror recount the write service runs after it.
         var feature = await db.Features.AsNoTracking()
             .Include(f => f.Entrance)
+            .Include(f => f.Centerline)
             .FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (feature is null)
+        if (feature is null || ctx is null || !(await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed)
         {
             return ApiProblems.NotFound("feature.not_found");
         }
 
-        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Delete, feature, ct)).Allowed)
+        // A protected centerline does not exist for a caller without exact view, as its read
+        // says; a 403 here would disclose that the cave has a survey at all.
+        if (await IsWithheldAsync(protection, ctx, feature, ct))
         {
-            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
-                ? ApiProblems.Forbidden()
-                : ApiProblems.NotFound("feature.not_found");
+            return ApiProblems.NotFound("feature.not_found");
         }
 
-        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct);
+        if (!(await access.DecideAsync(ctx, AccessAction.Delete, feature, ct)).Allowed)
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        // An entrance's or a centerline's delete also writes its cave (the entrance mirror, the
+        // default shape), so the cave is locked first, in the order its own kind's routes take.
+        var caveId = feature.Entrance?.CaveFeatureId ?? feature.Centerline?.CaveFeatureId;
+
+        // And it asks what the kind's own address asks: the right to edit that cave. A child
+        // copies its cave's owner and club when it is made and keeps them afterwards, so the
+        // right to delete the child alone can outlive the right over the cave whose main entrance,
+        // entrance count and current survey this delete recomputes.
+        if (caveId is { } container)
+        {
+            var cave = await db.Features.AsNoTracking().FirstOrDefaultAsync(f => f.Id == container, ct);
+            if (cave is null || !(await access.DecideAsync(ctx, AccessAction.Write, cave, ct)).Allowed)
+            {
+                return ApiProblems.Forbidden();
+            }
+        }
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Features, feature.Id, ct, containerId: caveId);
         if (hold.Refusal is { } stale)
         {
             return stale;
         }
 
-        await writeService.SoftDeleteAsync(feature.Id, ct);
-
-        // Deleting an entrance through the uniform address must keep the cave's derived
-        // mirror (entrance count + representative point) consistent, exactly as the
-        // typed entrance endpoint does.
-        if (feature.Kind == FeatureKind.CaveEntrance && feature.Entrance is not null)
-        {
-            await writeService.SyncCaveMirrorAsync(feature.Entrance.CaveFeatureId, ct);
-        }
+        // The kind's own rule, the same one its typed address runs: a centerline hands the
+        // cave's shape on before it goes, an entrance leaves the cave's mirror recomputed.
+        await writeService.DeleteFeatureAsync(feature.Id, ct);
 
         // The soft delete stamps rows immediately, but its audit entries ride the context.
         await db.SaveChangesAsync(ct);
@@ -549,6 +601,18 @@ public static class FeatureEndpoints
             db, ctx, new FeaturePrimaryChains.Subject(feature.Id, feature.AncestorIds), ct);
         return [.. chain.Select(step => new FeatureBreadcrumbDto(step.Id, step.Name))];
     }
+
+    /// <summary>
+    /// Whether the feature does not exist for this caller although they may read its row: a
+    /// protected centerline traces the cave's course, cannot be served obfuscated, and is
+    /// withheld whole from a caller without exact view. Every address of the feature answers
+    /// such a caller as it answers one for an id that names nothing — a 403 or a list of its
+    /// links would say that the cave has a survey at all.
+    /// </summary>
+    internal static async Task<bool> IsWithheldAsync(
+        FeatureProtection protection, AccessContext? ctx, Feature feature, CancellationToken ct) =>
+        feature.Kind == FeatureKind.Centerline
+        && !(await protection.ExactViewIdsAsync(ctx, [feature.Id], ct)).Contains(feature.Id);
 
     internal static ProblemHttpResult WriteProblem(FeatureWriteException ex) =>
         ApiProblems.BadRequest(ex.Code, string.Join(" ", ex.Errors));
