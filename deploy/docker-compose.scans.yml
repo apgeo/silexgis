@@ -1,0 +1,98 @@
+# Point-cloud worker overlay: turns an uploaded LiDAR point cloud (.laz/.las) into something the
+# 3D view can show — 3D Tiles — and makes the downsampled display copies and the estimates that
+# go with it.
+#
+# Entirely optional, and absent unless you start it. Without it a point cloud is still archived
+# against its cave, its header read and the scan listed with its facts; the run ends saying the
+# cloud was not tiled, and *Rerun* tiles it later once a worker is there.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.scans.yml up -d
+#
+# Requires in .env (or `up` stops and says so):
+#   SILEXGIS__Scans__ProcessingEnabled=true
+#
+# Optional in .env:
+#   SILEXGIS_SCANS_WORKER_MEMORY=16g          # the container's limit; see the sizing note below
+#   SILEXGIS_SCANS_WORKER_CPUS=4              # processors; tiling runs this many jobs at once
+#   SILEXGIS_SCANS_WORKER_POLL_SECONDS=2      # how often it looks for work
+#   SILEXGIS_SCANS_WORKER_CACHE_MB=2048       # the tiler's point cache, inside the memory limit
+#   SILEXGIS_SCANS_WORKER_TIMEOUT_SECONDS=14400   # the most one job may run when the request
+#                                                 # does not say (the application's own limit wins)
+#
+# The worker publishes no port and answers nothing: it watches a directory on the scans volume
+# that the application writes jobs into, and writes its answer back beside each request. It is
+# given no database credentials, no network at all (not even to the application), a read-only
+# filesystem, no capabilities, and limits on memory, processors and processes — it runs tools over
+# files somebody uploaded, so it runs where there is nothing to read and nowhere to go.
+#
+# **Size it deliberately.** Tiling was measured at 3.4 GB peak for a 34 M-point cloud and 5.9 GB
+# for 73 M points on 12 processors; the estimate and downsample passes hold a few bytes per point.
+# 16g by default leaves headroom for clouds of a couple of hundred million points, which is where
+# the application starts advising a downsampled display copy anyway. The tiler sizes its own cache
+# from SILEXGIS_SCANS_WORKER_CACHE_MB rather than from the machine, because inside a container the
+# free memory it would otherwise read is the host's. A changed limit takes effect when the
+# container is recreated:
+#   docker compose -f docker-compose.yml -f docker-compose.scans.yml up -d scans-worker
+#
+# The image is built here (about 650 MB: Python, py3dtiles, laspy and numpy), which is the reason it
+# is an overlay rather than part of the stack. The same Dockerfile has a second, much larger target
+# with HDMapping compiled in, for processing raw scanner recordings; this overlay builds only the
+# tiler.
+#
+# Stop it again with:
+#   docker compose -f docker-compose.yml -f docker-compose.scans.yml stop scans-worker
+# and remove SILEXGIS__Scans__ProcessingEnabled from .env, or the application will keep handing
+# jobs to a service that is no longer there. Stopping it while a job runs abandons that job; the
+# upload it belonged to is told so when the worker comes back, and can be run again.
+name: silexgis
+
+services:
+  api:
+    environment:
+      # Guarded rather than merely documented. A worker running beside an application that has
+      # not been told to use it looks exactly like no worker at all — every upload ends "not
+      # tiled" with nobody the wiser. This turns it into a sentence at `up`.
+      SILEXGIS__Scans__ProcessingEnabled: ${SILEXGIS__Scans__ProcessingEnabled:?set SILEXGIS__Scans__ProcessingEnabled=true in .env so the application hands its point clouds to the worker}
+
+  scans-worker:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    build:
+      context: ./scans
+      target: tiler
+    restart: unless-stopped
+    # No published ports and no network at all, on purpose — see the note above. The application
+    # never talks to it; the directory is the whole conversation.
+    network_mode: none
+    # The whole of the scans volume, writable: the application copies a cloud into a job directory
+    # there and this worker writes its products beside it. Both containers run as the same user and
+    # both create this path in their own image, so neither cares which of them a fresh volume is
+    # seeded from.
+    volumes:
+      - silexgis-scans:/data/scans
+    environment:
+      SILEXGIS_SCANS_ROOT: /data/scans
+      SILEXGIS_SCANS_POLL_SECONDS: ${SILEXGIS_SCANS_WORKER_POLL_SECONDS:-2}
+      SILEXGIS_SCANS_JOBS: ${SILEXGIS_SCANS_WORKER_CPUS:-4}
+      SILEXGIS_SCANS_CACHE_MB: ${SILEXGIS_SCANS_WORKER_CACHE_MB:-2048}
+      SILEXGIS_SCANS_JOB_TIMEOUT_SECONDS: ${SILEXGIS_SCANS_WORKER_TIMEOUT_SECONDS:-14400}
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${SILEXGIS_SCANS_WORKER_MEMORY:-16g}
+    cpus: ${SILEXGIS_SCANS_WORKER_CPUS:-4}
+    # The tiler runs one process per job plus a few helpers; a tool that forks without end stops
+    # here.
+    pids_limit: 256
+    tmpfs:
+      # The tiler's worker processes talk over sockets it creates under /tmp, and the filesystem is
+      # otherwise read-only; every job's own files go to its directory on the volume.
+      - /tmp:size=256m

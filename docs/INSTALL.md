@@ -1418,6 +1418,86 @@ Two things worth knowing:
   never serves, so a rule aimed too high hands those files to anyone who can reach the site, with no
   sign-in and nothing in the application's log.
 
+## Point-cloud worker (optional)
+
+A LiDAR point cloud (`.laz` or `.las`) uploaded against a cave is archived, its header read and
+the scan listed with its facts whatever else is running. Showing it in the 3D view needs it turned
+into 3D Tiles, and the tools that do that are Python, so they run as a service of their own:
+
+```bash
+cd deploy
+# in .env:
+#   SILEXGIS__Scans__ProcessingEnabled=true
+docker compose -f docker-compose.yml -f docker-compose.scans.yml up -d
+```
+
+It is a separate service for the same reasons the terrain worker is, and it is isolated the way
+the survey compiler is: it runs tools over files somebody uploaded, so it has **no network at all**
+(not even to the application), no database credentials, a read-only filesystem, no Linux
+capabilities, and limits on memory (`SILEXGIS_SCANS_WORKER_MEMORY`, 16 GB by default), processors
+(`SILEXGIS_SCANS_WORKER_CPUS`, 4) and processes. It publishes no port. The application and the
+worker meet on one directory of the `silexgis-scans` volume: the application copies the cloud into
+a job directory there with a `request.json`, the worker runs the step, writes `progress.json` as it
+goes and `result.json` with its products at the end, and the application stores the products and
+removes the directory. At start the worker writes `capabilities.json` at the root of that
+directory, naming the steps it can run and the tool versions, which is how the application knows
+what this installation can do; a missing file means no worker.
+
+What it runs, per upload:
+
+- **Estimate** — one pass over the cloud counting how many points would remain at voxel sizes of
+  1, 2, 3, 5 and 10 cm, with the tile size and tiling time each would take. A cloud under the
+  installation's thresholds (`SILEXGIS__Scans__DisplayWarnPoints` and the two beside it) is tiled
+  whole straight away. Over them the run stops here, succeeded, with the table and a suggested
+  size on the scan and the note "Estimated: … Choose how much to show, then run again": tiling
+  the whole of a cloud that size is hours of worker time and gigabytes of tiles, which are not
+  spent unasked. The upload page shows the table and the suggestion; running the upload again
+  with a choice carries on from the estimate, which is not repeated. A choice can also be sent
+  with the upload itself, and the whole cloud is a choice like any other.
+- **Downsample** — a display copy of the cloud at the chosen voxel size (one point per cell, the
+  one nearest the cell's centre) or every n-th point. The original is never altered.
+- **Tile** — 3D Tiles 1.0 from the cloud, packed into one archive. The cloud is first shifted to
+  its own centre, so **the tiles carry no coordinates**, whatever the file's frame; the shift is
+  kept by the application as the scan's placement, and the scan appears on the map only through
+  that placement and the exact-location rules.
+
+**Give it memory.** Tiling was measured at 3.4 GB peak for a cloud of 34 million points and 5.9 GB
+for 73 million (12 processors); the estimate and the downsample hold a few bytes per point. The
+16 GB default leaves room for a couple of hundred million points, which is where the application
+starts advising a downsampled display copy anyway. The tiler takes its own cache size from
+`SILEXGIS_SCANS_WORKER_CACHE_MB` (2048) rather than from the machine, because inside a container
+the free memory it would otherwise read is the host's. A changed limit takes effect when the
+container is recreated:
+
+```bash
+# in .env:
+#   SILEXGIS_SCANS_WORKER_MEMORY=24g
+docker compose -f docker-compose.yml -f docker-compose.scans.yml up -d scans-worker
+```
+
+**A job has a time limit.** The application names one with each request; a job that reaches it is
+stopped and answered as failed, and the upload says so. `SILEXGIS_SCANS_WORKER_TIMEOUT_SECONDS`
+(14400) applies only to a request that names none.
+
+**It is entirely optional, and not running it is the default.** Without it a point cloud is still
+archived, its facts shown on the cave, and the run ends saying the cloud was not tiled; *Rerun*
+tiles it once a worker is there. The same two notes as for the terrain worker apply: every later
+`docker compose` command must repeat the same `-f` list (or set `COMPOSE_FILE` in `.env`), and
+turning it off again means stopping the `scans-worker` service **and** removing
+`SILEXGIS__Scans__ProcessingEnabled` from `.env`. Stopping it while a job is running abandons that
+job; the upload is told so when the worker comes back, and can be run again.
+
+**Proving a built image.** `node scripts/scans-worker-check.mjs <cloud.las|cloud.laz>` starts the
+worker image the way the overlay does (no network, read-only, no capabilities, bounded), hands it
+the three steps on that cloud one after another and prints a verdict: points in and out, tiles and
+bytes, timings, and whether every answer agreed with what was written to disk and the tiles sit at
+their own centre. Run it after changing the image or the worker; it needs the image built
+(`--build` builds it) and a cloud of your own, and it is not part of the hosted build.
+
+**Raw scanner recordings.** The same Dockerfile (`deploy/scans/Dockerfile`) has a second target,
+`hdmapping`, with HDMapping compiled in for processing raw recordings on the server. It builds for
+most of an hour and is not what this overlay starts; nothing in this release uses it yet.
+
 ## Photo libraries (optional): who keeps them up to date
 
 SilexGIS can read photographs from an **Immich** or a **PhotoPrism** library running beside it
@@ -2501,6 +2581,14 @@ the reasoning beside each one.
 | `SILEXGIS__Sync__RejectedHeldBytesRetentionDays` | `30` | how many days the file bytes of a held change are kept once it is decided without them being used — turned down by a reviewer, replaced by a later upload, or accepted but not written — before the hourly upload sweep deletes them. 1 to 365. While a change waits for a reviewer its bytes are kept however long that takes (they count against the sending account's storage quota throughout), so a queue nobody looks at grows; the review queue shows each batch's age. Read when the change is decided: a change of the setting applies to changes decided after it. Changeable on the settings page. A held file import keeps no bytes of its own: the file it was confirmed from stays where it is, under the account that uploaded it, until somebody deletes it |
 | `SILEXGIS__SurveyUploads__MaxFileBytes` | `262144000` | the largest single file a field device (TopoDroid) may send in a survey upload, in bytes — 250 MB. A phone's survey archive carries its sketches and photos, so this is well above any survey source. The reverse proxy must let a body this size through: both packaged nginx configurations accept 1 GB, so raising this past that means raising `client_max_body_size` too |
 | `SILEXGIS__SurveyUploads__MaxFilesPerUpload` | `64` | the most files one survey upload may declare (the archive, its Therion sources and sketches, and other exports) |
+| `SILEXGIS__Scans__MaxUploadBytes` | `4294967296` | the largest point cloud file (`.laz`/`.las`) a survey upload of origin `pointcloud` may send, in bytes — 4 GiB. The reverse proxy must let a body this size through: both packaged nginx configurations accept 1 GB, so using the default in full means raising `client_max_body_size` |
+| `SILEXGIS__Scans__ProcessingEnabled` | `false` | whether this installation has a worker that can tile a point cloud. Set by the same deployment that starts the scans worker (see *Point-cloud worker (optional)*); switched on with no worker running, every point-cloud upload fails at the first worker step, saying so, once `PickupSeconds` have passed — the same wait whether the worker never announced itself or announced itself and takes nothing |
+| `SILEXGIS__Scans__HandoffRoot` | `data/scans` (the compose stack sets `/data/scans`) | the directory the application and the scans worker leave jobs and answers for each other in. Both sides must name the same directory, on a volume they share, and both compose files already do |
+| `SILEXGIS__Scans__PickupSeconds` | `300` | how long a job may wait in the hand-off directory before something takes it. Past this the run fails saying no worker is running, rather than waiting for an answer nothing will write |
+| `SILEXGIS__Scans__JobTimeoutSeconds` | `14400` | the most one worker step (estimate, thin, tile) may run before it is called off and the run fails. Four hours: tiling was measured at about a minute per 40 million points |
+| `SILEXGIS__Scans__DisplayWarnPoints` | `50000000` | above this many points, the upload is shown the estimate table and a thinned display copy is suggested |
+| `SILEXGIS__Scans__DisplayAdvisePoints` | `200000000` | above this many points, a thinned display copy is strongly advised |
+| `SILEXGIS__Scans__WarnTileBytes` | `2147483648` | above this many estimated bytes of tiles (2 GiB), a thinned display copy is suggested whatever the point count |
 | `SILEXGIS__SurveyUploads__CaveCreation` | `true` | whether a survey upload that names no cave may make one, named after the survey's title (numbered `(2)`, `(3)`… when a cave the uploader can see already has the name), on the uploader's ordinary right to create caves. `false` refuses such an upload, and the device has to name a cave the account can write to |
 | `SILEXGIS__SurveyUploads__DefaultCaveTypeId` | *(unset)* | the cave type a cave made from a survey upload gets when the upload names none. Unset, the installation's ordinary cave type |
 | `SILEXGIS__SurveyUploads__DefaultOutputs` | `lox,3d,plan-pdf,extended-pdf` | the outputs a survey upload's processing produces when the upload asks for none, as catalogue names separated by commas. The account's own *always produce* list and the setting below are added to it, never taken away |

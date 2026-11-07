@@ -113,6 +113,11 @@ services:
       # without a request ever reaching the application. Pointing that one directory higher would
       # publish the operator's own data.
       SILEXGIS__Terrain__PublishRoot: /data/terrain/published
+      # Where the application leaves a point-cloud job for the scans worker and where the answer
+      # comes back (docker-compose.scans.yml). A directory rather than an address, like the
+      # terrain spool above, and set here whether or not a worker is running, for the same
+      # reason: it costs an empty directory, and both halves of one handover belong in one place.
+      SILEXGIS__Scans__HandoffRoot: /data/scans
       # The installation's own vector basemap: where a region an administrator downloads is kept,
       # the directory its tile server reads. Off in this file, because the tile server is not part
       # of it: the basemap overlay (docker-compose.basemap.yml, named in COMPOSE_FILE in the sample
@@ -132,6 +137,10 @@ services:
       # Mounted whether or not the overlay runs, so an extract survives taking the overlay off
       # and putting it back.
       - silexgis-basemap:/data/basemap
+      # Point-cloud jobs: a cloud copied in for the scans worker and the tiles it writes back, each
+      # job's directory removed once the application has stored the products. A named volume
+      # because one job can hold several gigabytes while it runs.
+      - silexgis-scans:/data/scans
     # Answers "is the application up and its database reachable", which is what the web service
     # waits for below. The runtime image carries bash but neither curl nor wget, and installing a
     # tool only for this would grow the image, so the probe is a plain HTTP/1.0 request written to
@@ -220,3 +229,4 @@ volumes:
   silexgis-keys:
   silexgis-terrain:
   silexgis-basemap:
+  silexgis-scans:

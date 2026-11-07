@@ -51,7 +51,7 @@ COPY --from=pmtiles /out/pmtiles /usr/local/bin/pmtiles
 #
 # The basemap directory is the one the tile server reads (read-only) and this application writes a
 # finished download into.
-RUN mkdir -p /data/files /data/keys /data/terrain/builds /data/terrain/spool /data/terrain/published /data/basemap && chown -R app:app /data
+RUN mkdir -p /data/files /data/keys /data/terrain/builds /data/terrain/spool /data/terrain/published /data/basemap /data/scans/jobs && chown -R app:app /data
 USER app
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "SilexGis.Api.dll"]
