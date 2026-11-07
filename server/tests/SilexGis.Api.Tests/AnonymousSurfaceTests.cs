@@ -74,6 +74,7 @@ public sealed class AnonymousSurfaceTests(PostgresFixture postgres) : IDisposabl
         ("GET", "/api/v1/files/{id:guid}/pages/{page:int}/text", "answers on the same terms as the picture of the same page"),
         ("GET", "/api/v1/photo-libraries/{source}/thumbnails/{reference}", "a picture in a neighbouring photo library, loaded ambiently by the browser; the token carries the decision made where the layer was served"),
         ("GET", "/api/v1/terrain/derivatives/{id:guid}/rasters/{rasterId:long}/content", "a computed picture of the ground, read in ranges by a tile reader that can attach no header; the token carries the terrain-right decision made when the listing was served"),
+        ("GET", "/api/v1/survey-models/{id:guid}/tiles/{**path}", "one entry of a scan's tileset archive, fetched by a tile reader that can attach no header and derives every tile's address from the root it was handed; the token is a file delivery token over the archive, minted when the scan was listed to a caller who may see it, and the tiles carry no coordinates"),
 
         // A token somebody was handed deliberately is the credential.
         ("POST", "/api/v1/notifications/unsubscribe", "the signed token in the message is the claim; stopping mail cannot need an account"),

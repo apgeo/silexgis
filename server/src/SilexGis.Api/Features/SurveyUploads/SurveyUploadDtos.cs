@@ -213,6 +213,7 @@ public sealed record SurveyUploadPointCloudCrsDto(int? HorizontalEpsg, int? Vert
 /// <param name="TileBytes">The tileset's size, once tiled.</param>
 /// <param name="TileCount">How many tiles, once tiled.</param>
 /// <param name="TilerVersion">The tiler's version, once tiled.</param>
+/// <param name="TilesetUrl">A signed address of the tileset's root, good for a session, once tiled; the tiles are in the cloud's own frame and carry no coordinates, so it goes to everybody who may read the upload.</param>
 /// <param name="DisplayVoxelM">The voxel the shown copy was thinned to, or null when the whole cloud was tiled.</param>
 /// <param name="DisplayEveryNth">The stride the shown copy was thinned by, when every n-th point was kept.</param>
 /// <param name="DisplayPointCount">How many points the shown copy holds, when it was thinned.</param>
@@ -236,6 +237,7 @@ public sealed record SurveyUploadPointCloudDto(
     long? TileBytes,
     int? TileCount,
     string? TilerVersion,
+    string? TilesetUrl,
     double? DisplayVoxelM,
     int? DisplayEveryNth,
     long? DisplayPointCount,

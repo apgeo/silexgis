@@ -635,7 +635,7 @@ public static partial class SurveyUploadEndpoints
                 own.Where(f => f.Role == SurveyUploadFileRole.Archive).Select(Listed).FirstOrDefault(x => x is not null),
                 [.. own.Where(f => f.Role == SurveyUploadFileRole.TherionSource).Select(Listed).OfType<SurveyUploadListFileDto>()],
                 // Everybody listed here holds the exact position (see above), so the facts are whole.
-                clouds.TryGetValue(u.Id, out var cloud) ? PointCloudDto(cloud.ModelId, cloud.Facts, exact: true) : null,
+                clouds.TryGetValue(u.Id, out var cloud) ? PointCloudDto(tokens, cloud.ModelId, cloud.ConvertedFileId, cloud.Facts, exact: true) : null,
                 SurveyUploadLinks.StatusPage(u.CaveFeatureId, u.CaveSurveyId, u.Id),
                 openLinks.GetValueOrDefault(u.Id));
         }).ToList();
@@ -880,7 +880,7 @@ public static partial class SurveyUploadEndpoints
             upload.VersionAt,
             upload.CreatedCave,
             new SurveyUploadSurveyDto(upload.SurveyTitle, upload.SurveyName, upload.SurveyDate, upload.Team),
-            cloud is null ? null : PointCloudDto(cloud.ModelId, cloud.Facts, exact),
+            cloud is null ? null : PointCloudDto(tokens, cloud.ModelId, cloud.ConvertedFileId, cloud.Facts, exact),
             [.. files.Where(f => f.Role is not (SurveyUploadFileRole.Output or SurveyUploadFileRole.Log)).Select(f => new SurveyUploadFileDto(
                 f.Name,
                 f.Role,
@@ -912,7 +912,7 @@ public static partial class SurveyUploadEndpoints
     private sealed record Revision(Guid FileId, long SizeBytes);
 
     /// <param name="FileId">The stored file whose header the facts were read from.</param>
-    private sealed record PointCloudOfUpload(Guid ModelId, Guid FileId, PointCloudFacts Facts);
+    private sealed record PointCloudOfUpload(Guid ModelId, Guid FileId, Guid? ConvertedFileId, PointCloudFacts Facts);
 
     /// <summary>The point-cloud model of each of these uploads whose header has been read, by upload.</summary>
     private static async Task<Dictionary<Guid, PointCloudOfUpload>> PointCloudsOfAsync(
@@ -926,14 +926,14 @@ public static partial class SurveyUploadEndpoints
         var formats = SurveyModelKinds.FormatsOf(SurveyModelKind.PointCloud);
         var models = await db.SurveyModels.AsNoTracking()
             .Where(m => m.SurveyUploadId != null && uploadIds.Contains(m.SurveyUploadId.Value) && formats.Contains(m.Format))
-            .Select(m => new { m.Id, UploadId = m.SurveyUploadId!.Value, m.FileId, m.PointCloud })
+            .Select(m => new { m.Id, UploadId = m.SurveyUploadId!.Value, m.FileId, m.ConvertedFileId, m.PointCloud })
             .ToListAsync(ct);
         var found = new Dictionary<Guid, PointCloudOfUpload>();
         foreach (var m in models)
         {
             if (PointCloudFacts.FromJson(m.PointCloud) is { } facts)
             {
-                found[m.UploadId] = new PointCloudOfUpload(m.Id, m.FileId, facts);
+                found[m.UploadId] = new PointCloudOfUpload(m.Id, m.FileId, m.ConvertedFileId, facts);
             }
         }
 
@@ -945,7 +945,8 @@ public static partial class SurveyUploadEndpoints
     /// everybody; where the extent lies, and the coordinate system that makes it a place, are the
     /// position, shown only with the exact-location right.
     /// </summary>
-    private static SurveyUploadPointCloudDto PointCloudDto(Guid modelId, PointCloudFacts facts, bool exact) => new(
+    private static SurveyUploadPointCloudDto PointCloudDto(
+        IFileAccessTokenService tokens, Guid modelId, Guid? convertedFileId, PointCloudFacts facts, bool exact) => new(
         modelId,
         facts.PointCount,
         facts.PointFormat,
@@ -962,6 +963,7 @@ public static partial class SurveyUploadEndpoints
         facts.TileBytes,
         facts.TileCount,
         facts.TilerVersion,
+        convertedFileId is { } tiles ? SurveyTileAddresses.Root(tokens, modelId, tiles) : null,
         facts.DisplayVoxelM,
         facts.DisplayEveryNth,
         facts.DisplayPointCount,

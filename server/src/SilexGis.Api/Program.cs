@@ -593,6 +593,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapCaveDepthPlaceEndpoints();
     api.MapEntranceEndpoints();
     api.MapSurveyModelEndpoints();
+    api.MapSurveyModelTileEndpoints();
     api.MapSurveySourceEndpoints();
     api.MapSurveyCompilationEndpoints();
     api.MapCenterlineEndpoints();
