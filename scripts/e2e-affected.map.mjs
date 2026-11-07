@@ -106,6 +106,8 @@ export const specs = {
     'place-map.spec.ts',
     // The map-sheet list's conditions and saved filters.
     'geodata-filters.spec.ts',
+    // A map sheet drawn from a PDF, placed by its corners, and one that carries its own place.
+    'georeferenced-sheet.spec.ts',
   ],
   history: ['panel.spec.ts', 'map-editing.spec.ts'],
   imports: ['vector-import.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts', 'import-batch-undo.spec.ts'],
@@ -211,6 +213,8 @@ export const clientAreas = {
   'client/src/caveview/': ['surveys', 'trips'],
   'client/src/diagnostics/': 'diagnostics',
   'client/src/filters/': 'filters',
+  // The placement editor's pure rules: corners, point pairs, refusal wording.
+  'client/src/geodata/': 'georeferencedMaps',
   'client/src/imagelink/': 'resLinks',
   'client/src/map/': 'map',
   'client/src/notifications/': 'notifications',
@@ -238,6 +242,7 @@ export const clientAreas = {
   'client/src/components/features/': 'geoFeatures',
   'client/src/components/filters/': ['filters', 'map'],
   'client/src/components/gallery/': 'photos',
+  'client/src/components/geodata/': 'georeferencedMaps',
   'client/src/components/history/': 'history',
   'client/src/components/import/': 'imports',
   'client/src/components/invitations/': ['trips', 'events'],

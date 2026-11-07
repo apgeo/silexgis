@@ -38,6 +38,7 @@ const raster = (caveFeatureId: string | null): RasterMapInfo => ({
   cogUrl: null,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
+  hasEmbeddedPlacement: false,
 });
 
 let rows: RasterMapInfo[] = [];
@@ -48,6 +49,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useUploadRasterMap: () => ({ mutateAsync: vi.fn() }),
   useDeleteRasterMap: () => ({ mutateAsync: vi.fn() }),
   useUpdateRasterMap: () => ({ mutateAsync: updateSpy, isPending: false }),
+  useRenderRasterMap: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useFilterVocabulary: () => ({ data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] } }),
   useFilterQuery: (body: unknown, enabled: boolean) => {
     queryCalls.push({ body, enabled });
@@ -72,6 +74,12 @@ vi.mock('../../components/filters/WorldFilterBar.tsx', () => ({
   default: ({ world, where }: { world: string; where: unknown }) => (
     <div data-testid="world-filter-bar" data-world={world} data-on={where === null ? 'no' : 'yes'} />
   ),
+}));
+
+// The placement editor has its own test and draws a map; here only which sheet the tab opens it for.
+vi.mock('../../components/geodata/placement/PlacementEditorModal.tsx', () => ({
+  default: ({ raster }: { raster: RasterMapInfo | null }) =>
+    raster ? <div data-testid="fake-placement-editor" data-raster={raster.id} /> : null,
 }));
 
 const { default: RasterMapsTab } = await import('./RasterMapsTab.tsx');
@@ -212,5 +220,67 @@ describe('RasterMapsTab — without the right to change maps', () => {
     expect(container.querySelector('.anticon-edit')).toBeNull();
     expect(container.querySelector('.anticon-delete')).toBeNull();
     expect(container.querySelector('.ant-upload-drag')).toBeNull();
+  });
+});
+
+describe('RasterMapsTab — map sheets drawn from a document', () => {
+  afterEach(cleanup);
+
+  const sheet = (status: RasterMapInfo['status']): RasterMapInfo => ({
+    ...raster(null),
+    id: 'sheet-1',
+    name: 'Planșa 1',
+    status,
+    sourceFileId: 'pdf-1',
+    sourcePage: 1,
+    sourcePageCount: 2,
+    sourceLayers: ['Contur', 'Text'],
+    renderLayers: null,
+    renderDpi: 300,
+    renderWidth: 2400,
+    renderHeight: 1680,
+  });
+
+  function mount(rowsNow: RasterMapInfo[]) {
+    rows = rowsNow;
+    return render(
+      <MemoryRouter>
+        <App>
+          <RasterMapsTab />
+        </App>
+      </MemoryRouter>,
+    );
+  }
+
+  it('takes a PDF as well as a GeoTIFF', () => {
+    const { container } = mount([]);
+    expect(container.querySelector('input[type=file]')?.getAttribute('accept')).toBe('.tif,.tiff,.pdf');
+  });
+
+  it('names an unplaced sheet as needing placement and opens the editor for it', () => {
+    mount([sheet('unplaced')]);
+    expect(screen.getByText('Needs placement')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show on map' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Place on map…' }));
+    expect(screen.getByTestId('fake-placement-editor').dataset.raster).toBe('sheet-1');
+  });
+
+  it('offers to adjust a placed sheet, and to draw it again', () => {
+    mount([sheet('ready')]);
+    expect(screen.getByRole('button', { name: 'Adjust placement…' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Redraw…' }));
+    expect(screen.getByTestId('redraw-page')).toBeTruthy();
+  });
+
+  it('holds both back while the sheet is being processed', () => {
+    mount([sheet('processing')]);
+    expect(screen.getByRole('button', { name: 'Place on map…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Redraw…' })).toBeDisabled();
+  });
+
+  it('offers neither for a GeoTIFF', () => {
+    mount([raster(null)]);
+    expect(screen.queryByRole('button', { name: 'Place on map…' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Redraw…' })).toBeNull();
   });
 });

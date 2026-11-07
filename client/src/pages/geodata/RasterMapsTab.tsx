@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
-import { AimOutlined, DeleteOutlined, EditOutlined, InboxOutlined } from '@ant-design/icons';
+import {
+  AimOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EnvironmentOutlined,
+  InboxOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons';
 import {
   App,
   Flex,
@@ -27,6 +34,8 @@ import {
   type RasterMapInfo,
 } from '../../api/hooks.ts';
 import WorldFilterBar from '../../components/filters/WorldFilterBar.tsx';
+import PlacementEditorModal from '../../components/geodata/placement/PlacementEditorModal.tsx';
+import RedrawSheetModal from '../../components/geodata/RedrawSheetModal.tsx';
 import { readWorldFilter, worldToken, writeWorldFilter } from '../../filters/worldList.ts';
 import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
 import type { SelectorScope } from '../../filters/selection.ts';
@@ -38,7 +47,20 @@ const statusColor: Record<string, string> = {
   processing: 'processing',
   ready: 'success',
   failed: 'error',
+  unplaced: 'warning',
 };
+
+/** Why a row's status is what it is: the failure, and whatever the drawing warned about. */
+function statusTooltip(raster: RasterMapInfo): string | undefined {
+  const parts = [raster.processingError, raster.renderWarnings].filter(
+    (part): part is string => typeof part === 'string' && part.trim() !== '',
+  );
+  return parts.length > 0 ? parts.join('\n') : undefined;
+}
+
+/** A sheet drawn from a document, which can be drawn again and placed by hand. */
+const isSheet = (raster: RasterMapInfo) => raster.sourceFileId != null;
+const isBusy = (raster: RasterMapInfo) => raster.status === 'uploaded' || raster.status === 'processing';
 
 /** The filter world this list is about. */
 const RASTER_WORLD = 'georeferencedMap';
@@ -58,7 +80,10 @@ interface EditFormValues {
   visibility: RasterMapInfo['visibility'];
 }
 
-/** Georeferenced raster maps: upload GeoTIFFs, watch COG processing, manage, show on map. */
+/**
+ * Georeferenced raster maps: upload GeoTIFFs or map sheets in PDF, watch them being processed,
+ * place a sheet that carries no position of its own, manage, show on map.
+ */
 export default function RasterMapsTab() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -78,6 +103,8 @@ export default function RasterMapsTab() {
   const remove = useDeleteRasterMap();
   const setRasterVisible = useWorkspaceStore((s) => s.setRasterVisible);
   const [editing, setEditing] = useState<RasterMapInfo | null>(null);
+  const [placing, setPlacing] = useState<RasterMapInfo | null>(null);
+  const [redrawing, setRedrawing] = useState<RasterMapInfo | null>(null);
   const [form] = Form.useForm<EditFormValues>();
 
   const canEdit = useCan('georeferencedMaps', 'write');
@@ -147,7 +174,7 @@ export default function RasterMapsTab() {
       {canUpload && (
         <Upload.Dragger
           multiple
-          accept=".tif,.tiff"
+          accept=".tif,.tiff,.pdf"
           showUploadList={false}
           customRequest={({ file, onSuccess, onError }) => {
             upload
@@ -214,7 +241,7 @@ export default function RasterMapsTab() {
             dataIndex: 'status',
             width: 140,
             render: (status: string, record) => (
-              <Tooltip title={record.processingError}>
+              <Tooltip title={statusTooltip(record)}>
                 <Tag color={statusColor[status]}>{t(`geodata.rasterStatusValues.${status}`)}</Tag>
               </Tooltip>
             ),
@@ -234,7 +261,7 @@ export default function RasterMapsTab() {
           {
             title: '',
             key: 'actions',
-            width: 140,
+            width: 200,
             render: (_, record) => (
               <Flex gap={4}>
                 <Tooltip title={t('geodata.showOnMap')}>
@@ -248,6 +275,32 @@ export default function RasterMapsTab() {
                 </Tooltip>
                 {canEdit && (
                   <>
+                    {isSheet(record) && (
+                      <Tooltip
+                        title={record.status === 'ready' ? t('geodata.placement.adjust') : t('geodata.placement.place')}
+                      >
+                        <Button
+                          size="small"
+                          icon={<EnvironmentOutlined />}
+                          aria-label={
+                            record.status === 'ready' ? t('geodata.placement.adjust') : t('geodata.placement.place')
+                          }
+                          disabled={record.status !== 'unplaced' && record.status !== 'ready'}
+                          onClick={() => setPlacing(record)}
+                        />
+                      </Tooltip>
+                    )}
+                    {isSheet(record) && (
+                      <Tooltip title={t('geodata.redraw.action')}>
+                        <Button
+                          size="small"
+                          icon={<ReloadOutlined />}
+                          aria-label={t('geodata.redraw.action')}
+                          disabled={isBusy(record)}
+                          onClick={() => setRedrawing(record)}
+                        />
+                      </Tooltip>
+                    )}
                     <Tooltip title={t('geodata.editRaster')}>
                       <Button size="small" icon={<EditOutlined />} aria-label={t('geodata.editRaster')} onClick={() => onEditOpen(record)} />
                     </Tooltip>
@@ -265,6 +318,9 @@ export default function RasterMapsTab() {
           },
         ]}
       />
+
+      <PlacementEditorModal raster={placing} onClose={() => setPlacing(null)} />
+      <RedrawSheetModal raster={redrawing} onClose={() => setRedrawing(null)} />
 
       <Modal
         title={t('geodata.editRaster')}

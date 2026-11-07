@@ -1560,7 +1560,7 @@
     "mapKind": "Kind",
     "editRaster": "Edit raster map",
     "deleteRasterConfirm": "Delete this raster map entry?",
-    "rasterUploadPrompt": "Click or drag georeferenced GeoTIFFs here to upload",
+    "rasterUploadPrompt": "Click or drag georeferenced GeoTIFFs or PDF map sheets here to upload",
     "rasterUploadHint": "Converted to Cloud-Optimized GeoTIFF in the background.",
     "defaultOpacity": "Default opacity (0–1)",
     "attribution": "Attribution",
@@ -1575,7 +1575,88 @@
       "uploaded": "Queued",
       "processing": "Processing…",
       "ready": "Ready",
-      "failed": "Failed"
+      "failed": "Failed",
+      "unplaced": "Needs placement"
+    },
+    "placement": {
+      "title": "Place {{name}} on the map",
+      "place": "Place on map…",
+      "adjust": "Adjust placement…",
+      "mapLabel": "Map for placing the sheet",
+      "modes": {
+        "corners": "Corners",
+        "points": "Two points"
+      },
+      "transformations": {
+        "homography": "Perspective",
+        "affine": "Keep parallel"
+      },
+      "transformationHelp": {
+        "homography": "Each corner goes exactly where you put it; the sheet may be drawn in perspective.",
+        "affine": "The sheet's opposite sides stay parallel; the fit shows how far each corner is from where you put it."
+      },
+      "pointsHelp": "Click a point on the sheet, then the same point on the map. Two pairs place the sheet without stretching it.",
+      "opacity": "Sheet opacity",
+      "typeCorners": "Type the corners",
+      "corner": "Corner",
+      "longitude": "Longitude",
+      "latitude": "Latitude",
+      "corners": {
+        "nw": "Top left",
+        "ne": "Top right",
+        "se": "Bottom right",
+        "sw": "Bottom left"
+      },
+      "onSheet": "On the sheet",
+      "noPoints": "No points yet.",
+      "removePoint": "Remove point",
+      "addPoint": "Add a point",
+      "pickOnSheet": "Click the point on the sheet.",
+      "pickOnMap": "Now click the same point on the map.",
+      "noSheetPicture": "The sheet's picture is not available.",
+      "cornersCross": "The corners cross over each other. Move them so the sheet is not folded.",
+      "previewing": "Drawing the preview…",
+      "fit": "Fit: {{value}} m",
+      "residual": "{{corner}}: {{value}} m",
+      "saved": "Placement saved. The map is being prepared.",
+      "removed": "Placement removed.",
+      "remove": "Remove placement",
+      "removeConfirm": "Remove the placement made by hand?",
+      "errors": {
+        "generic": "The placement could not be used. Check the points and try again.",
+        "pageOutOfRange": "That page is not in the document.",
+        "layerUnknown": "One of the chosen layers is not in the document.",
+        "dpiOutOfRange": "The resolution must be between 72 and 600 dpi.",
+        "busy": "The sheet is being processed. Try again when it has finished.",
+        "notASheet": "This map was not drawn from a document.",
+        "notRendered": "The sheet has not been drawn yet.",
+        "noManualPlacement": "There is no placement made by hand to remove.",
+        "placementTransformationUnknown": "That way of placing the sheet is not known.",
+        "placementTooFewPoints": "There are too few points for this way of placing the sheet.",
+        "placementTooManyPoints": "There are too many points.",
+        "placementPointsDegenerate": "The points are too close together or in a line. Spread them out.",
+        "placementPointOutsidePicture": "A point lies outside the sheet.",
+        "placementPointInvalid": "A point has a position that cannot be used.",
+        "placementMaskInvalid": "The sheet's outline cannot be used.",
+        "placementCrsUnknown": "The coordinate system of the points is not known.",
+        "placementVersionUnknown": "This placement is written in a form the server does not read.",
+        "previewBusy": "The server is busy drawing previews. Try again in a moment.",
+        "previewFailed": "The preview could not be drawn."
+      }
+    },
+    "redraw": {
+      "action": "Redraw…",
+      "title": "Redraw {{name}}",
+      "page": "Page",
+      "pageOf": "Pages in the document: {{pages}}",
+      "layers": "Layers",
+      "allLayers": "All layers",
+      "resolution": "Resolution",
+      "dpi": "{{value}} dpi",
+      "customDpi": "Custom",
+      "keepsPlacement": "A placement made by hand is kept and applied to the new drawing.",
+      "submit": "Redraw",
+      "queued": "The sheet is being drawn again."
     },
     "tabImports": "Imports"
   },

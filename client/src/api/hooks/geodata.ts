@@ -138,6 +138,58 @@ export function useDeleteRasterMap() {
   });
 }
 
+export type RasterMapPlacement = components['schemas']['MapPlacementDto'];
+export type RasterMapPlacementPreview = components['schemas']['MapPlacementPreviewDto'];
+export type RasterMapRenderRequest = components['schemas']['MapSheetRenderRequest'];
+
+/** Draws a map sheet's document again: another page, other layers or another resolution. */
+export function useRenderRasterMap() {
+  const invalidate = useInvalidateRasterMaps();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: RasterMapRenderRequest }) =>
+      unwrap(api.POST('/api/v1/georeferenced-maps/{id}/render', { params: { path: { id } }, body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/** Sets where a drawn sheet lies; the server then publishes it in the background. */
+export function useSaveRasterPlacement() {
+  const invalidate = useInvalidateRasterMaps();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: RasterMapPlacement }) =>
+      unwrap(api.PUT('/api/v1/georeferenced-maps/{id}/placement', { params: { path: { id } }, body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/** Removes a hand placement; a document that carries its own place goes back to it. */
+export function useClearRasterPlacement() {
+  const invalidate = useInvalidateRasterMaps();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.DELETE('/api/v1/georeferenced-maps/{id}/placement', { params: { path: { id } } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * Tries a placement on the sheet's small picture without keeping it. Nothing is cached: every
+ * answer belongs to one arrangement of the points, and the caller passes a signal so a newer
+ * arrangement can abort the request it supersedes.
+ */
+export function usePreviewRasterPlacement() {
+  return useMutation({
+    mutationFn: ({ id, body, signal }: { id: string; body: RasterMapPlacement; signal?: AbortSignal }) =>
+      unwrap(
+        api.POST('/api/v1/georeferenced-maps/{id}/placement/preview', {
+          params: { path: { id } },
+          body,
+          signal,
+        }),
+      ),
+  });
+}
+
 export function useGeofile(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.geofile(id ?? ''),

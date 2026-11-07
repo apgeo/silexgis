@@ -1560,7 +1560,7 @@
     "mapKind": "Tip",
     "editRaster": "Editare hartă raster",
     "deleteRasterConfirm": "Ștergi această hartă raster?",
-    "rasterUploadPrompt": "Apasă sau trage fișiere GeoTIFF georeferențiate aici",
+    "rasterUploadPrompt": "Apasă sau trage aici fișiere GeoTIFF georeferențiate sau planșe de hartă PDF",
     "rasterUploadHint": "Convertite în fundal în Cloud-Optimized GeoTIFF.",
     "defaultOpacity": "Opacitate implicită (0–1)",
     "attribution": "Atribuire",
@@ -1575,7 +1575,88 @@
       "uploaded": "În așteptare",
       "processing": "Se procesează…",
       "ready": "Gata",
-      "failed": "Eșuat"
+      "failed": "Eșuat",
+      "unplaced": "De poziționat"
+    },
+    "placement": {
+      "title": "Poziționează {{name}} pe hartă",
+      "place": "Poziționează pe hartă…",
+      "adjust": "Ajustează poziția…",
+      "mapLabel": "Harta pe care se poziționează planșa",
+      "modes": {
+        "corners": "Colțuri",
+        "points": "Două puncte"
+      },
+      "transformations": {
+        "homography": "Perspectivă",
+        "affine": "Laturi paralele"
+      },
+      "transformationHelp": {
+        "homography": "Fiecare colț ajunge exact unde l-ai pus; planșa poate fi desenată în perspectivă.",
+        "affine": "Laturile opuse ale planșei rămân paralele; potrivirea arată cât de departe este fiecare colț de locul unde l-ai pus."
+      },
+      "pointsHelp": "Apasă un punct pe planșă, apoi același punct pe hartă. Două perechi poziționează planșa fără să o deformeze.",
+      "opacity": "Opacitatea planșei",
+      "typeCorners": "Scrie coordonatele colțurilor",
+      "corner": "Colț",
+      "longitude": "Longitudine",
+      "latitude": "Latitudine",
+      "corners": {
+        "nw": "Stânga sus",
+        "ne": "Dreapta sus",
+        "se": "Dreapta jos",
+        "sw": "Stânga jos"
+      },
+      "onSheet": "Pe planșă",
+      "noPoints": "Niciun punct încă.",
+      "removePoint": "Șterge punctul",
+      "addPoint": "Adaugă un punct",
+      "pickOnSheet": "Apasă punctul pe planșă.",
+      "pickOnMap": "Acum apasă același punct pe hartă.",
+      "noSheetPicture": "Imaginea planșei nu este disponibilă.",
+      "cornersCross": "Colțurile se încrucișează. Mută-le astfel încât planșa să nu fie pliată.",
+      "previewing": "Se desenează previzualizarea…",
+      "fit": "Potrivire: {{value}} m",
+      "residual": "{{corner}}: {{value}} m",
+      "saved": "Poziția a fost salvată. Harta se pregătește.",
+      "removed": "Poziția a fost ștearsă.",
+      "remove": "Șterge poziția",
+      "removeConfirm": "Ștergi poziția stabilită manual?",
+      "errors": {
+        "generic": "Poziția nu a putut fi folosită. Verifică punctele și încearcă din nou.",
+        "pageOutOfRange": "Pagina nu există în document.",
+        "layerUnknown": "Unul dintre straturile alese nu există în document.",
+        "dpiOutOfRange": "Rezoluția trebuie să fie între 72 și 600 dpi.",
+        "busy": "Planșa se procesează. Încearcă din nou după ce se termină.",
+        "notASheet": "Această hartă nu a fost desenată dintr-un document.",
+        "notRendered": "Planșa nu a fost încă desenată.",
+        "noManualPlacement": "Nu există o poziție stabilită manual care să poată fi ștearsă.",
+        "placementTransformationUnknown": "Acest mod de poziționare nu este cunoscut.",
+        "placementTooFewPoints": "Sunt prea puține puncte pentru acest mod de poziționare.",
+        "placementTooManyPoints": "Sunt prea multe puncte.",
+        "placementPointsDegenerate": "Punctele sunt prea apropiate sau în linie. Depărtează-le.",
+        "placementPointOutsidePicture": "Un punct se află în afara planșei.",
+        "placementPointInvalid": "Un punct are o poziție care nu poate fi folosită.",
+        "placementMaskInvalid": "Conturul planșei nu poate fi folosit.",
+        "placementCrsUnknown": "Sistemul de coordonate al punctelor nu este cunoscut.",
+        "placementVersionUnknown": "Poziția este scrisă într-o formă pe care serverul nu o citește.",
+        "previewBusy": "Serverul desenează alte previzualizări. Încearcă din nou peste câteva clipe.",
+        "previewFailed": "Previzualizarea nu a putut fi desenată."
+      }
+    },
+    "redraw": {
+      "action": "Redesenează…",
+      "title": "Redesenează {{name}}",
+      "page": "Pagina",
+      "pageOf": "Pagini în document: {{pages}}",
+      "layers": "Straturi",
+      "allLayers": "Toate straturile",
+      "resolution": "Rezoluție",
+      "dpi": "{{value}} dpi",
+      "customDpi": "Altă valoare",
+      "keepsPlacement": "O poziție stabilită manual se păstrează și se aplică noului desen.",
+      "submit": "Redesenează",
+      "queued": "Planșa se desenează din nou."
     },
     "tabImports": "Importuri"
   },
