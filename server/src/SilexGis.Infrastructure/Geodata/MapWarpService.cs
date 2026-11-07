@@ -157,6 +157,29 @@ public sealed class MapWarpService(ICrsRegistry crsRegistry)
         }
     }
 
+    /// <summary>The placement's control points with their ground coordinates in longitude and latitude.</summary>
+    public IReadOnlyList<MapControlPoint> PointsInWgs84(MapPlacement placement)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+        if (placement.EpsgCode == 4326)
+        {
+            return placement.Gcps;
+        }
+
+        using var source = new SpatialReference(WktOf(placement.Crs));
+        source.SetAxisMappingStrategy(AxisMappingStrategy.OAMS_TRADITIONAL_GIS_ORDER);
+        using var target = new SpatialReference("");
+        target.ImportFromEPSG(4326);
+        target.SetAxisMappingStrategy(AxisMappingStrategy.OAMS_TRADITIONAL_GIS_ORDER);
+        using var transform = new CoordinateTransformation(source, target);
+        var point = new double[3];
+        return [.. placement.Gcps.Select(p =>
+        {
+            transform.TransformPoint(point, p.X, p.Y, 0);
+            return p with { X = point[0], Y = point[1] };
+        })];
+    }
+
     /// <summary>The coordinate system a placement's points are written in, as the library's text.</summary>
     public string WktOf(string crs)
     {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
@@ -82,6 +83,14 @@ public static class GeoreferencedMapSheetEndpoints
             .WithSummary(
                 "Removes a hand placement (Write; If-Match). A document that carries its own place goes back "
                 + "to it; any other sheet becomes `unplaced`.");
+        maps.MapGet("/{id:guid}/placement/annotation", ExportAnnotationAsync)
+            .WithSummary(
+                "The sheet's placement as a IIIF Georeference Annotation (Read): control points in the drawn "
+                + "picture's pixels and in longitude and latitude, the outline as an SVG polygon.");
+        maps.MapPut("/{id:guid}/placement/annotation", ImportAnnotationAsync)
+            .WithSummary(
+                "Places the sheet from a IIIF Georeference Annotation made elsewhere (Write; If-Match), as a "
+                + "placement PUT would: points are read as fractions of the size the annotation states.");
         maps.MapPost("/{id:guid}/placement/preview", PreviewAsync).WithValidation<MapPlacementDto>()
             .WithSummary(
                 "Tries a placement on the sheet's small picture without keeping it (Read): the placed picture, "
@@ -193,13 +202,26 @@ public static class GeoreferencedMapSheetEndpoints
             return refusal;
         }
 
-        var placement = request.ToDomain();
-        if (Check(placement, crs, options.CurrentValue) is { } problem)
+        return await ApplyAsync(map!, request.ToDomain(), http, db, tokens, userAccessor, crs, options.CurrentValue, ct);
+    }
+
+    private static async Task<Results<Ok<GeoreferencedMapDto>, ProblemHttpResult>> ApplyAsync(
+        GeoreferencedMap map,
+        MapPlacement placement,
+        HttpContext http,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IUserContextAccessor userAccessor,
+        ICrsRegistry crs,
+        GeoreferencedMapOptions options,
+        CancellationToken ct)
+    {
+        if (Check(placement, crs, options) is { } problem)
         {
             return problem;
         }
 
-        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.GeoreferencedMaps, map!.Id, ct);
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.GeoreferencedMaps, map.Id, ct);
         if (hold.Refusal is { } stale)
         {
             return stale;
@@ -230,6 +252,74 @@ public static class GeoreferencedMapSheetEndpoints
         await db.SaveChangesAsync(ct);
         await hold.AnswerAsync(ct);
         return TypedResults.Ok(map.ToDto(tokens));
+    }
+
+    private static async Task<Results<Ok<JsonObject>, ProblemHttpResult>> ExportAnnotationAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IAccessService access,
+        FeatureProtection protection,
+        IAccessContextAccessor accessAccessor,
+        MapWarpService warper,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var map = await db.GeoreferencedMaps.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id, ct);
+        if (map is null || ctx is null
+            || !(await access.DecideAsync(ctx, AccessAction.Read, map, ct)).Allowed
+            || await protection.ShouldRedactLinkAsync(ctx, map.CaveFeatureId, ct))
+        {
+            return ApiProblems.NotFound("georeferenced_map.not_found");
+        }
+
+        if (MapPlacement.FromJson(map.Placement) is not { } placement || map.RenderWidth is not { } width
+            || map.RenderHeight is not { } height)
+        {
+            return ApiProblems.NotFound("georeferenced_map.no_placement");
+        }
+
+        IReadOnlyList<MapControlPoint> points;
+        try
+        {
+            points = warper.PointsInWgs84(placement);
+        }
+        catch (VectorIOException e)
+        {
+            return ApiProblems.BadRequest(MapPlacementRules.CrsUnknown, e.Message);
+        }
+
+        return TypedResults.Ok(GeoreferenceAnnotation.Write(
+            placement.Transformation, points, placement.Mask, width, height, $"urn:silexgis:georeferenced-map:{map.Id}"));
+    }
+
+    private static async Task<Results<Ok<GeoreferencedMapDto>, ProblemHttpResult>> ImportAnnotationAsync(
+        Guid id,
+        JsonNode? annotation,
+        HttpContext http,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IAccessService access,
+        FeatureProtection protection,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        ICrsRegistry crs,
+        IOptionsMonitor<GeoreferencedMapOptions> options,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var (map, refusal) = await WritableSheetAsync(id, db, access, protection, ctx, ct);
+        if (refusal is not null)
+        {
+            return refusal;
+        }
+
+        var (placement, problem) = GeoreferenceAnnotation.Read(annotation, map!.RenderWidth ?? 0, map.RenderHeight ?? 0);
+        if (placement is null)
+        {
+            return ApiProblems.BadRequest(GeoreferenceAnnotation.Malformed, problem);
+        }
+
+        return await ApplyAsync(map, placement, http, db, tokens, userAccessor, crs, options.CurrentValue, ct);
     }
 
     private static async Task<Results<Ok<GeoreferencedMapDto>, ProblemHttpResult>> UnplaceAsync(

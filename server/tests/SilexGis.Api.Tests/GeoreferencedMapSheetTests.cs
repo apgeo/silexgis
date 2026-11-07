@@ -295,6 +295,52 @@ public sealed class GeoreferencedMapSheetTests : IAsyncLifetime, IDisposable
         drawn.GetProperty("renderWarnings").GetString()!.ShouldContain("BDC");
     }
 
+    /// <summary>
+    /// A placement goes out as a IIIF Georeference Annotation and comes back in as the same
+    /// placement, in longitude and latitude whatever system it was typed in.
+    /// </summary>
+    [Fact]
+    public async Task A_placement_travels_out_and_back_as_a_georeference_annotation()
+    {
+        var id = (await UploadAsync(owner, "annotated.pdf", PdfSheetFixtures.PlainPdf())).GetProperty("id").GetGuid();
+        await WaitAsync(owner, id, "unplaced");
+        (await owner.GetAsync($"/api/v1/georeferenced-maps/{id}/placement/annotation")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var stereo = new
+        {
+            version = 1,
+            transformation = "affine",
+            crs = "EPSG:3844",
+            gcps = new object[]
+            {
+                new { u = 0.0, v = 0.0, x = 500000.0, y = 500150.0 },
+                new { u = 1.0, v = 0.0, x = 500200.0, y = 500150.0 },
+                new { u = 0.0, v = 1.0, x = 500000.0, y = 500000.0 },
+            },
+        };
+        (await PlaceAsync(owner, id, stereo)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var first = await WaitAsync(owner, id, "ready");
+
+        var exported = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/georeferenced-maps/{id}/placement/annotation");
+        exported.GetProperty("motivation").GetString().ShouldBe("georeferencing");
+        var features = exported.GetProperty("body").GetProperty("features");
+        features.GetArrayLength().ShouldBe(3);
+        features[0].GetProperty("geometry").GetProperty("coordinates")[0].GetDouble().ShouldBe(25.0, 0.01);
+
+        var imported = await owner.PutAsJsonAsync($"/api/v1/georeferenced-maps/{id}/placement/annotation", exported);
+        imported.StatusCode.ShouldBe(HttpStatusCode.OK, await imported.Content.ReadAsStringAsync());
+        var again = await WaitAsync(owner, id, "ready");
+        again.GetProperty("placement").GetProperty("crs").GetString().ShouldBe("EPSG:4326");
+        var before = first.GetProperty("bbox").GetProperty("coordinates")[0][0];
+        var after = again.GetProperty("bbox").GetProperty("coordinates")[0][0];
+        after[0].GetDouble().ShouldBe(before[0].GetDouble(), 1e-5);
+        after[1].GetDouble().ShouldBe(before[1].GetDouble(), 1e-5);
+
+        var broken = await owner.PutAsJsonAsync($"/api/v1/georeferenced-maps/{id}/placement/annotation", new { body = new { } });
+        broken.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await broken.Content.ReadAsStringAsync()).ShouldContain("georeferenced_map.annotation_invalid");
+    }
+
     /// <summary>A file named .pdf that is not one is refused at the door.</summary>
     [Fact]
     public async Task A_file_that_only_claims_to_be_a_portable_document_is_refused()
