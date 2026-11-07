@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Diagnostics;
 using MaxRev.Gdal.Core;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using OSGeo.GDAL;
 using Shouldly;
@@ -32,7 +33,7 @@ public sealed class MapSheetRenderingTests(ITestOutputHelper output) : IDisposab
         var drawn = new PdfSheetRenderService().Render(new SheetRenderRequest(pdf, 1, null, null, Dir("render")), options, default);
         output.WriteLine($"drawn {drawn.Width}x{drawn.Height} at {drawn.Dpi:0} dpi in {clock.ElapsedMilliseconds} ms");
         drawn.Info.Embedded.ShouldNotBeNull();
-        drawn.Dpi.ShouldBe(options.MaxDpi);
+        drawn.Dpi.ShouldBe(options.MaxAutoDpi);
         drawn.Warnings.ShouldBeNull();
 
         var placement = PdfSheetRenderService.EmbeddedPlacement(drawn.Info.Embedded!, drawn.Info.PointsWide, drawn.Info.PointsHigh);
@@ -113,6 +114,8 @@ public sealed class MapSheetRenderingTests(ITestOutputHelper output) : IDisposab
             ("PreviewMaxPixels", o => o.PreviewMaxPixels = 10),
             ("PreviewConcurrency", o => o.PreviewConcurrency = 0),
             ("MaxControlPoints", o => o.MaxControlPoints = 1),
+            ("MaxAutoDpi", o => o.MaxAutoDpi = 10),
+            ("PlacementCrsCodes", o => o.PlacementCrsCodes = [0]),
         ];
         foreach (var (name, breakIt) in cases)
         {
@@ -122,6 +125,19 @@ public sealed class MapSheetRenderingTests(ITestOutputHelper output) : IDisposab
             result.Failed.ShouldBeTrue(name);
             result.FailureMessage.ShouldContain(name);
         }
+    }
+
+    [Fact]
+    public void Sheet_jobs_move_to_the_heavy_lane_only_when_the_installation_says_so()
+    {
+        var off = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var on = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["GeoreferencedMaps:SheetJobsOnHeavyLane"] = "true" })
+            .Build();
+        SilexGis.Infrastructure.Jobs.JobLane.HeavyKinds(off).ShouldNotContain(SilexGis.Domain.Entities.ProcessingJobKinds.MapSheetRender);
+        SilexGis.Infrastructure.Jobs.JobLane.HeavyKinds(on).ShouldContain(SilexGis.Domain.Entities.ProcessingJobKinds.MapSheetRender);
+        SilexGis.Infrastructure.Jobs.JobLane.HeavyKinds(on).ShouldContain(SilexGis.Domain.Entities.ProcessingJobKinds.MapPlacementWarp);
+        SilexGis.Infrastructure.Jobs.JobLane.HeavyKinds(on).ShouldContain(SilexGis.Domain.Entities.ProcessingJobKinds.TerrainBuild);
     }
 
     private string Write(string name, byte[] bytes)

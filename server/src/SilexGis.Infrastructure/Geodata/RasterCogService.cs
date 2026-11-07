@@ -20,6 +20,31 @@ public sealed class RasterCogService
     public static bool CogDriverAvailable => Gdal.GetDriverByName("COG") is not null;
 
     /// <summary>
+    /// Whether an uploaded GeoTIFF opens but carries no place — a scan that becomes a sheet to be
+    /// placed by hand rather than a failed upload. False for a file that does not open as a GeoTIFF
+    /// at all, which is still refused.
+    /// </summary>
+    public bool IsUnplacedRaster(string inputPath)
+    {
+        Dataset source;
+        try
+        {
+            source = OpenUpload(inputPath);
+        }
+        catch (VectorIOException)
+        {
+            return false;
+        }
+
+        using (source)
+        {
+            var geoTransform = new double[6];
+            source.GetGeoTransform(geoTransform);
+            return RasterPlacement.IsUnplaced(geoTransform) || string.IsNullOrEmpty(source.GetProjection());
+        }
+    }
+
+    /// <summary>
     /// Converts any GDAL-readable georeferenced raster to a COG at <paramref name="outputPath"/>
     /// and returns its footprint. Throws <see cref="VectorIOException"/> on bad input.
     /// </summary>

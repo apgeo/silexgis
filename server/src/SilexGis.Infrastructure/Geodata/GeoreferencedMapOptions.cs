@@ -61,6 +61,28 @@ public sealed class GeoreferencedMapOptions
     /// <summary>The most control points a placement may hold.</summary>
     public int MaxControlPoints { get; set; } = 200;
 
+    /// <summary>
+    /// Whether drawing and placing sheets runs on the heavy job lane (beside terrain builds) instead
+    /// of the general one. Off by default: a sheet takes seconds to a minute, a terrain build hours.
+    /// Read when the workers start.
+    /// </summary>
+    public bool SheetJobsOnHeavyLane { get; set; }
+
+    /// <summary>
+    /// The highest resolution the server chooses by itself for a georeferenced document, in dots per
+    /// inch. The ground-resolution target asks for far more on a small-scale map (a 1:24 000 sheet
+    /// would want 12 000 dpi); this keeps such a sheet at a resolution that reads well instead of at
+    /// the absolute maximum. A resolution somebody asks for is still allowed up to <see cref="MaxDpi"/>.
+    /// </summary>
+    public double MaxAutoDpi { get; set; } = 300;
+
+    /// <summary>
+    /// Coordinate systems, besides longitude and latitude and the installation's working system,
+    /// in which placement coordinates may be typed — typically the national grid printed on the
+    /// sheets. EPSG codes.
+    /// </summary>
+    public IList<int> PlacementCrsCodes { get; set; } = [3844];
+
     /// <summary>The long side of the stored picture of a drawn page, in pixels.</summary>
     public const int StoredPreviewPixels = 2400;
 
@@ -108,6 +130,11 @@ public sealed class GeoreferencedMapOptionsValidator : IValidateOptions<Georefer
         Range(o.PreviewMaxPixels, 256, 4096, "PreviewMaxPixels");
         Range(o.PreviewConcurrency, 1, 32, "PreviewConcurrency");
         Range(o.MaxControlPoints, 4, 2000, "MaxControlPoints");
+        Range(o.MaxAutoDpi, 36, 2400, "MaxAutoDpi");
+        if (o.PlacementCrsCodes.Any(c => c <= 0))
+        {
+            failures.Add($"{P}PlacementCrsCodes must hold positive EPSG codes.");
+        }
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
 

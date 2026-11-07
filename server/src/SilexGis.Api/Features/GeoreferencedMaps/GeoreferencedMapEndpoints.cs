@@ -178,18 +178,26 @@ public static class GeoreferencedMapEndpoints
         }
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (extension is not (".tif" or ".tiff" or ".pdf"))
+        if (extension is not (".tif" or ".tiff" or ".pdf" or ".png" or ".jpg" or ".jpeg"))
         {
             return ApiProblems.BadRequest(
                 "georeferenced_map.format_unsupported",
-                "Upload a georeferenced GeoTIFF (.tif/.tiff) or a map sheet as a portable document (.pdf).");
+                "Upload a GeoTIFF (.tif/.tiff), a map sheet as a portable document (.pdf), or a scan to place by hand (.png/.jpg).");
         }
 
-        var isSheet = extension == ".pdf";
-        if (isSheet && !await StartsLikePdfAsync(file, ct))
+        // A portable document or a plain picture is a sheet: drawn, then placed. A GeoTIFF goes
+        // straight to conversion, and becomes a sheet only if it turns out to carry no place.
+        var (isSheet, mimeType, kind) = extension switch
+        {
+            ".pdf" => (true, "application/pdf", FileKind.Document),
+            ".png" => (true, "image/png", FileKind.Image),
+            ".jpg" or ".jpeg" => (true, "image/jpeg", FileKind.Image),
+            _ => (false, "image/tiff", FileKind.Raster),
+        };
+        if (isSheet && !await StartsLikeAsync(file, extension, ct))
         {
             return ApiProblems.BadRequest(
-                "georeferenced_map.format_unsupported", "The file is named .pdf but is not a portable document.");
+                "georeferenced_map.format_unsupported", $"The file is named {extension} but its content is not one.");
         }
 
         if (file.Length == 0 || file.Length > MaxUploadBytes)
@@ -229,10 +237,10 @@ public static class GeoreferencedMapEndpoints
             new StoredContent(
                 storagePath,
                 Path.GetFileName(file.FileName),
-                isSheet ? "application/pdf" : "image/tiff",
+                mimeType,
                 file.Length,
                 sha256,
-                isSheet ? FileKind.Document : FileKind.Raster),
+                kind),
             name,
             user.UserId,
             user.UserId).File;
@@ -242,7 +250,7 @@ public static class GeoreferencedMapEndpoints
             Name = name,
             FileId = stored.Id,
             OwnerUserId = user.UserId,
-            MapKind = isSheet ? MapKind.CaveMap : MapKind.Other,
+            MapKind = extension == ".pdf" ? MapKind.CaveMap : MapKind.Other,
             SourceFileId = isSheet ? stored.Id : null,
             SourcePage = isSheet ? 1 : null,
         };
@@ -456,13 +464,20 @@ public static class GeoreferencedMapEndpoints
         return cave is not null && (await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed;
     }
 
-    /// <summary>The first bytes of a portable document, which every one starts with.</summary>
-    private static async Task<bool> StartsLikePdfAsync(IFormFile file, CancellationToken ct)
+    /// <summary>Whether the file starts the way every file of its named format does.</summary>
+    private static async Task<bool> StartsLikeAsync(IFormFile file, string extension, CancellationToken ct)
     {
         var head = new byte[1024];
         await using var stream = file.OpenReadStream();
         var read = await stream.ReadAtLeastAsync(head, head.Length, throwOnEndOfStream: false, ct);
-        return head.AsSpan(0, read).IndexOf("%PDF-"u8) >= 0;
+        var bytes = head.AsSpan(0, read);
+        return extension switch
+        {
+            // A portable document may carry a few bytes of junk before its header.
+            ".pdf" => bytes.IndexOf("%PDF-"u8) >= 0,
+            ".png" => bytes.StartsWith((ReadOnlySpan<byte>)[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+            _ => bytes.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xD8, 0xFF]),
+        };
     }
 
     internal static GeoreferencedMapDto ToDto(this GeoreferencedMap m, IFileAccessTokenService tokens) => new(

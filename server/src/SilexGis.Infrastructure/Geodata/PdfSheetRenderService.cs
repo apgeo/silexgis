@@ -123,7 +123,7 @@ public sealed class PdfSheetRenderService
             // and the resolution that makes a pixel the target size scales from there.
             var metresPerPoint = MetresPerPixel(embedded);
             dpi = metresPerPoint is { } m && m > 0
-                ? 72 * m / options.TargetGroundResolutionMetres
+                ? Math.Min(72 * m / options.TargetGroundResolutionMetres, options.MaxAutoDpi)
                 : options.DefaultDpiUnplaced;
         }
         else
@@ -243,6 +243,77 @@ public sealed class PdfSheetRenderService
         }
 
         return new SheetRenderResult(masterPath, previewPath, width, height, dpi, info, joined);
+    }
+
+    /// <summary>The picture formats a scan with no place may be drawn from.</summary>
+    private static readonly string[] ImageDrivers = ["GTiff", "COG", "PNG", "JPEG", "WEBP"];
+
+    /// <summary>
+    /// Makes a scan with no place — a picture rather than a document — into a sheet's drawing: the
+    /// same RGBA master and preview a document's page becomes, scaled down only if it is larger
+    /// than the pixel budget.
+    /// </summary>
+    public SheetRenderResult RenderImage(string sourcePath, string workDirectory, GeoreferencedMapOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        using var scratch = GdalScratchDirectory.At(workDirectory);
+        using var sidecars = GdalSidecarsOff.OnThisThread();
+
+        Dataset? source;
+        Gdal.PushErrorHandler("CPLQuietErrorHandler");
+        try
+        {
+            // Named drivers only: a "picture" that is really a virtual raster pointing at other
+            // files on the server is refused rather than followed.
+            source = Gdal.OpenEx(
+                sourcePath, (uint)(GdalConst.OF_RASTER | GdalConst.OF_READONLY), ImageDrivers, null, null);
+        }
+        catch (ApplicationException)
+        {
+            source = null;
+        }
+        finally
+        {
+            Gdal.PopErrorHandler();
+        }
+
+        using var picture = source ?? throw new VectorIOException("The file could not be opened as a picture.");
+        if (picture.GetRasterBand(1).DataType != DataType.GDT_Byte)
+        {
+            throw new VectorIOException("Only 8-bit pictures can be drawn as a sheet.");
+        }
+
+        int width = picture.RasterXSize, height = picture.RasterYSize;
+        var budget = options.PixelBudgetMegapixels * 1_000_000d;
+        string? warning = null;
+        if ((double)width * height > budget)
+        {
+            var scale = Math.Sqrt(budget / ((double)width * height));
+            width = Math.Max(1, (int)(width * scale));
+            height = Math.Max(1, (int)(height * scale));
+            warning = string.Create(CultureInfo.InvariantCulture, $"The picture was scaled to {width} × {height} pixels to stay within the pixel budget.");
+        }
+
+        var masterPath = Path.Combine(workDirectory, "master.tif");
+        Gdal.ErrorReset();
+        using (var master = Gdal.wrapper_GDALTranslate(masterPath, picture, new GDALTranslateOptions(
+        [
+            "-of", "GTiff", "-outsize", width.ToString(CultureInfo.InvariantCulture), height.ToString(CultureInfo.InvariantCulture),
+            "-r", "average", "-co", "TILED=YES", "-co", "COMPRESS=DEFLATE", "-co", "PREDICTOR=2",
+            "-co", "PHOTOMETRIC=RGB", "-co", "ALPHA=YES", "-co", "BIGTIFF=IF_SAFER",
+            .. RasterBands.WithAlpha(picture),
+        ]), null, null))
+        {
+            if (master is null)
+            {
+                throw new VectorIOException($"The picture could not be drawn: {Gdal.GetLastErrorMsg()}");
+            }
+        }
+
+        var previewPath = Path.Combine(workDirectory, "preview.webp");
+        WritePreview(masterPath, previewPath, width, height);
+        var info = new PdfSheetInfo(1, width, height, [], null);
+        return new SheetRenderResult(masterPath, previewPath, width, height, 72, info, warning);
     }
 
     /// <summary>

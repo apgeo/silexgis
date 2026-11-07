@@ -183,7 +183,9 @@ public sealed class MapSheetRenderHandler(
             SheetRenderResult result;
             try
             {
-                result = renderer.Render(
+                result = upload.MimeType != "application/pdf"
+                    ? renderer.RenderImage(fileStore.GetAbsolutePath(upload.StoragePath), work, options)
+                    : renderer.Render(
                     new SheetRenderRequest(
                         fileStore.GetAbsolutePath(upload.StoragePath), map.SourcePage ?? 1, layers, payload.Dpi, work),
                     options,

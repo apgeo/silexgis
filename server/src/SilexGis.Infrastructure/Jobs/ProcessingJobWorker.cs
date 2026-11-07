@@ -498,7 +498,7 @@ public sealed class ProcessingJobWorker(
     IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
     ILogger<ProcessingJobWorker> logger)
-    : ProcessingJobWorkerBase(JobLane.General, scopeFactory, configuration, logger);
+    : ProcessingJobWorkerBase(JobLane.GeneralFor(configuration), scopeFactory, configuration, logger);
 
 /// <summary>
 /// The worker for terrain builds, which have an instance to themselves.
@@ -512,4 +512,4 @@ public sealed class TerrainProcessingJobWorker(
     IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
     ILogger<TerrainProcessingJobWorker> logger)
-    : ProcessingJobWorkerBase(JobLane.Terrain, scopeFactory, configuration, logger);
+    : ProcessingJobWorkerBase(JobLane.TerrainFor(configuration), scopeFactory, configuration, logger);

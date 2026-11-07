@@ -341,6 +341,44 @@ public sealed class GeoreferencedMapSheetTests : IAsyncLifetime, IDisposable
         (await broken.Content.ReadAsStringAsync()).ShouldContain("georeferenced_map.annotation_invalid");
     }
 
+    /// <summary>A scan with no place, as a plain picture, becomes a sheet placed like any other.</summary>
+    [Fact]
+    public async Task A_plain_picture_is_drawn_as_a_sheet_and_placed_by_its_corners()
+    {
+        var map = await UploadAsync(owner, "scan.png", PdfSheetFixtures.Png());
+        map.GetProperty("mapKind").GetString().ShouldBe("other");
+        var id = map.GetProperty("id").GetGuid();
+        var unplaced = await WaitAsync(owner, id, "unplaced");
+        unplaced.GetProperty("renderWidth").GetInt32().ShouldBe(64);
+        unplaced.GetProperty("sourceLayers").GetArrayLength().ShouldBe(0);
+
+        (await PlaceAsync(owner, id, Corners("homography", 24.000, 45.502, 24.004, 45.500))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await WaitAsync(owner, id, "ready");
+
+        using var form = Form("fake.png", "not a picture"u8.ToArray());
+        var fake = await owner.PostAsync("/api/v1/georeferenced-maps/", form);
+        fake.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>
+    /// The systems placement coordinates may be typed in: longitude and latitude, the
+    /// installation's working system, and the national grid it lists.
+    /// </summary>
+    [Fact]
+    public async Task The_placement_systems_are_published_to_signed_in_callers()
+    {
+        var systems = await owner.GetFromJsonAsync<JsonElement>("/api/v1/georeferenced-maps/placement-systems");
+        var crs = systems.EnumerateArray().Select(s => s.GetProperty("crs").GetString()).ToList();
+        crs.ShouldContain("EPSG:4326");
+        crs.ShouldContain("EPSG:3844");
+        systems.EnumerateArray().Count(s => s.GetProperty("working").GetBoolean()).ShouldBe(1);
+        systems.EnumerateArray().Single(s => s.GetProperty("crs").GetString() == "EPSG:4326")
+            .GetProperty("geographic").GetBoolean().ShouldBeTrue();
+
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync("/api/v1/georeferenced-maps/placement-systems")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
     /// <summary>A file named .pdf that is not one is refused at the door.</summary>
     [Fact]
     public async Task A_file_that_only_claims_to_be_a_portable_document_is_refused()
@@ -425,7 +463,10 @@ public sealed class GeoreferencedMapSheetTests : IAsyncLifetime, IDisposable
     private static MultipartFormDataContent Form(string fileName, byte[] bytes)
     {
         var content = new ByteArrayContent(bytes);
-        content.Headers.ContentType = new(fileName.EndsWith(".pdf", StringComparison.Ordinal) ? "application/pdf" : "image/tiff");
+        content.Headers.ContentType = new(
+            fileName.EndsWith(".pdf", StringComparison.Ordinal) ? "application/pdf"
+            : fileName.EndsWith(".png", StringComparison.Ordinal) ? "image/png"
+            : "image/tiff");
         return new MultipartFormDataContent { { content, "file", fileName } };
     }
 

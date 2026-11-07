@@ -48,6 +48,43 @@ internal static class PdfSheetFixtures
         "",
         []);
 
+    /// <summary>A small invented RGB picture (64 × 48) as a PNG, with no place.</summary>
+    public static byte[] Png()
+    {
+        GdalBase.ConfigureAll();
+        var path = Path.Combine(TestScratch.Root, $"silexgis-scan-{Guid.NewGuid():N}.png");
+        try
+        {
+            using (var picture = Gdal.GetDriverByName("MEM").Create("", 64, 48, 3, DataType.GDT_Byte, null))
+            {
+                var pixels = new byte[64 * 48];
+                for (var band = 1; band <= 3; band++)
+                {
+                    for (var i = 0; i < pixels.Length; i++)
+                    {
+                        pixels[i] = (byte)(i * band % 251);
+                    }
+
+                    picture.GetRasterBand(band).WriteRaster(0, 0, 64, 48, pixels, 64, 48, 0, 0);
+                }
+
+                using var written = Gdal.GetDriverByName("PNG").CreateCopy(path, picture, 0, null, null, null);
+            }
+
+            return File.ReadAllBytes(path);
+        }
+        finally
+        {
+            foreach (var leftover in new[] { path, path + ".aux.xml" })
+            {
+                if (File.Exists(leftover))
+                {
+                    File.Delete(leftover);
+                }
+            }
+        }
+    }
+
     private static (string Content, string Resources) Page(string content, string resources) => (content, resources);
 
     private static byte[] LibraryPdf(int epsg, double[] geoTransform, string encoding)

@@ -120,7 +120,7 @@ public sealed class MapWarpService(ICrsRegistry crsRegistry)
             Math.Max(1, (int)Math.Round(stored.RasterXSize * scale)).ToString(CultureInfo.InvariantCulture),
             Math.Max(1, (int)Math.Round(stored.RasterYSize * scale)).ToString(CultureInfo.InvariantCulture),
             "-r", "average", "-co", "ALPHA=YES",
-            .. AlphaBands(stored),
+            .. RasterBands.WithAlpha(stored),
         ]), null, null), "The sheet's picture could not be read"))
         {
         }
@@ -155,6 +155,33 @@ public sealed class MapWarpService(ICrsRegistry crsRegistry)
             var (rms, residuals) = Residuals(placed, placement, srsWkt);
             return new PreviewOutcome(File.ReadAllBytes(pngPath), extent3857, extent4326, width, height, rms, residuals);
         }
+    }
+
+    /// <summary>A system's own name and whether it is longitude and latitude; null when it cannot be defined.</summary>
+    public (string Name, bool Geographic)? Describe(int epsgCode)
+    {
+        if (crsRegistry.Proj4(epsgCode) is not { } proj4)
+        {
+            return null;
+        }
+
+        using var srs = new SpatialReference("");
+        var imported = false;
+        try
+        {
+            imported = srs.ImportFromEPSG(epsgCode) == 0;
+        }
+        catch (ApplicationException)
+        {
+            imported = false;
+        }
+
+        if (!imported && srs.ImportFromProj4(proj4) != 0)
+        {
+            return null;
+        }
+
+        return (srs.GetName() ?? $"EPSG:{epsgCode}", srs.IsGeographic() == 1);
     }
 
     /// <summary>The placement's control points with their ground coordinates in longitude and latitude.</summary>
@@ -201,17 +228,6 @@ public sealed class MapWarpService(ICrsRegistry crsRegistry)
         srs.ExportToWkt(out var wkt, null);
         return wkt;
     }
-
-    /// <summary>
-    /// The bands that give a picture a see-through channel: its own fourth band, or — for a
-    /// picture stored without one because every pixel was opaque, which is what the WebP writer
-    /// does with an opaque page — its mask, which then reads as fully opaque.
-    /// </summary>
-    private static string[] AlphaBands(Dataset picture) => picture.RasterCount >= 4
-        ? ["-b", "1", "-b", "2", "-b", "3", "-b", "4"]
-        : picture.RasterCount == 3
-            ? ["-b", "1", "-b", "2", "-b", "3", "-b", "mask", "-colorinterp_4", "alpha"]
-            : ["-b", "1", "-b", "1", "-b", "1", "-b", "mask", "-colorinterp_4", "alpha"];
 
     /// <summary>The source with its control points (or, for a similarity, its geotransform) attached.</summary>
     private static Dataset Placed(Dataset input, MapPlacement placement, string srsWkt)

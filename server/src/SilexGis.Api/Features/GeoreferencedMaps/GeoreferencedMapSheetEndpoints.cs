@@ -47,6 +47,18 @@ public sealed class MapPlacementDtoValidator : AbstractValidator<MapPlacementDto
     }
 }
 
+/// <summary>
+/// A georeference annotation must at least be a JSON object; what it says is read by the
+/// annotation reader, which answers its own codes.
+/// </summary>
+public sealed class GeoreferenceAnnotationBodyValidator : AbstractValidator<JsonNode>
+{
+    public GeoreferenceAnnotationBodyValidator()
+    {
+        RuleFor(x => x).Must(n => n is JsonObject).WithMessage("The annotation must be a JSON object.");
+    }
+}
+
 /// <summary>A placement tried on the sheet's small picture.</summary>
 /// <param name="Image">A PNG picture of the placed sheet, as a data address.</param>
 /// <param name="Extent3857">Where the picture goes, in web-mercator metres: west, south, east, north.</param>
@@ -60,6 +72,13 @@ public sealed record MapPlacementPreviewDto(
     double? RmsMetres,
     IReadOnlyList<MapControlPointResidualDto> Residuals);
 
+/// <summary>A coordinate system placement coordinates may be typed in.</summary>
+/// <param name="Crs">Written <c>EPSG:&lt;code&gt;</c>, as a placement names it.</param>
+/// <param name="Name">The system's own name.</param>
+/// <param name="Geographic">True for longitude and latitude; false for a grid in metres.</param>
+/// <param name="Working">True for the installation's working system.</param>
+public sealed record PlacementSystemDto(string Crs, string Name, bool Geographic, bool Working);
+
 /// <summary>How far one control point lands from where it was put, in metres on the ground.</summary>
 public sealed record MapControlPointResidualDto(int Index, double Metres);
 
@@ -71,6 +90,10 @@ public static class GeoreferencedMapSheetEndpoints
 {
     public static RouteGroupBuilder MapGeoreferencedMapSheetEndpoints(this RouteGroupBuilder maps)
     {
+        maps.MapGet("/placement-systems", PlacementSystemsAsync)
+            .WithSummary(
+                "The coordinate systems placement coordinates may be typed in: longitude and latitude, the "
+                + "installation's working system, and the grids it lists in GeoreferencedMaps:PlacementCrsCodes.");
         maps.MapPost("/{id:guid}/render", RenderAsync).WithValidation<MapSheetRenderRequest>()
             .WithSummary(
                 "Draws a map sheet's document again with another page, other layers or another resolution "
@@ -87,7 +110,7 @@ public static class GeoreferencedMapSheetEndpoints
             .WithSummary(
                 "The sheet's placement as a IIIF Georeference Annotation (Read): control points in the drawn "
                 + "picture's pixels and in longitude and latitude, the outline as an SVG polygon.");
-        maps.MapPut("/{id:guid}/placement/annotation", ImportAnnotationAsync)
+        maps.MapPut("/{id:guid}/placement/annotation", ImportAnnotationAsync).WithValidation<JsonNode>()
             .WithSummary(
                 "Places the sheet from a IIIF Georeference Annotation made elsewhere (Write; If-Match), as a "
                 + "placement PUT would: points are read as fractions of the size the annotation states.");
@@ -96,6 +119,35 @@ public static class GeoreferencedMapSheetEndpoints
                 "Tries a placement on the sheet's small picture without keeping it (Read): the placed picture, "
                 + "where it goes and how well the points fit.");
         return maps;
+    }
+
+    private static async Task<Results<Ok<IReadOnlyList<PlacementSystemDto>>, UnauthorizedHttpResult>> PlacementSystemsAsync(
+        IAccessContextAccessor accessAccessor,
+        MapWarpService warper,
+        IOptions<SpatialOptions> spatial,
+        IOptionsMonitor<GeoreferencedMapOptions> options,
+        CancellationToken ct)
+    {
+        if (await accessAccessor.GetAsync(ct) is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var working = spatial.Value.WorkingSrid;
+        var codes = new List<int> { 4326, working };
+        codes.AddRange(options.CurrentValue.PlacementCrsCodes);
+        var systems = new List<PlacementSystemDto>();
+        foreach (var code in codes.Distinct())
+        {
+            // A listed code this installation cannot define is left out rather than offered and
+            // then refused when a placement names it.
+            if (warper.Describe(code) is { } described)
+            {
+                systems.Add(new PlacementSystemDto($"EPSG:{code}", described.Name, described.Geographic, code == working));
+            }
+        }
+
+        return TypedResults.Ok<IReadOnlyList<PlacementSystemDto>>(systems);
     }
 
     private static async Task<Results<Ok<GeoreferencedMapDto>, ProblemHttpResult>> RenderAsync(
