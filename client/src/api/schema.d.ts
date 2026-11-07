@@ -15281,7 +15281,7 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {unknown} */
-        SurveyModelFormat: "lox" | "survex3d" | "stl";
+        SurveyModelFormat: "lox" | "survex3d" | "stl" | "laz" | "las";
         /** @enum {unknown} */
         SurveyModelStatus: "ready" | "pending" | "processing" | "failed";
         SurveyModelUpdateRequest: {
@@ -15291,10 +15291,17 @@ export interface components {
             surveyedAt: null | string;
         };
         /** @enum {unknown} */
-        SurveyOrigin: "topodroid" | "therion" | "other";
+        SurveyOrigin: "topodroid" | "therion" | "other" | "pointcloud";
         SurveyOutputCapabilitiesDto: {
             catalogue: string[];
             defaults: string[];
+        };
+        SurveyPointCloudCapabilitiesDto: {
+            /** Format: int64 */
+            maxFileBytes: number;
+            /** Format: int32 */
+            maxFilesPerUpload: number;
+            acceptedExtensions: string[];
         };
         SurveyPublicLinkCapabilitiesDto: {
             enabled: boolean;
@@ -15348,7 +15355,7 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {unknown} */
-        SurveySourceKind: "therionSource" | "therionConfig" | "therionLog" | "survexSource" | "topoDroidArchive";
+        SurveySourceKind: "therionSource" | "therionConfig" | "therionLog" | "survexSource" | "topoDroidArchive" | "pointCloud";
         SurveyStationDto: {
             name: string;
             viewerName: string;
@@ -15403,6 +15410,7 @@ export interface components {
             /** Format: int32 */
             pollIntervalSeconds: number;
             publicLinks: components["schemas"]["SurveyPublicLinkCapabilitiesDto"];
+            pointCloud: components["schemas"]["SurveyPointCloudCapabilitiesDto"];
         };
         SurveyUploadCaveDto: {
             /** Format: uuid */
@@ -15455,6 +15463,13 @@ export interface components {
             /** Format: int32 */
             segmentIndex: number;
         };
+        SurveyUploadDisplayRequest: {
+            method: string;
+            /** Format: double */
+            voxelCm?: null | number;
+            /** Format: int32 */
+            everyNth?: null | number;
+        };
         SurveyUploadDto: {
             /** Format: uuid */
             id: string;
@@ -15470,6 +15485,7 @@ export interface components {
             version: string;
             caveCreated: boolean;
             survey: components["schemas"]["SurveyUploadSurveyDto"];
+            pointCloud: null | components["schemas"]["SurveyUploadPointCloudDto"];
             files: components["schemas"]["SurveyUploadFileDto"][];
             artefacts: components["schemas"]["SurveyUploadArtefactDto"][];
             compiler: null | components["schemas"]["SurveyUploadCompilerDto"];
@@ -15567,6 +15583,7 @@ export interface components {
             createdAt: string;
             archive: null | components["schemas"]["SurveyUploadListFileDto"];
             therionSources: components["schemas"]["SurveyUploadListFileDto"][];
+            pointCloud: null | components["schemas"]["SurveyUploadPointCloudDto"];
             statusPageUrl: string;
             publicLink: null | components["schemas"]["SurveyUploadPublicLinkDto"];
         };
@@ -15604,6 +15621,7 @@ export interface components {
             pipeline: null | components["schemas"]["SurveyUploadPipelineRequest"];
             documentsVisibility: null | components["schemas"]["Visibility"];
             publicLink?: null | components["schemas"]["SurveyUploadPublicLinkRequest"];
+            display?: null | components["schemas"]["SurveyUploadDisplayRequest"];
         };
         SurveyUploadOrientationDto: {
             basis: components["schemas"]["SurveySegmentBasis"];
@@ -15631,6 +15649,70 @@ export interface components {
             outputs: null | string[];
             /** Format: int32 */
             mapScale: null | number;
+        };
+        SurveyUploadPointCloudAdviceDto: {
+            level: string;
+            /** Format: double */
+            suggestedVoxelCm: null | number;
+            /** Format: int64 */
+            warnPoints: number;
+            /** Format: int64 */
+            advisePoints: number;
+            /** Format: int64 */
+            warnTileBytes: number;
+        };
+        SurveyUploadPointCloudCrsDto: {
+            /** Format: int32 */
+            horizontalEpsg: null | number;
+            /** Format: int32 */
+            verticalEpsg: null | number;
+            wkt: null | string;
+        };
+        SurveyUploadPointCloudDto: {
+            /** Format: uuid */
+            modelId: string;
+            /** Format: int64 */
+            pointCount: number;
+            /** Format: int32 */
+            pointFormat: number;
+            lasVersion: string;
+            compressed: boolean;
+            hasRgb: boolean;
+            hasIntensity: null | boolean;
+            sizeM: number[];
+            georeferenced: boolean;
+            crs: null | components["schemas"]["SurveyUploadPointCloudCrsDto"];
+            min: null | number[];
+            max: null | number[];
+            generatingSoftware: null | string;
+            /** Format: int64 */
+            tileBytes: null | number;
+            /** Format: int32 */
+            tileCount: null | number;
+            tilerVersion: null | string;
+            /** Format: double */
+            displayVoxelM: null | number;
+            /** Format: int32 */
+            displayEveryNth: null | number;
+            /** Format: int64 */
+            displayPointCount: null | number;
+            originShift: null | number[];
+            estimate: null | components["schemas"]["SurveyUploadPointCloudEstimateDto"];
+            advice: null | components["schemas"]["SurveyUploadPointCloudAdviceDto"];
+        };
+        SurveyUploadPointCloudEstimateDto: {
+            full: components["schemas"]["SurveyUploadPointCloudEstimateRowDto"];
+            voxels: components["schemas"]["SurveyUploadPointCloudEstimateRowDto"][];
+        };
+        SurveyUploadPointCloudEstimateRowDto: {
+            /** Format: double */
+            voxelCm: null | number;
+            /** Format: int64 */
+            points: null | number;
+            /** Format: int64 */
+            estimatedTileBytes: null | number;
+            /** Format: int32 */
+            estimatedSeconds: null | number;
         };
         SurveyUploadPreferencesDto: {
             alwaysOutputs: string[];
@@ -15660,12 +15742,14 @@ export interface components {
         };
         SurveyUploadRerunRequest: {
             pipeline: null | components["schemas"]["SurveyUploadPipelineRequest"];
+            display?: null | components["schemas"]["SurveyUploadDisplayRequest"];
+            fromStep?: null | string;
         };
         SurveyUploadSettingsDto: {
             firstModelOfCreatedCave: boolean;
         };
         /** @enum {unknown} */
-        SurveyUploadStage: "archive" | "unpack" | "scaffold" | "compile" | "store" | "read";
+        SurveyUploadStage: "archive" | "unpack" | "scaffold" | "compile" | "store" | "read" | "inspect" | "downsample" | "tile";
         /** @enum {unknown} */
         SurveyUploadStageState: "pending" | "active" | "done" | "failed" | "skipped";
         SurveyUploadStatisticsDto: {

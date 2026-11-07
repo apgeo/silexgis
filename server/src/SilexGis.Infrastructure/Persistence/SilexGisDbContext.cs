@@ -213,6 +213,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<SurveySource> SurveySources => Set<SurveySource>();
 
+    public DbSet<ScanArtifact> ScanArtifacts => Set<ScanArtifact>();
+
     /// <summary>What one archived compilation log said about the survey it was written for.</summary>
     public DbSet<SurveyCompilation> SurveyCompilations => Set<SurveyCompilation>();
 

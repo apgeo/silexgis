@@ -22,6 +22,7 @@
     "date": "2026-10-25",
     "team": "Test A.; Test B."
   },
+  "pointCloud": null,
   "files": [
     {
       "name": "pestera_inventata-1p.th2",

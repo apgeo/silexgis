@@ -25,6 +25,7 @@
         "contentUrl": "/api/v1/files/<uuid-1>/content?token=<token>"
       },
       "therionSources": [],
+      "pointCloud": null,
       "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<next-upload>",
       "publicLink": {
         "url": "/p/survey/<next-public-token>",
@@ -58,6 +59,7 @@
         "contentUrl": "/api/v1/files/<uuid-2>/content?token=<token>"
       },
       "therionSources": [],
+      "pointCloud": null,
       "statusPageUrl": "/caves/<cave>/surveys/<survey>/uploads/<upload>",
       "publicLink": {
         "url": "/p/survey/<public-token>",

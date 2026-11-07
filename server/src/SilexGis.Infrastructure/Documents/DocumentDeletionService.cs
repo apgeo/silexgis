@@ -116,7 +116,8 @@ public sealed class DocumentDeletionService(
             || await db.SurveyModels.AnyAsync(m =>
                 files.Contains(m.FileId) || (m.ConvertedFileId != null && files.Contains(m.ConvertedFileId.Value)), ct)
             || await db.GeoreferencedMaps.AnyAsync(m => files.Contains(m.FileId), ct)
-            || await db.Geofiles.AnyAsync(g => files.Contains(g.FileId), ct);
+            || await db.Geofiles.AnyAsync(g => files.Contains(g.FileId), ct)
+            || await db.ScanArtifacts.AnyAsync(a => files.Contains(a.FileId), ct);
     }
 
     public async Task<DocumentRestoreOutcome> RestoreAsync(AccessContext ctx, Guid id, CancellationToken ct)

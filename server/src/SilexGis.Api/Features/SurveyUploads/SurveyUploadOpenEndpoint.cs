@@ -10,10 +10,12 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Scans;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Scans;
 using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Features.SurveyUploads;
@@ -31,6 +33,8 @@ public static partial class SurveyUploadEndpoints
         IFileAccessTokenService tokens,
         SurveyUploadPublicLinkService links,
         IOptions<SurveyUploadOptions> options,
+        IOptions<ScanOptions> scans,
+        ITypedPropertiesValidator schemas,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -42,7 +46,7 @@ public static partial class SurveyUploadEndpoints
         }
 
         var settings = options.Value;
-        if (!Sources.Contains(request.Source.Trim().ToLowerInvariant()))
+        if (OriginOf(request.Source) is not { } origin)
         {
             return ApiProblems.BadRequest(
                 SourceUnsupportedCode, $"Accepted survey tools: {string.Join(", ", Sources)}.");
@@ -56,20 +60,44 @@ public static partial class SurveyUploadEndpoints
         }
 
         var claims = request.Files.Select(f => new SurveyUploadFileClaim(f.Name, f.Size, f.Role)).ToList();
-        if (SurveyUploadFiles.Problem(claims, settings.FileCap, settings.FileCountCap) is { } fileProblem)
+        var fileCap = origin == SurveyOrigin.PointCloud ? scans.Value.UploadCap : settings.FileCap;
+        if (SurveyUploadFiles.Problem(origin, claims, fileCap, settings.FileCountCap) is { } fileProblem)
         {
             return ApiProblems.BadRequest(SurveyUploadFiles.InvalidCode, fileProblem.Detail, "file", fileProblem.File);
         }
 
-        var run = await RunOptionsAsync(db, settings, ctx.UserId, request.Pipeline, ct);
-        if (run.Problem is { } runProblem)
+        // What the run is asked to do. A survey archive's run is compiled as the request and the
+        // account's standing choices say; a point cloud's run is a recipe of steps with their
+        // parameters resolved now, so a rerun repeats exactly this.
+        string runOptions;
+        if (origin == SurveyOrigin.PointCloud)
         {
-            return runProblem;
+            // A device may decide how much to show before the estimate; otherwise the run
+            // decides for a small cloud and stops to ask for a large one.
+            var choice = request.Display is { } display
+                ? new PointCloudDisplayChoice(display.Method, display.VoxelCm, display.EveryNth)
+                : null;
+            var recipe = PointCloudRecipes.For(schemas, choice, rerunFrom: null, out var errors);
+            if (recipe is null)
+            {
+                return ApiProblems.BadRequest(DisplayInvalidCode, string.Join("; ", errors));
+            }
+
+            runOptions = ScanRecipes.ToOptionsJson(recipe);
+        }
+        else
+        {
+            var run = await RunOptionsAsync(db, settings, ctx.UserId, request.Pipeline, ct);
+            if (run.Problem is { } runProblem)
+            {
+                return runProblem;
+            }
+
+            runOptions = JsonSerializer.Serialize(run.Options, JsonSerializerOptions.Web);
         }
 
         var title = SurveyCaveNaming.TitleOf(request.SurveyTitle, request.SurveyName)!;
         var surveyKey = CaveSurveyMatching.KeyOf(request.SurveyName);
-        const SurveyOrigin origin = SurveyOrigin.TopoDroid;
 
         Feature cave;
         CaveSurvey? survey = null;
@@ -191,7 +219,7 @@ public static partial class SurveyUploadEndpoints
             PublicLinkWanted = request.PublicLink?.Wanted,
             PublicLinkAudience = request.PublicLink?.Audience,
             PublicLinkAllowProtected = request.PublicLink?.AllowProtected ?? false,
-            Options = JsonSerializer.Serialize(run.Options, JsonSerializerOptions.Web),
+            Options = runOptions,
             RequestedBy = ctx.UserId,
             ExpiresAt = now + settings.UploadSession,
         };

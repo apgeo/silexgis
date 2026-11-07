@@ -16,6 +16,12 @@ public enum SurveyReadingRequest
 
     /// <summary>Nothing was queued: a reading of the model is already waiting or running.</summary>
     AlreadyInProgress,
+
+    /// <summary>
+    /// Nothing was queued and nothing ever will be: a model of this kind has no reading. A point
+    /// cloud is tiled by its upload's run, which is asked again through the upload, not here.
+    /// </summary>
+    NoReading,
 }
 
 /// <summary>
@@ -139,6 +145,11 @@ public static class SurveyModelReading
     public static async Task<SurveyReadingRequest> QueueAgainAsync(
         SilexGisDbContext db, SurveyModel model, Guid? requestedBy, CancellationToken ct)
     {
+        if (!HasReading(model.Format))
+        {
+            return SurveyReadingRequest.NoReading;
+        }
+
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
         var retried = await db.SurveyModels
@@ -180,22 +191,35 @@ public static class SurveyModelReading
     }
 
     /// <summary>
+    /// Whether a model of this format is read at all. A line plot and a wall mesh are; a point
+    /// cloud is tiled by its upload's run and has no reading of its own.
+    /// </summary>
+    public static bool HasReading(SurveyModelFormat format) =>
+        SurveyModelKinds.Of(format) is SurveyModelKind.LinePlot or SurveyModelKind.WallMesh;
+
+    /// <summary>
     /// The job a model's format needs: a wall mesh is converted into the file the 3D scene draws,
     /// a line plot is read into station and leg rows. Which of the two a format is, is the
-    /// domain's answer and is not restated here.
+    /// domain's answer and is not restated here. A point cloud has no reading: it is tiled by its
+    /// upload's run, which queues its own work, so asking for a reading of one is a programming
+    /// error and is refused rather than answered with a mesh conversion of a file that is no mesh.
     /// </summary>
     private static ProcessingJob JobFor(SurveyModel model, Guid? requestedBy, Guid? takesMarkFrom = null) =>
-        SurveyModelKinds.Of(model.Format) == SurveyModelKind.LinePlot
-            ? new ProcessingJob
+        SurveyModelKinds.Of(model.Format) switch
+        {
+            SurveyModelKind.LinePlot => new ProcessingJob
             {
                 Kind = ProcessingJobKinds.SurveyGraph,
                 Payload = JsonSerializer.Serialize(new SurveyGraphPayload(model.Id, takesMarkFrom), JsonSerializerOptions.Web),
                 RequestedBy = requestedBy,
-            }
-            : new ProcessingJob
+            },
+            SurveyModelKind.WallMesh => new ProcessingJob
             {
                 Kind = ProcessingJobKinds.SurveyMesh,
                 Payload = JsonSerializer.Serialize(new SurveyMeshPayload(model.Id, takesMarkFrom), JsonSerializerOptions.Web),
                 RequestedBy = requestedBy,
-            };
+            },
+            _ => throw new InvalidOperationException(
+                $"A {model.Format} model is a point cloud; it is tiled by its upload's run and has no reading to queue."),
+        };
 }

@@ -5492,6 +5492,93 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("saved_filters", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.ScanArtifact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("FileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("file_id");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("format");
+
+                    b.PrimitiveCollection<Guid[]>("InputArtifactIds")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid[]")
+                        .HasColumnName("input_artifact_ids")
+                        .HasDefaultValueSql("'{}'::uuid[]");
+
+                    b.Property<short>("Kind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("ParamsHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("params_hash");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("StepId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("step_id");
+
+                    b.Property<Guid?>("SurveyModelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_model_id");
+
+                    b.Property<Guid>("SurveyUploadId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_upload_id");
+
+                    b.Property<string>("Tool")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tool");
+
+                    b.Property<string>("ToolVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tool_version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_scan_artifacts");
+
+                    b.HasIndex(new[] { "FileId" }, "ix_scan_artifacts_file_id")
+                        .HasDatabaseName("ix_scan_artifacts_file_id");
+
+                    b.HasIndex(new[] { "SurveyModelId" }, "ix_scan_artifacts_survey_model_id")
+                        .HasDatabaseName("ix_scan_artifacts_survey_model_id");
+
+                    b.HasIndex(new[] { "SurveyUploadId", "StepId", "ParamsHash" }, "ix_scan_artifacts_upload_step_params")
+                        .HasDatabaseName("ix_scan_artifacts_upload_step_params");
+
+                    b.ToTable("scan_artifacts", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.SpeleolocImportSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6017,6 +6104,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("name");
 
+                    b.Property<string>("PointCloud")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("point_cloud");
+
                     b.Property<string>("ProcessingError")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
@@ -6073,7 +6164,12 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex(new[] { "CaveFeatureId" }, "ix_survey_models_current_line_plot")
                         .IsUnique()
                         .HasDatabaseName("ix_survey_models_current_line_plot")
-                        .HasFilter("is_current AND format <> 2");
+                        .HasFilter("is_current AND format IN (0, 1)");
+
+                    b.HasIndex(new[] { "CaveFeatureId" }, "ix_survey_models_current_point_cloud")
+                        .IsUnique()
+                        .HasDatabaseName("ix_survey_models_current_point_cloud")
+                        .HasFilter("is_current AND format IN (3, 4)");
 
                     b.HasIndex(new[] { "CaveFeatureId" }, "ix_survey_models_current_wall_mesh")
                         .IsUnique()
@@ -10539,6 +10635,29 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_saved_filters_users_owner_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ScanArtifact", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_scan_artifacts_stored_files_file_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.SurveyModel", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyModelId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_scan_artifacts_survey_models_survey_model_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.SurveyUpload", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyUploadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_scan_artifacts_survey_uploads_survey_upload_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SpeleolocImportSession", b =>

@@ -895,12 +895,16 @@ public static class SurveyModelEndpoints
 
         // Asked of the database and not of the row loaded above: two requests arriving together
         // both loaded a finished model, and only one of them may queue the reading.
-        if (await SurveyModelReading.QueueAgainAsync(db, model, ctx.UserId, ct)
-            == SurveyReadingRequest.AlreadyInProgress)
+        switch (await SurveyModelReading.QueueAgainAsync(db, model, ctx.UserId, ct))
         {
-            return ApiProblems.Conflict(
-                "survey_model.reading_in_progress",
-                "This model is already being read. Wait for that reading to finish before asking for another.");
+            case SurveyReadingRequest.AlreadyInProgress:
+                return ApiProblems.Conflict(
+                    "survey_model.reading_in_progress",
+                    "This model is already being read. Wait for that reading to finish before asking for another.");
+            case SurveyReadingRequest.NoReading:
+                return ApiProblems.Conflict(
+                    "survey_model.no_reading",
+                    "A point cloud is not read; it is tiled by its upload's run. Run the upload again instead.");
         }
 
         return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));

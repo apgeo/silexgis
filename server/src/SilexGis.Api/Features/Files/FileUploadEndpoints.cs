@@ -402,6 +402,19 @@ public static partial class FileEndpoints
         var labels = await ProfileDirectory.ResolveLabelsAsync(
             db, user, versions.Where(x => x.Version.UploadedBy is not null).Select(x => x.Version.UploadedBy!.Value), ct);
 
+        // A point cloud's revisions are each a position when their header names a coordinate
+        // system — or until a run has read them — and every row here carries a delivery
+        // address, so the history of a scan's document is answered only when every revision
+        // may be handed to this caller; asked per revision, as the file route asks per file.
+        foreach (var x in versions)
+        {
+            if (await SilexGis.Infrastructure.Scans.PointCloudFileAccess.WithheldWithoutExactLocationAsync(
+                    db, access, ctx, new FileSubject(x.File, x.Version, subject.Document, subject.CurrentFile), ct))
+            {
+                return ApiProblems.NotFound("file.not_found");
+            }
+        }
+
         // Asked about the current file and answered for every revision. What places a photo
         // is what the document hangs on, and only the current file is what anything hangs
         // on — a superseded one is attached to nothing, so asking about it directly would

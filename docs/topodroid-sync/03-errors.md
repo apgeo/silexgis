@@ -114,6 +114,7 @@ result screen, which opens them with its access key:
 | `survey_pipeline.files_missing` | `archive` | an archived file is no longer in the server's store — an operator matter; the upload can be run again once it is restored |
 | `survey_pipeline.archive_invalid` | `unpack` | the archive is not a TopoDroid survey archive: no `manifest`, `manifest` not the first entry, no SQL dump at its root, a database version older than 21, an entry name that leaves the archive, an encrypted entry, or not a ZIP at all. `08-status-failed` |
 | `survey_pipeline.archive_too_large` | `unpack` | over 10,000 entries, more unpacked bytes than the installation allows, or an entry that inflates suspiciously (over 200:1) |
+| `survey_pipeline.point_cloud_invalid` | `inspect` | the file of a `pointcloud` upload is not a LAS or LAZ file the server can read: not the `LASF` signature, a version outside 1.0–1.4, a header shorter than its version requires, a file that ends before its point data, or counts, scales or extents that contradict each other; `errorMessage` says which |
 | `survey_pipeline.unexpected` | any | a defect on the server; its log holds the detail. Also what a run is failed with when the server lost it on every attempt it allows (the process running it died each time): `stage` and `progress` stay where it had got to, and it can be run again |
 
 Sent by a server that compiles: `survey_pipeline.source_missing` (compiling asked for, no `.th`

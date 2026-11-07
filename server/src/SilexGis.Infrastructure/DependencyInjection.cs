@@ -121,6 +121,8 @@ public static class DependencyInjection
             configuration.GetSection(Surveys.SurveyUploadOptions.SectionName));
         services.Configure<Surveys.SurveyCompilerOptions>(
             configuration.GetSection(Surveys.SurveyCompilerOptions.SectionName));
+        services.Configure<Scans.ScanOptions>(
+            configuration.GetSection(Scans.ScanOptions.SectionName));
         services.AddScoped<Import.ImportCandidateService>();
         services.AddScoped<Import.ImportCommitService>();
         services.AddScoped<Import.DeviceSyncUndoService>();
@@ -416,6 +418,9 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, UploadSessionSweepHandler>();
         services.AddScoped<Surveys.SurveyUploadArtefactStore>();
         services.AddScoped<IProcessingJobHandler, SurveyUploadPipelineHandler>();
+        services.AddScoped<IProcessingJobHandler, PointCloudPipelineHandler>();
+        services.AddSingleton<Scans.ScanWorkerHandoff>();
+        services.AddScoped<Scans.PointCloudProcessing>();
         services.AddScoped<IProcessingJobHandler, SurveyUploadSweepHandler>();
         // Which compiler is the installation's choice, made once at start-up: none unless it asked.
         var compilerChoice = configuration.GetSection(Surveys.SurveyCompilerOptions.SectionName).Get<Surveys.SurveyCompilerOptions>();

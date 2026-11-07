@@ -1,7 +1,8 @@
 {
   "contractVersion": 1,
   "sources": [
-    "topodroid"
+    "topodroid",
+    "pointcloud"
   ],
   "maxFileBytes": 262144000,
   "maxFilesPerUpload": 64,
@@ -73,5 +74,13 @@
   "publicLinks": {
     "enabled": true,
     "defaultAudience": "public"
+  },
+  "pointCloud": {
+    "maxFileBytes": 4294967296,
+    "maxFilesPerUpload": 1,
+    "acceptedExtensions": [
+      ".laz",
+      ".las"
+    ]
   }
 }

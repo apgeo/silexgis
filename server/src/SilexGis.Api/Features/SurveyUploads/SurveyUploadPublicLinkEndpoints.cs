@@ -299,7 +299,7 @@ public static partial class SurveyUploadEndpoints
             upload.VersionAt,
             upload.Status,
             upload.Stage,
-            [.. SurveyUploadPublicLinks.StageStates(upload.Status, upload.Stage, compile)
+            [.. SurveyUploadPublicLinks.StageStates(upload.Source, upload.Status, upload.Stage, compile)
                 .Select(s => new PublicSurveyUploadStageDto(s.Stage, s.State))],
             upload.Progress,
             upload.Message,

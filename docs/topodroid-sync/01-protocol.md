@@ -55,10 +55,11 @@ Read once per session, before showing the export dialog (`01-capabilities`).
 | Member | Meaning |
 |---|---|
 | `contractVersion` | the version this server serves |
-| `sources` | the survey tools accepted, by the names `source` uses (`topodroid`) |
-| `maxFileBytes` | the largest single file, in bytes (250 MB by default) |
-| `maxFilesPerUpload` | the most files one upload may declare |
-| `acceptedExtensions` | every extension a file may have, lower-case with the dot |
+| `sources` | the survey tools accepted, by the names `source` uses (`topodroid`, `pointcloud`) |
+| `maxFileBytes` | the largest single file of a survey tool's upload, in bytes (250 MB by default) |
+| `maxFilesPerUpload` | the most files one survey tool's upload may declare |
+| `acceptedExtensions` | every extension a survey tool's file may have, lower-case with the dot |
+| `pointCloud.maxFileBytes`, `pointCloud.maxFilesPerUpload`, `pointCloud.acceptedExtensions` | the same three for an upload of origin `pointcloud`: one `.laz` or `.las` file under the installation's own cap for scans (4 GiB by default) |
 | `compiler.available` | **false: the server keeps and reads the files but compiles nothing.** Say so before the caver starts: *"This server keeps the files but does not compile them."* |
 | `compiler.version`, `compiler.outputs` | the compiler and what it can produce, when there is one |
 | `caveCreation.allowed` | whether an upload that names no cave may make one |
@@ -152,6 +153,7 @@ application/octet-stream`), `{name}` URL-escaped. The answer is `200` (`03-put-f
 | `statusPageUrl` | the signed-in web page the run is watched on, relative to the installation — offer *Open in browser* |
 | `publicLink` | `{ url, createdAt, audience, protectedAcknowledged }` — the public page of the results (`url` is `/p/survey/<token>`, relative to the installation; `audience` is `public` or `organization`; `protectedAcknowledged` is `true` for a link made knowingly for a protected cave), shown to every account that may read the upload; `null` when there is none. Offer *Copy* and *Open*, and *Withdraw* / *Make a new link* (see "The public link" below) |
 | `publicLinkRefusal` | why there is no public link, as a code: `installation-off`, `account-off`, `not-wanted`, `no-share-right`, `protected-cave`, `revoked` (`03-errors.md`); `null` while there is a link, or before the upload is complete |
+| `pointCloud` | `null` for a survey tool's upload and for a point cloud whose header has not been read; otherwise the scan's facts: `modelId`, `pointCount`, `pointFormat`, `lasVersion`, `compressed`, `hasRgb`, `hasIntensity`, `sizeM`, `georeferenced`, `generatingSoftware`; once a worker has estimated it `estimate` (`{ full, voxels[] }` of `{ voxelCm, points, estimatedTileBytes, estimatedSeconds }`) and `advice` (`{ level: none \| warn \| advise, suggestedVoxelCm, warnPoints, advisePoints, warnTileBytes }`); once tiled `tileBytes`, `tileCount`, `tilerVersion`, `displayVoxelM`, `displayEveryNth`, `displayPointCount`. `crs`, `min`, `max` and `originShift` are sent only to a reader holding the cave's exact location. A run whose estimate puts the cloud over the thresholds, with no `display` chosen, ends `succeeded` at `downsample` with "Estimated: … Choose how much to show, then run again." and tiles nothing until a rerun chooses (§7) |
 | `olderVersions` | `{ count, sizeBytes, warn, warnBytes, keepVersions }` — what the survey's versions older than its newest still hold of their runs' outputs (`count` versions, `sizeBytes` in all, counting each stored output's and log's current revision). `warn` is `true` when that is past the installation's warning size `warnBytes` (`SILEXGIS__SurveyUploads__OlderVersionsWarnMegabytes`, 500 MB by default; `null` when it never warns); `keepVersions` is `SILEXGIS__SurveyUploads__KeepArtefactVersions` (`0` keeps every version's outputs, `1` only the newest's). The same on every version of one survey. A tool that shows it says the size and that the installation's administrator decides how many versions keep their outputs |
 | `createdAt`, `expiresAt`, `startedAt`, `finishedAt` | the upload's times |
 
@@ -208,6 +210,15 @@ Runs a finished upload again on the files it archived, with the options it ran w
 `pipeline` body (`10-rerun`); answers `202` with the status body. Refused while a run is queued or
 running (`run_in_progress`) and for an upload that never completed (`not_completed`). Needs write
 access to the cave.
+
+For a point cloud the body may instead carry `display` — `{ method: full | voxel | everyNth,
+voxelCm?, everyNth? }`, how much of the cloud to show; the run thins to it and tiles, reusing the
+estimate — and `fromStep`, a step id (`pointcloud.estimate`, `pointcloud.downsample`,
+`py3dtiles.tile`) to do again even where the earlier run's product would do; the steps after it
+follow, and it applies to that rerun only. `fromStep` alone keeps the thinning the upload was
+running with; a bare body reuses everything that still matches. A `display` the thinning step
+refuses answers `400` `survey_upload.display_invalid`. The same `display` may be sent with
+`POST /survey-uploads` to decide ahead of the estimate.
 
 ## 8. Listing — `GET /survey-uploads`
 

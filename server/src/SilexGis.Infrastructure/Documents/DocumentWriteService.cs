@@ -931,10 +931,12 @@ public sealed class DocumentWriteService(
     /// <summary>
     /// Whether anything still points at one of these files. Deleting a referenced file is
     /// never harmless: the attachment foreign key cascades, so the row disappears with no
-    /// audit trail; the entity foreign keys (geofile, raster map, survey model) restrict, so
-    /// the statement fails and the caller sees an unhandled database error instead of a
-    /// stable code; taggings and avatars carry no foreign key at all and would simply be left
-    /// pointing at nothing.
+    /// audit trail; the entity foreign keys (geofile, raster map, survey model, scan artefact)
+    /// restrict, so the statement fails and the caller sees an unhandled database error instead
+    /// of a stable code; taggings and avatars carry no foreign key at all and would simply be
+    /// left pointing at nothing. A scan artefact outlives its model — it is the record of what
+    /// an upload's run read or made, matched by later runs — so its file is in use while the
+    /// artefact row stands, whether or not a model still names it.
     /// </summary>
     private async Task<bool> AnythingPointsAtAsync(IReadOnlyCollection<Guid> fileIds, CancellationToken ct)
     {
@@ -950,6 +952,7 @@ public sealed class DocumentWriteService(
             || await db.Geofiles.AsNoTracking().AnyAsync(g => fileIds.Contains(g.FileId), ct)
             || await db.GeoreferencedMaps.AsNoTracking().AnyAsync(m => fileIds.Contains(m.FileId), ct)
             || await db.SurveyModels.AsNoTracking().AnyAsync(s => fileIds.Contains(s.FileId), ct)
+            || await db.ScanArtifacts.AsNoTracking().AnyAsync(a => fileIds.Contains(a.FileId), ct)
             || await db.Users.AsNoTracking().AnyAsync(
                 u => u.AvatarFileId != null && fileIds.Contains(u.AvatarFileId.Value), ct);
     }

@@ -31,6 +31,55 @@ turns every future addition into an outage of its own making.
 
 ---
 
+## 2026-11-07 — a point cloud as a survey upload
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one value is added to
+a list, one member is added to the status and list answers, and three values are added to `stage`;
+nothing a device sends or reads changes meaning. Every recording but `03-put-file` was rewritten
+for the two additions below.
+
+- `capabilities.sources` now lists `pointcloud` beside `topodroid`: an upload of origin
+  `pointcloud` declares exactly one `.laz` or `.las` file, as role `archive`, under the
+  installation's own cap for scans (`SILEXGIS__Scans__MaxUploadBytes`, 4 GiB by default).
+  `maxFileBytes`, `maxFilesPerUpload` and `acceptedExtensions` still describe a survey tool's
+  upload; the scans' own figures are the new `capabilities.pointCloud` block (`maxFileBytes`,
+  `maxFilesPerUpload`, always 1, and `acceptedExtensions`, `.laz` and `.las`), which a device
+  reads before offering a point cloud. The `source_unsupported` detail now names both.
+- Added `pointCloud` to the status answer and to each listed upload: `null` for a survey tool's
+  upload and for a point cloud whose header has not been read yet; otherwise the scan's facts
+  (`modelId`, `pointCount`, `pointFormat`, `lasVersion`, `compressed`, `hasRgb`, `hasIntensity`,
+  `sizeM`, `georeferenced`, `generatingSoftware`, and after tiling `tileBytes`, `tileCount`,
+  `tilerVersion`, `displayVoxelM`). `crs`, `min` and `max` are sent only to a reader holding the
+  cave's exact location, as is the `contentUrl` of an original whose header names a coordinate
+  system; an original with none is offered to everybody who may read the upload.
+- Added to `pointCloud` once a worker has run: `estimate` (`{ full, voxels[] }`, each row
+  `{ voxelCm, points, estimatedTileBytes, estimatedSeconds }`, `voxelCm` null on the full cloud's
+  row), `advice` (`{ level: none | warn | advise, suggestedVoxelCm, warnPoints, advisePoints,
+  warnTileBytes }`), and after tiling `displayEveryNth`, `displayPointCount` and `originShift`
+  (what was subtracted from the file's coordinates before tiling — a position for a georeferenced
+  file, so sent only with the cave's exact location, like `min` and `max`).
+- `POST /survey-uploads` takes an optional `display` for a point cloud — `{ method: full | voxel |
+  everyNth, voxelCm?, everyNth? }` — deciding how much of the cloud to show before it is
+  estimated. Without one, a run whose estimate puts the cloud over the installation's thresholds
+  (`advice.level` is `warn` or `advise`) ends `succeeded` at `downsample` with the message
+  "Estimated: … points. Choose how much to show, then run again." and tiles nothing; a cloud under
+  them is tiled whole. A device that shows the estimate table offers the choice then.
+- `POST /survey-uploads/{id}/rerun` takes `display` (the same shape; the run thins to it and tiles,
+  reusing the estimate) and `fromStep` (a step id to do again even where the earlier run's product
+  would do: `pointcloud.estimate`, `pointcloud.downsample`, `py3dtiles.tile`; applies to that
+  rerun only). `fromStep` alone keeps the thinning the upload was running with. A `display` the
+  thinning step refuses answers `400` `survey_upload.display_invalid`.
+- The file route serves the original of a point cloud whose header names a coordinate system,
+  and the thinned copy made from it, only to a reader holding the cave's exact location, as the
+  upload's own `contentUrl` already did.
+- New `stage` values for a point cloud's run: `inspect`, `downsample`, `tile`. A server with no
+  point-cloud worker ends such a run `succeeded` at `tile` with the message "Archived and
+  inspected. Not tiled: this server has no point-cloud worker."; a rerun once a worker is
+  installed carries on.
+- New code on the run: `survey_pipeline.point_cloud_invalid` at `inspect` (the file is not a LAS
+  or LAZ file the server can read). `survey_upload.content_mismatch` now also answers a `.laz` or
+  `.las` whose bytes do not begin with `LASF`.
+
 ## 2026-11-05 — the public page of results shows the map, the geodata and the whole figures
 
 **Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — nothing a device sends

@@ -25,6 +25,7 @@
     "date": null,
     "team": null
   },
+  "pointCloud": null,
   "files": [
     {
       "name": "no_manifest.zip",
