@@ -13,14 +13,27 @@ internal static class SyntheticLas
 {
     /// <summary>
     /// A LAS 1.2 file as the specification lays it out: the 227-byte public header, a GeoTIFF key
-    /// directory naming a projected system when asked, then zero point records of format 1 — or,
+    /// directory naming a projected system when asked and an OGC well-known-text record when
+    /// asked (either, both or neither, as writers do), then zero point records of format 1 — or,
     /// for a "LAZ", the compression bit and no points at all, since the header is all that is read.
     /// </summary>
-    public static byte[] Las(int points, bool compressed = false, (double X, double Y, double Z)? size = null, int? epsg = null, byte major = 1)
+    public static byte[] Las(int points, bool compressed = false, (double X, double Y, double Z)? size = null, int? epsg = null, byte major = 1, string? wkt = null)
     {
         const int headerSize = 227;
         const ushort recordLength = 28;
-        var vlr = epsg is { } code ? GeoKeyDirectory(code) : [];
+        var records = 0u;
+        byte[] vlr = [];
+        if (epsg is { } code)
+        {
+            vlr = GeoKeyDirectory(code);
+            records++;
+        }
+
+        if (wkt is not null)
+        {
+            vlr = [.. vlr, .. OgcWkt(wkt)];
+            records++;
+        }
         // A LAZ's point bytes cannot be counted from the header; a few stand in for them.
         var pointBytes = compressed ? 64 : points * recordLength;
         var file = new byte[headerSize + vlr.Length + pointBytes];
@@ -31,7 +44,7 @@ internal static class SyntheticLas
         Encoding.ASCII.GetBytes("silexgis tests").CopyTo(span[58..]);
         BinaryPrimitives.WriteUInt16LittleEndian(span[94..], headerSize);
         BinaryPrimitives.WriteUInt32LittleEndian(span[96..], (uint)(headerSize + vlr.Length));
-        BinaryPrimitives.WriteUInt32LittleEndian(span[100..], vlr.Length == 0 ? 0u : 1u);
+        BinaryPrimitives.WriteUInt32LittleEndian(span[100..], records);
         span[104] = (byte)(1 | (compressed ? LasPointFormats.CompressionBit : 0));
         BinaryPrimitives.WriteUInt16LittleEndian(span[105..], recordLength);
         BinaryPrimitives.WriteUInt32LittleEndian(span[107..], (uint)points);
@@ -59,6 +72,19 @@ internal static class SyntheticLas
         var record = new byte[LasHeaderReader.VlrHeaderBytes + data.Length];
         Encoding.ASCII.GetBytes(LasHeaderReader.ProjectionUserId).CopyTo(record, 2);
         BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(18), LasHeaderReader.GeoKeyDirectoryRecordId);
+        BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(20), (ushort)data.Length);
+        data.CopyTo(record, LasHeaderReader.VlrHeaderBytes);
+        return record;
+    }
+
+    /// <summary>The coordinate system as OGC well-known text, NUL-terminated, under the projection user id.</summary>
+    private static byte[] OgcWkt(string wkt)
+    {
+        var data = new byte[Encoding.UTF8.GetByteCount(wkt) + 1];
+        Encoding.UTF8.GetBytes(wkt, data);
+        var record = new byte[LasHeaderReader.VlrHeaderBytes + data.Length];
+        Encoding.ASCII.GetBytes(LasHeaderReader.ProjectionUserId).CopyTo(record, 2);
+        BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(18), LasHeaderReader.OgcWktRecordId);
         BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(20), (ushort)data.Length);
         data.CopyTo(record, LasHeaderReader.VlrHeaderBytes);
         return record;

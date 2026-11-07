@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using NetTopologySuite.Geometries;
+using SilexGis.Domain.Scans;
 
 namespace SilexGis.Domain.Entities;
 
@@ -132,6 +133,23 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     /// anything drawing the model, which is why it is not published.
     /// </summary>
     public double? AppliedRotationDeg { get; set; }
+
+    /// <summary>
+    /// For a point cloud: the compass bearing its tiles' own +Y axis points along, degrees
+    /// clockwise from true north, in [0, 360). Published, unlike <see cref="AppliedRotationDeg"/>,
+    /// because nothing was applied: a scan's tiles are made once in the cloud's own frame and the
+    /// scene turns them by this when it draws them, which is what lets a placement be corrected
+    /// without tiling again. Set together with <see cref="Anchor"/> and <see cref="AnchorHeightM"/>;
+    /// null for a scan nobody has placed and for every other kind of model.
+    /// </summary>
+    public double? PlacementHeadingDeg { get; set; }
+
+    /// <summary>
+    /// For a point cloud: how its placement came about — by hand, or from the coordinate system
+    /// its file named. A later tiling keeps a placement made by hand and recomputes one taken
+    /// from the file, whose zero point it may have moved. Null while unplaced.
+    /// </summary>
+    public ScanPlacementSource? PlacementSource { get; set; }
 
     /// <summary>Triangles in the converted model, after the ones carrying no surface were dropped.</summary>
     public int? TriangleCount { get; set; }

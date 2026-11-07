@@ -10,6 +10,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Scans;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
@@ -60,6 +61,19 @@ public sealed record SurveyModelDto(
     double? AnchorLongitude,
     double? AnchorLatitude,
     double? AnchorHeightM,
+    /// <summary>
+    /// For a point cloud: the compass bearing its tiles' +Y axis points along, degrees clockwise
+    /// from true north, which a scene turns the tiles by about the anchor. Null while the scan is
+    /// unplaced, and always null for a line plot or a wall mesh, whose turn was written into the
+    /// model itself. Published under the same rule as the anchor: the whole record is withheld
+    /// from callers without the cave's exact location.
+    /// </summary>
+    double? PlacementHeadingDeg,
+    /// <summary>
+    /// For a point cloud: whether the placement was made by hand or taken from the coordinate
+    /// system the file named. Null while unplaced.
+    /// </summary>
+    ScanPlacementSource? PlacementSource,
     int? TriangleCount,
     /// <summary>
     /// How many bytes the drawable mesh is, so a viewer can see how big it is before it arrives;
@@ -202,8 +216,10 @@ public sealed class SurveyModelUpdateRequestValidator : AbstractValidator<Survey
 internal sealed record UploadDeclaration(int? SourceEpsg, Point? Origin, double? OriginHeightM)
 {
     /// <summary>Deepest and highest a cave entrance can plausibly sit, in metres.</summary>
-    private const double LowestHeightM = -500;
-    private const double HighestHeightM = 9000;
+    // The same bounds a point cloud's placement is held to: one rule for the altitude a model's
+    // zero plane may be declared at, whichever kind of model is being placed.
+    private const double LowestHeightM = SilexGis.Domain.Scans.ScanPlacement.LowestHeightM;
+    private const double HighestHeightM = SilexGis.Domain.Scans.ScanPlacement.HighestHeightM;
 
     /// <summary>
     /// The declaration a wall mesh must carry. Every field is demanded, because eighty bytes of
@@ -329,6 +345,7 @@ public static class SurveyModelEndpoints
         api.MapDelete("/survey-models/{id:guid}", DeleteAsync)
             .WithTags("SurveyModels")
             .WithSummary("Deletes the survey model (Write on the cave); the stored file is kept. Refused while a trip's live tracking is armed on it.");
+        api.MapSurveyModelPlacementEndpoints();
 
         return api;
     }
@@ -1050,7 +1067,7 @@ public static class SurveyModelEndpoints
         return model is null ? (null, null) : (model, await CaveFeatureAsync(db, model.CaveFeatureId, ct));
     }
 
-    private static Task<Feature?> CaveFeatureAsync(SilexGisDbContext db, Guid caveFeatureId, CancellationToken ct) =>
+    internal static Task<Feature?> CaveFeatureAsync(SilexGisDbContext db, Guid caveFeatureId, CancellationToken ct) =>
         db.Features.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == caveFeatureId && f.Kind == FeatureKind.Cave, ct);
 
@@ -1066,7 +1083,7 @@ public static class SurveyModelEndpoints
     /// The byte length of each model's converted mesh, keyed by the converted file's id, for the
     /// models that have one. One query for a whole list rather than one per row.
     /// </summary>
-    private static async Task<IReadOnlyDictionary<Guid, long>> MeshSizesAsync(
+    internal static async Task<IReadOnlyDictionary<Guid, long>> MeshSizesAsync(
         SilexGisDbContext db, IReadOnlyList<SurveyModel> models, CancellationToken ct)
     {
         var converted = models.Where(m => m.ConvertedFileId is not null).Select(m => m.ConvertedFileId!.Value).ToList();
@@ -1080,7 +1097,7 @@ public static class SurveyModelEndpoints
             .ToDictionaryAsync(f => f.Id, f => f.SizeBytes, ct);
     }
 
-    private static SurveyModelDto ToDto(
+    internal static SurveyModelDto ToDto(
         this SurveyModel m,
         IFileAccessTokenService tokens,
         IReadOnlyDictionary<Guid, long>? meshSizes,
@@ -1100,6 +1117,8 @@ public static class SurveyModelEndpoints
         m.Anchor?.X,
         m.Anchor?.Y,
         m.AnchorHeightM,
+        m.PlacementHeadingDeg,
+        m.PlacementSource,
         m.TriangleCount,
         m.ConvertedFileId is { } sized && meshSizes is not null && meshSizes.TryGetValue(sized, out var bytes) ? bytes : null,
         m.SourcePrecisionLost,

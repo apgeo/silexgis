@@ -6104,6 +6104,14 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("name");
 
+                    b.Property<double?>("PlacementHeadingDeg")
+                        .HasColumnType("double precision")
+                        .HasColumnName("placement_heading_deg");
+
+                    b.Property<short?>("PlacementSource")
+                        .HasColumnType("smallint")
+                        .HasColumnName("placement_source");
+
                     b.Property<string>("PointCloud")
                         .HasColumnType("jsonb")
                         .HasColumnName("point_cloud");

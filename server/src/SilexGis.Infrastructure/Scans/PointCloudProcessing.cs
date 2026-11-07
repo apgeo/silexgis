@@ -10,6 +10,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Scans;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
 
@@ -59,6 +60,7 @@ public sealed class PointCloudProcessing(
     IFileStore fileStore,
     DocumentWriteService documents,
     ScanWorkerHandoff handoff,
+    ICoordinateProjector projector,
     IOptions<ScanOptions> options,
     ILogger<PointCloudProcessing> logger)
 {
@@ -207,9 +209,57 @@ public sealed class PointCloudProcessing(
 
         model.PointCloud = facts.ToJson();
         model.ConvertedFileId = tiles?.FileId;
+        if (tiles is not null)
+        {
+            // The tiles have a frame now, so a file that names its coordinate system can be set
+            // down on the earth through it. A placement somebody made by hand is kept — and the
+            // hand may have moved while the worker ran: this instance was loaded before the first
+            // step, minutes or hours ago, and placing a scan needs no tiles, so the row's
+            // placement is read again here rather than trusted from then. Without that, a
+            // correction made during a long tiling would be written over by the file's placement
+            // and its source flipped back, silently.
+            await RefreshPlacementAsync(model, ct);
+            ScanAutoPlacement.AfterTiling(projector, model, facts);
+        }
+
         model.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return new Outcome(facts, tiles is not null, tilesReused);
+    }
+
+    /// <summary>
+    /// Brings the tracked model's placement columns up to what the row holds now, so that a
+    /// placement written by somebody else while this run's worker steps were under way is what
+    /// the decision to place from the file is taken against, and what is kept when it is manual.
+    /// Only the placement is refreshed: the facts and the converted file are this run's to write.
+    /// </summary>
+    private async Task RefreshPlacementAsync(SurveyModel model, CancellationToken ct)
+    {
+        var row = await db.SurveyModels.AsNoTracking()
+            .Where(m => m.Id == model.Id)
+            .Select(m => new { m.Anchor, m.AnchorHeightM, m.PlacementHeadingDeg, m.PlacementSource, m.SourceEpsg })
+            .SingleOrDefaultAsync(ct);
+        if (row is null)
+        {
+            return;
+        }
+
+        var entry = db.Entry(model);
+        Refresh(entry.Property(m => m.Anchor), row.Anchor);
+        Refresh(entry.Property(m => m.AnchorHeightM), row.AnchorHeightM);
+        Refresh(entry.Property(m => m.PlacementHeadingDeg), row.PlacementHeadingDeg);
+        Refresh(entry.Property(m => m.PlacementSource), row.PlacementSource);
+        Refresh(entry.Property(m => m.SourceEpsg), row.SourceEpsg);
+
+        // Set as the original value too, so that a column this run then leaves alone is not
+        // written back as a change, and a later tiling that places the scan again compares
+        // against what the row really held.
+        static void Refresh<T>(Microsoft.EntityFrameworkCore.ChangeTracking.PropertyEntry<SurveyModel, T> property, T value)
+        {
+            property.CurrentValue = value;
+            property.OriginalValue = value;
+            property.IsModified = false;
+        }
     }
 
     /// <summary>

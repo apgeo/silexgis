@@ -28,4 +28,20 @@ public interface ICoordinateProjector
     /// code is unknown or the point cannot be transformed. Never throws for bad input.
     /// </summary>
     ProjectedPoint? ToWgs84(int epsgCode, double easting, double northing);
+
+    /// <summary>
+    /// Where an easting/northing in the projected system described by <paramref name="wkt"/> is in
+    /// the world, or null when the text is not a coordinate system PROJ can build a transform from,
+    /// describes a system that is not projected, or the point cannot be transformed. For a file
+    /// whose header carries its system as well-known text and no code — what current LAS writers
+    /// produce. Never throws for bad input.
+    /// </summary>
+    ProjectedPoint? ToWgs84(string wkt, double easting, double northing);
+
+    /// <summary>
+    /// The EPSG code of the system <paramref name="wkt"/> describes, when the text names one or
+    /// PROJ recognises its definition as one; null for an unknown, unnamed or unreadable system.
+    /// Never throws for bad input.
+    /// </summary>
+    int? EpsgOf(string wkt);
 }

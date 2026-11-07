@@ -426,6 +426,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-models/{id}/placement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Places a point cloud, or places it again: its tiles' zero point at a position and altitude, its frame turned to a bearing (Write on the cave, with its exact location). The tiles are not touched. Refused for a line plot or a wall mesh. */
+        put: operations["surveyModelPlacementPlace"];
+        post?: never;
+        /** Takes a point cloud's placement away, leaving it viewable in its own frame and off the map (Write on the cave, with its exact location). */
+        delete: operations["surveyModelPlacementUnplace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-models/{id}/tiles/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One entry of a scan's tileset archive — tileset.json or a .pnts tile — by the signed address the scan's listing handed out. */
+        get: operations["surveyModelTileTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{caveId}/survey-sources": {
         parameters: {
             query?: never;
@@ -778,6 +813,23 @@ export interface paths {
         };
         /** The wall mesh each cave is drawn by, for the caves whose mesh is anchored in the given bbox, nearest its middle first and capped at maxCaves (the installation's default when absent, never above its ceiling); caves the caller may not read or may not place exactly are omitted and not counted. A filter (`filter` token or `savedFilterId`) keeps the caves it keeps on the entrance layer, and the total counts only those. */
         get: operations["caveMeshMapCaveMeshes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map/cave-scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The placed point cloud each cave is shown by, for the caves whose scan is anchored in the given bbox, nearest its middle first and capped at maxCaves (the installation's default when absent, never above its ceiling); a scan that has not been placed is never listed, and caves the caller may not read or may not place exactly are omitted and not counted. A filter (`filter` token or `savedFilterId`) keeps the caves it keeps on the entrance layer, and the total counts only those. */
+        get: operations["caveScanMapCaveScans"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9824,6 +9876,34 @@ export interface components {
             notes: null | string;
             shortName?: null | string;
         };
+        CaveScanInViewDto: {
+            /** Format: uuid */
+            caveId: string;
+            caveName: null | string;
+            /** Format: uuid */
+            surveyModelId: string;
+            modelName: string;
+            tilesetUrl: string;
+            /** Format: double */
+            anchorLongitude: number;
+            /** Format: double */
+            anchorLatitude: number;
+            /** Format: double */
+            anchorHeightM: number;
+            /** Format: double */
+            headingDeg: number;
+            /** Format: int64 */
+            pointCount: null | number;
+            /** Format: int64 */
+            tiledPointCount: null | number;
+            /** Format: int64 */
+            sizeBytes: number;
+        };
+        CaveScansInViewDto: {
+            items: components["schemas"]["CaveScanInViewDto"][];
+            /** Format: int32 */
+            total: number;
+        };
         CaveStatisticsDto: {
             /** Format: uuid */
             caveId: string;
@@ -12460,6 +12540,16 @@ export interface components {
             /** Format: int64 */
             meshAskAboveBytes: number;
             /** Format: int32 */
+            scansInViewMinZoom: number;
+            /** Format: int32 */
+            scansInViewMaxCaves: number;
+            /** Format: int64 */
+            scansInViewMaxBytes: number;
+            /** Format: int32 */
+            scansInViewMaxCavesLimit: number;
+            /** Format: int64 */
+            scansInViewMaxBytesLimit: number;
+            /** Format: int32 */
             selectionMax: number;
             densityFixedBands: number[];
         };
@@ -14575,6 +14665,8 @@ export interface components {
             cavingGroupId: null | string;
             visibility?: components["schemas"]["Visibility"];
         };
+        /** @enum {unknown} */
+        ScanPlacementSource: "manual" | "fileCrs";
         SearchDocumentItemDto: {
             /** Format: uuid */
             id: string;
@@ -15263,6 +15355,9 @@ export interface components {
             anchorLatitude: null | number;
             /** Format: double */
             anchorHeightM: null | number;
+            /** Format: double */
+            placementHeadingDeg: null | number;
+            placementSource: null | components["schemas"]["ScanPlacementSource"];
             /** Format: int32 */
             triangleCount: null | number;
             /** Format: int64 */
@@ -15282,6 +15377,16 @@ export interface components {
         };
         /** @enum {unknown} */
         SurveyModelFormat: "lox" | "survex3d" | "stl" | "laz" | "las";
+        SurveyModelPlacementRequest: {
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            heightM: number;
+            /** Format: double */
+            headingDeg: number;
+        };
         /** @enum {unknown} */
         SurveyModelStatus: "ready" | "pending" | "processing" | "failed";
         SurveyModelUpdateRequest: {
@@ -15690,6 +15795,7 @@ export interface components {
             /** Format: int32 */
             tileCount: null | number;
             tilerVersion: null | string;
+            tilesetUrl: null | string;
             /** Format: double */
             displayVoxelM: null | number;
             /** Format: int32 */
@@ -19295,6 +19401,156 @@ export interface operations {
             };
         };
     };
+    surveyModelPlacementPlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurveyModelPlacementRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyModelPlacementUnplace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyModelTileTile: {
+        parameters: {
+            query?: {
+                token?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Modified */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     surveySourceList: {
         parameters: {
             query?: never;
@@ -20207,6 +20463,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaveMeshesInViewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    caveScanMapCaveScans: {
+        parameters: {
+            query: {
+                bbox: string;
+                maxCaves?: number;
+                filter?: string;
+                savedFilterId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaveScansInViewDto"];
                 };
             };
             /** @description Bad Request */
