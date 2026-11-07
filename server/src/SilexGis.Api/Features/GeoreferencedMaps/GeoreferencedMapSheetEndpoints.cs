@@ -10,7 +10,10 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Geo;
+using SilexGis.Domain.ResLinks;
+using SilexGis.Domain.Surveys;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Jobs;
@@ -79,6 +82,17 @@ public sealed record MapPlacementPreviewDto(
 /// <param name="Working">True for the installation's working system.</param>
 public sealed record PlacementSystemDto(string Crs, string Name, bool Geographic, bool Working);
 
+/// <summary>
+/// A survey station marked on the sheet's picture, with where the survey puts it — a control point
+/// ready to use.
+/// </summary>
+/// <param name="Label">The station's name as the drawing shows it.</param>
+/// <param name="U">Across the picture, as a fraction of its width.</param>
+/// <param name="V">Down the picture, as a fraction of its height.</param>
+/// <param name="X">Longitude.</param>
+/// <param name="Y">Latitude.</param>
+public sealed record SheetStationPointDto(string Label, double U, double V, double X, double Y, Guid SurveyModelId);
+
 /// <summary>How far one control point lands from where it was put, in metres on the ground.</summary>
 public sealed record MapControlPointResidualDto(int Index, double Metres);
 
@@ -94,6 +108,11 @@ public static class GeoreferencedMapSheetEndpoints
             .WithSummary(
                 "The coordinate systems placement coordinates may be typed in: longitude and latitude, the "
                 + "installation's working system, and the grids it lists in GeoreferencedMaps:PlacementCrsCodes.");
+        maps.MapGet("/{id:guid}/station-points", StationPointsAsync)
+            .WithSummary(
+                "The survey stations marked on the sheet's picture (station pins on its document), each with "
+                + "where its survey puts it in longitude and latitude — control points ready to use (Read). "
+                + "Only stations of surveys the caller may see exactly are answered.");
         maps.MapPost("/{id:guid}/render", RenderAsync).WithValidation<MapSheetRenderRequest>()
             .WithSummary(
                 "Draws a map sheet's document again with another page, other layers or another resolution "
@@ -148,6 +167,127 @@ public static class GeoreferencedMapSheetEndpoints
         }
 
         return TypedResults.Ok<IReadOnlyList<PlacementSystemDto>>(systems);
+    }
+
+    private static async Task<Results<Ok<IReadOnlyList<SheetStationPointDto>>, ProblemHttpResult>> StationPointsAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IAccessService access,
+        FeatureProtection protection,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var map = await db.GeoreferencedMaps.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id, ct);
+        if (map is null || ctx is null
+            || !(await access.DecideAsync(ctx, AccessAction.Read, map, ct)).Allowed
+            || await protection.ShouldRedactLinkAsync(ctx, map.CaveFeatureId, ct))
+        {
+            return ApiProblems.NotFound("georeferenced_map.not_found");
+        }
+
+        if (map.SourceFileId is not { } sourceFileId)
+        {
+            return ApiProblems.BadRequest(
+                "georeferenced_map.not_a_sheet", "Only a sheet's picture can carry station pins.");
+        }
+
+        // The pins hang on the sheet's document and were measured on one of the files of the
+        // revision the sheet is drawn from: the document itself, its drawing or its preview — all
+        // the same picture, so the same fractions.
+        var versionId = await db.StoredFiles.AsNoTracking()
+            .Where(f => f.Id == sourceFileId).Select(f => f.DocumentVersionId).FirstOrDefaultAsync(ct);
+        var documentId = await db.DocumentVersions.AsNoTracking()
+            .Where(v => v.Id == versionId).Select(v => v.DocumentId).FirstOrDefaultAsync(ct);
+        var files = db.StoredFiles.AsNoTracking().Where(f => f.DocumentVersionId == versionId).Select(f => f.Id);
+
+        var pins = await (
+                from pin in db.ResLinkMembers.AsNoTracking()
+                join link in db.ResLinks.AsNoTracking() on pin.ResLinkId equals link.Id
+                join relation in db.ResLinkRelationTypes.AsNoTracking() on link.RelationTypeId equals (long?)relation.Id
+                join station in db.ResLinkMembers.AsNoTracking() on link.Id equals station.ResLinkId
+                where relation.Code == ResLinkRelationTypeSeeds.MapStationPointCode
+                    && link.DeletedAt == null
+                    && pin.EntityType == AttachedEntityType.Document && pin.EntityId == documentId
+                    && pin.AnchorKind == AnchorKind.ImageRegion
+                    && pin.AnchorFileId != null && files.Contains(pin.AnchorFileId.Value)
+                    && station.EntityType == AttachedEntityType.SurveyModel
+                    && station.AnchorKind == AnchorKind.ModelStation
+                select new { pin.Anchor, ModelId = station.EntityId!.Value, StationAnchor = station.Anchor })
+            .ToListAsync(ct);
+
+        var answer = new List<SheetStationPointDto>();
+        foreach (var byModel in pins.GroupBy(p => p.ModelId))
+        {
+            var model = await db.SurveyModels.AsNoTracking().FirstOrDefaultAsync(m => m.Id == byModel.Key, ct);
+            var cave = model is null
+                ? null
+                : await db.Features.AsNoTracking().FirstOrDefaultAsync(f => f.Id == model.CaveFeatureId, ct);
+            if (model is null || cave is null || !await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct))
+            {
+                continue;
+            }
+
+            var wanted = byModel
+                .Select(p => (Point: PointOf(p.Anchor), Station: StationOf(p.StationAnchor)))
+                .Where(p => p.Point is not null && p.Station is not null)
+                .ToList();
+            var candidates = wanted
+                .SelectMany(p => SurveyStationNames.StoredCandidates(model.Format, model.RootSurveyName, p.Station!))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            var stations = await db.SurveyStations.AsNoTracking()
+                .Where(s => s.SurveyModelId == model.Id && candidates.Contains(s.Name))
+                .ToListAsync(ct);
+
+            foreach (var (point, name) in wanted)
+            {
+                // The best reading of the name first, as every other reader of station names does.
+                var station = SurveyStationNames.StoredCandidates(model.Format, model.RootSurveyName, name!)
+                    .Select(candidate => stations.FirstOrDefault(s => s.Name == candidate))
+                    .FirstOrDefault(s => s is not null);
+                if (station is not null)
+                {
+                    answer.Add(new SheetStationPointDto(
+                        SurveyStationNames.ViewerName(model.Format, model.RootSurveyName, station.Name),
+                        point!.Value.U, point.Value.V, station.Position.X, station.Position.Y, model.Id));
+                }
+            }
+        }
+
+        return TypedResults.Ok<IReadOnlyList<SheetStationPointDto>>(answer);
+    }
+
+    private static (double U, double V)? PointOf(string? anchor)
+    {
+        try
+        {
+            return JsonNode.Parse(anchor ?? "null") is JsonObject o
+                && o["shape"]?.GetValue<string>() == "point"
+                && o["x"] is JsonValue x && x.TryGetValue<double>(out var u)
+                && o["y"] is JsonValue y && y.TryGetValue<double>(out var v)
+                    ? (u, v)
+                    : null;
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static string? StationOf(string? anchor)
+    {
+        try
+        {
+            return JsonNode.Parse(anchor ?? "null") is JsonObject o && o["station"] is JsonValue s
+                && s.TryGetValue<string>(out var name) && !string.IsNullOrWhiteSpace(name)
+                    ? name
+                    : null;
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException)
+        {
+            return null;
+        }
     }
 
     private static async Task<Results<Ok<GeoreferencedMapDto>, ProblemHttpResult>> RenderAsync(
