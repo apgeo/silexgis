@@ -1560,7 +1560,8 @@
     "mapKind": "Kind",
     "editRaster": "Edit raster map",
     "deleteRasterConfirm": "Delete this raster map entry?",
-    "rasterUploadPrompt": "Click or drag georeferenced GeoTIFFs or PDF map sheets here to upload",
+    "rasterUploadPrompt": "Click or drag georeferenced GeoTIFFs, PDF map sheets or scanned maps (PNG, JPEG) here to upload",
+    "caveLinkWarning": "The original file of this sheet is a document of yours. Sharing that document shares the sheet — and with it the cave's location — with whoever you share it with.",
     "rasterUploadHint": "Converted to Cloud-Optimized GeoTIFF in the background.",
     "defaultOpacity": "Default opacity (0–1)",
     "attribution": "Attribution",
@@ -1677,8 +1678,6 @@
       "northing": "Northing (m)",
       "crsLabel": "Coordinates in",
       "crs": {
-        "wgs84": "WGS 84 (longitude, latitude)",
-        "stereo70": "Stereo 70 (EPSG:3844)",
         "document": "The document's own coordinate system"
       },
       "crsUnavailable": "This installation cannot convert coordinates in that system.",
@@ -1694,6 +1693,11 @@
       "export": "Export placement",
       "import": "Import placement",
       "imported": "Placement imported. The map is being prepared.",
+      "workingSystem": "(working system)",
+      "useStations": "Use pinned stations ({{n}})",
+      "published": "The map is placed and published.",
+      "publishing": "Placing the map…",
+      "publishFailed": "The map could not be published with this placement.",
       "importNotJson": "The file is not a placement file (JSON)."
     },
     "redraw": {

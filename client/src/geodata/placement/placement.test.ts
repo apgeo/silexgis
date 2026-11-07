@@ -12,12 +12,15 @@ import {
   isWktCrs,
   maskOf,
   minimumPoints,
+  orderSystems,
   outlierRows,
   pairsOfPlacement,
   pairsToPlacement,
   residualsByPair,
   previewImageOptions,
   sheetAspect,
+  stationPairs,
+  suggestedTransformation,
   type Corners,
 } from './placement.ts';
 
@@ -204,5 +207,53 @@ describe('the exported placement file', () => {
     expect(annotationFileName('a/b:c?')).toBe('a_b_c_.georef.json');
     expect(annotationFileName('...')).toBe('map.georef.json');
     expect(annotationFileName('x\u0001y')).toBe('x_y.georef.json');
+  });
+});
+
+describe('the coordinate systems offered', () => {
+  it('puts WGS 84 first, then the working system, each once', () => {
+    const ordered = orderSystems([
+      { crs: 'EPSG:2056', name: 'LV95', geographic: false, working: false },
+      { crs: 'EPSG:3844', name: 'Stereo 70', geographic: false, working: true },
+      { crs: 'EPSG:4326', name: 'WGS 84', geographic: true, working: false },
+      { crs: 'EPSG:2056', name: 'LV95', geographic: false, working: false },
+    ]);
+    expect(ordered.map((s) => s.crs)).toEqual(['EPSG:4326', 'EPSG:3844', 'EPSG:2056']);
+  });
+
+  it('offers WGS 84 even when the server has not answered', () => {
+    expect(orderSystems(undefined).map((s) => s.crs)).toEqual(['EPSG:4326']);
+  });
+});
+
+describe('pinned stations as control points', () => {
+  const stations = [
+    { label: 'A1', u: 0.1, v: 0.2, x: 24.001, y: 45.501 },
+    { label: 'A2', u: 0.8, v: 0.3, x: 24.003, y: 45.5015 },
+    { label: 'A3', u: 0.5, v: 0.9, x: 24.002, y: 45.5002 },
+  ];
+
+  it('adds each station under its name, moved into the table’s system', () => {
+    // A stand-in conversion that is easy to see through: the two numbers swapped.
+    const rows = stationPairs(stations, [], (lon, lat) => [lat, lon]);
+    expect(rows).toEqual([
+      { u: 0.1, v: 0.2, x: 45.501, y: 24.001, label: 'A1' },
+      { u: 0.8, v: 0.3, x: 45.5015, y: 24.003, label: 'A2' },
+      { u: 0.5, v: 0.9, x: 45.5002, y: 24.002, label: 'A3' },
+    ]);
+  });
+
+  it('leaves out a station already in the table, or one the system cannot hold', () => {
+    const rows = stationPairs(stations, [{ u: 0.1, v: 0.2, x: 1, y: 2 }], (lon, lat) =>
+      lon > 24.0025 ? null : [lon, lat],
+    );
+    expect(rows.map((r) => r.label)).toEqual(['A3']);
+  });
+
+  it('starts from an affine fit for a few points and a bending one for six or more', () => {
+    expect(suggestedTransformation(2)).toBeNull();
+    expect(suggestedTransformation(3)).toBe('affine');
+    expect(suggestedTransformation(5)).toBe('affine');
+    expect(suggestedTransformation(6)).toBe('polynomial2');
   });
 });

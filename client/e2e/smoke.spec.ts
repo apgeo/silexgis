@@ -391,7 +391,7 @@ test('georeferenced raster upload, COG processing, map overlay and delete', asyn
   // converts it to a Cloud-Optimized GeoTIFF.
   await page.goto('/geodata');
   await page.getByRole('tab', { name: 'Raster maps' }).click();
-  await page.locator('input[type=file][accept=".tif,.tiff,.pdf"]').setInputFiles('e2e/fixtures/e2e-map.tif');
+  await page.locator('input[type=file][accept=".tif,.tiff,.pdf,.png,.jpg,.jpeg"]').setInputFiles('e2e/fixtures/e2e-map.tif');
   // Newest first (the table sorts by update time) — robust to leftovers from aborted runs.
   const row = page.getByRole('row', { name: /e2e-map/ }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });

@@ -3,20 +3,13 @@ import { transform } from 'ol/proj';
 import { isWktCrs, type PointPair } from '../../../geodata/placement/placement.ts';
 import { canPlace, resolveProjection } from '../../../map/projections.ts';
 
-/**
- * The coordinate systems control points can be typed in. Longitude and latitude always; Stereo 70
- * besides, the grid Romanian maps are drawn in, whose definition comes from this installation's
- * own registry the first time it is chosen.
+/*
+ * Conversions between longitude and latitude and the systems control points are typed in. Which
+ * systems are offered is the server's answer; their definitions come from this installation's own
+ * registry the first time one is used.
  */
-export const TYPED_CRS = ['EPSG:4326', 'EPSG:3844'] as const;
-export type TypedCrs = (typeof TYPED_CRS)[number];
 
-export const CRS_LABEL_KEYS: Readonly<Record<TypedCrs, string>> = {
-  'EPSG:4326': 'geodata.placement.crs.wgs84',
-  'EPSG:3844': 'geodata.placement.crs.stereo70',
-};
-
-/** Whether a system's coordinates are degrees, which decides how they are typed. */
+/** Longitude and latitude themselves, which need no conversion at all. */
 export const inDegrees = (crs: string) => crs === 'EPSG:4326';
 
 /** Makes a system usable for conversion; false when the installation cannot define it. */

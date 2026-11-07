@@ -1,7 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AimOutlined, DownloadOutlined, ExpandOutlined, UploadOutlined } from '@ant-design/icons';
-import { Alert, App, Collapse, Flex, Modal, Popconfirm, Segmented, Select, Slider, Typography, Upload } from 'antd';
+import { AimOutlined, DownloadOutlined, EnvironmentOutlined, ExpandOutlined, UploadOutlined } from '@ant-design/icons';
+import {
+  Alert,
+  App,
+  Collapse,
+  Flex,
+  Modal,
+  Popconfirm,
+  Result,
+  Segmented,
+  Select,
+  Slider,
+  Spin,
+  Typography,
+  Upload,
+} from 'antd';
+import { useNavigate } from 'react-router-dom';
 import { toLonLat as projectedToLonLat } from 'ol/proj';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../../api/client.ts';
@@ -10,8 +25,12 @@ import {
   fetchRasterAnnotation,
   useClearRasterPlacement,
   useImportRasterAnnotation,
+  useMapLayers,
+  usePlacementSystems,
   usePreviewRasterPlacement,
+  useRasterMap,
   useSaveRasterPlacement,
+  useSheetStationPoints,
   type RasterMapInfo,
   type RasterMapPlacementPreview,
 } from '../../../api/hooks.ts';
@@ -30,19 +49,27 @@ import {
   isWktCrs,
   maskOf,
   minimumPoints,
+  orderSystems,
   outlierRows,
   pairsOfPlacement,
   pairsToPlacement,
   previewImageOptions,
   residualsByPair,
   sheetAspect,
+  stationPairs,
+  suggestedTransformation,
   type CornerTransformation,
   type Corners,
   type PlacementBody,
   type PlacementTransformation,
   type PointPair,
+  type TypedSystem,
 } from '../../../geodata/placement/placement.ts';
+import { chooseBackground, workspaceBackgroundId } from '../../../map/editorBackground.ts';
+import { fitGeoJsonGeometry } from '../../../map/mapContext.ts';
+import { useWorkspaceStore } from '../../../stores/workspaceStore.ts';
 import Button from '../../Button.tsx';
+import CaveLinkWarning from '../CaveLinkWarning.tsx';
 import ControlPointTable from './ControlPointTable.tsx';
 import { CORNER_LABEL_KEYS } from './cornerLabels.ts';
 import CornerTable from './CornerTable.tsx';
@@ -130,6 +157,16 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
   const save = useSaveRasterPlacement();
   const clear = useClearRasterPlacement();
   const importAnnotation = useImportRasterAnnotation();
+  const navigate = useNavigate();
+  const setRasterVisible = useWorkspaceStore((s) => s.setRasterVisible);
+  const { data: catalogue } = useMapLayers();
+  // Read once: the editor draws over whatever the reader had on the workspace map when it opened.
+  const [activeBackgroundId] = useState(() => workspaceBackgroundId());
+  const background = useMemo(() => chooseBackground(catalogue, activeBackgroundId), [catalogue, activeBackgroundId]);
+  const { data: listedSystems } = usePlacementSystems();
+  // Set once a write has been accepted: the dialog then watches the map until it is published.
+  const [publishing, setPublishing] = useState(false);
+  const { data: watched } = useRasterMap(raster.id, publishing);
 
   const existing = raster.placement ?? null;
   const embedded = raster.placementSource === 'embedded';
@@ -156,6 +193,36 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
 
   const documentCrs = isWktCrs(crs);
   const pointMode = mode !== 'corners';
+  const { data: pinned } = useSheetStationPoints(raster.id, mode === 'controls' && raster.sourceFileId != null);
+
+  // The systems the server offers, less any this installation cannot define for conversion.
+  const ordered = useMemo(() => orderSystems(listedSystems), [listedSystems]);
+  const [usable, setUsable] = useState<TypedSystem[]>(() => ordered.filter((s) => crsMath.inDegrees(s.crs)));
+  useEffect(() => {
+    let current = true;
+    void Promise.all(ordered.map((system) => crsMath.prepareCrs(system.crs))).then((answers) => {
+      if (current) {
+        setUsable(ordered.filter((_, index) => answers[index]));
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, [ordered]);
+  const degrees = documentCrs ? false : (usable.find((s) => s.crs === crs)?.geographic ?? crsMath.inDegrees(crs));
+
+  // A write was accepted: once the map is published the dialog offers to show it; a publishing
+  // that failed sends the sheet back to "needs placement" with the reason, and editing resumes.
+  useEffect(() => {
+    if (!publishing || !watched) {
+      return;
+    }
+    if (watched.status === 'unplaced' || watched.status === 'failed') {
+      setPublishing(false);
+      message.error(watched.processingError || t('geodata.placement.publishFailed'));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the watched answer only
+  }, [publishing, watched]);
   const pointsTransformation: PlacementTransformation = mode === 'points' ? 'similarity' : controlTransformation;
   const needed = minimumPoints(pointsTransformation);
   const complete = completePairs(pairs).length;
@@ -331,7 +398,7 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
     try {
       await save.mutateAsync({ id: raster.id, body });
       message.success(t('geodata.placement.saved'));
-      onClose();
+      setPublishing(true);
     } catch (error) {
       message.error(t(placementErrorKey(codeOf(error))));
     }
@@ -370,7 +437,7 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
     try {
       await importAnnotation.mutateAsync({ id: raster.id, annotation });
       message.success(t('geodata.placement.imported'));
-      onClose();
+      setPublishing(true);
     } catch (error) {
       message.error(t(placementErrorKey(codeOf(error))));
     }
@@ -411,9 +478,66 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
         : t('geodata.placement.controlsHelp');
 
   const crsOptions = [
-    ...crsMath.TYPED_CRS.map((code) => ({ value: code as string, label: t(crsMath.CRS_LABEL_KEYS[code]) })),
+    ...usable.map((system) => ({
+      value: system.crs,
+      label: system.working ? `${system.name} ${t('geodata.placement.workingSystem')}` : system.name,
+    })),
     ...(documentCrs ? [{ value: crs, label: t('geodata.placement.crs.document'), disabled: true }] : []),
   ];
+
+  const addPinnedStations = () => {
+    const added = stationPairs(pinned ?? [], pairs, (lon, lat) => crsMath.fromLonLat(lon, lat, crs));
+    if (added.length === 0) {
+      return;
+    }
+    const next = [...pairs, ...added];
+    setPairs(next);
+    setPicking(null);
+    const suggestion = suggestedTransformation(completePairs(next).length);
+    if (suggestion) {
+      setControlTransformation(suggestion);
+    }
+  };
+
+  const showOnMap = (published: RasterMapInfo) => {
+    setRasterVisible(published.id, true);
+    if (published.bbox) {
+      fitGeoJsonGeometry(published.bbox);
+    }
+    onClose();
+    navigate('/map');
+  };
+
+  if (publishing) {
+    const done = watched?.status === 'ready' ? watched : null;
+    return done ? (
+      <Result
+        status="success"
+        title={t('geodata.placement.published')}
+        data-testid="placement-published"
+        extra={[
+          <Button
+            key="show"
+            type="primary"
+            icon={<EnvironmentOutlined />}
+            onClick={() => showOnMap(done)}
+            data-testid="placement-show-on-map"
+          >
+            {t('geodata.showOnMap')}
+          </Button>,
+          <Button key="close" onClick={onClose} data-testid="placement-close">
+            {t('common.close')}
+          </Button>,
+        ]}
+      />
+    ) : (
+      <Flex vertical align="center" gap={12} style={{ padding: 48 }} data-testid="placement-publishing">
+        <Spin size="large" />
+        <Typography.Text>{t('geodata.placement.publishing')}</Typography.Text>
+        <Button onClick={onClose}>{t('common.close')}</Button>
+      </Flex>
+    );
+  }
 
   return (
     <Flex vertical gap={12}>
@@ -492,6 +616,7 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
         {helpText}
         {mode === 'controls' && ` ${t(TRANSFORMATION_KEYS[controlTransformation].explain)}`}
       </Typography.Text>
+      {raster.sourceFileId != null && raster.caveFeatureId != null && <CaveLinkWarning />}
       {pointMode && embedded && !documentCrs && (
         <Alert type="info" showIcon title={t('geodata.placement.embeddedNote')} />
       )}
@@ -567,6 +692,7 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
             fitRequest={fitRequest}
             onMapClick={onMapClick}
             active={active}
+            background={background}
           />
         </div>
       </Flex>
@@ -602,6 +728,11 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
                 {mode === 'controls' ? t('geodata.placement.addPoints') : t('geodata.placement.addPoint')}
               </Button>
             )}
+            {mode === 'controls' && (pinned?.length ?? 0) > 0 && !documentCrs && (
+              <Button onClick={addPinnedStations} data-testid="placement-use-stations">
+                {t('geodata.placement.useStations', { n: pinned?.length ?? 0 })}
+              </Button>
+            )}
             <Button
               icon={<ExpandOutlined />}
               disabled={!markers.some((m) => m.lonLat !== null)}
@@ -618,7 +749,7 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
           </Flex>
           <ControlPointTable
             points={pairs}
-            crs={crs}
+            degrees={degrees}
             readOnly={documentCrs}
             showLabels={mode === 'controls'}
             residuals={residuals}

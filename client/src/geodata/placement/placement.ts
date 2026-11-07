@@ -337,3 +337,74 @@ export function previewImageOptions(preview: { image: string; extent3857: readon
   }
   return { url: preview.image, imageExtent: [minX, minY, maxX, maxY], projection: 'EPSG:3857' };
 }
+
+/** A coordinate system control points may be typed in, as the server lists them. */
+export interface TypedSystem {
+  crs: string;
+  name: string;
+  geographic: boolean;
+  working: boolean;
+}
+
+export const WGS84_SYSTEM: TypedSystem = { crs: PLACEMENT_CRS, name: 'WGS 84', geographic: true, working: false };
+
+/**
+ * The systems to offer, in the order offered: WGS 84 first (it is always there, whatever the
+ * server listed), then the installation's working system, then the rest as listed, each once.
+ */
+export function orderSystems(listed: readonly TypedSystem[] | undefined): TypedSystem[] {
+  const all = listed ?? [];
+  const wgs = all.find((s) => s.crs === PLACEMENT_CRS) ?? WGS84_SYSTEM;
+  const rest = all.filter((s) => s.crs !== PLACEMENT_CRS);
+  const seen = new Set<string>([PLACEMENT_CRS]);
+  const ordered = [wgs];
+  for (const system of [...rest.filter((s) => s.working), ...rest.filter((s) => !s.working)]) {
+    if (!seen.has(system.crs)) {
+      seen.add(system.crs);
+      ordered.push(system);
+    }
+  }
+  return ordered;
+}
+
+/** A station pinned on the sheet, with where its survey puts it, in degrees. */
+export interface PinnedStation {
+  label: string;
+  u: number;
+  v: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * Pinned stations as control-point rows, their ground halves moved into the system the table is
+ * typed in. A station the conversion cannot place is left out rather than added half-empty; one
+ * already in the table (the same spot on the sheet) is not added twice.
+ */
+export function stationPairs(
+  stations: readonly PinnedStation[],
+  existing: readonly PointPair[],
+  convert: (lon: number, lat: number) => [number, number] | null,
+): PointPair[] {
+  const taken = new Set(existing.map((p) => `${p.u.toFixed(6)},${p.v.toFixed(6)}`));
+  return stations.flatMap((station) => {
+    const key = `${station.u.toFixed(6)},${station.v.toFixed(6)}`;
+    const at = convert(station.x, station.y);
+    if (taken.has(key) || at === null) {
+      return [];
+    }
+    taken.add(key);
+    return [{ u: station.u, v: station.v, x: at[0], y: at[1], label: station.label }];
+  });
+}
+
+/**
+ * The transformation to start from for a number of points: a gentle bend once there are enough
+ * points to support one, an affine fit for a few, and the choice left alone below that.
+ */
+export function suggestedTransformation(points: number): PlacementTransformation | null {
+  if (points >= 6) {
+    return 'polynomial2';
+  }
+  return points >= 3 ? 'affine' : null;
+}

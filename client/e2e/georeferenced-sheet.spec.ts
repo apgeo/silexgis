@@ -17,6 +17,7 @@ import { confirmOk, login } from './helpers.ts';
 
 const SHEET = 'e2e-sheet';
 const GEO_SHEET = 'e2e-geo-sheet';
+const SCAN = 'e2e-scan';
 
 async function openRasterTab(page: Page) {
   await page.goto('/geodata');
@@ -24,7 +25,7 @@ async function openRasterTab(page: Page) {
 }
 
 const upload = (page: Page, file: string) =>
-  page.locator('input[type=file][accept=".tif,.tiff,.pdf"]').setInputFiles(`e2e/fixtures/${file}`);
+  page.locator('input[type=file][accept=".tif,.tiff,.pdf,.png,.jpg,.jpeg"]').setInputFiles(`e2e/fixtures/${file}`);
 
 /** Every row of a name, removed — earlier aborted runs may have left some behind. */
 async function deleteAll(page: Page, name: string) {
@@ -56,6 +57,7 @@ test('a PDF sheet is placed by its corners; a geospatial PDF places itself', asy
   await openRasterTab(page);
   await deleteAll(page, SHEET);
   await deleteAll(page, GEO_SHEET);
+  await deleteAll(page, SCAN);
 
   // A sheet without a place of its own is drawn and then waits for one.
   await upload(page, `${SHEET}.pdf`);
@@ -83,11 +85,12 @@ test('a PDF sheet is placed by its corners; a geospatial PDF places itself', asy
   await expect(editor.getByTestId('placement-preview-state')).toContainText('Fit:');
 
   await editor.getByTestId('placement-save').click();
-  await expect(editor).toBeHidden({ timeout: 15_000 });
-  await expect(row.getByText('Ready')).toBeVisible({ timeout: 60_000 });
+  // The dialog waits for the publishing, then offers to show the result.
+  await expect(editor.getByTestId('placement-show-on-map')).toBeVisible({ timeout: 60_000 });
 
   // Published, it is a map like any other.
-  await row.getByRole('button', { name: 'Show on map' }).click();
+  await editor.getByTestId('placement-show-on-map').click();
+  await expect(editor).toBeHidden({ timeout: 15_000 });
   await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('checkbox', { name: SHEET }).first()).toBeChecked();
 
@@ -128,6 +131,7 @@ test('a PDF sheet is placed by its corners; a geospatial PDF places itself', asy
   });
   await expect(editor.getByTestId('placement-map')).toHaveAttribute('data-preview', 'loaded', { timeout: 15_000 });
   await editor.getByTestId('placement-save').click();
+  await editor.getByTestId('placement-close').click({ timeout: 60_000 });
   await expect(editor).toBeHidden({ timeout: 15_000 });
   await expect(again.getByText('Ready')).toBeVisible({ timeout: 60_000 });
 
@@ -146,8 +150,16 @@ test('a PDF sheet is placed by its corners; a geospatial PDF places itself', asy
   const imported = await importing;
   expect(imported.status()).toBe(200);
   expect(((await imported.json()) as { placementSource: string }).placementSource).toBe('manual');
+  await editor.getByTestId('placement-close').click({ timeout: 60_000 });
   await expect(editor).toBeHidden({ timeout: 15_000 });
   await expect(again.getByText('Ready')).toBeVisible({ timeout: 60_000 });
 
   await deleteAll(page, SHEET);
+
+  // A scanned picture with no place of its own waits to be placed, like a plain sheet.
+  await deleteAll(page, SCAN);
+  await upload(page, `${SCAN}.png`);
+  const scan = page.getByRole('row', { name: new RegExp(`^${SCAN}\\b`) }).first();
+  await expect(scan.getByText('Needs placement')).toBeVisible({ timeout: 60_000 });
+  await deleteAll(page, SCAN);
 });

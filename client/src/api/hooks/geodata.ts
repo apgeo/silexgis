@@ -190,6 +190,43 @@ export function usePreviewRasterPlacement() {
   });
 }
 
+export type PlacementSystem = components['schemas']['PlacementSystemDto'];
+export type SheetStationPoint = components['schemas']['SheetStationPointDto'];
+
+/**
+ * One map, watched while its publishing runs: asked again every two seconds until it settles.
+ * Kept under the list's key, so every write that refreshes the list refreshes this too.
+ */
+export function useRasterMap(id: string | undefined, watch = false) {
+  return useQuery({
+    queryKey: ['raster-maps', 'detail', id ?? ''] as const,
+    queryFn: () => unwrap(api.GET('/api/v1/georeferenced-maps/{id}', { params: { path: { id: id! } } })),
+    enabled: Boolean(id) && watch,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'uploaded' || query.state.data?.status === 'processing' ? 2000 : false,
+  });
+}
+
+/** The coordinate systems control points may be typed in on this installation. */
+export function usePlacementSystems() {
+  return useQuery({
+    queryKey: ['raster-maps', 'placement-systems'] as const,
+    queryFn: () => unwrap(api.GET('/api/v1/georeferenced-maps/placement-systems')),
+    staleTime: 30 * 60_000,
+  });
+}
+
+/** Survey stations pinned on a sheet's picture, with where the survey puts them. */
+export function useSheetStationPoints(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['raster-maps', 'station-points', id ?? ''] as const,
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/georeferenced-maps/{id}/station-points', { params: { path: { id: id! } } })),
+    enabled: Boolean(id) && enabled,
+    retry: false,
+  });
+}
+
 /** The sheet's placement as a IIIF Georeference Annotation, for saving to a file (not a hook). */
 export async function fetchRasterAnnotation(id: string): Promise<unknown> {
   return unwrap(api.GET('/api/v1/georeferenced-maps/{id}/placement/annotation', { params: { path: { id } } }));

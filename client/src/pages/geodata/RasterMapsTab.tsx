@@ -34,6 +34,7 @@ import {
   type RasterMapInfo,
 } from '../../api/hooks.ts';
 import WorldFilterBar from '../../components/filters/WorldFilterBar.tsx';
+import CaveLinkWarning from '../../components/geodata/CaveLinkWarning.tsx';
 import PlacementEditorModal from '../../components/geodata/placement/PlacementEditorModal.tsx';
 import RedrawSheetModal from '../../components/geodata/RedrawSheetModal.tsx';
 import { readWorldFilter, worldToken, writeWorldFilter } from '../../filters/worldList.ts';
@@ -81,7 +82,7 @@ interface EditFormValues {
 }
 
 /**
- * Georeferenced raster maps: upload GeoTIFFs or map sheets in PDF, watch them being processed,
+ * Georeferenced raster maps: upload GeoTIFFs, map sheets in PDF or scanned maps, watch them processed,
  * place a sheet that carries no position of its own, manage, show on map.
  */
 export default function RasterMapsTab() {
@@ -106,6 +107,8 @@ export default function RasterMapsTab() {
   const [placing, setPlacing] = useState<RasterMapInfo | null>(null);
   const [redrawing, setRedrawing] = useState<RasterMapInfo | null>(null);
   const [form] = Form.useForm<EditFormValues>();
+  // Watched rather than read on save, so the warning appears the moment a cave is picked.
+  const linkedCave = Form.useWatch('caveFeatureId', form);
 
   const canEdit = useCan('georeferencedMaps', 'write');
   const canUpload = useCan('georeferencedMaps', 'create');
@@ -174,7 +177,7 @@ export default function RasterMapsTab() {
       {canUpload && (
         <Upload.Dragger
           multiple
-          accept=".tif,.tiff,.pdf"
+          accept=".tif,.tiff,.pdf,.png,.jpg,.jpeg"
           showUploadList={false}
           customRequest={({ file, onSuccess, onError }) => {
             upload
@@ -330,7 +333,11 @@ export default function RasterMapsTab() {
         confirmLoading={update.isPending}
         destroyOnHidden
       >
-        <Form<EditFormValues> form={form} layout="vertical">
+        {/* Until the form has reported its first value the stored link stands for it. */}
+        {editing !== null && isSheet(editing) && (linkedCave !== undefined ? linkedCave : editing.caveFeatureId) != null && (
+          <CaveLinkWarning />
+        )}
+        <Form<EditFormValues> form={form} layout="vertical" style={{ marginTop: 12 }}>
           <Form.Item name="name" label={t('geodata.name')} rules={[{ required: true }]}>
             <Input maxLength={200} />
           </Form.Item>

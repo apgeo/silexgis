@@ -252,9 +252,34 @@ describe('RasterMapsTab — map sheets drawn from a document', () => {
     );
   }
 
-  it('takes a PDF as well as a GeoTIFF', () => {
+  it('takes a PDF and a scanned picture as well as a GeoTIFF', () => {
     const { container } = mount([]);
-    expect(container.querySelector('input[type=file]')?.getAttribute('accept')).toBe('.tif,.tiff,.pdf');
+    expect(container.querySelector('input[type=file]')?.getAttribute('accept')).toBe(
+      '.tif,.tiff,.pdf,.png,.jpg,.jpeg',
+    );
+  });
+
+  it('warns, in the editor, once a sheet is linked to a cave', () => {
+    const { container } = mount([{ ...sheet('ready'), caveFeatureId: 'cave-1' }]);
+    fireEvent.click(container.querySelector('.anticon-edit')!.closest('button')!);
+    expect(screen.getByTestId('sheet-cave-warning')).toBeTruthy();
+  });
+
+  it('does not warn for a sheet linked to no cave, nor for a GeoTIFF linked to one', () => {
+    const { container } = mount([sheet('ready'), { ...raster('cave-1'), id: 'tif-1', name: 'Harta 2' }]);
+    const edits = container.querySelectorAll('.anticon-edit');
+    fireEvent.click(edits[0].closest('button')!);
+    expect(screen.queryByTestId('sheet-cave-warning')).toBeNull();
+  });
+
+  it('warns the moment a cave is picked for a sheet', async () => {
+    const { container } = mount([sheet('ready')]);
+    fireEvent.click(container.querySelector('.anticon-edit')!.closest('button')!);
+    expect(screen.queryByTestId('sheet-cave-warning')).toBeNull();
+    fireEvent.click(screen.getByTestId('raster-map-cave-picker'));
+    fireEvent.change(screen.getByTestId('raster-map-cave-picker-input'), { target: { value: 'pe' } });
+    fireEvent.click(await screen.findByRole('button', { name: /Peștera 2/ }, { timeout: 3000 }));
+    expect(await screen.findByTestId('sheet-cave-warning')).toBeTruthy();
   });
 
   it('names an unplaced sheet as needing placement and opens the editor for it', () => {

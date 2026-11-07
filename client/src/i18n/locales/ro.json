@@ -1560,7 +1560,8 @@
     "mapKind": "Tip",
     "editRaster": "Editare hartă raster",
     "deleteRasterConfirm": "Ștergi această hartă raster?",
-    "rasterUploadPrompt": "Apasă sau trage aici fișiere GeoTIFF georeferențiate sau planșe de hartă PDF",
+    "rasterUploadPrompt": "Apasă sau trage aici fișiere GeoTIFF georeferențiate, planșe de hartă PDF sau hărți scanate (PNG, JPEG)",
+    "caveLinkWarning": "Fișierul original al acestei planșe este un document al tău. Dacă partajezi acel document cu cineva, îi dai și planșa — și, odată cu ea, locul peșterii.",
     "rasterUploadHint": "Convertite în fundal în Cloud-Optimized GeoTIFF.",
     "defaultOpacity": "Opacitate implicită (0–1)",
     "attribution": "Atribuire",
@@ -1677,8 +1678,6 @@
       "northing": "Nord (m)",
       "crsLabel": "Coordonate în",
       "crs": {
-        "wgs84": "WGS 84 (longitudine, latitudine)",
-        "stereo70": "Stereo 70 (EPSG:3844)",
         "document": "Sistemul de coordonate al documentului"
       },
       "crsUnavailable": "Această instalare nu poate converti coordonate în acest sistem.",
@@ -1694,6 +1693,11 @@
       "export": "Exportă poziția",
       "import": "Importă poziția",
       "imported": "Poziția a fost importată. Harta se pregătește.",
+      "workingSystem": "(sistemul de lucru)",
+      "useStations": "Folosește stațiile marcate pe planșă ({{n}})",
+      "published": "Harta a fost poziționată și publicată.",
+      "publishing": "Se poziționează harta…",
+      "publishFailed": "Harta nu a putut fi publicată cu această poziție.",
       "importNotJson": "Fișierul nu este un fișier de poziționare (JSON)."
     },
     "redraw": {

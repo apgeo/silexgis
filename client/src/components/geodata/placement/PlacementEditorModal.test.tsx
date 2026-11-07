@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App } from 'antd';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../../i18n';
 import { ApiError } from '../../../api/client.ts';
@@ -17,6 +18,15 @@ const preview = vi.fn();
 const save = vi.fn();
 const clear = vi.fn();
 const importAnnotation = vi.fn();
+const fitGeometry = vi.fn();
+const navigateTo = vi.fn();
+const live = vi.hoisted(() => ({
+  /** What the map's own reading answers while the dialog watches it publish. */
+  watched: undefined as unknown,
+  systems: undefined as unknown,
+  stations: undefined as unknown,
+  background: null as unknown,
+}));
 
 vi.mock('../../../api/hooks.ts', () => ({
   usePreviewRasterPlacement: () => ({ mutateAsync: preview, isPending: false }),
@@ -24,6 +34,24 @@ vi.mock('../../../api/hooks.ts', () => ({
   useClearRasterPlacement: () => ({ mutateAsync: clear, isPending: false }),
   useImportRasterAnnotation: () => ({ mutateAsync: importAnnotation, isPending: false }),
   fetchRasterAnnotation: vi.fn(),
+  useMapLayers: () => ({ data: [] }),
+  usePlacementSystems: () => ({ data: live.systems }),
+  useRasterMap: (_id: string, watch: boolean) => ({ data: watch ? live.watched : undefined }),
+  useSheetStationPoints: (_id: string, enabled: boolean) => ({ data: enabled ? live.stations : undefined }),
+}));
+
+vi.mock('../../../map/editorBackground.ts', () => ({
+  workspaceBackgroundId: () => undefined,
+  chooseBackground: () => live.background,
+}));
+
+vi.mock('../../../map/mapContext.ts', () => ({
+  fitGeoJsonGeometry: (geometry: unknown) => fitGeometry(geometry),
+}));
+
+vi.mock('react-router-dom', async (original) => ({
+  ...(await original<typeof import('react-router-dom')>()),
+  useNavigate: () => navigateTo,
 }));
 
 // No grid definitions here: longitude and latitude need none, and a grid is the server's to define.
@@ -42,6 +70,7 @@ vi.mock('./PlacementMap.tsx', async () => {
       preview: shown,
       onMapClick,
       markers,
+      background,
     }: PlacementMapProps) {
       useEffect(() => {
         // A box in the map's projection around 24.0 E 45.5 N.
@@ -53,6 +82,7 @@ vi.mock('./PlacementMap.tsx', async () => {
           data-testid="fake-map"
           data-preview={shown ? 'yes' : 'no'}
           data-markers={markers.filter((m) => m.lonLat !== null).length}
+          data-background={background === null ? 'fallback' : 'catalogue'}
         >
           <button data-testid="fake-map-click" onClick={() => onMapClick?.([24.003, 45.501])} />
           <button
@@ -150,9 +180,11 @@ const onClose = vi.fn();
 
 function show(raster: RasterMapInfo = sheet()) {
   return render(
-    <App>
-      <PlacementEditorModal raster={raster} onClose={onClose} />
-    </App>,
+    <MemoryRouter>
+      <App>
+        <PlacementEditorModal raster={raster} onClose={onClose} />
+      </App>
+    </MemoryRouter>,
   );
 }
 
@@ -164,6 +196,12 @@ beforeEach(() => {
   save.mockReset().mockResolvedValue(sheet({ status: 'processing' }));
   clear.mockReset().mockResolvedValue(sheet({ status: 'unplaced' }));
   importAnnotation.mockReset().mockResolvedValue(sheet({ status: 'processing' }));
+  fitGeometry.mockReset();
+  navigateTo.mockReset();
+  live.watched = undefined;
+  live.systems = undefined;
+  live.stations = undefined;
+  live.background = null;
   onClose.mockReset();
 });
 
@@ -226,14 +264,38 @@ describe('the placement editor', () => {
     expect(await screen.findByText(/Top left: 0\.50 m/)).toBeInTheDocument();
   });
 
-  it('saves exactly what it last previewed, then closes', async () => {
+  it('saves exactly what it last previewed, then waits for the map to be published', async () => {
+    live.watched = sheet({ status: 'processing' });
     show();
     fireEvent.click(screen.getByText('Keep parallel'));
     await waitFor(() => expect(lastPreview()?.body.transformation).toBe('affine'));
     fireEvent.click(screen.getByTestId('placement-save'));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({ id: 'sheet-1', body: lastPreview().body });
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(await screen.findByTestId('placement-publishing')).toHaveTextContent('Placing the map…');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('offers to show the map once it is published, as the list does', async () => {
+    const bbox = { type: 'Polygon', coordinates: [[[24, 45.5], [24.004, 45.5], [24.004, 45.502], [24, 45.5]]] };
+    live.watched = sheet({ status: 'ready', bbox: bbox as RasterMapInfo['bbox'] });
+    show();
+    await waitFor(() => expect(preview).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('placement-save'));
+    fireEvent.click(await screen.findByTestId('placement-show-on-map'));
+    expect(fitGeometry).toHaveBeenCalledWith(bbox);
+    expect(navigateTo).toHaveBeenCalledWith('/map');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('goes back to editing, with the reason, when publishing fails', async () => {
+    live.watched = sheet({ status: 'unplaced', processingError: 'The placement folds the sheet over itself.' });
+    show();
+    await waitFor(() => expect(preview).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('placement-save'));
+    expect(await screen.findByText('The placement folds the sheet over itself.')).toBeInTheDocument();
+    expect(screen.getByTestId('placement-save')).toBeEnabled();
+    expect(screen.queryByTestId('placement-publishing')).toBeNull();
   });
 
   it('says what a refused preview means, in words', async () => {
@@ -391,7 +453,8 @@ describe('the placement editor with control points', () => {
     expect(screen.queryByTestId('placement-point-0-lon')).toBeNull();
   });
 
-  it('imports a placement file and closes', async () => {
+  it('imports a placement file and waits for it to be published', async () => {
+    live.watched = sheet({ status: 'processing' });
     show();
     const annotation = { type: 'Annotation', body: { type: 'FeatureCollection', features: [] } };
     const input = document.querySelector('input[type=file][accept=".json,application/json"]') as HTMLInputElement;
@@ -399,7 +462,7 @@ describe('the placement editor with control points', () => {
       target: { files: [new File([JSON.stringify(annotation)], 'e2e.georef.json', { type: 'application/json' })] },
     });
     await waitFor(() => expect(importAnnotation).toHaveBeenCalledWith({ id: 'sheet-1', annotation }));
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(await screen.findByTestId('placement-publishing')).toBeInTheDocument();
   });
 
   it('says so when the file is not JSON', async () => {
@@ -408,5 +471,61 @@ describe('the placement editor with control points', () => {
     fireEvent.change(input, { target: { files: [new File(['not json'], 'x.json')] } });
     expect(await screen.findByText('The file is not a placement file (JSON).')).toBeInTheDocument();
     expect(importAnnotation).not.toHaveBeenCalled();
+  });
+});
+
+describe('the placement editor and what the installation knows', () => {
+  const unplaced = (overrides: Partial<RasterMapInfo> = {}) =>
+    sheet({ status: 'unplaced', placement: null, placementSource: null, ...overrides });
+
+  it('warns that a cave-linked sheet’s document carries the cave’s location', () => {
+    show(unplaced({ caveFeatureId: 'cave-1' }));
+    expect(screen.getByTestId('sheet-cave-warning')).toHaveTextContent(
+      'Sharing that document shares the sheet — and with it the cave',
+    );
+  });
+
+  it('says nothing of the kind for a sheet linked to no cave', () => {
+    show(unplaced());
+    expect(screen.queryByTestId('sheet-cave-warning')).toBeNull();
+  });
+
+  it('offers the systems the server lists, WGS 84 first and the working one named', async () => {
+    live.systems = [
+      { crs: 'EPSG:3844', name: 'Stereo 70', geographic: false, working: true },
+      { crs: 'EPSG:4326', name: 'WGS 84', geographic: true, working: false },
+    ];
+    show(unplaced());
+    fireEvent.click(screen.getByText('Control points'));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Coordinates in' }));
+    // The grid cannot be defined here (no registry in a test), so only WGS 84 is offered.
+    expect(await screen.findAllByText('WGS 84')).not.toHaveLength(0);
+    expect(screen.queryByText('Stereo 70 (working system)')).toBeNull();
+  });
+
+  it('adds the stations pinned on the sheet and starts from a bending fit for six or more', async () => {
+    live.stations = Array.from({ length: 6 }, (_, i) => ({
+      label: `St${i}`,
+      u: 0.1 + i * 0.1,
+      v: 0.2 + (i % 2) * 0.5,
+      x: 24 + i * 0.0005,
+      y: 45.5 + (i % 2) * 0.001,
+      surveyModelId: 'survey-1',
+    }));
+    show(unplaced());
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByText('Control points'));
+    fireEvent.click(await screen.findByTestId('placement-use-stations'));
+    expect(screen.getByTestId('placement-point-5-label')).toHaveValue('St5');
+    await waitFor(() => expect(lastPreview().body.transformation).toBe('polynomial2'));
+    expect(lastPreview().body.gcps).toHaveLength(6);
+    expect(lastPreview().body.gcps[0]).toMatchObject({ u: 0.1, v: 0.2, x: 24, y: 45.5, label: 'St0' });
+  });
+
+  it('hides the button when no station is pinned', () => {
+    live.stations = [];
+    show(unplaced());
+    fireEvent.click(screen.getByText('Control points'));
+    expect(screen.queryByTestId('placement-use-stations')).toBeNull();
   });
 });

@@ -5,14 +5,13 @@ import { useTranslation } from 'react-i18next';
 import { formatMetres, type PointPair } from '../../../geodata/placement/placement.ts';
 import Button from '../../Button.tsx';
 import CoordinateInput from './CoordinateInput.tsx';
-import { inDegrees } from './crs.ts';
 
 interface Props {
   points: readonly PointPair[];
   onChange: (index: number, next: PointPair) => void;
   onRemove: (index: number) => void;
-  /** The system the ground halves are typed in. */
-  crs?: string;
+  /** Whether the ground halves are typed in degrees rather than in metres of a grid. */
+  degrees?: boolean;
   /** Points shown as they are, for a system that cannot be typed in here. */
   readOnly?: boolean;
   /** A label column, for the mode where points are many and worth naming. */
@@ -32,14 +31,13 @@ export default function ControlPointTable({
   points,
   onChange,
   onRemove,
-  crs = 'EPSG:4326',
+  degrees = true,
   readOnly = false,
   showLabels = false,
   residuals,
   outliers,
 }: Props) {
   const { t } = useTranslation();
-  const degrees = inDegrees(crs);
   const xTitle = degrees ? t('geodata.placement.longitude') : t('geodata.placement.easting');
   const yTitle = degrees ? t('geodata.placement.latitude') : t('geodata.placement.northing');
   const bounds = degrees

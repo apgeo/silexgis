@@ -9,15 +9,16 @@ import Point from 'ol/geom/Point';
 import Polygon from 'ol/geom/Polygon';
 import { Modify, Translate } from 'ol/interaction';
 import ImageLayer from 'ol/layer/Image';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import { fromLonLat, toLonLat, transformExtent } from 'ol/proj';
 import ImageStatic from 'ol/source/ImageStatic';
 import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
 import { useTranslation } from 'react-i18next';
 import { CORNER_IDS, type CornerId, type Corners } from '../../../geodata/placement/placement.ts';
+import type { MapLayerInfo } from '../../../api/hooks.ts';
+import type { BackgroundLayer } from '../../../map/baseLayers.ts';
+import { editorBackgroundLayer } from '../../../map/editorBackground.ts';
 import { mapLonLatExtent } from '../../../map/mapContext.ts';
 import { coarsePointer } from '../../../map/pointer.ts';
 
@@ -49,6 +50,8 @@ export interface PlacementMapProps {
   onMapClick?: (lonLat: [number, number]) => void;
   /** Whether the dialog has finished opening, so the map can measure its box again. */
   active: boolean;
+  /** The catalogue background to draw under the sheet; null draws the fallback background. */
+  background: MapLayerInfo | null;
 }
 
 export interface PlacementMarker {
@@ -86,8 +89,11 @@ export default function PlacementMap({
   fitRequest = 0,
   onMapClick,
   active,
+  background,
 }: PlacementMapProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const backgroundLayer = useRef<BackgroundLayer | null>(null);
+  const firstBackground = useRef(background);
   const { token } = theme.useToken();
   const target = useRef<HTMLDivElement | null>(null);
   const map = useRef<Map | null>(null);
@@ -202,15 +208,11 @@ export default function PlacementMap({
     const pointStyle = (feature: { get: (key: string) => unknown }) =>
       markStyle(feature, feature.get('outlier') === true ? token.colorError : token.colorPrimary);
     pointLayer.current = new VectorLayer({ source: pointSource.current, style: pointStyle });
+    backgroundLayer.current = editorBackgroundLayer(firstBackground.current, i18n.language);
     const instance = new Map({
       target: target.current,
       layers: [
-        new TileLayer({
-          source: new XYZ({
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            attributions: '© OpenStreetMap contributors',
-          }),
-        }),
+        backgroundLayer.current,
         imageLayer.current,
         outlineLayer.current,
         handleLayer.current,
@@ -303,6 +305,25 @@ export default function PlacementMap({
       map.current?.updateSize();
     }
   }, [active]);
+
+  // The catalogue may answer after the map is built; its background then replaces the fallback.
+  const backgroundId = background?.id ?? null;
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || (backgroundId ?? null) === (firstBackground.current?.id ?? null)) {
+      return;
+    }
+    firstBackground.current = background;
+    const next = editorBackgroundLayer(background, i18n.language);
+    const layers = instance.getLayers();
+    if (backgroundLayer.current) {
+      layers.remove(backgroundLayer.current);
+      backgroundLayer.current.dispose();
+    }
+    layers.insertAt(0, next);
+    backgroundLayer.current = next;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the entry is named by its id
+  }, [backgroundId]);
 
   useEffect(() => {
     if (corners && map.current) {
