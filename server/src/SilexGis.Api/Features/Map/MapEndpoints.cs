@@ -176,6 +176,18 @@ public sealed record TerrainBuildChoiceDto(
 /// The size above which the scene asks before downloading the walls of a selected cave; 0 asks
 /// before every one. A default: a person may set their own for their browser.
 /// </param>
+/// <param name="ScansInViewMinZoom">
+/// The zoom from which a scene may ask for the placed point clouds of every cave in its view.
+/// </param>
+/// <param name="ScansInViewMaxCaves">
+/// The most caves one such request answers with when it names no count of its own.
+/// </param>
+/// <param name="ScansInViewMaxBytes">
+/// How many bytes of point-cloud tiles a scene may hold at once for the caves in its view,
+/// counted in the archive sizes the listing states. Spent by the scene, like the meshes' budget.
+/// </param>
+/// <param name="ScansInViewMaxCavesLimit">The most caves a person may raise their own scan count to.</param>
+/// <param name="ScansInViewMaxBytesLimit">The most bytes a person may raise their own tile budget to.</param>
 /// <param name="DensityFixedBands">
 /// The upper bounds, in caves per square kilometre and ascending, of the fixed bands the
 /// cave-density layer colours by when a reader chooses fixed rather than relative bands; the band
@@ -197,6 +209,11 @@ public sealed record MapConfigDto(
     int MeshesInViewMaxCavesLimit,
     long MeshesInViewMaxBytesLimit,
     long MeshAskAboveBytes,
+    int ScansInViewMinZoom,
+    int ScansInViewMaxCaves,
+    long ScansInViewMaxBytes,
+    int ScansInViewMaxCavesLimit,
+    long ScansInViewMaxBytesLimit,
     int SelectionMax,
     IReadOnlyList<double> DensityFixedBands);
 
@@ -323,6 +340,11 @@ public static class MapEndpoints
             options.MeshesInViewMaxCavesLimit,
             options.MeshesInViewMaxBytesLimit,
             Math.Max(0, options.MeshAskAboveBytes),
+            options.ScansInViewMinZoom,
+            options.ScansInViewCaves(),
+            options.ScansInViewBytes(),
+            options.ScansInViewMaxCavesLimit,
+            options.ScansInViewMaxBytesLimit,
             options.SelectionMax,
             options.DensityFixedBandBounds()));
     }

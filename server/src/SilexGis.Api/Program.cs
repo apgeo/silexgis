@@ -623,6 +623,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapMapKarstIndexEndpoints();
     api.MapMapPointPatternEndpoints();
     api.MapMapCaveMeshEndpoints();
+    api.MapMapCaveScanEndpoints();
     api.MapSearchEndpoints();
     api.MapDashboardEndpoints();
     api.MapCalendarEndpoints();
