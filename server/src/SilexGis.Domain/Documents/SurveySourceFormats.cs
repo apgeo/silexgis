@@ -14,6 +14,9 @@ public enum SurveySourceEvidence
 
     /// <summary>A ZIP container — an exported project bundle.</summary>
     ZipArchive = 1,
+
+    /// <summary>A LAS file — the four bytes <c>LASF</c> open every LAS and LAZ file.</summary>
+    LasFile = 2,
 }
 
 /// <summary>
@@ -60,7 +63,26 @@ public static class SurveySourceFormats
 
         // A survey app's export bundle, which is a ZIP whatever it holds inside.
         (".zip", SurveySourceKind.TopoDroidArchive),
+
+        // A scan's point cloud. One kind for both spellings: a LAZ file is a LAS file whose
+        // points are compressed, and its header — the part that is read — is the same.
+        (".laz", SurveySourceKind.PointCloud),
+        (".las", SurveySourceKind.PointCloud),
     ];
+
+    /// <summary>The IANA media type of a LAS or LAZ point cloud.</summary>
+    public const string PointCloudMediaType = "application/vnd.las";
+
+    /// <summary>
+    /// Whether a source of this kind may be archived on its own from the web. A point cloud may
+    /// not: it arrives only as a survey upload, which reads its header and makes the model that
+    /// shows it, and a cloud archived without that would be a file nothing can show.
+    /// </summary>
+    public static bool ArchivableOnTheWeb(SurveySourceKind kind) => kind != SurveySourceKind.PointCloud;
+
+    /// <summary>The extensions the web's archive route accepts: every accepted one but the point cloud's.</summary>
+    public static IReadOnlyList<string> WebAcceptedExtensions { get; } =
+        [.. Extensions.Where(e => ArchivableOnTheWeb(e.Kind)).Select(e => e.Extension).Distinct(StringComparer.Ordinal)];
 
     /// <summary>Every extension this archive accepts, lower-cased and dotted.</summary>
     public static IReadOnlyList<string> AcceptedExtensions { get; } =
@@ -93,6 +115,7 @@ public static class SurveySourceFormats
     public static SurveySourceEvidence EvidenceFor(SurveySourceKind kind) => kind switch
     {
         SurveySourceKind.TopoDroidArchive => SurveySourceEvidence.ZipArchive,
+        SurveySourceKind.PointCloud => SurveySourceEvidence.LasFile,
         _ => SurveySourceEvidence.Text,
     };
 
@@ -119,6 +142,9 @@ public static class SurveySourceFormats
                 signature is not null
                 && string.Equals(
                     signature.MimeType, FileFormats.ZipContainerMimeType, StringComparison.Ordinal),
+            // The shared signature table does not know LAS, so the file's own magic is asked for
+            // here: the reader that follows checks the rest of the header.
+            SurveySourceEvidence.LasFile => signature is null && header.StartsWith("LASF"u8),
             _ => signature is null && FileFormats.LooksLikeText(header),
         };
     }
@@ -141,6 +167,7 @@ public static class SurveySourceFormats
         SurveySourceKind.TherionLog => "application/x-therion-log",
         SurveySourceKind.SurvexSource => "application/x-survex",
         SurveySourceKind.TopoDroidArchive => FileFormats.ZipContainerMimeType,
+        SurveySourceKind.PointCloud => PointCloudMediaType,
         _ => FileFormats.UnknownMimeType,
     };
 
@@ -148,10 +175,12 @@ public static class SurveySourceFormats
     /// What the file was expected to contain, in words worth putting in front of whoever
     /// uploaded it.
     /// </summary>
-    public static string ExpectedContent(SurveySourceKind kind) =>
-        EvidenceFor(kind) == SurveySourceEvidence.ZipArchive
-            ? "a ZIP archive"
-            : "a text file";
+    public static string ExpectedContent(SurveySourceKind kind) => EvidenceFor(kind) switch
+    {
+        SurveySourceEvidence.ZipArchive => "a ZIP archive",
+        SurveySourceEvidence.LasFile => "a LAS or LAZ point cloud",
+        _ => "a text file",
+    };
 
     private static string? ExtensionOf(string? fileName)
     {

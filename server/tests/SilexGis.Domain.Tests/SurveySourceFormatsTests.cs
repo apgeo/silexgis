@@ -89,6 +89,21 @@ public sealed class SurveySourceFormatsTests
     }
 
     [Fact]
+    public void A_point_cloud_is_claimed_by_either_spelling_and_shown_by_its_magic_not_the_web()
+    {
+        SurveySourceFormats.ClaimedKind("scan.laz").ShouldBe(SurveySourceKind.PointCloud);
+        SurveySourceFormats.ClaimedKind("SCAN.LAS").ShouldBe(SurveySourceKind.PointCloud);
+        SurveySourceFormats.ContentMatches(SurveySourceKind.PointCloud, "LASF\0\0\0\0"u8).ShouldBeTrue();
+        SurveySourceFormats.ContentMatches(SurveySourceKind.PointCloud, TherionText()).ShouldBeFalse();
+        SurveySourceFormats.ContentMatches(SurveySourceKind.PointCloud, Executable()).ShouldBeFalse();
+        SurveySourceFormats.ContentMatches(SurveySourceKind.TopoDroidArchive, "LASF\0\0\0\0"u8).ShouldBeFalse();
+        SurveySourceFormats.MediaTypeFor(SurveySourceKind.PointCloud).ShouldBe("application/vnd.las");
+        SurveySourceFormats.ArchivableOnTheWeb(SurveySourceKind.PointCloud).ShouldBeFalse();
+        SurveySourceFormats.WebAcceptedExtensions.ShouldNotContain(".laz");
+        SurveySourceFormats.AcceptedExtensions.ShouldContain(".laz");
+    }
+
+    [Fact]
     public void An_empty_file_claims_nothing_and_matches_nothing()
     {
         foreach (var kind in Enum.GetValues<SurveySourceKind>())

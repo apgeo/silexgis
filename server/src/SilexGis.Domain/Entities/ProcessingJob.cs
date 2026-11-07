@@ -232,6 +232,14 @@ public static class ProcessingJobKinds
     public const string SurveyUploadPipeline = "survey-upload-pipeline";
 
     /// <summary>
+    /// The same run for an upload that is a point cloud, under a kind of its own because of where
+    /// it waits: tiling a cloud is minutes to hours in the worker, and a wait that long on the
+    /// general lane would stand in front of every conversion and import behind it. Payload and
+    /// handler are the survey upload's; only the lane differs.
+    /// </summary>
+    public const string PointCloudPipeline = "point-cloud-pipeline";
+
+    /// <summary>
     /// Closes survey uploads whose device stopped sending before every file arrived. The files
     /// that did arrive stay archived — they are the caver's. Payload: <c>{}</c>.
     /// </summary>
@@ -265,8 +273,12 @@ public static class ProcessingJobKinds
     /// A basemap download is here for the first reason only: a country is minutes of downloading,
     /// and on the general lane every import and conversion behind it would wait for all of them.
     /// </para>
+    /// <para>
+    /// A point cloud's run is here for the first reason as well: it waits on a worker that takes
+    /// minutes to hours over one cloud.
+    /// </para>
     /// </remarks>
-    public static readonly IReadOnlyList<string> TerrainLane = [TerrainBuild, TerrainDerivative, BasemapExtract];
+    public static readonly IReadOnlyList<string> TerrainLane = [TerrainBuild, TerrainDerivative, BasemapExtract, PointCloudPipeline];
 
     /// <summary>
     /// The kinds nobody is waiting on, which a worker takes only when no other job of its lane is

@@ -143,6 +143,22 @@ public class SurveyUploadPublicLinksTests
             .ShouldBe(["active", "pending", "pending", "pending", "pending", "pending"]);
     }
 
+    [Fact]
+    public void A_point_clouds_stage_list_is_its_own_runs_not_the_survey_archives()
+    {
+        SurveyUploadPublicLinks.StageStates(SurveyOrigin.PointCloud, SurveyUploadStatus.Succeeded, SurveyUploadStage.Tile, compile: false)
+            .Select(s => s.Stage)
+            .ShouldBe([SurveyUploadStage.Archive, SurveyUploadStage.Inspect, SurveyUploadStage.Downsample, SurveyUploadStage.Tile, SurveyUploadStage.Store]);
+        // Ended at tiling for want of a worker: everything up to it done, storing never reached;
+        // nothing is skipped for not compiling, because no stage of this run compiles.
+        States(SurveyUploadStatus.Succeeded, SurveyUploadStage.Tile, compile: false, SurveyOrigin.PointCloud)
+            .ShouldBe(["done", "done", "done", "done", "skipped"]);
+        States(SurveyUploadStatus.Running, SurveyUploadStage.Inspect, compile: false, SurveyOrigin.PointCloud)
+            .ShouldBe(["done", "active", "pending", "pending", "pending"]);
+        States(SurveyUploadStatus.Failed, SurveyUploadStage.Inspect, compile: false, SurveyOrigin.PointCloud)
+            .ShouldBe(["done", "failed", "pending", "pending", "pending"]);
+    }
+
     private static SurveyUploadLinkDecision Decide(
         bool installationOn = true,
         bool accountOn = true,
@@ -155,6 +171,7 @@ public class SurveyUploadPublicLinksTests
         SurveyUploadPublicLinks.AtCompletion(
             installationOn, accountOn, accountAudience, wanted, audience, allowProtected, mayShare, caveProtected);
 
-    private static string[] States(SurveyUploadStatus status, SurveyUploadStage? stage, bool compile) =>
-        [.. SurveyUploadPublicLinks.StageStates(status, stage, compile).Select(s => s.State.ToString().ToLowerInvariant())];
+    private static string[] States(
+        SurveyUploadStatus status, SurveyUploadStage? stage, bool compile, SurveyOrigin origin = SurveyOrigin.TopoDroid) =>
+        [.. SurveyUploadPublicLinks.StageStates(origin, status, stage, compile).Select(s => s.State.ToString().ToLowerInvariant())];
 }

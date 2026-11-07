@@ -13,7 +13,7 @@ public class SurveyUploadFilesTests
         new(name, size, SurveyUploadFileRole.Archive);
 
     private static SurveyUploadFileProblem? Check(params SurveyUploadFileClaim[] files) =>
-        SurveyUploadFiles.Problem(files, Cap, maxFiles: 5);
+        SurveyUploadFiles.Problem(SurveyOrigin.TopoDroid, files, Cap, maxFiles: 5);
 
     [Fact]
     public void An_archive_with_its_therion_files_and_another_export_is_accepted()
@@ -29,8 +29,8 @@ public class SurveyUploadFilesTests
     [Fact]
     public void Exactly_one_archive_is_required()
     {
-        SurveyUploadFiles.Problem([], Cap, 5).ShouldNotBeNull();
-        SurveyUploadFiles.Problem(null, Cap, 5).ShouldNotBeNull();
+        SurveyUploadFiles.Problem(SurveyOrigin.TopoDroid, [], Cap, 5).ShouldNotBeNull();
+        SurveyUploadFiles.Problem(SurveyOrigin.TopoDroid, null, Cap, 5).ShouldNotBeNull();
         Check(new SurveyUploadFileClaim("inventata.th", 10, SurveyUploadFileRole.TherionSource)).ShouldNotBeNull();
         Check(Archive(), Archive("second.zip")).ShouldNotBeNull();
 
@@ -100,6 +100,33 @@ public class SurveyUploadFilesTests
         SurveyUploadFiles.ExtensionOf(".th").ShouldBe("");
         SurveyUploadFiles.ExtensionOf("inventata").ShouldBe("");
         SurveyUploadFiles.ExtensionOf("inventata.").ShouldBe("");
+    }
+
+    [Fact]
+    public void A_point_cloud_upload_is_one_las_or_laz_file_declared_as_the_archive_under_its_own_cap()
+    {
+        static SurveyUploadFileProblem? Cloud(long cap, params SurveyUploadFileClaim[] files) =>
+            SurveyUploadFiles.Problem(SurveyOrigin.PointCloud, files, cap, maxFiles: 64);
+
+        Cloud(Cap, new SurveyUploadFileClaim("scan.laz", 10, SurveyUploadFileRole.Archive)).ShouldBeNull();
+        Cloud(Cap, new SurveyUploadFileClaim("Scan.LAS", Cap, SurveyUploadFileRole.Archive)).ShouldBeNull();
+
+        // The survey tool's rules do not apply: a ZIP is not a point cloud, nothing rides along,
+        // the one file is the archive, and the cap is the one given for clouds.
+        Cloud(Cap).ShouldNotBeNull();
+        Cloud(Cap, new SurveyUploadFileClaim("scan.zip", 10, SurveyUploadFileRole.Archive))!.File.ShouldBe("scan.zip");
+        Cloud(Cap, new SurveyUploadFileClaim("scan.laz", 10, SurveyUploadFileRole.Other)).ShouldNotBeNull();
+        Cloud(Cap, new SurveyUploadFileClaim("scan.laz", 10, SurveyUploadFileRole.Archive),
+            new SurveyUploadFileClaim("notes.txt", 10, SurveyUploadFileRole.Other)).ShouldNotBeNull();
+        Cloud(Cap, new SurveyUploadFileClaim("scan.laz", Cap + 1, SurveyUploadFileRole.Archive)).ShouldNotBeNull();
+        Cloud(Cap, new SurveyUploadFileClaim("scan.laz", 0, SurveyUploadFileRole.Archive)).ShouldNotBeNull();
+        Cloud(Cap, new SurveyUploadFileClaim("a/scan.laz", 10, SurveyUploadFileRole.Archive)).ShouldNotBeNull();
+
+        // And a survey tool's upload does not take a point cloud.
+        SurveyUploadFiles.Problem(SurveyOrigin.TopoDroid, [new SurveyUploadFileClaim("scan.laz", 10, SurveyUploadFileRole.Other)], Cap, 5)
+            .ShouldNotBeNull();
+        SurveyUploadFiles.AcceptedExtensionsFor(SurveyOrigin.PointCloud).ShouldBe([".laz", ".las"]);
+        SurveyUploadFiles.AcceptedExtensionsFor(SurveyOrigin.TopoDroid).ShouldBeSameAs(SurveyUploadFiles.AcceptedExtensions);
     }
 
     [Fact]

@@ -52,6 +52,15 @@ public enum SurveyUploadStage : short
 
     /// <summary>Handing the stored models to the readers that index them.</summary>
     Read = 5,
+
+    /// <summary>Reading a point cloud's header and records, without touching a point.</summary>
+    Inspect = 6,
+
+    /// <summary>Thinning a point cloud into the copy that is shown, when the person asked for one.</summary>
+    Downsample = 7,
+
+    /// <summary>Converting a point cloud into the tiles a viewer streams.</summary>
+    Tile = 8,
 }
 
 /// <summary>

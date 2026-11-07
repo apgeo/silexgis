@@ -14,6 +14,12 @@ public enum SurveyModelFormat : short
 
     /// <summary>Triangle mesh of the passage walls, as exported by every survey toolchain in use.</summary>
     Stl = 2,
+
+    /// <summary>A LiDAR point cloud, LAZ-compressed (.laz).</summary>
+    Laz = 3,
+
+    /// <summary>A LiDAR point cloud, uncompressed (.las).</summary>
+    Las = 4,
 }
 
 /// <summary>
@@ -204,6 +210,15 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     /// centreline, since nobody has chosen anything for that cave yet.
     /// </summary>
     public Guid? SurveyUploadId { get; set; }
+
+    /// <summary>
+    /// What is known about a point cloud, as a JSON document; null for every other kind of model
+    /// and for a cloud whose header has not been read yet. A document rather than columns because
+    /// the facts grow by stage — the header check writes the first set, tiling adds its own —
+    /// and because no query reads them: they are shown on the scan's card and nowhere else.
+    /// The shape is <see cref="Scans.PointCloudFacts"/>.
+    /// </summary>
+    public string? PointCloud { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

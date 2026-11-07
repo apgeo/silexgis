@@ -17,8 +17,12 @@ namespace SilexGis.Domain.Surveys;
 /// un-marks the survey the statistics were measured over.
 /// </para>
 /// <para>
-/// Two kinds and not three, deliberately: the two line-plot formats are the same thing written two
-/// ways, and a cave that holds its survey in both of them has one survey, not two.
+/// The two line-plot formats are one kind, deliberately: they are the same thing written two
+/// ways, and a cave that holds its survey in both of them has one survey, not two. The two
+/// point-cloud formats are one kind for the same reason — a LAZ file is a LAS file with its
+/// points compressed — and a point cloud is a kind of its own because it answers a third question
+/// (what the scanner saw), is made by a third family of tools, and would otherwise take the
+/// line plot's mark away from the survey the figures are measured over.
 /// </para>
 /// </remarks>
 public enum SurveyModelKind
@@ -28,17 +32,26 @@ public enum SurveyModelKind
 
     /// <summary>A triangle mesh of the passage walls.</summary>
     WallMesh = 1,
+
+    /// <summary>A LiDAR point cloud: a <c>.laz</c> or <c>.las</c> file.</summary>
+    PointCloud = 2,
 }
 
 public static class SurveyModelKinds
 {
     /// <summary>The kind a model of this format is, which decides whose current mark it competes for.</summary>
-    public static SurveyModelKind Of(SurveyModelFormat format) =>
-        format == SurveyModelFormat.Stl ? SurveyModelKind.WallMesh : SurveyModelKind.LinePlot;
+    public static SurveyModelKind Of(SurveyModelFormat format) => format switch
+    {
+        SurveyModelFormat.Stl => SurveyModelKind.WallMesh,
+        SurveyModelFormat.Laz or SurveyModelFormat.Las => SurveyModelKind.PointCloud,
+        _ => SurveyModelKind.LinePlot,
+    };
 
     /// <summary>The formats that make up one kind, for a query that has only the format column to go on.</summary>
-    public static IReadOnlyList<SurveyModelFormat> FormatsOf(SurveyModelKind kind) =>
-        kind == SurveyModelKind.WallMesh
-            ? [SurveyModelFormat.Stl]
-            : [SurveyModelFormat.Lox, SurveyModelFormat.Survex3d];
+    public static IReadOnlyList<SurveyModelFormat> FormatsOf(SurveyModelKind kind) => kind switch
+    {
+        SurveyModelKind.WallMesh => [SurveyModelFormat.Stl],
+        SurveyModelKind.PointCloud => [SurveyModelFormat.Laz, SurveyModelFormat.Las],
+        _ => [SurveyModelFormat.Lox, SurveyModelFormat.Survex3d],
+    };
 }

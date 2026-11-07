@@ -63,6 +63,24 @@ public static class SurveyPipelineFailures
     /// </summary>
     public const string CrsUnknown = "survey_pipeline.crs_unknown";
 
+    /// <summary>The uploaded point cloud is not a LAS or LAZ file the server can read: its header is missing, short or inconsistent.</summary>
+    public const string PointCloudInvalid = "survey_pipeline.point_cloud_invalid";
+
+    /// <summary>
+    /// Processing is switched on, but no point-cloud worker has announced itself, or the one that
+    /// has cannot run a step the recipe asks for.
+    /// </summary>
+    public const string WorkerUnavailable = "survey_pipeline.worker_unavailable";
+
+    /// <summary>Processing is switched on and a job was left for the worker, and nothing took it in the time allowed.</summary>
+    public const string WorkerSilent = "survey_pipeline.worker_silent";
+
+    /// <summary>The worker took the job and answered that it failed, refused it, or was stopped before finishing it.</summary>
+    public const string WorkerFailed = "survey_pipeline.worker_failed";
+
+    /// <summary>The worker ran past the time this installation allows one job.</summary>
+    public const string WorkerTimeout = "survey_pipeline.worker_timeout";
+
     /// <summary>
     /// Something went wrong that the run did not expect. The server's own log has the whole of it;
     /// the upload's row says only that, because the inside of the server is not the uploader's to
@@ -85,6 +103,14 @@ public sealed class SurveyPipelineException(string code, string message) : Excep
 /// How far along the whole run each stage is: the progress a device's bar shows is one number for
 /// the run, and every stage owns a band of it, in the order the stages happen.
 /// </summary>
+/// <remarks>
+/// There are two runs: a survey archive goes Archive, Unpack, Scaffold, Compile, Store, Read; a
+/// point cloud goes Archive, Inspect, Downsample, Tile, Store. A stage's band is the same in
+/// whichever run it appears — the ones the two runs share sit at the same place in both — so a
+/// band is a fact about the stage and a device that knows only the stage can still place the bar.
+/// A run that ends early (nothing to compile, no tiler) jumps to 100 when it succeeds, so the last
+/// stage of a run need not end at 100; what matters is that bands do not overlap within one run.
+/// </remarks>
 public static class SurveyPipelineProgress
 {
     /// <summary>The band a stage owns, as the run's percentage at its start and at its end.</summary>
@@ -96,8 +122,24 @@ public static class SurveyPipelineProgress
         SurveyUploadStage.Compile => (25, 80),
         SurveyUploadStage.Store => (80, 95),
         SurveyUploadStage.Read => (95, 100),
+        SurveyUploadStage.Inspect => (5, 15),
+        SurveyUploadStage.Downsample => (15, 25),
+        SurveyUploadStage.Tile => (25, 80),
         _ => throw new ArgumentOutOfRangeException(nameof(stage), stage, null),
     };
+
+    /// <summary>The stages a run of an upload of this origin goes through, in order.</summary>
+    public static IReadOnlyList<SurveyUploadStage> Order(SurveyOrigin origin) => origin == SurveyOrigin.PointCloud
+        ?
+        [
+            SurveyUploadStage.Archive, SurveyUploadStage.Inspect, SurveyUploadStage.Downsample,
+            SurveyUploadStage.Tile, SurveyUploadStage.Store,
+        ]
+        :
+        [
+            SurveyUploadStage.Archive, SurveyUploadStage.Unpack, SurveyUploadStage.Scaffold,
+            SurveyUploadStage.Compile, SurveyUploadStage.Store, SurveyUploadStage.Read,
+        ];
 
     /// <summary>
     /// The run's percentage when a stage is <paramref name="percentOfStage"/> of the way through.
@@ -121,6 +163,32 @@ public static class SurveyPipelineNotes
     public const string NotAsked = "Archived and read. Compiling was not asked for.";
 
     public const string NoCompiler = "Archived and read. Not compiled: this server has no survey compiler.";
+
+    /// <summary>
+    /// What a point-cloud run says when it stops after reading the header because this server has
+    /// no worker to tile with. The same family of words as <see cref="NoCompiler"/>, because it is
+    /// the same situation — the file is kept and described, and a rerun once a worker is installed
+    /// finishes the work.
+    /// </summary>
+    public const string NoTiler = "Archived and inspected. Not tiled: this server has no point-cloud worker.";
+
+    /// <summary>
+    /// The note of a point-cloud run that estimated a cloud over the installation's thresholds
+    /// and stopped, because nobody has yet chosen how much of it to show. Tiling the whole of a
+    /// cloud that size takes hours of worker time and gigabytes of tiles, which is not spent on
+    /// anybody's behalf unasked; a rerun with a choice carries on from the estimate.
+    /// </summary>
+    public static string ChoiceNeeded(long pointsInFile) =>
+        string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"Estimated: {pointsInFile:N0} points. Choose how much to show, then run again.");
+
+    /// <summary>The note of a point-cloud run that tiled the cloud: how much was shown and what it came to.</summary>
+    public static string Tiled(long pointsTiled, long pointsInFile, long tileBytes, bool reused) =>
+        string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"Tiled: {pointsTiled:N0} of {pointsInFile:N0} points, {tileBytes / 1_048_576d:N1} MB of tiles.")
+        + (reused ? " The tiles of an earlier run were kept, nothing about them having changed." : "");
 
     /// <summary>
     /// The note a run ends with when it stops after reading the archive, or null when it goes on

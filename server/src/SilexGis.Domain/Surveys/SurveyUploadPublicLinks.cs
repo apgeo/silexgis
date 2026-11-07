@@ -105,29 +105,18 @@ public static class SurveyUploadPublicLinks
     public static bool IsPlausible(string? token) =>
         !string.IsNullOrEmpty(token) && token.Length <= MaxTokenLength;
 
-    /// <summary>The order the stages of a run go in.</summary>
-    public static IReadOnlyList<SurveyUploadStage> StageOrder => Order;
-
-    private static readonly SurveyUploadStage[] Order =
-    [
-        SurveyUploadStage.Archive,
-        SurveyUploadStage.Unpack,
-        SurveyUploadStage.Scaffold,
-        SurveyUploadStage.Compile,
-        SurveyUploadStage.Store,
-        SurveyUploadStage.Read,
-    ];
-
     /// <summary>
-    /// Each stage's state for a page that shows the run as a list of steps, worked out from where
-    /// the upload stands, the stage it is in or reached last, and whether it was asked to compile.
-    /// The same rule the signed-in page applies, so the two pages never disagree.
+    /// Each stage's state for a page that shows the run as a list of steps, worked out from the
+    /// stages a run of the upload's origin goes through, where the upload stands, the stage it is
+    /// in or reached last, and whether it was asked to compile. The same rule the signed-in page
+    /// applies, so the two pages never disagree.
     /// </summary>
     public static IReadOnlyList<(SurveyUploadStage Stage, SurveyUploadStageState State)> StageStates(
-        SurveyUploadStatus status, SurveyUploadStage? stage, bool compile)
+        SurveyOrigin origin, SurveyUploadStatus status, SurveyUploadStage? stage, bool compile)
     {
-        var index = stage is { } s ? Array.IndexOf(Order, s) : -1;
-        return [.. Order.Select((st, i) => (st, StateOf(status, index, i, compile, st)))];
+        var order = SurveyPipelineProgress.Order(origin);
+        var index = stage is { } s ? order.ToList().IndexOf(s) : -1;
+        return [.. order.Select((st, i) => (st, StateOf(status, index, i, compile, st)))];
     }
 
     private static SurveyUploadStageState StateOf(

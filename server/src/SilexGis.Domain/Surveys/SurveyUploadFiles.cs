@@ -11,7 +11,9 @@ public sealed record SurveyUploadFileProblem(string Detail, string? File = null)
 
 /// <summary>
 /// The rules a device's list of files must keep before anything of it is accepted: which names,
-/// which kinds, how large, how many, and exactly one archive.
+/// which kinds, how large, how many, and exactly one archive. What the archive is depends on
+/// what is uploaded: a survey tool's ZIP, with the sources and exports beside it, or a scan's
+/// one LAS or LAZ file, alone.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -44,6 +46,13 @@ public static class SurveyUploadFiles
         ".csv", ".dat", ".tro", ".trox", ".srv", ".plt", ".shz", ".csx", ".cave", ".cav", ".sur",
         ".trb", ".txt",
     ];
+
+    /// <summary>The extensions a point cloud is uploaded as: the LAS file, compressed or not. Lower-case, with the dot.</summary>
+    public static readonly IReadOnlyList<string> PointCloudExtensions = [".laz", ".las"];
+
+    /// <summary>The extensions an upload of this origin may carry.</summary>
+    public static IReadOnlyList<string> AcceptedExtensionsFor(SurveyOrigin origin) =>
+        origin == SurveyOrigin.PointCloud ? PointCloudExtensions : AcceptedExtensions;
 
     /// <summary>The roles a device may declare; the rest are what a processing run produces.</summary>
     public static readonly IReadOnlyList<SurveyUploadFileRole> DeclarableRoles =
@@ -83,12 +92,18 @@ public static class SurveyUploadFiles
     };
 
     /// <summary>The first thing wrong with a declared file list, or null when it may be accepted.</summary>
+    /// <param name="origin">What is uploaded, which decides what the archive is and what may come with it.</param>
     /// <param name="files">The files as declared.</param>
-    /// <param name="maxFileBytes">The largest one file may be.</param>
+    /// <param name="maxFileBytes">The largest one file may be, for this origin.</param>
     /// <param name="maxFiles">The most files one upload may declare.</param>
     public static SurveyUploadFileProblem? Problem(
-        IReadOnlyList<SurveyUploadFileClaim>? files, long maxFileBytes, int maxFiles)
+        SurveyOrigin origin, IReadOnlyList<SurveyUploadFileClaim>? files, long maxFileBytes, int maxFiles)
     {
+        if (origin == SurveyOrigin.PointCloud)
+        {
+            return PointCloudProblem(files, maxFileBytes);
+        }
+
         if (files is null || files.Count == 0)
         {
             return new SurveyUploadFileProblem("An upload declares its files, the survey archive among them.");
@@ -153,6 +168,49 @@ public static class SurveyUploadFiles
         return archives == 1
             ? null
             : new SurveyUploadFileProblem("An upload carries exactly one survey archive.");
+    }
+
+    /// <summary>
+    /// A point cloud's list: one file, declared as the archive, a LAS or LAZ file, within the
+    /// cap scans have of their own. Nothing rides along — a scan's other products are made by
+    /// the run, not sent with it.
+    /// </summary>
+    private static SurveyUploadFileProblem? PointCloudProblem(IReadOnlyList<SurveyUploadFileClaim>? files, long maxFileBytes)
+    {
+        if (files is null || files.Count == 0)
+        {
+            return new SurveyUploadFileProblem("A point cloud upload declares its one LAS or LAZ file.");
+        }
+
+        if (files.Count > 1)
+        {
+            return new SurveyUploadFileProblem("A point cloud upload carries exactly one file, the LAS or LAZ file.");
+        }
+
+        var file = files[0];
+        if (!IsValidName(file.Name))
+        {
+            return new SurveyUploadFileProblem(
+                $"A file name must be 1 to {MaxNameLength} characters with no path, no control "
+                + "characters and none of / \\ : * ? \" < > |, and must not end with a dot or a space.",
+                file.Name);
+        }
+
+        var name = file.Name!;
+        if (!PointCloudExtensions.Contains(ExtensionOf(name)))
+        {
+            return new SurveyUploadFileProblem(
+                $"A point cloud is a {string.Join(" or ", PointCloudExtensions)} file.", name);
+        }
+
+        if (file.Role != SurveyUploadFileRole.Archive)
+        {
+            return new SurveyUploadFileProblem("The point cloud file is declared as the archive.", name);
+        }
+
+        return file.Size <= 0 || file.Size > maxFileBytes
+            ? new SurveyUploadFileProblem($"A point cloud is between 1 byte and {maxFileBytes} bytes.", name)
+            : null;
     }
 }
 

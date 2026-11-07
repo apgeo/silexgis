@@ -1,0 +1,332 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Buffers;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace SilexGis.Domain.Scans;
+
+/// <summary>
+/// One step of a recipe as it was resolved for one upload: the step, every parameter value it
+/// will run with, and the hash of those values.
+/// </summary>
+/// <param name="StepId">The step's registry id.</param>
+/// <param name="Parameters">The resolved parameter values, a JSON object; never a profile reference, so the run means the same thing whatever a profile says later.</param>
+/// <param name="ParamsHash">The hash of <paramref name="Parameters"/> as <see cref="ScanRecipes.ParamsHash"/> computes it, kept beside the values so an artefact row can be matched to the step that would make it without re-hashing.</param>
+public sealed record ScanRecipeStep(string StepId, JsonElement Parameters, string ParamsHash);
+
+/// <summary>
+/// The processing an upload is asked for: its steps in order, each with resolved parameters. A
+/// snapshot — it is written into the upload's options when the upload is opened and read back
+/// unchanged by every rerun.
+/// </summary>
+/// <param name="Steps">The steps in the order they run.</param>
+/// <param name="RerunFrom">
+/// The id of a step from which a rerun repeats the work even where an earlier run's artefacts
+/// would do, or null to reuse whatever still matches. Set by a rerun that asks for a step to be
+/// done again; a step before it is still reused. One-shot: the run that takes it up clears it
+/// from the stored recipe, so the next plain rerun reuses again.
+/// </param>
+/// <param name="DisplayChosen">
+/// Whether somebody chose how much of the cloud to show — the whole of it, or a thinned copy.
+/// A recipe nobody chose for has no thinning step either, so the steps alone cannot tell "the
+/// whole cloud, deliberately" from "nobody has decided yet"; and the difference matters, because
+/// a run that has estimated a cloud over the installation's thresholds stops there to ask rather
+/// than tile the whole thing unasked.
+/// </param>
+public sealed record ScanRecipe(IReadOnlyList<ScanRecipeStep> Steps, string? RerunFrom = null, bool DisplayChosen = false)
+{
+    /// <summary>Whether a run may reuse an earlier run's artefact of this step.</summary>
+    public bool MayReuse(string stepId)
+    {
+        if (RerunFrom is null)
+        {
+            return true;
+        }
+
+        var from = Steps.ToList().FindIndex(s => s.StepId == RerunFrom);
+        var at = Steps.ToList().FindIndex(s => s.StepId == stepId);
+        return from >= 0 && at >= 0 && at < from;
+    }
+}
+
+/// <summary>
+/// The recipes a point cloud is given: the header read, the thinning estimated, the cloud thinned
+/// when a person chose so, and the result tiled. Each step's values are checked against its
+/// schema before they are written, so a default the schema itself would refuse — a defect in the
+/// step, not in the request — is caught before it reaches a run, and a choice that does not fit is
+/// refused with the schema's own words.
+/// </summary>
+public static class PointCloudRecipes
+{
+    /// <summary>
+    /// The recipe an upload gets when it is opened: nobody has chosen anything yet. The full
+    /// cloud is tiled when the estimate finds it small enough; over the thresholds the run stops
+    /// at the estimate and waits for a choice.
+    /// </summary>
+    public static ScanRecipe Default(ITypedPropertiesValidator schemas) => For(schemas, choice: null, rerunFrom: null, out _)!;
+
+    /// <summary>
+    /// The recipe for a choice of how much to show — null when nobody has chosen. Answers null
+    /// and the schema's errors when the choice's values do not satisfy the downsample step's
+    /// schema.
+    /// </summary>
+    public static ScanRecipe? For(
+        ITypedPropertiesValidator schemas, PointCloudDisplayChoice? choice, string? rerunFrom, out IReadOnlyList<string> errors)
+    {
+        ArgumentNullException.ThrowIfNull(schemas);
+        var steps = new List<ScanRecipeStep>
+        {
+            Resolved(schemas, PointCloudInspectStep.StepId, null, out _)!,
+            Resolved(schemas, PointCloudEstimateStep.StepId, null, out _)!,
+        };
+
+        errors = [];
+        if (choice is not null && choice.Method != PointCloudDisplayChoice.Full)
+        {
+            var chosen = new Dictionary<string, object?>(StringComparer.Ordinal) { ["method"] = choice.Method };
+            if (choice.VoxelCm is { } voxel)
+            {
+                chosen["voxelCm"] = voxel;
+            }
+
+            if (choice.EveryNth is { } nth)
+            {
+                chosen["everyNth"] = nth;
+            }
+
+            using var document = JsonDocument.Parse(JsonSerializer.Serialize(chosen));
+            var thinned = Resolved(schemas, PointCloudDownsampleStep.StepId, document.RootElement, out errors);
+            if (thinned is null)
+            {
+                return null;
+            }
+
+            steps.Add(thinned);
+        }
+
+        steps.Add(Resolved(schemas, Py3dtilesTileStep.StepId, null, out _)!);
+        return new ScanRecipe(steps, rerunFrom, DisplayChosen: choice is not null);
+    }
+
+    /// <summary>
+    /// A step with the given values laid over its defaults, every value written out, checked
+    /// against the step's schema. The defaults alone must always pass: failing on them is a
+    /// defect in the step, and is thrown rather than answered.
+    /// </summary>
+    private static ScanRecipeStep? Resolved(
+        ITypedPropertiesValidator schemas, string stepId, JsonElement? chosen, out IReadOnlyList<string> errors)
+    {
+        var step = ScanSteps.Find(stepId)
+            ?? throw new InvalidOperationException($"The scan step {stepId} is not registered.");
+        var values = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var property in ScanSteps.DefaultParameters(step).EnumerateObject())
+        {
+            values[property.Name] = property.Value;
+        }
+
+        if (chosen is { ValueKind: JsonValueKind.Object } given)
+        {
+            foreach (var property in given.EnumerateObject())
+            {
+                values[property.Name] = property.Value.Clone();
+            }
+        }
+
+        using var merged = JsonDocument.Parse(JsonSerializer.Serialize(values));
+        var found = schemas.Validate(step.ParameterSchemaJson, merged.RootElement.GetRawText());
+        if (found.Count > 0)
+        {
+            if (chosen is null)
+            {
+                throw new InvalidOperationException(
+                    $"The defaults of scan step {step.Id} do not satisfy its own schema: {string.Join("; ", found)}.");
+            }
+
+            errors = found;
+            return null;
+        }
+
+        errors = [];
+        return ScanRecipes.Step(step.Id, merged.RootElement);
+    }
+}
+
+/// <summary>
+/// Builds, writes and reads recipes, and computes the one hash every artefact's parameters are
+/// compared by.
+/// </summary>
+public static class ScanRecipes
+{
+    /// <summary>The name the recipe is stored under in the upload's options document.</summary>
+    public const string OptionsKey = "recipe";
+
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    /// <summary>A step with its hash computed from the parameters given.</summary>
+    public static ScanRecipeStep Step(string stepId, JsonElement parameters) =>
+        new(stepId, parameters.Clone(), ParamsHash(parameters));
+
+    /// <summary>A step with no parameters: an empty object, hashed like any other.</summary>
+    public static ScanRecipeStep Step(string stepId)
+    {
+        using var empty = JsonDocument.Parse("{}");
+        return Step(stepId, empty.RootElement);
+    }
+
+    /// <summary>
+    /// A step at its schema's defaults, every value written out and hashed: what an upload is
+    /// given when nobody chooses parameters for it.
+    /// </summary>
+    public static ScanRecipeStep StepWithDefaults(IScanStep step)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+        return Step(step.Id, ScanSteps.DefaultParameters(step));
+    }
+
+    /// <summary>
+    /// The hash of a parameter object that depends on its values alone: the same values written
+    /// in another key order, with other whitespace, or with a number spelt another way (<c>1</c>
+    /// and <c>1.0</c>) hash the same. SHA-256 of the canonical text, lower-case hex.
+    /// </summary>
+    /// <remarks>
+    /// Canonical text is JSON with object keys sorted by ordinal comparison at every depth, no
+    /// whitespace, strings escaped by one writer, and numbers written as an integer when they are
+    /// one and as a shortest round-trip double otherwise. Arrays keep their order: a list of
+    /// values is a different request when reordered, where a set of named settings is not.
+    /// </remarks>
+    public static string ParamsHash(JsonElement parameters)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = false, SkipValidation = false }))
+        {
+            WriteCanonical(writer, parameters);
+        }
+
+        return Convert.ToHexStringLower(SHA256.HashData(buffer.WrittenSpan));
+    }
+
+    /// <summary>The hash of parameters given as JSON text; a convenience over <see cref="ParamsHash(JsonElement)"/>.</summary>
+    public static string ParamsHash(string parametersJson)
+    {
+        using var document = JsonDocument.Parse(parametersJson);
+        return ParamsHash(document.RootElement);
+    }
+
+    /// <summary>
+    /// The recipe as the upload's options document: an object with the recipe under
+    /// <see cref="OptionsKey"/>, so it can sit in the same column the survey-archive run options
+    /// use without either reading the other's members.
+    /// </summary>
+    public static string ToOptionsJson(ScanRecipe recipe)
+    {
+        ArgumentNullException.ThrowIfNull(recipe);
+        var envelope = new Dictionary<string, ScanRecipe>(StringComparer.Ordinal) { [OptionsKey] = recipe };
+        return JsonSerializer.Serialize(envelope, Json);
+    }
+
+    /// <summary>
+    /// The recipe an upload's options document carries, or null when it carries none or cannot be
+    /// read — an upload of a survey archive has options of another shape and no recipe at all.
+    /// </summary>
+    public static ScanRecipe? FromOptionsJson(string? optionsJson)
+    {
+        if (string.IsNullOrWhiteSpace(optionsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(optionsJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty(OptionsKey, out var recipeElement)
+                || recipeElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            var recipe = recipeElement.Deserialize<ScanRecipe>(Json);
+            if (recipe?.Steps is null || recipe.Steps.Any(s =>
+                    string.IsNullOrEmpty(s.StepId)
+                    || string.IsNullOrEmpty(s.ParamsHash)
+                    || s.Parameters.ValueKind != JsonValueKind.Object))
+            {
+                return null;
+            }
+
+            // The elements come out of a document that is disposed on return; cloned, they outlive it.
+            // The step to run again from and the display choice come back with the steps: a
+            // rerun's request is carried to the run by this document and nothing else.
+            return recipe with { Steps = [.. recipe.Steps.Select(s => s with { Parameters = s.Parameters.Clone() })] };
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+                foreach (var property in element.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal))
+                {
+                    writer.WritePropertyName(property.Name);
+                    WriteCanonical(writer, property.Value);
+                }
+
+                writer.WriteEndObject();
+                break;
+
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+                foreach (var item in element.EnumerateArray())
+                {
+                    WriteCanonical(writer, item);
+                }
+
+                writer.WriteEndArray();
+                break;
+
+            case JsonValueKind.Number:
+                if (element.TryGetInt64(out var integer))
+                {
+                    writer.WriteNumberValue(integer);
+                }
+                else
+                {
+                    // "1.0" does not parse as an integer; it is the same value as 1, and is written as 1.
+                    var value = element.GetDouble();
+                    if (double.IsInteger(value) && Math.Abs(value) < 9_007_199_254_740_992d)
+                    {
+                        writer.WriteNumberValue((long)value);
+                    }
+                    else
+                    {
+                        writer.WriteNumberValue(value);
+                    }
+                }
+
+                break;
+
+            case JsonValueKind.String:
+                writer.WriteStringValue(element.GetString());
+                break;
+
+            case JsonValueKind.True:
+            case JsonValueKind.False:
+                writer.WriteBooleanValue(element.GetBoolean());
+                break;
+
+            default:
+                writer.WriteNullValue();
+                break;
+        }
+    }
+}

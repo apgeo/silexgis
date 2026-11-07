@@ -29,6 +29,12 @@ public enum SurveySourceKind : short
 
     /// <summary>An archive exported by a survey app, such as TopoDroid (<c>.zip</c>).</summary>
     TopoDroidArchive = 4,
+
+    /// <summary>
+    /// A LiDAR point cloud as a LAS file, compressed (<c>.laz</c>) or not (<c>.las</c>): the
+    /// uploaded original of a scan, kept so the scan can be tiled again with a later tool.
+    /// </summary>
+    PointCloud = 5,
 }
 
 /// <summary>

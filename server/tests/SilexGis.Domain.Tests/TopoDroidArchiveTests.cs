@@ -134,15 +134,43 @@ public class TopoDroidArchiveTests
 public class SurveyPipelineProgressTests
 {
     [Fact]
-    public void Each_stage_owns_its_band_of_the_run_in_order()
+    public void Every_stage_has_a_band_and_belongs_to_a_run()
     {
-        var stages = Enum.GetValues<SurveyUploadStage>();
+        var inSomeRun = Enum.GetValues<SurveyOrigin>().SelectMany(SurveyPipelineProgress.Order).ToHashSet();
+        foreach (var stage in Enum.GetValues<SurveyUploadStage>())
+        {
+            var (start, end) = SurveyPipelineProgress.Band(stage);
+            start.ShouldBeInRange(0, 100, stage.ToString());
+            end.ShouldBeInRange(start + 1, 100, stage.ToString());
+            inSomeRun.ShouldContain(stage);
+        }
+    }
+
+    [Theory]
+    [InlineData(SurveyOrigin.TopoDroid, 100)]
+    [InlineData(SurveyOrigin.PointCloud, 95)]
+    public void Each_stage_of_a_run_owns_its_band_in_order(SurveyOrigin origin, int lastEnd)
+    {
+        // A run's bands follow one another without a gap or an overlap. The survey run's last
+        // stage reaches 100; the point-cloud run's does not, since succeeding is what writes 100
+        // and nothing is read after tiles are stored.
+        var stages = SurveyPipelineProgress.Order(origin);
         SurveyPipelineProgress.Band(stages[0]).Start.ShouldBe(0);
-        SurveyPipelineProgress.Band(stages[^1]).End.ShouldBe(100);
-        for (var i = 1; i < stages.Length; i++)
+        SurveyPipelineProgress.Band(stages[^1]).End.ShouldBe(lastEnd);
+        for (var i = 1; i < stages.Count; i++)
         {
             SurveyPipelineProgress.Band(stages[i]).Start.ShouldBe(SurveyPipelineProgress.Band(stages[i - 1]).End);
         }
+    }
+
+    [Fact]
+    public void A_point_cloud_run_inspects_and_tiles_where_a_survey_run_unpacks_and_compiles()
+    {
+        SurveyPipelineProgress.Order(SurveyOrigin.PointCloud).ShouldBe(
+            [SurveyUploadStage.Archive, SurveyUploadStage.Inspect, SurveyUploadStage.Downsample, SurveyUploadStage.Tile, SurveyUploadStage.Store]);
+        SurveyPipelineProgress.Order(SurveyOrigin.TopoDroid).ShouldBe(
+            [SurveyUploadStage.Archive, SurveyUploadStage.Unpack, SurveyUploadStage.Scaffold, SurveyUploadStage.Compile, SurveyUploadStage.Store, SurveyUploadStage.Read]);
+        SurveyPipelineProgress.Order(SurveyOrigin.Therion).ShouldBe(SurveyPipelineProgress.Order(SurveyOrigin.TopoDroid));
     }
 
     [Fact]
