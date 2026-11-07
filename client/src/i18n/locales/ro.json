@@ -1585,7 +1585,8 @@
       "mapLabel": "Harta pe care se poziționează planșa",
       "modes": {
         "corners": "Colțuri",
-        "points": "Două puncte"
+        "points": "Două puncte",
+        "controls": "Puncte de control"
       },
       "transformations": {
         "homography": "Perspectivă",
@@ -1641,8 +1642,59 @@
         "placementCrsUnknown": "Sistemul de coordonate al punctelor nu este cunoscut.",
         "placementVersionUnknown": "Poziția este scrisă într-o formă pe care serverul nu o citește.",
         "previewBusy": "Serverul desenează alte previzualizări. Încearcă din nou peste câteva clipe.",
-        "previewFailed": "Previzualizarea nu a putut fi desenată."
-      }
+        "previewFailed": "Previzualizarea nu a putut fi desenată.",
+        "annotationInvalid": "Fișierul nu este o adnotare de georeferențiere pe care serverul o poate citi.",
+        "noPlacement": "Planșa nu are o poziție de exportat."
+      },
+      "controlsHelp": "Apasă un punct pe planșă, apoi același loc pe hartă — sau scrie-i coordonatele. Adaugă câte puncte are nevoie planșa; trage oricare capăt ca să muți un punct.",
+      "addPoints": "Adaugă puncte",
+      "stopAdding": "Oprește adăugarea",
+      "fitToPoints": "Încadrează punctele",
+      "transformation": "Transformare",
+      "transformationNames": {
+        "similarity": "Similaritate",
+        "affine": "Afină",
+        "homography": "Perspectivă",
+        "polynomial2": "Polinomială de gradul 2",
+        "polynomial3": "Polinomială de gradul 3",
+        "tps": "Spline cu plăci subțiri"
+      },
+      "transformationExplain": {
+        "similarity": "Mută, rotește și scalează planșa fără să o deformeze.",
+        "affine": "O și întinde și înclină; laturile opuse rămân paralele.",
+        "homography": "Perspectivă: pentru o planșă fotografiată din unghi.",
+        "polynomial2": "Curbează ușor planșa; pentru planșe vechi sau întinse inegal.",
+        "polynomial3": "O curbează mai liber; are nevoie de multe puncte bine răspândite.",
+        "tps": "Curbează planșa ca să treacă exact prin fiecare punct, așa că abaterile afișate sunt calculate lăsând pe rând câte un punct deoparte."
+      },
+      "minimumPoints": "cel puțin {{min}} puncte",
+      "needsPoints": "{{name}} are nevoie de cel puțin {{min}} puncte complete; acum sunt {{have}}.",
+      "fitNotMeasured": "Potrivire: nemăsurată",
+      "residualColumn": "Abatere",
+      "metres": "{{value}} m",
+      "label": "Etichetă",
+      "easting": "Est (m)",
+      "northing": "Nord (m)",
+      "crsLabel": "Coordonate în",
+      "crs": {
+        "wgs84": "WGS 84 (longitudine, latitudine)",
+        "stereo70": "Stereo 70 (EPSG:3844)",
+        "document": "Sistemul de coordonate al documentului"
+      },
+      "crsUnavailable": "Această instalare nu poate converti coordonate în acest sistem.",
+      "documentCrsNote": "Aceste puncte sunt în sistemul de coordonate al documentului și nu pot fi modificate aici. Începe o poziționare nouă ca să poziționezi singur planșa.",
+      "startFresh": "Începe o poziționare nouă",
+      "embeddedNote": "Acestea sunt punctele pe care le conține documentul. La salvare, poziția devine a ta; dacă o ștergi mai târziu, se revine la cea a documentului.",
+      "outline": "Contur",
+      "drawOutline": "Desenează conturul",
+      "stopDrawing": "Oprește desenarea",
+      "clearOutline": "Șterge conturul",
+      "useFrame": "Folosește chenarul hărții",
+      "outlineHelp": "Apasă de jur împrejurul părții din planșă care este harta; dublu clic ca să termini. Restul planșei este lăsat deoparte.",
+      "export": "Exportă poziția",
+      "import": "Importă poziția",
+      "imported": "Poziția a fost importată. Harta se pregătește.",
+      "importNotJson": "Fișierul nu este un fișier de poziționare (JSON)."
     },
     "redraw": {
       "action": "Redesenează…",

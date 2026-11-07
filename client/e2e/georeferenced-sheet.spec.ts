@@ -8,6 +8,9 @@ import { confirmOk, login } from './helpers.ts';
  * "Needs placement", is placed by typing its four corners, and is then published like any other
  * map; a sheet whose document says where it lies (a geospatial PDF) is ready without help.
  *
+ * The same sheet is then placed again by control points, and its placement leaves as a
+ * georeference annotation file and comes back in from it.
+ *
  * Both documents are generated for this suite: a plain page of lines, and the same kind of page
  * with a WGS 84 frame near 24.0 E 45.5 N written into it. Neither is a map of anything.
  */
@@ -40,8 +43,15 @@ const CORNERS: Record<'nw' | 'ne' | 'se' | 'sw', [number, number]> = {
   sw: [24.0, 45.5],
 };
 
+/** Three points pressed on the sheet (as fractions of its pane) and the ground each one is typed at. */
+const CONTROL_POINTS: { at: [number, number]; lonLat: [number, number] }[] = [
+  { at: [0.35, 0.38], lonLat: [24.0012, 45.5014] },
+  { at: [0.65, 0.38], lonLat: [24.0028, 45.5014] },
+  { at: [0.5, 0.62], lonLat: [24.002, 45.5006] },
+];
+
 test('a PDF sheet is placed by its corners; a geospatial PDF places itself', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(360_000);
   await login(page);
   await openRasterTab(page);
   await deleteAll(page, SHEET);
@@ -89,6 +99,55 @@ test('a PDF sheet is placed by its corners; a geospatial PDF places itself', asy
   await expect(geoRow.getByText('Ready')).toBeVisible({ timeout: 60_000 });
   await expect(geoRow.getByText('Needs placement')).toHaveCount(0);
 
-  await deleteAll(page, SHEET);
   await deleteAll(page, GEO_SHEET);
+
+  // The same kind of sheet again, placed this time by three control points with an affine fit.
+  await deleteAll(page, SHEET);
+  await upload(page, `${SHEET}.pdf`);
+  const again = page.getByRole('row', { name: new RegExp(`^${SHEET}\\b`) }).first();
+  await expect(again.getByText('Needs placement')).toBeVisible({ timeout: 60_000 });
+  await again.getByRole('button', { name: 'Place on map…' }).click();
+  await editor.getByText('Control points').click();
+  const sheetPane = editor.getByTestId('placement-sheet');
+  await expect(sheetPane).toHaveAttribute('data-ready', 'yes', { timeout: 15_000 });
+  await editor.getByTestId('placement-add-point').click();
+  const box = (await sheetPane.boundingBox())!;
+  for (const [index, point] of CONTROL_POINTS.entries()) {
+    // A press in the middle part of the pane lands on the picture whatever the pane's proportions.
+    await sheetPane.click({ position: { x: box.width * point.at[0], y: box.height * point.at[1] } });
+    const lon = editor.getByTestId(`placement-point-${index}-lon`);
+    await expect(lon).toBeVisible({ timeout: 15_000 });
+    await lon.fill(point.lonLat[0].toFixed(6));
+    await lon.press('Tab');
+    const lat = editor.getByTestId(`placement-point-${index}-lat`);
+    await lat.fill(point.lonLat[1].toFixed(6));
+    await lat.press('Tab');
+  }
+  await expect(editor.getByTestId('placement-preview-state')).toHaveAttribute('data-state', 'ready', {
+    timeout: 30_000,
+  });
+  await expect(editor.getByTestId('placement-map')).toHaveAttribute('data-preview', 'loaded', { timeout: 15_000 });
+  await editor.getByTestId('placement-save').click();
+  await expect(editor).toBeHidden({ timeout: 15_000 });
+  await expect(again.getByText('Ready')).toBeVisible({ timeout: 60_000 });
+
+  // Its placement leaves as a georeference annotation and comes back in from the same file.
+  await again.getByRole('button', { name: 'Adjust placement…' }).click();
+  const downloading = page.waitForEvent('download');
+  await editor.getByTestId('placement-export').click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe(`${SHEET}.georef.json`);
+  const saved = test.info().outputPath(`${SHEET}.georef.json`);
+  await download.saveAs(saved);
+  const importing = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.url().endsWith('/placement/annotation'),
+  );
+  await editor.locator('input[type=file][accept=".json,application/json"]').setInputFiles(saved);
+  const imported = await importing;
+  expect(imported.status()).toBe(200);
+  expect(((await imported.json()) as { placementSource: string }).placementSource).toBe('manual');
+  await expect(editor).toBeHidden({ timeout: 15_000 });
+  await expect(again.getByText('Ready')).toBeVisible({ timeout: 60_000 });
+
+  await deleteAll(page, SHEET);
 });

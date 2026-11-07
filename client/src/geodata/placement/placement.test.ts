@@ -1,14 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import {
+  TRANSFORMATIONS,
+  annotationFileName,
   cornersOfPlacement,
   cornersToPlacement,
   cornerTransformationOf,
   formatMetres,
   initialCorners,
   isUsableQuadrilateral,
+  isWktCrs,
+  maskOf,
   minimumPoints,
+  outlierRows,
+  pairsOfPlacement,
   pairsToPlacement,
+  residualsByPair,
   previewImageOptions,
   sheetAspect,
   type Corners,
@@ -121,5 +128,81 @@ describe('the preview answer', () => {
     expect(formatMetres(0.031)).toBe('0.03');
     expect(formatMetres(12.34)).toBe('12.3');
     expect(formatMetres(1234.5)).toBe('1235');
+  });
+});
+
+describe('control points', () => {
+  const pairs = [
+    { u: 0.1, v: 0.1, x: 500000, y: 400000, label: 'Cross' },
+    { u: 0.9, v: 0.1, x: 500300, y: 400000 },
+    { u: 0.5, v: 0.9, x: null, y: null },
+    { u: 0.5, v: 0.5, x: 500150, y: 399800, label: '  ' },
+  ];
+
+  it('sends the complete points in the chosen system, with the outline, under each point’s label', () => {
+    const body = pairsToPlacement(pairs, 'affine', {
+      crs: 'EPSG:3844',
+      mask: [
+        [0.05, 0.05],
+        [0.95, 0.05],
+        [0.95, 0.95],
+      ],
+    });
+    expect(body).toMatchObject({ version: 1, transformation: 'affine', crs: 'EPSG:3844' });
+    expect(body?.gcps.map((p) => p.label)).toEqual(['Cross', '2', '4']);
+    expect(body?.mask).toEqual([
+      [0.05, 0.05],
+      [0.95, 0.05],
+      [0.95, 0.95],
+    ]);
+  });
+
+  it('sends no outline of fewer than three corners', () => {
+    expect(pairsToPlacement(pairs, 'affine', { mask: [[0, 0], [1, 1]] })?.mask).toBeNull();
+  });
+
+  it('asks nothing below each transformation’s minimum', () => {
+    expect(pairsToPlacement(pairs, 'affine')).not.toBeNull();
+    expect(pairsToPlacement(pairs, 'homography')).toBeNull();
+    expect(pairsToPlacement(pairs, 'polynomial2')).toBeNull();
+    expect(pairsToPlacement(pairs, 'tps')).not.toBeNull();
+    expect(TRANSFORMATIONS.map(minimumPoints)).toEqual([2, 3, 4, 6, 10, 3]);
+  });
+
+  it('reads a saved placement back into rows, outline included', () => {
+    const body = pairsToPlacement(pairs, 'affine', { crs: 'EPSG:3844', mask: [[0, 0], [1, 0], [1, 1], [0, 1]] })!;
+    expect(pairsOfPlacement(body).map((p) => p.label)).toEqual(['Cross', '2', '4']);
+    expect(maskOf(body)).toHaveLength(4);
+    expect(maskOf(null)).toBeNull();
+  });
+
+  it('maps the answer’s residuals back to table rows, skipping incomplete ones', () => {
+    const byPair = residualsByPair(pairs, [
+      { index: 0, metres: 0.4 },
+      { index: 1, metres: 0.5 },
+      { index: 2, metres: 4 },
+    ]);
+    expect([...byPair]).toEqual([
+      [0, 0.4],
+      [1, 0.5],
+      [3, 4],
+    ]);
+    expect([...outlierRows(byPair, 1)]).toEqual([3]);
+    expect([...outlierRows(byPair, null)]).toEqual([]);
+    expect([...outlierRows(byPair, 0)]).toEqual([]);
+  });
+
+  it('knows a document’s own coordinate system from a code', () => {
+    expect(isWktCrs('WKT:PROJCS["x"]')).toBe(true);
+    expect(isWktCrs('EPSG:3844')).toBe(false);
+  });
+});
+
+describe('the exported placement file', () => {
+  it('is named after the map, made safe for a file system', () => {
+    expect(annotationFileName('Planșa de probă')).toBe('Planșa de probă.georef.json');
+    expect(annotationFileName('a/b:c?')).toBe('a_b_c_.georef.json');
+    expect(annotationFileName('...')).toBe('map.georef.json');
+    expect(annotationFileName('x\u0001y')).toBe('x_y.georef.json');
   });
 });

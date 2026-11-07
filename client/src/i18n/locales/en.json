@@ -1585,7 +1585,8 @@
       "mapLabel": "Map for placing the sheet",
       "modes": {
         "corners": "Corners",
-        "points": "Two points"
+        "points": "Two points",
+        "controls": "Control points"
       },
       "transformations": {
         "homography": "Perspective",
@@ -1641,8 +1642,59 @@
         "placementCrsUnknown": "The coordinate system of the points is not known.",
         "placementVersionUnknown": "This placement is written in a form the server does not read.",
         "previewBusy": "The server is busy drawing previews. Try again in a moment.",
-        "previewFailed": "The preview could not be drawn."
-      }
+        "previewFailed": "The preview could not be drawn.",
+        "annotationInvalid": "The file is not a georeference annotation this server can read.",
+        "noPlacement": "The sheet has no placement to export."
+      },
+      "controlsHelp": "Click a point on the sheet, then the same place on the map — or type its coordinates. Add as many as the sheet needs; drag either end to move one.",
+      "addPoints": "Add points",
+      "stopAdding": "Stop adding",
+      "fitToPoints": "Fit view to points",
+      "transformation": "Transformation",
+      "transformationNames": {
+        "similarity": "Similarity",
+        "affine": "Affine",
+        "homography": "Perspective",
+        "polynomial2": "Polynomial, 2nd order",
+        "polynomial3": "Polynomial, 3rd order",
+        "tps": "Thin-plate spline"
+      },
+      "transformationExplain": {
+        "similarity": "Moves, turns and scales the sheet without stretching it.",
+        "affine": "Also stretches and slants it; opposite sides stay parallel.",
+        "homography": "Perspective: for a sheet photographed at an angle.",
+        "polynomial2": "Bends the sheet gently; for old or unevenly stretched sheets.",
+        "polynomial3": "Bends it more freely; needs many well-spread points.",
+        "tps": "Bends the sheet to pass exactly through every point, so the residuals shown are each point left out in turn."
+      },
+      "minimumPoints": "at least {{min}} points",
+      "needsPoints": "{{name}} needs at least {{min}} complete points; there are {{have}}.",
+      "fitNotMeasured": "Fit: not measured",
+      "residualColumn": "Residual",
+      "metres": "{{value}} m",
+      "label": "Label",
+      "easting": "Easting (m)",
+      "northing": "Northing (m)",
+      "crsLabel": "Coordinates in",
+      "crs": {
+        "wgs84": "WGS 84 (longitude, latitude)",
+        "stereo70": "Stereo 70 (EPSG:3844)",
+        "document": "The document's own coordinate system"
+      },
+      "crsUnavailable": "This installation cannot convert coordinates in that system.",
+      "documentCrsNote": "These points are in the document's own coordinate system and cannot be edited here. Start a fresh placement to place the sheet yourself.",
+      "startFresh": "Start a fresh placement",
+      "embeddedNote": "These are the points the document carries. Saving makes this placement your own; removing it later returns to the document's.",
+      "outline": "Outline",
+      "drawOutline": "Draw outline",
+      "stopDrawing": "Stop drawing",
+      "clearOutline": "Clear outline",
+      "useFrame": "Use the map frame",
+      "outlineHelp": "Click around the part of the sheet that is the map; double-click to finish. The rest of the sheet is left out.",
+      "export": "Export placement",
+      "import": "Import placement",
+      "imported": "Placement imported. The map is being prepared.",
+      "importNotJson": "The file is not a placement file (JSON)."
     },
     "redraw": {
       "action": "Redraw…",

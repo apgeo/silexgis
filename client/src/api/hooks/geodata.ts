@@ -190,6 +190,26 @@ export function usePreviewRasterPlacement() {
   });
 }
 
+/** The sheet's placement as a IIIF Georeference Annotation, for saving to a file (not a hook). */
+export async function fetchRasterAnnotation(id: string): Promise<unknown> {
+  return unwrap(api.GET('/api/v1/georeferenced-maps/{id}/placement/annotation', { params: { path: { id } } }));
+}
+
+/** Places a sheet from a Georeference Annotation made here or in another editor. */
+export function useImportRasterAnnotation() {
+  const invalidate = useInvalidateRasterMaps();
+  return useMutation({
+    mutationFn: ({ id, annotation }: { id: string; annotation: unknown }) =>
+      unwrap(
+        api.PUT('/api/v1/georeferenced-maps/{id}/placement/annotation', {
+          params: { path: { id } },
+          body: annotation as never,
+        }),
+      ),
+    onSuccess: () => invalidate(),
+  });
+}
+
 export function useGeofile(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.geofile(id ?? ''),

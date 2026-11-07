@@ -17,7 +17,7 @@ import VectorSource from 'ol/source/Vector';
 import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
 import { useTranslation } from 'react-i18next';
-import { CORNER_IDS, type CornerId, type Corners, type PointPair } from '../../../geodata/placement/placement.ts';
+import { CORNER_IDS, type CornerId, type Corners } from '../../../geodata/placement/placement.ts';
 import { mapLonLatExtent } from '../../../map/mapContext.ts';
 import { coarsePointer } from '../../../map/pointer.ts';
 
@@ -35,13 +35,27 @@ export interface PlacementMapProps {
   /** The last preview the server answered, already in the map's projection. */
   preview: { url: string; imageExtent: Extent } | null;
   opacity: number;
-  mode: 'corners' | 'points';
-  /** The control points of the two-point mode; the complete ones are drawn on the ground. */
-  points: readonly PointPair[];
+  mode: 'corners' | 'points' | 'controls';
+  /**
+   * The ground half of each control point, in degrees, by table row; null for a row whose ground
+   * half is not chosen yet or cannot be shown.
+   */
+  markers: readonly PlacementMarker[];
+  /** A control point's ground half dragged somewhere else; absent where points are not moved. */
+  onMarkerMove?: (index: number, lonLat: [number, number]) => void;
+  /** Changed to ask the map to frame every control point it shows. */
+  fitRequest?: number;
   /** Answers a click on the map with its point in degrees; absent while a click means nothing. */
   onMapClick?: (lonLat: [number, number]) => void;
   /** Whether the dialog has finished opening, so the map can measure its box again. */
   active: boolean;
+}
+
+export interface PlacementMarker {
+  lonLat: [number, number] | null;
+  label: string;
+  /** Drawn as suspect: its residual is far above the rest. */
+  outlier?: boolean;
 }
 
 /** Brașov and the Southern Carpathians, when nothing else says where to look. */
@@ -67,7 +81,9 @@ export default function PlacementMap({
   preview,
   opacity,
   mode,
-  points,
+  markers,
+  onMarkerMove,
+  fitRequest = 0,
   onMapClick,
   active,
 }: PlacementMapProps) {
@@ -84,13 +100,14 @@ export default function PlacementMap({
   const pointLayer = useRef<VectorLayer | null>(null);
   const modify = useRef<Modify | null>(null);
   const translate = useRef<Translate | null>(null);
+  const pointModify = useRef<Modify | null>(null);
   // Set while this component itself moves the handles, so the change it causes is not taken for
   // a drag and echoed back into the outline it came from.
   const syncing = useRef(false);
 
   // Listeners are attached once, when the map is built; what they call changes with every render.
-  const callbacks = useRef({ onCornersChange, onViewReady, onMapClick });
-  callbacks.current = { onCornersChange, onViewReady, onMapClick };
+  const callbacks = useRef({ onCornersChange, onViewReady, onMapClick, onMarkerMove });
+  callbacks.current = { onCornersChange, onViewReady, onMapClick, onMarkerMove };
   const first = useRef({ corners, initialLonLatExtent });
 
   const handle = (id: CornerId) => handleSource.current.getFeatureById(id) as Feature<Point> | null;
@@ -156,18 +173,18 @@ export default function PlacementMap({
     if (map.current || !target.current) {
       return;
     }
-    const handleStyle = (feature: { get: (key: string) => unknown }) =>
+    const markStyle = (feature: { get: (key: string) => unknown }, colour: string) =>
       new Style({
         image: new CircleStyle({
           radius: coarsePointer() ? 10 : 7,
-          fill: new Fill({ color: token.colorPrimary }),
+          fill: new Fill({ color: colour }),
           stroke: new Stroke({ color: '#ffffff', width: 2 }),
         }),
         text: new Text({
           text: String(feature.get('label') ?? ''),
           offsetY: -16,
           font: '600 12px sans-serif',
-          fill: new Fill({ color: token.colorPrimary }),
+          fill: new Fill({ color: colour }),
           stroke: new Stroke({ color: 'rgba(255, 255, 255, 0.9)', width: 3 }),
         }),
       });
@@ -180,8 +197,11 @@ export default function PlacementMap({
         fill: new Fill({ color: 'rgba(22, 119, 255, 0.06)' }),
       }),
     });
+    const handleStyle = (feature: { get: (key: string) => unknown }) => markStyle(feature, token.colorPrimary);
     handleLayer.current = new VectorLayer({ source: handleSource.current, style: handleStyle });
-    pointLayer.current = new VectorLayer({ source: pointSource.current, style: handleStyle });
+    const pointStyle = (feature: { get: (key: string) => unknown }) =>
+      markStyle(feature, feature.get('outlier') === true ? token.colorError : token.colorPrimary);
+    pointLayer.current = new VectorLayer({ source: pointSource.current, style: pointStyle });
     const instance = new Map({
       target: target.current,
       layers: [
@@ -247,6 +267,18 @@ export default function PlacementMap({
       }
     });
     instance.addInteraction(modify.current);
+    pointModify.current = new Modify({ source: pointSource.current, pixelTolerance: 12, deleteCondition: never });
+    pointModify.current.setActive(false);
+    pointModify.current.on('modifyend', (event) => {
+      for (const feature of event.features.getArray()) {
+        const index = feature.get('index') as number | undefined;
+        const coordinate = (feature.getGeometry() as Point | undefined)?.getCoordinates();
+        if (index !== undefined && coordinate) {
+          callbacks.current.onMarkerMove?.(index, toLonLat(coordinate) as [number, number]);
+        }
+      }
+    });
+    instance.addInteraction(pointModify.current);
     handleSource.current.on('changefeature', () => {
       if (!syncing.current) {
         drawOutline();
@@ -287,16 +319,35 @@ export default function PlacementMap({
     pointLayer.current?.setVisible(!cornersMode);
   }, [mode]);
 
+  const canMoveMarkers = onMarkerMove !== undefined;
+  useEffect(() => {
+    pointModify.current?.setActive(mode !== 'corners' && canMoveMarkers);
+  }, [mode, canMoveMarkers]);
+
   useEffect(() => {
     pointSource.current.clear();
-    points.forEach((point, index) => {
-      if (point.x !== null && point.y !== null) {
-        const feature = new Feature({ geometry: new Point(fromLonLat([point.x, point.y])) });
-        feature.set('label', String(index + 1));
+    markers.forEach((marker, index) => {
+      if (marker.lonLat !== null) {
+        const feature = new Feature({ geometry: new Point(fromLonLat(marker.lonLat)) });
+        feature.set('index', index);
+        feature.set('label', marker.label);
+        feature.set('outlier', marker.outlier === true);
         pointSource.current.addFeature(feature);
       }
     });
-  }, [points]);
+  }, [markers]);
+
+  useEffect(() => {
+    const instance = map.current;
+    if (fitRequest === 0 || !instance) {
+      return;
+    }
+    const extent = pointSource.current.getExtent();
+    // An empty source reports an infinite extent, and fitting one throws.
+    if (extent && extent.every(Number.isFinite)) {
+      instance.getView().fit(extent, { padding: [48, 48, 48, 48], maxZoom: 18, duration: 250 });
+    }
+  }, [fitRequest]);
 
   useEffect(() => {
     imageLayer.current?.setOpacity(opacity);

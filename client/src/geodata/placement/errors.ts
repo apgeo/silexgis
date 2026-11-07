@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * The refusals the map-sheet routes give — drawing, placing, previewing — by the part of the
+ * The refusals the map-sheet routes give — drawing, placing, previewing, importing — by the part of the
  * code after `georeferenced_map.`, each with its sentence under `geodata.placement.errors`.
  * The list is closed so an unknown code falls back to the generic sentence rather than putting
  * a key, or an identifier, on screen.
@@ -25,6 +25,8 @@ export const PLACEMENT_ERROR_CODES = [
   'placement_version_unknown',
   'preview_busy',
   'preview_failed',
+  'annotation_invalid',
+  'no_placement',
 ] as const;
 
 export type PlacementErrorCode = (typeof PLACEMENT_ERROR_CODES)[number];

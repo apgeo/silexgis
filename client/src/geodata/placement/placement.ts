@@ -57,6 +57,25 @@ export interface PlacementBody {
 
 export const PLACEMENT_CRS = 'EPSG:4326';
 
+/** Every transformation the server can fit, in the order the editor offers them. */
+export const TRANSFORMATIONS: readonly PlacementTransformation[] = [
+  'similarity',
+  'affine',
+  'homography',
+  'polynomial2',
+  'polynomial3',
+  'tps',
+];
+
+/**
+ * A coordinate system named the way a document names its own — by its whole definition rather
+ * than by a code. Such points can be shown and sent back as they are, but not typed in or
+ * converted here.
+ */
+export function isWktCrs(crs: string): boolean {
+  return crs.trim().toUpperCase().startsWith('WKT:');
+}
+
 /** The fewest points the server accepts for each transformation. */
 export function minimumPoints(transformation: PlacementTransformation): number {
   switch (transformation) {
@@ -195,13 +214,15 @@ export interface PointPair {
   v: number;
   x: number | null;
   y: number | null;
+  /** What the point is called, when anybody named it. */
+  label?: string | null;
 }
 
 /** The pairs that have both halves. */
 export function completePairs(pairs: readonly PointPair[]): ControlPoint[] {
   return pairs.flatMap((pair, index) =>
     pair.x !== null && pair.y !== null && Number.isFinite(pair.x) && Number.isFinite(pair.y)
-      ? [{ u: pair.u, v: pair.v, x: pair.x, y: pair.y, label: String(index + 1) }]
+      ? [{ u: pair.u, v: pair.v, x: pair.x, y: pair.y, label: pair.label?.trim() || String(index + 1) }]
       : [],
   );
 }
@@ -213,12 +234,79 @@ export function completePairs(pairs: readonly PointPair[]): ControlPoint[] {
 export function pairsToPlacement(
   pairs: readonly PointPair[],
   transformation: PlacementTransformation = 'similarity',
+  options: { crs?: string; mask?: readonly (readonly [number, number])[] | null } = {},
 ): PlacementBody | null {
   const gcps = completePairs(pairs);
   if (gcps.length < minimumPoints(transformation)) {
     return null;
   }
-  return { version: 1, transformation, crs: PLACEMENT_CRS, gcps, mask: null };
+  const mask = options.mask && options.mask.length >= 3 ? options.mask.map(([u, v]) => [u, v]) : null;
+  return { version: 1, transformation, crs: options.crs ?? PLACEMENT_CRS, gcps, mask };
+}
+
+/** The pairs of a saved placement, whatever its points and system, for the control-point table. */
+export function pairsOfPlacement(placement: PlacementBody | null | undefined): PointPair[] {
+  return (placement?.gcps ?? []).map((p) => ({ u: p.u, v: p.v, x: p.x, y: p.y, label: p.label ?? null }));
+}
+
+/** A placement's outline as picture fractions, or null when it has none worth drawing. */
+export function maskOf(placement: PlacementBody | null | undefined): [number, number][] | null {
+  const ring = placement?.mask;
+  if (!ring || ring.length < 3) {
+    return null;
+  }
+  return ring.map((point) => [point[0], point[1]] as [number, number]);
+}
+
+/**
+ * Each pair's residual from a preview answer. The answer numbers the points it was sent, and only
+ * complete pairs are sent, so its indexes are mapped back to the table's rows here.
+ */
+export function residualsByPair(
+  pairs: readonly PointPair[],
+  residuals: readonly { index: number; metres: number }[],
+): Map<number, number> {
+  const sent = pairs.flatMap((pair, index) =>
+    pair.x !== null && pair.y !== null && Number.isFinite(pair.x) && Number.isFinite(pair.y) ? [index] : [],
+  );
+  const byPair = new Map<number, number>();
+  for (const { index, metres } of residuals) {
+    const row = sent[index];
+    if (row !== undefined) {
+      byPair.set(row, metres);
+    }
+  }
+  return byPair;
+}
+
+/**
+ * The rows whose residual is more than three times the fit's root mean square: the points most
+ * likely clicked in the wrong place. Nothing is singled out while the fit is exact or unmeasured.
+ */
+export function outlierRows(byPair: ReadonlyMap<number, number>, rms: number | null): Set<number> {
+  const out = new Set<number>();
+  if (rms === null || !(rms > 0)) {
+    return out;
+  }
+  for (const [row, metres] of byPair) {
+    if (metres > 3 * rms) {
+      out.add(row);
+    }
+  }
+  return out;
+}
+
+/** The file an exported placement is saved as: the map's name, made safe for a file system. */
+export function annotationFileName(name: string): string {
+  const safe = [...name.normalize('NFC')]
+    // Characters below a space are no part of a file name anywhere.
+    .map((char) => (char.charCodeAt(0) < 32 ? '_' : char))
+    .join('')
+    .replace(/[\\/:*?"<>|]+/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^\.+/, '');
+  return `${safe || 'map'}.georef.json`;
 }
 
 /** A distance in metres as the footer prints it: finer for a close fit, whole metres for a poor one. */
