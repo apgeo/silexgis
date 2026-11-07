@@ -40,6 +40,8 @@ const FORMAT_LABEL_KEYS: Record<SurveyModelInfo['format'], string> = {
   lox: 'surveyModels.formats.lox',
   survex3d: 'surveyModels.formats.survex3d',
   stl: 'surveyModels.formats.stl',
+  laz: 'surveyModels.formats.laz',
+  las: 'surveyModels.formats.las',
 };
 
 /**

@@ -305,6 +305,8 @@ const surveyModelFormats: Record<SurveyModelInfo['format'], true> = {
   lox: true,
   survex3d: true,
   stl: true,
+  laz: true,
+  las: true,
 };
 
 /**

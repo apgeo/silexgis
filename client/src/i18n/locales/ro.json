@@ -4194,7 +4194,9 @@
     "formats": {
       "lox": "Therion .lox",
       "survex3d": "Survex .3d",
-      "stl": "Pereți .stl"
+      "stl": "Pereți .stl",
+      "laz": "Nor de puncte .laz",
+      "las": "Nor de puncte .las"
     },
     "converting": "Pereții sunt pregătiți pentru scena 3D. Lista se actualizează singură când sunt gata.",
     "conversionFailed": "Pereții nu au putut fi convertiți.",
@@ -6834,7 +6836,8 @@
       "therionConfig": "Therion .thconfig",
       "therionLog": "Jurnal de compilare",
       "survexSource": "Survex .svx",
-      "topoDroidArchive": "Export din aplicație"
+      "topoDroidArchive": "Export din aplicație",
+      "pointCloud": "Nor de puncte"
     },
     "problems": {
       "formatUnsupported": "Arhivează o sursă topografică: Therion .th, .th2 sau .thconfig, Survex .svx, un .log de compilare sau exportul .zip al unei aplicații de topografie.",

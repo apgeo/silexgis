@@ -4181,7 +4181,9 @@
     "formats": {
       "lox": "Therion .lox",
       "survex3d": "Survex .3d",
-      "stl": "Walls .stl"
+      "stl": "Walls .stl",
+      "laz": "Point cloud .laz",
+      "las": "Point cloud .las"
     },
     "converting": "The walls are being prepared for the 3D scene. This list updates itself when they are ready.",
     "conversionFailed": "The walls could not be converted.",
@@ -6821,7 +6823,8 @@
       "therionConfig": "Therion .thconfig",
       "therionLog": "Compilation log",
       "survexSource": "Survex .svx",
-      "topoDroidArchive": "Survey app export"
+      "topoDroidArchive": "Survey app export",
+      "pointCloud": "Point cloud"
     },
     "problems": {
       "formatUnsupported": "Archive a survey source: Therion .th, .th2 or .thconfig, Survex .svx, a compilation .log, or a survey app's .zip export.",
