@@ -449,6 +449,12 @@ public abstract class ProcessingJobWorkerBase(
                         && r.GeoreferencedMapId != Guid.Empty
                         ? (NotificationTargetKind.GeoreferencedMap, r.GeoreferencedMapId)
                         : null;
+                case ProcessingJobKinds.MapSheetRender:
+                case ProcessingJobKinds.MapPlacementWarp:
+                    return JsonSerializer.Deserialize<MapSheetPayload>(job.Payload, JsonSerializerOptions.Web) is { } m
+                        && m.GeoreferencedMapId != Guid.Empty
+                        ? (NotificationTargetKind.GeoreferencedMap, m.GeoreferencedMapId)
+                        : null;
                 default:
                     return null;
             }

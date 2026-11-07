@@ -115,7 +115,12 @@ public sealed class DocumentDeletionService(
         return await db.SurveySources.AnyAsync(s => s.DocumentId == documentId, ct)
             || await db.SurveyModels.AnyAsync(m =>
                 files.Contains(m.FileId) || (m.ConvertedFileId != null && files.Contains(m.ConvertedFileId.Value)), ct)
-            || await db.GeoreferencedMaps.AnyAsync(m => files.Contains(m.FileId), ct)
+            || await db.GeoreferencedMaps.AnyAsync(
+                m => files.Contains(m.FileId)
+                    || (m.SourceFileId != null && files.Contains(m.SourceFileId.Value))
+                    || (m.MasterFileId != null && files.Contains(m.MasterFileId.Value))
+                    || (m.PreviewFileId != null && files.Contains(m.PreviewFileId.Value)),
+                ct)
             || await db.Geofiles.AnyAsync(g => files.Contains(g.FileId), ct);
     }
 

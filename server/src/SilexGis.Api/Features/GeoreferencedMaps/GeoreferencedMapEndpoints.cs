@@ -8,6 +8,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Filters;
@@ -39,7 +40,40 @@ public sealed record GeoreferencedMapDto(
     /// <summary>Signed COG URL once Ready — feed it to ol/source/GeoTIFF as-is.</summary>
     string? CogUrl,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    /// <summary>The uploaded portable document a map sheet is drawn from; null for a GeoTIFF upload.</summary>
+    Guid? SourceFileId = null,
+    /// <summary>The page of the document that is drawn, from 1.</summary>
+    int? SourcePage = null,
+    int? SourcePageCount = null,
+    /// <summary>The page's optional-content layer names; empty when it has none, null before it is drawn.</summary>
+    IReadOnlyList<string>? SourceLayers = null,
+    /// <summary>The layers drawn; null for all of them.</summary>
+    IReadOnlyList<string>? RenderLayers = null,
+    decimal? RenderDpi = null,
+    int? RenderWidth = null,
+    int? RenderHeight = null,
+    /// <summary>What the drawing library complained about while still drawing the page whole.</summary>
+    string? RenderWarnings = null,
+    /// <summary>Where the sheet is placed; null when it is not.</summary>
+    MapPlacementDto? Placement = null,
+    PlacementSource? PlacementSource = null,
+    /// <summary>Whether the document carries a place of its own, which removing a hand placement returns to.</summary>
+    bool HasEmbeddedPlacement = false,
+    decimal? PlacementRmsMetres = null,
+    /// <summary>A short-lived address of the drawn page's picture, for the placement editor.</summary>
+    string? PreviewUrl = null);
+
+/// <summary>A sheet's placement as the wire carries it; see the placement rules for what each part means.</summary>
+public sealed record MapPlacementDto(
+    int Version,
+    string Transformation,
+    string Crs,
+    IReadOnlyList<MapControlPointDto> Gcps,
+    IReadOnlyList<IReadOnlyList<double>>? Mask);
+
+/// <summary>A point on the picture (fractions of its width and height) matched to a point on the ground.</summary>
+public sealed record MapControlPointDto(double U, double V, double X, double Y, string? Label);
 
 public sealed record GeoreferencedMapUpdateRequest(
     string Name,
@@ -98,7 +132,10 @@ public static class GeoreferencedMapEndpoints
         maps.MapPost("/", UploadAsync)
             .DisableAntiforgery()
             .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(RasterUploadLimits.MaxRequestBytes))
-            .WithSummary("Uploads a georeferenced raster (GeoTIFF) and queues COG normalization.");
+            .WithSummary(
+                "Uploads a georeferenced raster (GeoTIFF) and queues COG normalization, or a map sheet as a "
+                + "portable document (.pdf) and queues drawing it: placed at once when the document carries its "
+                + "own georeferencing, otherwise left `unplaced` for a placement.");
         maps.MapGet("/", ListAsync)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -113,6 +150,7 @@ public static class GeoreferencedMapEndpoints
             .WithSummary("Metadata update (Write permission).");
         maps.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes the catalog entry (stored files are kept).");
+        maps.MapGeoreferencedMapSheetEndpoints();
 
         return api;
     }
@@ -140,10 +178,18 @@ public static class GeoreferencedMapEndpoints
         }
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (extension is not (".tif" or ".tiff"))
+        if (extension is not (".tif" or ".tiff" or ".pdf"))
         {
             return ApiProblems.BadRequest(
-                "georeferenced_map.format_unsupported", "Upload a georeferenced GeoTIFF (.tif/.tiff).");
+                "georeferenced_map.format_unsupported",
+                "Upload a georeferenced GeoTIFF (.tif/.tiff) or a map sheet as a portable document (.pdf).");
+        }
+
+        var isSheet = extension == ".pdf";
+        if (isSheet && !await StartsLikePdfAsync(file, ct))
+        {
+            return ApiProblems.BadRequest(
+                "georeferenced_map.format_unsupported", "The file is named .pdf but is not a portable document.");
         }
 
         if (file.Length == 0 || file.Length > MaxUploadBytes)
@@ -176,9 +222,17 @@ public static class GeoreferencedMapEndpoints
         // The display name is only a starting point the owner can edit, so a long one is cut to
         // what the column holds rather than refused.
         var name = Clipped(Path.GetFileNameWithoutExtension(file.FileName), MaxNameLength);
+        // A sheet's document is a document like any other — private to its uploader until they
+        // share it — and the map is how everybody else sees it: as a picture placed on the map,
+        // published only to those the map is published to.
         var stored = documents.Create(
             new StoredContent(
-                storagePath, Path.GetFileName(file.FileName), "image/tiff", file.Length, sha256, FileKind.Raster),
+                storagePath,
+                Path.GetFileName(file.FileName),
+                isSheet ? "application/pdf" : "image/tiff",
+                file.Length,
+                sha256,
+                isSheet ? FileKind.Document : FileKind.Raster),
             name,
             user.UserId,
             user.UserId).File;
@@ -188,15 +242,25 @@ public static class GeoreferencedMapEndpoints
             Name = name,
             FileId = stored.Id,
             OwnerUserId = user.UserId,
+            MapKind = isSheet ? MapKind.CaveMap : MapKind.Other,
+            SourceFileId = isSheet ? stored.Id : null,
+            SourcePage = isSheet ? 1 : null,
         };
 
         db.GeoreferencedMaps.Add(map);
-        db.ProcessingJobs.Add(new ProcessingJob
-        {
-            Kind = ProcessingJobKinds.RasterCog,
-            Payload = JsonSerializer.Serialize(new RasterCogPayload(map.Id), JsonSerializerOptions.Web),
-            RequestedBy = user.UserId,
-        });
+        db.ProcessingJobs.Add(isSheet
+            ? new ProcessingJob
+            {
+                Kind = ProcessingJobKinds.MapSheetRender,
+                Payload = JsonSerializer.Serialize(new MapSheetPayload(map.Id), JsonSerializerOptions.Web),
+                RequestedBy = user.UserId,
+            }
+            : new ProcessingJob
+            {
+                Kind = ProcessingJobKinds.RasterCog,
+                Payload = JsonSerializer.Serialize(new RasterCogPayload(map.Id), JsonSerializerOptions.Web),
+                RequestedBy = user.UserId,
+            });
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Created($"/api/v1/georeferenced-maps/{map.Id}", map.ToDto(tokens));
@@ -392,7 +456,16 @@ public static class GeoreferencedMapEndpoints
         return cave is not null && (await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed;
     }
 
-    private static GeoreferencedMapDto ToDto(this GeoreferencedMap m, IFileAccessTokenService tokens) => new(
+    /// <summary>The first bytes of a portable document, which every one starts with.</summary>
+    private static async Task<bool> StartsLikePdfAsync(IFormFile file, CancellationToken ct)
+    {
+        var head = new byte[1024];
+        await using var stream = file.OpenReadStream();
+        var read = await stream.ReadAtLeastAsync(head, head.Length, throwOnEndOfStream: false, ct);
+        return head.AsSpan(0, read).IndexOf("%PDF-"u8) >= 0;
+    }
+
+    internal static GeoreferencedMapDto ToDto(this GeoreferencedMap m, IFileAccessTokenService tokens) => new(
         m.Id,
         m.Name,
         m.Description,
@@ -417,5 +490,39 @@ public static class GeoreferencedMapEndpoints
             ? $"/api/v1/files/{m.FileId}/content?token={Uri.EscapeDataString(tokens.CreateToken(m.FileId, FileDelivery.Full, FileAccessLifetime.Session))}"
             : null,
         m.CreatedAt,
-        m.UpdatedAt);
+        m.UpdatedAt,
+        m.SourceFileId,
+        m.SourcePage,
+        m.SourcePageCount,
+        Names(m.SourceLayers),
+        Names(m.RenderLayers),
+        m.RenderDpi,
+        m.RenderWidth,
+        m.RenderHeight,
+        m.RenderWarnings,
+        MapPlacement.FromJson(m.Placement) is { } placement ? placement.ToDto() : null,
+        m.PlacementSource,
+        m.EmbeddedPlacement is not null,
+        m.PlacementRmsMetres,
+        m.PreviewFileId is { } preview
+            // A picture this application drew of the page; the editor shows it once, soon after.
+            ? $"/api/v1/files/{preview}/content?token={Uri.EscapeDataString(tokens.CreateToken(preview, FileDelivery.Full))}"
+            : null);
+
+    private static IReadOnlyList<string>? Names(string? json) =>
+        json is null ? null : JsonSerializer.Deserialize<string[]>(json);
+
+    internal static MapPlacementDto ToDto(this MapPlacement p) => new(
+        p.Version,
+        p.Transformation,
+        p.Crs,
+        [.. p.Gcps.Select(g => new MapControlPointDto(g.U, g.V, g.X, g.Y, g.Label))],
+        p.Mask);
+
+    internal static MapPlacement ToDomain(this MapPlacementDto p) => new(
+        p.Version,
+        p.Transformation,
+        p.Crs,
+        [.. (p.Gcps ?? []).Select(g => new MapControlPoint(g.U, g.V, g.X, g.Y, g.Label))],
+        p.Mask);
 }

@@ -3790,6 +3790,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
+                    b.Property<string>("EmbeddedPlacement")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("embedded_placement");
+
                     b.Property<Guid>("FileId")
                         .HasColumnType("uuid")
                         .HasColumnName("file_id");
@@ -3797,6 +3801,10 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<short>("MapKind")
                         .HasColumnType("smallint")
                         .HasColumnName("map_kind");
+
+                    b.Property<Guid?>("MasterFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("master_file_id");
 
                     b.Property<int?>("MaxZoom")
                         .HasColumnType("integer")
@@ -3816,10 +3824,65 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("owner_user_id");
 
+                    b.Property<string>("Placement")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("placement");
+
+                    b.Property<decimal?>("PlacementRmsMetres")
+                        .HasPrecision(10, 3)
+                        .HasColumnType("numeric(10,3)")
+                        .HasColumnName("placement_rms_metres");
+
+                    b.Property<short?>("PlacementSource")
+                        .HasColumnType("smallint")
+                        .HasColumnName("placement_source");
+
+                    b.Property<Guid?>("PreviewFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("preview_file_id");
+
                     b.Property<string>("ProcessingError")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("processing_error");
+
+                    b.Property<decimal?>("RenderDpi")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("numeric(6,2)")
+                        .HasColumnName("render_dpi");
+
+                    b.Property<int?>("RenderHeight")
+                        .HasColumnType("integer")
+                        .HasColumnName("render_height");
+
+                    b.Property<string>("RenderLayers")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("render_layers");
+
+                    b.Property<string>("RenderWarnings")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("render_warnings");
+
+                    b.Property<int?>("RenderWidth")
+                        .HasColumnType("integer")
+                        .HasColumnName("render_width");
+
+                    b.Property<Guid?>("SourceFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_file_id");
+
+                    b.Property<string>("SourceLayers")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("source_layers");
+
+                    b.Property<int?>("SourcePage")
+                        .HasColumnType("integer")
+                        .HasColumnName("source_page");
+
+                    b.Property<int?>("SourcePageCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("source_page_count");
 
                     b.Property<short>("Status")
                         .HasColumnType("smallint")
@@ -3850,8 +3913,17 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("FileId")
                         .HasDatabaseName("ix_georeferenced_maps_file_id");
 
+                    b.HasIndex("MasterFileId")
+                        .HasDatabaseName("ix_georeferenced_maps_master_file_id");
+
                     b.HasIndex("OwnerUserId")
                         .HasDatabaseName("ix_georeferenced_maps_owner_user_id");
+
+                    b.HasIndex("PreviewFileId")
+                        .HasDatabaseName("ix_georeferenced_maps_preview_file_id");
+
+                    b.HasIndex("SourceFileId")
+                        .HasDatabaseName("ix_georeferenced_maps_source_file_id");
 
                     b.ToTable("georeferenced_maps", (string)null);
                 });
@@ -10212,12 +10284,30 @@ namespace SilexGis.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_georeferenced_maps_stored_files_file_id");
 
+                    b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("MasterFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_georeferenced_maps_stored_files_master_file_id");
+
                     b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
                         .WithMany()
                         .HasForeignKey("OwnerUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_georeferenced_maps_users_owner_user_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("PreviewFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_georeferenced_maps_stored_files_preview_file_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("SourceFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_georeferenced_maps_stored_files_source_file_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.HierarchyMembership", b =>
