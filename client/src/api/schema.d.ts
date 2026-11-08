@@ -14143,6 +14143,7 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             finishedAt: null | string;
+            language: null | string;
         };
         PublicSurveyUploadErrorDto: {
             code: string;

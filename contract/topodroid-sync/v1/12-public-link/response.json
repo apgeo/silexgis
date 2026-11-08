@@ -41,5 +41,6 @@
   "logTail": null,
   "log": null,
   "createdAt": "<timestamp>",
-  "finishedAt": "<timestamp>"
+  "finishedAt": "<timestamp>",
+  "language": "en"
 }

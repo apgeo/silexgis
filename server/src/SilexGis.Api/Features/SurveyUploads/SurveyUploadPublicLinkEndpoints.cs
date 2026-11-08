@@ -37,6 +37,8 @@ namespace SilexGis.Api.Features.SurveyUploads;
 /// <param name="Log">The compiler's whole log, to download, once a compile has written one.</param>
 /// <param name="CreatedAt">When the upload was opened.</param>
 /// <param name="FinishedAt">When the last run finished.</param>
+/// <param name="Language">The interface language of the account that sent the survey, so a reader who has not picked one
+/// in this browser sees the page in the language its sender works in; null when that account is gone.</param>
 public sealed record PublicSurveyUploadDto(
     PublicSurveyUploadSurveyDto Survey,
     PublicSurveyUploadCaveDto Cave,
@@ -51,7 +53,8 @@ public sealed record PublicSurveyUploadDto(
     string? LogTail,
     PublicSurveyUploadLogDto? Log,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? FinishedAt);
+    DateTimeOffset? FinishedAt,
+    string? Language);
 
 /// <summary>The survey a public page is about.</summary>
 public sealed record PublicSurveyUploadSurveyDto(string Title);
@@ -293,6 +296,10 @@ public static partial class SurveyUploadEndpoints
 
         var log = await PublicLogFileAsync(db, upload.Id, ct);
         var compile = ReadOptions(upload).Compile;
+        var language = await db.Users.AsNoTracking()
+            .Where(u => u.Id == upload.RequestedBy)
+            .Select(u => u.Locale)
+            .FirstOrDefaultAsync(ct);
         return TypedResults.Ok(new PublicSurveyUploadDto(
             new PublicSurveyUploadSurveyDto(title),
             new PublicSurveyUploadCaveDto(cave.Name ?? ""),
@@ -308,7 +315,8 @@ public static partial class SurveyUploadEndpoints
             upload.LogTail,
             log is null ? null : new PublicSurveyUploadLogDto(log.Name, log.SizeBytes, PublicLogUrl(token)),
             upload.CreatedAt,
-            upload.FinishedAt));
+            upload.FinishedAt,
+            language));
     }
 
     private static async Task<Results<PhysicalFileHttpResult, ProblemHttpResult>> PublicLogAsync(

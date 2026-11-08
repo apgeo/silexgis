@@ -282,6 +282,7 @@ smaller shape:
 | `logTail` | the last lines the compiler wrote, as the status answer's `logTail`; null before a compile |
 | `log` | `{ name, sizeBytes, url }` — the compiler's whole log, once a compile wrote one, after a failed compile as after one that worked; null otherwise |
 | `createdAt`, `finishedAt` | the upload's times |
+| `language` | the interface language of the account that sent the survey (`en`, `ro`); the page opens in it unless the reader has picked one in that browser. Null when that account no longer exists |
 
 `log.url` is `GET /api/v1/public/survey-uploads/{token}/log`, a route of the same link: it decides
 on every read exactly as the page does (the same `404` for a withdrawn, invented or no-longer-open

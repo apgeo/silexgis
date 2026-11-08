@@ -17,6 +17,7 @@ import {
   viewerModelOf,
 } from '../../api/hooks.ts';
 import { useAuth } from '../../auth/auth.tsx';
+import { useSendersLanguage } from '../../i18n/languageChoice.ts';
 import Button from '../../components/Button.tsx';
 import SurveyResultViewer, { type SurveyGeoState } from '../../components/surveyUploads/viewer/SurveyResultViewer.tsx';
 
@@ -40,6 +41,7 @@ export default function PublicSurveyViewerPage() {
   const location = useLocation();
   const { user, signIn } = useAuth();
   const { data: view, isPending, error } = usePublicSurveyUpload(token);
+  useSendersLanguage(view?.language);
   const settled = !!view && !surveyUploadUnsettled(view.status);
   const figures = usePublicSurveyUploadFigures(token, settled);
   // Asked for only when the figures say the run placed a line, so a survey that was never placed
