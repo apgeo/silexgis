@@ -51,6 +51,8 @@ export const specs = {
     'object-selector-pickers.spec.ts',
     'map-filter-layers.spec.ts',
     'cave-club-fields.spec.ts',
+    // The cave page's survey-model rows for a scan and the scan's placement control.
+    'point-clouds.spec.ts',
   ],
   cavingGroups: [
     'announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts', 'caver-caving-groups.spec.ts',
@@ -148,7 +150,11 @@ export const specs = {
     // A place a phone mapped to a survey station, listed and removed on the place's page.
     'place-station.spec.ts',
   ],
-  scene: ['scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts', 'scene3d-backgrounds.spec.ts'],
+  scene: [
+    'scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts', 'scene3d-backgrounds.spec.ts',
+    // A tiled scan drawn in the scene and opened in the local viewer.
+    'point-clouds.spec.ts',
+  ],
   search: ['documents.spec.ts'],
   settings: [
     'settings.spec.ts', 'not-found.spec.ts', 'saved-filter-audience.spec.ts', 'coordinate-converter.spec.ts',
@@ -169,7 +175,11 @@ export const specs = {
   ],
   // Surveys sent from a field device: the access-key and upload settings, the cave's list of
   // surveys, the status page of one upload and the page behind its public link.
-  surveyUploads: ['access-keys.spec.ts', 'survey-uploads.spec.ts', 'public-survey.spec.ts', 'survey-viewer.spec.ts'],
+  surveyUploads: [
+    'access-keys.spec.ts', 'survey-uploads.spec.ts', 'public-survey.spec.ts', 'survey-viewer.spec.ts',
+    // A point cloud dropped on a cave: its facts, the downsample choice, the scan card and its placement.
+    'point-clouds.spec.ts',
+  ],
   sync: [
     'settings.spec.ts', 'review-queue.spec.ts', 'review-uploader.spec.ts',
     'review-uploader-mobile.spec.ts', 'review-file-import.spec.ts',
