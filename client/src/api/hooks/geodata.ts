@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from '../client.ts';
 import { uploadWithProgress, type UploadProgress } from '../uploadWithProgress.ts';
 import type { components } from '../schema';
@@ -28,9 +28,21 @@ export function useGeofiles(params: GeofileListParams, pollWhileImporting = fals
   });
 }
 
+/**
+ * Reads the lists under a key again after a write, including one whose first read is still on its
+ * way. Invalidating alone does not do that: a query that has no answer yet keeps the request
+ * already running instead of starting another, and that request may have been answered by the
+ * server before the write landed — so a file dropped while its tab was still loading never
+ * appeared in the list. Cancelling first makes the next read start after the write.
+ */
+async function refreshAfterWrite(queryClient: QueryClient, queryKey: readonly unknown[]): Promise<void> {
+  await queryClient.cancelQueries({ queryKey });
+  await queryClient.invalidateQueries({ queryKey });
+}
+
 function useInvalidateGeofiles() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: ['geofiles'] });
+  return () => void refreshAfterWrite(queryClient, ['geofiles']);
 }
 
 /** A file to send, and who to tell how much of it has gone up. */
@@ -101,7 +113,7 @@ export function useRasterMaps(params: RasterMapListParams, pollWhileProcessing =
 
 function useInvalidateRasterMaps() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: ['raster-maps'] });
+  return () => void refreshAfterWrite(queryClient, ['raster-maps']);
 }
 
 export function useUploadRasterMap() {
