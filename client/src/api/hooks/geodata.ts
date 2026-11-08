@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client.ts';
+import { uploadWithProgress, type UploadProgress } from '../uploadWithProgress.ts';
 import type { components } from '../schema';
 import { unwrap } from './shared.ts';
 import type { EntranceFeatureCollection, GeofileListParams, RasterMapListParams } from './types.ts';
@@ -32,17 +33,19 @@ function useInvalidateGeofiles() {
   return () => void queryClient.invalidateQueries({ queryKey: ['geofiles'] });
 }
 
+/** A file to send, and who to tell how much of it has gone up. */
+export interface FileUpload {
+  file: File;
+  onProgress?: (progress: UploadProgress) => void;
+}
+
 export function useUploadGeofile() {
   const invalidate = useInvalidateGeofiles();
   return useMutation({
-    mutationFn: async (file: File): Promise<GeofileInfo> => {
+    mutationFn: async ({ file, onProgress }: FileUpload): Promise<GeofileInfo> => {
       const form = new FormData();
       form.append('file', file, file.name);
-      // Multipart: hand the FormData through untouched (the browser sets the boundary).
-      return unwrap(api.POST('/api/v1/geofiles', {
-        body: form as never,
-        bodySerializer: (b: unknown) => b as FormData,
-      }));
+      return uploadWithProgress<GeofileInfo>('/api/v1/geofiles', form, { onProgress });
     },
     onSuccess: () => invalidate(),
   });
@@ -104,13 +107,10 @@ function useInvalidateRasterMaps() {
 export function useUploadRasterMap() {
   const invalidate = useInvalidateRasterMaps();
   return useMutation({
-    mutationFn: async (file: File): Promise<RasterMapInfo> => {
+    mutationFn: async ({ file, onProgress }: FileUpload): Promise<RasterMapInfo> => {
       const form = new FormData();
       form.append('file', file, file.name);
-      return unwrap(api.POST('/api/v1/georeferenced-maps', {
-        body: form as never,
-        bodySerializer: (b: unknown) => b as FormData,
-      }));
+      return uploadWithProgress<RasterMapInfo>('/api/v1/georeferenced-maps', form, { onProgress });
     },
     onSuccess: () => invalidate(),
   });

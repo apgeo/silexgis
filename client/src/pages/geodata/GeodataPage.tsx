@@ -7,7 +7,6 @@ import {
   DownloadOutlined,
   EditOutlined,
   ImportOutlined,
-  InboxOutlined,
 } from '@ant-design/icons';
 import {
   App,
@@ -23,9 +22,9 @@ import {
   Tag,
   Tooltip,
   Typography,
-  Upload,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import UploadDropzone from '../../components/geodata/UploadDropzone.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { downloadFile, geofileListExportUrl } from '../../api/download.ts';
@@ -171,30 +170,13 @@ export default function GeodataPage() {
   const vectorTab = (
     <>
       {canUpload && (
-        <Upload.Dragger
-          multiple
+        <UploadDropzone
           accept=".gpx,.kml,.kmz,.geojson,.json,.zip,.csv,.tsv,.txt,.wkt,.wkb"
-          showUploadList={false}
-          customRequest={({ file, onSuccess, onError }) => {
-            upload
-              .mutateAsync(file as File)
-              .then((created) => {
-                onSuccess?.(created);
-                message.success(t('geodata.uploadQueued', { name: created.name }));
-              })
-              .catch((e: Error) => {
-                onError?.(e);
-                message.error(t('geodata.uploadFailed'));
-              });
-          }}
-          style={{ marginBottom: 16 }}
-        >
-          <p className="ant-upload-drag-icon">
-            <InboxOutlined />
-          </p>
-          <p className="ant-upload-text">{t('geodata.uploadPrompt')}</p>
-          <p className="ant-upload-hint">{t('geodata.uploadHint')}</p>
-        </Upload.Dragger>
+          prompt={t('geodata.uploadPrompt')}
+          hint={t('geodata.uploadHint')}
+          upload={(file, onProgress) => upload.mutateAsync({ file, onProgress })}
+          doneText={(name) => t('geodata.uploadQueued', { name })}
+        />
       )}
 
       <WorldFilterBar
