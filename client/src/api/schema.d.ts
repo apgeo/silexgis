@@ -16005,10 +16005,22 @@ export interface components {
             /** Format: int32 */
             maxFilesPerUpload: number;
             acceptedExtensions: string[];
+            recording: components["schemas"]["SurveyRecordingCapabilitiesDto"];
         };
         SurveyPublicLinkCapabilitiesDto: {
             enabled: boolean;
             defaultAudience: components["schemas"]["SurveyUploadLinkAudience"];
+        };
+        SurveyRecordingCapabilitiesDto: {
+            /** Format: int64 */
+            maxFileBytes: number;
+            /** Format: int64 */
+            maxTotalBytes: number;
+            /** Format: int32 */
+            maxFiles: number;
+            acceptedExtensions: string[];
+            /** Format: int32 */
+            odometryWorkerFactor: number;
         };
         /** @enum {unknown} */
         SurveySegmentBasis: "unavailable" | "surveyFlags" | "skeletonHeuristic";
@@ -16404,6 +16416,7 @@ export interface components {
             originShift: null | number[];
             estimate: null | components["schemas"]["SurveyUploadPointCloudEstimateDto"];
             advice: null | components["schemas"]["SurveyUploadPointCloudAdviceDto"];
+            recording: null | components["schemas"]["SurveyUploadRecordingDto"];
         };
         SurveyUploadPointCloudEstimateDto: {
             full: components["schemas"]["SurveyUploadPointCloudEstimateRowDto"];
@@ -16444,6 +16457,21 @@ export interface components {
             wanted: null | boolean;
             audience: null | components["schemas"]["SurveyUploadLinkAudience"];
             allowProtected: null | boolean;
+        };
+        SurveyUploadRecordingDto: {
+            /** Format: int32 */
+            chunkCount: number;
+            /** Format: int32 */
+            sensorCount: null | number;
+            hasCalibration: boolean;
+            hasGnss: boolean;
+            /** Format: double */
+            durationSeconds: null | number;
+            /** Format: int64 */
+            pointCount: number;
+            imuHasHeader: boolean;
+            /** Format: int64 */
+            bytes: number;
         };
         SurveyUploadRerunRequest: {
             pipeline: null | components["schemas"]["SurveyUploadPipelineRequest"];

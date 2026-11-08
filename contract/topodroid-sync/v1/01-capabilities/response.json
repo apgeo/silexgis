@@ -82,6 +82,20 @@
     "acceptedExtensions": [
       ".laz",
       ".las"
-    ]
+    ],
+    "recording": {
+      "maxFileBytes": 4294967296,
+      "maxTotalBytes": 21474836480,
+      "maxFiles": 5000,
+      "acceptedExtensions": [
+        ".laz",
+        ".csv",
+        ".sn",
+        ".gnss",
+        ".nmea",
+        ".json"
+      ],
+      "odometryWorkerFactor": 22
+    }
   }
 }

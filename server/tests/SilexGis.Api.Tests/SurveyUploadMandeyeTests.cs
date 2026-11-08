@@ -106,6 +106,14 @@ public sealed class SurveyUploadMandeyeTests : IAsyncLifetime, IDisposable, ICla
         facts.GetProperty("pointCount").GetInt64().ShouldBe(5);
         facts.GetProperty("georeferenced").GetBoolean().ShouldBeFalse();
 
+        // The recording's own facts reach the screen beside the cloud's.
+        var read = facts.GetProperty("recording");
+        read.GetProperty("chunkCount").GetInt32().ShouldBe(2);
+        read.GetProperty("sensorCount").GetInt32().ShouldBe(2);
+        read.GetProperty("hasGnss").GetBoolean().ShouldBeFalse();
+        read.GetProperty("durationSeconds").GetDouble().ShouldBe(2.5);
+        read.GetProperty("bytes").GetInt64().ShouldBe(recording.Sum(f => (long)f.Bytes.Length));
+
         // Every file of the folder is archived as the recording's original, none of them as a
         // document of the cave.
         var files = shown.GetProperty("files").EnumerateArray().ToList();
@@ -140,6 +148,15 @@ public sealed class SurveyUploadMandeyeTests : IAsyncLifetime, IDisposable, ICla
     public async Task The_declared_folder_is_checked_against_the_recording_rules_and_caps()
     {
         var caveId = await CreateCaveAsync("authenticated", locationProtected: false);
+
+        // The limits are published, so a screen can check a folder before it opens an upload.
+        var capabilities = await owner.GetFromJsonAsync<JsonElement>("/api/v1/survey-uploads/capabilities");
+        var limits = capabilities.GetProperty("pointCloud").GetProperty("recording");
+        limits.GetProperty("maxFileBytes").GetInt64().ShouldBe(ScanCap);
+        limits.GetProperty("maxTotalBytes").GetInt64().ShouldBe(RawCap);
+        limits.GetProperty("maxFiles").GetInt32().ShouldBe(12);
+        limits.GetProperty("acceptedExtensions").EnumerateArray().Select(e => e.GetString()).ShouldContain(".csv");
+        limits.GetProperty("odometryWorkerFactor").GetInt32().ShouldBe(ScanStorageNeeds.OdometryWorkerFactor);
 
         await ShouldBeProblemAsync(await Open(owner, caveId, File("lidar0000.laz", 10)), HttpStatusCode.BadRequest, SurveyUploadFiles.InvalidCode);
         await ShouldBeProblemAsync(

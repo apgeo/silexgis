@@ -213,9 +213,18 @@ public static partial class SurveyUploadEndpoints
             PollIntervalSeconds,
             new SurveyPublicLinkCapabilitiesDto(linksEnabled, defaultAudience),
             // A point cloud is one file under a cap of its own, orders of magnitude above a
-            // survey tool's; a device reads the scans' rules here rather than the survey's.
+            // survey tool's; a device reads the scans' rules here rather than the survey's. A raw
+            // recording is many files, each under the same per-file cap, with a total of its own.
             new SurveyPointCloudCapabilitiesDto(
-                scans.Value.UploadCap, 1, SurveyUploadFiles.AcceptedExtensionsFor(SurveyOrigin.PointCloud))));
+                scans.Value.UploadCap,
+                1,
+                SurveyUploadFiles.AcceptedExtensionsFor(SurveyOrigin.PointCloud),
+                new SurveyRecordingCapabilitiesDto(
+                    scans.Value.UploadCap,
+                    scans.Value.RawUploadCap,
+                    scans.Value.RawFileCap,
+                    SurveyUploadFiles.AcceptedExtensionsFor(SurveyOrigin.Mandeye),
+                    ScanStorageNeeds.OdometryWorkerFactor))));
     }
 
     private static async Task<Results<Ok<SurveyUploadDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
@@ -1018,6 +1027,17 @@ public static partial class SurveyUploadEndpoints
         facts.Advice is { } advice
             ? new SurveyUploadPointCloudAdviceDto(
                 advice.Level.ToString().ToLowerInvariant(), advice.SuggestedVoxelCm, advice.WarnPoints, advice.AdvisePoints, advice.WarnTileBytes)
+            : null,
+        facts.Recording is { } recording
+            ? new SurveyUploadRecordingDto(
+                recording.ChunkCount,
+                recording.SensorCount,
+                recording.HasCalibration,
+                recording.HasGnss,
+                recording.DurationSeconds,
+                recording.PointCount,
+                recording.ImuHasHeader,
+                recording.Bytes)
             : null);
 
     private static SurveyUploadPointCloudEstimateRowDto EstimateRow(PointCloudEstimateRow row) =>

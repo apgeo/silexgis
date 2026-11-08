@@ -36,7 +36,25 @@ public sealed record SurveyUploadCapabilitiesDto(
 /// <param name="MaxFileBytes">The largest point cloud file an upload may send, in bytes.</param>
 /// <param name="MaxFilesPerUpload">How many files a point-cloud upload declares: one, the cloud itself.</param>
 /// <param name="AcceptedExtensions">The extensions a point cloud may have, lower-case with the dot.</param>
-public sealed record SurveyPointCloudCapabilitiesDto(long MaxFileBytes, int MaxFilesPerUpload, IReadOnlyList<string> AcceptedExtensions);
+/// <param name="Recording">What an upload of origin <c>mandeye</c>, a scanner's raw recording folder, may send.</param>
+public sealed record SurveyPointCloudCapabilitiesDto(
+    long MaxFileBytes, int MaxFilesPerUpload, IReadOnlyList<string> AcceptedExtensions, SurveyRecordingCapabilitiesDto Recording);
+
+/// <summary>
+/// The limits of a raw recording upload. Every file of the folder is declared, by its bare name,
+/// as the archive; a name the recording does not hold (a camera folder's pictures, for one) is
+/// refused, so a device leaves those out.
+/// </summary>
+/// <param name="MaxFileBytes">The largest single file of the recording, in bytes.</param>
+/// <param name="MaxTotalBytes">The recording's files together, at most, in bytes.</param>
+/// <param name="MaxFiles">How many files a recording may declare.</param>
+/// <param name="AcceptedExtensions">The extensions a recording's files may have, lower-case with the dot.</param>
+/// <param name="OdometryWorkerFactor">
+/// How many times the recording's size its odometry needs free on the processing worker's disk
+/// while it runs, so a screen can ask about that room before the upload starts.
+/// </param>
+public sealed record SurveyRecordingCapabilitiesDto(
+    long MaxFileBytes, long MaxTotalBytes, int MaxFiles, IReadOnlyList<string> AcceptedExtensions, int OdometryWorkerFactor);
 
 /// <param name="Enabled">
 /// Whether an upload of the calling account gets a link when it does not ask either way: the
@@ -232,6 +250,7 @@ public sealed record SurveyUploadPointCloudCrsDto(int? HorizontalEpsg, int? Vert
 /// <param name="OriginShift">What was subtracted from the file's coordinates before tiling; a position for a georeferenced file, so with the exact-location right only.</param>
 /// <param name="Estimate">What a thinned copy would keep at each voxel size, once the worker has estimated it.</param>
 /// <param name="Advice">The installation's advice on thinning, with the thresholds it was judged by.</param>
+/// <param name="Recording">What reading a raw recording found, when the cloud came from one; measurements only, no position.</param>
 public sealed record SurveyUploadPointCloudDto(
     Guid ModelId,
     long PointCount,
@@ -255,7 +274,20 @@ public sealed record SurveyUploadPointCloudDto(
     long? DisplayPointCount,
     double[]? OriginShift,
     SurveyUploadPointCloudEstimateDto? Estimate,
-    SurveyUploadPointCloudAdviceDto? Advice);
+    SurveyUploadPointCloudAdviceDto? Advice,
+    SurveyUploadRecordingDto? Recording);
+
+/// <summary>What an inspection read of a raw scanner recording.</summary>
+/// <param name="ChunkCount">How many lidar/IMU chunk pairs the recording holds.</param>
+/// <param name="SensorCount">How many lidar sensors wrote it, or null when neither a calibration nor serial numbers said.</param>
+/// <param name="HasCalibration">Whether it carries a calibration of its sensors.</param>
+/// <param name="HasGnss">Whether a GNSS log holds anything; such a recording is treated as georeferenced.</param>
+/// <param name="DurationSeconds">From the first to the last IMU sample, or null when the logs did not say.</param>
+/// <param name="PointCount">The points of every lidar chunk together.</param>
+/// <param name="ImuHasHeader">Whether the IMU logs open with a line naming their columns.</param>
+/// <param name="Bytes">The recording's files together, in bytes.</param>
+public sealed record SurveyUploadRecordingDto(
+    int ChunkCount, int? SensorCount, bool HasCalibration, bool HasGnss, double? DurationSeconds, long PointCount, bool ImuHasHeader, long Bytes);
 
 /// <summary>One row of the estimate: what tiling at this voxel size (null for the full cloud) would come to.</summary>
 public sealed record SurveyUploadPointCloudEstimateRowDto(double? VoxelCm, long? Points, long? EstimatedTileBytes, int? EstimatedSeconds);

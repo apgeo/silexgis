@@ -31,6 +31,17 @@ turns every future addition into an outage of its own making.
 
 ---
 
+## 2026-11-09 — the limits of a raw recording, in the capabilities answer
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one member is added
+to `capabilities.pointCloud`; nothing a device sends or reads changes meaning. One recording was
+rewritten for it: `01-capabilities`.
+
+- `capabilities.pointCloud.recording` states what an upload of origin `mandeye` may send:
+  `maxFileBytes`, `maxTotalBytes`, `maxFiles`, `acceptedExtensions` and `odometryWorkerFactor` (how
+  many times the recording's size the processing worker needs free while it runs). A tool that does
+  not know the member ignores it.
+
 ## 2026-11-08 — a raw scanner recording as a survey upload
 
 **Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one value is added to
