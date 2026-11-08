@@ -1546,7 +1546,7 @@
     "exportListFailed": "The list could not be exported. A very large selection is refused rather than cut short: narrow the filter and export in parts.",
     "searchPlaceholder": "Search by name…",
     "uploadPrompt": "Click or drag vector files here to upload",
-    "uploadHint": "GPX, KML, KMZ, GeoJSON, zipped shapefile, CSV with coordinate columns, WKT — imported in the background.",
+    "uploadHint": "GPX, KML, KMZ, GeoJSON, zipped shapefile, CSV with coordinate columns, WKT — imported in the background. Up to 150 MB per file.",
     "uploadQueued": "{{name}} uploaded — import queued.",
     "upload": {
       "sending": "Uploading — {{sent}} of {{total}}",

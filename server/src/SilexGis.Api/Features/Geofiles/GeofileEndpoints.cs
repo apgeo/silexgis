@@ -25,6 +25,7 @@ public static class GeofileEndpoints
 
         geofiles.MapPost("/", UploadAsync)
             .DisableAntiforgery() // bearer-token API; no cookie-form surface to forge
+            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(VectorUploadLimits.MaxRequestBytes))
             .WithSummary("Uploads a vector file (multipart) and queues the server-side import.");
         geofiles.MapGet("/", ListAsync)
             .ProducesProblem(StatusCodes.Status400BadRequest)
@@ -101,6 +102,13 @@ public static class GeofileEndpoints
         if (file.Length == 0)
         {
             return ApiProblems.BadRequest("geofile.file_empty", "The uploaded file is empty.");
+        }
+
+        if (file.Length > VectorUploadLimits.MaxVectorBytes)
+        {
+            return ApiProblems.BadRequest(
+                "geofile.file_too_large",
+                $"The file is larger than the {VectorUploadLimits.MaxVectorBytes / (1024 * 1024)} MB a vector upload may be.");
         }
 
         var extension = Path.GetExtension(file.FileName);

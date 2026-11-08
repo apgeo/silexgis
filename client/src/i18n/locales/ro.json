@@ -1546,7 +1546,7 @@
     "exportListFailed": "Lista nu a putut fi exportată. O selecție foarte mare este refuzată în loc să fie tăiată: restrânge filtrul și exportă pe părți.",
     "searchPlaceholder": "Caută după denumire…",
     "uploadPrompt": "Apasă sau trage fișiere vectoriale aici pentru încărcare",
-    "uploadHint": "GPX, KML, KMZ, GeoJSON, shapefile arhivat, CSV cu coloane de coordonate, WKT — importate în fundal.",
+    "uploadHint": "GPX, KML, KMZ, GeoJSON, shapefile arhivat, CSV cu coloane de coordonate, WKT — importate în fundal. Cel mult 150 MB pe fișier.",
     "uploadQueued": "{{name}} încărcat — importul a fost programat.",
     "upload": {
       "sending": "Se încarcă — {{sent}} din {{total}}",
