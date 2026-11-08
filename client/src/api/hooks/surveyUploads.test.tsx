@@ -5,8 +5,13 @@ import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { queryKeys } from './queryKeys.ts';
 import {
+  displayChoiceUsed,
+  displayRequestOf,
   groupCaveSurveys,
   normaliseAlwaysOutputs,
+  pointCloudChoiceNeeded,
+  suggestedDisplayChoice,
+  surveyUploadIsPointCloud,
   surveyUploadLinkHref,
   surveyUploadListPollInterval,
   surveyUploadPollInterval,
@@ -15,11 +20,105 @@ import {
   type StageState,
   type SurveyUpload,
   type SurveyUploadListItem,
+  type SurveyUploadPointCloud,
   type SurveyUploadStatus,
 } from './surveyUploads.ts';
 
 const statesOf = (input: Parameters<typeof surveyUploadStageStates>[0]): StageState[] =>
   surveyUploadStageStates(input).map((s) => s.state);
+
+/** An invented cloud's facts, inspected and not yet tiled. */
+function cloud(over: Partial<SurveyUploadPointCloud> = {}): SurveyUploadPointCloud {
+  return {
+    modelId: 'm1',
+    pointCount: 12_400_000,
+    pointFormat: 6,
+    lasVersion: '1.4',
+    compressed: true,
+    hasRgb: true,
+    hasIntensity: true,
+    sizeM: [120.5, 80.2, 15.1],
+    georeferenced: false,
+    crs: null,
+    min: null,
+    max: null,
+    generatingSoftware: 'invented scanner',
+    tileBytes: null,
+    tileCount: null,
+    tilerVersion: null,
+    tilesetUrl: null,
+    displayVoxelM: null,
+    displayEveryNth: null,
+    displayPointCount: null,
+    originShift: null,
+    estimate: {
+      full: { voxelCm: null, points: 12_400_000, estimatedTileBytes: 900_000_000, estimatedSeconds: 400 },
+      voxels: [
+        { voxelCm: 1, points: 9_000_000, estimatedTileBytes: 700_000_000, estimatedSeconds: 300 },
+        { voxelCm: 2, points: 4_000_000, estimatedTileBytes: 190_000_000, estimatedSeconds: 120 },
+        { voxelCm: 5, points: 800_000, estimatedTileBytes: 40_000_000, estimatedSeconds: 30 },
+      ],
+    },
+    advice: { level: 'warn', suggestedVoxelCm: 2, warnPoints: 5_000_000, advisePoints: 200_000_000, warnTileBytes: 2_147_483_648 },
+    ...over,
+  };
+}
+
+describe('point-cloud uploads', () => {
+  it('walks the cloud’s own five stages, with nothing skipped for not compiling', () => {
+    expect(surveyUploadStageStates({ status: 'queued', stage: null, pointCloud: true }).map((s) => s.stage)).toEqual([
+      'archive', 'inspect', 'downsample', 'tile', 'store',
+    ]);
+    expect(statesOf({ status: 'running', stage: 'inspect', compile: false, pointCloud: true })).toEqual([
+      'done', 'active', 'pending', 'pending', 'pending',
+    ]);
+    // Stopped to ask how much to show: the stages after the estimate were not reached.
+    expect(statesOf({ status: 'succeeded', stage: 'downsample', pointCloud: true })).toEqual([
+      'done', 'done', 'done', 'skipped', 'skipped',
+    ]);
+    // No worker: archived and inspected, the tiling stage reported and the run ended there.
+    expect(statesOf({ status: 'succeeded', stage: 'tile', pointCloud: true })).toEqual([
+      'done', 'done', 'done', 'done', 'skipped',
+    ]);
+    expect(statesOf({ status: 'failed', stage: 'inspect', pointCloud: true })).toEqual([
+      'done', 'failed', 'pending', 'pending', 'pending',
+    ]);
+  });
+
+  it('knows a cloud by its facts, or before the header is read by its one archive file’s name', () => {
+    expect(surveyUploadIsPointCloud({ pointCloud: cloud(), files: [] })).toBe(true);
+    expect(surveyUploadIsPointCloud({ pointCloud: null, files: [{ name: 'Scan_01.LAZ', role: 'archive' }] })).toBe(true);
+    expect(surveyUploadIsPointCloud({ pointCloud: null, files: [{ name: 'cave.las', role: 'archive' }] })).toBe(true);
+    expect(surveyUploadIsPointCloud({ pointCloud: null, files: [{ name: 'pestera.zip', role: 'archive' }] })).toBe(false);
+    // A cloud named among the other files of a survey archive is not the upload's kind.
+    expect(surveyUploadIsPointCloud({ pointCloud: null, files: [{ name: 'notes.las', role: 'other' }] })).toBe(false);
+  });
+
+  it('needs a choice only when the run stopped at the estimate without tiles', () => {
+    expect(pointCloudChoiceNeeded({ status: 'succeeded', stage: 'downsample', pointCloud: cloud() })).toBe(true);
+    expect(pointCloudChoiceNeeded({ status: 'succeeded', stage: 'tile', pointCloud: cloud() })).toBe(false);
+    expect(pointCloudChoiceNeeded({ status: 'running', stage: 'downsample', pointCloud: cloud() })).toBe(false);
+    expect(pointCloudChoiceNeeded({ status: 'succeeded', stage: 'downsample', pointCloud: cloud({ estimate: null }) })).toBe(false);
+    expect(
+      pointCloudChoiceNeeded({ status: 'succeeded', stage: 'downsample', pointCloud: cloud({ tilesetUrl: '/tiles/tileset.json' }) }),
+    ).toBe(false);
+    expect(pointCloudChoiceNeeded({ status: 'succeeded', stage: 'downsample', pointCloud: null })).toBe(false);
+  });
+
+  it('pre-selects the suggested voxel when thinning is advised and the whole cloud otherwise', () => {
+    expect(suggestedDisplayChoice(cloud())).toEqual({ method: 'voxel', voxelCm: 2 });
+    expect(suggestedDisplayChoice(cloud({ advice: { level: 'none', suggestedVoxelCm: null, warnPoints: 1, advisePoints: 2, warnTileBytes: 3 } }))).toEqual({ method: 'full' });
+    expect(suggestedDisplayChoice(cloud({ advice: null }))).toEqual({ method: 'full' });
+  });
+
+  it('writes the choice as the server reads it and reads back the one a run used', () => {
+    expect(displayRequestOf({ method: 'full' })).toEqual({ method: 'full' });
+    expect(displayRequestOf({ method: 'voxel', voxelCm: 2 })).toEqual({ method: 'voxel', voxelCm: 2 });
+    expect(displayChoiceUsed(cloud())).toBeNull();
+    expect(displayChoiceUsed(cloud({ tilesetUrl: '/t', displayVoxelM: null }))).toEqual({ method: 'full' });
+    expect(displayChoiceUsed(cloud({ tilesetUrl: '/t', displayVoxelM: 0.02 }))).toEqual({ method: 'voxel', voxelCm: 2 });
+  });
+});
 
 describe('surveyUploadPollInterval', () => {
   it('keeps asking while the upload is unfinished and never afterwards', () => {

@@ -8,6 +8,8 @@ import Button from '../../components/Button.tsx';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import { ApiError } from '../../api/client.ts';
 import {
+  displayRequestOf,
+  surveyUploadIsPointCloud,
   surveyUploadLinkHref,
   surveyUploadPublicLinkRefusal,
   useCaveSurveys,
@@ -20,9 +22,11 @@ import {
   useRevokeSurveyUploadPublicLink,
   useSurveyUpload,
   useSurveyUploadPreferences,
+  type PointCloudDisplayChoice,
   type SurveyUpload,
   type SurveyUploadFile,
 } from '../../api/hooks.ts';
+import PointCloudCard from '../../components/surveyUploads/PointCloudCard.tsx';
 import SurveyUploadProgressPanel from '../../components/surveyUploads/SurveyUploadProgress.tsx';
 import MakePublicLinkDialog from '../../components/surveyUploads/MakePublicLinkDialog.tsx';
 import OlderVersionsWarning from '../../components/surveyUploads/OlderVersionsWarning.tsx';
@@ -97,12 +101,16 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
     upload.artefacts.some((a) => a.kind === 'log' && a.contentUrl !== null) ||
     (canWrite && !!upload.logTail);
 
+  // A point cloud has stages of its own, and no line-survey viewer: its picture is the 3D scene's,
+  // reached from the scan on the cave page, so the viewer button of a survey archive is not drawn.
+  const pointCloud = surveyUploadIsPointCloud(upload);
+
   const view = {
     status: upload.status,
     progress: upload.progress,
     message: upload.message,
     error: upload.error,
-    stages: surveyUploadStageStates({ status: upload.status, stage: upload.stage, compile: upload.compile }),
+    stages: surveyUploadStageStates({ status: upload.status, stage: upload.stage, compile: upload.compile, pointCloud }),
     artefacts: upload.artefacts,
   };
 
@@ -110,6 +118,15 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
     try {
       await rerun.mutateAsync({ id: upload.id });
       message.success(t('surveyUploads.page.rerunStarted'));
+    } catch (error) {
+      message.error(surveyUploadRequestErrorText(error, t));
+    }
+  };
+
+  const onChooseDisplay = async (choice: PointCloudDisplayChoice) => {
+    try {
+      await rerun.mutateAsync({ id: upload.id, display: displayRequestOf(choice) });
+      message.success(t('surveyUploads.pointCloud.tilingStarted'));
     } catch (error) {
       message.error(surveyUploadRequestErrorText(error, t));
     }
@@ -136,7 +153,7 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
           </Typography.Text>
         </Flex>
         <Flex gap={8} wrap>
-        {!unsettled && (
+        {!unsettled && !pointCloud && (
           <Link to={surveyUploadViewerPath(upload.statusPageUrl)} data-testid="survey-upload-open-viewer">
             <Button type="primary" icon={<BarChartOutlined />}>
               {t('surveyViewer.open')}
@@ -160,6 +177,16 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
         <Card size="small" title={t('surveyUploads.page.progressTitle')}>
           <SurveyUploadProgressPanel view={view} logShown={logShown} />
         </Card>
+
+        {pointCloud && (
+          <PointCloudCard
+            upload={upload}
+            name={upload.caveSurvey.title}
+            canWrite={canWrite}
+            onChoose={onChooseDisplay}
+            choosing={rerun.isPending}
+          />
+        )}
 
         <PublicLinkCard upload={upload} canWrite={canWrite} />
 
