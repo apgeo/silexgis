@@ -33,8 +33,8 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync,
-  statSync, writeFileSync,
+  chmodSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync,
+  renameSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
@@ -47,7 +47,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // The worker runs as the application's own runtime user, which is not the user running this
 // script, so the directories it must write into are opened to everyone for the duration of the
 // check. Only the check's own scratch directory is ever opened this way.
-const WORKER_UID = 1654;
+export const WORKER_UID = 1654;
 const OPEN_DIR = 0o777;
 
 // ---------------------------------------------------------------------------------------------
@@ -139,9 +139,13 @@ export function zipRead(buffer, entry) {
 /**
  * What the application relies on in one step's answer, checked. `outputs` maps an output's file
  * name to {sizeBytes, sha256} as measured on disk; `archive` is the parsed tiles archive for the
- * tile step ({entries, tileset}) and absent otherwise. Returns the failed checks, in words.
+ * tile step ({entries, tileset}) or the session archive for the odometry step ({entries}), and
+ * absent otherwise. `extra` carries what the caller measured itself for the HDMapping steps:
+ * `recording` ({chunks, bytes, gnss}) for the preflight, and `exportedPoints` (the point count the
+ * exported cloud's header declares) for the export and the check. Returns the failed checks, in
+ * words.
  */
-export function checkAnswer(step, result, files, outputs, archive) {
+export function checkAnswer(step, result, files, outputs, archive, extra = {}) {
   const failed = [];
   const expect = (ok, text) => { if (!ok) failed.push(text); };
   expect(files.started, 'the worker wrote no `started` file when it took the job');
@@ -213,6 +217,54 @@ export function checkAnswer(step, result, files, outputs, archive) {
       }
       break;
     }
+    case 'hdmapping.preflight':
+      expect(kinds.includes('report'), 'no preflight report output');
+      expect(Number.isInteger(data.chunks) && data.chunks > 0, 'the preflight counts no chunks');
+      expect(Number.isInteger(data.points) && data.points > 0, 'the preflight counts no points');
+      expect(data.neededBytes >= data.rawBytes, 'the preflight asks for less room than the recording itself');
+      expect(data.freeBytes >= data.neededBytes, 'the preflight passed with less room than it says odometry needs');
+      if (extra.recording) {
+        expect(data.chunks === extra.recording.chunks, `the preflight counts ${data.chunks} chunks, the recording has ${extra.recording.chunks}`);
+        expect(data.rawBytes === extra.recording.bytes, `the preflight counts ${data.rawBytes} bytes, the recording has ${extra.recording.bytes}`);
+        expect(data.gnss === extra.recording.gnss, `the preflight says GNSS ${data.gnss}, the recording ${extra.recording.gnss ? 'has' : 'has no'} GNSS file`);
+      }
+      break;
+    case 'hdmapping.odometry': {
+      expect(kinds.includes('hdmSession'), 'no session output');
+      expect(result.tool === 'hdmapping', `the odometry names tool ${result.tool}, not hdmapping`);
+      const parameters = data.parameters ?? {};
+      expect(typeof parameters.softwareVersion === 'string' && parameters.softwareVersion !== '', 'the odometry does not name the HDMapping version its parameters came from');
+      expect(/^[0-9a-f]{64}$/.test(parameters.sha256 ?? ''), 'the odometry does not report the digest of the parameters it ran with');
+      expect(data.odometry?.completed === true, 'HDMapping did not say the odometry completed');
+      expect(Number.isInteger(data.odometry?.scans) && data.odometry.scans > 0, 'the session lists no scans');
+      if (!archive) { failed.push('the session archive could not be read'); break; }
+      const names = archive.entries.map((e) => e.name);
+      expect(names.includes('session.mjs'), 'the session archive has no session.mjs at its root');
+      // The odometry's cache is about twenty times the recording and is never kept; the preview
+      // folder is a by-product for the desktop program.
+      expect(!names.some((n) => n.startsWith('cache/') || n.startsWith('preview/')), 'the session archive carries the cache or preview folder');
+      expect(names.every((n) => !n.startsWith('/') && !n.split('/').includes('..')), 'a session archive entry has a path outside the archive');
+      break;
+    }
+    case 'hdmapping.export':
+      expect(kinds.includes('pointCloudLaz'), 'no exported cloud output');
+      expect(kinds.includes('trajectory'), 'no trajectory output');
+      expect(Number.isInteger(data.export?.pointsWritten) && data.export.pointsWritten > 0, 'the export reports no points written');
+      if (extra.exportedPoints !== undefined) {
+        expect(extra.exportedPoints === data.export?.pointsWritten, `the exported cloud's header declares ${extra.exportedPoints} points, the export reports ${data.export?.pointsWritten}`);
+      }
+      break;
+    case 'pointcloud.check':
+      expect(kinds.includes('report'), 'no check report output');
+      expect(Array.isArray(data.problems) && data.problems.length === 0, `the check found problems: ${(data.problems ?? []).join('; ')}`);
+      expect(Number.isInteger(data.pointCount) && data.pointCount > 0 && data.pointCount === data.declaredPoints, `the check counted ${data.pointCount} of ${data.declaredPoints} declared points`);
+      expect(data.nonFinitePoints === 0, `${data.nonFinitePoints} points are not finite`);
+      expect(data.headerBoundsHold === true, 'the header bounds do not hold the points');
+      expect(Number.isInteger(data.trajectory?.rows) && data.trajectory.rows > 0, 'the check read no trajectory');
+      if (extra.exportedPoints !== undefined) {
+        expect(data.pointCount === extra.exportedPoints, `the check counted ${data.pointCount} points, the exported cloud declares ${extra.exportedPoints}`);
+      }
+      break;
     default:
       failed.push(`no checks are known for step ${step}`);
   }
@@ -254,32 +306,41 @@ export function formatVerdict(verdict) {
 // ---------------------------------------------------------------------------------------------
 // Running the container and handing it jobs.
 
-function sha256(path) {
-  return createHash('sha256').update(readFileSync(path)).digest('hex');
+/** A file's SHA-256, read in pieces: a session archive or an exported cloud can be gigabytes. */
+export function sha256(path) {
+  const hash = createHash('sha256');
+  const piece = Buffer.alloc(1 << 22);
+  const fd = openSync(path, 'r');
+  try {
+    for (let read; (read = readSync(fd, piece, 0, piece.length, null)) > 0;) hash.update(piece.subarray(0, read));
+  } finally {
+    closeSync(fd);
+  }
+  return hash.digest('hex');
 }
 
-function docker(args, options = {}) {
+export function docker(args, options = {}) {
   const run = spawnSync('docker', args, { encoding: 'utf8', ...options });
   if (run.error) throw new Error(`docker could not be run: ${run.error.message}`);
   return run;
 }
 
-function openDir(path) {
+export function openDir(path) {
   mkdirSync(path, { recursive: true });
   chmodSync(path, OPEN_DIR);
 }
 
 /** Writes a request the way the application does: a temporary name, then renamed into place. */
-function handOver(jobDir, request) {
+export function handOver(jobDir, request) {
   const part = join(jobDir, 'request.json.part');
   writeFileSync(part, JSON.stringify(request, null, 1) + '\n');
   chmodSync(part, 0o644);
   renameSync(part, join(jobDir, 'request.json'));
 }
 
-const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+export const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
-async function waitForAnswer(jobDir, timeoutSeconds, containerName) {
+export async function waitForAnswer(jobDir, timeoutSeconds, containerName) {
   const deadline = Date.now() + (timeoutSeconds + 60) * 1000;
   while (Date.now() < deadline) {
     if (existsSync(join(jobDir, 'result.json'))) return JSON.parse(readFileSync(join(jobDir, 'result.json'), 'utf8'));
@@ -290,11 +351,11 @@ async function waitForAnswer(jobDir, timeoutSeconds, containerName) {
   throw new Error(`no answer in ${jobDir} within ${timeoutSeconds + 60} s`);
 }
 
-function readProgress(jobDir) {
+export function readProgress(jobDir) {
   try { return JSON.parse(readFileSync(join(jobDir, 'progress.json'), 'utf8')).fraction; } catch { return null; }
 }
 
-function measureOutputs(jobDir, result) {
+export function measureOutputs(jobDir, result) {
   const measured = {};
   for (const output of result.outputs ?? []) {
     const path = join(jobDir, output.file);
@@ -304,12 +365,12 @@ function measureOutputs(jobDir, result) {
   return measured;
 }
 
-function readArchive(path) {
+export function readArchive(path, index = 'tileset.json') {
   try {
     const buffer = readFileSync(path);
     const entries = zipEntries(buffer);
-    const index = entries.find((e) => e.name === 'tileset.json');
-    const tileset = index ? JSON.parse(zipRead(buffer, index).toString('utf8')) : null;
+    const found = entries.find((e) => e.name === index);
+    const tileset = found ? JSON.parse(zipRead(buffer, found).toString('utf8')) : null;
     return { entries, tileset };
   } catch {
     return null;
