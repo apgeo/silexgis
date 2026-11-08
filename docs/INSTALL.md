@@ -2748,6 +2748,22 @@ the reasoning beside each one.
 | `SILEXGIS__Import__DuplicateNameSimilarity` | `0.8` | how alike two names must be, from 0 to 1, before a nearby object is called the same thing rather than merely close |
 | `SILEXGIS__Import__PhotoProximityRadiusMeters` | `80` | how far a photograph looks for objects already in the registry — wider than for a vector file, because a picture is taken from where the photographer stood |
 | `SILEXGIS__Import__PhotoClusterRadiusMeters` | `25` | how far apart two photographs can be and still be proposed as one place. These five are also editable under **Administration → Messaging → Vector import**, which replaces them once saved |
+| `SILEXGIS__GeoreferencedMaps__CogCompression` | `webp` | how a map sheet's published GeoTIFF is compressed: `webp` (small; lossy below quality 100) or `deflate` (lossless, several times larger) |
+| `SILEXGIS__GeoreferencedMaps__CogWebpQuality` | `85` | WebP quality, 1–100; read only with `webp` |
+| `SILEXGIS__GeoreferencedMaps__CogDeflateLevel` | `6` | deflate level, 1–9; read only with `deflate` |
+| `SILEXGIS__GeoreferencedMaps__DefaultDpiUnplaced` | `300` | the resolution a sheet with no georeferencing of its own is drawn at, unless the person drawing it asks for another |
+| `SILEXGIS__GeoreferencedMaps__TargetGroundResolutionMetres` | `0.05` | the ground size of one pixel a georeferenced sheet is drawn for; the resolution follows from the sheet's own scale |
+| `SILEXGIS__GeoreferencedMaps__MinDpi` | `72` | lowest drawing resolution anyone may ask for or the rules may choose |
+| `SILEXGIS__GeoreferencedMaps__MaxDpi` | `600` | highest drawing resolution |
+| `SILEXGIS__GeoreferencedMaps__PixelBudgetMegapixels` | `600` | the largest drawing made of one page, in millions of pixels; past it the resolution is lowered and the map says so |
+| `SILEXGIS__GeoreferencedMaps__RenderBudgetMegabytes` | `1024` | the most memory one read of a page may take; a larger drawing is made in strips, each of which reads the document again |
+| `SILEXGIS__GeoreferencedMaps__RenderTimeLimitMinutes` | `30` | how long drawing one page may take before the job gives up |
+| `SILEXGIS__GeoreferencedMaps__PreviewMaxPixels` | `1024` | the longer side of the picture the placement editor shows while a sheet is being placed |
+| `SILEXGIS__GeoreferencedMaps__PreviewConcurrency` | `4` | how many placement previews are worked out at once; more are answered "busy, try again" |
+| `SILEXGIS__GeoreferencedMaps__MaxControlPoints` | `200` | the most control points one placement may hold |
+| `SILEXGIS__GeoreferencedMaps__MaxAutoDpi` | `300` | the highest resolution the server chooses by itself for a georeferenced document; a small-scale map would otherwise be drawn at `MaxDpi`. A resolution somebody asks for may still go up to `MaxDpi` |
+| `SILEXGIS__GeoreferencedMaps__SheetJobsOnHeavyLane` | `false` | run drawing and placing sheets on the heavy job queue beside terrain builds instead of the general one; read when the API starts |
+| `SILEXGIS__GeoreferencedMaps__PlacementCrsCodes__0`, `__1`, … | `3844` | national grids, besides WGS 84 and the working system, in which placement coordinates may be typed (EPSG codes the installation can define) |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB unless `SILEXGIS_MAX_BODY_SIZE` raises it) |
 | `SILEXGIS_MAX_BODY_SIZE` | `1024m` | the largest request body the bundled web service's proxy passes to the API, as an nginx size (`1024m`, `2g`). It answers before the application, so it must stay above `SILEXGIS__Files__MaxUploadBytes`, the raster limit and `SILEXGIS__SurveyUploads__MaxFileBytes`. Read when the web container starts: `docker compose up -d web`. The container receives it as `SILEXGIS__Web__MaxBodySize`. Not read by a hand-installed nginx, where it is `client_max_body_size` in the nginx file |

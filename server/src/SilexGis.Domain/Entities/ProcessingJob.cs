@@ -83,6 +83,15 @@ public static class ProcessingJobKinds
     public const string ImportCommit = "import-commit";
     public const string RasterCog = "raster-cog";
 
+    /// <summary>
+    /// Draw one page of an uploaded portable document into a map sheet, and publish it at once
+    /// when the document carries its own place.
+    /// </summary>
+    public const string MapSheetRender = "map-sheet-render";
+
+    /// <summary>Publish a drawn map sheet where its placement now says.</summary>
+    public const string MapPlacementWarp = "map-placement-warp";
+
     /// <summary>Turn an uploaded cave wall mesh into the form the 3D scene draws.</summary>
     public const string SurveyMesh = "survey-mesh";
 

@@ -370,6 +370,14 @@ public static class DependencyInjection
         services.AddScoped<ContentIntake>();
         services.AddSingleton<IVectorIO, GdalVectorIO>();
         services.AddSingleton<RasterCogService>();
+        services.AddOptions<GeoreferencedMapOptions>()
+            .Bind(configuration.GetSection(GeoreferencedMapOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<GeoreferencedMapOptions>,
+            GeoreferencedMapOptionsValidator>();
+        services.AddSingleton<PdfSheetRenderService>();
+        services.AddSingleton<MapWarpService>();
+        services.AddScoped<MapSheetPublisher>();
         services.AddSingleton<Documents.ISpreadsheetWriter, Documents.XlsxSpreadsheetWriter>();
         services.AddSingleton<Documents.IDocumentWriter, Documents.DocxDocumentWriter>();
         services.Configure<Documents.ReportOptions>(
@@ -400,6 +408,8 @@ public static class DependencyInjection
 
         services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();
         services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
+        services.AddScoped<IProcessingJobHandler, MapSheetRenderHandler>();
+        services.AddScoped<IProcessingJobHandler, MapPlacementWarpHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyMeshHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyGraphHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyReadingBackfillHandler>();

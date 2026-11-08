@@ -359,7 +359,7 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
     [Fact]
     public async Task A_waypoint_stored_as_a_one_part_multipoint_is_still_found_as_a_duplicate()
     {
-        var caveId = await CreateCaveWithEntranceAsync($"Known Cave {tag}", 46.31, 26.31);
+        var caveId = await CreateCaveWithEntranceAsync($"Known Cave {tag}", 46.37, 26.37);
 
         var geojson = $$"""
             {
@@ -368,7 +368,7 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
                 {
                   "type": "Feature",
                   "properties": { "name": "P. Again {{tag}}" },
-                  "geometry": { "type": "MultiPoint", "coordinates": [[26.3101, 46.3101]] }
+                  "geometry": { "type": "MultiPoint", "coordinates": [[26.3701, 46.3701]] }
                 }
               ]
             }

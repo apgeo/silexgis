@@ -449,6 +449,12 @@ public abstract class ProcessingJobWorkerBase(
                         && r.GeoreferencedMapId != Guid.Empty
                         ? (NotificationTargetKind.GeoreferencedMap, r.GeoreferencedMapId)
                         : null;
+                case ProcessingJobKinds.MapSheetRender:
+                case ProcessingJobKinds.MapPlacementWarp:
+                    return JsonSerializer.Deserialize<MapSheetPayload>(job.Payload, JsonSerializerOptions.Web) is { } m
+                        && m.GeoreferencedMapId != Guid.Empty
+                        ? (NotificationTargetKind.GeoreferencedMap, m.GeoreferencedMapId)
+                        : null;
                 default:
                     return null;
             }
@@ -492,7 +498,7 @@ public sealed class ProcessingJobWorker(
     IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
     ILogger<ProcessingJobWorker> logger)
-    : ProcessingJobWorkerBase(JobLane.General, scopeFactory, configuration, logger);
+    : ProcessingJobWorkerBase(JobLane.GeneralFor(configuration), scopeFactory, configuration, logger);
 
 /// <summary>
 /// The worker for terrain builds, which have an instance to themselves.
@@ -506,4 +512,4 @@ public sealed class TerrainProcessingJobWorker(
     IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
     ILogger<TerrainProcessingJobWorker> logger)
-    : ProcessingJobWorkerBase(JobLane.Terrain, scopeFactory, configuration, logger);
+    : ProcessingJobWorkerBase(JobLane.TerrainFor(configuration), scopeFactory, configuration, logger);

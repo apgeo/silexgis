@@ -59,6 +59,23 @@ public sealed class RasterCogHandler(
         map.Status = RasterStatus.Processing;
         await db.SaveChangesAsync(ct);
 
+        // A scan with no place is not a failed map: it becomes a sheet, drawn and then placed by
+        // hand like a portable document with no georeferencing of its own.
+        if (rasterService.IsUnplacedRaster(fileStore.GetAbsolutePath(upload.StoragePath)))
+        {
+            map.SourceFileId = upload.Id;
+            map.SourcePage = 1;
+            map.Status = RasterStatus.Uploaded;
+            db.ProcessingJobs.Add(new ProcessingJob
+            {
+                Kind = ProcessingJobKinds.MapSheetRender,
+                Payload = JsonSerializer.Serialize(new MapSheetPayload(map.Id), JsonSerializerOptions.Web),
+                RequestedBy = job.RequestedBy,
+            });
+            await db.SaveChangesAsync(ct);
+            return;
+        }
+
         var workPath = Path.Combine(Path.GetTempPath(), $"silexgis-cog-{Guid.NewGuid():N}.tif");
         try
         {

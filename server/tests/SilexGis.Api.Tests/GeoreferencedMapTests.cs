@@ -184,12 +184,14 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
                 .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         }
 
-        // A TIFF without georeferencing must fail processing, not crash the worker.
+        // A TIFF without georeferencing is not a failed map but a scan to place by hand: it is
+        // drawn as a sheet and waits, unplaced, with nothing on the map.
         var map = await UploadAsync(owner, "plain-image.tif", MakePlainTiff());
         var id = map.GetProperty("id").GetGuid();
-        var failed = await WaitForProcessingAsync(owner, id, expectFailure: true);
-        failed.GetProperty("status").GetString().ShouldBe("failed");
-        failed.GetProperty("processingError").GetString().ShouldNotBeNullOrWhiteSpace();
+        var unplaced = await WaitForProcessingAsync(owner, id, expectFailure: true);
+        unplaced.GetProperty("status").GetString().ShouldBe("unplaced");
+        unplaced.GetProperty("sourceFileId").GetGuid().ShouldBe(map.GetProperty("fileId").GetGuid());
+        unplaced.GetProperty("cogUrl").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 
     /// <summary>
@@ -610,7 +612,7 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
             response.StatusCode.ShouldBe(HttpStatusCode.OK);
             var map = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
             var status = map.GetProperty("status").GetString();
-            if (status is "ready" or "failed")
+            if (status is "ready" or "failed" or "unplaced")
             {
                 if (!expectFailure)
                 {

@@ -5671,7 +5671,7 @@ export interface paths {
         /** Paged catalog; visibility-filtered; protected-cave-linked maps omitted and not counted. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the georeferenced map world's conditions, applied after visibility and counted over the narrowed set. */
         get: operations["georeferencedMapList"];
         put?: never;
-        /** Uploads a georeferenced raster (GeoTIFF) and queues COG normalization. */
+        /** Uploads a georeferenced raster (GeoTIFF) and queues COG normalization, or a map sheet as a portable document (.pdf) and queues drawing it: placed at once when the document carries its own georeferencing, otherwise left `unplaced` for a placement. */
         post: operations["georeferencedMapUpload"];
         delete?: never;
         options?: never;
@@ -5693,6 +5693,110 @@ export interface paths {
         post?: never;
         /** Deletes the catalog entry (stored files are kept). */
         delete: operations["georeferencedMapDelete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/placement-systems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The coordinate systems placement coordinates may be typed in: longitude and latitude, the installation's working system, and the grids it lists in GeoreferencedMaps:PlacementCrsCodes. */
+        get: operations["georeferencedMapSheetPlacementSystems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/{id}/station-points": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The survey stations marked on the sheet's picture (station pins on its document), each with where its survey puts it in longitude and latitude — control points ready to use (Read). Only stations of surveys the caller may see exactly are answered. */
+        get: operations["georeferencedMapSheetStationPoints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/{id}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Draws a map sheet's document again with another page, other layers or another resolution (Write). A hand placement is kept and applied to the new drawing. */
+        post: operations["georeferencedMapSheetRender"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/{id}/placement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets where a drawn map sheet lies — control points as picture fractions matched to ground coordinates, a transformation and an optional outline (Write; If-Match) — and queues publishing it. */
+        put: operations["georeferencedMapSheetPlace"];
+        post?: never;
+        /** Removes a hand placement (Write; If-Match). A document that carries its own place goes back to it; any other sheet becomes `unplaced`. */
+        delete: operations["georeferencedMapSheetUnplace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/{id}/placement/annotation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The sheet's placement as a IIIF Georeference Annotation (Read): control points in the drawn picture's pixels and in longitude and latitude, the outline as an SVG polygon. */
+        get: operations["georeferencedMapSheetExportAnnotation"];
+        /** Places the sheet from a IIIF Georeference Annotation made elsewhere (Write; If-Match), as a placement PUT would: points are read as fractions of the size the annotation states. */
+        put: operations["georeferencedMapSheetImportAnnotation"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/{id}/placement/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Tries a placement on the sheet's small picture without keeping it (Read): the placed picture, where it goes and how well the points fit. */
+        post: operations["georeferencedMapSheetPreview"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -11809,6 +11913,28 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** Format: uuid */
+            sourceFileId?: null | string;
+            /** Format: int32 */
+            sourcePage?: null | number;
+            /** Format: int32 */
+            sourcePageCount?: null | number;
+            sourceLayers?: null | string[];
+            renderLayers?: null | string[];
+            /** Format: double */
+            renderDpi?: null | number;
+            /** Format: int32 */
+            renderWidth?: null | number;
+            /** Format: int32 */
+            renderHeight?: null | number;
+            renderWarnings?: null | string;
+            placement?: null | components["schemas"]["MapPlacementDto"];
+            placementSource?: null | components["schemas"]["PlacementSource"];
+            /** @default false */
+            hasEmbeddedPlacement: boolean;
+            /** Format: double */
+            placementRmsMetres?: null | number;
+            previewUrl?: null | string;
         };
         GeoreferencedMapUpdateRequest: {
             name: string;
@@ -12262,6 +12388,8 @@ export interface components {
             panelDefaults: string;
         };
         JsonElement: unknown;
+        JsonNode: unknown;
+        JsonObject: Record<string, never>;
         /** @enum {unknown} */
         KarstificationClass: "unknown" | "veryLow" | "low" | "moderate" | "high" | "veryHigh";
         KarstificationComponentDto: {
@@ -12553,6 +12681,23 @@ export interface components {
             selectionMax: number;
             densityFixedBands: number[];
         };
+        MapControlPointDto: {
+            /** Format: double */
+            u: number;
+            /** Format: double */
+            v: number;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+            label: null | string;
+        };
+        MapControlPointResidualDto: {
+            /** Format: int32 */
+            index: number;
+            /** Format: double */
+            metres: number;
+        };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";
         MapLayerCogOptions: {
@@ -12616,6 +12761,35 @@ export interface components {
             style: string;
             crs: string;
             matrixIdPrefix: string;
+        };
+        MapPlacementDto: {
+            /** Format: int32 */
+            version: number;
+            transformation: string;
+            crs: string;
+            gcps: components["schemas"]["MapControlPointDto"][];
+            mask: null | number[][];
+        };
+        MapPlacementPreviewDto: {
+            image: string;
+            extent3857: number[];
+            extent4326: number[];
+            /** Format: int32 */
+            width: number;
+            /** Format: int32 */
+            height: number;
+            /** Format: double */
+            rmsMetres: null | number;
+            residuals: components["schemas"]["MapControlPointResidualDto"][];
+        };
+        MapSheetRenderRequest: {
+            /** Format: int32 */
+            page: null | number;
+            layers: null | string[];
+            /** Format: double */
+            dpi: null | number;
+            /** @default false */
+            allLayers: boolean;
         };
         MapViewDto: {
             /** Format: uuid */
@@ -13806,6 +13980,14 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        /** @enum {unknown} */
+        PlacementSource: "embedded" | "manual";
+        PlacementSystemDto: {
+            crs: string;
+            name: string;
+            geographic: boolean;
+            working: boolean;
+        };
         PlacePointCreateRequest: {
             /** Format: uuid */
             documentId: string;
@@ -14248,7 +14430,7 @@ export interface components {
         /** @enum {unknown} */
         RasterMapType: "planView" | "projectedProfile" | "extendedProfile" | "other";
         /** @enum {unknown} */
-        RasterStatus: "uploaded" | "processing" | "ready" | "failed";
+        RasterStatus: "uploaded" | "processing" | "ready" | "failed" | "unplaced";
         ReanchorReportDto: {
             /** Format: int32 */
             unmoved: number;
@@ -14882,6 +15064,19 @@ export interface components {
             north: number;
             /** Format: int32 */
             minZoom: number;
+        };
+        SheetStationPointDto: {
+            label: string;
+            /** Format: double */
+            u: number;
+            /** Format: double */
+            v: number;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+            /** Format: uuid */
+            surveyModelId: string;
         };
         SmsSettingsDto: {
             enabled: boolean;
@@ -33611,6 +33806,304 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetPlacementSystems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlacementSystemDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetStationPoints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SheetStationPointDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetRender: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapSheetRenderRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoreferencedMapDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetPlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapPlacementDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoreferencedMapDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetUnplace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoreferencedMapDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetExportAnnotation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonObject"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetImportAnnotation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["JsonNode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoreferencedMapDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapPlacementDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapPlacementPreviewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
             };
             /** @description Unauthorized */
             401: {

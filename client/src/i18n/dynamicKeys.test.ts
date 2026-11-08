@@ -109,6 +109,7 @@ const DYNAMIC_KEY_FAMILIES: readonly string[] = [
   'filters.sorts.',
   'gallery.licences.',
   'geodata.mapKinds.',
+  'geodata.placement.errors.',
   'geodata.rasterStatusValues.',
   'geodata.statusValues.',
   'history.action.',
