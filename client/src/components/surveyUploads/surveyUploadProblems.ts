@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
+import { formatBytes, insufficientFigures, limitKey } from '../storage/storageFigures.ts';
 
 type Translate = ReturnType<typeof useTranslation>['t'];
 
@@ -25,6 +26,7 @@ export const SURVEY_UPLOAD_RUN_ERROR_KEYS: Record<string, string> = {
   'survey_pipeline.output_missing': 'surveyUploads.problems.outputMissing',
   'survey_pipeline.crs_unknown': 'surveyUploads.problems.crsUnknown',
   'survey_pipeline.store_failed': 'surveyUploads.problems.storeFailed',
+  'survey_pipeline.storage_insufficient': 'surveyUploads.problems.storageInsufficient',
 };
 
 /**
@@ -51,6 +53,12 @@ export function surveyUploadRunErrorText(code: string, t: Translate): string | n
 
 /** The sentence for a failed request about an upload. */
 export function surveyUploadRequestErrorText(error: unknown, t: Translate): string {
+  // Not enough room: said with the amount missing and the ceiling it is under, read from the
+  // refusal's own members, so the person knows how much to free or to ask an administrator for.
+  const room = error instanceof ApiError ? insufficientFigures(error.problem) : null;
+  if (room) {
+    return t('fileStorage.room.refused', { missing: formatBytes(room.missingBytes), limit: t(limitKey(room.limit)) });
+  }
   const key = error instanceof ApiError && error.code ? SURVEY_UPLOAD_REQUEST_ERROR_KEYS[error.code] : undefined;
   return key ? t(key) : t('surveyUploads.problems.requestFailed');
 }

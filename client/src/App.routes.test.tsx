@@ -91,6 +91,11 @@ describe('the addresses this application hands out', () => {
     expect(pageFor('/admin/notification-health')).toBeTruthy();
   });
 
+  // Offered by the sidebar beside delivery health, and reached from nowhere else.
+  it('include the storage page the sidebar offers', () => {
+    expect(pageFor('/admin/storage')).toBeTruthy();
+  });
+
   // The sidebar is the only way in to this one too, and only for full administrators — so a
   // missing route would be seen by the handful of people who are also the only ones who can use it.
   it('include the page of everything published that the sidebar offers', () => {

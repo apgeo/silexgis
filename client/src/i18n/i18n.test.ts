@@ -175,6 +175,7 @@ const notificationCategories: Record<NotificationCategoryName, true> = {
   commentOnMine: true,
   groupAnnouncement: true,
   expeditionUpdate: true,
+  storageAlert: true,
 };
 
 /**

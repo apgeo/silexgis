@@ -28,7 +28,7 @@ export const NAV_SECTIONS = [
   'caving-groups', 'cavers',
   'tools/coordinates',
   'review',
-  'admin/audit', 'admin/notification-health', 'admin/messaging', 'admin/message-templates',
+  'admin/audit', 'admin/notification-health', 'admin/storage', 'admin/messaging', 'admin/message-templates',
   'admin/published-trips',
   'admin/permission-groups', 'admin/users',
   'admin/feature-sets', 'admin/document-types', 'admin/feature-types', 'admin/relation-types', 'admin/term-rules',

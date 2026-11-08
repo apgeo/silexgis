@@ -94,6 +94,8 @@ vi.mock('../../api/hooks.ts', async () => {
     POINT_CLOUD_EXTENSIONS: actual.POINT_CLOUD_EXTENSIONS,
     useSurveyUploadCapabilities: () => ({ data: undefined }),
     useUploadPointCloud: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    // The dialog shows the room left in storage before an upload starts; no figures here.
+    useStorageRoom: () => ({ data: undefined }),
     // The placement row on a point-cloud model; none of the models here is one.
     isPointCloudModel: actual.isPointCloudModel,
     usePlaceSurveyModel: () => ({ mutateAsync: vi.fn(), isPending: false }),

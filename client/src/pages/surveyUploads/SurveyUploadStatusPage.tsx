@@ -27,6 +27,8 @@ import {
   type SurveyUploadFile,
 } from '../../api/hooks.ts';
 import PointCloudCard from '../../components/surveyUploads/PointCloudCard.tsx';
+import StorageRoomSummary from '../../components/storage/StorageRoomSummary.tsx';
+import { originalBytesOf, runAddsBytes } from '../../components/storage/storageFigures.ts';
 import SurveyUploadProgressPanel from '../../components/surveyUploads/SurveyUploadProgress.tsx';
 import MakePublicLinkDialog from '../../components/surveyUploads/MakePublicLinkDialog.tsx';
 import OlderVersionsWarning from '../../components/surveyUploads/OlderVersionsWarning.tsx';
@@ -160,7 +162,7 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
             </Button>
           </Link>
         )}
-        {canRerun && (
+        {canRerun && !pointCloud && (
           <Button
             icon={<ReloadOutlined />}
             loading={rerun.isPending}
@@ -169,6 +171,30 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
           >
             {t('surveyUploads.page.rerun')}
           </Button>
+        )}
+        {canRerun && pointCloud && (
+          // A point cloud's run can take gigabytes, so the room it needs is shown before it starts.
+          // A cloud already tiled keeps its tiles on a plain rerun, which then adds nothing.
+          <Popconfirm
+            title={t('surveyUploads.page.rerunConfirm')}
+            description={
+              <StorageRoomSummary
+                addingBytes={
+                  upload.pointCloud?.tilesetUrl
+                    ? 0
+                    : runAddsBytes(false, originalBytesOf(upload.files), upload.pointCloud?.estimate?.full.estimatedTileBytes)
+                }
+                scan
+                processing
+              />
+            }
+            okText={t('surveyUploads.page.rerun')}
+            onConfirm={() => void onRerun()}
+          >
+            <Button icon={<ReloadOutlined />} loading={rerun.isPending} data-testid="survey-upload-rerun">
+              {t('surveyUploads.page.rerun')}
+            </Button>
+          </Popconfirm>
         )}
         </Flex>
       </Flex>

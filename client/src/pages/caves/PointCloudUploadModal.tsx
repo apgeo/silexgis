@@ -7,12 +7,14 @@ import { useNavigate } from 'react-router-dom';
 import {
   isPointCloudFileName,
   POINT_CLOUD_EXTENSIONS,
+  useStorageRoom,
   useSurveyUploadCapabilities,
   useUploadPointCloud,
   type PointCloudUploadPhase,
 } from '../../api/hooks.ts';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import { surveyUploadRequestErrorText } from '../../components/surveyUploads/surveyUploadProblems.ts';
+import StorageRoomSummary from '../../components/storage/StorageRoomSummary.tsx';
 
 /** The cap the server publishes for a cloud when the capabilities have not answered yet: 4 GiB, its own default. */
 const DEFAULT_MAX_CLOUD_BYTES = 4 * 1024 * 1024 * 1024;
@@ -58,6 +60,12 @@ export default function PointCloudUploadModal({
   const accepted = capabilities?.pointCloud.acceptedExtensions ?? [...POINT_CLOUD_EXTENSIONS];
   const tooLarge = file !== undefined && file.size > maxBytes;
   const wrongKind = file !== undefined && !isPointCloudFileName(file.name);
+  // Asked once a file is chosen, so the totals and what this one adds are on screen before the
+  // upload starts. The same reading the summary below shows; a cloud that will not fit is not
+  // offered for sending, and the server refuses it anyway with the same figures.
+  const roomFor = file !== undefined && !tooLarge && !wrongKind ? file.size : null;
+  const { data: room } = useStorageRoom({ addingBytes: roomFor, scan: true });
+  const noRoom = roomFor !== null && room?.fits === false;
 
   const close = () => {
     form.resetFields();
@@ -67,7 +75,7 @@ export default function PointCloudUploadModal({
   };
 
   const submit = async () => {
-    if (!file || tooLarge || wrongKind) {
+    if (!file || tooLarge || wrongKind || noRoom) {
       return;
     }
     let title: string;
@@ -94,7 +102,7 @@ export default function PointCloudUploadModal({
       onCancel={close}
       onOk={() => void submit()}
       okText={t('surveyUploads.pointCloud.upload')}
-      okButtonProps={{ disabled: !file || tooLarge || wrongKind, loading: upload.isPending }}
+      okButtonProps={{ disabled: !file || tooLarge || wrongKind || noRoom, loading: upload.isPending }}
       cancelButtonProps={{ disabled: upload.isPending }}
       confirmLoading={upload.isPending}
       closable={!upload.isPending}
@@ -146,6 +154,8 @@ export default function PointCloudUploadModal({
           title={t('surveyUploads.pointCloud.wrongKind', { extensions: accepted.join(', ') })}
         />
       )}
+
+      {roomFor !== null && <StorageRoomSummary addingBytes={roomFor} scan />}
 
       <Form form={form} layout="vertical" style={{ marginTop: 16 }} disabled={upload.isPending}>
         <Form.Item

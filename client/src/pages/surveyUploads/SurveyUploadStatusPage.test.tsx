@@ -28,6 +28,7 @@ vi.mock('../../api/hooks.ts', async () => {
     useCaveSurveys: () => ({ data: groups }),
     useRefreshCaveWhenUploadSettles: () => undefined,
     useCaveSummary: () => ({ data: { permissions: { canWrite } } }),
+    useStorageRoom: () => ({ data: undefined }),
     useRerunSurveyUpload: () => ({ mutateAsync: rerunMutate, isPending: false }),
     useMintSurveyUploadPublicLink: () => ({ mutateAsync: mintMutate, isPending: false }),
     useRevokeSurveyUploadPublicLink: () => ({ mutateAsync: revokeMutate, isPending: false }),
@@ -243,6 +244,23 @@ describe('the upload status page', () => {
   it('runs the upload again', async () => {
     show();
     fireEvent.click(screen.getByTestId('survey-upload-rerun'));
+    await waitFor(() => expect(rerunMutate).toHaveBeenCalledWith({ id: 'u1' }));
+  });
+
+  it('runs a point cloud again only after a confirmation that shows the room it needs', async () => {
+    upload = made({
+      status: 'failed',
+      files: [
+        { name: 'scan.laz', role: 'archive', status: 'stored', declaredSize: 4096, receivedSize: 4096, sha256: null, refusalCode: null, sourceId: null, documentId: null, contentUrl: null },
+      ],
+    });
+    show();
+
+    fireEvent.click(screen.getByTestId('survey-upload-rerun'));
+    expect(rerunMutate).not.toHaveBeenCalled();
+    // The confirmation's own button, beside the one that opened it.
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Run again' })).toHaveLength(2));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run again' })[1]!);
     await waitFor(() => expect(rerunMutate).toHaveBeenCalledWith({ id: 'u1' }));
   });
 

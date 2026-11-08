@@ -3,7 +3,16 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { SurveyUpload, SurveyUploadPointCloud } from '../../api/hooks.ts';
-import PointCloudCard from './PointCloudCard.tsx';
+
+// The room summary asks the server; here it only says what it was asked, so the card's part —
+// passing the chosen row's estimated size as a processing run's — is what is checked.
+vi.mock('../storage/StorageRoomSummary.tsx', () => ({
+  default: ({ addingBytes, scan, processing }: { addingBytes: number | null; scan?: boolean; processing?: boolean }) => (
+    <div data-testid="storage-room-asked" data-adding={String(addingBytes)} data-scan={String(scan)} data-processing={String(processing)} />
+  ),
+}));
+
+const { default: PointCloudCard } = await import('./PointCloudCard.tsx');
 
 /**
  * The scan's card: the header's facts, the estimate table with the suggestion pre-selected, and
@@ -104,6 +113,11 @@ describe('the point-cloud card', () => {
     expect(screen.getByTestId('point-cloud-estimate-row-full')).toHaveTextContent('7 minutes');
     expect(screen.getByTestId('point-cloud-estimate-row-voxel-5')).toHaveTextContent('30 seconds');
 
+    // What the run with the suggested row would add is shown before it is started: the thinned
+    // copy, counted at the size of the 2,048-byte original as the server counts it, and the tiles.
+    expect(screen.getByTestId('storage-room-asked')).toHaveAttribute('data-adding', String(2048 + 190_000_000));
+    expect(screen.getByTestId('storage-room-asked')).toHaveAttribute('data-processing', 'true');
+
     fireEvent.click(screen.getByTestId('point-cloud-choose'));
     expect(onChoose).toHaveBeenCalledWith({ method: 'voxel', voxelCm: 2 });
 
@@ -112,6 +126,8 @@ describe('the point-cloud card', () => {
     fireEvent.click(screen.getByTestId('point-cloud-choose'));
     expect(onChoose).toHaveBeenLastCalledWith({ method: 'voxel', voxelCm: 5 });
     fireEvent.click(within(screen.getByTestId('point-cloud-estimate-row-full')).getByRole('radio'));
+    // The whole cloud is tiled without a thinned copy: the tiles alone.
+    expect(screen.getByTestId('storage-room-asked')).toHaveAttribute('data-adding', '900000000');
     fireEvent.click(screen.getByTestId('point-cloud-choose'));
     expect(onChoose).toHaveBeenLastCalledWith({ method: 'full' });
   });

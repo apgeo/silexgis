@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import Button from '../Button.tsx';
 import PointCloudViewerModal from '../scene3d/PointCloudViewerModal.tsx';
 import { formatSize } from '../attachments/fileFormat.ts';
+import StorageRoomSummary from '../storage/StorageRoomSummary.tsx';
+import { originalBytesOf, runAddsBytes } from '../storage/storageFigures.ts';
 import {
   displayChoiceUsed,
   pointCloudChoiceNeeded,
@@ -104,6 +106,7 @@ export default function PointCloudCard({
         {cloud.estimate && (
           <EstimateTable
             cloud={cloud}
+            originalBytes={originalBytesOf(upload.files)}
             choiceNeeded={choiceNeeded}
             canChoose={canWrite && upload.status === 'succeeded' && onChoose !== undefined}
             onChoose={onChoose}
@@ -205,12 +208,14 @@ function Facts({ cloud, language }: { cloud: SurveyUploadPointCloud; language: s
  */
 function EstimateTable({
   cloud,
+  originalBytes,
   choiceNeeded,
   canChoose,
   onChoose,
   choosing,
 }: {
   cloud: SurveyUploadPointCloud;
+  originalBytes: number | null;
   choiceNeeded: boolean;
   canChoose: boolean;
   onChoose?: (choice: PointCloudDisplayChoice) => void | Promise<void>;
@@ -314,6 +319,20 @@ function EstimateTable({
         <Typography.Text type="secondary" data-testid="point-cloud-choice-needed">
           {t('surveyUploads.pointCloud.choiceNeeded')}
         </Typography.Text>
+      )}
+      {canChoose && (
+        // What the run with the chosen row would add — the thinned copy and the tiles, as the server
+        // counts them — against the totals and the worker's disk, so a run that will not fit is
+        // seen before it is started rather than refused after.
+        <StorageRoomSummary
+          addingBytes={runAddsBytes(
+            selected.method === 'voxel',
+            originalBytes,
+            rows.find((row) => row.key === rowKey(selected))?.estimatedTileBytes,
+          )}
+          scan
+          processing
+        />
       )}
       {canChoose && (
         <Flex>
