@@ -3,7 +3,7 @@ import { Card, Col, Empty, Row, Statistic, Typography } from 'antd';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { components } from '../../api/schema';
+import type { SurveyUploadDepthProfile } from '../../api/hooks/surveyUploads.ts';
 import { useCaveDepthProfile } from '../../api/hooks/karstProfiles.ts';
 import { EnvelopeChart } from './DistributionCharts.tsx';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
@@ -26,7 +26,7 @@ export default function CaveDepthProfilePanel({ caveId }: { caveId: string }) {
 }
 
 /** What the depth profile panel draws: a cave's current survey or one survey upload's own. */
-export type SurveyDepthProfileViewData = components['schemas']['SurveyUploadDepthProfileDto'];
+export type SurveyDepthProfileViewData = SurveyUploadDepthProfile;
 
 export function SurveyDepthProfileView({
   data,

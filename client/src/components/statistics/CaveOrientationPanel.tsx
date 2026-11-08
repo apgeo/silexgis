@@ -2,7 +2,7 @@
 import { Card, Col, Empty, Row, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 
-import type { components } from '../../api/schema';
+import type { SurveyUploadOrientation } from '../../api/hooks/surveyUploads.ts';
 import { useCaveOrientation } from '../../api/hooks.ts';
 import DipHistogram from './DipHistogram.tsx';
 import RoseDiagram from './RoseDiagram.tsx';
@@ -40,7 +40,7 @@ export default function CaveOrientationPanel({ caveId }: { caveId: string }) {
 }
 
 /** What the orientation panel draws: a cave's current survey or one survey upload's own. */
-export type SurveyOrientationViewData = components['schemas']['SurveyUploadOrientationDto'];
+export type SurveyOrientationViewData = SurveyUploadOrientation;
 
 export function SurveyOrientationView({
   data,

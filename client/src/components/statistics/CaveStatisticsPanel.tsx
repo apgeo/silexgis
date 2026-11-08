@@ -2,7 +2,7 @@
 import { Alert, Card, Col, Descriptions, Empty, Row, Statistic, Table, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 
-import type { components } from '../../api/schema';
+import type { SurveyUploadStatistics } from '../../api/hooks/surveyUploads.ts';
 import { useCaveSurveyStatistics, useSurveyModels, type MorphometryComparison } from '../../api/hooks.ts';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
 
@@ -55,7 +55,7 @@ export default function CaveStatisticsPanel({ caveId }: { caveId: string }) {
  * What the statistics panel draws, from figures already in hand: a cave's current survey, with its
  * record beside it, or one survey upload's own, which has no record to set against.
  */
-export type SurveyStatisticsViewData = components['schemas']['SurveyUploadStatisticsDto'] &
+export type SurveyStatisticsViewData = SurveyUploadStatistics &
   Partial<{ length: MorphometryComparison; depth: MorphometryComparison; declaredDisagrees: boolean }>;
 
 export function SurveyStatisticsView({

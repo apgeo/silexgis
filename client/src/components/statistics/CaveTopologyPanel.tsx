@@ -2,7 +2,7 @@
 import { Card, Descriptions, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 
-import type { components } from '../../api/schema';
+import type { SurveyUploadTopology } from '../../api/hooks/surveyUploads.ts';
 import { caveHasMeasurableSurvey, useCaveTopology, useSurveyModels } from '../../api/hooks.ts';
 
 /**
@@ -57,7 +57,7 @@ export default function CaveTopologyPanel({ caveId }: { caveId: string }) {
 }
 
 /** What the network panel draws: a cave's current survey or one survey upload's own. */
-export type SurveyTopologyViewData = components['schemas']['SurveyUploadTopologyDto'];
+export type SurveyTopologyViewData = SurveyUploadTopology;
 
 export function SurveyTopologyView({
   data,
