@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using NetTopologySuite.Geometries;
 using Shouldly;
 using SilexGis.Api.Features.SurveyUploads;
 using SilexGis.Api.Tests.Support;
@@ -137,6 +138,11 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         dto.GetProperty("anchorHeightM").GetDouble().ShouldBe(980);
         dto.GetProperty("placementHeadingDeg").GetDouble().ShouldBe(315, "a bearing is stored in the compass round");
         dto.GetProperty("placementSource").GetString().ShouldBe("manual");
+        // The model itself names its tiles, so the scan can be opened from the cave's model list
+        // to pick the points it is placed by; the address opens the same tiles the card's does.
+        var modelTiles = dto.GetProperty("tilesetUrl").GetString()!;
+        modelTiles.ShouldStartWith($"/api/v1/survey-models/{scan.ModelId}/tiles/tileset.json?token=");
+        (await nobody.GetAsync(modelTiles)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // On the map, turned as placed, at the same address the card hands out.
         var listed = await ScansAtAsync(owner, lon, lat);
@@ -144,6 +150,8 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         var item = listed.GetProperty("items")[0];
         item.GetProperty("surveyModelId").GetGuid().ShouldBe(scan.ModelId);
         item.GetProperty("headingDeg").GetDouble().ShouldBe(315);
+        item.GetProperty("pitchDeg").GetDouble().ShouldBe(0, "a scan placed by hand is level");
+        item.GetProperty("rollDeg").GetDouble().ShouldBe(0);
         item.GetProperty("anchorHeightM").GetDouble().ShouldBe(980);
         item.GetProperty("tilesetUrl").GetString().ShouldStartWith($"/api/v1/survey-models/{scan.ModelId}/tiles/tileset.json?token=");
 
@@ -368,6 +376,207 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
     }
 
     // ---- what the canned worker answers with ----
+
+    /// <summary>Where the invented survey truly has the scan: what a fit is to find again.</summary>
+    private static readonly ScanPlacement Truth = new(25.4472, 45.5312, 952, 40, ScanPlacementSource.Manual);
+
+    /// <summary>Four points picked in the scan, spread over a passage some thirty metres long.</summary>
+    private static readonly (string Station, double X, double Y, double Z)[] Picks =
+    [
+        ("st.1", 1, 2, 0.5),
+        ("st.2", 12, -3, 1.0),
+        ("st.3", 25, 6, -2.0),
+        ("st.4", 31, 15, 0.0),
+    ];
+
+    [Fact]
+    public async Task A_scan_placed_by_control_points_is_fitted_to_its_stations_with_residuals_and_the_wrong_pair_is_flagged()
+    {
+        var caveId = await CreateCaveAsync();
+        var scan = await TiledScanAsync(owner, caveId);
+        // The fourth station is drawn two metres east of where the scan has it: a pair put on
+        // the wrong station, which the fit is to flag and the other three are to stay close to.
+        await LinePlotAsync(caveId, scan.ModelId, wrongBy: 2);
+        var jobsBefore = await JobCountAsync();
+
+        var placed = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement/control-points", new
+        {
+            pairs = Picks.Select(p => new { scanX = p.X, scanY = p.Y, scanZ = p.Z, station = p.Station }),
+        });
+        placed.StatusCode.ShouldBe(HttpStatusCode.OK, await placed.Content.ReadAsStringAsync());
+        var dto = await placed.Content.ReadFromJsonAsync<JsonElement>();
+        dto.GetProperty("placementSource").GetString().ShouldBe("controlPoints");
+        dto.GetProperty("placementHeadingDeg").GetDouble().ShouldBe(40, tolerance: 3);
+        dto.GetProperty("placementPitchDeg").ValueKind.ShouldBe(JsonValueKind.Null, "no tilt was asked for");
+        var fit = dto.GetProperty("placementControlPoints");
+        var pairs = fit.GetProperty("pairs").EnumerateArray().ToList();
+        pairs.Count.ShouldBe(4);
+        pairs.Select(p => p.GetProperty("station").GetString()).ShouldBe(["st.1", "st.2", "st.3", "st.4"]);
+        pairs[3].GetProperty("flagged").GetBoolean().ShouldBeTrue();
+        pairs[3].GetProperty("distanceM").GetDouble().ShouldBeGreaterThan(pairs[0].GetProperty("distanceM").GetDouble());
+        fit.GetProperty("warnM").GetDouble().ShouldBe(ScanControlPoints.DefaultWarnM);
+        fit.GetProperty("rmsM").GetDouble().ShouldBeGreaterThan(0);
+        (await JobCountAsync()).ShouldBe(jobsBefore, "re-placing a scan never tiles it again");
+
+        // The placement and its pairs are what the model reads back.
+        var read = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{scan.ModelId}");
+        read.GetProperty("placementControlPoints").GetProperty("pairs").GetArrayLength().ShouldBe(4);
+
+        // A placement by hand replaces it, and the pairs no longer describe it.
+        var byHand = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement",
+            new { longitude = 25.4472, latitude = 45.5312, heightM = 952, headingDeg = 10 });
+        byHand.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await byHand.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("placementControlPoints").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task Exact_pairs_place_the_scan_where_the_survey_has_it()
+    {
+        var caveId = await CreateCaveAsync();
+        var scan = await TiledScanAsync(owner, caveId);
+        await LinePlotAsync(caveId, scan.ModelId, wrongBy: 0);
+
+        var placed = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement/control-points", new
+        {
+            pairs = Picks.Select(p => new { scanX = p.X, scanY = p.Y, scanZ = p.Z, station = p.Station }),
+            fitTilt = true,
+        });
+        placed.StatusCode.ShouldBe(HttpStatusCode.OK, await placed.Content.ReadAsStringAsync());
+        var dto = await placed.Content.ReadFromJsonAsync<JsonElement>();
+        dto.GetProperty("anchorLongitude").GetDouble().ShouldBe(Truth.Longitude, tolerance: 1e-7);
+        dto.GetProperty("anchorLatitude").GetDouble().ShouldBe(Truth.Latitude, tolerance: 1e-7);
+        dto.GetProperty("anchorHeightM").GetDouble().ShouldBe(Truth.HeightM, tolerance: 0.01);
+        dto.GetProperty("placementHeadingDeg").GetDouble().ShouldBe(Truth.HeadingDeg, tolerance: 0.01);
+        var fit = dto.GetProperty("placementControlPoints");
+        fit.GetProperty("rmsM").GetDouble().ShouldBeLessThan(0.01);
+        fit.GetProperty("tiltFitted").GetBoolean().ShouldBeTrue();
+        fit.GetProperty("pairs").EnumerateArray().ShouldAllBe(p => !p.GetProperty("flagged").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Control_points_that_cannot_place_the_scan_are_refused_with_a_code()
+    {
+        var caveId = await CreateCaveAsync();
+        var scan = await TiledScanAsync(owner, caveId);
+        var url = $"/api/v1/survey-models/{scan.ModelId}/placement/control-points";
+        var two = Picks.Take(2).Select(p => new { scanX = p.X, scanY = p.Y, scanZ = p.Z, station = p.Station }).ToArray();
+
+        // No line plot yet: no stations to place by.
+        await RefusedAsync(await owner.PutAsJsonAsync(url, new { pairs = two }), HttpStatusCode.Conflict, "survey_model.control_points_no_line_plot");
+
+        await LinePlotAsync(caveId, scan.ModelId, wrongBy: 0);
+        await RefusedAsync(await owner.PutAsJsonAsync(url, new { pairs = two.Take(1) }), HttpStatusCode.BadRequest, "validation.failed");
+        await RefusedAsync(await owner.PutAsJsonAsync(url, new { pairs = two, fitTilt = true }), HttpStatusCode.BadRequest, "validation.failed");
+        // A null element is a malformed request, not a server fault.
+        await RefusedAsync(
+            await owner.PutAsync(url, new StringContent("{\"pairs\":[null,null]}", System.Text.Encoding.UTF8, "application/json")),
+            HttpStatusCode.BadRequest,
+            "validation.failed");
+        await RefusedAsync(
+            await owner.PutAsJsonAsync(url, new { pairs = new[] { two[0], two[1] with { station = "no.such" } } }),
+            HttpStatusCode.BadRequest,
+            "survey_model.control_points_station_not_found");
+        await RefusedAsync(
+            await owner.PutAsJsonAsync(url, new { pairs = new[] { two[0], two[0] with { station = "st.2" } } }),
+            HttpStatusCode.BadRequest,
+            ScanControlPoints.ScanPointsTooClose);
+
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{scan.ModelId}"))
+            .GetProperty("placementSource").ValueKind.ShouldBe(JsonValueKind.Null, "nothing refused placed the scan");
+    }
+
+    [Fact]
+    public async Task Placing_by_control_points_needs_write_on_the_cave_with_its_exact_location()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: true);
+        var scan = await TiledScanAsync(owner, caveId);
+        await LinePlotAsync(caveId, scan.ModelId, wrongBy: 0);
+        var url = $"/api/v1/survey-models/{scan.ModelId}/placement/control-points";
+        var body = new { pairs = Picks.Select(p => new { scanX = p.X, scanY = p.Y, scanZ = p.Z, station = p.Station }) };
+
+        (await nobody.PutAsJsonAsync(url, body)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // Read, write and the exact location: the reader places it and reads the pairs back.
+        await GrantAsync(caveId, "read, write, viewExactLocation");
+        var placed = await reader.PutAsJsonAsync(url, body);
+        placed.StatusCode.ShouldBe(HttpStatusCode.OK, await placed.Content.ReadAsStringAsync());
+        (await reader.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{scan.ModelId}"))
+            .GetProperty("placementControlPoints").GetProperty("pairs").GetArrayLength().ShouldBe(4);
+
+        // The position open, no write: forbidden.
+        await GrantAsync(caveId, "read, viewExactLocation");
+        (await reader.PutAsJsonAsync(url, body)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // Write, but the position closed: the model and its pairs are nobody's to find.
+        await GrantAsync(caveId, "read, write");
+        (await reader.PutAsJsonAsync(url, body)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/v1/survey-models/{scan.ModelId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // The owner still reads what the reader placed.
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{scan.ModelId}"))
+            .GetProperty("placementSource").GetString().ShouldBe("controlPoints");
+    }
+
+    [Fact]
+    public async Task A_model_that_is_not_a_point_cloud_cannot_be_placed_by_control_points()
+    {
+        var caveId = await CreateCaveAsync();
+        var scan = await TiledScanAsync(owner, caveId);
+        var linePlotId = await LinePlotAsync(caveId, scan.ModelId, wrongBy: 0);
+        var refused = await owner.PutAsJsonAsync($"/api/v1/survey-models/{linePlotId}/placement/control-points", new
+        {
+            pairs = Picks.Select(p => new { scanX = p.X, scanY = p.Y, scanZ = p.Z, station = p.Station }),
+        });
+        await RefusedAsync(refused, HttpStatusCode.Conflict, "survey_model.not_placeable");
+    }
+
+    private static async Task RefusedAsync(HttpResponseMessage response, HttpStatusCode status, string code)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(status, body);
+        JsonDocument.Parse(body).RootElement.GetProperty("code").GetString().ShouldBe(code, body);
+    }
+
+    /// <summary>
+    /// The cave's current line plot, written straight into the tables: its stations stand where
+    /// <see cref="Truth"/> puts the picked points, the last one moved east by <paramref name="wrongBy"/> metres.
+    /// </summary>
+    private async Task<Guid> LinePlotAsync(Guid caveId, Guid scanId, double wrongBy)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var fileId = (await db.SurveyModels.AsNoTracking().SingleAsync(m => m.Id == scanId)).FileId;
+        var linePlot = new SurveyModel
+        {
+            CaveFeatureId = caveId,
+            Name = "the survey",
+            FileId = fileId,
+            Format = SurveyModelFormat.Survex3d,
+            Status = SurveyModelStatus.Ready,
+            IsCurrent = true,
+        };
+        db.SurveyModels.Add(linePlot);
+        for (var i = 0; i < Picks.Length; i++)
+        {
+            var (station, x, y, z) = Picks[i];
+            var (lon, lat, h) = Truth.PositionOf(x, y, z);
+            if (i == Picks.Length - 1 && wrongBy != 0)
+            {
+                (lon, lat, h) = new SilexGis.Domain.Geo.LocalTangentFrame(lon, lat, h).GeodeticAt(wrongBy, 0, 0);
+            }
+
+            db.SurveyStations.Add(new SurveyStation
+            {
+                SurveyModelId = linePlot.Id,
+                Name = station,
+                Position = new Point(new CoordinateZ(lon, lat, h)) { SRID = 4326 },
+                Flags = SurveyStationFlags.Underground,
+            });
+        }
+
+        await db.SaveChangesAsync();
+        return linePlot.Id;
+    }
 
     private static readonly byte[] Tileset = Encoding.UTF8.GetBytes(
         """{"asset":{"version":"1.0"},"geometricError":4.0,"root":{"boundingVolume":{"box":[0,0,0,2,0,0,0,2,0,0,0,2]},"geometricError":1.0,"refine":"ADD","content":{"uri":"r.pnts"}}}""");

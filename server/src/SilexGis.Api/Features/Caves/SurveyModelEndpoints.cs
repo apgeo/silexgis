@@ -70,10 +70,30 @@ public sealed record SurveyModelDto(
     /// </summary>
     double? PlacementHeadingDeg,
     /// <summary>
-    /// For a point cloud: whether the placement was made by hand or taken from the coordinate
-    /// system the file named. Null while unplaced.
+    /// For a point cloud: how the placement came about — by hand, from the coordinate system the
+    /// file named, fitted to control points, or from the recording's satellite fixes. Null while
+    /// unplaced.
     /// </summary>
     ScanPlacementSource? PlacementSource,
+    /// <summary>
+    /// For a point cloud: the small tilts a control-point fit found, degrees — the first raises
+    /// the tiles' +X end, the second their +Y end; composed roll, then pitch, then heading. Null
+    /// for a level placement.
+    /// </summary>
+    double? PlacementPitchDeg,
+    double? PlacementRollDeg,
+    /// <summary>
+    /// For a point cloud placed by control points: the pairs, each one's residual, and their
+    /// root mean square. Null for every other placement.
+    /// </summary>
+    SurveyModelControlPointsDto? PlacementControlPoints,
+    /// <summary>
+    /// For a point cloud once tiled: a signed address of its tileset's root, good for a session,
+    /// so the scan can be opened in its own frame — to look at it, or to pick the points it is
+    /// placed by. The tiles carry no coordinates, so this follows the model's own reading rule,
+    /// not the exact-location one. Null for every other model and for a scan not yet tiled.
+    /// </summary>
+    string? TilesetUrl,
     int? TriangleCount,
     /// <summary>
     /// How many bytes the drawable mesh is, so a viewer can see how big it is before it arrives;
@@ -1119,6 +1139,12 @@ public static class SurveyModelEndpoints
         m.AnchorHeightM,
         m.PlacementHeadingDeg,
         m.PlacementSource,
+        m.PlacementPitchDeg,
+        m.PlacementRollDeg,
+        SurveyModelControlPointsDto.Of(ScanControlRecord.FromJson(m.PlacementControlPoints)),
+        m.ConvertedFileId is { } tiles && SurveyModelKinds.FormatsOf(SurveyModelKind.PointCloud).Contains(m.Format)
+            ? SurveyTileAddresses.Root(tokens, m.Id, tiles)
+            : null,
         m.TriangleCount,
         m.ConvertedFileId is { } sized && meshSizes is not null && meshSizes.TryGetValue(sized, out var bytes) ? bytes : null,
         m.SourcePrecisionLost,

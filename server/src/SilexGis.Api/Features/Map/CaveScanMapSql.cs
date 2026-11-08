@@ -25,6 +25,8 @@ public sealed record CaveScanMapRow(
     double AnchorLatitude,
     double AnchorHeightM,
     double HeadingDeg,
+    double PitchDeg,
+    double RollDeg,
     long? PointCount,
     long? TiledPointCount,
     long SizeBytes);
@@ -129,7 +131,8 @@ public static class CaveScanMapSql
             WITH chosen AS (
                 SELECT DISTINCT ON (m.cave_feature_id)
                        m.cave_feature_id, m.id, m.name, m.converted_file_id,
-                       m.anchor, m.anchor_height_m, m.placement_heading_deg, m.point_cloud
+                       m.anchor, m.anchor_height_m, m.placement_heading_deg,
+                       m.placement_pitch_deg, m.placement_roll_deg, m.point_cloud
                 FROM survey_models m
                 WHERE m.cave_feature_id = ANY(@exact_ids)
                   AND m.format = ANY(@scan_formats)
@@ -150,6 +153,8 @@ public static class CaveScanMapSql
                    ST_Y(c.anchor) AS "AnchorLatitude",
                    c.anchor_height_m AS "AnchorHeightM",
                    COALESCE(c.placement_heading_deg, 0) AS "HeadingDeg",
+                   COALESCE(c.placement_pitch_deg, 0) AS "PitchDeg",
+                   COALESCE(c.placement_roll_deg, 0) AS "RollDeg",
                    (c.point_cloud->>'pointCount')::bigint AS "PointCount",
                    COALESCE((c.point_cloud->>'displayPointCount')::bigint,
                             (c.point_cloud->>'pointCount')::bigint) AS "TiledPointCount",

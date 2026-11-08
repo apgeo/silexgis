@@ -28,6 +28,12 @@ namespace SilexGis.Api.Features.Map;
 /// The compass bearing the tiles' own +Y axis points along, degrees clockwise from true north:
 /// the turn a scene gives the tiles about the anchor. Zero when the frame's north is true north.
 /// </param>
+/// <param name="PitchDeg">
+/// The small tilt a fit against surveyed stations may have found, raising the frame's +X end, in
+/// degrees; zero for a level scan. The scene turns the tiles by it after the heading, exactly as
+/// the fit that produced it composed the three angles.
+/// </param>
+/// <param name="RollDeg">The small tilt that raises the frame's +Y end, in degrees; zero for a level scan.</param>
 /// <param name="PointCount">How many points the uploaded cloud holds, by its header; null when unknown.</param>
 /// <param name="TiledPointCount">
 /// How many points the tiles hold — the thinned copy's count when one was shown, else the
@@ -48,6 +54,8 @@ public sealed record CaveScanInViewDto(
     double AnchorLatitude,
     double AnchorHeightM,
     double HeadingDeg,
+    double PitchDeg,
+    double RollDeg,
     long? PointCount,
     long? TiledPointCount,
     long SizeBytes);
@@ -153,6 +161,8 @@ public static class CaveScanMapEndpoints
                 row.AnchorLatitude,
                 row.AnchorHeightM,
                 row.HeadingDeg,
+                row.PitchDeg,
+                row.RollDeg,
                 row.PointCount,
                 row.TiledPointCount,
                 row.SizeBytes))

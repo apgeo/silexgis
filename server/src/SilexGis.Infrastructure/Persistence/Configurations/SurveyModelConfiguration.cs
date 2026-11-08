@@ -23,6 +23,7 @@ public sealed class SurveyModelConfiguration : IEntityTypeConfiguration<SurveyMo
         builder.Property(x => x.Anchor).HasColumnType("geometry(Point, 4326)");
         builder.Property(x => x.PointCloud).HasColumnType("jsonb");
         builder.Property(x => x.PlacementSource).HasConversion<short>();
+        builder.Property(x => x.PlacementControlPoints).HasColumnType("jsonb");
 
         // Models die with their cave (purge path); the stored file survives.
         builder.HasOne<Cave>().WithMany().HasForeignKey(x => x.CaveFeatureId).OnDelete(DeleteBehavior.Cascade);

@@ -151,6 +151,31 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     /// </summary>
     public ScanPlacementSource? PlacementSource { get; set; }
 
+    /// <summary>
+    /// For a point cloud: the small tilt that raises its tiles' +X end, degrees, composed after the
+    /// roll and before the heading. Null or zero for a level scan; set only by a control-point fit
+    /// that was asked to fit a tilt. Published under the same rule as the heading.
+    /// </summary>
+    public double? PlacementPitchDeg { get; set; }
+
+    /// <summary>For a point cloud: the small tilt that raises its tiles' +Y end, degrees. See <see cref="PlacementPitchDeg"/>.</summary>
+    public double? PlacementRollDeg { get; set; }
+
+    /// <summary>
+    /// For a point cloud placed by control points: the root mean square of the pairs' residuals,
+    /// metres — the one figure that says how well the placement agrees with the survey. Null for
+    /// every other placement.
+    /// </summary>
+    public double? PlacementRmsM { get; set; }
+
+    /// <summary>
+    /// For a point cloud placed by control points: the pairs it was fitted to and each one's
+    /// residual, as JSON (<see cref="ScanControlRecord"/>). Kept so the pairs can be shown,
+    /// corrected and fitted again; null for every other placement, and cleared whenever the
+    /// placement is replaced by one the pairs did not make.
+    /// </summary>
+    public string? PlacementControlPoints { get; set; }
+
     /// <summary>Triangles in the converted model, after the ones carrying no surface were dropped.</summary>
     public int? TriangleCount { get; set; }
 

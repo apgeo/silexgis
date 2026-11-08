@@ -6390,9 +6390,25 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("name");
 
+                    b.Property<string>("PlacementControlPoints")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("placement_control_points");
+
                     b.Property<double?>("PlacementHeadingDeg")
                         .HasColumnType("double precision")
                         .HasColumnName("placement_heading_deg");
+
+                    b.Property<double?>("PlacementPitchDeg")
+                        .HasColumnType("double precision")
+                        .HasColumnName("placement_pitch_deg");
+
+                    b.Property<double?>("PlacementRmsM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("placement_rms_m");
+
+                    b.Property<double?>("PlacementRollDeg")
+                        .HasColumnType("double precision")
+                        .HasColumnName("placement_roll_deg");
 
                     b.Property<short?>("PlacementSource")
                         .HasColumnType("smallint")

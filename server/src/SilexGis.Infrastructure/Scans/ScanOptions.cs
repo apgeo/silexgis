@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Scans;
+
 namespace SilexGis.Infrastructure.Scans;
 
 /// <summary>
@@ -87,6 +89,18 @@ public sealed class ScanOptions
 
     /// <summary>Above this many estimated bytes of tiles, the run suggests a thinned display copy. 2 GiB by default.</summary>
     public long WarnTileBytes { get; set; } = 2L * 1024 * 1024 * 1024;
+
+    /// <summary>
+    /// A control point whose scan point lands further than this from its station, in metres, is
+    /// flagged when a scan is placed by control points. Half a metre by default: a station is
+    /// usually marked on the wall or floor within a decimetre or two of where a person picks it in
+    /// the cloud, so a pair half a metre out was more likely paired with the wrong station.
+    /// </summary>
+    public double ControlPointWarnMetres { get; set; } = ScanControlPoints.DefaultWarnM;
+
+    /// <summary>The warning distance, held between a centimetre and a hundred metres.</summary>
+    public double ControlPointWarn =>
+        double.IsFinite(ControlPointWarnMetres) ? Math.Clamp(ControlPointWarnMetres, 0.01, 100) : ScanControlPoints.DefaultWarnM;
 
     /// <summary>The pickup wait, held between one second and an hour.</summary>
     public TimeSpan PickupWait => TimeSpan.FromSeconds(Math.Clamp(PickupSeconds, 1, 3600));
