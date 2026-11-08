@@ -273,6 +273,15 @@ public sealed class PointCloudProcessing(
             // and its source flipped back, silently.
             await RefreshPlacementAsync(model, ct);
             ScanAutoPlacement.AfterTiling(projector, model, facts);
+
+            // A raw recording names no coordinate system, but one that heard satellites outside
+            // the entrance can still be put down roughly where it was made, for control points
+            // to refine. Only an unplaced scan, or one placed this way before, is placed so.
+            if (trajectory is not null && ScanAutoPlacement.WantsGnss(model, facts)
+                && await GnssPlacementAsync(recording, trajectory, facts, ct) is { } fromFixes)
+            {
+                ScanAutoPlacement.Apply(model, fromFixes);
+            }
         }
 
         model.UpdatedAt = DateTimeOffset.UtcNow;
@@ -307,6 +316,66 @@ public sealed class PointCloudProcessing(
         }
     }
 
+    // A satellite log is a few hundred lines a chunk and a trajectory a few hundred thousand; a
+    // file far past either is not one of them, and is not read into memory to find out.
+    private const long MaxGnssFileBytes = 16L * 1024 * 1024;
+    private const long MaxTrajectoryBytes = 256L * 1024 * 1024;
+
+    /// <summary>
+    /// The placement the recording's satellite fixes give the tiles, or null when they give none
+    /// — no fix file, no good fix inside the trajectory, or too short a walk to take a heading
+    /// from. Nothing here fails the run: a scan left unplaced is still a scan.
+    /// </summary>
+    private async Task<ScanPlacement?> GnssPlacementAsync(
+        ScanArtifact[] recording, ScanArtifact trajectory, PointCloudFacts facts, CancellationToken ct)
+    {
+        if (ScanPlacement.TilesZeroPoint(facts) is not { } zero)
+        {
+            return null;
+        }
+
+        var ids = recording.Select(a => a.FileId).Append(trajectory.FileId).ToList();
+        var stored = await db.StoredFiles.AsNoTracking()
+            .Where(f => ids.Contains(f.Id))
+            .Select(f => new { f.Id, f.StoragePath, f.OriginalName })
+            .ToDictionaryAsync(f => f.Id, ct);
+
+        try
+        {
+            var fixes = new List<GnssFix>();
+            foreach (var file in recording)
+            {
+                if (stored.TryGetValue(file.FileId, out var found)
+                    && MandeyeRecording.Classify(found.OriginalName) is { Kind: MandeyeFileKind.Gnss }
+                    && await ReadTextAsync(found.StoragePath, MaxGnssFileBytes, ct) is { } text)
+                {
+                    fixes.AddRange(MandeyeGnss.Parse(text));
+                }
+            }
+
+            if (fixes.Count == 0
+                || !stored.TryGetValue(trajectory.FileId, out var track)
+                || await ReadTextAsync(track.StoragePath, MaxTrajectoryBytes, ct) is not { } trackText)
+            {
+                return null;
+            }
+
+            return MandeyeGnss.Place(fixes, MandeyeGnss.ParseTrajectory(trackText), zero);
+        }
+        catch (IOException e)
+        {
+            logger.LogWarning(e, "The satellite fixes of a recording could not be read; its scan is left unplaced.");
+            return null;
+        }
+    }
+
+    private async Task<string?> ReadTextAsync(string storagePath, long maxBytes, CancellationToken ct)
+    {
+        var path = fileStore.GetAbsolutePath(storagePath);
+        var info = new FileInfo(path);
+        return info.Exists && info.Length <= maxBytes ? await File.ReadAllTextAsync(path, ct) : null;
+    }
+
     /// <summary>
     /// Brings the tracked model's placement columns up to what the row holds now, so that a
     /// placement written by somebody else while this run's worker steps were under way is what
@@ -317,7 +386,18 @@ public sealed class PointCloudProcessing(
     {
         var row = await db.SurveyModels.AsNoTracking()
             .Where(m => m.Id == model.Id)
-            .Select(m => new { m.Anchor, m.AnchorHeightM, m.PlacementHeadingDeg, m.PlacementSource, m.SourceEpsg })
+            .Select(m => new
+            {
+                m.Anchor,
+                m.AnchorHeightM,
+                m.PlacementHeadingDeg,
+                m.PlacementPitchDeg,
+                m.PlacementRollDeg,
+                m.PlacementSource,
+                m.PlacementRmsM,
+                m.PlacementControlPoints,
+                m.SourceEpsg,
+            })
             .SingleOrDefaultAsync(ct);
         if (row is null)
         {
@@ -328,7 +408,11 @@ public sealed class PointCloudProcessing(
         Refresh(entry.Property(m => m.Anchor), row.Anchor);
         Refresh(entry.Property(m => m.AnchorHeightM), row.AnchorHeightM);
         Refresh(entry.Property(m => m.PlacementHeadingDeg), row.PlacementHeadingDeg);
+        Refresh(entry.Property(m => m.PlacementPitchDeg), row.PlacementPitchDeg);
+        Refresh(entry.Property(m => m.PlacementRollDeg), row.PlacementRollDeg);
         Refresh(entry.Property(m => m.PlacementSource), row.PlacementSource);
+        Refresh(entry.Property(m => m.PlacementRmsM), row.PlacementRmsM);
+        Refresh(entry.Property(m => m.PlacementControlPoints), row.PlacementControlPoints);
         Refresh(entry.Property(m => m.SourceEpsg), row.SourceEpsg);
 
         // Set as the original value too, so that a column this run then leaves alone is not

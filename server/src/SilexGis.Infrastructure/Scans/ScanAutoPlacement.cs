@@ -86,8 +86,11 @@ public static class ScanAutoPlacement
     }
 
     /// <summary>
-    /// Writes a placement on the model. One place for the five columns, so that a placement
-    /// made by hand and one taken from the file write the same thing.
+    /// Writes a placement on the model. One place for the placement's columns, so that a
+    /// placement made by hand, one taken from the file, one from the satellite fixes and one
+    /// fitted to control points all write the same thing. The control points and their figure
+    /// are cleared: they describe the placement they were fitted to, and this is another one —
+    /// <see cref="ApplyFit"/> writes them back when it is theirs.
     /// </summary>
     public static void Apply(SurveyModel model, ScanPlacement placement)
     {
@@ -96,7 +99,21 @@ public static class ScanAutoPlacement
         model.Anchor = new Point(placement.Longitude, placement.Latitude) { SRID = 4326 };
         model.AnchorHeightM = placement.HeightM;
         model.PlacementHeadingDeg = placement.HeadingDeg;
+        model.PlacementPitchDeg = placement.PitchDeg == 0 ? null : placement.PitchDeg;
+        model.PlacementRollDeg = placement.RollDeg == 0 ? null : placement.RollDeg;
         model.PlacementSource = placement.Source;
+        model.PlacementRmsM = null;
+        model.PlacementControlPoints = null;
+    }
+
+    /// <summary>Writes a placement fitted to control points, with the pairs and their residuals beside it.</summary>
+    public static void ApplyFit(SurveyModel model, ScanControlFit fit, ScanControlRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(fit);
+        ArgumentNullException.ThrowIfNull(record);
+        Apply(model, fit.Placement);
+        model.PlacementRmsM = fit.RmsM;
+        model.PlacementControlPoints = record.ToJson();
     }
 
     /// <summary>Leaves the model unplaced: its tiles keep their frame and lose their place on the earth.</summary>
@@ -106,19 +123,50 @@ public static class ScanAutoPlacement
         model.Anchor = null;
         model.AnchorHeightM = null;
         model.PlacementHeadingDeg = null;
+        model.PlacementPitchDeg = null;
+        model.PlacementRollDeg = null;
         model.PlacementSource = null;
+        model.PlacementRmsM = null;
+        model.PlacementControlPoints = null;
     }
 
     /// <summary>
-    /// After a tiling: a scan placed by hand is left where it was put, since the tiles' frame is
-    /// what the person placed and a new tiling of the same file frames it the same way; a scan
-    /// placed from its file, or not placed, is placed from the file again, because the worker
-    /// chose this tiling's zero point and it need not be the last one's.
+    /// Whether a placement somebody arrived at deliberately stands on the model — by hand or by
+    /// control points. Such a placement is kept by every later tiling; the automatic ones, from
+    /// the file's coordinate system or from the satellite fixes, are worked out again.
+    /// </summary>
+    public static bool IsDeliberate(SurveyModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        return model.PlacementSource is ScanPlacementSource.Manual or ScanPlacementSource.ControlPoints;
+    }
+
+    /// <summary>
+    /// Whether, after <see cref="AfterTiling"/>, the scan is still waiting for a placement the
+    /// satellite fixes could give: it is unplaced or was placed from the fixes before, its
+    /// recording heard GNSS, and its tiles have a zero point to place.
+    /// </summary>
+    public static bool WantsGnss(SurveyModel model, PointCloudFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(facts);
+        return model.PlacementSource is null or ScanPlacementSource.Gnss
+            && facts.Recording is { HasGnss: true }
+            && ScanPlacement.TilesZeroPoint(facts) is not null;
+    }
+
+    /// <summary>
+    /// After a tiling: a scan placed by hand or by control points is left where it was put,
+    /// since the tiles' frame is what the person placed and a new tiling of the same file frames
+    /// it the same way; a scan placed from its file, or not placed, is placed from the file
+    /// again, because the worker chose this tiling's zero point and it need not be the last
+    /// one's. A scan its file cannot place may then be placed from its satellite fixes
+    /// (<see cref="WantsGnss"/>), which needs the recording's files and is the caller's to read.
     /// </summary>
     public static void AfterTiling(ICoordinateProjector projector, SurveyModel model, PointCloudFacts facts)
     {
         ArgumentNullException.ThrowIfNull(model);
-        if (model.PlacementSource == ScanPlacementSource.Manual)
+        if (IsDeliberate(model))
         {
             return;
         }

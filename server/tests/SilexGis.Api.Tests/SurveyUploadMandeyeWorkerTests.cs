@@ -308,6 +308,80 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
         (await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{id}/rerun", body)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
     }
 
+    // An invented walk: eleven seconds, five metres a second, along the frame's +Y axis. The
+    // receiver put the same walk due east, so the frame's +Y must come out facing east.
+    private const double WalkLatitude = 45.5;
+    private const double WalkLongitude = 25.0;
+    private const double MetresPerDegreeLongitude = 111320.0 * 0.7009; // cos(45.5 degrees)
+
+    private static string WalkTrajectory() => string.Concat(Enumerable.Range(0, 11).Select(k =>
+        string.Create(CultureInfo.InvariantCulture, $"{(1 + k) * 1_000_000_000L},{(1 + k) * 1000},0,{5 * k},0,0,0,0,1\n")));
+
+    // The scanner's own whitespace layout: lidar clock, latitude, longitude, altitude, HDOP,
+    // satellites, geoid separation, correction age, UTC time, quality, computer clock.
+    private static string WalkFixes() => string.Concat(Enumerable.Range(0, 11).Select(k =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"{(1 + k) * 1_000_000_000L} {WalkLatitude} {WalkLongitude + (5.0 * k / MetresPerDegreeLongitude):F8} 1000.0 1.0 9 0.0 0.0 120000.00 1 {(1 + k) * 1000}\n")));
+
+    [Fact]
+    public async Task A_recording_with_good_satellite_fixes_is_placed_from_them_when_tiled_and_a_placement_by_hand_is_kept()
+    {
+        worker.Answer = Hdmapping(exportPoints: 7, trajectoryText: WalkTrajectory());
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var id = await SendAsync(owner, "Fixed scan", caveId, Recording(gnss: true, gnssText: WalkFixes()));
+        await RunPipelineAsync(id);
+
+        async Task<SurveyModel> ModelAsync()
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            return await db.SurveyModels.AsNoTracking().SingleAsync(m => m.SurveyUploadId == id);
+        }
+
+        var model = await ModelAsync();
+        model.PlacementSource.ShouldBe(ScanPlacementSource.Gnss);
+        // The frame's +Y runs the way the receiver walked: east.
+        model.PlacementHeadingDeg.ShouldNotBeNull().ShouldBe(90.0, 1.0);
+        // The placement puts the last pose of the walk, in tile coordinates (the pose less the
+        // 0.5 m the tiles are shifted by), on the last good fix.
+        var placement = new ScanPlacement(
+            model.Anchor.ShouldNotBeNull().X, model.Anchor.Y, model.AnchorHeightM.ShouldNotBeNull(),
+            model.PlacementHeadingDeg.ShouldNotBeNull(), ScanPlacementSource.Gnss);
+        var (lon, lat, _) = placement.PositionOf(-0.5, 49.5, -0.5);
+        (Math.Abs(lon - (WalkLongitude + (50.0 / MetresPerDegreeLongitude))) * MetresPerDegreeLongitude).ShouldBeLessThan(1.0);
+        (Math.Abs(lat - WalkLatitude) * 111320.0).ShouldBeLessThan(1.0);
+
+        // A hand placement made afterwards is not taken back by the fixes when the tiles are made again.
+        var byHand = await owner.PutAsJsonAsync($"/api/v1/survey-models/{model.Id}/placement",
+            new { longitude = 25.5, latitude = 45.9, heightM = 700, headingDeg = 10 });
+        byHand.StatusCode.ShouldBe(HttpStatusCode.OK, await byHand.Content.ReadAsStringAsync());
+        var rerun = await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{id}/rerun", new { fromStep = Py3dtilesTileStep.StepId });
+        rerun.StatusCode.ShouldBe(HttpStatusCode.Accepted, await rerun.Content.ReadAsStringAsync());
+        await RunPipelineAsync(id);
+
+        var kept = await ModelAsync();
+        kept.PlacementSource.ShouldBe(ScanPlacementSource.Manual);
+        kept.PlacementHeadingDeg.ShouldBe(10.0);
+        kept.Anchor!.X.ShouldBe(25.5, 1e-9);
+    }
+
+    [Fact]
+    public async Task A_recording_whose_fixes_are_all_in_one_spot_is_left_unplaced()
+    {
+        worker.Answer = Hdmapping(exportPoints: 7, trajectoryText: WalkTrajectory());
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var standing = string.Concat(Enumerable.Range(0, 11).Select(k =>
+            string.Create(CultureInfo.InvariantCulture, $"{(1 + k) * 1_000_000_000L} 45.5 25.0 1000.0 1.0 9 0.0 0.0 120000.00 1 {(1 + k) * 1000}\n")));
+        var id = await SendAsync(owner, "Standing scan", caveId, Recording(gnss: true, gnssText: standing));
+        await RunPipelineAsync(id);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var model = await db.SurveyModels.AsNoTracking().SingleAsync(m => m.SurveyUploadId == id);
+        model.PlacementSource.ShouldBeNull();
+    }
+
     [Fact]
     public async Task The_track_and_a_gnss_recordings_export_are_served_only_with_the_exact_location()
     {
@@ -372,7 +446,7 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
     /// recording and the resolved defaults, the export writes a cloud of <paramref name="exportPoints"/>
     /// and a trajectory, the check passes (or fails), and the estimate and tiling answer as the tiler does.
     /// </summary>
-    private static Func<string, JsonElement, Task> Hdmapping(int exportPoints, bool checkFails = false) => (directory, request) =>
+    private static Func<string, JsonElement, Task> Hdmapping(int exportPoints, bool checkFails = false, string? trajectoryText = null) => (directory, request) =>
     {
         var step = request.GetProperty("step").GetString();
         var inputs = request.GetProperty("inputs");
@@ -399,7 +473,7 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
                 File.Exists(Path.Combine(directory, inputs.GetProperty("hdmSession").GetString()!)).ShouldBeTrue();
                 var cloud = CannedScanWorker.Output(directory, "pointCloudLaz", "export.laz", SyntheticLas.Las(exportPoints, compressed: true));
                 var track = CannedScanWorker.Output(
-                    directory, "trajectory", "trajectory.csv", Encoding.ASCII.GetBytes("1 0 0 0 0 0 0 0 1\n2 0 1 0 0 0 0 0 1\n"));
+                    directory, "trajectory", "trajectory.csv", Encoding.ASCII.GetBytes(trajectoryText ?? "1 0 0 0 0 0 0 0 1\n2 0 1 0 0 0 0 0 1\n"));
                 CannedScanWorker.Finish(directory, "ok", [cloud, track], new { export = new { pointsWritten = exportPoints } }, tool: "hdmapping");
                 break;
             }
@@ -456,7 +530,7 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
     };
 
     /// <summary>The invented two-chunk recording: 2 and 3 points, IMU logs over 2.5 seconds, two invented sensors, and an invented GNSS sentence when asked for.</summary>
-    private static List<(string Name, byte[] Bytes)> Recording(bool gnss)
+    private static List<(string Name, byte[] Bytes)> Recording(bool gnss, string? gnssText = null)
     {
         const string header = "timestamp gyroX gyroY gyroZ accX accY accZ imuId timestampUnix\n";
         List<(string Name, byte[] Bytes)> files =
@@ -470,7 +544,7 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
         ];
         if (gnss)
         {
-            files.Add(("gnss0000.gnss", Encoding.ASCII.GetBytes("1000000000 $GPGGA,000000.00,0000.0000,N,00000.0000,E,1,08,1.0,0.0,M,0.0,M,,*00\n")));
+            files.Add(("gnss0000.gnss", Encoding.ASCII.GetBytes(gnssText ?? "1000000000 $GPGGA,000000.00,0000.0000,N,00000.0000,E,1,08,1.0,0.0,M,0.0,M,,*00\n")));
         }
 
         return files;
