@@ -29,6 +29,7 @@ export const specs = {
     'users-admin.spec.ts',
     'feature-sets.spec.ts',
     'users-admin.spec.ts', 'map-background-kinds.spec.ts', 'sync-settings-admin.spec.ts',
+    'storage-admin.spec.ts',
   ],
   audit: ['panel.spec.ts', 'history-phone-upload.spec.ts'],
   cabinets: ['documents.spec.ts'],
@@ -168,6 +169,8 @@ export const specs = {
     'cave-topology.spec.ts', 'cave-levels.spec.ts', 'doline-morphometry.spec.ts',
     'karst-density.spec.ts', 'karst-autocorrelation.spec.ts', 'karst-layers.spec.ts', 'trip-stats.spec.ts',
   ],
+  // Room in storage: the administrators' report, and the scans whose uploads and runs it caps.
+  storage: ['storage-admin.spec.ts', 'point-clouds.spec.ts'],
   surveys: [
     'survey-compare.spec.ts', 'survey-extraction.spec.ts', 'survey-photos.spec.ts', 'survey-quality.spec.ts',
     'survey-sources.spec.ts', 'cave-statistics.spec.ts', 'cave-topology.spec.ts',
