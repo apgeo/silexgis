@@ -87,6 +87,8 @@ export interface PublicResultView {
   logTail: string | null;
   /** The compiler's whole log, downloaded from a route of the same link; null when there is none. */
   log: PublicSurveyLog | null;
+  /** The interface language of the account that sent the survey; null when it is not known. */
+  language: string | null;
 }
 
 /** The whole log of a run, as the public answer offers it. */
@@ -118,6 +120,7 @@ export function publicResultView(answer: PublicSurveyUpload): PublicResultView {
     artefacts: answer.artefacts,
     logTail: answer.logTail ?? null,
     log: answer.log ?? null,
+    language: answer.language ?? null,
   };
 }
 

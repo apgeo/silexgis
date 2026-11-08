@@ -1,11 +1,11 @@
-# Tells the documentation site's repository that the Markdown here changed, so the published
-# pages at speotopo.ro/SilexGIS/docs/ are rebuilt within minutes instead of at the next nightly
-# build. The site's repository does the building, link checking and uploading; this job only
-# sends the signal.
+# Tells the shared documentation repository (apgeo/speotopo-docs) that the Markdown here
+# changed, so the SilexGIS site there (sites/silexgis) is rebuilt and the pages at
+# speotopo.ro/SilexGIS/docs/ follow within minutes. That repository does the building, link
+# checking and uploading; this job only sends the signal.
 #
 # Needs a secret DOCS_SITE_TOKEN: a fine-grained token limited to that repository with
 # "Contents: read and write" (the permission GitHub asks for a repository_dispatch). Without
-# the secret the job does nothing, and the nightly build still picks the change up.
+# the secret the job does nothing.
 
 name: Docs site
 
@@ -34,5 +34,5 @@ jobs:
           curl -fsS -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/apgeo/silexgis-docs/dispatches \
-            -d '{"event_type":"docs-changed","client_payload":{"sha":"${{ github.sha }}"}}'
+            https://api.github.com/repos/apgeo/speotopo-docs/dispatches \
+            -d '{"event_type":"docs-changed","client_payload":{"site":"silexgis","sha":"${{ github.sha }}"}}'

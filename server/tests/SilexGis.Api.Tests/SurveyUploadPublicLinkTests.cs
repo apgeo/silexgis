@@ -89,6 +89,25 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
     }
 
     [Fact]
+    public async Task A_public_page_names_the_language_its_sender_reads_the_interface_in()
+    {
+        // The page is opened without an account, so the sender's choice is the only one there is
+        // to start from; the default language would otherwise greet everybody, whatever the sender
+        // works in. Romanian is set because it is not the account default, so this cannot pass on
+        // the default alone.
+        (await owner.PutAsJsonAsync("/api/v1/me/locale", new { language = "ro", timeZone = (string?)null }))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        var (id, _) = await SendCompiledAsync($"Limba {suffix}");
+        var status = await owner.GetFromJsonAsync<JsonElement>($"{Uploads}/{id}");
+        var url = status.GetProperty("publicLink").GetProperty("url").GetString()!;
+
+        using var anonymous = factory.CreateClient();
+        var page = await anonymous.GetFromJsonAsync<JsonElement>($"/api/v1/public/survey-uploads/{url["/p/survey/".Length..]}");
+
+        page.GetProperty("language").GetString().ShouldBe("ro");
+    }
+
+    [Fact]
     public async Task An_unprotected_caves_upload_gets_a_link_whose_page_carries_the_results_and_nothing_that_places_the_cave()
     {
         var (id, caveId) = await SendCompiledAsync($"Publicata {suffix}");
@@ -118,7 +137,7 @@ public sealed class SurveyUploadPublicLinkTests : IAsyncLifetime, IDisposable, I
         // the envelope's own, and no identifier of either appears anywhere. The compiler's log is
         // the holder's to read, through members of its own.
         page.EnumerateObject().Select(p => p.Name).ShouldBe(
-            ["survey", "cave", "version", "status", "stage", "stages", "progress", "message", "error", "artefacts", "logTail", "log", "createdAt", "finishedAt"]);
+            ["survey", "cave", "version", "status", "stage", "stages", "progress", "message", "error", "artefacts", "logTail", "log", "createdAt", "finishedAt", "language"]);
         text.ShouldNotContain(caveId.ToString(), Case.Insensitive);
         text.ShouldNotContain(id.ToString(), Case.Insensitive);
         text.ShouldNotContain("pestera_inventata.zip");

@@ -11,6 +11,7 @@ import {
 const envelope = (over: Partial<PublicSurveyUpload> = {}): PublicSurveyUpload => ({
   survey: { title: 'Invented survey' },
   cave: { name: 'Invented cave' },
+  language: null,
   version: '2026-10-25T01:32:00Z',
   status: 'succeeded',
   stage: 'unpack',

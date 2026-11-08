@@ -53,6 +53,7 @@ function failedCompile(over: Partial<PublicResultView> = {}): PublicResultView {
     title: 'Invented survey',
     caveName: 'Invented cave',
     version: '2026-10-25T10:15:00Z',
+    language: null,
     status: 'failed',
     progress: 60,
     message: null,
@@ -85,6 +86,7 @@ describe('PublicSurveyResultPage', () => {
       artefacts: [{ kind: 'plan-pdf', name: 'plan.pdf', sizeBytes: 1024, contentUrl: '/files/plan' }],
       logTail: null,
       log: null,
+      language: null,
     };
     show();
     expect(screen.getByText('Invented survey')).toBeTruthy();
@@ -97,6 +99,7 @@ describe('PublicSurveyResultPage', () => {
     const view = publicResultView({
       survey: { title: 'Invented survey' },
       cave: { name: 'Invented cave' },
+      language: null,
       version: '2026-10-25T10:15:00Z',
       status: 'succeeded',
       stage: 'unpack',

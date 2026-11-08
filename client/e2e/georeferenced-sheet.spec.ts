@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { createHash } from 'node:crypto';
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { confirmOk, login } from './helpers.ts';
@@ -37,6 +38,29 @@ async function deleteAll(page: Page, name: string) {
   }
 }
 
+/** A picture of the middle of the map, as a short fingerprint to compare with another. */
+async function middleOfTheMap(page: Page): Promise<string> {
+  const box = (await page.locator('.ol-viewport').boundingBox())!;
+  const picture = await page.screenshot({
+    clip: { x: box.x + box.width / 2 - 100, y: box.y + box.height / 2 - 100, width: 200, height: 200 },
+  });
+  return createHash('sha256').update(picture).digest('hex').slice(0, 16);
+}
+
+/** The middle of the map once two pictures a second apart agree — nothing is still arriving. */
+async function mapAtRest(page: Page): Promise<string> {
+  let last = await middleOfTheMap(page);
+  for (let tries = 0; tries < 30; tries++) {
+    await page.waitForTimeout(1_000);
+    const now = await middleOfTheMap(page);
+    if (now === last) {
+      return now;
+    }
+    last = now;
+  }
+  throw new Error('the map never came to rest');
+}
+
 const CORNERS: Record<'nw' | 'ne' | 'se' | 'sw', [number, number]> = {
   nw: [24.0, 45.502],
   ne: [24.004, 45.502],
@@ -51,7 +75,7 @@ const CONTROL_POINTS: { at: [number, number]; lonLat: [number, number] }[] = [
   { at: [0.5, 0.62], lonLat: [24.002, 45.5006] },
 ];
 
-test('a PDF sheet is placed by its corners; a geospatial PDF places itself', async ({ page }) => {
+test('a PDF sheet is placed by its corners; a geospatial PDF places itself', async ({ page, consoleErrors }) => {
   test.setTimeout(360_000);
   await login(page);
   await openRasterTab(page);
@@ -59,8 +83,24 @@ test('a PDF sheet is placed by its corners; a geospatial PDF places itself', asy
   await deleteAll(page, GEO_SHEET);
   await deleteAll(page, SCAN);
 
-  // A sheet without a place of its own is drawn and then waits for one.
+  // A file named as a PDF that is not one is refused, and the drop zone says why on its own row.
+  // The refusal is the answer under test, so the browser's line about the failed request is too.
+  consoleErrors.allow(/status of 400/, 'the drop zone is shown a file the server refuses on purpose');
+  await page
+    .locator('input[type=file][accept=".tif,.tiff,.pdf,.png,.jpg,.jpeg"]')
+    .setInputFiles({ name: 'not-a-sheet.pdf', mimeType: 'application/pdf', buffer: Buffer.from('plain words') });
+  const refused = page.locator('[data-testid=upload-item][data-name="not-a-sheet.pdf"]');
+  await expect(refused).toHaveAttribute('data-state', 'failed', { timeout: 15_000 });
+  await expect(refused).toContainText('This kind of file is not accepted here.');
+  await refused.getByRole('button', { name: 'Dismiss not-a-sheet.pdf' }).click();
+  await expect(refused).toHaveCount(0);
+
+  // A sheet without a place of its own is drawn and then waits for one. The drop zone follows the
+  // file until the server has it.
   await upload(page, `${SHEET}.pdf`);
+  const sent = page.locator(`[data-testid=upload-item][data-name="${SHEET}.pdf"]`);
+  await expect(sent).toHaveAttribute('data-state', 'done', { timeout: 15_000 });
+  await expect(sent).toContainText(`${SHEET} uploaded`);
   const row = page.getByRole('row', { name: new RegExp(`^${SHEET}\\b`) }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await expect(row.getByText('Needs placement')).toBeVisible({ timeout: 60_000 });
@@ -92,7 +132,17 @@ test('a PDF sheet is placed by its corners; a geospatial PDF places itself', asy
   await editor.getByTestId('placement-show-on-map').click();
   await expect(editor).toBeHidden({ timeout: 15_000 });
   await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('checkbox', { name: SHEET }).first()).toBeChecked();
+  const sheetLayer = page.getByRole('checkbox', { name: SHEET }).first();
+  await expect(sheetLayer).toBeChecked();
+
+  // And it is drawn there. The published file has an alpha band (the outside of the sheet is
+  // see-through), which a reader asking for red, green and blue only gets three bands of while the
+  // layer expects four — the layer then draws nothing and logs an error for every tile. So the map
+  // is pictured without the sheet, at rest, and must look different with it.
+  await sheetLayer.uncheck();
+  const without = await mapAtRest(page);
+  await sheetLayer.check();
+  await expect.poll(() => middleOfTheMap(page), { timeout: 30_000 }).not.toBe(without);
 
   // A geospatial PDF says where it lies, so it is ready without being placed.
   await openRasterTab(page);

@@ -17,6 +17,7 @@ import {
   type PublicResultView,
 } from '../../api/hooks.ts';
 import { useAuth } from '../../auth/auth.tsx';
+import { useSendersLanguage } from '../../i18n/languageChoice.ts';
 import { DOWNLOAD_BUTTON } from '../../theme.ts';
 
 /**
@@ -40,6 +41,7 @@ export default function PublicSurveyResultPage() {
   const { t, i18n } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const { data: view, isPending, error, refetch } = usePublicSurveyUpload(token);
+  useSendersLanguage(view?.language);
   const { signIn } = useAuth();
   const location = useLocation();
 

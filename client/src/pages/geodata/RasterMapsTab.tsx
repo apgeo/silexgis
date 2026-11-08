@@ -5,7 +5,6 @@ import {
   DeleteOutlined,
   EditOutlined,
   EnvironmentOutlined,
-  InboxOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
 import {
@@ -20,9 +19,9 @@ import {
   Table,
   Tag,
   Tooltip,
-  Upload,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import UploadDropzone from '../../components/geodata/UploadDropzone.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -175,30 +174,13 @@ export default function RasterMapsTab() {
   return (
     <>
       {canUpload && (
-        <Upload.Dragger
-          multiple
+        <UploadDropzone
           accept=".tif,.tiff,.pdf,.png,.jpg,.jpeg"
-          showUploadList={false}
-          customRequest={({ file, onSuccess, onError }) => {
-            upload
-              .mutateAsync(file as File)
-              .then((created) => {
-                onSuccess?.(created);
-                message.success(t('geodata.uploadQueued', { name: created.name }));
-              })
-              .catch((e: Error) => {
-                onError?.(e);
-                message.error(t('geodata.uploadFailed'));
-              });
-          }}
-          style={{ marginBottom: 16 }}
-        >
-          <p className="ant-upload-drag-icon">
-            <InboxOutlined />
-          </p>
-          <p className="ant-upload-text">{t('geodata.rasterUploadPrompt')}</p>
-          <p className="ant-upload-hint">{t('geodata.rasterUploadHint')}</p>
-        </Upload.Dragger>
+          prompt={t('geodata.rasterUploadPrompt')}
+          hint={t('geodata.rasterUploadHint')}
+          upload={(file, onProgress) => upload.mutateAsync({ file, onProgress })}
+          doneText={(name) => t('geodata.uploadQueued', { name })}
+        />
       )}
 
       <WorldFilterBar

@@ -70,5 +70,6 @@
     "url": "/api/v1/public/survey-uploads/<public-token>/log"
   },
   "createdAt": "<timestamp>",
-  "finishedAt": "<timestamp>"
+  "finishedAt": "<timestamp>",
+  "language": "en"
 }

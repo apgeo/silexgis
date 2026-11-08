@@ -1549,7 +1549,29 @@
     "uploadPrompt": "Apasă sau trage fișiere vectoriale aici pentru încărcare",
     "uploadHint": "GPX, KML, KMZ, GeoJSON, shapefile arhivat, CSV cu coloane de coordonate, WKT — importate în fundal.",
     "uploadQueued": "{{name}} încărcat — importul a fost programat.",
-    "uploadFailed": "Încărcarea a eșuat. Verifică formatul fișierului și încearcă din nou.",
+    "upload": {
+      "sending": "Se încarcă — {{sent}} din {{total}}",
+      "checking": "Trimis — serverul verifică fișierul…",
+      "clearFinished": "Șterge cele terminate",
+      "dismiss": "Închide {{name}}",
+      "errors": {
+        "formatUnsupported": "Acest tip de fișier nu este acceptat aici.",
+        "empty": "Fișierul este gol.",
+        "sizeInvalid": "Fișierul este gol sau mai mare decât acceptă serverul.",
+        "nameTooLong": "Numele fișierului este prea lung. Redenumește fișierul și încearcă din nou.",
+        "unreadable": "Fișierul nu a putut fi citit în formatul indicat de numele lui.",
+        "notDelimited": "Fișierul nu este un tabel cu un separator recunoscut de server.",
+        "stopped": "Încărcarea a fost oprită.",
+        "connection": "Legătura cu serverul s-a pierdut înainte ca fișierul să fie trimis. Încearcă din nou.",
+        "signedOut": "Autentificarea a expirat. Autentifică-te din nou și reîncearcă.",
+        "forbidden": "Contul tău nu poate încărca fișiere aici.",
+        "tooLarge": "Fișierul este mai mare decât acceptă serverul.",
+        "tooMany": "Prea multe încărcări deodată. Așteaptă puțin și încearcă din nou.",
+        "server": "Serverul nu a putut primi fișierul (eroarea {{status}}). Încearcă mai târziu.",
+        "refused": "Serverul a refuzat fișierul (eroarea {{status}}).",
+        "generic": "Încărcarea a eșuat."
+      }
+    },
     "statusValues": {
       "uploaded": "În așteptare",
       "importing": "Se importă…",

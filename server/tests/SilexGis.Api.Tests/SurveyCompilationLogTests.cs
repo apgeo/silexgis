@@ -188,6 +188,28 @@ public class SurveyCompilationLogTests
         """;
 
     [Fact]
+    public void A_log_from_survex_1_4_which_says_legs_rather_than_shots_still_has_its_figures()
+    {
+        // The compiler image's Survex (1.4) words its statistics "legs"; earlier releases said
+        // "shots". Reading only the older wording left every count and length on the page blank.
+        var text = "therion 6.3.4 (2025-04-08)\nreading source files ... done\n"
+            + InventedStatistics
+                .Replace("joined by 57 shots", "joined by 57 legs", StringComparison.Ordinal)
+                .Replace("of survey shots", "of survey legs", StringComparison.Ordinal)
+            + "\ncompilation time: 1 sec\n";
+        text.ShouldNotContain("shots");
+
+        var figures = Reader.ReadFigures("therion.log", text).ShouldNotBeNull();
+
+        figures.StationCount.ShouldBe(42);
+        figures.ShotCount.ShouldBe(57);
+        figures.TotalLengthM.ShouldBe(312.40);
+        figures.TotalLengthAdjustedM.ShouldBe(311.95);
+        figures.PlanLengthM.ShouldBe(280.10);
+        figures.VerticalLengthM.ShouldBe(95.30);
+    }
+
+    [Fact]
     public void A_logs_figures_are_everything_it_states_stations_and_positions_included()
     {
         var text = "therion 6.3.4 (2025-04-08)\nreading source files ... done\n"
