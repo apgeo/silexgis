@@ -278,6 +278,8 @@ export function attachScansInView3d(
         altitudeM: item.anchorHeightM,
         surveyTopAltitudeM: surveyTopOf(item.caveId),
         headingDeg: item.headingDeg,
+        pitchDeg: item.pitchDeg,
+        rollDeg: item.rollDeg,
       },
       sizeBytes: item.sizeBytes,
       status: 'loading',

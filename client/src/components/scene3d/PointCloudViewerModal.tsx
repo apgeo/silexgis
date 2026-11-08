@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Flex, Modal, Radio, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import Button from '../Button.tsx';
@@ -11,6 +11,7 @@ import type {
   Scene3DMeasurement,
   Scene3DPointCloudColoring,
   Scene3DPointCloudStatus,
+  Scene3DScanPoint,
 } from '../../scene3d/scene3dEngine.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
@@ -23,6 +24,19 @@ interface PointCloudViewerModalProps {
   hasRgb: boolean;
   hasIntensity: boolean;
   onClose(): void;
+  /**
+   * Point picking, for a viewer opened to place the scan: while `active`, a click on the cloud
+   * takes the point under the pointer in the tiles' own metres and hands it to `onPick`; `marks`
+   * are drawn on the cloud so the points already paired can be seen. The measure is put away
+   * while picking is on, since both are a click on the cloud.
+   */
+  picking?: {
+    active: boolean;
+    marks: readonly Scene3DScanPoint[];
+    onPick(point: Scene3DScanPoint): void;
+  };
+  /** Drawn beside the cloud: what the viewer was opened for, when that is more than looking. */
+  aside?: ReactNode;
 }
 
 const COLORING_LABEL_KEYS: Record<Scene3DPointCloudColoring, string> = {
@@ -48,6 +62,8 @@ export default function PointCloudViewerModal({
   hasRgb,
   hasIntensity,
   onClose,
+  picking,
+  aside,
 }: PointCloudViewerModalProps) {
   const { t, i18n } = useTranslation();
   const pointDetail = useUiPrefsStore((s) => s.pointDetail);
@@ -61,6 +77,9 @@ export default function PointCloudViewerModal({
   const [coloring, setColoring] = useState<Scene3DPointCloudColoring>(() => defaultColoring(hasRgb, hasIntensity));
   const [measuring, setMeasuring] = useState(false);
   const [measurement, setMeasurement] = useState<Scene3DMeasurement | undefined>(undefined);
+  // The pick handler is read through a ref so the scene, built once, always calls the latest one.
+  const onPick = useRef(picking?.onPick);
+  onPick.current = picking?.onPick;
 
   useEffect(() => {
     if (!open || !surface) {
@@ -87,6 +106,7 @@ export default function PointCloudViewerModal({
       scene.current = built;
       built.subscribeRenderError((message) => setRenderError(message));
       built.subscribeMeasurement((next) => setMeasurement(next));
+      built.subscribePick((point) => onPick.current?.(point));
       try {
         await built.load({
           url: tilesetUrl,
@@ -117,6 +137,23 @@ export default function PointCloudViewerModal({
   useEffect(() => {
     scene.current?.setDetail(pointCloudDetailInForce(pointDetail, coarsePointer()));
   }, [pointDetail]);
+
+  const pickingActive = picking?.active === true;
+  const marks = picking?.marks;
+  useEffect(() => {
+    if (status !== 'loaded') {
+      return;
+    }
+    scene.current?.setPicking(pickingActive);
+    if (pickingActive) {
+      setMeasuring(false);
+    }
+  }, [pickingActive, status]);
+  useEffect(() => {
+    if (status === 'loaded' && marks) {
+      scene.current?.setMarks(marks);
+    }
+  }, [marks, status]);
 
   const choose = (next: Scene3DPointCloudColoring) => {
     setColoring(next);
@@ -179,7 +216,7 @@ export default function PointCloudViewerModal({
             size="small"
             type={measuring ? 'primary' : 'default'}
             aria-pressed={measuring}
-            disabled={status !== 'loaded'}
+            disabled={status !== 'loaded' || pickingActive}
             onClick={toggleMeasure}
             data-testid="point-cloud-measure"
           >
@@ -200,7 +237,17 @@ export default function PointCloudViewerModal({
         {renderError !== null && (
           <Alert type="error" showIcon title={t('scene3d.pointCloud.renderFailed', { message: renderError })} />
         )}
-        <div style={{ position: 'relative', height: '70vh', background: '#101014' }}>
+        <Flex gap={12} wrap>
+        <div
+          style={{
+            position: 'relative',
+            height: '70vh',
+            flex: '1 1 480px',
+            minWidth: 0,
+            background: '#101014',
+            cursor: pickingActive ? 'crosshair' : undefined,
+          }}
+        >
           <div
             ref={setSurface}
             data-testid="point-cloud-surface"
@@ -219,6 +266,8 @@ export default function PointCloudViewerModal({
             </Flex>
           )}
         </div>
+        {aside !== undefined && <div style={{ flex: '0 1 380px', minWidth: 0 }}>{aside}</div>}
+        </Flex>
       </Flex>
     </Modal>
   );

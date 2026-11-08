@@ -3121,6 +3121,24 @@ describe('point clouds the scene loads', () => {
     session.release();
   });
 
+  it('turns the frame by a fitted tilt as well as the bearing', async () => {
+    const session = acquire();
+    const loading = session.engine.loadPointCloud('scan', {
+      url: TILES_URL,
+      anchor: { ...anchor(), pitchDeg: 2.5, rollDeg: -1.5 },
+      placement: anchored,
+      detail,
+    });
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await loading;
+
+    const [cloud] = loadedClouds();
+    expect(cloud.modelMatrix.headingDegrees).toBeCloseTo(30);
+    expect(cloud.modelMatrix.pitchDegrees).toBeCloseTo(2.5);
+    expect(cloud.modelMatrix.rollDegrees).toBeCloseTo(-1.5);
+    session.release();
+  });
+
   it('colours by height unless told otherwise, and never with any transparency', async () => {
     const session = acquire();
     const loading = session.engine.loadPointCloud('scan', { url: TILES_URL, anchor: anchor(), placement: anchored, detail });
@@ -3337,6 +3355,48 @@ describe('a scan on its own', () => {
     expect(local.measurement()).toBeUndefined();
     expect(handler.destroyed).toBe(true);
     expect(reported).toEqual([{ points: 1 }, { points: 2, distanceM: 5 }, undefined, { points: 1 }, undefined]);
+    local.destroy();
+  });
+
+  it('picks a point in the tiles’ own metres, one click at a time, and marks the points it is given', async () => {
+    const local = createLocalScan3D(container());
+    const scene = engine.engineState.widgets.at(-1)!.scene;
+    const loading = local.load({ url: TILES_URL, detail });
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await loading;
+    const picked: unknown[] = [];
+    local.subscribePick((point) => picked.push(point));
+    const at = (x: number, y: number, z: number) =>
+      new engine.Cartesian3(x, y, z) as unknown as typeof scene.pickedPosition;
+
+    local.setMeasuring(true);
+    const measureHandler = engine.engineState.eventHandlers.at(-1)!;
+    // Picking and the measure share the click: arming one puts the other away.
+    local.setPicking(true);
+    expect(measureHandler.destroyed).toBe(true);
+    const handler = engine.engineState.eventHandlers.at(-1)!;
+    const click = () => handler.raise(engine.ScreenSpaceEventType.LEFT_CLICK, { position: new engine.Cartesian2(5, 5) });
+
+    scene.pickedPosition = undefined;
+    click(); // the void takes nothing
+    scene.pickedPosition = at(1.5, -2, 0.25);
+    click();
+    expect(picked).toEqual([{ x: 1.5, y: -2, z: 0.25 }]);
+
+    local.setPicking(false);
+    expect(handler.destroyed).toBe(true);
+
+    local.setMarks([
+      { x: 0, y: 0, z: 0 },
+      { x: 1, y: 1, z: 1 },
+    ]);
+    const marks = scene.primitives.items.find((item) => item instanceof engine.PolylineCollection) as InstanceType<
+      typeof engine.PolylineCollection
+    >;
+    // A cross of three short segments per point.
+    expect(marks.polylines).toHaveLength(6);
+    local.setMarks([]);
+    expect(marks.polylines).toHaveLength(0);
     local.destroy();
   });
 

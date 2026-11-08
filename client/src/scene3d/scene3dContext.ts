@@ -86,6 +86,7 @@ import type {
   Scene3DImageryOptions,
   Scene3DLocalScan,
   Scene3DMeasurement,
+  Scene3DScanPoint,
   Scene3DMarker,
   Scene3DModelAnchor,
   Scene3DModelOptions,
@@ -1702,7 +1703,11 @@ class CesiumScene3D implements Scene3DCore {
     );
     return Transforms.headingPitchRollToFixedFrame(
       Cartesian3.fromDegrees(anchor.longitude, anchor.latitude, height),
-      new HeadingPitchRoll(CesiumMath.toRadians(anchor.headingDeg), 0, 0),
+      new HeadingPitchRoll(
+        CesiumMath.toRadians(anchor.headingDeg),
+        CesiumMath.toRadians(anchor.pitchDeg ?? 0),
+        CesiumMath.toRadians(anchor.rollDeg ?? 0),
+      ),
     );
   }
 
@@ -2746,6 +2751,11 @@ class CesiumLocalScan3D implements Scene3DLocalScan {
   private measurePoints: Cartesian3[] = [];
   private measurementState: Scene3DMeasurement | undefined;
   private readonly measurementListeners = new Set<(measurement: Scene3DMeasurement | undefined) => void>();
+  // Picking: a handler of its own while on, and the marks drawn in a collection of their own, so
+  // neither the cloud nor the measure is touched by what a placement session draws.
+  private pickHandler: ScreenSpaceEventHandler | undefined;
+  private readonly pickListeners = new Set<(point: Scene3DScanPoint) => void>();
+  private markLines: PolylineCollection | undefined;
 
   constructor(container: HTMLElement) {
     this.widget = new CesiumWidget(container, {
@@ -2788,7 +2798,9 @@ class CesiumLocalScan3D implements Scene3DLocalScan {
     this.removeRenderErrorHandler = undefined;
     this.renderErrorListeners.clear();
     this.setMeasuring(false);
+    this.setPicking(false);
     this.measurementListeners.clear();
+    this.pickListeners.clear();
     this.entry = undefined;
     this.widget.destroy();
   }
@@ -2807,6 +2819,7 @@ class CesiumLocalScan3D implements Scene3DLocalScan {
       if (this.measureHandler) {
         return;
       }
+      this.setPicking(false);
       const handler = new ScreenSpaceEventHandler(this.widget.canvas);
       handler.setInputAction((event: { position: Cartesian2 }) => this.takeMeasurePoint(event.position), ScreenSpaceEventType.LEFT_CLICK);
       this.measureHandler = handler;
@@ -2819,6 +2832,79 @@ class CesiumLocalScan3D implements Scene3DLocalScan {
 
   measurement(): Scene3DMeasurement | undefined {
     return this.measurementState;
+  }
+
+  setPicking(on: boolean): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    if (on) {
+      if (this.pickHandler) {
+        return;
+      }
+      this.setMeasuring(false);
+      const handler = new ScreenSpaceEventHandler(this.widget.canvas);
+      handler.setInputAction((event: { position: Cartesian2 }) => this.takePick(event.position), ScreenSpaceEventType.LEFT_CLICK);
+      this.pickHandler = handler;
+      return;
+    }
+    this.pickHandler?.destroy();
+    this.pickHandler = undefined;
+  }
+
+  subscribePick(listener: (point: Scene3DScanPoint) => void): () => void {
+    this.pickListeners.add(listener);
+    return () => {
+      this.pickListeners.delete(listener);
+    };
+  }
+
+  /**
+   * One click of picking: the depth under the pointer, as for the measure, turned back from the
+   * scene's world into the tiles' own frame. The tiles are drawn untransformed under this
+   * scene's fixed frame, so undoing that one frame gives exactly the offsets from the tiles' zero
+   * point the tiles were written with — the frame a placement is fitted in.
+   */
+  private takePick(windowPosition: Cartesian2): void {
+    if (this.widget.isDestroyed() || !this.entry?.tileset) {
+      return;
+    }
+    const world = this.widget.scene.pickPosition(windowPosition);
+    if (!world) {
+      return;
+    }
+    const local = Matrix4.multiplyByPoint(Matrix4.inverse(this.frame, new Matrix4()), world, new Cartesian3());
+    const point: Scene3DScanPoint = { x: local.x, y: local.y, z: local.z };
+    for (const listener of [...this.pickListeners]) {
+      listener(point);
+    }
+  }
+
+  setMarks(points: readonly Scene3DScanPoint[]): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    this.markLines ??= new PolylineCollection();
+    if (!this.widget.scene.primitives.contains(this.markLines)) {
+      this.widget.scene.primitives.add(this.markLines);
+    }
+    this.markLines.removeAll();
+    // A small cross along the three axes, half a metre across: a cloud has no surface to pin a
+    // flat marker to, and a cross reads the same from every side the scan is orbited from.
+    const half = 0.25;
+    const material = Material.fromType(Material.ColorType, { color: Color.fromCssColorString('#ff4d6d') });
+    points.forEach((point, index) => {
+      for (const [dx, dy, dz] of [
+        [half, 0, 0],
+        [0, half, 0],
+        [0, 0, half],
+      ] as const) {
+        const from = Matrix4.multiplyByPoint(this.frame, new Cartesian3(point.x - dx, point.y - dy, point.z - dz), new Cartesian3());
+        const to = Matrix4.multiplyByPoint(this.frame, new Cartesian3(point.x + dx, point.y + dy, point.z + dz), new Cartesian3());
+        this.markLines!.add({ positions: [from, to], width: 2, material, id: `mark-${index}` });
+      }
+    });
+    this.requestRender();
   }
 
   subscribeMeasurement(listener: (measurement: Scene3DMeasurement | undefined) => void): () => void {

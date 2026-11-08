@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { App, Flex, Form, InputNumber, Modal, Popconfirm, Tag, Tooltip, Typography } from 'antd';
-import { EnvironmentOutlined } from '@ant-design/icons';
+import { AimOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import Button from '../../components/Button.tsx';
 import {
@@ -12,11 +12,14 @@ import {
   type SurveyModelPlacementRequest,
 } from '../../api/hooks.ts';
 import { surveyModelProblemMessage } from './surveyModelProblems.ts';
+import ScanControlPointsPlacer from './ScanControlPointsPlacer.tsx';
 
 /** Where a placement came from, as the row words it; literal keys so the parity checks see each one. */
 const SOURCE_LABEL_KEYS: Record<NonNullable<SurveyModelInfo['placementSource']>, string> = {
   manual: 'surveyModels.placement.byHand',
   fileCrs: 'surveyModels.placement.fromFile',
+  controlPoints: 'surveyModels.placement.byControlPoints',
+  gnss: 'surveyModels.placement.fromGnss',
 };
 
 interface PlacementForm {
@@ -53,6 +56,7 @@ export default function ScanPlacementControl({
   const place = usePlaceSurveyModel();
   const unplace = useUnplaceSurveyModel();
   const [open, setOpen] = useState(false);
+  const [placingByPoints, setPlacingByPoints] = useState(false);
   const [form] = Form.useForm<PlacementForm>();
 
   const canViewExact = summary?.permissions.canViewExactLocation === true;
@@ -106,6 +110,14 @@ export default function ScanPlacementControl({
           {model.placementHeadingDeg !== null && (
             <> · {t('surveyModels.placement.bearing', { degrees: Math.round(model.placementHeadingDeg) })}</>
           )}
+          {model.placementControlPoints && (
+            <>
+              {' · '}
+              {t('surveyModels.placement.rms', {
+                metres: (Math.round(model.placementControlPoints.rmsM * 100) / 100).toString(),
+              })}
+            </>
+          )}
         </Tag>
       ) : (
         <Tag data-testid={`scan-placement-state-${model.id}`}>{t('surveyModels.placement.notPlaced')}</Tag>
@@ -122,6 +134,27 @@ export default function ScanPlacementControl({
               data-testid={`scan-place-${model.id}`}
             />
           </Tooltip>
+          {/* Picking points needs the tiles, so the scan has to have been tiled. */}
+          {model.tilesetUrl !== null && (
+            <Tooltip title={t('surveyModels.controlPoints.open')}>
+              <Button
+                size="small"
+                type="text"
+                icon={<AimOutlined />}
+                aria-label={t('surveyModels.controlPoints.open')}
+                onClick={() => setPlacingByPoints(true)}
+                data-testid={`scan-place-points-${model.id}`}
+              />
+            </Tooltip>
+          )}
+          {placingByPoints && model.tilesetUrl !== null && (
+            <ScanControlPointsPlacer
+              model={{ ...model, tilesetUrl: model.tilesetUrl }}
+              caveId={caveId}
+              open
+              onClose={() => setPlacingByPoints(false)}
+            />
+          )}
           {placed && (
             <Popconfirm
               title={t('surveyModels.placement.removeConfirm')}

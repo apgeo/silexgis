@@ -753,6 +753,13 @@ export interface Scene3DModels {
 export interface Scene3DPointCloudAnchor extends Scene3DModelAnchor {
   /** Compass bearing of the cloud's own +y axis: 0 = true north, increasing clockwise. */
   headingDeg: number;
+  /**
+   * A small fitted tilt raising the cloud's +x end, degrees; absent or 0 for a level scan. Composed
+   * after the heading the way the server's fit composed it.
+   */
+  pitchDeg?: number;
+  /** A small fitted tilt raising the cloud's +y end, degrees; absent or 0 for a level scan. */
+  rollDeg?: number;
 }
 
 /**
@@ -868,6 +875,32 @@ export interface Scene3DLocalScan {
   subscribeMeasurement(listener: (measurement: Scene3DMeasurement | undefined) => void): () => void;
   /** Reports the engine's own message when rendering dies; the caller supplies the sentence. */
   subscribeRenderError(listener: (message: string) => void): () => void;
+  /**
+   * Turns point picking on or off. While it is on, a click on the drawn cloud reports the point
+   * under the pointer, in the tiles' own metres; a click on the void reports nothing. Picking and
+   * the measure share the click, so turning one on turns the other off.
+   */
+  setPicking(on: boolean): void;
+  /** Reports each point picking takes. */
+  subscribePick(listener: (point: Scene3DScanPoint) => void): () => void;
+  /**
+   * Marks points on the cloud, in the tiles' own metres, replacing whatever was marked before; an
+   * empty list takes every mark away. A marked point is the one picked earlier, so the person can
+   * see which places they have already paired.
+   */
+  setMarks(points: readonly Scene3DScanPoint[]): void;
+}
+
+/**
+ * A point of a scan in its own frame: metres from the tiles' zero point along the tiles' X, Y and
+ * Z axes — the frame the tiles were written in, before anything said where on earth it is. This
+ * is the frame a placement is fitted from, which is why a pick is reported in it and not in the
+ * scene's synthetic world coordinates.
+ */
+export interface Scene3DScanPoint {
+  x: number;
+  y: number;
+  z: number;
 }
 
 /**

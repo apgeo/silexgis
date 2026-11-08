@@ -1109,6 +1109,8 @@ export interface FakeMatrix4 {
   origin: FakeCartesian3;
   /** Present when the frame was turned about its up axis; a plain east-north-up frame has none. */
   headingDegrees?: number;
+  pitchDegrees?: number;
+  rollDegrees?: number;
 }
 
 export const Transforms = {
@@ -1116,7 +1118,12 @@ export const Transforms = {
     return { origin };
   },
   headingPitchRollToFixedFrame(origin: FakeCartesian3, orientation: HeadingPitchRoll): FakeMatrix4 {
-    return { origin, headingDegrees: CesiumMath.toDegrees(orientation.heading) };
+    return {
+      origin,
+      headingDegrees: CesiumMath.toDegrees(orientation.heading),
+      pitchDegrees: CesiumMath.toDegrees(orientation.pitch),
+      rollDegrees: CesiumMath.toDegrees(orientation.roll),
+    };
   },
 };
 
@@ -1124,8 +1131,8 @@ export const Transforms = {
  * Only the two columns the scene reads off a frame: its up axis, which in this stand-in is always
  * straight up, and its origin, whose height is the one component the frame arithmetic can see.
  */
-export const Matrix4 = {
-  getColumn(matrix: FakeMatrix4, index: number, result: Cartesian4): Cartesian4 {
+export class Matrix4 {
+  static getColumn(matrix: FakeMatrix4, index: number, result: Cartesian4): Cartesian4 {
     if (index === 2) {
       result.x = 0;
       result.y = 0;
@@ -1137,8 +1144,25 @@ export const Matrix4 = {
     }
     result.w = index === 3 ? 1 : 0;
     return result;
-  },
-};
+  }
+
+  /**
+   * The inverse of a frame, kept as the frame it undoes. The only frame anything is inverted for
+   * is the local scan's, built at the synthetic origin with no turn, and the double treats that one
+   * as the identity: world and tile coordinates are the same numbers in it.
+   */
+  static inverse(matrix: FakeMatrix4, _result: unknown): FakeMatrix4 {
+    return { ...matrix };
+  }
+
+  /** A point through a frame. Identity here, for the reason {@link Matrix4.inverse} gives. */
+  static multiplyByPoint(_matrix: FakeMatrix4, point: Cartesian3, result: Cartesian3): Cartesian3 {
+    result.x = point.x;
+    result.y = point.y;
+    result.z = point.z;
+    return result;
+  }
+}
 
 /** One `Cesium3DTileset.fromUrl` the scene made, with the options it passed. */
 export interface FakePointCloudRequest {

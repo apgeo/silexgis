@@ -103,6 +103,7 @@ vi.mock('../../api/hooks.ts', async () => {
     // The placement row on a point-cloud model; none of the models here is one.
     isPointCloudModel: actual.isPointCloudModel,
     usePlaceSurveyModel: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    usePlaceSurveyModelByControlPoints: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useUnplaceSurveyModel: () => ({ mutateAsync: vi.fn(), isPending: false }),
     // The viewer opened from this section reads the model's links, to show over the model the
     // photographs somebody has hung on its stations. Nothing here is about those, so there are

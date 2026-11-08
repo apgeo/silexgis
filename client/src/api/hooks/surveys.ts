@@ -854,6 +854,31 @@ export function usePlaceSurveyModel() {
   });
 }
 
+export type SurveyModelControlPointsRequest = components['schemas']['SurveyModelControlPointsRequest'];
+export type SurveyModelControlPoint = components['schemas']['SurveyModelControlPointDto'];
+
+/**
+ * Places a point cloud by control points: pairs of a point picked in the scan, in its own metres,
+ * and a station of the cave's current line plot. The server fits the translation and heading (a
+ * small tilt too when asked) and answers the model with each pair's residual and their RMS; a pair
+ * over the installation's warning distance comes back flagged. Like every placement it never
+ * touches the tiles, so trying again with a pair dropped or changed costs only this request.
+ */
+export function usePlaceSurveyModelByControlPoints() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: ({ id, request }: { id: string; caveId: string; request: SurveyModelControlPointsRequest }) =>
+      unwrap(
+        api.PUT('/api/v1/survey-models/{id}/placement/control-points', { params: { path: { id } }, body: request }),
+      ),
+    onSuccess: (model, { id, caveId }) => {
+      queryClient.setQueryData<SurveyModelInfo>(queryKeys.surveyModel(id), model);
+      invalidate(caveId);
+    },
+  });
+}
+
 /** Takes a point cloud's placement away: still viewable in its own frame, no longer on the map. */
 export function useUnplaceSurveyModel() {
   const queryClient = useQueryClient();

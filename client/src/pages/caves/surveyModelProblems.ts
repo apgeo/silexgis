@@ -31,6 +31,14 @@ export const SURVEY_MODEL_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   // Asking for a model to be read again while a reading of it is queued or running. The list on
   // screen was a moment behind; the sentence says what is true now rather than that something failed.
   'survey_model.reading_in_progress': 'surveyModels.problems.readingInProgress',
+  // Placing a scan by control points: the refusals somebody can act on by changing a pair.
+  'survey_model.control_points_station_not_found': 'surveyModels.problems.controlPointsStationNotFound',
+  'survey_model.control_points_no_line_plot': 'surveyModels.problems.controlPointsNoLinePlot',
+  'survey_model.control_points_scan_too_close': 'surveyModels.problems.controlPointsScanTooClose',
+  'survey_model.control_points_stations_too_close': 'surveyModels.problems.controlPointsStationsTooClose',
+  'survey_model.control_points_offset_too_far': 'surveyModels.problems.controlPointsOffsetTooFar',
+  'survey_model.control_points_tilt_in_line': 'surveyModels.problems.controlPointsTiltInLine',
+  'survey_model.control_points_tilt_too_large': 'surveyModels.problems.controlPointsTiltTooLarge',
   'cave.not_found': 'surveyModels.problems.caveNotFound',
   'acl.forbidden': 'surveyModels.problems.forbidden',
 };

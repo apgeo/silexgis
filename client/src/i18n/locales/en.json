@@ -4418,7 +4418,14 @@
       "notReady": "This model is still being read, or could not be. Only a model that has finished can be made the current one.",
       "readingInProgress": "This model is already being read. Wait for that reading to finish before asking for another.",
       "caveNotFound": "This cave no longer exists.",
-      "forbidden": "You are not allowed to change this cave's survey models."
+      "forbidden": "You are not allowed to change this cave's survey models.",
+      "controlPointsStationNotFound": "The cave's current line plot has no station by one of these names. Check the spelling.",
+      "controlPointsNoLinePlot": "This cave has no current line plot, so there are no stations to place the scan by.",
+      "controlPointsScanTooClose": "The picked points are less than a metre apart. Pick points further apart.",
+      "controlPointsStationsTooClose": "The stations are less than a metre apart. Pair points with stations further apart.",
+      "controlPointsOffsetTooFar": "A picked point lies implausibly far from the scan's zero point.",
+      "controlPointsTiltInLine": "For a tilt, one picked point must lie at least a metre off the line through the others.",
+      "controlPointsTiltTooLarge": "The pairs ask for a tilt larger than a levelled scan can be off. Check the pairs, or place without the tilt."
     },
     "reading": "The survey is being read into its stations and shots. The plot can be viewed already; this list updates itself when the reading is done.",
     "readingFailed": "The survey could not be read.",
@@ -4442,7 +4449,34 @@
       "noEntrance": "This cave has no exact main entrance position to start from; type the position.",
       "fromFileHint": "This placement was read from the coordinate system in the file's header. Saving here replaces it with yours, and it is not read from the file again.",
       "heading": "Bearing of the scan's north",
-      "headingHint": "Degrees clockwise from true north that the scan's own +Y axis points along. 0 if the scanner was already aligned to north."
+      "headingHint": "Degrees clockwise from true north that the scan's own +Y axis points along. 0 if the scanner was already aligned to north.",
+      "byControlPoints": "Placed by control points",
+      "fromGnss": "Placed from the recording's satellite fixes",
+      "rms": "RMS {{metres}} m"
+    },
+    "controlPoints": {
+      "open": "Place by control points",
+      "hint": "Pair at least two points of the scan with the stations of the cave's current line plot they stand on. For each pair, press Pick and click the point on the cloud, then name its station. The scan is turned and moved to fit the stations; the tiles are not changed, so you can try again.",
+      "noLinePlot": "This cave has no current line plot, so there are no stations to place the scan by.",
+      "pair": "Pair {{number}}",
+      "point": "x {{x}} · y {{y}} · z {{z}} m",
+      "notPicked": "No point picked yet",
+      "pick": "Pick",
+      "picking": "Click the cloud…",
+      "removePair": "Remove this pair",
+      "addPair": "Add a pair",
+      "fitTilt": "Also fit a small tilt",
+      "tiltNeedsThree": "A tilt is fitted from at least {{count}} complete pairs.",
+      "save": "Fit and place",
+      "placed": "The scan is placed by its control points.",
+      "rms": "RMS of the residuals: {{metres}} m",
+      "flagged_one": "{{count}} pair is further than {{metres}} m from its station — probably paired with the wrong station.",
+      "flagged": "{{count}} pairs are further than {{metres}} m from their stations — probably paired with the wrong stations.",
+      "station": "Station",
+      "horizontal": "Horizontal (m)",
+      "vertical": "Vertical (m)",
+      "distance": "Distance (m)",
+      "tiltFitted": "A small tilt was fitted as well as the bearing."
     }
   },
   "centerlines": {

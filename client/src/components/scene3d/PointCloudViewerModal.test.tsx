@@ -59,6 +59,25 @@ function fakeScene() {
       }
     },
     subscribeRenderError: () => () => {},
+    picking: [] as boolean[],
+    marks: [] as unknown[],
+    pickListeners: [] as ((point: { x: number; y: number; z: number }) => void)[],
+    setPicking: (on: boolean) => {
+      scene.picking.push(on);
+    },
+    setMarks: (points: unknown) => {
+      scene.marks.push(points);
+    },
+    subscribePick: (listener: (point: { x: number; y: number; z: number }) => void) => {
+      scene.pickListeners.push(listener);
+      return () => {};
+    },
+    /** How a test stands in for a click on the cloud while picking is on. */
+    pick: (point: { x: number; y: number; z: number }) => {
+      for (const listener of scene.pickListeners) {
+        listener(point);
+      }
+    },
     land: () => resolveLoad?.(),
     refuse: (error: unknown) => rejectLoad?.(error),
   };
@@ -161,6 +180,47 @@ describe('the scan viewer', () => {
     fireEvent.click(screen.getByTestId('point-cloud-measure'));
     expect(built[0].measuring).toEqual([true, false]);
     expect(screen.queryByTestId('point-cloud-measure-readout')).toBeNull();
+  });
+
+  it('picks points for whoever opened it to place the scan, draws their marks, and puts the measure away', async () => {
+    const onPick = vi.fn();
+    const marks = [{ x: 1, y: 2, z: 3 }];
+    const { rerender } = render(
+      <PointCloudViewerModal
+        open
+        tilesetUrl={URL}
+        name="Hall"
+        hasRgb={false}
+        hasIntensity={false}
+        onClose={() => {}}
+        picking={{ active: false, marks, onPick }}
+        aside={<div data-testid="beside">pairs</div>}
+      />,
+    );
+    await waitFor(() => expect(built).toHaveLength(1));
+    await act(async () => {
+      built[0].land();
+    });
+    expect(screen.getByTestId('beside')).toBeInTheDocument();
+    expect(built[0].marks.at(-1)).toEqual(marks);
+    expect(built[0].picking.at(-1)).toBe(false);
+
+    rerender(
+      <PointCloudViewerModal
+        open
+        tilesetUrl={URL}
+        name="Hall"
+        hasRgb={false}
+        hasIntensity={false}
+        onClose={() => {}}
+        picking={{ active: true, marks, onPick }}
+      />,
+    );
+    expect(built[0].picking.at(-1)).toBe(true);
+    // Both are a click on the cloud, so the measure cannot be on while points are being picked.
+    expect(screen.getByTestId('point-cloud-measure')).toBeDisabled();
+    act(() => built[0].pick({ x: 4, y: 5, z: 6 }));
+    expect(onPick).toHaveBeenCalledWith({ x: 4, y: 5, z: 6 });
   });
 
   it('says so when the tileset cannot be read', async () => {

@@ -22,6 +22,8 @@ function scan(caveId: string, sizeBytes: number): CaveScanInView {
     anchorLatitude: 45,
     anchorHeightM: 1000,
     headingDeg: 0,
+    pitchDeg: 0,
+    rollDeg: 0,
     pointCount: 1,
     tiledPointCount: 1,
     sizeBytes,

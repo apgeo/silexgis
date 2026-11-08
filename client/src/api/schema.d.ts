@@ -444,6 +444,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-models/{id}/placement/control-points": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Places a point cloud by pairs of a point picked in the scan and a station of the cave's current line plot: the translation and heading (and, when asked, a small tilt) that bring the points closest to their stations, stored with each pair's residual and their RMS; pairs over the installation's warning distance are flagged (Write on the cave, with its exact location). The tiles are not touched. */
+        put: operations["surveyModelPlacementPlaceByControlPoints"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/survey-models/{id}/tiles/{path}": {
         parameters: {
             query?: never;
@@ -10182,6 +10199,10 @@ export interface components {
             anchorHeightM: number;
             /** Format: double */
             headingDeg: number;
+            /** Format: double */
+            pitchDeg: number;
+            /** Format: double */
+            rollDeg: number;
             /** Format: int64 */
             pointCount: null | number;
             /** Format: int64 */
@@ -15121,7 +15142,7 @@ export interface components {
             visibility?: components["schemas"]["Visibility"];
         };
         /** @enum {unknown} */
-        ScanPlacementSource: "manual" | "fileCrs";
+        ScanPlacementSource: "manual" | "fileCrs" | "controlPoints" | "gnss";
         ScanStepParameterSchemaDto: {
             stepId: string;
             toolVersion: null | string;
@@ -15930,6 +15951,50 @@ export interface components {
             errorZM: number;
             stations: string;
         };
+        SurveyModelControlPointDto: {
+            /** Format: double */
+            scanX: number;
+            /** Format: double */
+            scanY: number;
+            /** Format: double */
+            scanZ: number;
+            station: string;
+            /** Format: double */
+            eastM: number;
+            /** Format: double */
+            northM: number;
+            /** Format: double */
+            upM: number;
+            /** Format: double */
+            horizontalM: number;
+            /** Format: double */
+            distanceM: number;
+            flagged: boolean;
+        };
+        SurveyModelControlPointRequest: {
+            /** Format: double */
+            scanX: number;
+            /** Format: double */
+            scanY: number;
+            /** Format: double */
+            scanZ: number;
+            station: string;
+        };
+        SurveyModelControlPointsDto: {
+            /** Format: uuid */
+            linePlotId: string;
+            pairs: components["schemas"]["SurveyModelControlPointDto"][];
+            /** Format: double */
+            rmsM: number;
+            /** Format: double */
+            warnM: number;
+            tiltFitted: boolean;
+        };
+        SurveyModelControlPointsRequest: {
+            pairs: components["schemas"]["SurveyModelControlPointRequest"][];
+            /** @default false */
+            fitTilt: boolean;
+        };
         SurveyModelDto: {
             /** Format: uuid */
             id: string;
@@ -15956,6 +16021,12 @@ export interface components {
             /** Format: double */
             placementHeadingDeg: null | number;
             placementSource: null | components["schemas"]["ScanPlacementSource"];
+            /** Format: double */
+            placementPitchDeg: null | number;
+            /** Format: double */
+            placementRollDeg: null | number;
+            placementControlPoints: null | components["schemas"]["SurveyModelControlPointsDto"];
+            tilesetUrl: null | string;
             /** Format: int32 */
             triangleCount: null | number;
             /** Format: int64 */
@@ -20109,6 +20180,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyModelPlacementPlaceByControlPoints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurveyModelControlPointsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Unauthorized */

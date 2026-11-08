@@ -4431,7 +4431,14 @@
       "notReady": "Modelul este încă în curs de citire sau nu a putut fi citit. Numai un model terminat poate fi setat ca model curent.",
       "readingInProgress": "Modelul este deja în curs de citire. Așteaptă încheierea acelei citiri înainte să ceri alta.",
       "caveNotFound": "Această peșteră nu mai există.",
-      "forbidden": "Nu ai voie să modifici modelele topo ale acestei peșteri."
+      "forbidden": "Nu ai voie să modifici modelele topo ale acestei peșteri.",
+      "controlPointsStationNotFound": "Modelul de drumuire curent al peșterii nu are o stație cu unul dintre aceste nume. Verifică scrierea.",
+      "controlPointsNoLinePlot": "Peștera nu are un model de drumuire curent, deci nu există stații după care să fie plasată scanarea.",
+      "controlPointsScanTooClose": "Punctele alese sunt la mai puțin de un metru unul de altul. Alege puncte mai depărtate.",
+      "controlPointsStationsTooClose": "Stațiile sunt la mai puțin de un metru una de alta. Asociază puncte cu stații mai depărtate.",
+      "controlPointsOffsetTooFar": "Un punct ales este neverosimil de departe de punctul zero al scanării.",
+      "controlPointsTiltInLine": "Pentru o înclinare, un punct ales trebuie să fie la cel puțin un metru de linia care trece prin celelalte.",
+      "controlPointsTiltTooLarge": "Perechile cer o înclinare mai mare decât poate avea o scanare nivelată. Verifică perechile sau plasează fără înclinare."
     },
     "reading": "Topografia este citită în stațiile și vizele ei. Planul poate fi deja vizualizat; lista se actualizează singură când citirea s-a încheiat.",
     "readingFailed": "Topografia nu a putut fi citită.",
@@ -4455,7 +4462,34 @@
       "noEntrance": "Această peșteră nu are o poziție exactă a intrării principale de la care să se pornească; scrie poziția.",
       "fromFileHint": "Această plasare a fost citită din sistemul de coordonate din antetul fișierului. Salvarea de aici o înlocuiește cu a ta și nu mai este citită din fișier.",
       "heading": "Azimutul nordului scanării",
-      "headingHint": "Grade în sensul acelor de ceasornic față de nordul geografic pe care le urmează axa +Y a scanării. 0 dacă scanerul era deja aliniat la nord."
+      "headingHint": "Grade în sensul acelor de ceasornic față de nordul geografic pe care le urmează axa +Y a scanării. 0 dacă scanerul era deja aliniat la nord.",
+      "byControlPoints": "Plasat după puncte de control",
+      "fromGnss": "Plasat după pozițiile prin satelit ale înregistrării",
+      "rms": "RMS {{metres}} m"
+    },
+    "controlPoints": {
+      "open": "Plasează după puncte de control",
+      "hint": "Asociază cel puțin două puncte din scanare cu stațiile din modelul de drumuire curent al peșterii pe care se află. Pentru fiecare pereche, apasă Alege și dă clic pe punct în nor, apoi scrie stația. Scanarea este rotită și mutată ca să se potrivească stațiilor; dalele nu se schimbă, deci poți încerca din nou.",
+      "noLinePlot": "Peștera nu are un model de drumuire curent, deci nu există stații după care să fie plasată scanarea.",
+      "pair": "Perechea {{number}}",
+      "point": "x {{x}} · y {{y}} · z {{z}} m",
+      "notPicked": "Niciun punct ales încă",
+      "pick": "Alege",
+      "picking": "Dă clic pe nor…",
+      "removePair": "Elimină această pereche",
+      "addPair": "Adaugă o pereche",
+      "fitTilt": "Potrivește și o mică înclinare",
+      "tiltNeedsThree": "O înclinare se potrivește din cel puțin {{count}} perechi complete.",
+      "save": "Potrivește și plasează",
+      "placed": "Scanarea este plasată după punctele de control.",
+      "rms": "RMS-ul abaterilor: {{metres}} m",
+      "flagged_one": "{{count}} pereche este la mai mult de {{metres}} m de stația ei — probabil asociată cu stația greșită.",
+      "flagged": "{{count}} de perechi sunt la mai mult de {{metres}} m de stațiile lor — probabil asociate cu stații greșite.",
+      "station": "Stația",
+      "horizontal": "Orizontal (m)",
+      "vertical": "Vertical (m)",
+      "distance": "Distanța (m)",
+      "tiltFitted": "Pe lângă orientare a fost potrivită și o mică înclinare."
     }
   },
   "centerlines": {
