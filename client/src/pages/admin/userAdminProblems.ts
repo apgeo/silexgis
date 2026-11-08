@@ -35,6 +35,8 @@ function blockingLabel(kind: string, t: TFunction): string {
       return t('admin.users.problems.deleteBlockedKinds.georeferenced_maps');
     case 'import_batches':
       return t('admin.users.problems.deleteBlockedKinds.import_batches');
+    case 'processing_profiles':
+      return t('admin.users.problems.deleteBlockedKinds.processing_profiles');
     case 'raster_maps':
       return t('admin.users.problems.deleteBlockedKinds.raster_maps');
     case 'survey_uploads':

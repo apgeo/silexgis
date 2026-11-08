@@ -8907,6 +8907,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/scan-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The processing profiles the caller may use, optionally for one step: installation ones, their groups' ones and their own. */
+        get: operations["processingProfileList"];
+        put?: never;
+        /** Saves a processing profile. A personal one is anybody's to save; an installation or group one needs the scan-profiles Create right. 400 processing_profile.values_invalid names each key the step's schema refuses. */
+        post: operations["processingProfileCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One processing profile. Answered as absent where the caller may not read it. */
+        get: operations["processingProfileGet"];
+        /** Rewrites a profile's name, description and values. 409 processing_profile.built_in for a built-in one. */
+        put: operations["processingProfileUpdate"];
+        post?: never;
+        /** Deletes a profile. Past runs keep the values they resolved; 409 processing_profile.built_in for a built-in one. */
+        delete: operations["processingProfileDelete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles/schemas/{stepId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a step's parameters may hold and its defaults; for HDMapping's odometry, as the installed program dumped them. */
+        get: operations["processingProfileSchema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Imports a profile from HDMapping's TOML (odometry) or a SilexGIS profile file (any step), with a report of what was taken, dropped, filled and refused. dryRun reports without saving. 400 processing_profile.import_refused names each refused key. */
+        post: operations["processingProfileTransferImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A profile as a file: format=toml writes HDMapping's own parameter file (odometry only), format=json (the default) a SilexGIS profile file for any step. */
+        get: operations["processingProfileTransferExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles/{id}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Saves a copy of a profile the caller may read, with new values if sent — how a built-in is edited. A personal copy is anybody's; an installation or group copy needs the scan-profiles Create right. */
+        post: operations["processingProfileUseCopy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles/remembered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The profile the caller ran each step with last, where that profile is still one they may use. */
+        get: operations["processingProfileUseRemembered"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/storage/room": {
         parameters: {
             query?: never;
@@ -9003,7 +9125,7 @@ export interface components {
             actions: components["schemas"]["AccessAction"][];
         };
         /** @enum {unknown} */
-        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions" | "checklists" | "events" | "terrain" | "uploadReview";
+        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions" | "checklists" | "events" | "terrain" | "uploadReview" | "scanProfiles";
         /** @enum {unknown} */
         AccessEffect: "allow" | "deny";
         AccessEntryDto: {
@@ -14133,6 +14255,92 @@ export interface components {
         };
         /** @enum {unknown} */
         ProcessingJobStatus: "queued" | "running" | "succeeded" | "failed";
+        ProcessingProfileChoiceDto: {
+            stepId: string;
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            chosenAt: string;
+        };
+        ProcessingProfileCopyRequest: {
+            name?: null | string;
+            description?: null | string;
+            scope?: components["schemas"]["ProcessingProfileScope"];
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            values?: unknown;
+        };
+        ProcessingProfileCreateRequest: {
+            stepId: string;
+            name: string;
+            description: null | string;
+            scope: components["schemas"]["ProcessingProfileScope"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            values: components["schemas"]["JsonElement"];
+        };
+        ProcessingProfileDto: {
+            /** Format: uuid */
+            id: string;
+            stepId: string;
+            toolVersion: null | string;
+            name: string;
+            description: null | string;
+            scope: components["schemas"]["ProcessingProfileScope"];
+            /** Format: uuid */
+            ownerUserId: null | string;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            values: components["schemas"]["JsonElement"];
+            origin: string;
+            builtIn: boolean;
+            mayEdit: boolean;
+            mayDelete: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ProcessingProfileImportReportDto: {
+            stepId: string;
+            format: string;
+            taken: string[];
+            unknown: string[];
+            defaulted: string[];
+            fixed: string[];
+            droppedSections: string[];
+            refused: components["schemas"]["ProfileImportRefusal"][];
+            fileVersion: null | string;
+            installedVersion: null | string;
+            versionDiffers: boolean;
+            accepted: boolean;
+        };
+        ProcessingProfileImportRequest: {
+            fileName: string;
+            content: string;
+            scope: components["schemas"]["ProcessingProfileScope"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            name: null | string;
+            description: null | string;
+            dryRun: boolean;
+        };
+        ProcessingProfileImportResultDto: {
+            profile: null | components["schemas"]["ProcessingProfileDto"];
+            report: components["schemas"]["ProcessingProfileImportReportDto"];
+            values: components["schemas"]["JsonElement"];
+        };
+        /** @enum {unknown} */
+        ProcessingProfileScope: "installation" | "cavingGroup" | "personal";
+        ProcessingProfileUpdateRequest: {
+            name: string;
+            description: null | string;
+            values: components["schemas"]["JsonElement"];
+        };
+        ProfileImportRefusal: {
+            key: string;
+            reason: string;
+        };
         /** @enum {unknown} */
         ProfileVisibility: "private" | "cavingGroup" | "authenticated";
         ProfileVisibilityDto: {
@@ -14913,6 +15121,15 @@ export interface components {
         };
         /** @enum {unknown} */
         ScanPlacementSource: "manual" | "fileCrs";
+        ScanStepParameterSchemaDto: {
+            stepId: string;
+            toolVersion: null | string;
+            schema: components["schemas"]["JsonElement"];
+            defaults: components["schemas"]["JsonElement"];
+            source: components["schemas"]["ScanStepSchemaSource"];
+        };
+        /** @enum {unknown} */
+        ScanStepSchemaSource: "registry" | "worker" | "stored";
         SearchDocumentItemDto: {
             /** Format: uuid */
             id: string;
@@ -16107,6 +16324,7 @@ export interface components {
             documentsVisibility: null | components["schemas"]["Visibility"];
             publicLink?: null | components["schemas"]["SurveyUploadPublicLinkRequest"];
             display?: null | components["schemas"]["SurveyUploadDisplayRequest"];
+            profiles?: null | string[];
         };
         SurveyUploadOrientationDto: {
             basis: components["schemas"]["SurveySegmentBasis"];
@@ -16230,6 +16448,7 @@ export interface components {
             pipeline: null | components["schemas"]["SurveyUploadPipelineRequest"];
             display?: null | components["schemas"]["SurveyUploadDisplayRequest"];
             fromStep?: null | string;
+            profiles?: null | string[];
         };
         SurveyUploadSettingsDto: {
             firstModelOfCreatedCave: boolean;
@@ -43998,6 +44217,400 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileList: {
+        parameters: {
+            query?: {
+                stepId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessingProfileCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessingProfileUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileSchema: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stepId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanStepParameterSchemaDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileTransferImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessingProfileImportRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileImportResultDto"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileImportResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileTransferExport: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileUseCopy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessingProfileCopyRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileUseRemembered: {
+        parameters: {
+            query?: {
+                stepId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileChoiceDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

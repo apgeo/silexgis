@@ -3535,7 +3535,8 @@
       "terrain": "Terrain",
       "checklists": "Checklists",
       "events": "Calendar events",
-      "uploadReview": "Upload review"
+      "uploadReview": "Upload review",
+      "scanProfiles": "Scans · Processing profiles"
     },
     "sources": {
       "fullAdministrators": "Full administration: membership decides before any rule is consulted.",
@@ -4818,6 +4819,7 @@
           "geofiles": "geodata files",
           "georeferenced_maps": "georeferenced maps",
           "import_batches": "confirmed imports",
+          "processing_profiles": "scan processing profiles",
           "raster_maps": "scanned maps",
           "survey_uploads": "survey uploads",
           "survey_upload_public_links": "public survey-upload links",

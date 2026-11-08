@@ -144,6 +144,7 @@ const accessDomains: Record<AccessDomainName, true> = {
   jobs: true,
   terrain: true,
   uploadReview: true,
+  scanProfiles: true,
 };
 
 /**

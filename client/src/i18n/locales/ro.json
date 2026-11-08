@@ -3535,7 +3535,8 @@
       "terrain": "Relief",
       "checklists": "Liste de verificare",
       "events": "Evenimente din calendar",
-      "uploadReview": "Revizuirea încărcărilor"
+      "uploadReview": "Revizuirea încărcărilor",
+      "scanProfiles": "Scanări · Profiluri de procesare"
     },
     "sources": {
       "fullAdministrators": "Administrare deplină: apartenența decide înainte de orice regulă.",
@@ -4831,6 +4832,7 @@
           "geofiles": "fișiere de geodate",
           "georeferenced_maps": "hărți georeferențiate",
           "import_batches": "importuri confirmate",
+          "processing_profiles": "profiluri de procesare a scanărilor",
           "raster_maps": "hărți scanate",
           "survey_uploads": "încărcări de topografii",
           "survey_upload_public_links": "linkuri publice de încărcare a topografiilor",
