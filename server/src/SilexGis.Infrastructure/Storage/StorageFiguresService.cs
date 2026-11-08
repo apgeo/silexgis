@@ -137,7 +137,7 @@ public sealed class StorageFiguresService(
         var staged = await db.UploadSessions.AsNoTracking().Where(s => s.StagedForSync).SumAsync(s => s.DeclaredSizeBytes, ct);
         var reserved = await ReservedAsync(_ => true, excludingUploadId, ct);
         var scanStored = await ScanStoredAsync(ct);
-        var scanReserved = await ReservedAsync(u => u.Source == SurveyOrigin.PointCloud, excludingUploadId, ct);
+        var scanReserved = await ReservedAsync(u => (u.Source == SurveyOrigin.PointCloud || u.Source == SurveyOrigin.Mandeye), excludingUploadId, ct);
 
         var settings = files.Value;
         return new StorageFigures(
@@ -166,7 +166,7 @@ public sealed class StorageFiguresService(
                 v.Id == f.DocumentVersionId
                 && db.SurveyUploadFiles.Any(sf =>
                     sf.DocumentId == v.DocumentId
-                    && db.SurveyUploads.Any(u => u.Id == sf.SurveyUploadId && u.Source == SurveyOrigin.PointCloud))))
+                    && db.SurveyUploads.Any(u => u.Id == sf.SurveyUploadId && (u.Source == SurveyOrigin.PointCloud || u.Source == SurveyOrigin.Mandeye)))))
             .SumAsync(f => f.SizeBytes, ct);
 
     /// <summary>

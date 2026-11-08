@@ -164,6 +164,28 @@ public class SurveyPipelineProgressTests
     }
 
     [Fact]
+    public void A_recording_run_owns_its_bands_in_order_with_odometry_between_inspect_and_tiling()
+    {
+        var stages = SurveyPipelineProgress.Order(SurveyOrigin.Mandeye);
+        stages.ShouldBe(
+        [
+            SurveyUploadStage.Archive, SurveyUploadStage.Inspect, SurveyUploadStage.Odometry, SurveyUploadStage.Export,
+            SurveyUploadStage.Check, SurveyUploadStage.Downsample, SurveyUploadStage.Tile, SurveyUploadStage.Store,
+        ]);
+        SurveyPipelineProgress.Band(stages[0], SurveyOrigin.Mandeye).Start.ShouldBe(0);
+        SurveyPipelineProgress.Band(stages[^1], SurveyOrigin.Mandeye).End.ShouldBe(95);
+        for (var i = 1; i < stages.Count; i++)
+        {
+            SurveyPipelineProgress.Band(stages[i], SurveyOrigin.Mandeye).Start
+                .ShouldBe(SurveyPipelineProgress.Band(stages[i - 1], SurveyOrigin.Mandeye).End);
+        }
+
+        // The other runs keep the bands they always had.
+        SurveyPipelineProgress.Band(SurveyUploadStage.Tile, SurveyOrigin.PointCloud).ShouldBe(SurveyPipelineProgress.Band(SurveyUploadStage.Tile));
+        SurveyPipelineProgress.Overall(SurveyUploadStage.Odometry, 50, SurveyOrigin.Mandeye).ShouldBe(30);
+    }
+
+    [Fact]
     public void A_point_cloud_run_inspects_and_tiles_where_a_survey_run_unpacks_and_compiles()
     {
         SurveyPipelineProgress.Order(SurveyOrigin.PointCloud).ShouldBe(

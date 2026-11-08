@@ -149,6 +149,14 @@ public class SurveyUploadPipelineHandler(
         try
         {
             var archived = await ArchivedFilesAsync(upload.Id, ct);
+            if (upload.Source == SurveyOrigin.Mandeye)
+            {
+                // A raw recording is every file of the folder, all of them its archive.
+                await RunRecordingAsync(upload, archived, reached => stage = reached, ct);
+                await NotifyAsync(upload, succeeded: true);
+                return;
+            }
+
             var archiveFile = archived.Single(f => f.Role == SurveyUploadFileRole.Archive);
             var archivePath = archiveFile.StoragePath;
 
@@ -575,6 +583,72 @@ public class SurveyUploadPipelineHandler(
                 outcome.Facts.DisplayPointCount ?? outcome.Facts.PointCount, outcome.Facts.PointCount, outcome.Facts.TileBytes ?? 0, outcome.TilesReused)
             : SurveyPipelineNotes.NoTiler;
         await SurveyUploadWrites.SucceedAsync(db, upload.Id, stage, note, ct);
+    }
+
+    /// <summary>
+    /// A raw recording's run: the recording is inspected and its facts recorded on the scan's
+    /// model, and then the recipe's worker steps run — odometry, export, the export's check, and
+    /// from there a point cloud's steps. Without processing switched on the run ends at the
+    /// odometry stage with a note saying so, the recording kept and described, and a rerun once a
+    /// worker is installed carries on from here.
+    /// </summary>
+    private async Task RunRecordingAsync(
+        SurveyUpload upload, IReadOnlyList<ArchivedFile> archived, Action<SurveyUploadStage> entering, CancellationToken ct)
+    {
+        var stage = SurveyUploadStage.Inspect;
+        entering(stage);
+        await SurveyUploadWrites.ProgressAsync(
+            db, upload.Id, stage, SurveyPipelineProgress.Band(stage, upload.Source).Start, "Inspecting the recording.", ct);
+
+        var files = archived
+            .Select(f => new ArchivedRecordingFile(f.Name, f.StoragePath, f.FileId, f.SizeBytes, f.Sha256))
+            .ToList();
+        var facts = await MandeyeUploadRun.InspectAsync(files, OpenAsync, ct);
+
+        // What an earlier run wrote — the export's header, the estimate, the tiling — is read
+        // before the recording's facts are written over it, so a rerun that reuses that
+        // processing carries it across.
+        var earlier = PointCloudFacts.FromJson(await db.SurveyModels.AsNoTracking()
+            .Where(m => m.SurveyUploadId == upload.Id && m.PointCloud != null)
+            .Select(m => m.PointCloud)
+            .FirstOrDefaultAsync(ct));
+        var model = await MandeyeUploadRun.RecordAsync(db, upload, files, facts, ct);
+
+        if (!pointClouds.Enabled)
+        {
+            stage = SurveyUploadStage.Odometry;
+            entering(stage);
+            await SurveyUploadWrites.SucceedAsync(db, upload.Id, stage, SurveyPipelineNotes.NoOdometry, ct);
+            return;
+        }
+
+        var recipe = ScanRecipes.FromOptionsJson(upload.Options)
+            ?? throw new SurveyPipelineException(SurveyPipelineFailures.Unexpected, "The upload carries no recipe to run.");
+        if (recipe.RerunFrom is not null)
+        {
+            // As for a point cloud: a step asked to be done again is done again by this run only.
+            var once = ScanRecipes.ToOptionsJson(recipe with { RerunFrom = null });
+            await db.SurveyUploads.Where(u => u.Id == upload.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.Options, once), ct);
+        }
+
+        var outcome = await pointClouds.RunAsync(upload, model, facts, earlier, recipe, entering, ct);
+        if (outcome.ChoiceNeeded)
+        {
+            await SurveyUploadWrites.SucceedAsync(
+                db, upload.Id, SurveyUploadStage.Downsample, SurveyPipelineNotes.ChoiceNeeded(outcome.Facts.PointCount), ct);
+            return;
+        }
+
+        stage = SurveyUploadStage.Store;
+        entering(stage);
+        await SurveyUploadWrites.SucceedAsync(
+            db,
+            upload.Id,
+            stage,
+            SurveyPipelineNotes.Tiled(
+                outcome.Facts.DisplayPointCount ?? outcome.Facts.PointCount, outcome.Facts.PointCount, outcome.Facts.TileBytes ?? 0, outcome.TilesReused),
+            ct);
     }
 
     private sealed record ArchivedFile(

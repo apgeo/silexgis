@@ -70,6 +70,9 @@ public sealed class PointCloudProcessing(
     private const string LazMediaType = "application/vnd.laszip";
     private const string LasMediaType = "application/vnd.las";
 
+    // The name of the manifest a raw recording's job reads its files from.
+    private const string RecordingManifest = "recording.json";
+
     /// <summary>Whether this installation says it has a worker; off, the run ends after the header with a note.</summary>
     public bool Enabled => handoff.Enabled;
 
@@ -93,11 +96,29 @@ public sealed class PointCloudProcessing(
         Action<SurveyUploadStage> entering,
         CancellationToken ct)
     {
+        var origin = upload.Source;
         var facts = headerFacts.WithProcessingOf(earlierFacts);
-        var original = await db.ScanArtifacts
-            .FirstAsync(a => a.SurveyUploadId == upload.Id && a.StepId == ScanSteps.UploadStepId && a.Kind == ScanArtifactKind.PointCloudLaz, ct);
+
+        // What the upload itself made: a point cloud's one file, or every file of a raw recording.
+        // The recording's files are put in one fixed order, so the odometry's inputs compare
+        // equal from one run to the next while the recording is the same files.
+        var uploaded = await db.ScanArtifacts
+            .Where(a => a.SurveyUploadId == upload.Id && a.StepId == ScanSteps.UploadStepId)
+            .ToListAsync(ct);
+        var recording = uploaded.Where(a => a.Kind == ScanArtifactKind.RawRecording).OrderBy(a => a.Id).ToArray();
+
+        // The cloud of record: the uploaded original, or — for a raw recording — what the export
+        // made of it, once the export step has run or been reused.
+        var cloud = uploaded.FirstOrDefault(a => a.Kind == ScanArtifactKind.PointCloudLaz);
+        if (cloud is null && recording.Length == 0)
+        {
+            throw new SurveyPipelineException(SurveyPipelineFailures.FilesMissing, "The upload's original is not among its recorded files.");
+        }
+
+        // The products are stored as files of the document the model is shown from when the run
+        // starts: the original cloud's, or the recording's first lidar chunk's.
         var versionId = await db.StoredFiles.AsNoTracking()
-            .Where(f => f.Id == original.FileId).Select(f => f.DocumentVersionId).FirstAsync(ct);
+            .Where(f => f.Id == model.FileId).Select(f => f.DocumentVersionId).FirstAsync(ct);
 
         // A worker announces itself when it starts; after a restart of the whole stack this run
         // may be taken up before it has, so the announcement is waited for as a job would be.
@@ -106,7 +127,11 @@ public sealed class PointCloudProcessing(
                 SurveyPipelineFailures.WorkerUnavailable,
                 $"Point-cloud processing is switched on, but no worker announced itself in {(int)options.Value.PickupWait.TotalSeconds} seconds. Start the scans worker, then run the upload again.");
 
+        recipe = await ResolveOdometryAsync(upload, recipe, ct);
+
         // The products of the steps as they stand, by kind, for the steps that read them.
+        ScanArtifact? session = null;
+        ScanArtifact? trajectory = null;
         ScanArtifact? display = null;
         ScanArtifact? tiles = null;
         var tilesReused = false;
@@ -131,26 +156,31 @@ public sealed class PointCloudProcessing(
 
             var definition = ScanSteps.Find(step.StepId)
                 ?? throw new SurveyPipelineException(SurveyPipelineFailures.WorkerUnavailable, $"The recipe names a step this server does not know: {step.StepId}.");
-            var stage = step.StepId == Py3dtilesTileStep.StepId ? SurveyUploadStage.Tile : SurveyUploadStage.Downsample;
+            var stage = StageOf(step.StepId);
             entering(stage);
 
-            var inputs = step.StepId == Py3dtilesTileStep.StepId ? [display ?? original] : new[] { original };
+            var inputs = step.StepId switch
+            {
+                HdmappingOdometryStep.StepId => recording.Length > 0
+                    ? recording
+                    : throw new SurveyPipelineException(SurveyPipelineFailures.FilesMissing, "The recipe runs odometry, and the upload holds no recording."),
+                HdmappingExportStep.StepId => [Needed(session, "the odometry's session")],
+                PointCloudCheckStep.StepId => trajectory is null ? [Needed(cloud, "the exported cloud")] : [Needed(cloud, "the exported cloud"), trajectory],
+                Py3dtilesTileStep.StepId => [display ?? Needed(cloud, "the point cloud")],
+                _ => new[] { Needed(cloud, "the point cloud") },
+            };
             var inputIds = inputs.Select(a => a.Id).ToArray();
 
-            var reused = recipe.MayReuse(step.StepId) ? await ReusableAsync(upload.Id, step, inputIds, ct) : null;
+            var reused = recipe.MayReuse(step.StepId) ? await ReusableAsync(upload.Id, step, definition, inputIds, ct) : null;
             if (reused is not null)
             {
-                logger.LogInformation("Survey upload {UploadId}: {Step} reused from artefact {ArtifactId}", upload.Id, step.StepId, reused.Id);
+                logger.LogInformation("Survey upload {UploadId}: {Step} reused from artefact {ArtifactId}", upload.Id, step.StepId, reused[0].Id);
                 await SurveyUploadWrites.ProgressAsync(
-                    db, upload.Id, stage, SurveyPipelineProgress.Band(stage).End, $"{definition.DisplayName}: kept from an earlier run.", ct);
-                if (step.StepId == PointCloudDownsampleStep.StepId)
+                    db, upload.Id, stage, SurveyPipelineProgress.Band(stage, origin).End, $"{definition.DisplayName}: kept from an earlier run.", ct);
+                Take(reused, kept: true);
+                if (step.StepId == HdmappingExportStep.StepId)
                 {
-                    display = reused;
-                }
-                else if (step.StepId == Py3dtilesTileStep.StepId)
-                {
-                    tiles = reused;
-                    tilesReused = true;
+                    facts = await ExportedFactsAsync(model, Needed(cloud, "the exported cloud"), facts, earlierFacts, ct);
                 }
                 else if (step.StepId == PointCloudEstimateStep.StepId && await StopsForChoiceAsync(model, facts, recipe, ct))
                 {
@@ -174,7 +204,7 @@ public sealed class PointCloudProcessing(
                     .Where(id => id != PointCloudInspectStep.StepId && id != PointCloudEstimateStep.StepId)
                     .ToList();
                 var runNeed = ScanStorageNeeds.ForRun(
-                    remaining, original.SizeBytes, display?.SizeBytes, facts.Estimate, ChosenVoxelCm(recipe));
+                    remaining, cloud?.SizeBytes ?? recording.Sum(a => a.SizeBytes), display?.SizeBytes, facts.Estimate, ChosenVoxelCm(recipe));
                 await RefuseUnlessItFitsAsync(upload, runNeed, "this run", ct);
                 runChecked = true;
             }
@@ -183,7 +213,7 @@ public sealed class PointCloudProcessing(
             await RefuseUnlessItFitsAsync(upload, stepNeed, definition.DisplayName.ToLowerInvariant(), ct);
 
             await SurveyUploadWrites.ProgressAsync(
-                db, upload.Id, stage, SurveyPipelineProgress.Band(stage).Start, definition.DisplayName + ".", ct);
+                db, upload.Id, stage, SurveyPipelineProgress.Band(stage, origin).Start, definition.DisplayName + ".", ct);
 
             var (result, directory) = await RunStepAsync(upload, step, definition, inputs, stage, ct);
             try
@@ -194,11 +224,12 @@ public sealed class PointCloudProcessing(
                 if (result.Status != ScanJobStatus.Ok)
                 {
                     throw new SurveyPipelineException(
-                        SurveyPipelineFailures.WorkerFailed,
+                        FailureCode(step.StepId, result.Status),
                         $"The point-cloud worker could not {definition.DisplayName.ToLowerInvariant()}: {Words(result)}");
                 }
 
                 var made = await StoreOutputsAsync(upload, model, versionId, step, definition, result, inputs, directory, ct);
+                Take(made, kept: false);
                 facts = step.StepId switch
                 {
                     PointCloudEstimateStep.StepId => WithEstimate(facts, result.Data),
@@ -206,13 +237,11 @@ public sealed class PointCloudProcessing(
                     Py3dtilesTileStep.StepId => WithTiles(facts, result.Data, made.FirstOrDefault(a => a.Kind == ScanArtifactKind.PointCloudTiles), result.ToolVersion),
                     _ => facts,
                 };
-                if (step.StepId == PointCloudDownsampleStep.StepId)
+                if (step.StepId == HdmappingExportStep.StepId)
                 {
-                    display = made.FirstOrDefault(a => a.Kind == ScanArtifactKind.PointCloudLazDisplay);
-                }
-                else if (step.StepId == Py3dtilesTileStep.StepId)
-                {
-                    tiles = made.FirstOrDefault(a => a.Kind == ScanArtifactKind.PointCloudTiles);
+                    // A new export is a new cloud: nothing an earlier run worked out from the old
+                    // one is carried over, and every step after this one reads the new one.
+                    facts = await ExportedFactsAsync(model, Needed(cloud, "the exported cloud"), facts, earlier: null, ct);
                 }
 
                 // Written after every step, so what a step found stands even when a later one fails.
@@ -249,6 +278,33 @@ public sealed class PointCloudProcessing(
         model.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return new Outcome(facts, tiles is not null, tilesReused);
+
+        // Each product, made or kept, becomes what the steps after it read.
+        void Take(IEnumerable<ScanArtifact> products, bool kept)
+        {
+            foreach (var product in products)
+            {
+                switch (product.Kind)
+                {
+                    case ScanArtifactKind.HdmSession:
+                        session = product;
+                        break;
+                    case ScanArtifactKind.PointCloudLaz:
+                        cloud = product;
+                        break;
+                    case ScanArtifactKind.Trajectory:
+                        trajectory = product;
+                        break;
+                    case ScanArtifactKind.PointCloudLazDisplay:
+                        display = product;
+                        break;
+                    case ScanArtifactKind.PointCloudTiles:
+                        tiles = product;
+                        tilesReused = kept;
+                        break;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -360,30 +416,113 @@ public sealed class PointCloudProcessing(
             : null;
     }
 
-    /// <summary>An earlier run's artefact of this step with these inputs and parameters, whose file is still stored; else null.</summary>
-    private async Task<ScanArtifact?> ReusableAsync(Guid uploadId, ScanRecipeStep step, Guid[] inputIds, CancellationToken ct)
+    /// <summary>
+    /// An earlier run's products of this step with these inputs and parameters — one of every
+    /// kind the step makes, each with its stored file still there — or null when any is missing,
+    /// in which case the step runs again.
+    /// </summary>
+    private async Task<List<ScanArtifact>?> ReusableAsync(
+        Guid uploadId, ScanRecipeStep step, IScanStep definition, Guid[] inputIds, CancellationToken ct)
     {
         var candidates = await db.ScanArtifacts
             .Where(a => a.SurveyUploadId == uploadId && a.StepId == step.StepId && a.ParamsHash == step.ParamsHash)
             .OrderByDescending(a => a.CreatedAt)
             .ToListAsync(ct);
-        foreach (var candidate in candidates)
+        var kept = new List<ScanArtifact>();
+        foreach (var kind in definition.Outputs.Distinct())
         {
-            if (!candidate.InputArtifactIds.SequenceEqual(inputIds))
+            ScanArtifact? found = null;
+            foreach (var candidate in candidates.Where(c => c.Kind == kind && c.InputArtifactIds.SequenceEqual(inputIds)))
             {
-                continue;
+                var path = await db.StoredFiles.AsNoTracking()
+                    .Where(f => f.Id == candidate.FileId).Select(f => f.StoragePath).FirstOrDefaultAsync(ct);
+                if (path is not null && File.Exists(fileStore.GetAbsolutePath(path)))
+                {
+                    found = candidate;
+                    break;
+                }
             }
 
-            var path = await db.StoredFiles.AsNoTracking()
-                .Where(f => f.Id == candidate.FileId).Select(f => f.StoragePath).FirstOrDefaultAsync(ct);
-            if (path is not null && File.Exists(fileStore.GetAbsolutePath(path)))
+            if (found is null)
             {
-                return candidate;
+                return null;
             }
+
+            kept.Add(found);
         }
 
-        return null;
+        return kept.Count > 0 ? kept : null;
     }
+
+    /// <summary>
+    /// Fills a recording's odometry parameters in, when the recipe still carries an empty set, with
+    /// the defaults the HDMapping worker dumped from the program it runs, and writes the recipe
+    /// back so the upload records the whole set the step ran with. Unchanged when there is no
+    /// odometry step, the set is already resolved, or no worker has dumped its defaults — a worker
+    /// that has not cannot run the step either, and the run says so where the step is reached.
+    /// </summary>
+    private async Task<ScanRecipe> ResolveOdometryAsync(SurveyUpload upload, ScanRecipe recipe, CancellationToken ct)
+    {
+        if (!PointCloudRecipes.OdometryUnresolved(recipe) || handoff.ReadOdometryDefaults() is not { } defaults)
+        {
+            return recipe;
+        }
+
+        var resolved = PointCloudRecipes.WithOdometryValues(recipe, defaults);
+        var stored = ScanRecipes.ToOptionsJson(resolved with { RerunFrom = null });
+        await db.SurveyUploads.Where(u => u.Id == upload.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.Options, stored), ct);
+        return resolved;
+    }
+
+    /// <summary>
+    /// The facts of an exported cloud: its own header read, the recording's facts kept, and — when
+    /// the export is an earlier run's, reused — what that run worked out from it carried over. The
+    /// model is shown from the export from here on.
+    /// </summary>
+    private async Task<PointCloudFacts> ExportedFactsAsync(
+        SurveyModel model, ScanArtifact exported, PointCloudFacts facts, PointCloudFacts? earlier, CancellationToken ct)
+    {
+        var path = await db.StoredFiles.AsNoTracking()
+            .Where(f => f.Id == exported.FileId).Select(f => f.StoragePath).FirstOrDefaultAsync(ct)
+            ?? throw new SurveyPipelineException(SurveyPipelineFailures.FilesMissing, "The exported point cloud can no longer be found in the file store.");
+        PointCloudFacts header;
+        try
+        {
+            await using var stream = File.OpenRead(fileStore.GetAbsolutePath(path));
+            header = PointCloudUploadRun.Inspect(stream);
+        }
+        catch (SurveyPipelineException e) when (e.Code == SurveyPipelineFailures.PointCloudInvalid)
+        {
+            throw new SurveyPipelineException(SurveyPipelineFailures.ExportInvalid, "The exported point cloud does not read: " + e.Message);
+        }
+
+        var exportedFacts = (header with { Recording = facts.Recording }).WithProcessingOf(earlier);
+        model.FileId = exported.FileId;
+        model.Format = SurveyModelFormat.Laz;
+        return exportedFacts;
+    }
+
+    /// <summary>The stage a step's work is reported under.</summary>
+    private static SurveyUploadStage StageOf(string stepId) => stepId switch
+    {
+        HdmappingOdometryStep.StepId => SurveyUploadStage.Odometry,
+        HdmappingExportStep.StepId => SurveyUploadStage.Export,
+        PointCloudCheckStep.StepId => SurveyUploadStage.Check,
+        Py3dtilesTileStep.StepId => SurveyUploadStage.Tile,
+        _ => SurveyUploadStage.Downsample,
+    };
+
+    /// <summary>The code a worker's answer other than "ok" fails the run with.</summary>
+    private static string FailureCode(string stepId, ScanJobStatus status) => status switch
+    {
+        ScanJobStatus.Interrupted => SurveyPipelineFailures.WorkerInterrupted,
+        ScanJobStatus.Failed when stepId == PointCloudCheckStep.StepId => SurveyPipelineFailures.ExportInvalid,
+        _ => SurveyPipelineFailures.WorkerFailed,
+    };
+
+    private static ScanArtifact Needed(ScanArtifact? artefact, string what) =>
+        artefact ?? throw new SurveyPipelineException(SurveyPipelineFailures.FilesMissing, $"This step needs {what}, and the run has none.");
 
     private async Task<(ScanJobResult Result, string Directory)> RunStepAsync(
         SurveyUpload upload, ScanRecipeStep step, IScanStep definition, ScanArtifact[] inputs, SurveyUploadStage stage, CancellationToken ct)
@@ -391,6 +530,12 @@ public sealed class PointCloudProcessing(
         var jobName = $"{upload.Id:N}-{step.StepId.Replace('.', '-')}";
         var directory = await handoff.BeginAsync(jobName, ct);
         var named = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (step.StepId == HdmappingOdometryStep.StepId)
+        {
+            await CopyRecordingInAsync(directory, inputs, named, ct);
+            inputs = [];
+        }
+
         foreach (var input in inputs)
         {
             var path = await db.StoredFiles.AsNoTracking()
@@ -408,7 +553,7 @@ public sealed class PointCloudProcessing(
             var result = await handoff.WaitAsync(
                 directory,
                 (fraction, message, token) => SurveyUploadWrites.ProgressAsync(
-                    db, upload.Id, stage, SurveyPipelineProgress.Overall(stage, (int)(fraction * 100)),
+                    db, upload.Id, stage, SurveyPipelineProgress.Overall(stage, (int)(fraction * 100), upload.Source),
                     string.IsNullOrWhiteSpace(message) ? definition.DisplayName + "." : message, token),
                 ct);
             return (result, directory);
@@ -424,6 +569,47 @@ public sealed class PointCloudProcessing(
             // The host is stopping; the job stays where it is for the resumed run to take up.
             throw;
         }
+    }
+
+    /// <summary>
+    /// Copies a raw recording into the job directory the way the HDMapping worker reads one: every
+    /// file under its own name within the recording, and a manifest naming them all, which is the
+    /// step's one input. A name the recording rules do not know, or one that comes twice, is not
+    /// sent: the worker would refuse it, and the folder it builds for the odometry must be exactly
+    /// the recording.
+    /// </summary>
+    private async Task CopyRecordingInAsync(
+        string directory, ScanArtifact[] files, Dictionary<string, string> named, CancellationToken ct)
+    {
+        var ids = files.Select(a => a.FileId).ToList();
+        var stored = await db.StoredFiles.AsNoTracking()
+            .Where(f => ids.Contains(f.Id))
+            .Select(f => new { f.Id, f.StoragePath, f.OriginalName })
+            .ToDictionaryAsync(f => f.Id, ct);
+        var names = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in files)
+        {
+            if (!stored.TryGetValue(file.FileId, out var found))
+            {
+                throw new SurveyPipelineException(SurveyPipelineFailures.FilesMissing, "A file of the recording can no longer be found in the file store.");
+            }
+
+            if (MandeyeRecording.Classify(found.OriginalName) is null || !IsPlainName(found.OriginalName) || !seen.Add(found.OriginalName))
+            {
+                throw new SurveyPipelineException(
+                    SurveyPipelineFailures.RecordingInvalid, "The recording cannot be processed: one of its files is no longer named as a file of a MANDEYE recording.");
+            }
+
+            await ScanWorkerHandoff.CopyInAsync(directory, fileStore.GetAbsolutePath(found.StoragePath), found.OriginalName, ct);
+            names.Add(found.OriginalName);
+        }
+
+        await File.WriteAllBytesAsync(
+            Path.Combine(directory, RecordingManifest),
+            JsonSerializer.SerializeToUtf8Bytes(new Dictionary<string, object> { ["files"] = names }),
+            ct);
+        named[InputName(ScanArtifactKind.RawRecording)] = RecordingManifest;
     }
 
     /// <summary>
@@ -491,7 +677,7 @@ public sealed class PointCloudProcessing(
                 versionId,
                 new StoredContent(
                     storagePath,
-                    OutputName(upload, kind.Value, extension),
+                    OutputName(upload, step.StepId, kind.Value, extension),
                     MediaTypeOf(format),
                     size,
                     sha256,
@@ -525,6 +711,15 @@ public sealed class PointCloudProcessing(
             if (replacedFiles.Contains(model.ConvertedFileId ?? Guid.Empty))
             {
                 model.ConvertedFileId = null;
+            }
+
+            // A raw recording's model is shown from its export: a new export replaces the old
+            // one under it before the old file goes.
+            if (replacedFiles.Contains(model.FileId)
+                && made.FirstOrDefault(a => a.Kind == ScanArtifactKind.PointCloudLaz) is { } exported)
+            {
+                model.FileId = exported.FileId;
+                model.Format = SurveyModelFormat.Laz;
             }
 
             db.ScanArtifacts.RemoveRange(earlier);
@@ -615,6 +810,8 @@ public sealed class PointCloudProcessing(
         ScanArtifactKind.PointCloudTiles => "pointCloudTiles",
         ScanArtifactKind.Trajectory => "trajectory",
         ScanArtifactKind.Report => "report",
+        ScanArtifactKind.RawRecording => "rawRecording",
+        ScanArtifactKind.HdmSession => "hdmSession",
         _ => kind.ToString(),
     };
 
@@ -625,10 +822,11 @@ public sealed class PointCloudProcessing(
         "pointCloudTiles" => ScanArtifactKind.PointCloudTiles,
         "trajectory" => ScanArtifactKind.Trajectory,
         "estimate" or "report" => ScanArtifactKind.Report,
+        "hdmSession" => ScanArtifactKind.HdmSession,
         _ => null,
     };
 
-    private static string OutputName(SurveyUpload upload, ScanArtifactKind kind, string extension)
+    private static string OutputName(SurveyUpload upload, string stepId, ScanArtifactKind kind, string extension)
     {
         var stem = FileFormats.FitFileName(upload.SurveyTitle);
         stem = string.IsNullOrWhiteSpace(stem) ? "scan" : stem;
@@ -636,6 +834,9 @@ public sealed class PointCloudProcessing(
         {
             ScanArtifactKind.PointCloudTiles => stem + ".tiles" + extension,
             ScanArtifactKind.PointCloudLazDisplay => stem + ".display" + extension,
+            ScanArtifactKind.HdmSession => stem + ".session" + extension,
+            ScanArtifactKind.Trajectory => stem + ".trajectory" + extension,
+            ScanArtifactKind.Report when stepId == PointCloudCheckStep.StepId => stem + ".check" + extension,
             ScanArtifactKind.Report => stem + ".estimate" + extension,
             _ => stem + extension,
         };
@@ -647,6 +848,7 @@ public sealed class PointCloudProcessing(
         "laz" => LazMediaType,
         "las" => LasMediaType,
         "json" => "application/json",
+        "csv" => "text/csv",
         _ => "application/octet-stream",
     };
 

@@ -132,4 +132,44 @@ public class ScanRecipeTests
         ScanRecipes.FromOptionsJson("""{"recipe": {"steps": [{"stepId": "", "parameters": {}, "paramsHash": ""}]}}""").ShouldBeNull();
         ScanRecipes.FromOptionsJson("not json").ShouldBeNull();
     }
+
+    [Fact]
+    public void A_recordings_recipe_runs_odometry_export_and_check_before_a_point_clouds_steps()
+    {
+        var recipe = PointCloudRecipes.ForRecording(new AcceptAll(), choice: null, rerunFrom: null, odometry: null, out var errors).ShouldNotBeNull();
+        errors.ShouldBeEmpty();
+        recipe.Steps.Select(s => s.StepId).ShouldBe([
+            PointCloudInspectStep.StepId, HdmappingOdometryStep.StepId, HdmappingExportStep.StepId, PointCloudCheckStep.StepId,
+            PointCloudEstimateStep.StepId, Py3dtilesTileStep.StepId,
+        ]);
+        recipe.DisplayChosen.ShouldBeFalse();
+
+        // Made before any worker dumped HDMapping's defaults, the odometry waits to be resolved.
+        PointCloudRecipes.OdometryUnresolved(recipe).ShouldBeTrue();
+        using var defaults = JsonDocument.Parse("""{"lidar_odometry_control":{"decimation":0.01}}""");
+        var resolved = PointCloudRecipes.WithOdometryValues(recipe, defaults.RootElement);
+        PointCloudRecipes.OdometryUnresolved(resolved).ShouldBeFalse();
+        var odometry = resolved.Steps.Single(s => s.StepId == HdmappingOdometryStep.StepId);
+        odometry.ParamsHash.ShouldBe(ScanRecipes.ParamsHash(odometry.Parameters));
+        odometry.ParamsHash.ShouldNotBe(recipe.Steps.Single(s => s.StepId == HdmappingOdometryStep.StepId).ParamsHash);
+
+        // A new choice of how much to show keeps the odometry it is given, and thins after the check.
+        var thinned = PointCloudRecipes.ForRecording(
+            new AcceptAll(), new PointCloudDisplayChoice("voxel", 5, null), HdmappingExportStep.StepId, odometry, out _).ShouldNotBeNull();
+        thinned.Steps.Single(s => s.StepId == HdmappingOdometryStep.StepId).ShouldBe(odometry);
+        thinned.Steps.Select(s => s.StepId).ToList().IndexOf(PointCloudDownsampleStep.StepId)
+            .ShouldBeGreaterThan(thinned.Steps.Select(s => s.StepId).ToList().IndexOf(PointCloudCheckStep.StepId));
+        thinned.MayReuse(HdmappingOdometryStep.StepId).ShouldBeTrue();
+        thinned.MayReuse(HdmappingExportStep.StepId).ShouldBeFalse();
+
+        // A point cloud's recipe has no odometry to resolve.
+        PointCloudRecipes.OdometryUnresolved(PointCloudRecipes.Default(new AcceptAll())).ShouldBeFalse();
+    }
+
+    private sealed class AcceptAll : ITypedPropertiesValidator
+    {
+        public IReadOnlyList<string> Validate(string schemaJson, string propertiesJson) => [];
+
+        public IReadOnlyList<string> ValidateSchema(string schemaJson) => [];
+    }
 }

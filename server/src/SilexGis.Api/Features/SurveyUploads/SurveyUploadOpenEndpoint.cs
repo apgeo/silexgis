@@ -63,8 +63,12 @@ public static partial class SurveyUploadEndpoints
         }
 
         var claims = request.Files.Select(f => new SurveyUploadFileClaim(f.Name, f.Size, f.Role)).ToList();
-        var fileCap = origin == SurveyOrigin.PointCloud ? scans.Value.UploadCap : settings.FileCap;
-        if (SurveyUploadFiles.Problem(origin, claims, fileCap, settings.FileCountCap) is { } fileProblem)
+        // A scan's files are held to the scans' own caps, orders of magnitude above a survey
+        // tool's; a raw recording is many files, capped together and in number as well.
+        var fileCap = ScanOrigins.IsScan(origin) ? scans.Value.UploadCap : settings.FileCap;
+        var countCap = origin == SurveyOrigin.Mandeye ? scans.Value.RawFileCap : settings.FileCountCap;
+        long? totalCap = origin == SurveyOrigin.Mandeye ? scans.Value.RawUploadCap : null;
+        if (SurveyUploadFiles.Problem(origin, claims, fileCap, countCap, totalCap) is { } fileProblem)
         {
             return ApiProblems.BadRequest(SurveyUploadFiles.InvalidCode, fileProblem.Detail, "file", fileProblem.File);
         }
@@ -73,14 +77,18 @@ public static partial class SurveyUploadEndpoints
         // account's standing choices say; a point cloud's run is a recipe of steps with their
         // parameters resolved now, so a rerun repeats exactly this.
         string runOptions;
-        if (origin == SurveyOrigin.PointCloud)
+        if (ScanOrigins.IsScan(origin))
         {
             // A device may decide how much to show before the estimate; otherwise the run
             // decides for a small cloud and stops to ask for a large one.
             var choice = request.Display is { } display
                 ? new PointCloudDisplayChoice(display.Method, display.VoxelCm, display.EveryNth)
                 : null;
-            var recipe = PointCloudRecipes.For(schemas, choice, rerunFrom: null, out var errors);
+            // A raw recording's recipe runs odometry, export and a check first; its odometry
+            // parameters are resolved by the run against the defaults of the version that runs.
+            var recipe = origin == SurveyOrigin.Mandeye
+                ? PointCloudRecipes.ForRecording(schemas, choice, rerunFrom: null, odometry: null, out var errors)
+                : PointCloudRecipes.For(schemas, choice, rerunFrom: null, out errors);
             if (recipe is null)
             {
                 return ApiProblems.BadRequest(DisplayInvalidCode, string.Join("; ", errors));
@@ -168,7 +176,7 @@ public static partial class SurveyUploadEndpoints
 
         // The exports with no survey format become documents of the cave; whether the uploader
         // may make them, and on what terms, is known now and is better said before any byte is sent.
-        if (request.Files.Any(f => SurveySourceFormats.ClaimedKind(f.Name) is null)
+        if (request.Files.Any(f => SurveySourceFormats.ClaimedKind(f.Name, origin) is null)
             && DocumentAudience(ctx, cave, request.DocumentsVisibility).RefusalCode is { } documentsRefused)
         {
             return DocumentAudienceProblem(documentsRefused);
@@ -180,7 +188,7 @@ public static partial class SurveyUploadEndpoints
         // the room its declaration takes is reserved from here until its files arrive or it expires.
         var declaredBytes = request.Files.Sum(f => Math.Max(0, f.Size));
         var room = await storage.ForAsync(ctx.UserId, ct: ct);
-        if (StorageRules.Shortfall(room.Limits(scan: origin == SurveyOrigin.PointCloud), declaredBytes) is { } shortfall)
+        if (StorageRules.Shortfall(room.Limits(scan: ScanOrigins.IsScan(origin)), declaredBytes) is { } shortfall)
         {
             return StorageProblems.Insufficient(shortfall);
         }

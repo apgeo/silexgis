@@ -74,7 +74,7 @@ internal sealed class CannedScanWorker : IAsyncDisposable
     public static void Announce(string handoffRoot, params string[] stepIds)
     {
         Directory.CreateDirectory(handoffRoot);
-        var steps = stepIds.Select(id => new { id, tool = id.StartsWith("py3dtiles", StringComparison.Ordinal) ? "py3dtiles" : "laspy", version = "test-1.0" });
+        var steps = stepIds.Select(id => new { id, tool = id.StartsWith("py3dtiles", StringComparison.Ordinal) ? "py3dtiles" : id.StartsWith("hdmapping", StringComparison.Ordinal) ? "hdmapping" : "laspy", version = "test-1.0" });
         File.WriteAllText(Path.Combine(handoffRoot, "capabilities.json"), JsonSerializer.Serialize(new { worker = "canned", steps }));
     }
 

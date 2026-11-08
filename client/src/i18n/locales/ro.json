@@ -6982,7 +6982,10 @@
       "read": "Citirea rezultatelor",
       "inspect": "Citirea antetului",
       "downsample": "Estimare și rărire",
-      "tile": "Împărțire în dale"
+      "tile": "Împărțire în dale",
+      "odometry": "Calcul odometrie",
+      "export": "Exportul norului de puncte",
+      "check": "Verificarea exportului"
     },
     "stageStates": {
       "skipped": "Nu era nevoie"
@@ -7224,7 +7227,9 @@
       "therionLog": "Jurnal de compilare",
       "survexSource": "Survex .svx",
       "topoDroidArchive": "Export din aplicație",
-      "pointCloud": "Nor de puncte"
+      "pointCloud": "Nor de puncte",
+      "lidarRawSession": "Înregistrare brută de scaner",
+      "hdmSession": "Sesiune de cartare a scanerului"
     },
     "problems": {
       "formatUnsupported": "Arhivează o sursă topografică: Therion .th, .th2 sau .thconfig, Survex .svx, un .log de compilare sau exportul .zip al unei aplicații de topografie.",

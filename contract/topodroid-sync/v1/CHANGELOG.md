@@ -31,6 +31,16 @@ turns every future addition into an outage of its own making.
 
 ---
 
+## 2026-11-08 — a raw scanner recording as a survey upload
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one value is added to
+`capabilities.sources`; nothing a device sends or reads changes meaning. Two recordings were
+rewritten for it: `01-capabilities` and `11-errors/source-unsupported`.
+
+- `capabilities.sources` now lists `mandeye` after `pointcloud`: the raw folder of a MANDEYE
+  handheld-scanner recording, sent as an upload of origin `mandeye`. A tool that does not know the
+  value ignores it. The `source_unsupported` detail now names all three.
+
 ## 2026-11-08 — refused for lack of room, before anything is stored
 
 **Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one code is added on

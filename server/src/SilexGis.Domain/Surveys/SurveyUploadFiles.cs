@@ -51,8 +51,12 @@ public static class SurveyUploadFiles
     public static readonly IReadOnlyList<string> PointCloudExtensions = [".laz", ".las"];
 
     /// <summary>The extensions an upload of this origin may carry.</summary>
-    public static IReadOnlyList<string> AcceptedExtensionsFor(SurveyOrigin origin) =>
-        origin == SurveyOrigin.PointCloud ? PointCloudExtensions : AcceptedExtensions;
+    public static IReadOnlyList<string> AcceptedExtensionsFor(SurveyOrigin origin) => origin switch
+    {
+        SurveyOrigin.PointCloud => PointCloudExtensions,
+        SurveyOrigin.Mandeye => Scans.MandeyeRecording.Extensions,
+        _ => AcceptedExtensions,
+    };
 
     /// <summary>The roles a device may declare; the rest are what a processing run produces.</summary>
     public static readonly IReadOnlyList<SurveyUploadFileRole> DeclarableRoles =
@@ -96,12 +100,18 @@ public static class SurveyUploadFiles
     /// <param name="files">The files as declared.</param>
     /// <param name="maxFileBytes">The largest one file may be, for this origin.</param>
     /// <param name="maxFiles">The most files one upload may declare.</param>
+    /// <param name="maxTotalBytes">The most all the files together may be, for an origin that caps the whole; null for none.</param>
     public static SurveyUploadFileProblem? Problem(
-        SurveyOrigin origin, IReadOnlyList<SurveyUploadFileClaim>? files, long maxFileBytes, int maxFiles)
+        SurveyOrigin origin, IReadOnlyList<SurveyUploadFileClaim>? files, long maxFileBytes, int maxFiles, long? maxTotalBytes = null)
     {
         if (origin == SurveyOrigin.PointCloud)
         {
             return PointCloudProblem(files, maxFileBytes);
+        }
+
+        if (origin == SurveyOrigin.Mandeye)
+        {
+            return Scans.MandeyeRecording.Problem(files, maxFileBytes, maxTotalBytes ?? long.MaxValue, maxFiles);
         }
 
         if (files is null || files.Count == 0)

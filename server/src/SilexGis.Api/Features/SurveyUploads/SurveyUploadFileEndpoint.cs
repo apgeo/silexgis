@@ -6,6 +6,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Documents;
+using SilexGis.Domain.Scans;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Storage;
 using SilexGis.Domain.Surveys;
@@ -97,7 +98,7 @@ public static partial class SurveyUploadEndpoints
         // was advice given minutes or hours ago and is the rule now. This upload's own reservation
         // is left out of the figures — it is the room this file is about to take.
         var room = await storage.ForAsync(ctx.UserId, excludingUploadId: upload.Id, ct);
-        if (StorageRules.Shortfall(room.Limits(scan: upload.Source == SurveyOrigin.PointCloud), file.DeclaredSize) is { } shortfall)
+        if (StorageRules.Shortfall(room.Limits(scan: ScanOrigins.IsScan(upload.Source)), file.DeclaredSize) is { } shortfall)
         {
             return StorageProblems.Insufficient(shortfall);
         }
@@ -106,7 +107,7 @@ public static partial class SurveyUploadEndpoints
         // document is created on. Asked before the bytes are read, and again here although the
         // open asked it too: a right can be taken away while a session waits.
         SurveyCaveAudience? documentAudience = null;
-        if (SurveySourceFormats.ClaimedKind(name) is null)
+        if (SurveySourceFormats.ClaimedKind(name, upload.Source) is null)
         {
             documentAudience = DocumentAudience(ctx, found.Cave, upload.DocumentsVisibility);
             if (documentAudience.RefusalCode is { } refused)
@@ -125,15 +126,19 @@ public static partial class SurveyUploadEndpoints
             return SizeMismatch(file.DeclaredSize);
         }
 
-        var kind = SurveySourceFormats.ClaimedKind(name);
+        // A raw recording's files are all its original, whatever their extension, and each is
+        // checked against what its name within the recording says it is.
+        var kind = SurveySourceFormats.ClaimedKind(name, upload.Source);
         if (kind is { } claimed
-            && !SurveySourceFormats.ContentMatches(claimed, await HeaderAsync(fileStore, content.StoragePath, ct)))
+            && !(kind == SurveySourceKind.LidarRawSession
+                ? SurveySourceFormats.RecordingContentMatches(name, await HeaderAsync(fileStore, content.StoragePath, ct))
+                : SurveySourceFormats.ContentMatches(claimed, await HeaderAsync(fileStore, content.StoragePath, ct))))
         {
             await fileStore.DeleteAsync(content.StoragePath, CancellationToken.None);
             await RefuseAsync(db, file.Id, ContentMismatchCode, clock.GetUtcNow(), ct);
             return ApiProblems.BadRequest(
                 ContentMismatchCode,
-                $"This file is not what its name says: it was expected to be {SurveySourceFormats.ExpectedContent(claimed)}.",
+                $"This file is not what its name says: it was expected to be {ExpectedContent(claimed, name)}.",
                 "file",
                 name);
         }
@@ -185,8 +190,11 @@ public static partial class SurveyUploadEndpoints
             // document — which is what would send it to be read for words. It stays the
             // uploader's own document: who else reads it is the cave's survey rule, asked on every
             // route that serves it.
+            var mediaType = sourceKind == SurveySourceKind.LidarRawSession
+                ? SurveySourceFormats.RecordingMediaType(name)
+                : SurveySourceFormats.MediaTypeFor(sourceKind);
             stored = documents.Create(
-                content with { MimeType = SurveySourceFormats.MediaTypeFor(sourceKind), Kind = FileKind.Survey },
+                content with { MimeType = mediaType, Kind = FileKind.Survey },
                 title, userId, userId);
 
             var source = new SurveySource
@@ -266,6 +274,11 @@ public static partial class SurveyUploadEndpoints
         await transaction.CommitAsync(ct);
         return await db.SurveyUploadFiles.AsNoTracking().FirstAsync(f => f.Id == file.Id, ct);
     }
+
+    private static string ExpectedContent(SurveySourceKind kind, string name) =>
+        kind == SurveySourceKind.LidarRawSession
+            ? MandeyeRecording.Classify(name)?.Kind == MandeyeFileKind.LidarChunk ? "a LAS or LAZ point cloud" : "a text file"
+            : SurveySourceFormats.ExpectedContent(kind);
 
     /// <summary>Who an attached export of this upload is open to, and the group it is filed under.</summary>
     private static SurveyCaveAudience DocumentAudience(AccessContext ctx, Feature cave, Visibility? requested) =>

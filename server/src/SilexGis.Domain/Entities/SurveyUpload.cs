@@ -61,6 +61,15 @@ public enum SurveyUploadStage : short
 
     /// <summary>Converting a point cloud into the tiles a viewer streams.</summary>
     Tile = 8,
+
+    /// <summary>Running a raw scanner recording's lidar odometry: the trajectory and the registered chunks.</summary>
+    Odometry = 9,
+
+    /// <summary>Exporting the registered recording as one point cloud and its trajectory.</summary>
+    Export = 10,
+
+    /// <summary>Checking the exported point cloud before it is treated as the scan of record.</summary>
+    Check = 11,
 }
 
 /// <summary>

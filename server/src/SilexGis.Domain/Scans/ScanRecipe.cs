@@ -110,6 +110,65 @@ public static class PointCloudRecipes
     }
 
     /// <summary>
+    /// The recipe of a raw scanner recording: the recording inspected, its odometry run, the
+    /// session exported into one cloud and the export checked, and from there exactly a point
+    /// cloud's recipe for the same choice — the thinning estimated, the cloud thinned when chosen,
+    /// the result tiled. Answers null and the schema's errors as <see cref="For"/> does.
+    /// </summary>
+    /// <param name="odometry">
+    /// The odometry step to keep — a rerun keeps the parameters the recording was processed with —
+    /// or null for the step at its defaults, whose values the run resolves before it runs.
+    /// </param>
+    public static ScanRecipe? ForRecording(
+        ITypedPropertiesValidator schemas,
+        PointCloudDisplayChoice? choice,
+        string? rerunFrom,
+        ScanRecipeStep? odometry,
+        out IReadOnlyList<string> errors)
+    {
+        var cloud = For(schemas, choice, rerunFrom, out errors);
+        if (cloud is null)
+        {
+            return null;
+        }
+
+        var steps = cloud.Steps.ToList();
+        var after = steps.FindIndex(s => s.StepId == PointCloudInspectStep.StepId) + 1;
+        steps.InsertRange(after,
+        [
+            odometry is { StepId: HdmappingOdometryStep.StepId } kept
+                ? kept
+                : Resolved(schemas, HdmappingOdometryStep.StepId, null, out _)!,
+            Resolved(schemas, HdmappingExportStep.StepId, null, out _)!,
+            Resolved(schemas, PointCloudCheckStep.StepId, null, out _)!,
+        ]);
+        return cloud with { Steps = steps };
+    }
+
+    /// <summary>The recipe with its odometry step's parameter set replaced, hashed afresh; unchanged when it has no odometry step.</summary>
+    public static ScanRecipe WithOdometryValues(ScanRecipe recipe, JsonElement values)
+    {
+        ArgumentNullException.ThrowIfNull(recipe);
+        using var parameters = JsonDocument.Parse(
+            JsonSerializer.Serialize(new Dictionary<string, JsonElement>(StringComparer.Ordinal) { ["values"] = values }));
+        return recipe with
+        {
+            Steps = [.. recipe.Steps.Select(s => s.StepId == HdmappingOdometryStep.StepId ? ScanRecipes.Step(s.StepId, parameters.RootElement) : s)],
+        };
+    }
+
+    /// <summary>Whether the recipe's odometry step still waits for its parameters to be resolved: it carries an empty set.</summary>
+    public static bool OdometryUnresolved(ScanRecipe recipe)
+    {
+        ArgumentNullException.ThrowIfNull(recipe);
+        var step = recipe.Steps.FirstOrDefault(s => s.StepId == HdmappingOdometryStep.StepId);
+        return step is not null
+            && (!step.Parameters.TryGetProperty("values", out var values)
+                || values.ValueKind != JsonValueKind.Object
+                || !values.EnumerateObject().Any());
+    }
+
+    /// <summary>
     /// A step with the given values laid over its defaults, every value written out, checked
     /// against the step's schema. The defaults alone must always pass: failing on them is a
     /// defect in the step, and is thrown rather than answered.

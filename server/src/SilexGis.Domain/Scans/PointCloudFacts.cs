@@ -94,6 +94,13 @@ public sealed record PointCloudFacts
     /// <summary>The installation's advice on thinning, computed from the estimate when it was made.</summary>
     public PointCloudDisplayAdvice? Advice { get; init; }
 
+    /// <summary>
+    /// What the inspection of a raw scanner recording found, for a scan made from one; null for
+    /// a point cloud uploaded as a LAS or LAZ file. Kept across the run, so the facts of the
+    /// exported cloud that replace the header layer still say what it was made from.
+    /// </summary>
+    public MandeyeRecordingFacts? Recording { get; init; }
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -122,6 +129,18 @@ public sealed record PointCloudFacts
     }
 
     /// <summary>
+    /// The facts of a raw recording before it is processed: the header layer of its first lidar
+    /// chunk — the chunks are written alike, in the sensor's own frame — with the point count of
+    /// all of them, and what the inspection found of the recording. The export's header replaces
+    /// the header layer once there is one.
+    /// </summary>
+    public static PointCloudFacts FromRecording(LasHeader firstChunk, MandeyeRecordingFacts recording)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+        return FromHeader(firstChunk) with { PointCount = recording.PointCount, Recording = recording };
+    }
+
+    /// <summary>
     /// These facts with what an earlier run's processing added carried over — the estimate, the
     /// advice and the tiling — for a rerun that reuses that processing rather than repeating it.
     /// The header's own facts are this record's, read afresh.
@@ -138,10 +157,15 @@ public sealed record PointCloudFacts
         OriginShift = earlier.OriginShift,
         Estimate = earlier.Estimate,
         Advice = earlier.Advice,
+        Recording = Recording ?? earlier.Recording,
     };
 
-    /// <summary>Whether the file stated a coordinate system, which is what makes its original a location.</summary>
-    public bool IsGeoreferenced => Crs is not null;
+    /// <summary>
+    /// Whether the scan's original is a location: the file stated a coordinate system, or the
+    /// raw recording it was made from holds GNSS positions of its track. Either way its original
+    /// and the coordinates in these facts are handed out only under the exact-location rule.
+    /// </summary>
+    public bool IsGeoreferenced => Crs is not null || Recording is { HasGnss: true };
 
     public string ToJson() => JsonSerializer.Serialize(this, Json);
 

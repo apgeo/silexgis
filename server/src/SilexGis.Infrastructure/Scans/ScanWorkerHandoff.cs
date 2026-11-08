@@ -83,6 +83,8 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
     public const string CancelFile = "cancel";
     public const string ResultFile = "result.json";
     public const string LogFile = "worker.log";
+    public const string DefaultsDirectory = "defaults";
+    public const string OdometryDefaultsFile = "hdmapping.odometry.json";
     private const string PartialSuffix = ".part";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -136,6 +138,35 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
         {
             logger.LogWarning(e, "The point-cloud worker's capabilities at {Path} could not be read", path);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// HDMapping's default odometry parameters as the HDMapping worker dumped them from the program
+    /// it runs, by TOML section; null when no such worker has started, or what it wrote does not
+    /// read. The worker writes them under <c>defaults/</c> beside the capabilities at every start.
+    /// </summary>
+    public JsonElement? ReadOdometryDefaults()
+    {
+        var path = Path.Combine(Root, DefaultsDirectory, OdometryDefaultsFile);
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+            return document.RootElement.TryGetProperty("values", out var values)
+                && values.ValueKind == JsonValueKind.Object
+                && values.EnumerateObject().Any()
+                ? values.Clone()
+                : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        {
+            logger.LogWarning(e, "HDMapping's default parameters at {Path} could not be read", path);
             return null;
         }
     }

@@ -1494,9 +1494,48 @@ bytes, timings, and whether every answer agreed with what was written to disk an
 their own centre. Run it after changing the image or the worker; it needs the image built
 (`--build` builds it) and a cloud of your own, and it is not part of the hosted build.
 
-**Raw scanner recordings.** The same Dockerfile (`deploy/scans/Dockerfile`) has a second target,
-`hdmapping`, with HDMapping compiled in for processing raw recordings on the server. It builds for
-most of an hour and is not what this overlay starts; nothing in this release uses it yet.
+**Raw scanner recordings.** A raw MANDEYE recording — the scanner's folder of `lidarNNNN.laz`
+chunks with their `imuNNNN.csv` logs, and the optional `lidarNNNN.sn`, `gnssNNNN.gnss`, `.nmea`
+files and `calibration.json` — is uploaded with origin `mandeye`. The application archives every
+file, pairs the chunks, reads each chunk's header and records the recording's facts (chunks,
+duration, points, sensors, whether it holds GNSS) whatever else is running; a recording that holds
+GNSS positions is treated as georeferenced, so its files need the exact-location right. Turning it
+into a scan needs a second worker, `scans-hdmapping`, built from the same Dockerfile's `hdmapping`
+target with HDMapping compiled in from a pinned commit. It runs the odometry
+(`lidar_odometry_step_1`), the export (`multi_view_tls_registration_step_2`) and a check of the
+exported cloud; from there the tiler finishes the scan exactly as it does an uploaded cloud. The
+HDMapping session (without its cache), the exported cloud and its trajectory are kept as the scan's
+products, and the parameters the odometry ran with are recorded on the upload.
+
+```bash
+# in deploy/.env, beside SILEXGIS__Scans__ProcessingEnabled=true:
+#   COMPOSE_PROFILES=hdmapping
+docker compose -f docker-compose.yml -f docker-compose.scans.yml up -d --build
+```
+
+It is behind the `hdmapping` profile because building it compiles HDMapping, which takes most of an
+hour. It is isolated exactly as the tiler is (no network, read-only, no capabilities, bounded
+processes) and shares the `silexgis-scans` volume with it; each worker announces its own steps in the
+volume's `capabilities.json` and keeps the other's, so **rebuild both images together** after an
+update — an older tiler image rewrites that file without the HDMapping steps. Its limits are
+`SILEXGIS_SCANS_HDM_MEMORY` (16 GB; odometry peaked at 11.9 GB on a 15-minute two-sensor recording
+and 5.7 GB on a 6-minute one) and `SILEXGIS_SCANS_HDM_CPUS` (8; odometry runs about 1.4 times as
+long as the recording on 12 processors). **Disk:** while odometry runs its cache grows to about
+twenty times the recording inside the job's directory on the scans volume, and the worker refuses a
+recording the volume has no room for (it wants 22 times the recording free) rather than fill it.
+The cache is removed when the step ends. Without this worker a recording is archived and inspected,
+and its run ends saying it was not processed; *Rerun* processes it once the worker is there.
+
+**Proving the HDMapping image.** `node scripts/scans-hdmapping-check.mjs <recording folder> --work
+<dir>` starts the `hdmapping` image twice, as the HDMapping worker and as the tiler, isolated as the
+overlay isolates them and sharing one hand-off directory under `<dir>`, and hands the recording
+through every step in the application's order: preflight, odometry, export, the export check, the
+estimate and tiling (`--voxel-cm <n>` adds a downsample). It prints a verdict — what the two workers
+announced, each step's time, the points, the session and tile sizes and each step's memory peak —
+and never a point or a position. `--work` must be on a disk with room for the odometry cache (about
+twenty times the recording), not a memory-backed temporary directory. It needs the image built
+(`--build` builds it) and a recording of your own, takes about 1.5 times the recording's length,
+and is not part of the hosted build.
 
 ## Photo libraries (optional): who keeps them up to date
 
@@ -2582,6 +2621,8 @@ the reasoning beside each one.
 | `SILEXGIS__SurveyUploads__MaxFileBytes` | `262144000` | the largest single file a field device (TopoDroid) may send in a survey upload, in bytes — 250 MB. A phone's survey archive carries its sketches and photos, so this is well above any survey source. The reverse proxy must let a body this size through: both packaged nginx configurations accept 1 GB, so raising this past that means raising `client_max_body_size` too |
 | `SILEXGIS__SurveyUploads__MaxFilesPerUpload` | `64` | the most files one survey upload may declare (the archive, its Therion sources and sketches, and other exports) |
 | `SILEXGIS__Scans__MaxUploadBytes` | `4294967296` | the largest point cloud file (`.laz`/`.las`) a survey upload of origin `pointcloud` may send, in bytes — 4 GiB. The reverse proxy must let a body this size through: both packaged nginx configurations accept 1 GB, so using the default in full means raising `client_max_body_size` |
+| `SILEXGIS__Scans__MaxRawUploadBytes` | `21474836480` (20 GiB) | the most a raw MANDEYE recording's files may take together; each file is also held to `SILEXGIS__Scans__MaxUploadBytes`. The folder is declared file by file — `lidarNNNN.laz` paired with `imuNNNN.csv`, optionally `lidarNNNN.sn`, `gnssNNNN.gnss`, `.nmea` files and `calibration.json` — and a recording that holds GNSS positions is treated as georeferenced: its files need the exact-location right |
+| `SILEXGIS__Scans__MaxRawFiles` | `5000` | the most files a raw MANDEYE recording upload (origin `mandeye`) may declare; a recording writes four or five files per chunk of a few seconds |
 | `SILEXGIS__Scans__MaxTotalBytes` | `0` (no separate cap) | the most everything kept for point clouds may take together — uploaded originals (always kept) and every product made from them. Checked beside the installation and account caps when a point-cloud upload opens, as each file arrives, and before each processing step, which is refused before it starts with the missing amount (code `storage.insufficient` for an upload, `survey_pipeline.storage_insufficient` for a run) |
 | `SILEXGIS__Scans__ProcessingEnabled` | `false` | whether this installation has a worker that can tile a point cloud. Set by the same deployment that starts the scans worker (see *Point-cloud worker (optional)*); switched on with no worker running, every point-cloud upload fails at the first worker step, saying so, once `PickupSeconds` have passed — the same wait whether the worker never announced itself or announced itself and takes nothing |
 | `SILEXGIS__Scans__HandoffRoot` | `data/scans` (the compose stack sets `/data/scans`) | the directory the application and the scans worker leave jobs and answers for each other in. Both sides must name the same directory, on a volume they share, and both compose files already do |

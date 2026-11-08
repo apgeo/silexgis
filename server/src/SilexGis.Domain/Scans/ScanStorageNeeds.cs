@@ -24,6 +24,21 @@ public static class ScanStorageNeeds
     public const long ReportBytes = 1024 * 1024;
 
     /// <summary>
+    /// How many times the recording the odometry step needs on the worker's volume. Measured on two
+    /// recordings, HDMapping's step 1 writes a cache of 17 to 20 times the raw size beside its input
+    /// before it removes it; the copy of the recording and the session it leaves add about one more
+    /// each.
+    /// </summary>
+    public const int OdometryWorkerFactor = 22;
+
+    /// <summary>
+    /// How many times the bytes it reads the export step needs on the worker's volume: the session
+    /// archive copied in, the session unpacked beside it, and the cloud written from it — measured at
+    /// about the size of the session each.
+    /// </summary>
+    public const int ExportWorkerFactor = 3;
+
+    /// <summary>
     /// What <paramref name="stepId"/> is expected to write, given the bytes it reads.
     /// </summary>
     /// <param name="inputBytes">The size of what the step reads: the original, or the thinned copy when tiling one.</param>
@@ -40,12 +55,21 @@ public static class ScanStorageNeeds
         var input = Math.Max(0, inputBytes);
         var output = stepId switch
         {
-            PointCloudEstimateStep.StepId => ReportBytes,
+            PointCloudEstimateStep.StepId or PointCloudCheckStep.StepId => ReportBytes,
             PointCloudDownsampleStep.StepId => input,
             Py3dtilesTileStep.StepId => TileBytes(input, estimate, voxelCm),
+
+            // The session (without the cache) and the export were each measured at a little under
+            // the size of what they were made from.
             _ => input,
         };
-        return new ScanStepNeed(output, SaturatingAdd(input, output));
+        var worker = stepId switch
+        {
+            HdmappingOdometryStep.StepId => SaturatingMultiply(input, OdometryWorkerFactor),
+            HdmappingExportStep.StepId => SaturatingMultiply(input, ExportWorkerFactor),
+            _ => SaturatingAdd(input, output),
+        };
+        return new ScanStepNeed(output, worker);
     }
 
     /// <summary>
@@ -54,7 +78,7 @@ public static class ScanStorageNeeds
     /// than after a thinned copy has already taken part of the room.
     /// </summary>
     /// <param name="stepIds">The steps still to run, in order. Steps that write only a report count as such.</param>
-    /// <param name="originalBytes">The size of the uploaded cloud, which the thinning step (and an unthinned tiling) reads.</param>
+    /// <param name="originalBytes">The size of the uploaded cloud, which the thinning step (and an unthinned tiling) reads; for a raw recording, the recording's size, which each of its steps is taken to read about as much of.</param>
     /// <param name="thinnedBytes">The size of a thinned copy an earlier run left and this one keeps, when the run tiles that without thinning again.</param>
     /// <param name="estimate">The estimate step's table, when it has run.</param>
     /// <param name="voxelCm">The voxel size the cloud is thinned at before tiling, or null when it is not thinned by voxel.</param>
@@ -96,4 +120,6 @@ public static class ScanStorageNeeds
     }
 
     private static long SaturatingAdd(long a, long b) => a > long.MaxValue - b ? long.MaxValue : a + b;
+
+    private static long SaturatingMultiply(long a, int factor) => a > long.MaxValue / factor ? long.MaxValue : a * factor;
 }

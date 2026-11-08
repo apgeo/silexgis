@@ -6969,7 +6969,10 @@
       "read": "Reading the results",
       "inspect": "Reading the header",
       "downsample": "Estimating and thinning",
-      "tile": "Tiling"
+      "tile": "Tiling",
+      "odometry": "Running the odometry",
+      "export": "Exporting the point cloud",
+      "check": "Checking the export"
     },
     "stageStates": {
       "skipped": "Not needed"
@@ -7211,7 +7214,9 @@
       "therionLog": "Compilation log",
       "survexSource": "Survex .svx",
       "topoDroidArchive": "Survey app export",
-      "pointCloud": "Point cloud"
+      "pointCloud": "Point cloud",
+      "lidarRawSession": "Raw scanner recording",
+      "hdmSession": "Scanner mapping session"
     },
     "problems": {
       "formatUnsupported": "Archive a survey source: Therion .th, .th2 or .thconfig, Survex .svx, a compilation .log, or a survey app's .zip export.",

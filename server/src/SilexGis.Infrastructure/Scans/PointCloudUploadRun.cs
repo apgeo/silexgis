@@ -60,34 +60,8 @@ public static class PointCloudUploadRun
         SilexGisDbContext db, SurveyUpload upload, ArchivedPointCloud archive, PointCloudFacts facts, CancellationToken ct)
     {
         var format = SurveyUploadFiles.ExtensionOf(archive.Name) == ".las" ? SurveyModelFormat.Las : SurveyModelFormat.Laz;
-        var formats = SurveyModelKinds.FormatsOf(SurveyModelKind.PointCloud);
         var now = DateTimeOffset.UtcNow;
-
-        var model = await db.SurveyModels
-            .FirstOrDefaultAsync(m => m.SurveyUploadId == upload.Id && formats.Contains(m.Format), ct);
-        var made = model is null;
-        if (model is null)
-        {
-            model = new SurveyModel
-            {
-                CaveFeatureId = upload.CaveFeatureId,
-                Name = upload.SurveyTitle.Length > 200 ? upload.SurveyTitle[..200] : upload.SurveyTitle,
-                FileId = archive.FileId,
-                Format = format,
-                SurveyedAt = upload.SurveyDate,
-                // Ready at once: a point cloud has no reading of its own, and whether it has been
-                // tiled is a fact of the upload's run, not a status of the model.
-                Status = SurveyModelStatus.Ready,
-                CaveSurveyId = upload.CaveSurveyId,
-                SurveyUploadId = upload.Id,
-            };
-            db.SurveyModels.Add(model);
-            await SurveyModelCurrency.TakeIfUnclaimedAsync(db, model, ct);
-        }
-
-        model.FileId = archive.FileId;
-        model.Format = format;
-        model.PointCloud = facts.ToJson();
+        var (model, made) = await ModelOfAsync(db, upload, archive.FileId, format, facts, ct);
 
         var artefact = await db.ScanArtifacts.FirstOrDefaultAsync(
             a => a.SurveyUploadId == upload.Id && a.StepId == ScanSteps.UploadStepId && a.Sha256 == archive.Sha256, ct);
@@ -113,6 +87,57 @@ public static class PointCloudUploadRun
             artefact.SurveyModelId = model.Id;
         }
 
+        await SaveAsync(db, model, made, ct);
+
+        await db.SurveyUploadFiles
+            .Where(f => f.Id == archive.FileRowId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(f => f.SurveyModelId, model.Id)
+                .SetProperty(f => f.UpdatedAt, now), ct);
+
+        return model;
+    }
+
+    /// <summary>
+    /// The upload's point-cloud model with the facts written on it, made on the first run: shown
+    /// from <paramref name="fileId"/>, in <paramref name="format"/>. Not saved; whether it was
+    /// made here is answered so the save can settle the current mark.
+    /// </summary>
+    public static async Task<(SurveyModel Model, bool Made)> ModelOfAsync(
+        SilexGisDbContext db, SurveyUpload upload, Guid fileId, SurveyModelFormat format, PointCloudFacts facts, CancellationToken ct)
+    {
+        var formats = SurveyModelKinds.FormatsOf(SurveyModelKind.PointCloud);
+        var model = await db.SurveyModels
+            .FirstOrDefaultAsync(m => m.SurveyUploadId == upload.Id && formats.Contains(m.Format), ct);
+        var made = model is null;
+        if (model is null)
+        {
+            model = new SurveyModel
+            {
+                CaveFeatureId = upload.CaveFeatureId,
+                Name = upload.SurveyTitle.Length > 200 ? upload.SurveyTitle[..200] : upload.SurveyTitle,
+                FileId = fileId,
+                Format = format,
+                SurveyedAt = upload.SurveyDate,
+                // Ready at once: a point cloud has no reading of its own, and whether it has been
+                // tiled is a fact of the upload's run, not a status of the model.
+                Status = SurveyModelStatus.Ready,
+                CaveSurveyId = upload.CaveSurveyId,
+                SurveyUploadId = upload.Id,
+            };
+            db.SurveyModels.Add(model);
+            await SurveyModelCurrency.TakeIfUnclaimedAsync(db, model, ct);
+        }
+
+        model.FileId = fileId;
+        model.Format = format;
+        model.PointCloud = facts.ToJson();
+        return (model, made);
+    }
+
+    /// <summary>Saves the model and what was written beside it, giving up the current mark when another model took it first.</summary>
+    public static async Task SaveAsync(SilexGisDbContext db, SurveyModel model, bool made, CancellationToken ct)
+    {
         try
         {
             await db.SaveChangesAsync(ct);
@@ -124,13 +149,5 @@ public static class PointCloudUploadRun
             model.IsCurrent = false;
             await db.SaveChangesAsync(ct);
         }
-
-        await db.SurveyUploadFiles
-            .Where(f => f.Id == archive.FileRowId)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(f => f.SurveyModelId, model.Id)
-                .SetProperty(f => f.UpdatedAt, now), ct);
-
-        return model;
     }
 }

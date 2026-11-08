@@ -57,13 +57,14 @@ public static partial class SurveyUploadEndpoints
     public const int PollIntervalSeconds = 3;
 
     /// <summary>The survey tools accepted, by the names an upload's <c>source</c> uses.</summary>
-    public static readonly IReadOnlyList<string> Sources = ["topodroid", "pointcloud"];
+    public static readonly IReadOnlyList<string> Sources = ["topodroid", "pointcloud", "mandeye"];
 
     /// <summary>The origin an upload's <c>source</c> names, or null for a name not accepted.</summary>
     public static SurveyOrigin? OriginOf(string? source) => source?.Trim().ToLowerInvariant() switch
     {
         "topodroid" => SurveyOrigin.TopoDroid,
         "pointcloud" => SurveyOrigin.PointCloud,
+        "mandeye" => SurveyOrigin.Mandeye,
         _ => null,
     };
 
@@ -405,12 +406,18 @@ public static partial class SurveyUploadEndpoints
         // A point cloud's options are its recipe, which a survey's pipeline request says nothing
         // about. A choice of how much to show makes a new recipe; a step to do again without one
         // keeps the recipe the upload has, thinning included, and only marks the step.
-        if (upload.Source == SurveyOrigin.PointCloud)
+        if (ScanOrigins.IsScan(upload.Source))
         {
+            var current = ScanRecipes.FromOptionsJson(upload.Options);
             if (request?.Display is { } display)
             {
+                // A recording keeps the odometry parameters it was processed with: a new choice
+                // of how much to show changes what follows the export, not the odometry.
                 var choice = new PointCloudDisplayChoice(display.Method, display.VoxelCm, display.EveryNth);
-                var recipe = PointCloudRecipes.For(schemas, choice, request.FromStep, out var errors);
+                var recipe = upload.Source == SurveyOrigin.Mandeye
+                    ? PointCloudRecipes.ForRecording(
+                        schemas, choice, request.FromStep, current?.Steps.FirstOrDefault(s => s.StepId == HdmappingOdometryStep.StepId), out var errors)
+                    : PointCloudRecipes.For(schemas, choice, request.FromStep, out errors);
                 if (recipe is null)
                 {
                     return ApiProblems.BadRequest(DisplayInvalidCode, string.Join("; ", errors));
@@ -420,7 +427,10 @@ public static partial class SurveyUploadEndpoints
             }
             else if (request?.FromStep is { } fromStep)
             {
-                var kept = ScanRecipes.FromOptionsJson(upload.Options) ?? PointCloudRecipes.Default(schemas);
+                var kept = current
+                    ?? (upload.Source == SurveyOrigin.Mandeye
+                        ? PointCloudRecipes.ForRecording(schemas, null, null, null, out _)!
+                        : PointCloudRecipes.Default(schemas));
                 upload.Options = ScanRecipes.ToOptionsJson(kept with { RerunFrom = fromStep });
             }
         }
@@ -609,7 +619,7 @@ public static partial class SurveyUploadEndpoints
         var revisions = await CurrentRevisionsAsync(db, [.. files.Select(f => f.DocumentId!.Value)], ct);
         var labels = await ProfileDirectory.ResolveLabelsAsync(db, user, rows.Select(r => r.RequestedBy), ct);
         var openLinks = await links.OpenLinksAsync([.. rows.Select(r => (r.Id, r.CaveFeatureId))], ct);
-        var clouds = await PointCloudsOfAsync(db, [.. rows.Where(r => r.Source == SurveyOrigin.PointCloud).Select(r => r.Id)], ct);
+        var clouds = await PointCloudsOfAsync(db, [.. rows.Where(r => ScanOrigins.IsScan(r.Source)).Select(r => r.Id)], ct);
 
         SurveyUploadListFileDto? Listed(SurveyUploadFile f) =>
             revisions.TryGetValue(f.DocumentId!.Value, out var r)
@@ -681,7 +691,7 @@ public static partial class SurveyUploadEndpoints
         {
             // A point cloud waits on a worker for minutes to hours, so its run goes on the
             // long-work lane under a kind of its own; the run itself is the same.
-            Kind = upload.Source == SurveyOrigin.PointCloud ? ProcessingJobKinds.PointCloudPipeline : ProcessingJobKinds.SurveyUploadPipeline,
+            Kind = ScanOrigins.IsScan(upload.Source) ? ProcessingJobKinds.PointCloudPipeline : ProcessingJobKinds.SurveyUploadPipeline,
             Payload = JsonSerializer.Serialize(new SurveyUploadPipelinePayload(upload.Id), JsonSerializerOptions.Web),
         });
 
@@ -800,10 +810,10 @@ public static partial class SurveyUploadEndpoints
         var revisions = await CurrentRevisionsAsync(
             db, [.. files.Where(f => f.DocumentId is not null).Select(f => f.DocumentId!.Value)], ct);
         // A point cloud's options are its recipe, which says nothing a survey run's options say.
-        var options = upload.Source == SurveyOrigin.PointCloud
+        var options = ScanOrigins.IsScan(upload.Source)
             ? new SurveyUploadRunOptions(false, [], SurveyUploadRunOptions.DefaultMapScale)
             : ReadOptions(upload);
-        var cloud = upload.Source == SurveyOrigin.PointCloud
+        var cloud = ScanOrigins.IsScan(upload.Source)
             ? (await PointCloudsOfAsync(db, [upload.Id], ct)).GetValueOrDefault(upload.Id)
             : null;
 
@@ -813,13 +823,20 @@ public static partial class SurveyUploadEndpoints
         // The facts describe the bytes the run read; a later revision of the same document may
         // be another file altogether, so without the exact position the link is offered only
         // while the document's current revision is still the file the run inspected.
+        // A raw recording's files follow the cloud's georeferencing: they are location-free
+        // unless the recording holds GNSS positions. The facts of a recording describe the
+        // recording as a whole, so no revision-currency test applies to its files.
         bool MayLink(SurveyUploadFile f) =>
             exact
-            || (f.Role == SurveyUploadFileRole.Archive
+            || (upload.Source == SurveyOrigin.PointCloud
+                && f.Role == SurveyUploadFileRole.Archive
                 && cloud is { Facts.IsGeoreferenced: false }
                 && f.DocumentId is { } inspected
                 && revisions.TryGetValue(inspected, out var current)
-                && current.FileId == cloud.FileId);
+                && current.FileId == cloud.FileId)
+            || (upload.Source == SurveyOrigin.Mandeye
+                && f.Role == SurveyUploadFileRole.Archive
+                && cloud is { Facts.IsGeoreferenced: false });
 
         // What the run produced is listed apart from what the device sent and what the run was
         // compiled from, in the order the run stored it.

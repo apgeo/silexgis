@@ -151,6 +151,23 @@ public class StorageRulesTests
     }
 
     [Fact]
+    public void Odometry_needs_twenty_two_times_the_recording_on_the_worker_and_keeps_about_its_size()
+    {
+        ScanStorageNeeds.For(HdmappingOdometryStep.StepId, 1000, null, null).ShouldBe(new ScanStepNeed(1000, 22_000));
+        ScanStorageNeeds.For(HdmappingExportStep.StepId, 1000, null, null).ShouldBe(new ScanStepNeed(1000, 3000));
+        ScanStorageNeeds.For(PointCloudCheckStep.StepId, 1000, null, null)
+            .ShouldBe(new ScanStepNeed(ScanStorageNeeds.ReportBytes, 1000 + ScanStorageNeeds.ReportBytes));
+
+        // The whole run: session, export, check report and tiles kept; the odometry's peak on the worker.
+        const long raw = 100_000_000;
+        var run = ScanStorageNeeds.ForRun(
+            [HdmappingOdometryStep.StepId, HdmappingExportStep.StepId, PointCloudCheckStep.StepId, Py3dtilesTileStep.StepId], raw, null, null, null);
+        run.WorkerBytes.ShouldBe(raw * 22);
+        run.OutputBytes.ShouldBe(raw + raw + ScanStorageNeeds.ReportBytes + (raw * ScanStorageNeeds.TileFactorWithoutEstimate));
+        ScanStorageNeeds.For(HdmappingOdometryStep.StepId, long.MaxValue / 4, null, null).WorkerBytes.ShouldBe(long.MaxValue);
+    }
+
+    [Fact]
     public void Thinning_is_taken_as_large_as_the_cloud_and_the_estimate_as_a_small_report()
     {
         ScanStorageNeeds.For(PointCloudDownsampleStep.StepId, 5000, null, 2).ShouldBe(new ScanStepNeed(5000, 10_000));

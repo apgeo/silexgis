@@ -78,7 +78,40 @@ public static class SurveySourceFormats
     /// not: it arrives only as a survey upload, which reads its header and makes the model that
     /// shows it, and a cloud archived without that would be a file nothing can show.
     /// </summary>
-    public static bool ArchivableOnTheWeb(SurveySourceKind kind) => kind != SurveySourceKind.PointCloud;
+    public static bool ArchivableOnTheWeb(SurveySourceKind kind) =>
+        kind is not (SurveySourceKind.PointCloud or SurveySourceKind.LidarRawSession or SurveySourceKind.HdmSession);
+
+    /// <summary>
+    /// The media type every file of a raw scanner recording but its lidar chunks is recorded
+    /// under. One survey-specific type rather than text or JSON, for the reason
+    /// <see cref="MediaTypeFor"/> gives: these are a scanner's logs, kept to be processed, not
+    /// prose to be indexed.
+    /// </summary>
+    public const string RawRecordingMediaType = "application/x-mandeye-recording";
+
+    /// <summary>
+    /// The kind a file name claims within an upload of this origin: a raw recording's files are
+    /// all its original, whatever their extension; any other upload's are claimed by extension.
+    /// </summary>
+    public static SurveySourceKind? ClaimedKind(string? fileName, SurveyOrigin origin) =>
+        origin == SurveyOrigin.Mandeye
+            ? Scans.MandeyeRecording.Classify(fileName) is null ? null : SurveySourceKind.LidarRawSession
+            : ClaimedKind(fileName);
+
+    /// <summary>
+    /// Whether the first bytes of a raw recording's file are what its name says: a lidar chunk
+    /// is a LAS file, everything else a scanner writes beside it is text.
+    /// </summary>
+    public static bool RecordingContentMatches(string fileName, ReadOnlySpan<byte> header) =>
+        Scans.MandeyeRecording.Classify(fileName)?.Kind == Scans.MandeyeFileKind.LidarChunk
+            ? ContentMatches(SurveySourceKind.PointCloud, header)
+            : ContentMatches(SurveySourceKind.TherionSource, header);
+
+    /// <summary>The media type a raw recording's file is recorded under: a lidar chunk as a LAS file, the rest as the recording's own.</summary>
+    public static string RecordingMediaType(string fileName) =>
+        Scans.MandeyeRecording.Classify(fileName)?.Kind == Scans.MandeyeFileKind.LidarChunk
+            ? PointCloudMediaType
+            : RawRecordingMediaType;
 
     /// <summary>The extensions the web's archive route accepts: every accepted one but the point cloud's.</summary>
     public static IReadOnlyList<string> WebAcceptedExtensions { get; } =

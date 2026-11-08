@@ -225,6 +225,112 @@ public sealed class Py3dtilesTileStep : IScanStep
         """;
 }
 
+/// <summary>
+/// HDMapping's LiDAR-inertial odometry (its step 1) over a raw scanner recording, in the HDMapping
+/// worker: the chunks registered along the trajectory the scanner travelled. Writes the session,
+/// packed without the odometry's cache, which is tens of times the recording and only a working file.
+/// </summary>
+/// <remarks>
+/// Its one parameter is HDMapping's own parameter set, by TOML section, laid over the defaults the
+/// worker dumps from the program it runs. A recipe made before any worker has announced those
+/// defaults carries an empty set; the run fills it in with the defaults it is about to use before
+/// the step runs, so what the recipe stores is always the whole set the step ran with, never
+/// "whatever the defaults were then".
+/// </remarks>
+public sealed class HdmappingOdometryStep : IScanStep
+{
+    public const string StepId = "hdmapping.odometry";
+
+    public string Id => StepId;
+
+    public string DisplayName => "Run the recording's odometry";
+
+    public string Tool => "hdmapping";
+
+    public IReadOnlyList<ScanArtifactKind> Inputs => [ScanArtifactKind.RawRecording];
+
+    public IReadOnlyList<ScanArtifactKind> Outputs => [ScanArtifactKind.HdmSession];
+
+    public ScanStepLocation WhereItRuns => ScanStepLocation.Worker;
+
+    public string ParameterSchemaJson => """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "values": {
+              "description": "HDMapping's odometry parameters by TOML section, every one written out; empty until the run resolves them against the defaults of the version that runs.",
+              "type": "object",
+              "additionalProperties": { "type": "object" },
+              "default": {}
+            }
+          },
+          "additionalProperties": false
+        }
+        """;
+}
+
+/// <summary>
+/// HDMapping's export (its step 2) of an odometry session, in the HDMapping worker: one point cloud
+/// of the whole recording and the trajectory, as the program writes them.
+/// </summary>
+public sealed class HdmappingExportStep : IScanStep
+{
+    public const string StepId = "hdmapping.export";
+
+    public string Id => StepId;
+
+    public string DisplayName => "Export the registered recording as one point cloud";
+
+    public string Tool => "hdmapping";
+
+    public IReadOnlyList<ScanArtifactKind> Inputs => [ScanArtifactKind.HdmSession];
+
+    public IReadOnlyList<ScanArtifactKind> Outputs => [ScanArtifactKind.PointCloudLaz, ScanArtifactKind.Trajectory];
+
+    public ScanStepLocation WhereItRuns => ScanStepLocation.Worker;
+
+    public string ParameterSchemaJson => """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+        """;
+}
+
+/// <summary>
+/// A cloud a tool made checked before anything is built on it, in the worker: the points its header
+/// declares are there, every coordinate is finite and inside the header's bounds, the extent is not
+/// empty; and the trajectory beside it reads and runs forward in time. Writes a report of figures.
+/// </summary>
+public sealed class PointCloudCheckStep : IScanStep
+{
+    public const string StepId = "pointcloud.check";
+
+    public string Id => StepId;
+
+    public string DisplayName => "Check the exported point cloud";
+
+    public string Tool => "laspy";
+
+    public IReadOnlyList<ScanArtifactKind> Inputs => [ScanArtifactKind.PointCloudLaz, ScanArtifactKind.Trajectory];
+
+    public IReadOnlyList<ScanArtifactKind> Outputs => [ScanArtifactKind.Report];
+
+    public ScanStepLocation WhereItRuns => ScanStepLocation.Worker;
+
+    public string ParameterSchemaJson => """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+        """;
+}
+
 /// <summary>The steps this server knows, by id. A list in code, never a scan of assemblies.</summary>
 public static class ScanSteps
 {
@@ -244,6 +350,9 @@ public static class ScanSteps
         new PointCloudEstimateStep(),
         new PointCloudDownsampleStep(),
         new Py3dtilesTileStep(),
+        new HdmappingOdometryStep(),
+        new HdmappingExportStep(),
+        new PointCloudCheckStep(),
     ];
 
     private static readonly Dictionary<string, IScanStep> ById =

@@ -67,6 +67,12 @@ public static class SurveyPipelineFailures
     public const string PointCloudInvalid = "survey_pipeline.point_cloud_invalid";
 
     /// <summary>
+    /// The uploaded raw recording is not one the server can process: a lidar chunk whose header
+    /// does not read, an IMU log without the expected columns, or a chunk missing its pair.
+    /// </summary>
+    public const string RecordingInvalid = "survey_pipeline.recording_invalid";
+
+    /// <summary>
     /// Processing is switched on, but no point-cloud worker has announced itself, or the one that
     /// has cannot run a step the recipe asks for.
     /// </summary>
@@ -80,6 +86,20 @@ public static class SurveyPipelineFailures
 
     /// <summary>The worker ran past the time this installation allows one job.</summary>
     public const string WorkerTimeout = "survey_pipeline.worker_timeout";
+
+    /// <summary>
+    /// The worker was stopped (restarted, or its container replaced) while it ran a step, and its
+    /// half-written outputs are not trusted: a half-run odometry leaves a session that looks whole
+    /// and is not. Running the upload again starts the step afresh; nothing restarts it unasked.
+    /// </summary>
+    public const string WorkerInterrupted = "survey_pipeline.worker_interrupted";
+
+    /// <summary>
+    /// The point cloud a tool exported from a raw recording failed its check — points missing, a
+    /// coordinate that is not a number, points outside the header's bounds, a trajectory whose time
+    /// goes back — and nothing was built on it.
+    /// </summary>
+    public const string ExportInvalid = "survey_pipeline.export_invalid";
 
     /// <summary>
     /// A processing step was not started because what it is estimated to write does not fit: under
@@ -112,10 +132,13 @@ public sealed class SurveyPipelineException(string code, string message) : Excep
 /// the run, and every stage owns a band of it, in the order the stages happen.
 /// </summary>
 /// <remarks>
-/// There are two runs: a survey archive goes Archive, Unpack, Scaffold, Compile, Store, Read; a
-/// point cloud goes Archive, Inspect, Downsample, Tile, Store. A stage's band is the same in
-/// whichever run it appears — the ones the two runs share sit at the same place in both — so a
-/// band is a fact about the stage and a device that knows only the stage can still place the bar.
+/// There are three runs: a survey archive goes Archive, Unpack, Scaffold, Compile, Store, Read; a
+/// point cloud goes Archive, Inspect, Downsample, Tile, Store; a raw scanner recording goes
+/// Archive, Inspect, Odometry, Export, Check, Downsample, Tile, Store. The survey and the point
+/// cloud runs share one band per stage, so for them a band is a fact about the stage. The
+/// recording's run spends most of its time in odometry, which has to sit between stages the
+/// point cloud's run already places end to end; it has bands of its own, asked for with the
+/// origin, and a run of it reports through <see cref="Band(SurveyUploadStage, SurveyOrigin)"/>.
 /// A run that ends early (nothing to compile, no tiler) jumps to 100 when it succeeds, so the last
 /// stage of a run need not end at 100; what matters is that bands do not overlap within one run.
 /// </remarks>
@@ -133,32 +156,67 @@ public static class SurveyPipelineProgress
         SurveyUploadStage.Inspect => (5, 15),
         SurveyUploadStage.Downsample => (15, 25),
         SurveyUploadStage.Tile => (25, 80),
+        SurveyUploadStage.Odometry => RecordingBand(SurveyUploadStage.Odometry),
+        SurveyUploadStage.Export => RecordingBand(SurveyUploadStage.Export),
+        SurveyUploadStage.Check => RecordingBand(SurveyUploadStage.Check),
+        _ => throw new ArgumentOutOfRangeException(nameof(stage), stage, null),
+    };
+
+    /// <summary>The band a stage owns in a run of an upload of this origin.</summary>
+    public static (int Start, int End) Band(SurveyUploadStage stage, SurveyOrigin origin) =>
+        origin == SurveyOrigin.Mandeye ? RecordingBand(stage) : Band(stage);
+
+    // A raw recording's run: odometry runs for longer than the recording lasted, so it owns the
+    // largest share; tiling, which follows, still takes minutes and keeps a share of its own.
+    private static (int Start, int End) RecordingBand(SurveyUploadStage stage) => stage switch
+    {
+        SurveyUploadStage.Archive => (0, 5),
+        SurveyUploadStage.Inspect => (5, 10),
+        SurveyUploadStage.Odometry => (10, 50),
+        SurveyUploadStage.Export => (50, 55),
+        SurveyUploadStage.Check => (55, 60),
+        SurveyUploadStage.Downsample => (60, 65),
+        SurveyUploadStage.Tile => (65, 80),
+        SurveyUploadStage.Store => (80, 95),
         _ => throw new ArgumentOutOfRangeException(nameof(stage), stage, null),
     };
 
     /// <summary>The stages a run of an upload of this origin goes through, in order.</summary>
-    public static IReadOnlyList<SurveyUploadStage> Order(SurveyOrigin origin) => origin == SurveyOrigin.PointCloud
-        ?
+    public static IReadOnlyList<SurveyUploadStage> Order(SurveyOrigin origin) => origin switch
+    {
+        SurveyOrigin.PointCloud =>
         [
             SurveyUploadStage.Archive, SurveyUploadStage.Inspect, SurveyUploadStage.Downsample,
             SurveyUploadStage.Tile, SurveyUploadStage.Store,
-        ]
-        :
+        ],
+        SurveyOrigin.Mandeye =>
+        [
+            SurveyUploadStage.Archive, SurveyUploadStage.Inspect, SurveyUploadStage.Odometry,
+            SurveyUploadStage.Export, SurveyUploadStage.Check, SurveyUploadStage.Downsample,
+            SurveyUploadStage.Tile, SurveyUploadStage.Store,
+        ],
+        _ =>
         [
             SurveyUploadStage.Archive, SurveyUploadStage.Unpack, SurveyUploadStage.Scaffold,
             SurveyUploadStage.Compile, SurveyUploadStage.Store, SurveyUploadStage.Read,
-        ];
+        ],
+    };
 
     /// <summary>
     /// The run's percentage when a stage is <paramref name="percentOfStage"/> of the way through.
     /// A stage's own figure outside 0–100 is brought inside it, so a misreporting step can never
     /// move the bar backwards past its stage or forwards past the next.
     /// </summary>
-    public static int Overall(SurveyUploadStage stage, int percentOfStage)
+    public static int Overall(SurveyUploadStage stage, int percentOfStage) => Within(Band(stage), percentOfStage);
+
+    /// <summary>The run's percentage for a stage of a run of an upload of this origin, as <see cref="Overall(SurveyUploadStage, int)"/>.</summary>
+    public static int Overall(SurveyUploadStage stage, int percentOfStage, SurveyOrigin origin) =>
+        Within(Band(stage, origin), percentOfStage);
+
+    private static int Within((int Start, int End) band, int percentOfStage)
     {
-        var (start, end) = Band(stage);
         var within = Math.Clamp(percentOfStage, 0, 100);
-        return start + ((end - start) * within / 100);
+        return band.Start + ((band.End - band.Start) * within / 100);
     }
 }
 
@@ -179,6 +237,13 @@ public static class SurveyPipelineNotes
     /// finishes the work.
     /// </summary>
     public const string NoTiler = "Archived and inspected. Not tiled: this server has no point-cloud worker.";
+
+    /// <summary>
+    /// What a raw recording's run says when it stops after inspecting the recording because this
+    /// server has no worker that runs HDMapping. The recording is kept and described; a rerun once
+    /// such a worker is installed processes it.
+    /// </summary>
+    public const string NoOdometry = "Archived and inspected. Not processed: this server has no worker that runs HDMapping.";
 
     /// <summary>
     /// The note of a point-cloud run that estimated a cloud over the installation's thresholds

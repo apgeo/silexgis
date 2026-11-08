@@ -21,4 +21,22 @@ public enum ScanArtifactKind : short
 
     /// <summary>A human-readable account of a run: what was done, with what, and what came out.</summary>
     Report = 4,
+
+    /// <summary>One file of a raw scanner recording as it was uploaded: a lidar chunk, an IMU log, a serial-number, GNSS or calibration file.</summary>
+    RawRecording = 5,
+
+    /// <summary>An HDMapping session — the registered chunks, their poses and the parameters used — packed into one archive, without the odometry's cache.</summary>
+    HdmSession = 6,
+
+    /// <summary>A picture of the scan seen from above.</summary>
+    PlanImage = 7,
+
+    /// <summary>A picture of the scan unrolled along its centreline, seen from the side.</summary>
+    ProfileImage = 8,
+
+    /// <summary>A surface reconstructed from the points, as a mesh.</summary>
+    MeshStl = 9,
+
+    /// <summary>The scanner's path simplified into a line through the passages, in the scan's own frame.</summary>
+    Centreline = 10,
 }

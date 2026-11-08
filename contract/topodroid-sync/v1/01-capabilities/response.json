@@ -2,7 +2,8 @@
   "contractVersion": 1,
   "sources": [
     "topodroid",
-    "pointcloud"
+    "pointcloud",
+    "mandeye"
   ],
   "maxFileBytes": 262144000,
   "maxFilesPerUpload": 64,

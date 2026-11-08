@@ -22,6 +22,25 @@ public sealed class ScanOptions
     public long UploadCap => Math.Max(1, MaxUploadBytes);
 
     /// <summary>
+    /// The most a raw scanner recording's files may take together, in bytes. 20 GiB by default —
+    /// well over an hour of a two-sensor handheld scanner. Each file of it is also held to
+    /// <see cref="MaxUploadBytes"/>.
+    /// </summary>
+    public long MaxRawUploadBytes { get; set; } = 20L * 1024 * 1024 * 1024;
+
+    /// <summary>The recording cap, never below one byte.</summary>
+    public long RawUploadCap => Math.Max(1, MaxRawUploadBytes);
+
+    /// <summary>
+    /// The most files a raw scanner recording may declare. 5,000 by default: a recording writes
+    /// four or five files per chunk of a few seconds, so an hour of scanning stays well inside it.
+    /// </summary>
+    public int MaxRawFiles { get; set; } = 5_000;
+
+    /// <summary>The recording's file-count cap, never below one.</summary>
+    public int RawFileCap => Math.Max(1, MaxRawFiles);
+
+    /// <summary>
     /// The most everything kept for point clouds may take together, in bytes: the uploaded
     /// originals (which are always kept) and every product made from them. Zero, the default,
     /// sets no cap of its own, leaving the installation's file store cap to answer. A scan run

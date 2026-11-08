@@ -15776,7 +15776,7 @@ export interface components {
             surveyedAt: null | string;
         };
         /** @enum {unknown} */
-        SurveyOrigin: "topodroid" | "therion" | "other" | "pointcloud";
+        SurveyOrigin: "topodroid" | "therion" | "other" | "pointcloud" | "mandeye";
         SurveyOutputCapabilitiesDto: {
             catalogue: string[];
             defaults: string[];
@@ -15840,7 +15840,7 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {unknown} */
-        SurveySourceKind: "therionSource" | "therionConfig" | "therionLog" | "survexSource" | "topoDroidArchive" | "pointCloud";
+        SurveySourceKind: "therionSource" | "therionConfig" | "therionLog" | "survexSource" | "topoDroidArchive" | "pointCloud" | "lidarRawSession" | "hdmSession";
         SurveyStationDto: {
             name: string;
             viewerName: string;
@@ -16235,7 +16235,7 @@ export interface components {
             firstModelOfCreatedCave: boolean;
         };
         /** @enum {unknown} */
-        SurveyUploadStage: "archive" | "unpack" | "scaffold" | "compile" | "store" | "read" | "inspect" | "downsample" | "tile";
+        SurveyUploadStage: "archive" | "unpack" | "scaffold" | "compile" | "store" | "read" | "inspect" | "downsample" | "tile" | "odometry" | "export" | "check";
         /** @enum {unknown} */
         SurveyUploadStageState: "pending" | "active" | "done" | "failed" | "skipped";
         SurveyUploadStatisticsDto: {
