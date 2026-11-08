@@ -123,6 +123,11 @@ public static class DependencyInjection
             configuration.GetSection(Surveys.SurveyCompilerOptions.SectionName));
         services.Configure<Scans.ScanOptions>(
             configuration.GetSection(Scans.ScanOptions.SectionName));
+        services.Configure<Storage.StorageOptions>(
+            configuration.GetSection(Storage.StorageOptions.SectionName));
+        services.AddScoped<Storage.StorageFiguresService>();
+        services.AddScoped<Storage.StorageAlerts>();
+        services.AddScoped<Storage.StorageReportService>();
         services.AddScoped<Import.ImportCandidateService>();
         services.AddScoped<Import.ImportCommitService>();
         services.AddScoped<Import.DeviceSyncUndoService>();
@@ -417,6 +422,8 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, PhotoGeoBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, AccountDataExportHandler>();
         services.AddScoped<IProcessingJobHandler, FeatureIntegrityVerifyHandler>();
+        services.AddScoped<IProcessingJobHandler, Storage.StorageCheckHandler>();
+        services.AddScoped<IProcessingJobHandler, Storage.StorageReportHandler>();
         services.AddScoped<IProcessingJobHandler, TextExtractionHandler>();
         services.AddScoped<IProcessingJobHandler, TextExtractionBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, AccessHistoryPruneHandler>();
@@ -559,6 +566,8 @@ public static class DependencyInjection
         services.Configure<FeatureIntegrityOptions>(
             configuration.GetSection(FeatureIntegrityOptions.SectionName));
         services.AddHostedService<FeatureIntegrityScheduler>();
+        services.AddHostedService<Storage.StorageCheckScheduler>();
+        services.AddHostedService<Storage.StorageReportScheduler>();
 
         services.Configure<AccessHistoryOptions>(
             configuration.GetSection(AccessHistoryOptions.SectionName));

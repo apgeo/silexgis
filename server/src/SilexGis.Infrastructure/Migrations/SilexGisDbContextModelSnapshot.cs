@@ -5700,6 +5700,68 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("speleoloc_import_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.StorageAlertState", b =>
+                {
+                    b.Property<short>("LimitKind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("limit_kind");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<short>("Level")
+                        .HasColumnType("smallint")
+                        .HasColumnName("level");
+
+                    b.HasKey("LimitKind")
+                        .HasName("pk_storage_alert_states");
+
+                    b.ToTable("storage_alert_states", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_storage_alert_states_level", "level >= 0 AND level <= 3");
+
+                            t.HasCheckConstraint("ck_storage_alert_states_limit_kind", "limit_kind >= 0 AND limit_kind <= 4");
+                        });
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.StorageReportSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Report")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("report");
+
+                    b.Property<long>("ScanUsedBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("scan_used_bytes");
+
+                    b.Property<long?>("StoreFreeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("store_free_bytes");
+
+                    b.Property<long>("StoreUsedBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("store_used_bytes");
+
+                    b.Property<DateTimeOffset>("TakenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("taken_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_storage_report_snapshots");
+
+                    b.HasIndex("TakenAt")
+                        .HasDatabaseName("ix_storage_report_snapshots_taken_at");
+
+                    b.ToTable("storage_report_snapshots", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.StoredFile", b =>
                 {
                     b.Property<Guid>("Id")

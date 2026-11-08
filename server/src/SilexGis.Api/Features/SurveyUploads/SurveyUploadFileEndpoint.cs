@@ -7,12 +7,14 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Storage;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Storage;
 
 namespace SilexGis.Api.Features.SurveyUploads;
 
@@ -40,6 +42,7 @@ public static partial class SurveyUploadEndpoints
         IAccessService access,
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
+        StorageFiguresService storage,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -88,6 +91,15 @@ public static partial class SurveyUploadEndpoints
         if (http.ContentLength is { } announced && announced != file.DeclaredSize)
         {
             return SizeMismatch(file.DeclaredSize);
+        }
+
+        // The room was judged when the upload opened; asked again as the bytes arrive, because that
+        // was advice given minutes or hours ago and is the rule now. This upload's own reservation
+        // is left out of the figures — it is the room this file is about to take.
+        var room = await storage.ForAsync(ctx.UserId, excludingUploadId: upload.Id, ct);
+        if (StorageRules.Shortfall(room.Limits(scan: upload.Source == SurveyOrigin.PointCloud), file.DeclaredSize) is { } shortfall)
+        {
+            return StorageProblems.Insufficient(shortfall);
         }
 
         // A file with no survey format becomes an ordinary document, on the questions any other

@@ -56,6 +56,7 @@ using SilexGis.Api.Features.QrLanding;
 using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.Statistics;
 using SilexGis.Api.Features.Sync;
+using SilexGis.Api.Features.Storage;
 using SilexGis.Api.Features.SurveyUploads;
 using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
@@ -713,6 +714,8 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapTerrainDerivativeEndpoints();
     api.MapSyncEndpoints();
     api.MapSurveyUploadEndpoints();
+    api.MapStorageEndpoints();
+    api.MapStorageReportEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {

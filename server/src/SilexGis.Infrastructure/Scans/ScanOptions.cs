@@ -22,6 +22,17 @@ public sealed class ScanOptions
     public long UploadCap => Math.Max(1, MaxUploadBytes);
 
     /// <summary>
+    /// The most everything kept for point clouds may take together, in bytes: the uploaded
+    /// originals (which are always kept) and every product made from them. Zero, the default,
+    /// sets no cap of its own, leaving the installation's file store cap to answer. A scan run
+    /// can take 5–10 GB, which is why scans can be capped apart from the documents beside them.
+    /// </summary>
+    public long MaxTotalBytes { get; set; }
+
+    /// <summary>The scans' total cap, or null when none is set.</summary>
+    public long? TotalCap => MaxTotalBytes > 0 ? MaxTotalBytes : null;
+
+    /// <summary>
     /// Whether this installation runs a point-cloud worker. Off, a run ends after reading the
     /// header with a note saying the cloud was not tiled; on, the run leaves each worker step in
     /// the hand-off directory and waits for its answer.

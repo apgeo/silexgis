@@ -255,6 +255,20 @@ public static class ProcessingJobKinds
     public const string SurveyUploadSweep = "survey-upload-sweep";
 
     /// <summary>
+    /// Measures how full storage is — the installation's cap, the point clouds' cap and the free
+    /// space of the file store's and the processing worker's disks — and tells administrators
+    /// about every level crossed upwards since the last pass. Payload: <c>{}</c>.
+    /// </summary>
+    public const string StorageCheck = "storage-check";
+
+    /// <summary>
+    /// Writes the day's storage report: what fills the file store by kind, cave and account, the
+    /// largest files, the growth since a week and a month ago, and what could be deleted.
+    /// Payload: <c>{}</c>.
+    /// </summary>
+    public const string StorageReport = "storage-report";
+
+    /// <summary>
     /// The kinds that run on a worker of their own rather than on the general one.
     /// </summary>
     /// <remarks>
@@ -307,5 +321,6 @@ public static class ProcessingJobKinds
         PhotoGeoBackfill, SurveyReadingBackfill, TextExtraction, TextExtractionBackfill,
         DocumentConversion, DocumentConversionBackfill, AccessHistoryPrune, FeatureIntegrityVerify,
         UploadSessionSweep, DocumentPurge, TripPurge, TerrainUploadSweep, SurveyUploadSweep,
+        StorageCheck, StorageReport,
     ];
 }

@@ -8907,6 +8907,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/storage/room": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The storage totals and caps, and whether an upload or a processing run of a given size fits.
+         * @description addingBytes is what is about to be added (an upload's file sizes, or a run's estimated products). scan=true checks it as a point cloud's: under the scans' own cap as well, and on the processing worker's disk when processing=true. The same check refuses the upload or the run itself, with the code storage.insufficient and the missing amount, so this is advice given early, not a reservation.
+         */
+        get: operations["storageRoom"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The latest storage report: totals by kind, cave and account, the largest files, growth, and what could be deleted.
+         * @description Written once a day by a scheduled job; 404 storage.report_missing before the first. Full administrators only: the report names caves, files and their owners across the whole installation, unfiltered, so a grant over the settings domain alone is not enough. Usable by an operator's monitoring, signed in as a full administrator, as it is.
+         */
+        get: operations["storageReportLatest"];
+        put?: never;
+        /**
+         * Measures storage now and keeps the result as the latest report.
+         * @description Full administrators only, as for reading it. Counts as one of the daily reports for growth.
+         */
+        post: operations["storageReportMeasure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage/reclaim/{group}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deletes one group of what the report offers, as it stands now.
+         * @description Full administrators only, and a body with confirm=true: a group reaches every cave and account. The group is computed again when the request arrives, not taken from the report. Uploaded originals are never deleted: a group that would reach one is refused with storage.reclaim_refused and nothing is deleted. Recorded in the audit trail with what was given back.
+         */
+        post: operations["storageReportReclaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -12963,7 +13027,7 @@ export interface components {
             isProtected: boolean;
         };
         /** @enum {unknown} */
-        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | "tripPublished" | "tripNeedsAttention" | "uploadAwaitingReview" | "uploadReviewed" | "expeditionUpdate";
+        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | "tripPublished" | "tripNeedsAttention" | "uploadAwaitingReview" | "uploadReviewed" | "expeditionUpdate" | "storageAlert";
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
             reachesNobody: boolean;
@@ -15381,6 +15445,127 @@ export interface components {
             stagedAt: string;
             /** Format: date-time */
             expiresAt: string;
+        };
+        StorageGrowthDto: {
+            /** Format: int64 */
+            sevenDayBytes: null | number;
+            /** Format: int64 */
+            thirtyDayBytes: null | number;
+            /** Format: int64 */
+            bytesPerDay: null | number;
+            /** Format: date */
+            fullOn: null | string;
+            /** Format: int64 */
+            scanBytesPerDay: null | number;
+            /** Format: date */
+            scansFullOn: null | string;
+        };
+        StorageHolderDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            /** Format: int64 */
+            bytes: number;
+            /** Format: int32 */
+            files: number;
+        };
+        StorageKindTotalDto: {
+            kind: string;
+            /** Format: int64 */
+            bytes: number;
+            /** Format: int32 */
+            files: number;
+        };
+        StorageLargeItemDto: {
+            /** Format: uuid */
+            fileId: string;
+            name: string;
+            kind: string;
+            /** Format: int64 */
+            bytes: number;
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            ownerUserId: string;
+            ownerName: null | string;
+            /** Format: uuid */
+            caveId: null | string;
+            caveName: null | string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        StorageReclaimableDto: {
+            group: string;
+            /** Format: int32 */
+            items: number;
+            /** Format: int64 */
+            bytes: number;
+        };
+        StorageReclaimRequest: {
+            confirm: boolean;
+        };
+        StorageReclaimResultDto: {
+            group: string;
+            /** Format: int32 */
+            items: number;
+            /** Format: int64 */
+            freedBytes: number;
+        };
+        StorageReportDto: {
+            /** Format: date-time */
+            takenAt: string;
+            /** Format: int64 */
+            storeUsedBytes: number;
+            /** Format: int64 */
+            storeCapBytes: null | number;
+            /** Format: int64 */
+            scanUsedBytes: number;
+            /** Format: int64 */
+            scanCapBytes: null | number;
+            /** Format: int64 */
+            storeFreeBytes: null | number;
+            /** Format: int64 */
+            workerFreeBytes: null | number;
+            /** Format: int64 */
+            minFreeBytes: number;
+            level: string;
+            byFileKind: components["schemas"]["StorageKindTotalDto"][];
+            scanByKind: components["schemas"]["StorageKindTotalDto"][];
+            /** Format: int64 */
+            workDirectoryBytes: number;
+            byCave: components["schemas"]["StorageHolderDto"][];
+            byAccount: components["schemas"]["StorageHolderDto"][];
+            largest: components["schemas"]["StorageLargeItemDto"][];
+            growth: components["schemas"]["StorageGrowthDto"];
+            reclaimable: components["schemas"]["StorageReclaimableDto"][];
+        };
+        StorageRoomDto: {
+            /** Format: int64 */
+            addingBytes: number;
+            fits: boolean;
+            shortfall: null | components["schemas"]["StorageShortfallDto"];
+            /** Format: int64 */
+            storeUsedBytes: number;
+            /** Format: int64 */
+            storeCapBytes: null | number;
+            /** Format: int64 */
+            scanUsedBytes: number;
+            /** Format: int64 */
+            scanCapBytes: null | number;
+            /** Format: int64 */
+            accountUsedBytes: number;
+            /** Format: int64 */
+            accountCapBytes: null | number;
+            level: string;
+        };
+        StorageShortfallDto: {
+            limit: string;
+            /** Format: int64 */
+            neededBytes: number;
+            /** Format: int64 */
+            roomBytes: number;
+            /** Format: int64 */
+            missingBytes: number;
         };
         /** Format: binary */
         Stream: string;
@@ -43813,6 +43998,141 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    storageRoom: {
+        parameters: {
+            query?: {
+                addingBytes?: number;
+                scan?: boolean;
+                processing?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageRoomDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    storageReportLatest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageReportDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    storageReportMeasure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageReportDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    storageReportReclaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["StorageReclaimRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageReclaimResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

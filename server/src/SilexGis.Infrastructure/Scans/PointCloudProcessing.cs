@@ -8,10 +8,12 @@ using SilexGis.Domain;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Scans;
+using SilexGis.Domain.Storage;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Storage;
 using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Infrastructure.Scans;
@@ -62,6 +64,7 @@ public sealed class PointCloudProcessing(
     ScanWorkerHandoff handoff,
     ICoordinateProjector projector,
     IOptions<ScanOptions> options,
+    StorageFiguresService storage,
     ILogger<PointCloudProcessing> logger)
 {
     private const string LazMediaType = "application/vnd.laszip";
@@ -113,8 +116,14 @@ public sealed class PointCloudProcessing(
             facts = facts with { DisplayVoxelM = null, DisplayPointCount = null, DisplayEveryNth = null };
         }
 
-        foreach (var step in recipe.Steps)
+        // The whole run's need is checked once, before the first step that writes more than a
+        // report: by then the estimate is known, and the run is refused there rather than after a
+        // thinned copy has been stored and the tiling then found not to fit. Each step is checked
+        // again before it starts, against the room as it stands then.
+        var runChecked = false;
+        for (var index = 0; index < recipe.Steps.Count; index++)
         {
+            var step = recipe.Steps[index];
             if (step.StepId == PointCloudInspectStep.StepId)
             {
                 continue;
@@ -157,6 +166,21 @@ public sealed class PointCloudProcessing(
                     SurveyPipelineFailures.WorkerUnavailable,
                     $"The point-cloud worker running on this server cannot {definition.DisplayName.ToLowerInvariant()} ({step.StepId}).");
             }
+
+            if (!runChecked && step.StepId != PointCloudEstimateStep.StepId)
+            {
+                var remaining = recipe.Steps.Skip(index)
+                    .Select(s => s.StepId)
+                    .Where(id => id != PointCloudInspectStep.StepId && id != PointCloudEstimateStep.StepId)
+                    .ToList();
+                var runNeed = ScanStorageNeeds.ForRun(
+                    remaining, original.SizeBytes, display?.SizeBytes, facts.Estimate, ChosenVoxelCm(recipe));
+                await RefuseUnlessItFitsAsync(upload, runNeed, "this run", ct);
+                runChecked = true;
+            }
+
+            var stepNeed = ScanStorageNeeds.For(step.StepId, inputs.Sum(a => a.SizeBytes), facts.Estimate, ChosenVoxelCm(recipe));
+            await RefuseUnlessItFitsAsync(upload, stepNeed, definition.DisplayName.ToLowerInvariant(), ct);
 
             await SurveyUploadWrites.ProgressAsync(
                 db, upload.Id, stage, SurveyPipelineProgress.Band(stage).Start, definition.DisplayName + ".", ct);
@@ -279,6 +303,61 @@ public sealed class PointCloudProcessing(
         model.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return true;
+    }
+
+    /// <summary>
+    /// Refuses the run, or one step of it, before anything of it is written, when what it is
+    /// estimated to write does not fit: under the uploader's quota, the installation's cap or the
+    /// scans' cap, on the file store's disk, or — for its inputs' copies and its outputs together —
+    /// on the worker's disk. A run is stopped here rather than left to fail half-way through a
+    /// tiling that fills the disk.
+    /// </summary>
+    /// <param name="what">What needs the room, as the message names it: "this run", or the step's name.</param>
+    private async Task RefuseUnlessItFitsAsync(SurveyUpload upload, ScanStepNeed need, string what, CancellationToken ct)
+    {
+        var room = await storage.ForAsync(upload.RequestedBy, ct: ct);
+        var shortfall = StorageRules.Shortfall(room.Limits(scan: true), need.OutputBytes);
+        if (room.WorkerFreeBytes is { } workerFree
+            && StorageRules.Shortfall([StorageLimit.Disk(StorageLimitKind.WorkerDisk, workerFree)], need.WorkerBytes) is { } onWorker
+            && (shortfall is null || onWorker.MissingBytes > shortfall.MissingBytes))
+        {
+            shortfall = onWorker;
+        }
+
+        if (shortfall is not null)
+        {
+            throw new SurveyPipelineException(
+                SurveyPipelineFailures.StorageInsufficient,
+                string.Create(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    $"Not started: {what} needs about {shortfall.NeededBytes:N0} bytes {Where(shortfall.Kind)}, where {shortfall.RoomBytes:N0} are left — {shortfall.MissingBytes:N0} bytes are missing. Free that much, or raise the cap, then run the upload again."));
+        }
+
+        static string Where(StorageLimitKind kind) => kind switch
+        {
+            StorageLimitKind.Account => "under the uploader's storage quota",
+            StorageLimitKind.Installation => "under this installation's storage cap",
+            StorageLimitKind.Scans => "under this installation's cap for point clouds",
+            StorageLimitKind.StoreDisk => "on the disk that holds the file store",
+            _ => "on the disk the point-cloud worker uses",
+        };
+    }
+
+    /// <summary>The voxel size the recipe thins at before tiling, in centimetres, or null when it does not thin by voxel.</summary>
+    private static double? ChosenVoxelCm(ScanRecipe recipe)
+    {
+        var downsample = recipe.Steps.FirstOrDefault(s => s.StepId == PointCloudDownsampleStep.StepId);
+        if (downsample is null || downsample.Parameters.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var method = downsample.Parameters.TryGetProperty("method", out var m) && m.ValueKind == JsonValueKind.String
+            ? m.GetString()
+            : "voxel";
+        return method == "voxel" && downsample.Parameters.TryGetProperty("voxelCm", out var v) && v.ValueKind == JsonValueKind.Number
+            ? v.GetDouble()
+            : null;
     }
 
     /// <summary>An earlier run's artefact of this step with these inputs and parameters, whose file is still stored; else null.</summary>

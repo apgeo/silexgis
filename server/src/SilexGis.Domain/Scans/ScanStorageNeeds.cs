@@ -1,0 +1,99 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+namespace SilexGis.Domain.Scans;
+
+/// <summary>
+/// What a processing step of a point cloud's run is about to write, estimated before it starts, so
+/// that a step which would not fit is refused rather than left half-done.
+/// </summary>
+/// <param name="OutputBytes">What the step's products will add to the file store (and to the caps).</param>
+/// <param name="WorkerBytes">What the step needs on the worker's volume: its inputs are copied there and its outputs written there before they are stored.</param>
+public sealed record ScanStepNeed(long OutputBytes, long WorkerBytes);
+
+/// <summary>The estimate of <see cref="ScanStepNeed"/> for each step.</summary>
+public static class ScanStorageNeeds
+{
+    /// <summary>
+    /// How many times its input a tileset is taken to be when no estimate says better. Tiles were
+    /// measured at two to six times the LAZ they were made from; the top of that range is used,
+    /// because an estimate that is too low lets a run start that then fails half-way, which is the
+    /// one outcome this check exists to prevent.
+    /// </summary>
+    public const int TileFactorWithoutEstimate = 6;
+
+    /// <summary>Room allowed for a step whose products are a small report (the estimate's), in bytes: 1 MiB.</summary>
+    public const long ReportBytes = 1024 * 1024;
+
+    /// <summary>
+    /// What <paramref name="stepId"/> is expected to write, given the bytes it reads.
+    /// </summary>
+    /// <param name="inputBytes">The size of what the step reads: the original, or the thinned copy when tiling one.</param>
+    /// <param name="estimate">The estimate step's table, when it has run.</param>
+    /// <param name="voxelCm">The voxel size the cloud was thinned at before tiling, or null when it was not thinned by voxel.</param>
+    /// <remarks>
+    /// The thinning step's product is taken to be as large as the cloud it thins — a thinned copy is
+    /// never larger, and LAZ compression varies too much with density for anything closer to be
+    /// safe. Tiling uses the estimate's own figure for the voxel size chosen (or for the full cloud),
+    /// and the measured upper factor when the estimate has no row for it.
+    /// </remarks>
+    public static ScanStepNeed For(string stepId, long inputBytes, PointCloudEstimate? estimate, double? voxelCm)
+    {
+        var input = Math.Max(0, inputBytes);
+        var output = stepId switch
+        {
+            PointCloudEstimateStep.StepId => ReportBytes,
+            PointCloudDownsampleStep.StepId => input,
+            Py3dtilesTileStep.StepId => TileBytes(input, estimate, voxelCm),
+            _ => input,
+        };
+        return new ScanStepNeed(output, SaturatingAdd(input, output));
+    }
+
+    /// <summary>
+    /// What the rest of a run is expected to write, from <paramref name="stepIds"/> on, so that a
+    /// run whose later steps would not fit is refused before its first step writes anything rather
+    /// than after a thinned copy has already taken part of the room.
+    /// </summary>
+    /// <param name="stepIds">The steps still to run, in order. Steps that write only a report count as such.</param>
+    /// <param name="originalBytes">The size of the uploaded cloud, which the thinning step (and an unthinned tiling) reads.</param>
+    /// <param name="thinnedBytes">The size of a thinned copy an earlier run left and this one keeps, when the run tiles that without thinning again.</param>
+    /// <param name="estimate">The estimate step's table, when it has run.</param>
+    /// <param name="voxelCm">The voxel size the cloud is thinned at before tiling, or null when it is not thinned by voxel.</param>
+    /// <returns>
+    /// The products of every step added up — they all stay in the store — and, on the worker's
+    /// volume, the largest single step's need: each step's job directory is cleared before the next starts.
+    /// </returns>
+    public static ScanStepNeed ForRun(
+        IEnumerable<string> stepIds, long originalBytes, long? thinnedBytes, PointCloudEstimate? estimate, double? voxelCm)
+    {
+        ArgumentNullException.ThrowIfNull(stepIds);
+        var original = Math.Max(0, originalBytes);
+        var tilingReads = thinnedBytes is { } kept ? Math.Max(0, kept) : original;
+        long output = 0;
+        long worker = 0;
+        foreach (var stepId in stepIds)
+        {
+            var need = For(stepId, stepId == Py3dtilesTileStep.StepId ? tilingReads : original, estimate, voxelCm);
+            if (stepId == PointCloudDownsampleStep.StepId)
+            {
+                tilingReads = need.OutputBytes;
+            }
+
+            output = SaturatingAdd(output, need.OutputBytes);
+            worker = Math.Max(worker, need.WorkerBytes);
+        }
+
+        return new ScanStepNeed(output, worker);
+    }
+
+    private static long TileBytes(long input, PointCloudEstimate? estimate, double? voxelCm)
+    {
+        var row = voxelCm is { } voxel
+            ? estimate?.Voxels.FirstOrDefault(r => r.VoxelCm is { } v && Math.Abs(v - voxel) < 1e-9)
+            : estimate?.Full;
+        return row?.EstimatedTileBytes is { } estimated and > 0
+            ? estimated
+            : input > long.MaxValue / TileFactorWithoutEstimate ? long.MaxValue : input * TileFactorWithoutEstimate;
+    }
+
+    private static long SaturatingAdd(long a, long b) => a > long.MaxValue - b ? long.MaxValue : a + b;
+}

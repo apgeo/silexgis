@@ -82,6 +82,14 @@ public static class SurveyPipelineFailures
     public const string WorkerTimeout = "survey_pipeline.worker_timeout";
 
     /// <summary>
+    /// A processing step was not started because what it is estimated to write does not fit: under
+    /// the account's quota, the installation's cap, the scans' cap, or on the disk of the file store
+    /// or the worker. Checked before each step, so a run is refused rather than left half-done; the
+    /// message says how much is missing.
+    /// </summary>
+    public const string StorageInsufficient = "survey_pipeline.storage_insufficient";
+
+    /// <summary>
     /// Something went wrong that the run did not expect. The server's own log has the whole of it;
     /// the upload's row says only that, because the inside of the server is not the uploader's to
     /// read.

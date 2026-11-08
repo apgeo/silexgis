@@ -31,6 +31,24 @@ turns every future addition into an outage of its own making.
 
 ---
 
+## 2026-11-08 — refused for lack of room, before anything is stored
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one code is added on
+opening and on sending a file, one on the run; nothing a device sends or reads changes meaning. No
+recording was written or rewritten.
+
+- `POST /survey-uploads` and `PUT /survey-uploads/{id}/files/{name}` may answer `409`
+  `storage.insufficient` when the declared files (or this file) do not fit in the storage left:
+  under the account's quota, the installation's cap, for a `pointcloud` upload the scans' own cap
+  (`SILEXGIS__Scans__MaxTotalBytes`), or on the disk of the file store. Members `limit`,
+  `neededBytes`, `roomBytes`, `missingBytes`. An open upload's declared sizes count as taken from
+  the moment it opens until its files arrive, it is abandoned or it expires.
+- New code on the run: `survey_pipeline.storage_insufficient` at `downsample` or `tile` — the step
+  was not started because what it is estimated to write does not fit; `errorMessage` says how much
+  is missing.
+- `GET /api/v1/storage/room` (outside this contract, for the web; it does not take a device key)
+  answers the totals, the caps and whether a given `addingBytes` fits.
+
 ## 2026-11-07 — a point cloud as a survey upload
 
 **Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one value is added to

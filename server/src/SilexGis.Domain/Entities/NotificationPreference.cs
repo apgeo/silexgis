@@ -134,6 +134,20 @@ public enum NotificationCategory : short
     /// planning notices — the camp's page keeps the change whether or not the message is read.
     /// </remarks>
     ExpeditionUpdate = 14,
+
+    /// <summary>
+    /// The installation's storage is filling up: a cap (the whole file store's, or the one on
+    /// point clouds) passed its notice or warning percentage, or a disk the files or the processing
+    /// worker write to is running short of free space. Sent to administrators only, once each time
+    /// a level is crossed upwards.
+    /// </summary>
+    /// <remarks>
+    /// A category of its own because it is the one message here that is about the installation
+    /// rather than about something a person did or is part of, and an administrator who mutes
+    /// comment traffic has said nothing about wanting to hear that the disk is nearly full. It stays
+    /// mutable: an installation with two administrators may well agree that one of them watches it.
+    /// </remarks>
+    StorageAlert = 15,
 }
 
 /// <summary>
@@ -289,6 +303,7 @@ public static class NotificationCategories
         NotificationCategory.SecurityAlerts => InboxAndMail,
         NotificationCategory.TripPlanning => InboxAndMail,
         NotificationCategory.ExpeditionUpdate => InboxAndMail,
+        NotificationCategory.StorageAlert => InboxAndMail,
         // An overdue party, and the one message with a safety argument for reaching a phone:
         // whoever is going to drive to a cave entrance is standing outside with no data, where a
         // text arrives and a mailbox does not. Naming the channel here makes it permissible and

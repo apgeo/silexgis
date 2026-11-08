@@ -11,11 +11,13 @@ using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Scans;
+using SilexGis.Domain.Storage;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Scans;
+using SilexGis.Infrastructure.Storage;
 using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Features.SurveyUploads;
@@ -35,6 +37,7 @@ public static partial class SurveyUploadEndpoints
         IOptions<SurveyUploadOptions> options,
         IOptions<ScanOptions> scans,
         ITypedPropertiesValidator schemas,
+        StorageFiguresService storage,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -169,6 +172,17 @@ public static partial class SurveyUploadEndpoints
             && DocumentAudience(ctx, cave, request.DocumentsVisibility).RefusalCode is { } documentsRefused)
         {
             return DocumentAudienceProblem(documentsRefused);
+        }
+
+        // Whether the declared files fit, asked now — after the cave has been found and the right
+        // to write to it settled, before anything is saved or a byte is sent. A point cloud is
+        // measured under the scans' own cap as well as the account's and the installation's, and
+        // the room its declaration takes is reserved from here until its files arrive or it expires.
+        var declaredBytes = request.Files.Sum(f => Math.Max(0, f.Size));
+        var room = await storage.ForAsync(ctx.UserId, ct: ct);
+        if (StorageRules.Shortfall(room.Limits(scan: origin == SurveyOrigin.PointCloud), declaredBytes) is { } shortfall)
+        {
+            return StorageProblems.Insufficient(shortfall);
         }
 
         var now = clock.GetUtcNow();
