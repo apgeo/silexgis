@@ -16,6 +16,7 @@ export const SETTINGS_SECTIONS = [
   'sync',
   'access-keys',
   'survey-uploads',
+  'scan-profiles',
   'advanced',
 ] as const;
 

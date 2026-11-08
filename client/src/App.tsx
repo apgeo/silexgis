@@ -120,6 +120,7 @@ const SurveyUploadViewerPage = lazy(() => import('./pages/surveyUploads/SurveyUp
 const PublicSurveyViewerPage = lazy(() => import('./pages/public/PublicSurveyViewerPage.tsx'));
 const AccessKeysSettingsPage = lazy(() => import('./pages/settings/AccessKeysSettingsPage.tsx'));
 const SurveyUploadSettingsPage = lazy(() => import('./pages/settings/SurveyUploadSettingsPage.tsx'));
+const ScanProfileSettingsPage = lazy(() => import('./pages/settings/ScanProfileSettingsPage.tsx'));
 const AdvancedSettingsPage = lazy(() => import('./pages/settings/AdvancedSettingsPage.tsx'));
 
 function Loadable({ children }: { children: ReactNode }) {
@@ -290,6 +291,7 @@ export const routes: RouteObject[] = guarded([
               { path: 'sync', element: <Loadable><SyncSettingsPage /></Loadable> },
               { path: 'access-keys', element: <Loadable><AccessKeysSettingsPage /></Loadable> },
               { path: 'survey-uploads', element: <Loadable><SurveyUploadSettingsPage /></Loadable> },
+              { path: 'scan-profiles', element: <Loadable><ScanProfileSettingsPage /></Loadable> },
               { path: 'advanced', element: <Loadable><AdvancedSettingsPage /></Loadable> },
             ],
           },

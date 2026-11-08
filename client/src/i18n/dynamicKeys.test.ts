@@ -211,6 +211,8 @@ const DYNAMIC_KEY_FAMILIES: readonly string[] = [
   'surveyUploads.outputs.',
   'surveyUploads.pointCloud.advice.',
   'surveyUploads.pointCloud.phase.',
+  'surveyUploads.recording.problem.',
+  'surveyUploads.recording.scope.',
   'surveyUploads.stages.',
   'surveyUploads.status.',
   'surveyViewer.figures.outcome.',
