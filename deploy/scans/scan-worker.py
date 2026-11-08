@@ -11,8 +11,13 @@ outcome back beside the request.
 
 Layout of the hand-off directory (``SILEXGIS_SCANS_ROOT``, ``/data/scans`` in the image):
 
-    capabilities.json           rewritten by this worker at every start: which steps it can run,
-                                with which tool at which version. Absent = no worker.
+    capabilities.json           which steps the workers can run, with which tool at which version.
+                                Absent = no worker. Each worker rewrites its own entries (marked
+                                with its role as "owner") at every start and keeps the others'.
+    capabilities.lock           held while a worker rewrites capabilities.json
+    defaults/                   HDMapping's default odometry parameters, dumped by the HDMapping
+                                worker at start: hdmapping.odometry.toml as the program wrote it,
+                                hdmapping.odometry.json with the same values for the application
     jobs/<jobId>/request.json   written by the application (to a temporary name, then renamed):
                                 {"step": "...", "parameters": {...}, "inputs": {"<kind>": "<file>"},
                                  "timeoutSeconds": N}. Input files sit beside it, named by plain
@@ -46,6 +51,18 @@ The steps:
                             coordinates at all — the shift is reported in the result and is the
                             application's to keep as the scan's placement. Writes tiles.zip.
 
+and, in the HDMapping worker (SILEXGIS_SCANS_WORKER_ROLE=hdmapping), for raw scanner recordings:
+
+    hdmapping.preflight     a recording's chunks paired, every lidar header readable, and room on
+                            the volume for odometry. Writes preflight.json.
+    hdmapping.odometry      HDMapping's LiDAR-inertial odometry (step 1) over the recording, with
+                            HDMapping's defaults and the request's "values" laid over them. Writes
+                            session.zip: the session, without its cache.
+    hdmapping.export        the session exported (step 2) into one cloud and the trajectory the
+                            scanner travelled. Writes export.laz and trajectory.csv.
+    pointcloud.check        a cloud (and, given one, a trajectory) checked before anything is built
+                            on it: count, finite coordinates, bounds, time order. Writes check.json.
+
 Three things this loop deliberately does not do: it does not judge the outcome beyond the tool's
 exit code (the log is kept for the side that reads the result); it does not delete anything outside
 the job directory it is working in; and it does not retry — a job it took and never finished (the
@@ -60,10 +77,13 @@ from __future__ import annotations
 import datetime as _dt
 import hashlib
 import json
+import math
 import os
+import re
 import resource
 import shutil
 import signal
+import struct
 import subprocess
 import sys
 import time
@@ -95,6 +115,35 @@ CHUNK_POINTS = 2_000_000
 
 STEPS = ("pointcloud.estimate", "pointcloud.downsample", "py3dtiles.tile")
 LOG_TAIL_LINES = 30
+
+# Which worker this is. Two may share one hand-off directory: the tiler (every installation that
+# processes scans) and the HDMapping worker (installations that turn raw scanner recordings into
+# point clouds). Each runs only its own steps, announces only its own entries in capabilities.json,
+# and leaves the other's jobs alone — including the other's abandoned ones, which only their owner
+# may call interrupted.
+ROLE = os.environ.get("SILEXGIS_SCANS_WORKER_ROLE", "tiler")
+HDMAPPING_STEPS = ("hdmapping.preflight", "hdmapping.odometry", "hdmapping.export", "pointcloud.check")
+ROLE_STEPS = {"tiler": STEPS, "hdmapping": HDMAPPING_STEPS}
+HDMAPPING_COMMIT = os.environ.get("HDMAPPING_COMMIT", "")
+# HDMapping's two headless programs, found on PATH. Named by the environment so that the loop around
+# them can be exercised with stand-ins where HDMapping is not built.
+ODOMETRY_PROGRAM = os.environ.get("SILEXGIS_SCANS_HDM_ODOMETRY", "lidar_odometry_step_1")
+EXPORT_PROGRAM = os.environ.get("SILEXGIS_SCANS_HDM_EXPORT", "multi_view_tls_registration_step_2")
+# The free space odometry is refused without, as a multiple of the recording's size. Measured on two
+# real recordings: step 1's cache peaks at 17–20 times the raw size inside the job directory before
+# it is removed, and the session and the export add about one more each.
+ODOMETRY_DISK_FACTOR = 22
+# HDMapping's default parameters, dumped by the program itself at start and kept beside
+# capabilities.json, so the application can store a run's parameters resolved against the exact
+# version that will run them.
+DEFAULTS_DIRECTORY = "defaults"
+ODOMETRY_DEFAULTS_NAME = "hdmapping.odometry"
+# Set by publish_defaults() when the dump worked; the HDMapping steps are announced only then.
+PUBLISHED_DEFAULTS: dict | None = None
+# Lines of a tool's output that are not passed on in a result's log tail. HDMapping's export prints
+# the session's extent, which in a georeferenced session is a real position; the log on the volume
+# keeps it, the result (which the application may show to anyone who can see the upload) does not.
+WITHHELD_LINE = re.compile(r"^(\s*[XYZ] \((?:length|width|height)\)\s*:).*$")
 
 
 def now() -> str:
@@ -146,6 +195,10 @@ class ToolFailed(Exception):
     """The tool ran and exited non-zero."""
 
 
+class CheckFailed(ToolFailed):
+    """What the step was given, or what a tool made, does not pass the step's checks."""
+
+
 def tool_versions() -> dict[str, str]:
     versions: dict[str, str] = {}
     try:
@@ -160,14 +213,34 @@ def tool_versions() -> dict[str, str]:
     return versions
 
 
+def hdmapping_version(software_version: object) -> str:
+    """HDMapping's version as recorded per run: the release it reports, at the commit it was built
+    from, because between releases the command line and the parameters change under one number."""
+    version = str(software_version or "unknown")
+    return f"{version}@{HDMAPPING_COMMIT}" if HDMAPPING_COMMIT else version
+
+
 def capabilities() -> dict:
+    """This worker's own announcement. Every step entry names this worker as its owner."""
     versions = tool_versions()
     steps = []
-    if "laspy" in versions and "numpy" in versions:
-        steps.append({"id": "pointcloud.estimate", "tool": "laspy", "version": versions["laspy"]})
-        steps.append({"id": "pointcloud.downsample", "tool": "laspy", "version": versions["laspy"]})
-    if "py3dtiles" in versions:
-        steps.append({"id": "py3dtiles.tile", "tool": "py3dtiles", "version": versions["py3dtiles"]})
+    if ROLE == "tiler":
+        if "laspy" in versions and "numpy" in versions:
+            steps.append({"id": "pointcloud.estimate", "tool": "laspy", "version": versions["laspy"]})
+            steps.append({"id": "pointcloud.downsample", "tool": "laspy", "version": versions["laspy"]})
+        if "py3dtiles" in versions:
+            steps.append({"id": "py3dtiles.tile", "tool": "py3dtiles", "version": versions["py3dtiles"]})
+    elif ROLE == "hdmapping" and PUBLISHED_DEFAULTS is not None:
+        version = hdmapping_version(PUBLISHED_DEFAULTS.get("softwareVersion"))
+        steps.append({"id": "hdmapping.preflight", "tool": "scan-worker", "version": WORKER_VERSION})
+        steps.append({"id": "hdmapping.odometry", "tool": "hdmapping", "version": version,
+                      "defaults": f"{DEFAULTS_DIRECTORY}/{ODOMETRY_DEFAULTS_NAME}.json"})
+        if shutil.which(EXPORT_PROGRAM):
+            steps.append({"id": "hdmapping.export", "tool": "hdmapping", "version": version})
+        if "laspy" in versions and "numpy" in versions:
+            steps.append({"id": "pointcloud.check", "tool": "laspy", "version": versions["laspy"]})
+    for step in steps:
+        step["owner"] = ROLE
     value = {
         "worker": WORKER_VERSION,
         "writtenAt": now(),
@@ -179,10 +252,63 @@ def capabilities() -> dict:
             "defaultTimeoutSeconds": int(DEFAULT_TIMEOUT_SECONDS),
         },
     }
-    hdmapping = os.environ.get("HDMAPPING_COMMIT")
-    if hdmapping:
-        value["hdmapping"] = hdmapping
+    if HDMAPPING_COMMIT:
+        value["hdmapping"] = HDMAPPING_COMMIT
     return value
+
+
+def merge_capabilities(own: dict, earlier: object, role: str) -> dict:
+    """The announcement to write: this worker's entries, plus every entry another worker owns.
+
+    Entries without an owner come from a worker that wrote the file alone and are dropped: whoever
+    wrote them, they are this worker's to replace or nobody's. A step this worker announces is its
+    own even when another worker's entry names it too."""
+    own_ids = {step["id"] for step in own.get("steps", [])}
+    others: list = []
+    workers: dict = {}
+    if isinstance(earlier, dict):
+        for step in earlier.get("steps") or []:
+            if isinstance(step, dict) and step.get("owner") not in (None, role) and step.get("id") not in own_ids:
+                others.append(step)
+        if isinstance(earlier.get("workers"), dict):
+            workers = {name: entry for name, entry in earlier["workers"].items() if name != role}
+    workers[role] = {key: own[key] for key in ("worker", "writtenAt", "tools", "limits", "hdmapping") if key in own}
+    merged = dict(own)
+    merged["steps"] = list(own.get("steps", [])) + others
+    merged["workers"] = workers
+    return merged
+
+
+def announce() -> dict:
+    """Writes this worker's entries into capabilities.json, keeping the other workers' entries.
+
+    Two workers starting together would each read the file, add their own and write it back, and
+    the later write would drop the earlier's entries; a lock on the volume puts the two in turn."""
+    own = capabilities()
+    with (ROOT / "capabilities.lock").open("a") as lock:
+        try:
+            import fcntl
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        except ImportError:  # not on Linux: a lone worker needs no lock
+            pass
+        try:
+            earlier = json.loads((ROOT / "capabilities.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            earlier = None
+        merged = merge_capabilities(own, earlier, ROLE)
+        write_json(ROOT / "capabilities.json", merged)
+    return own
+
+
+def steps_of_other_workers() -> set[str]:
+    try:
+        announced = json.loads((ROOT / "capabilities.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    if not isinstance(announced, dict):
+        return set()
+    return {step.get("id") for step in announced.get("steps") or []
+            if isinstance(step, dict) and step.get("owner") not in (None, ROLE)}
 
 
 class Job:
@@ -246,12 +372,15 @@ class Job:
             "sha256": sha256_of(path),
         })
 
-    def run_tool(self, command: list[str], progress_from_line=None) -> None:
+    def run_tool(self, command: list[str], progress_from_line=None, env: dict | None = None) -> None:
         """Runs a command line into worker.log, watching for a withdrawal and the time limit."""
         self.log("running: " + " ".join(command))
         with self.log_path.open("ab") as log:
-            process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
-                                       cwd=self.directory, start_new_session=True)
+            try:
+                process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
+                                           cwd=self.directory, start_new_session=True, env=env)
+            except OSError as error:
+                raise ToolFailed(f"{command[0]} could not be started: {error.strerror}") from error
             try:
                 while process.poll() is None:
                     try:
@@ -304,7 +433,11 @@ class Job:
             lines = self.log_path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
             return []
-        return lines[-LOG_TAIL_LINES:]
+        return [withheld(line) for line in lines[-LOG_TAIL_LINES:]]
+
+
+def withheld(line: str) -> str:
+    return WITHHELD_LINE.sub(r"\1 [withheld]", line)
 
 
 # -- the steps ---------------------------------------------------------------------------------
@@ -642,10 +775,712 @@ def step_tile(job: Job) -> None:
     }
 
 
+# -- raw scanner recordings and HDMapping ------------------------------------------------------
+#
+# A raw MANDEYE recording reaches a job as its files, copied into the job directory under their own
+# names, and one manifest naming them: inputs {"rawRecording": "recording.json"}, where
+# recording.json is {"files": ["lidar0000.laz", "imu0000.csv", ...]}. The plain-name rule holds for
+# every one of them, so a recording is hundreds of plain files and never a path.
+#
+# HDMapping's runs are long (longer than the recording lasted) and are split into stages, each
+# marked done in stages.json as it finishes. A worker restarted between two stages resumes after the
+# last one done; a worker restarted in the middle of one answers the job "interrupted" and names the
+# stage, because a half-run odometry leaves a session that looks whole and is not.
+
+RECORDING_CHUNKED = (
+    (re.compile(r"^lidar(\d{1,6})\.laz$", re.IGNORECASE), "lidar"),
+    (re.compile(r"^imu(\d{1,6})\.csv$", re.IGNORECASE), "imu"),
+    (re.compile(r"^lidar(\d{1,6})\.sn$", re.IGNORECASE), "serial"),
+    (re.compile(r"^gnss(\d{1,6})\.gnss$", re.IGNORECASE), "gnss"),
+)
+STAGED_STEPS = ("hdmapping.odometry", "hdmapping.export")
+STAGES_FILE = "stages.json"
+
+
+def classify_recording_file(name: str) -> tuple[str, int | None] | None:
+    """What a file of a MANDEYE recording is, with its chunk number; None for a name a recording
+    does not hold. The same names the application accepts on upload."""
+    for pattern, kind in RECORDING_CHUNKED:
+        match = pattern.match(name)
+        if match:
+            return kind, int(match.group(1))
+    if name.lower().endswith(".nmea"):
+        return "nmea", None
+    if name.lower() == "calibration.json":
+        return "calibration", None
+    return None
+
+
+def pair_recording(names: list[str]) -> dict:
+    """Classifies a recording's file names and pairs its lidar chunks with its IMU logs.
+
+    Raises Refused for a name no recording holds (the request is wrong) and CheckFailed for a
+    recording the odometry cannot read (a chunk without its pair)."""
+    lidar: dict[int, str] = {}
+    imu: dict[int, str] = {}
+    seen: set[str] = set()
+    gnss = False
+    for name in names:
+        if not plain_file_name(name):
+            raise Refused("a file of the recording is not named by a plain file name")
+        kind = classify_recording_file(name)
+        if kind is None:
+            raise Refused(f"'{name[:80]}' is not a file of a MANDEYE recording")
+        if name.lower() in seen:
+            raise Refused(f"'{name[:80]}' is named twice")
+        seen.add(name.lower())
+        if kind[0] == "lidar":
+            lidar[kind[1]] = name
+        elif kind[0] == "imu":
+            imu[kind[1]] = name
+        elif kind[0] in ("gnss", "nmea"):
+            gnss = True
+    if not lidar or set(lidar) != set(imu):
+        raise CheckFailed("the recording does not pair every lidar chunk with the IMU log of the same number")
+    return {"lidar": lidar, "imu": imu, "gnss": gnss, "names": list(names)}
+
+
+def las_point_count(path: Path) -> int:
+    """The point count a LAS or LAZ file's public header declares, read with nothing but struct:
+    the header is uncompressed even inside a LAZ file."""
+    with path.open("rb") as handle:
+        head = handle.read(375)
+    if len(head) < 227 or head[:4] != b"LASF":
+        raise CheckFailed(f"{path.name} is not a LAS or LAZ file: its header does not read")
+    major, minor = head[24], head[25]
+    header_size = struct.unpack_from("<H", head, 94)[0]
+    legacy = struct.unpack_from("<I", head, 107)[0]
+    if major != 1 or header_size < 227:
+        raise CheckFailed(f"{path.name} has a LAS header this worker does not read (version {major}.{minor})")
+    if minor >= 4 and len(head) >= 255 and header_size >= 375:
+        return struct.unpack_from("<Q", head, 247)[0] or legacy
+    return legacy
+
+
+def read_recording(job: "Job") -> dict:
+    """The recording the request names: its manifest read, every file found in the job directory."""
+    manifest = job.input("rawRecording")
+    try:
+        value = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise Refused(f"the recording's manifest cannot be read: {error}") from error
+    names = value.get("files") if isinstance(value, dict) else None
+    if not isinstance(names, list) or not names or not all(isinstance(n, str) for n in names):
+        raise Refused("the recording's manifest names no files")
+    recording = pair_recording(names)
+    paths = []
+    for name in names:
+        path = job.directory / name
+        if not path.is_file():
+            raise Refused(f"the recording's file {name} is not in the job directory")
+        paths.append(path)
+    recording["paths"] = paths
+    recording["bytes"] = sum(path.stat().st_size for path in paths)
+    return recording
+
+
+def preflight_checks(job: "Job", recording: dict) -> dict:
+    """What has to hold before odometry is worth starting: every chunk paired (done when the
+    recording was read), every lidar chunk's header readable, and room on the volume for step 1's
+    cache, which it writes beside its input and which peaks at about twenty times the recording."""
+    points = 0
+    for chunk in sorted(recording["lidar"]):
+        job.check()
+        points += las_point_count(job.directory / recording["lidar"][chunk])
+    if points == 0:
+        raise CheckFailed("the recording's lidar chunks hold no points")
+    free = shutil.disk_usage(job.directory).free
+    needed = recording["bytes"] * ODOMETRY_DISK_FACTOR
+    facts = {
+        "chunks": len(recording["lidar"]),
+        "files": len(recording["names"]),
+        "rawBytes": recording["bytes"],
+        "points": points,
+        "gnss": recording["gnss"],
+        "freeBytes": free,
+        "neededBytes": needed,
+    }
+    if free < needed:
+        raise CheckFailed(f"the scans volume has {free:,} bytes free and odometry needs about {needed:,} "
+                          f"({ODOMETRY_DISK_FACTOR} times the recording) for its working files")
+    return facts
+
+
+def step_preflight(job: "Job") -> None:
+    job.tool, job.tool_version = "scan-worker", WORKER_VERSION
+    recording = read_recording(job)
+    job.progress(0.1, "reading the chunks' headers")
+    job.data = preflight_checks(job, recording)
+    out = job.directory / "preflight.json"
+    write_json(out, job.data)
+    job.produced("report", out)
+
+
+class Stages:
+    """The stages of a long step, each marked done in stages.json as it finishes, with what the
+    step has learnt so far, so a resumed job carries on with it."""
+
+    def __init__(self, job: "Job") -> None:
+        self.job = job
+        self.path = job.directory / STAGES_FILE
+        self.state = read_stages(job.directory) or {"done": [], "running": None, "data": {}}
+        job.data = dict(self.state.get("data") or {}) | job.data
+
+    def run(self, name: str, work) -> None:
+        if name in self.state["done"]:
+            return
+        self.state["running"] = name
+        self._save()
+        work()
+        self.state["done"].append(name)
+        self.state["running"] = None
+        self._save()
+
+    def _save(self) -> None:
+        self.state["data"] = self.job.data
+        write_json(self.path, self.state)
+
+
+def read_stages(directory: Path) -> dict | None:
+    try:
+        state = json.loads((directory / STAGES_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(state, dict) or not isinstance(state.get("done"), list):
+        return None
+    return state
+
+
+def finite(value):
+    """A value JSON can carry: TOML allows inf and nan, JSON does not."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: finite(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [finite(v) for v in value]
+    return value
+
+
+def toml_value(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if math.isnan(value):
+            return "nan"
+        if math.isinf(value):
+            return "inf" if value > 0 else "-inf"
+        return repr(value)
+    if isinstance(value, str):
+        # A JSON string is a TOML basic string: the same quotes and the same escapes.
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, list):
+        return "[" + ", ".join(toml_value(v) for v in value) + "]"
+    raise ValueError(f"a {type(value).__name__} has no place in HDMapping's parameters")
+
+
+def toml_key(key: str) -> str:
+    return key if re.fullmatch(r"[A-Za-z0-9_-]+", key) else json.dumps(key, ensure_ascii=False)
+
+
+def toml_text(values: dict) -> str:
+    """HDMapping's parameter file from its values: one table per section, as the program writes it."""
+    lines = ["# HDMapping parameters, written by the SilexGIS scan worker from HDMapping's own",
+             "# defaults and the run's settings."]
+    for key, value in values.items():
+        if not isinstance(value, dict):
+            lines.append(f"{toml_key(key)} = {toml_value(value)}")
+    for section, table in values.items():
+        if isinstance(table, dict):
+            lines.append("")
+            lines.append(f"[{toml_key(section)}]")
+            for key, value in table.items():
+                lines.append(f"{toml_key(key)} = {toml_value(value)}")
+    return "\n".join(lines) + "\n"
+
+
+def _same_kind(default, value) -> bool:
+    if isinstance(default, bool):
+        return isinstance(value, bool)
+    if isinstance(default, int):
+        return isinstance(value, int) and not isinstance(value, bool)
+    if isinstance(default, float):
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if isinstance(default, list):
+        return isinstance(value, list) and all(
+            _same_kind(default[0], v) if default else isinstance(v, (int, float, bool, str)) for v in value)
+    return False
+
+
+def _kind_name(default) -> str:
+    if isinstance(default, bool):
+        return "true or false"
+    if isinstance(default, int):
+        return "a whole number"
+    if isinstance(default, float):
+        return "a number"
+    if isinstance(default, list):
+        return "a list"
+    return "unchanged"
+
+
+def resolve_parameters(defaults: dict, overrides) -> tuple[dict, list[str]]:
+    """HDMapping's defaults with a run's settings laid over them, and the keys the settings changed.
+
+    Every key set must be one the defaults hold, with a value of the default's kind; anything else
+    is refused, naming the key, because HDMapping reads an unknown key as nothing and a misspelt
+    setting would otherwise run silently with its default. [version_info] is always the program's
+    own, whatever the settings say: the values were resolved for some version, and the one that
+    runs is the one that counts. Text values (the version, and directories the program writes to)
+    cannot be changed at all: a directory outside the job's own is not for a request to name."""
+    resolved = json.loads(json.dumps(defaults))  # a deep copy; the dump is plain data
+    changed: list[str] = []
+    if overrides is None:
+        return resolved, changed
+    if not isinstance(overrides, dict):
+        raise Refused("values must be an object of HDMapping parameter sections")
+    for section, table in overrides.items():
+        if section == "version_info":
+            continue
+        if not isinstance(defaults.get(section), dict) or not isinstance(table, dict):
+            raise Refused(f"[{section}] is not a section of HDMapping's odometry parameters")
+        for key, value in table.items():
+            if key not in defaults[section]:
+                raise Refused(f"{section}.{key} is not one of HDMapping's odometry parameters")
+            default = defaults[section][key]
+            if isinstance(default, str):
+                if value != default:
+                    raise Refused(f"{section}.{key} cannot be set")
+                continue
+            if not _same_kind(default, value):
+                raise Refused(f"{section}.{key} must be {_kind_name(default)}")
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and not math.isfinite(float(value)):
+                raise Refused(f"{section}.{key} must be a finite number")
+            if isinstance(default, float):
+                value = float(value)
+            elif isinstance(default, list) and default and isinstance(default[0], float):
+                value = [float(v) for v in value]
+            if value != default:
+                changed.append(f"{section}.{key}")
+            resolved[section][key] = value
+    return resolved, changed
+
+
+def read_defaults(path: Path) -> dict:
+    import tomllib
+    text = path.read_text(encoding="utf-8")
+    try:
+        values = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as error:
+        raise ToolFailed(f"{ODOMETRY_PROGRAM} wrote default parameters that do not read: {error}") from error
+    version = (values.get("version_info") or {}).get("software_version", "")
+    return {"toml": text, "values": values, "softwareVersion": str(version)}
+
+
+def publish_defaults() -> bool:
+    """Dumps HDMapping's default parameters beside capabilities.json, as the program's own TOML and
+    as JSON for the application. False (and the HDMapping steps not announced) when the program
+    cannot be run: a worker that cannot dump its defaults cannot run odometry either."""
+    global PUBLISHED_DEFAULTS
+    folder = ROOT / DEFAULTS_DIRECTORY
+    folder.mkdir(parents=True, exist_ok=True)
+    dumped = folder / f"{ODOMETRY_DEFAULTS_NAME}.dump.toml"
+    dumped.unlink(missing_ok=True)
+    try:
+        run = subprocess.run([ODOMETRY_PROGRAM, "--dump-default-params", str(dumped)],
+                             capture_output=True, timeout=120, cwd=folder, env=tool_env(folder))
+    except (OSError, subprocess.TimeoutExpired) as error:
+        say(f"HDMapping's odometry cannot be run, so no HDMapping step is offered: {error}")
+        return False
+    if run.returncode != 0 or not dumped.is_file():
+        say(f"{ODOMETRY_PROGRAM} --dump-default-params exited {run.returncode}; no HDMapping step is offered")
+        return False
+    try:
+        defaults = read_defaults(dumped)
+    except ToolFailed as error:
+        say(f"{error}; no HDMapping step is offered")
+        return False
+    os.replace(dumped, folder / f"{ODOMETRY_DEFAULTS_NAME}.toml")
+    write_json(folder / f"{ODOMETRY_DEFAULTS_NAME}.json", {
+        "step": "hdmapping.odometry",
+        "tool": "hdmapping",
+        "version": hdmapping_version(defaults["softwareVersion"]),
+        "softwareVersion": defaults["softwareVersion"],
+        "commit": HDMAPPING_COMMIT,
+        "writtenAt": now(),
+        "values": finite(defaults["values"]),
+        "toml": defaults["toml"],
+    })
+    PUBLISHED_DEFAULTS = defaults
+    return True
+
+
+def tool_env(directory: Path) -> dict:
+    """The environment HDMapping runs in: a home and a temporary directory inside the job's own
+    folder, so whatever it writes there lands on the volume and not in the small /tmp."""
+    scratch = directory / "home"
+    scratch.mkdir(exist_ok=True)
+    env = dict(os.environ)
+    env["HOME"] = str(scratch)
+    env["TMPDIR"] = str(scratch)
+    return env
+
+
+ODOMETRY_POSES = re.compile(r"finished optimizing .* - (\d+) / (\d+) at iteration")
+ODOMETRY_COUNTED = re.compile(r"(?:running iterations:|processing worker_data) (\d+)/(\d+)")
+
+
+def odometry_progress(line: str) -> tuple[float, str] | None:
+    """The odometry stage's own progress (0 to 1) from the last line step 1 printed, or None for a
+    line that says nothing about it. The poses it optimises one by one are nearly all of its time."""
+    match = ODOMETRY_POSES.search(line) or ODOMETRY_COUNTED.search(line)
+    if match:
+        done, total = int(match.group(1)), int(match.group(2))
+        if total > 0:
+            return 0.05 + 0.85 * min(done, total) / total, f"odometry: {done:,} of {total:,} poses"
+    if line.startswith("Loading point clouds") or line.startswith("Loading data"):
+        return 0.02, "loading the recording"
+    if "Odometry finished" in line:
+        return 0.92, "writing the session"
+    if line.startswith("Status: completed"):
+        return 0.98, "odometry finished"
+    return None
+
+
+def export_progress(line: str) -> tuple[float, str] | None:
+    if "contains" in line and "points" in line:
+        return 0.3, "reading the session's scans"
+    if line.startswith("updated:"):
+        return 0.6, "writing the cloud"
+    if line.startswith("successfully written"):
+        return 0.9, "writing the trajectory"
+    return None
+
+
+def odometry_summary(log_text: str) -> dict:
+    """What step 1 reports about its run: elapsed time, the trajectory's length, the cache's peak,
+    the memory it used, and whether it said it completed. Figures only, never a position."""
+    summary: dict = {"completed": "Status: completed" in log_text}
+    for key, pattern in (
+        ("elapsedSeconds", r"finished computation, elapsed time: ([0-9.]+)s"),
+        ("trajectoryMetres", r"total_length_of_calculated_trajectory: ([0-9.]+)"),
+        ("cachePeakMiB", r"Cache: removed; peak ([0-9.]+) MiB"),
+        ("residentPeakMiB", r"Application resident RAM peak sampled: ([0-9.]+) MiB"),
+    ):
+        found = re.findall(pattern, log_text)
+        if found:
+            summary[key] = float(found[-1])
+    return summary
+
+
+def read_log_end(job: "Job", size: int = 256 * 1024) -> str:
+    try:
+        with job.log_path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            handle.seek(max(0, handle.tell() - size))
+            return handle.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
+
+
+def session_facts(session_file: Path) -> dict:
+    """The session's scan count and the odometry version that wrote it. Its offsets, which can be a
+    real position, are not read."""
+    try:
+        session = json.loads(session_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise CheckFailed(f"the session file does not read: {error}") from error
+    names = session.get("laz_file_names") if isinstance(session, dict) else None
+    settings = session.get("Session Settings") if isinstance(session, dict) else None
+    return {
+        "scans": len(names) if isinstance(names, list) else 0,
+        "softwareVersion": str((settings or {}).get("lidar_odometry_version", "")),
+    }
+
+
+def step_odometry(job: "Job") -> None:
+    job.tool = "hdmapping"
+    recording = read_recording(job)
+    stages = Stages(job)
+    links = job.directory / "in"
+    session = job.directory / "lio"
+    params = job.directory / "params.toml"
+
+    def preflight() -> None:
+        job.progress(0.01, "checking the recording")
+        job.data["preflight"] = preflight_checks(job, recording)
+
+    def parameters() -> None:
+        dumped = job.directory / "defaults.toml"
+        dumped.unlink(missing_ok=True)
+        job.run_tool([ODOMETRY_PROGRAM, "--dump-default-params", str(dumped)], env=tool_env(job.directory))
+        if not dumped.is_file():
+            raise ToolFailed(f"{ODOMETRY_PROGRAM} wrote no default parameters")
+        defaults = read_defaults(dumped)
+        values, changed = resolve_parameters(defaults["values"], job.parameter("values", None))
+        write_whole(params, toml_text(values))
+        job.data["parameters"] = {
+            "softwareVersion": defaults["softwareVersion"],
+            "sha256": sha256_of(params),
+            "changed": changed,
+        }
+
+    def link() -> None:
+        # Step 1 writes a cache folder (and a preview folder) inside the folder it reads from, so
+        # it is given a folder of its own holding links to the recording's files, which stay
+        # untouched beside them. The links are relative, so the job directory can be read from
+        # any mount point.
+        if links.exists():
+            shutil.rmtree(links)
+        links.mkdir()
+        for path in recording["paths"]:
+            os.symlink(os.path.join("..", path.name), links / path.name)
+
+    def odometry() -> None:
+        if session.exists():
+            shutil.rmtree(session)
+
+        def progress(line: str) -> None:
+            found = odometry_progress(line)
+            if found:
+                job.progress(0.02 + 0.86 * found[0], found[1])
+
+        job.progress(0.02, "starting odometry")
+        job.run_tool([ODOMETRY_PROGRAM, str(links), str(params), str(session)], progress,
+                     env=tool_env(job.directory))
+        if not (session / "session.mjs").is_file():
+            raise ToolFailed(f"{ODOMETRY_PROGRAM} exited 0 but wrote no session")
+        job.data["odometry"] = odometry_summary(read_log_end(job)) | session_facts(session / "session.mjs")
+
+    def pack() -> None:
+        job.progress(0.9, "packing the session")
+        archive = job.directory / "session.zip"
+        pack_folder(job, session, archive, skip=("cache", "preview"))
+        shutil.rmtree(session)
+        if links.exists():
+            shutil.rmtree(links)
+
+    stages.run("preflight", preflight)
+    stages.run("parameters", parameters)
+    stages.run("links", link)
+    stages.run("odometry", odometry)
+    stages.run("session", pack)
+    job.tool_version = hdmapping_version(job.data.get("parameters", {}).get("softwareVersion"))
+    job.produced("hdmSession", job.directory / "session.zip")
+
+
+def pack_folder(job: "Job", folder: Path, archive: Path, skip: tuple[str, ...] = ()) -> None:
+    """Packs a folder into a zip, its top-level folders named in skip left out. Point files are
+    stored as they are (they are compressed already); everything else is deflated."""
+    part = archive.with_name(archive.name + ".part")
+    with zipfile.ZipFile(part, "w") as pack:
+        for path in sorted(folder.rglob("*")):
+            relative = path.relative_to(folder)
+            if relative.parts[0] in skip or not path.is_file() or path.is_symlink():
+                continue
+            job.check()
+            stored = path.suffix.lower() in (".laz", ".zip")
+            pack.write(path, relative.as_posix(),
+                       compress_type=zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED)
+    os.replace(part, archive)
+
+
+def unpack_session(job: "Job", archive: Path, folder: Path) -> None:
+    """Unpacks a session archive, refusing any member that would land outside the folder."""
+    if folder.exists():
+        shutil.rmtree(folder)
+    folder.mkdir()
+    try:
+        with zipfile.ZipFile(archive) as pack:
+            for member in pack.infolist():
+                job.check()
+                name = member.filename
+                parts = name.replace("\\", "/").split("/")
+                if name.startswith(("/", "\\")) or ".." in parts or ":" in name or "\0" in name:
+                    raise CheckFailed("the session archive names a file outside itself")
+                if member.is_dir():
+                    continue
+                target = folder.joinpath(*[p for p in parts if p])
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with pack.open(member) as source, target.open("wb") as out:
+                    shutil.copyfileobj(source, out, 1 << 20)
+    except zipfile.BadZipFile as error:
+        raise CheckFailed(f"the session archive does not read: {error}") from error
+
+
+def step_export(job: "Job") -> None:
+    job.tool = "hdmapping"
+    archive = job.input("hdmSession")
+    stages = Stages(job)
+    folder = job.directory / "session"
+    out = job.directory / "export"
+    cloud = job.directory / "export.laz"
+    trajectory = job.directory / "trajectory.csv"
+
+    def unpack() -> None:
+        job.progress(0.02, "unpacking the session")
+        unpack_session(job, archive, folder)
+        if not (folder / "session.mjs").is_file():
+            raise CheckFailed("the session archive holds no session.mjs")
+        job.data["session"] = session_facts(folder / "session.mjs")
+
+    def export() -> None:
+        if out.exists():
+            shutil.rmtree(out)
+
+        def progress(line: str) -> None:
+            found = export_progress(line)
+            if found:
+                job.progress(0.05 + 0.9 * found[0], found[1])
+
+        job.run_tool([EXPORT_PROGRAM, str(folder / "session.mjs"), "--export", str(out)], progress,
+                     env=tool_env(job.directory))
+        laz, csv = out / "all_step_2.laz", out / "trajectories.csv"
+        if not laz.is_file() or not csv.is_file():
+            raise ToolFailed(f"{EXPORT_PROGRAM} exited 0 but did not write both the cloud and the trajectory")
+        os.replace(laz, cloud)
+        os.replace(csv, trajectory)
+        log = read_log_end(job, 64 * 1024)
+        written = re.findall(r"successfully written (\d+) points", log)
+        job.data["export"] = {
+            "pointsWritten": int(written[-1]) if written else None,
+            # HDMapping leaves a pose's Unix time at zero when the recording did not carry one.
+            "missingTimestamps": "timestamps are missing" in log,
+        }
+        shutil.rmtree(out)
+        shutil.rmtree(folder)
+
+    stages.run("unpack", unpack)
+    stages.run("export", export)
+    job.tool_version = hdmapping_version(job.data.get("session", {}).get("softwareVersion"))
+    job.produced("pointCloudLaz", cloud)
+    job.produced("trajectory", trajectory)
+
+
+def check_trajectory(path: Path, job: "Job") -> tuple[dict, list[str]]:
+    """HDMapping's exported trajectory: nine numbers a line (time, a flag, position, quaternion),
+    every one finite, the times (where present) never going back."""
+    rows = 0
+    missing = 0
+    backwards = 0
+    bad = 0
+    length = 0.0
+    last_time = None
+    last_xyz = None
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            fields = re.split(r"[,\s]+", line)
+            try:
+                numbers = [float(f) for f in fields]
+            except ValueError:
+                bad += 1
+                continue
+            if len(numbers) != 9 or not all(math.isfinite(n) for n in numbers):
+                bad += 1
+                continue
+            rows += 1
+            if rows % 100_000 == 0:
+                job.check()
+            time_stamp, xyz = numbers[0], numbers[2:5]
+            if time_stamp == 0:
+                missing += 1
+            else:
+                if last_time is not None and time_stamp < last_time:
+                    backwards += 1
+                last_time = time_stamp
+            if last_xyz is not None:
+                length += math.dist(last_xyz, xyz)
+            last_xyz = xyz
+    problems = []
+    if rows == 0:
+        problems.append("the trajectory holds no poses")
+    if bad:
+        problems.append(f"{bad:,} trajectory lines are not nine finite numbers")
+    if backwards:
+        problems.append(f"the trajectory's time goes back {backwards:,} times")
+    return {"rows": rows, "missingTimestamps": missing, "timeGoesBack": backwards,
+            "lengthMetres": round(length, 2)}, problems
+
+
+def step_check(job: "Job") -> None:
+    """A cloud checked before anything is built on it: the points its header declares are there,
+    every coordinate is a finite number inside the header's bounds, and the extent is not empty;
+    with a trajectory, that too reads and runs forward in time. The report carries figures and the
+    extent's size, never a coordinate."""
+    import laspy
+    import numpy as np
+
+    job.tool, job.tool_version = "laspy", tool_versions().get("laspy", "")
+    source = job.input("pointCloudLaz")
+    inputs = job.request.get("inputs") or {}
+    problems: list[str] = []
+    with laspy.open(source) as reader:
+        header = reader.header
+        declared = int(header.point_count)
+        scales = np.asarray(header.scales, dtype=np.float64)
+        offsets = np.asarray(header.offsets, dtype=np.float64)
+        if not (np.all(np.isfinite(scales)) and np.all(np.isfinite(offsets)) and np.all(scales > 0)):
+            problems.append("the header's scales or offsets are not finite positive numbers")
+        header_min = np.asarray(header.mins, dtype=np.float64)
+        header_max = np.asarray(header.maxs, dtype=np.float64)
+        mins = np.full(3, np.inf)
+        maxs = np.full(3, -np.inf)
+        counted = 0
+        non_finite = 0
+        for chunk in reader.chunk_iterator(CHUNK_POINTS):
+            job.check()
+            xyz = np.column_stack((np.asarray(chunk.x), np.asarray(chunk.y), np.asarray(chunk.z)))
+            good = np.all(np.isfinite(xyz), axis=1)
+            non_finite += int((~good).sum())
+            if good.any():
+                mins = np.minimum(mins, xyz[good].min(axis=0))
+                maxs = np.maximum(maxs, xyz[good].max(axis=0))
+            counted += len(chunk)
+            job.progress(0.9 * counted / max(1, declared), f"checked {counted:,} of {declared:,} points")
+    if counted == 0:
+        problems.append("the cloud holds no points")
+    if counted != declared:
+        problems.append(f"the header declares {declared:,} points and the file holds {counted:,}")
+    if non_finite:
+        problems.append(f"{non_finite:,} points have a coordinate that is not a finite number")
+    size = [float(maxs[i] - mins[i]) if counted else 0.0 for i in range(3)]
+    bounds_hold = bool(counted == 0 or (np.all(mins >= header_min - scales) and np.all(maxs <= header_max + scales)))
+    if not bounds_hold:
+        problems.append("the header's bounds do not contain the cloud's points")
+    if counted and sum(1 for s in size if s > 0) < 2:
+        problems.append("the cloud's extent is empty on more than one axis")
+    report = {
+        "pointCount": counted,
+        "declaredPoints": declared,
+        "extentMetres": [round(s, 3) for s in size],
+        "nonFinitePoints": non_finite,
+        "headerBoundsHold": bounds_hold,
+    }
+    if "trajectory" in inputs:
+        report["trajectory"], trajectory_problems = check_trajectory(job.input("trajectory"), job)
+        problems += trajectory_problems
+    report["problems"] = problems
+    out = job.directory / "check.json"
+    write_json(out, report)
+    job.produced("report", out)
+    job.data = report
+    if problems:
+        raise CheckFailed("the cloud failed its check: " + "; ".join(problems))
+
+
 RUNNERS = {
     "pointcloud.estimate": step_estimate,
     "pointcloud.downsample": step_downsample,
     "py3dtiles.tile": step_tile,
+    "hdmapping.preflight": step_preflight,
+    "hdmapping.odometry": step_odometry,
+    "hdmapping.export": step_export,
+    "pointcloud.check": step_check,
 }
 
 
@@ -672,9 +1507,22 @@ def finish(job: Job, status: str, reason: str = "") -> None:
     say(f"{job.directory.name}: {status}" + (f" ({reason})" if reason else ""))
 
 
-def run_job(directory: Path) -> None:
+def claim(directory: Path, stamp: str) -> bool:
+    """Marks the job taken, unless another worker took it first: the marker is created only if it
+    does not exist yet, which the filesystem decides once for everybody."""
+    try:
+        handle = os.open(directory / "started", os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError:
+        return False
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        out.write(stamp + "\n")
+    return True
+
+
+def run_job(directory: Path, resume: bool = False) -> None:
     job = Job(directory)
-    (directory / "started").write_text(job.started_at + "\n", encoding="utf-8")
+    if not resume and not claim(directory, job.started_at):
+        return
     try:
         try:
             job.request = json.loads((directory / "request.json").read_text(encoding="utf-8"))
@@ -683,7 +1531,7 @@ def run_job(directory: Path) -> None:
         if not isinstance(job.request, dict):
             raise Refused("request.json is not an object")
         step = job.request.get("step")
-        if step not in RUNNERS:
+        if step not in RUNNERS or step not in ROLE_STEPS.get(ROLE, ()):
             raise Refused(f"step '{step}' is not one this worker runs")
         timeout = job.request.get("timeoutSeconds")
         if timeout is not None:
@@ -699,8 +1547,8 @@ def run_job(directory: Path) -> None:
             if not plain_file_name(name):
                 raise Refused(f"input {kind} is not a plain file name")
         job.check()
-        job.progress(0.0, "starting")
-        job.log(f"step {step} in {directory.name}")
+        job.progress(0.0, "resuming" if resume else "starting")
+        job.log(f"step {step} in {directory.name}" + (", resumed after its last finished stage" if resume else ""))
         RUNNERS[step](job)
         job.progress(1.0, "finished")
         finish(job, "ok")
@@ -731,17 +1579,43 @@ def pending_jobs(jobs: Path) -> list[Path]:
     return found
 
 
+def requested_step(directory: Path) -> object:
+    try:
+        request = json.loads((directory / "request.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return request.get("step") if isinstance(request, dict) else None
+
+
 def sweep(jobs: Path) -> int:
-    """Answers every waiting job once. Returns how many it took."""
+    """Answers every waiting job once. Returns how many it took.
+
+    A job whose step another worker announces is that worker's, waiting or abandoned, and is left
+    alone; everything else (this worker's steps, and steps nobody runs, which are refused) is
+    answered here."""
     taken = 0
+    theirs = steps_of_other_workers() - set(ROLE_STEPS.get(ROLE, ()))
     for directory in pending_jobs(jobs):
+        step = requested_step(directory)
+        if step in theirs:
+            continue
         if (directory / "cancel").exists():
             job = Job(directory)
             finish(job, "cancelled", "the job was called off before this worker ran it")
             continue
         if (directory / "started").exists():
+            stages = read_stages(directory) if step in STAGED_STEPS else None
+            if stages and stages.get("done") and stages.get("running") is None:
+                run_job(directory, resume=True)
+                taken += 1
+                continue
             job = Job(directory)
-            finish(job, "interrupted", "the worker stopped while this job was running; its outputs are unfinished")
+            if stages and stages.get("running"):
+                job.data = {"stagesDone": stages.get("done"), "interruptedIn": stages.get("running")}
+                finish(job, "interrupted", f"the worker stopped during the {stages.get('running')} stage; "
+                       "its outputs are unfinished")
+            else:
+                finish(job, "interrupted", "the worker stopped while this job was running; its outputs are unfinished")
             continue
         run_job(directory)
         taken += 1
@@ -757,10 +1631,15 @@ def serve(once: bool) -> int:
         if not value.isdigit() or int(value) < 1:
             say(f"{name} must be a whole number above zero, not '{value}'")
             return 1
+    if ROLE not in ROLE_STEPS:
+        say(f"SILEXGIS_SCANS_WORKER_ROLE must be one of {', '.join(ROLE_STEPS)}, not '{ROLE}'")
+        return 1
     jobs = ROOT / "jobs"
     try:
         jobs.mkdir(parents=True, exist_ok=True)
-        write_json(ROOT / "capabilities.json", capabilities())
+        if ROLE == "hdmapping":
+            publish_defaults()
+        announced = announce()
     except OSError as error:
         say(f"cannot write {ROOT} — the scans volume must be mounted there and owned by uid {os.getuid()}: {error}")
         return 1
@@ -772,8 +1651,8 @@ def serve(once: bool) -> int:
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    say(f"scan worker {WORKER_VERSION} watching {jobs} every {POLL_SECONDS}s; steps: "
-        + ", ".join(s["id"] for s in capabilities()["steps"]))
+    say(f"scan worker {WORKER_VERSION} ({ROLE}) watching {jobs} every {POLL_SECONDS}s; steps: "
+        + (", ".join(s["id"] for s in announced["steps"]) or "none"))
     while running:
         sweep(jobs)
         if once:

@@ -2,7 +2,7 @@
 #
 # The point-cloud worker image, in two targets:
 #
-#   tiler      (what docker-compose.scans.yml builds) — Python with py3dtiles, laspy and numpy, and
+#   tiler      (the overlay's scans-worker service) — Python with py3dtiles, laspy and numpy, and
 #              the worker loop. Tiles a LAZ/LAS into 3D Tiles, estimates and makes downsampled
 #              display copies. Small, and enough for every installation that uploads finished
 #              clouds. PDAL is not used: it is not packaged for Ubuntu 24.04, and laspy + numpy do
@@ -12,6 +12,9 @@
 #              scanner recordings on the server. Its build compiles HDMapping and takes most of an
 #              hour; `docker build --target tiler` never touches it. The commit is pinned because
 #              HDMapping's command line is young and changes often, and it is recorded on every run.
+#              The overlay's scans-hdmapping service (behind the "hdmapping" profile) runs it as a
+#              second worker that takes only the HDMapping steps and the export check; the tiler
+#              keeps tiling.
 #
 # Both run as uid 1654, the application's own runtime user, because both write the volume the
 # application hands jobs over on.
@@ -100,5 +103,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
       libproj25 liblz4-1 libzstd1 libgl1 libglu1-mesa \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/ /usr/local/bin/
-ENV HDMAPPING_COMMIT=${HDMAPPING_COMMIT}
+# The same loop, taking the HDMapping steps only: it shares the hand-off directory with the tiler,
+# and each answers its own steps' jobs and announces its own entries.
+ENV HDMAPPING_COMMIT=${HDMAPPING_COMMIT} \
+    SILEXGIS_SCANS_WORKER_ROLE=hdmapping
 USER 1654:1654

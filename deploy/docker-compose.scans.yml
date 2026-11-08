@@ -20,6 +20,17 @@
 #   SILEXGIS_SCANS_WORKER_TIMEOUT_SECONDS=14400   # the most one job may run when the request
 #                                                 # does not say (the application's own limit wins)
 #
+# Raw scanner recordings (MANDEYE folders) need a second worker that runs HDMapping. It is behind a
+# profile, because its image compiles HDMapping and takes most of an hour to build:
+#   COMPOSE_PROFILES=hdmapping                # in .env, or `--profile hdmapping` on every command
+#   SILEXGIS_SCANS_HDM_MEMORY=16g             # its limit: odometry peaked at 11.9 GB on a 15-minute
+#                                             # two-sensor recording, 5.7 GB on a 6-minute one
+#   SILEXGIS_SCANS_HDM_CPUS=8                 # processors; odometry runs about 1.4 times as long
+#                                             # as the recording on 12
+# Odometry also writes a cache of about twenty times the recording into the scans volume while it
+# runs; the worker refuses a recording the volume has no room for. Without this worker a recording
+# is still archived and inspected, and its run ends saying it was not processed.
+#
 # The worker publishes no port and answers nothing: it watches a directory on the scans volume
 # that the application writes jobs into, and writes its answer back beside each request. It is
 # given no database credentials, no network at all (not even to the application), a read-only
@@ -95,4 +106,38 @@ services:
     tmpfs:
       # The tiler's worker processes talk over sockets it creates under /tmp, and the filesystem is
       # otherwise read-only; every job's own files go to its directory on the volume.
+      - /tmp:size=256m
+
+  scans-hdmapping:
+    # Started only with the "hdmapping" profile (see the note at the top).
+    profiles: ["hdmapping"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    build:
+      context: ./scans
+      target: hdmapping
+    restart: unless-stopped
+    # Isolated exactly as the tiler is: no network, the scans volume and nothing else writable.
+    network_mode: none
+    volumes:
+      - silexgis-scans:/data/scans
+    environment:
+      SILEXGIS_SCANS_ROOT: /data/scans
+      SILEXGIS_SCANS_WORKER_ROLE: hdmapping
+      SILEXGIS_SCANS_POLL_SECONDS: ${SILEXGIS_SCANS_WORKER_POLL_SECONDS:-2}
+      SILEXGIS_SCANS_JOB_TIMEOUT_SECONDS: ${SILEXGIS_SCANS_WORKER_TIMEOUT_SECONDS:-14400}
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${SILEXGIS_SCANS_HDM_MEMORY:-16g}
+    cpus: ${SILEXGIS_SCANS_HDM_CPUS:-8}
+    pids_limit: 256
+    tmpfs:
+      # HDMapping is given a home and a temporary directory inside each job's folder on the volume;
+      # this is only for anything that insists on /tmp.
       - /tmp:size=256m
