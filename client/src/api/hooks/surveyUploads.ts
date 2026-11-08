@@ -59,6 +59,23 @@ export const POINT_CLOUD_STAGE_ORDER: readonly SurveyUploadStage[] = [
   'store',
 ];
 
+/**
+ * The stages a scanner's raw recording goes through: the folder is archived and read (inspect),
+ * HDMapping's odometry turns it into a session, the session is exported as one cloud and the
+ * cloud checked, and from there it is a point cloud's run like any other. A server without an
+ * HDMapping worker ends at odometry.
+ */
+export const RECORDING_STAGE_ORDER: readonly SurveyUploadStage[] = [
+  'archive',
+  'inspect',
+  'odometry',
+  'export',
+  'check',
+  'downsample',
+  'tile',
+  'store',
+];
+
 /** The file extensions a point-cloud upload is made of; the server accepts exactly one such file. */
 export const POINT_CLOUD_EXTENSIONS = ['.laz', '.las'] as const;
 
@@ -81,7 +98,8 @@ export function isPointCloudFileName(name: string): boolean {
  * Whether an upload is a point cloud's. The single upload's answer does not name its source, so
  * it is told by its facts once the header has been read, and before that by the one archive file
  * it was declared with — a cloud is always exactly one `.laz` or `.las` file declared as the
- * archive, and no survey archive is ever named so.
+ * archive, and no survey archive is ever named so. A raw recording's lidar chunks are `.laz`
+ * files declared as the archive too, so a recording is a point cloud by the same test.
  */
 export function surveyUploadIsPointCloud(
   upload: Pick<SurveyUpload, 'pointCloud'> & { files: readonly Pick<SurveyUploadFile, 'name' | 'role'>[] },
@@ -182,6 +200,8 @@ export interface StageInputs {
   compile?: boolean;
   /** Whether the upload is a point cloud, whose run has stages of its own. Unknown is a survey archive. */
   pointCloud?: boolean;
+  /** Whether the point cloud is a raw recording, whose run makes the cloud first. */
+  recording?: boolean;
 }
 
 /**
@@ -194,12 +214,17 @@ export interface StageInputs {
  *   showing compile, store and read as done would claim work that never happened.
  * - Queued, receiving and abandoned: nothing has started, so everything waits.
  * - A run that was not asked to compile has no scaffold or compile stage, whatever else is true.
- * - A point cloud's run walks its own list of stages, and nothing in it is a compile.
+ * - A point cloud's run walks its own list of stages, and nothing in it is a compile; a raw
+ *   recording's walks a longer one, which makes the cloud before it is a point cloud's run.
  */
 export function surveyUploadStageStates(input: StageInputs): StageProgress[] {
-  const order = input.pointCloud ? POINT_CLOUD_STAGE_ORDER : SURVEY_UPLOAD_STAGE_ORDER;
+  const order = input.recording
+    ? RECORDING_STAGE_ORDER
+    : input.pointCloud
+      ? POINT_CLOUD_STAGE_ORDER
+      : SURVEY_UPLOAD_STAGE_ORDER;
   const index = input.stage === null ? -1 : order.indexOf(input.stage);
-  const notCompiling = !input.pointCloud && input.compile === false;
+  const notCompiling = !input.pointCloud && !input.recording && input.compile === false;
 
   return order.map((stage, i) => {
     if (notCompiling && (stage === 'scaffold' || stage === 'compile')) {

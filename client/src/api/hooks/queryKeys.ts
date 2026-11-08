@@ -358,6 +358,11 @@ export const queryKeys = {
   eventDefaults: ['events', 'defaults'] as const,
   eventInvitations: (id: string) => ['events', 'invitations', id] as const,
   accessKeys: ['access-keys'] as const,
+  // Every processing-profile key starts with this one, so a change reaches every step's list.
+  processingProfilesAll: ['scan-profiles'] as const,
+  processingProfiles: (stepId: string) => ['scan-profiles', 'list', stepId] as const,
+  processingProfileChoices: (stepId: string) => ['scan-profiles', 'remembered', stepId] as const,
+  scanStepSchema: (stepId: string) => ['scan-step-schemas', stepId] as const,
   // Every survey-upload key starts with this one, so a rerun or a finished run that invalidates it
   // reaches the listings, the per-cave groupings and each upload's own status together.
   surveyUploads: ['survey-uploads'] as const,

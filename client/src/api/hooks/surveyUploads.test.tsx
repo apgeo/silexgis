@@ -51,6 +51,7 @@ function cloud(over: Partial<SurveyUploadPointCloud> = {}): SurveyUploadPointClo
     displayEveryNth: null,
     displayPointCount: null,
     originShift: null,
+    recording: null,
     estimate: {
       full: { voxelCm: null, points: 12_400_000, estimatedTileBytes: 900_000_000, estimatedSeconds: 400 },
       voxels: [
@@ -82,6 +83,22 @@ describe('point-cloud uploads', () => {
     ]);
     expect(statesOf({ status: 'failed', stage: 'inspect', pointCloud: true })).toEqual([
       'done', 'failed', 'pending', 'pending', 'pending',
+    ]);
+  });
+
+  it('walks a raw recording’s longer list, which makes the cloud before it is a cloud’s run', () => {
+    expect(
+      surveyUploadStageStates({ status: 'queued', stage: null, pointCloud: true, recording: true }).map((s) => s.stage),
+    ).toEqual(['archive', 'inspect', 'odometry', 'export', 'check', 'downsample', 'tile', 'store']);
+    // No HDMapping worker: archived and read, the odometry stage reported and the run ended there.
+    expect(statesOf({ status: 'succeeded', stage: 'odometry', pointCloud: true, recording: true })).toEqual([
+      'done', 'done', 'done', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped',
+    ]);
+    expect(statesOf({ status: 'running', stage: 'export', compile: false, pointCloud: true, recording: true })).toEqual([
+      'done', 'done', 'done', 'active', 'pending', 'pending', 'pending', 'pending',
+    ]);
+    expect(statesOf({ status: 'failed', stage: 'check', pointCloud: true, recording: true })).toEqual([
+      'done', 'done', 'done', 'done', 'failed', 'pending', 'pending', 'pending',
     ]);
   });
 

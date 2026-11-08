@@ -8,6 +8,7 @@ const BY_CODE: Record<string, string> = {
   'georeferenced_map.format_unsupported': 'geodata.upload.errors.formatUnsupported',
   'geofile.file_empty': 'geodata.upload.errors.empty',
   'georeferenced_map.size_invalid': 'geodata.upload.errors.sizeInvalid',
+  'geofile.file_too_large': 'geodata.upload.errors.tooLarge',
   'geofile.file_name_too_long': 'geodata.upload.errors.nameTooLong',
   'georeferenced_map.file_name_too_long': 'geodata.upload.errors.nameTooLong',
   'geofile.unreadable': 'geodata.upload.errors.unreadable',
