@@ -805,3 +805,71 @@ export async function fetchCaveMeshesInView(
 ): Promise<CaveMeshesInView> {
   return unwrap(api.GET('/api/v1/map/cave-meshes', { params: { query: { bbox, maxCaves, ...filter } } }));
 }
+
+/** The placed point clouds of the caves in a view, and how many caves there were in all. */
+export type CaveScansInView = components['schemas']['CaveScansInViewDto'];
+/** The one scan a cave is drawn by, with its placement and what a scene needs to budget it. */
+export type CaveScanInView = components['schemas']['CaveScanInViewDto'];
+
+/**
+ * Imperative fetch used by the 3D scene's scans-in-view loader (not a hook).
+ *
+ * The same contract as the wall meshes: one scan per cave, chosen by the server, nearest the
+ * middle of the box first, and only placed scans of caves this caller may both read and place
+ * exactly — a cave left out for either reason is in neither the items nor the total. The
+ * placement is the only thing about a scan that says where its cave is, which is why the listing
+ * sits behind the exact-location rule while the scan's own card and local viewer do not.
+ */
+export async function fetchCaveScansInView(
+  bbox: string,
+  maxCaves?: number,
+  filter: MapFilterParams = {},
+): Promise<CaveScansInView> {
+  return unwrap(api.GET('/api/v1/map/cave-scans', { params: { query: { bbox, maxCaves, ...filter } } }));
+}
+
+/** Whether a model is a point cloud: the one kind that is tiled, viewed locally and placed by a bearing. */
+export function isPointCloudModel(model: { format: SurveyModelInfo['format'] }): boolean {
+  return model.format === 'laz' || model.format === 'las';
+}
+
+export type SurveyModelPlacementRequest = components['schemas']['SurveyModelPlacementRequest'];
+
+/**
+ * Places a point cloud — its tiles' zero point at a position and altitude, its frame turned to a
+ * bearing — or places it again. The tiles are never rewritten, so a correction costs nothing but
+ * this request. Needs Write on the cave with its exact location; the server refuses it for a
+ * line plot or a wall mesh.
+ */
+export function usePlaceSurveyModel() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: ({ id, placement }: { id: string; caveId: string; placement: SurveyModelPlacementRequest }) =>
+      unwrap(api.PUT('/api/v1/survey-models/{id}/placement', { params: { path: { id } }, body: placement })),
+    onSuccess: (model, { id, caveId }) => {
+      queryClient.setQueryData<SurveyModelInfo>(queryKeys.surveyModel(id), model);
+      invalidate(caveId);
+    },
+  });
+}
+
+/** Takes a point cloud's placement away: still viewable in its own frame, no longer on the map. */
+export function useUnplaceSurveyModel() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; caveId: string }) => {
+      const { error, response } = await api.DELETE('/api/v1/survey-models/{id}/placement', {
+        params: { path: { id } },
+      });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: (_, { id, caveId }) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModel(id) });
+      invalidate(caveId);
+    },
+  });
+}

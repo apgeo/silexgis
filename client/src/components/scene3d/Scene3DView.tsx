@@ -107,6 +107,16 @@ import { attachViewSync3d, type ViewSync3dHandle } from '../../scene3d/viewSync3
 import { supportsWebGl2 } from '../../scene3d/webglSupport.ts';
 import { saveBlob } from '../../api/download.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+import { coarsePointer } from '../../map/pointer.ts';
+import { pointCloudDetailInForce } from '../../scene3d/pointCloudDetail.ts';
+import {
+  attachScansInView3d,
+  EMPTY_SCANS_IN_VIEW_3D_STATE,
+  SCANS_IN_VIEW_LAYER_ID,
+  scansInViewLimitsInForce,
+  type ScansInView3DHandle,
+  type ScansInView3DState,
+} from '../../scene3d/scansInView3d.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
@@ -119,6 +129,8 @@ import Scene3DOverlay from './Scene3DOverlay.tsx';
 import {
   meshesInViewMessage,
   meshesInViewNeedsNotice,
+  scansInViewMessage,
+  scansInViewNeedsNotice,
   meshProgressMessage,
 } from './meshMessages.ts';
 import { formatSize } from '../attachments/fileFormat.ts';
@@ -493,6 +505,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // camera-driven one. A loader of its own because it answers to a budget the selected cave's
   // walls do not have, and because only one of the two ever holds anything at a time.
   const meshesInViewRef = useRef<SurveyMeshesInView3DHandle | null>(null);
+  const scansInViewRef = useRef<ScansInView3DHandle | null>(null);
+  const [scansInViewState, setScansInViewState] = useState<ScansInView3DState>(EMPTY_SCANS_IN_VIEW_3D_STATE);
   const [meshesInViewState, setMeshesInViewState] = useState<SurveyMeshesInView3DState>(
     EMPTY_SURVEY_MESHES_IN_VIEW_3D_STATE,
   );
@@ -538,6 +552,16 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     const meshesInView = attachSurveyMeshesInView3d(engine, (caveId) => data.caveSurveyTop(caveId));
     meshesInViewRef.current = meshesInView;
     const unsubscribeMeshesInView = meshesInView.subscribe(setMeshesInViewState);
+    // The placed scans of the caves in view, hung from the same tops as the walls, at the point
+    // detail this browser has chosen — read at each load, because the engine takes the detail
+    // handed with a load as the budget for every cloud.
+    const scansInView = attachScansInView3d(
+      engine,
+      (caveId) => data.caveSurveyTop(caveId),
+      () => pointCloudDetailInForce(useUiPrefsStore.getState().pointDetail, coarsePointer()),
+    );
+    scansInViewRef.current = scansInView;
+    const unsubscribeScansInView = scansInView.subscribe(setScansInViewState);
     const tracks = attachGeofileTracks3d(engine);
     tracksRef.current = tracks;
     const unsubscribeTracks = tracks.subscribe(setTracksState);
@@ -565,6 +589,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       // And the walls of the caves in view, each of which usually started arriving before the
       // lines that say where its cave's top is.
       meshesInView.refreshSurveyTops();
+      scansInView.refreshSurveyTops();
       // And the places of the photographs, which hang from the same top.
       photos.refreshSurveyTops();
       // Whether there is a cave to frame changes with every load, and only the loader knows.
@@ -720,6 +745,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       meshesInView.detach();
       meshesInViewRef.current = null;
       setMeshesInViewState(EMPTY_SURVEY_MESHES_IN_VIEW_3D_STATE);
+      unsubscribeScansInView();
+      scansInView.detach();
+      scansInViewRef.current = null;
+      setScansInViewState(EMPTY_SCANS_IN_VIEW_3D_STATE);
       setDataState(EMPTY_CAVE_DATA_3D_STATE);
       setCaveFramable(false);
       setCamera(undefined);
@@ -886,6 +915,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const ownMeshesMinZoom = useUiPrefsStore((s) => s.meshesInViewMinZoom);
   const ownMeshesMaxCaves = useUiPrefsStore((s) => s.meshesInViewMaxCaves);
   const ownMeshesMaxBytes = useUiPrefsStore((s) => s.meshesInViewMaxBytes);
+  const ownScansMinZoom = useUiPrefsStore((s) => s.scansInViewMinZoom);
+  const ownScansMaxCaves = useUiPrefsStore((s) => s.scansInViewMaxCaves);
+  const ownScansMaxBytes = useUiPrefsStore((s) => s.scansInViewMaxBytes);
+  const pointDetail = useUiPrefsStore((s) => s.pointDetail);
 
   // Keyed on the surface as well as on the scene: a mount that takes the surface back attaches
   // fresh loaders, and the one for the walls in view holds nothing at all until it has been told
@@ -901,8 +934,31 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           maxBytes: ownMeshesMaxBytes,
         }),
       );
+      scansInViewRef.current?.setLimits(
+        scansInViewLimitsInForce(mapConfig, {
+          minZoom: ownScansMinZoom,
+          maxCaves: ownScansMaxCaves,
+          maxBytes: ownScansMaxBytes,
+        }),
+      );
     }
-  }, [mapConfig, engineVersion, showingHere, ownMeshesMinZoom, ownMeshesMaxCaves, ownMeshesMaxBytes]);
+  }, [
+    mapConfig,
+    engineVersion,
+    showingHere,
+    ownMeshesMinZoom,
+    ownMeshesMaxCaves,
+    ownMeshesMaxBytes,
+    ownScansMinZoom,
+    ownScansMaxCaves,
+    ownScansMaxBytes,
+  ]);
+
+  // The point detail is the engine's, applied to every cloud it holds; changed in Settings while
+  // the scene is open, it is in force at once rather than at the next load.
+  useEffect(() => {
+    engineRef.current?.setPointCloudDetail(pointCloudDetailInForce(pointDetail, coarsePointer()));
+  }, [pointDetail, engineVersion, showingHere]);
 
   // Above what size a selected cave's walls wait for a yes: this person's own number where they
   // set one, else the installation's, else the default it ships with. Declared after the effect
@@ -1128,6 +1184,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     meshRef.current?.setAltitudePlacement(placement);
     photosRef.current?.setAltitudePlacement(placement);
     meshesInViewRef.current?.setAltitudePlacement(placement);
+    scansInViewRef.current?.setAltitudePlacement(placement);
     // And the measured line, whose two ends hang from the tops of two different caves under the
     // one rule: left behind, it would join two surveys that had both moved out from under it.
     approachRef.current?.setAltitudePlacement(placement);
@@ -1173,6 +1230,18 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     meshesInView.setSelectedCave(selectedCaveId);
     meshesInView.setActive(everyCaveInView);
   }, [selectedCaveId, meshVisible, wallsMode, dataState, engineVersion, showingHere]);
+
+  // The placed scans of the caves in view: one layer, on by default, released whole when it is
+  // switched off because a tileset's cache is graphics memory like a mesh is.
+  const scansVisible = overlayVisible[SCANS_IN_VIEW_LAYER_ID] ?? true;
+  useEffect(() => {
+    const scansInView = scansInViewRef.current;
+    if (!scansInView) {
+      return;
+    }
+    scansInView.setSelectedCave(selectedCaveId);
+    scansInView.setActive(scansVisible);
+  }, [selectedCaveId, scansVisible, engineVersion, showingHere]);
 
   // The photographs of the selected cave, on by default like its walls and switched in the same
   // list. Only the selected cave's: reading every link of every cave in a view is not a cost to
@@ -1290,7 +1359,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     meshState.status === 'looking' ||
     meshState.status === 'loading' ||
     meshesInViewState.listing ||
-    meshesInViewState.loading > 0;
+    meshesInViewState.loading > 0 ||
+    scansInViewState.listing ||
+    scansInViewState.loading > 0;
 
   // The walls of the caves in view are said out here whenever what is drawn is less than that:
   // nothing because the view is too wide, some because a limit was reached, or not yet. A subset
@@ -1300,9 +1371,12 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     ? meshesInViewMessage(meshesInViewState, t)
     : undefined;
 
+  const scansInViewNotice = scansInViewNeedsNotice(scansInViewState) ? scansInViewMessage(scansInViewState, t) : undefined;
+
   const notices = [
     meshNotice(),
     meshesInViewNotice,
+    scansInViewNotice,
     dataState.withheldCount > 0 ? t('map.centerlinesWithheld', { count: dataState.withheldCount }) : undefined,
     dataState.flatCount > 0 ? t('scene3d.centerlinesFlat', { count: dataState.flatCount }) : undefined,
     // A layer the server cut off at its per-request limit. Without this the scene showing fewer
@@ -1437,6 +1511,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
                 onWallsModeChange={setWallsMode}
                 meshState={meshState}
                 meshesInViewState={meshesInViewState}
+                scansVisible={scansVisible}
+                onScansVisibleChange={(visible) => setOverlayVisible(SCANS_IN_VIEW_LAYER_ID, visible)}
+                scansInViewState={scansInViewState}
                 terrainBuilds={terrainBuilds}
                 terrainConfigured={mapConfig?.terrain?.origin === 'configured'}
                 terrainChoice={terrainChoice}

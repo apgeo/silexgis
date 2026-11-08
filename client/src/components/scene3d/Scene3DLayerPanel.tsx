@@ -21,7 +21,8 @@ import type {
   SurveyWalls3DMode,
 } from '../../scene3d/surveyMeshesInView3d.ts';
 import { extentSizeKm, type TerrainBuildChoice } from '../../scene3d/terrainBuilds3d.ts';
-import { meshesInViewMessage, meshProgressMessage } from './meshMessages.ts';
+import { meshesInViewMessage, meshProgressMessage, scansInViewMessage } from './meshMessages.ts';
+import type { ScansInView3DState } from '../../scene3d/scansInView3d.ts';
 import { formatSize } from '../attachments/fileFormat.ts';
 import { cutawayPauseMessage } from './surfaceMessages.ts';
 import './Scene3DLayerPanel.css';
@@ -100,6 +101,11 @@ export interface Scene3DLayerPanelProps {
   photosState: StationPhotos3DState;
   /** What the scene holds of the walls of the caves in view, said in the same place in that mode. */
   meshesInViewState: SurveyMeshesInView3DState;
+  /** Whether the placed scans of the caves in view are drawn; off releases their tiles. */
+  scansVisible: boolean;
+  onScansVisibleChange: (visible: boolean) => void;
+  /** What the scene holds of those scans, said under their switch. */
+  scansInViewState: ScansInView3DState;
   /**
    * The elevation models this installation has baked, newest first, for the viewer to draw the
    * ground from. Empty leaves the section out: there is nothing to switch between.
@@ -160,6 +166,9 @@ export default function Scene3DLayerPanel({
   onWallsModeChange,
   meshState,
   meshesInViewState,
+  scansVisible,
+  onScansVisibleChange,
+  scansInViewState,
   terrainBuilds,
   terrainConfigured,
   terrainChoice,
@@ -595,6 +604,27 @@ export default function Scene3DLayerPanel({
             >
               {t('scene3d.meshPrecisionLost')}
             </Typography.Text>
+          )}
+        </div>
+
+        {/* The placed scans of the caves in view. Only placed ones — a scan nobody has put on the
+            earth is looked at from its cave's page, in its own frame — and only for caves whose
+            exact position this viewer may see, which the server has already decided. */}
+        <div className="scene3d-layer-row">
+          <Checkbox
+            checked={scansVisible}
+            onChange={(e) => onScansVisibleChange(e.target.checked)}
+            data-testid="scene3d-scans-toggle"
+          >
+            {t('scene3d.scansLayer')}
+          </Checkbox>
+          <Typography.Text type="secondary" className="scene3d-mesh-hint" data-testid="scene3d-scans-status">
+            {scansInViewMessage(scansInViewState, t)}
+          </Typography.Text>
+          {scansVisible && (
+            <Link to="/settings/advanced" className="scene3d-mesh-hint" data-testid="scene3d-scans-limits-link">
+              {t('scene3d.scansLimitsLink')}
+            </Link>
           )}
         </div>
 

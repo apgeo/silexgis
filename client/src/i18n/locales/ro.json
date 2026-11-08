@@ -3689,6 +3689,23 @@
     "bulkTagHint": "Etichetarea în masă vine odată cu filtrul comun."
   },
   "scene3d": {
+    "pointCloud": {
+      "viewerTitle": "Scanare: {{name}}",
+      "loading": "Se citește scanarea…",
+      "failed": "Scanarea nu a putut fi citită.",
+      "renderFailed": "Desenarea s-a oprit: {{message}}",
+      "colorBy": "Colorare după",
+      "colorByRgb": "Culoarea înregistrată",
+      "colorByIntensity": "Intensitate",
+      "colorByHeight": "Înălțime",
+      "viewAll": "Toată scanarea",
+      "measure": "Măsoară",
+      "measureOff": "Oprește măsurarea",
+      "measureHint": "Dă clic pe două puncte ale scanării.",
+      "measureFirstPoint": "Un punct luat — dă clic pe al doilea.",
+      "measureDistance": "{{metres}} m între cele două puncte",
+      "localFrameHint": "Afișată în metrii ei proprii, nu pe hartă: tragerea o rotește, derularea apropie."
+    },
     "unsupportedTitle": "Acest browser nu poate afișa vizualizarea 3D",
     "unsupportedHint": "Vizualizarea 3D are nevoie de WebGL 2, pe care acest browser sau driverul său grafic nu îl oferă. Încearcă un browser actualizat sau folosește în continuare harta 2D.",
     "openFlatMap": "Deschide harta 2D",
@@ -3796,11 +3813,21 @@
     "meshesInViewLoading": "Încă se încarcă: {{count}}.",
     "meshesInViewUnreadable": "Nu au putut fi citite: {{count}}.",
     "meshesInViewLimitsLink": "Schimbă aceste limite în Setări › Avansat",
+    "scansLimitsLink": "Schimbă detaliul punctelor scanărilor în Setări › Avansat",
     "surfaceFeaturesCapped": "Se arată primele {{limit}} fenomene de suprafață din această vedere, atât cât permite această instalare; apropie vederea pentru a le vedea pe celelalte.",
     "entrancesCapped": "Se arată primele {{limit}} intrări în peșteri din această vedere, atât cât permite această instalare; apropie vederea pentru a le vedea pe celelalte.",
     "saveImage": "Salvează imaginea",
     "saveImageHint": "Salvează această vedere ca imagine",
-    "saveImageFailed": "Această vedere nu a putut fi salvată ca imagine."
+    "saveImageFailed": "Această vedere nu a putut fi salvată ca imagine.",
+    "scansLayer": "Scanări",
+    "scansOff": "Scanările nu sunt încărcate și nu ocupă memorie grafică.",
+    "scansInViewZoomIn": "Apropie pentru a vedea scanările peșterilor din vedere.",
+    "scansInViewLooking": "Se caută scanări plasate ale peșterilor din vedere…",
+    "scansInViewFailed": "Scanările peșterilor din vedere nu au putut fi listate.",
+    "scansInViewNone": "Nicio peșteră din vedere nu are o scanare plasată de desenat.",
+    "scansInViewShown": "Scanările a {{shown}} din {{total}} peșteri din vedere — {{size}}.",
+    "scansInViewOverBytes": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul ar depăși {{limit}}.",
+    "scansInViewOverCount": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul depășesc cele {{limit}} desenate deodată."
   },
   "caveview": {
     "dankezCaveView": {
@@ -4161,6 +4188,9 @@
     }
   },
   "surveyModels": {
+    "uploadPointCloud": "Încarcă nor de puncte",
+    "scanProcessing": "Scanarea este împărțită în dale pentru vederea 3D. Progresul ei este pe pagina de stare a topografiei.",
+    "scanFailed": "Scanarea nu a putut fi procesată.",
     "title": "Modele topo 3D",
     "stationSearchMore": "Alte stații: {{count}} — scrie mai mult din nume",
     "upload": "Încarcă model",
@@ -4246,7 +4276,26 @@
     "readingFailed": "Topografia nu a putut fi citită.",
     "plotDeclaration": "Unde se află această topografie în lume",
     "plotDeclarationRequiredHint": "Un fișier .lox nu are câmp pentru un sistem de coordonate, deci nu spune niciodată unde se află. Spune ce înseamnă numerele din el — fără asta topografia nu poate fi poziționată și nimic nu poate fi citit din ea.",
-    "plotDeclarationOptionalHint": "Un fișier .3d își declară sistemul de coordonate doar dacă topografia a fost compilată cu unul. Dacă acesta îl declară, el este folosit și ce scrii aici este ignorat; dacă nu, doar asta îl poate poziționa."
+    "plotDeclarationOptionalHint": "Un fișier .3d își declară sistemul de coordonate doar dacă topografia a fost compilată cu unul. Dacă acesta îl declară, el este folosit și ce scrii aici este ignorat; dacă nu, doar asta îl poate poziționa.",
+    "placement": {
+      "notPlaced": "Neplasată",
+      "byHand": "Plasată manual",
+      "fromFile": "Plasată din coordonatele fișierului",
+      "bearing": "azimut {{degrees}}°",
+      "place": "Plasează pe hartă",
+      "correct": "Corectează plasarea",
+      "remove": "Elimină plasarea",
+      "removeConfirm": "Scoți această scanare de pe hartă? Rămâne vizibilă de sine stătător.",
+      "save": "Plasează",
+      "placed": "Scanarea este plasată. Harta și vederea 3D o arată acolo.",
+      "failed": "Plasarea nu a putut fi salvată.",
+      "required": "Obligatoriu.",
+      "hint": "Punctul zero al scanării este pus la această poziție și altitudine, iar cadrul ei este rotit astfel încât nordul ei propriu să urmeze azimutul. Tile-urile nu se schimbă; o corecție nu costă nimic.",
+      "noEntrance": "Această peșteră nu are o poziție exactă a intrării principale de la care să se pornească; scrie poziția.",
+      "fromFileHint": "Această plasare a fost citită din sistemul de coordonate din antetul fișierului. Salvarea de aici o înlocuiește cu a ta și nu mai este citită din fișier.",
+      "heading": "Azimutul nordului scanării",
+      "headingHint": "Grade în sensul acelor de ceasornic față de nordul geografic pe care le urmează axa +Y a scanării. 0 dacă scanerul era deja aliniat la nord."
+    }
   },
   "centerlines": {
     "title": "Drumuiri",
@@ -4507,8 +4556,20 @@
       "centerlinesDetailZoom": "Detaliu de la nivelul",
       "centerlinesMaxPaths": "Limită de linii",
       "centerlinesCeiling": "Această instalare permite o limită de linii de cel mult {{paths, number}}.",
+      "pointDetailHeading": "Nori de puncte",
+      "pointDetailIntro": "Cât de fin este desenată o scanare, în vederea 3D și de una singură. Un detaliu mai fin aduce mai multe dale și păstrează mai multe în memoria plăcii grafice; un telefon e mai bine servit de mai puțin. Se păstrează doar pentru acest browser.",
+      "pointDetailLevel": "Detaliul punctelor",
+      "pointDetailLow": "Redus",
+      "pointDetailNormal": "Normal",
+      "pointDetailHigh": "Ridicat",
+      "pointDetailDefault": "Nestabilit, acest dispozitiv folosește {{level}}.",
       "emptyHint": "Un câmp gol urmează valoarea implicită a acestei instalări, afișată cu gri.",
-      "useDefaults": "Folosește valorile implicite ale instalării"
+      "useDefaults": "Folosește valorile implicite ale instalării",
+      "scansHeading": "Scanările tuturor peșterilor din vedere (3D)",
+      "scansIntro": "Norii de puncte plasați pe care vederea 3D îi desenează pentru peșterile din vedere: de la ce zoom, câte peșteri deodată și câți megaocteți de tile poate ține. Separat de pereți, pentru că o scanare este mult mai mare decât un model de pereți.",
+      "scansMinZoom": "Scanări: zoomul de la care se desenează",
+      "scansMaxCaves": "Scanări: peșteri desenate deodată",
+      "scansMaxMegabytes": "Scanări: megaocteți ținuți deodată"
     },
     "pointPicker": {
       "title": "Alege un punct",
@@ -6660,7 +6721,10 @@
       "scaffold": "Pregătirea compilării",
       "compile": "Compilare",
       "store": "Salvarea rezultatelor",
-      "read": "Citirea rezultatelor"
+      "read": "Citirea rezultatelor",
+      "inspect": "Citirea antetului",
+      "downsample": "Estimare și rărire",
+      "tile": "Împărțire în dale"
     },
     "stageStates": {
       "skipped": "Nu era nevoie"
@@ -6676,7 +6740,70 @@
     "origins": {
       "topodroid": "TopoDroid",
       "therion": "Therion",
-      "other": "Altă sursă"
+      "other": "Altă sursă",
+      "pointcloud": "Nor de puncte"
+    },
+    "pointCloud": {
+      "title": "Nor de puncte",
+      "view": "Vezi scanarea",
+      "points": "Puncte",
+      "format": "Format",
+      "formatLaz": "LAZ {{version}}, format de punct {{pointFormat}}",
+      "formatLas": "LAS {{version}}, format de punct {{pointFormat}}",
+      "attributes": "Conține",
+      "rgb": "Culoare",
+      "intensity": "Intensitate",
+      "positionsOnly": "Doar poziții",
+      "extent": "Întindere",
+      "metres": "{{value}} m",
+      "coordinates": "Coordonate",
+      "georeferenced": "Georeferențiat",
+      "crsWkt": "Sistem de coordonate numit în fișier",
+      "local": "Locale: fișierul nu declară un sistem de coordonate, deci scanarea se poziționează manual",
+      "software": "Produs cu",
+      "tiles": "Dale",
+      "tiled": "{{size}} în {{count}} dale",
+      "notTiled": "Încă neîmpărțit în dale",
+      "shownFull": "întregul nor",
+      "shownVoxel": "un punct la {{voxelCm}} cm, {{points}} puncte",
+      "originalWithheld": "Fișierul original conține coordonate reale, așa că descărcarea lui cere dreptul de a vedea locația exactă a acestei peșteri.",
+      "estimateTitle": "Cât de mult se afișează",
+      "advice": {
+        "warn": "{{points}} puncte depășesc pragul de {{warnPoints}} puncte sau {{warnTiles}} de dale de la care acest server sugerează rărirea. Întregul nor funcționează în continuare; costă mai mult la împărțire, stocare și descărcare.",
+        "advise": "{{points}} puncte depășesc pragul de {{advisePoints}} puncte de la care acest server recomandă insistent rărirea. Întregul nor poate fi totuși ales; așteaptă-te la o împărțire lungă și o descărcare grea la fiecare vizită."
+      },
+      "suggestion": "Sugestie: un punct la {{voxelCm}} cm, cel mai fin detaliu care se încadrează în praguri.",
+      "detail": "Detaliu",
+      "fullCloud": "Întregul nor",
+      "voxelRow": "Un punct la {{voxelCm}} cm",
+      "suggested": "Sugerat",
+      "inUse": "În uz",
+      "estimatedTiles": "Dale (aprox.)",
+      "estimatedTime": "Timp de împărțire (aprox.)",
+      "seconds_one": "{{count}} secundă",
+      "seconds": "{{count}} secunde",
+      "minutes_one": "{{count}} minut",
+      "minutes": "{{count}} minute",
+      "choiceNeeded": "Procesarea s-a oprit aici: alege cât din nor se afișează, apoi pornește împărțirea în dale.",
+      "tileWithChoice": "Împarte în dale cu această alegere",
+      "tileAgainWithChoice": "Împarte din nou în dale cu această alegere",
+      "tilingStarted": "Împărțirea în dale va porni cu alegerea ta.",
+      "uploadTitle": "Încarcă un nor de puncte",
+      "upload": "Încarcă nor de puncte",
+      "chooseFile": "Apasă sau trage aici un fișier .laz sau .las",
+      "acceptHint": "Un singur fișier, {{extensions}}, până la {{max}}.",
+      "tooLarge": "Fișierul depășește limita de {{max}} acceptată de acest server.",
+      "wrongKind": "Aici se poate încărca doar un nor de puncte ({{extensions}}).",
+      "surveyTitle": "Titlul topografiei",
+      "surveyTitleHint": "Cum se numește această scanare printre topografiile peșterii. Este propus numele fișierului.",
+      "surveyTitleRequired": "Dă scanării un titlu.",
+      "whatHappens": "Fișierul este păstrat așa cum este. Antetul i se citește imediat; împărțirea în dale pentru vederea 3D rulează pe server, iar un nor mare se oprește pentru a întreba cât din el se afișează. Pagina de progres se deschide când fișierul a ajuns.",
+      "uploaded": "Norul de puncte a ajuns și procesarea lui este în așteptare.",
+      "phase": {
+        "opening": "Se deschide încărcarea…",
+        "sending": "Se trimite fișierul…",
+        "completing": "Se finalizează…"
+      }
     },
     "fileRoles": {
       "archive": "Arhiva topografiei",

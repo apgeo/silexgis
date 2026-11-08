@@ -204,6 +204,8 @@ const DYNAMIC_KEY_FAMILIES: readonly string[] = [
   'surveyUploads.link.refusal.',
   'surveyUploads.origins.',
   'surveyUploads.outputs.',
+  'surveyUploads.pointCloud.advice.',
+  'surveyUploads.pointCloud.phase.',
   'surveyUploads.stages.',
   'surveyUploads.status.',
   'surveyViewer.figures.outcome.',

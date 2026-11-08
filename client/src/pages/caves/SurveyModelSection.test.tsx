@@ -88,6 +88,16 @@ vi.mock('../../api/hooks.ts', async () => {
     useDeleteSurveyModel: () => ({ mutateAsync: deleteMutate, isPending: false }),
     useMakeSurveyModelCurrent: () => ({ mutateAsync: makeCurrentMutate, isPending: false }),
     useReadSurveyModelAgain: () => ({ mutateAsync: readAgainMutate, isPending: false }),
+    // The point-cloud dialog beside the model upload reads the installation's caps and sends
+    // through the survey-upload protocol; nothing here opens it, but it mounts with the section.
+    isPointCloudFileName: actual.isPointCloudFileName,
+    POINT_CLOUD_EXTENSIONS: actual.POINT_CLOUD_EXTENSIONS,
+    useSurveyUploadCapabilities: () => ({ data: undefined }),
+    useUploadPointCloud: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    // The placement row on a point-cloud model; none of the models here is one.
+    isPointCloudModel: actual.isPointCloudModel,
+    usePlaceSurveyModel: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useUnplaceSurveyModel: () => ({ mutateAsync: vi.fn(), isPending: false }),
     // The viewer opened from this section reads the model's links, to show over the model the
     // photographs somebody has hung on its stations. Nothing here is about those, so there are
     // none — but the mock lists what it answers, so a hook left out of it is a crash.
@@ -298,6 +308,22 @@ describe('the survey model list', () => {
     expect(screen.queryByTestId('survey-model-read-again-again')).toBeNull();
     expect(screen.queryByTestId('survey-model-read-again-walls')).toBeNull();
     expect(screen.getByTestId('survey-model-read-again-done')).toBeInTheDocument();
+  });
+
+  it('offers a scan neither another reading nor the current mark, and says it is tiled, not read', async () => {
+    // A point cloud is tiled by its upload's run, and the server refuses a reading of it; and a
+    // cave's current model is where its centreline comes from, which a scan cannot supply.
+    models = [
+      model({ id: 'scan', format: 'laz', name: 'Hall scan', status: 'processing' }),
+      model({ id: 'scan-done', format: 'las', name: 'Hall scan done' }),
+    ];
+    show();
+    await screen.findByText('Hall scan done');
+
+    expect(screen.getByText(/The scan is being tiled for the 3D view/)).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-model-read-again-scan')).toBeNull();
+    expect(screen.queryByTestId('survey-model-read-again-scan-done')).toBeNull();
+    expect(screen.queryByText('Make current')).toBeNull();
   });
 
   it('offers another conversion of a wall mesh, converted or not', async () => {

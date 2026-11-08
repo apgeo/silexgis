@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { EMPTY_SCANS_IN_VIEW_3D_STATE } from '../../scene3d/scansInView3d.ts';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -101,6 +102,9 @@ function renderPanel(overrides: Partial<Scene3DLayerPanelProps> = {}) {
     onPhotosVisibleChange: vi.fn(),
     photosState: EMPTY_STATION_PHOTOS_3D_STATE,
     meshesInViewState: EMPTY_SURVEY_MESHES_IN_VIEW_3D_STATE,
+    scansVisible: true,
+    onScansVisibleChange: vi.fn(),
+    scansInViewState: EMPTY_SCANS_IN_VIEW_3D_STATE,
     terrainBuilds: [],
     terrainConfigured: false,
     terrainChoice: undefined,

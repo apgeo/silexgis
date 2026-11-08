@@ -3689,6 +3689,23 @@
     "bulkTagHint": "Bulk tagging arrives with the shared filter."
   },
   "scene3d": {
+    "pointCloud": {
+      "viewerTitle": "Scan: {{name}}",
+      "loading": "Reading the scan…",
+      "failed": "The scan could not be read.",
+      "renderFailed": "Drawing stopped: {{message}}",
+      "colorBy": "Colour by",
+      "colorByRgb": "Recorded colour",
+      "colorByIntensity": "Intensity",
+      "colorByHeight": "Height",
+      "viewAll": "Whole scan",
+      "measure": "Measure",
+      "measureOff": "Stop measuring",
+      "measureHint": "Click two points on the scan.",
+      "measureFirstPoint": "One point taken — click the second.",
+      "measureDistance": "{{metres}} m between the two points",
+      "localFrameHint": "Shown in its own metres, not on the map: dragging turns it, scrolling moves closer."
+    },
     "unsupportedTitle": "This browser cannot show the 3D view",
     "unsupportedHint": "The 3D view needs WebGL 2, which this browser or its graphics driver does not provide. Try an up-to-date browser, or keep using the 2D map.",
     "openFlatMap": "Open the 2D map",
@@ -3796,11 +3813,21 @@
     "meshesInViewLoading": "Still loading: {{count}}.",
     "meshesInViewUnreadable": "Could not be read: {{count}}.",
     "meshesInViewLimitsLink": "Change these limits in Settings › Advanced",
+    "scansLimitsLink": "Change the scan point detail in Settings › Advanced",
     "surfaceFeaturesCapped": "Showing the first {{limit}} surface features in this view, which is this installation's limit; zoom in to see the rest.",
     "entrancesCapped": "Showing the first {{limit}} cave entrances in this view, which is this installation's limit; zoom in to see the rest.",
     "saveImage": "Save image",
     "saveImageHint": "Save this view as a picture",
-    "saveImageFailed": "This view could not be saved as an image."
+    "saveImageFailed": "This view could not be saved as an image.",
+    "scansLayer": "Scans",
+    "scansOff": "The scans are not loaded, and hold no graphics memory.",
+    "scansInViewZoomIn": "Zoom in to see the scans of the caves in view.",
+    "scansInViewLooking": "Looking for placed scans of the caves in view…",
+    "scansInViewFailed": "The scans of the caves in view could not be listed.",
+    "scansInViewNone": "No cave in view has a placed scan to draw.",
+    "scansInViewShown": "Scans of {{shown}} of {{total}} caves in view — {{size}}.",
+    "scansInViewOverBytes": "Scans of {{shown}} of {{total}} caves in view — the rest would exceed {{limit}}.",
+    "scansInViewOverCount": "Scans of {{shown}} of {{total}} caves in view — the rest are beyond the {{limit}} drawn at once."
   },
   "caveview": {
     "dankezCaveView": {
@@ -4148,6 +4175,9 @@
     }
   },
   "surveyModels": {
+    "uploadPointCloud": "Upload point cloud",
+    "scanProcessing": "The scan is being tiled for the 3D view. Its progress is on the survey's status page.",
+    "scanFailed": "The scan could not be processed.",
     "title": "3D survey models",
     "stationSearchMore": "More stations: {{count}} — type more of the name",
     "upload": "Upload model",
@@ -4233,7 +4263,26 @@
     "readingFailed": "The survey could not be read.",
     "plotDeclaration": "Where this survey sits in the world",
     "plotDeclarationRequiredHint": "A .lox file has no field for a coordinate system, so it never says where it is. Say what its numbers mean — without this the survey cannot be placed, and nothing can be read out of it.",
-    "plotDeclarationOptionalHint": "A .3d file states its own coordinate system only when the survey was compiled with one. If this one does, that is used and what you give here is ignored; if it does not, this is the only thing that can place it."
+    "plotDeclarationOptionalHint": "A .3d file states its own coordinate system only when the survey was compiled with one. If this one does, that is used and what you give here is ignored; if it does not, this is the only thing that can place it.",
+    "placement": {
+      "notPlaced": "Not placed",
+      "byHand": "Placed by hand",
+      "fromFile": "Placed from the file's coordinates",
+      "bearing": "bearing {{degrees}}°",
+      "place": "Place on the map",
+      "correct": "Correct the placement",
+      "remove": "Remove placement",
+      "removeConfirm": "Take this scan off the map? It stays viewable on its own.",
+      "save": "Place",
+      "placed": "The scan is placed. The map and the 3D view show it there.",
+      "failed": "The placement could not be saved.",
+      "required": "Required.",
+      "hint": "The scan's own zero point is put at this position and altitude, and its frame is turned so that its own north points along the bearing. The tiles are not changed; a correction costs nothing.",
+      "noEntrance": "This cave has no exact main entrance position to start from; type the position.",
+      "fromFileHint": "This placement was read from the coordinate system in the file's header. Saving here replaces it with yours, and it is not read from the file again.",
+      "heading": "Bearing of the scan's north",
+      "headingHint": "Degrees clockwise from true north that the scan's own +Y axis points along. 0 if the scanner was already aligned to north."
+    }
   },
   "centerlines": {
     "title": "Centerlines",
@@ -4494,8 +4543,20 @@
       "centerlinesDetailZoom": "Detail from zoom",
       "centerlinesMaxPaths": "Line budget",
       "centerlinesCeiling": "This installation allows a line budget of at most {{paths, number}}.",
+      "pointDetailHeading": "Point clouds",
+      "pointDetailIntro": "How finely a scan is drawn, in the 3D view and on its own. Finer detail fetches more tiles and keeps more of them in graphics memory; a phone is better served by less. Kept for this browser alone.",
+      "pointDetailLevel": "Point detail",
+      "pointDetailLow": "Low",
+      "pointDetailNormal": "Normal",
+      "pointDetailHigh": "High",
+      "pointDetailDefault": "Left unset, this device uses {{level}}.",
       "emptyHint": "An empty field follows this installation's default, shown in grey.",
-      "useDefaults": "Use this installation's defaults"
+      "useDefaults": "Use this installation's defaults",
+      "scansHeading": "Scans of every cave in view (3D)",
+      "scansIntro": "The placed point clouds the 3D view draws for the caves in view: from which zoom, how many caves at once, and how many megabytes of tiles it may hold. Kept apart from the walls, because a scan is far larger than a wall model.",
+      "scansMinZoom": "Scans: zoom from which scans are drawn",
+      "scansMaxCaves": "Scans: caves drawn at once",
+      "scansMaxMegabytes": "Scans: megabytes held at once"
     },
     "pointPicker": {
       "title": "Pick a point",
@@ -6647,7 +6708,10 @@
       "scaffold": "Preparing the compilation",
       "compile": "Compiling",
       "store": "Storing the results",
-      "read": "Reading the results"
+      "read": "Reading the results",
+      "inspect": "Reading the header",
+      "downsample": "Estimating and thinning",
+      "tile": "Tiling"
     },
     "stageStates": {
       "skipped": "Not needed"
@@ -6663,7 +6727,70 @@
     "origins": {
       "topodroid": "TopoDroid",
       "therion": "Therion",
-      "other": "Other"
+      "other": "Other",
+      "pointcloud": "Point cloud"
+    },
+    "pointCloud": {
+      "title": "Point cloud",
+      "view": "View the scan",
+      "points": "Points",
+      "format": "Format",
+      "formatLaz": "LAZ {{version}}, point format {{pointFormat}}",
+      "formatLas": "LAS {{version}}, point format {{pointFormat}}",
+      "attributes": "Carries",
+      "rgb": "Colour",
+      "intensity": "Intensity",
+      "positionsOnly": "Positions only",
+      "extent": "Extent",
+      "metres": "{{value}} m",
+      "coordinates": "Coordinates",
+      "georeferenced": "Georeferenced",
+      "crsWkt": "Coordinate system named in the file",
+      "local": "Local: the file states no coordinate system, so the scan is placed by hand",
+      "software": "Made with",
+      "tiles": "Tiles",
+      "tiled": "{{size}} in {{count}} tiles",
+      "notTiled": "Not tiled yet",
+      "shownFull": "the whole cloud",
+      "shownVoxel": "one point per {{voxelCm}} cm, {{points}} points",
+      "originalWithheld": "The original file carries real coordinates, so downloading it needs the right to see this cave's exact location.",
+      "estimateTitle": "How much to show",
+      "advice": {
+        "warn": "{{points}} points is above the {{warnPoints}} points or {{warnTiles}} of tiles this server suggests thinning at. The whole cloud still works; it costs more to tile, store and download.",
+        "advise": "{{points}} points is above the {{advisePoints}} points this server strongly advises thinning at. The whole cloud can still be chosen; expect long tiling and a heavy download on every visit."
+      },
+      "suggestion": "Suggested: one point per {{voxelCm}} cm, the finest detail that fits within the thresholds.",
+      "detail": "Detail",
+      "fullCloud": "The whole cloud",
+      "voxelRow": "One point per {{voxelCm}} cm",
+      "suggested": "Suggested",
+      "inUse": "In use",
+      "estimatedTiles": "Tiles (about)",
+      "estimatedTime": "Tiling time (about)",
+      "seconds_one": "{{count}} second",
+      "seconds": "{{count}} seconds",
+      "minutes_one": "{{count}} minute",
+      "minutes": "{{count}} minutes",
+      "choiceNeeded": "The run stopped here: choose how much of the cloud to show, then start the tiling.",
+      "tileWithChoice": "Tile with this choice",
+      "tileAgainWithChoice": "Tile again with this choice",
+      "tilingStarted": "Tiling will start with your choice.",
+      "uploadTitle": "Upload a point cloud",
+      "upload": "Upload point cloud",
+      "chooseFile": "Click or drop a .laz or .las file here",
+      "acceptHint": "One file, {{extensions}}, up to {{max}}.",
+      "tooLarge": "This file is larger than the {{max}} this server accepts.",
+      "wrongKind": "Only a point cloud can be uploaded here ({{extensions}}).",
+      "surveyTitle": "Survey title",
+      "surveyTitleHint": "What this scan is called among the cave's surveys. The file's name is offered.",
+      "surveyTitleRequired": "Give the scan a title.",
+      "whatHappens": "The file is kept as it is. Its header is read at once; tiling it for the 3D view runs on the server, and a large cloud stops to ask how much of it to show. The progress page opens when the file has arrived.",
+      "uploaded": "The point cloud arrived and its run is queued.",
+      "phase": {
+        "opening": "Opening the upload…",
+        "sending": "Sending the file…",
+        "completing": "Finishing…"
+      }
     },
     "fileRoles": {
       "archive": "Survey archive",
