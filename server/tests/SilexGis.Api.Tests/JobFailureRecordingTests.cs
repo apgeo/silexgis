@@ -160,6 +160,9 @@ public sealed class JobFailureRecordingTests : IAsyncLifetime, IDisposable, ICla
             ProcessingJobKinds.DocumentPurge,
             ProcessingJobKinds.ImportCommit,
             ProcessingJobKinds.PhotoGeoBackfill,
+            // Writes one snapshot row in one save, then prunes old ones: a second attempt adds a
+            // later snapshot, which is what the next day's run would do anyway.
+            ProcessingJobKinds.StorageReport,
             ProcessingJobKinds.SurveyUploadSweep,
             ProcessingJobKinds.TerrainUploadSweep,
             ProcessingJobKinds.TripPurge,
