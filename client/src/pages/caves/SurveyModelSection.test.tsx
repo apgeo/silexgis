@@ -92,8 +92,12 @@ vi.mock('../../api/hooks.ts', async () => {
     // through the survey-upload protocol; nothing here opens it, but it mounts with the section.
     isPointCloudFileName: actual.isPointCloudFileName,
     POINT_CLOUD_EXTENSIONS: actual.POINT_CLOUD_EXTENSIONS,
+    DEFAULT_RECORDING_CAPABILITIES: actual.DEFAULT_RECORDING_CAPABILITIES,
+    recordingSelection: actual.recordingSelection,
+    titleFromRecordingFolder: actual.titleFromRecordingFolder,
     useSurveyUploadCapabilities: () => ({ data: undefined }),
     useUploadPointCloud: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useUploadRecording: () => ({ mutateAsync: vi.fn(), isPending: false }),
     // The dialog shows the room left in storage before an upload starts; no figures here.
     useStorageRoom: () => ({ data: undefined }),
     // The placement row on a point-cloud model; none of the models here is one.

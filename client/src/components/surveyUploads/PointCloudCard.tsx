@@ -7,7 +7,7 @@ import Button from '../Button.tsx';
 import PointCloudViewerModal from '../scene3d/PointCloudViewerModal.tsx';
 import { formatSize } from '../attachments/fileFormat.ts';
 import StorageRoomSummary from '../storage/StorageRoomSummary.tsx';
-import { originalBytesOf, runAddsBytes } from '../storage/storageFigures.ts';
+import { formatBytes, originalBytesOf, runAddsBytes } from '../storage/storageFigures.ts';
 import {
   displayChoiceUsed,
   pointCloudChoiceNeeded,
@@ -17,6 +17,7 @@ import {
   type SurveyUpload,
   type SurveyUploadPointCloud,
   type SurveyUploadPointCloudEstimateRow,
+  type SurveyUploadRecording,
 } from '../../api/hooks.ts';
 
 /** One row of the estimate table, keyed so a radio can name it. */
@@ -98,6 +99,7 @@ export default function PointCloudCard({
     >
       <Flex vertical gap={12}>
         <Facts cloud={cloud} language={i18n.language} />
+        {cloud.recording && <RecordingFacts recording={cloud.recording} language={i18n.language} />}
         {originalWithheld && (
           <Typography.Text type="secondary" data-testid="point-cloud-original-withheld">
             {t('surveyUploads.pointCloud.originalWithheld')}
@@ -196,6 +198,42 @@ function Facts({ cloud, language }: { cloud: SurveyUploadPointCloud; language: s
             {t('surveyUploads.pointCloud.notTiled')}
           </Typography.Text>
         )}
+      </Descriptions.Item>
+    </Descriptions>
+  );
+}
+
+/**
+ * What reading a raw recording found: how many chunks and sensors, whether it carries a
+ * calibration and a GNSS log, how long it ran and how large it is. Measurements only — a GNSS log
+ * is said to be there, never where it was — so the block goes to whoever may read the card.
+ */
+function RecordingFacts({ recording, language }: { recording: SurveyUploadRecording; language: string }) {
+  const { t } = useTranslation();
+  const number = (value: number) => value.toLocaleString(language);
+  const yesNo = (value: boolean) => t(value ? 'surveyUploads.recording.yes' : 'surveyUploads.recording.no');
+  const duration = recording.durationSeconds;
+
+  return (
+    <Descriptions
+      size="small"
+      column={{ xs: 1, sm: 2 }}
+      title={t('surveyUploads.recording.factsTitle')}
+      data-testid="point-cloud-recording"
+    >
+      <Descriptions.Item label={t('surveyUploads.recording.chunks')}>
+        <span data-testid="point-cloud-recording-chunks">{number(recording.chunkCount)}</span>
+      </Descriptions.Item>
+      <Descriptions.Item label={t('surveyUploads.recording.sensors')}>
+        {recording.sensorCount === null ? t('surveyUploads.recording.unknown') : number(recording.sensorCount)}
+      </Descriptions.Item>
+      <Descriptions.Item label={t('surveyUploads.recording.duration')}>
+        {duration === null ? t('surveyUploads.recording.unknown') : formatSeconds(duration, t)}
+      </Descriptions.Item>
+      <Descriptions.Item label={t('surveyUploads.recording.size')}>{formatBytes(recording.bytes)}</Descriptions.Item>
+      <Descriptions.Item label={t('surveyUploads.recording.calibration')}>{yesNo(recording.hasCalibration)}</Descriptions.Item>
+      <Descriptions.Item label={t('surveyUploads.recording.gnss')}>
+        <span data-testid="point-cloud-recording-gnss">{yesNo(recording.hasGnss)}</span>
       </Descriptions.Item>
     </Descriptions>
   );

@@ -1547,7 +1547,7 @@
     "exportListFailed": "Lista nu a putut fi exportată. O selecție foarte mare este refuzată în loc să fie tăiată: restrânge filtrul și exportă pe părți.",
     "searchPlaceholder": "Caută după denumire…",
     "uploadPrompt": "Apasă sau trage fișiere vectoriale aici pentru încărcare",
-    "uploadHint": "GPX, KML, KMZ, GeoJSON, shapefile arhivat, CSV cu coloane de coordonate, WKT — importate în fundal.",
+    "uploadHint": "GPX, KML, KMZ, GeoJSON, shapefile arhivat, CSV cu coloane de coordonate, WKT — importate în fundal. Cel mult 150 MB pe fișier.",
     "uploadQueued": "{{name}} încărcat — importul a fost programat.",
     "upload": {
       "sending": "Se încarcă — {{sent}} din {{total}}",
@@ -4477,6 +4477,103 @@
     "paths": "Trasee"
   },
   "settings": {
+    "scanProfiles": {
+      "title": "Profiluri de procesare",
+      "intro": "Seturi de setări cu nume după care rulează un pas de procesare a scanărilor. Le poți păstra pentru tine, pentru un grup speologic sau pentru toată instalarea, poți alege unul când încarci o înregistrare și poți aduce sau scoate fișierele de parametri ale HDMapping.",
+      "stepLabel": "Pas de procesare",
+      "step": {
+        "odometry": "Odometria HDMapping (înregistrări brute)",
+        "downsample": "Rărirea unui nor pentru afișare",
+        "tile": "Împărțirea unui nor în dale pentru vizualizare",
+        "estimate": "Estimarea a ce păstrează rărirea"
+      },
+      "scope": {
+        "installation": "Toată instalarea",
+        "cavingGroup": "Grupuri speologice",
+        "personal": "Ale mele",
+        "group": "Grup speologic",
+        "pickGroup": "Alege un grup speologic"
+      },
+      "new": "Profil nou",
+      "view": "Vezi",
+      "builtIn": "Inclus",
+      "emptyScope": "Niciun profil aici.",
+      "loadFailed": "Profilurile nu au putut fi încărcate.",
+      "duplicate": "Duplică {{name}}",
+      "duplicated": "O copie a fost salvată printre profilurile tale.",
+      "export": "Salvează {{name}} ca fișier",
+      "exportToml": "Fișier de parametri HDMapping (TOML)",
+      "exportJson": "Fișier de profil SilexGIS (JSON)",
+      "exportFailed": "Fișierul nu a putut fi salvat.",
+      "delete": "Șterge {{name}}",
+      "deleteConfirm": "Ștergi profilul „{{name}}”? Rulările care l-au folosit deja își păstrează setările.",
+      "deleted": "Profil șters.",
+      "origin": {
+        "imported": "Importat din {{file}}"
+      },
+      "errors": {
+        "valuesInvalid": "Unele setări au fost refuzate:",
+        "builtIn": "Un profil inclus nu se modifică niciodată; salvează modificările ca o copie.",
+        "forbidden": "Nu ai voie să păstrezi profiluri acolo."
+      },
+      "editor": {
+        "titleNew": "Profil nou: {{step}}",
+        "titleEdit": "Profil: {{name}}",
+        "schemaFailed": "Setările acestui pas nu au putut fi încărcate.",
+        "builtInNotice": "Profilurile incluse nu se modifică niciodată. Schimbă setările de mai jos și salvează-le ca o copie a ta.",
+        "notYoursNotice": "Nu ai voie să modifici acest profil. Schimbă setările de mai jos și salvează-le ca o copie a ta.",
+        "toolVersion": "Setările versiunii {{version}}",
+        "noWorkerYet": "Serviciul de procesare nu a rulat încă, deci setările programului instalat nu se cunosc. Profilurile acestui pas pot fi editate după ce pornește.",
+        "name": "Nume",
+        "description": "Descriere",
+        "scope": "Păstrat pentru",
+        "onlyChanged": "Doar ce diferă de valorile implicite",
+        "changedCount_one": "O setare diferă de valorile implicite",
+        "changedCount": "Setări diferite de valorile implicite: {{count}}",
+        "saveAs": "Salvează ca…",
+        "saveCopy": "Salvează ca o copie a mea…",
+        "saveAsTitle": "Salvează ca profil nou",
+        "copyName": "{{name}} (copie)",
+        "saved": "Profil salvat."
+      },
+      "form": {
+        "general": "Generale",
+        "defaultIs": "Implicit: {{value}}",
+        "reset": "Readu {{key}} la valoarea implicită",
+        "changedCount_one": "{{count}} modificată",
+        "changedCount": "modificate: {{count}}",
+        "nothingChanged": "Toate setările au valorile implicite.",
+        "noSettings": "Acest pas nu are setări.",
+        "listInvalid": "Scrie numere separate prin virgule."
+      },
+      "import": {
+        "open": "Importă un fișier",
+        "title": "Importă un fișier de parametri",
+        "pick": "Trage aici un fișier de parametri sau dă clic pentru a-l alege",
+        "hint": "Un fișier TOML HDMapping (merge și cel pe care odometria îl scrie lângă fiecare rulare) sau un fișier de profil salvat din SilexGIS.",
+        "reading": "Se citește fișierul…",
+        "accepted": "Fișierul poate fi păstrat ca profil.",
+        "refusedTitle": "Fișierul nu poate fi păstrat: unele valori sunt de tip greșit sau în afara limitelor.",
+        "versionDiffers": "Fișierul a fost scris de versiunea {{file}}; versiunea instalată este {{installed}}. Verifică setările înainte de a le folosi.",
+        "step": "Pas",
+        "format": "Citit ca",
+        "taken": "Setări preluate din fișier",
+        "defaulted": "Setări lipsă din fișier, completate cu valorile implicite",
+        "unknown": "Setări pe care versiunea instalată nu le are, lăsate deoparte",
+        "fixed": "Setări fixe schimbate de fișier, păstrate la valorile implicite",
+        "droppedSections": "Secțiuni care nu fac niciodată parte dintr-un profil, lăsate deoparte",
+        "namePlaceholder": "Numele dat de fișier sau numele fișierului",
+        "keep": "Păstrează ca profil",
+        "saved": "Profil importat.",
+        "errors": {
+          "unreadable": "Fișierul nu a putut fi citit ca TOML sau JSON.",
+          "notAProfile": "Fișierul nu este un fișier de parametri pe care această instalare îl cunoaște.",
+          "defaultsUnknown": "Serviciul de procesare nu a rulat încă, deci nu există cu ce verifica fișierul. Încearcă din nou după ce pornește.",
+          "stepUnknown": "Fișierul este pentru un pas de procesare pe care această instalare nu îl are.",
+          "refused": "Fișierul a fost refuzat; vezi raportul."
+        }
+      }
+    },
     "title": "Setări",
     "nav": {
       "profile": "Profil",
@@ -4490,6 +4587,7 @@
       "sync": "Sincronizare",
       "access-keys": "Chei de acces",
       "survey-uploads": "Încărcări de topografii",
+      "scan-profiles": "Scanări · Profiluri de procesare",
       "advanced": "Avansat"
     },
     "visibility": {
@@ -7089,6 +7187,52 @@
         "sending": "Se trimite fișierul…",
         "completing": "Se finalizează…"
       }
+    },
+    "recording": {
+      "kindFile": "Un fișier nor de puncte",
+      "kindRecording": "Dosarul unei înregistrări de scaner",
+      "chooseFolder": "Trageți aici dosarul înregistrării scanerului sau faceți clic pentru a-l alege",
+      "folderHint": "Fișiere lidarNNNN.laz cu jurnalele lor imuNNNN.csv și, opțional, .sn, .gnss, .nmea și calibration.json. Dosarele camerelor sunt lăsate deoparte. Cel mult {{max}} și {{files}} fișiere în total.",
+      "files": "Fișiere de trimis",
+      "size": "Mărime",
+      "chunks": "Bucăți lidar",
+      "leftOut": "Lăsate deoparte",
+      "leftOutHint": "Pozele camerelor, alte dosare și fișierele care nu țin de o înregistrare nu se trimit.",
+      "fileName": "Fișier",
+      "fileSize": "Mărime",
+      "problem": {
+        "noLidar": "Dosarul nu conține nicio bucată lidar (lidarNNNN.laz).",
+        "unpaired": "Bucata lidar {{chunk}} nu are alături jurnalul IMU (imuNNNN.csv).",
+        "tooManyFiles": "O înregistrare poate avea cel mult {{max}} fișiere.",
+        "tooLarge": "O înregistrare poate avea cel mult {{max}} în total.",
+        "fileTooLarge": "{{name}} depășește cei {{max}} permiși unui singur fișier.",
+        "duplicate": "Două fișiere se numesc {{name}}.",
+        "empty": "{{name}} este gol."
+      },
+      "gnssHint": "Înregistrarea conține un jurnal GNSS, deci este o locație: fișierele ei se arată doar celor care pot vedea poziția exactă a peșterii.",
+      "runRoom": "Procesarea are nevoie, cât rulează, de spațiu pe discul serviciului de procesare:",
+      "profile": "Profil de odometrie",
+      "profileDefaults": "Valorile implicite HDMapping",
+      "profileDiffers_one": "Diferă de valorile implicite la {{count}} setare",
+      "profileDiffers": "Diferă de valorile implicite la {{count}} setări",
+      "profileIsDefault": "Rulează cu valorile implicite HDMapping.",
+      "profileHint": "Profilul ales este ținut minte pentru următoarea înregistrare.",
+      "scope": {
+        "installation": "Instalare",
+        "cavingGroup": "Grup",
+        "personal": "Personal"
+      },
+      "sendingFile": "Se trimite fișierul {{done}} din {{total}}…",
+      "upload": "Încarcă înregistrarea",
+      "uploaded": "Înregistrarea a fost trimisă. Procesarea începe în curând.",
+      "factsTitle": "Înregistrare",
+      "sensors": "Senzori",
+      "duration": "Durată",
+      "calibration": "Calibrare",
+      "gnss": "Jurnal GNSS",
+      "unknown": "Necunoscut",
+      "yes": "Da",
+      "no": "Nu"
     },
     "fileRoles": {
       "archive": "Arhiva topografiei",

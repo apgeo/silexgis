@@ -10,6 +10,7 @@ import { ApiError } from '../../api/client.ts';
 import {
   displayRequestOf,
   surveyUploadIsPointCloud,
+  surveyUploadIsRecording,
   surveyUploadLinkHref,
   surveyUploadPublicLinkRefusal,
   useCaveSurveys,
@@ -106,13 +107,14 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
   // A point cloud has stages of its own, and no line-survey viewer: its picture is the 3D scene's,
   // reached from the scan on the cave page, so the viewer button of a survey archive is not drawn.
   const pointCloud = surveyUploadIsPointCloud(upload);
+  const recording = pointCloud && surveyUploadIsRecording(upload);
 
   const view = {
     status: upload.status,
     progress: upload.progress,
     message: upload.message,
     error: upload.error,
-    stages: surveyUploadStageStates({ status: upload.status, stage: upload.stage, compile: upload.compile, pointCloud }),
+    stages: surveyUploadStageStates({ status: upload.status, stage: upload.stage, compile: upload.compile, pointCloud, recording }),
     artefacts: upload.artefacts,
   };
 

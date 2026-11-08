@@ -196,6 +196,7 @@ describe('the upload status page', () => {
         displayEveryNth: null,
         displayPointCount: null,
         originShift: null,
+        recording: null,
         estimate: {
           full: { voxelCm: null, points: 12_400_000, estimatedTileBytes: 900_000_000, estimatedSeconds: 400 },
           voxels: [{ voxelCm: 2, points: 4_000_000, estimatedTileBytes: 190_000_000, estimatedSeconds: 120 }],

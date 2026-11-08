@@ -42,6 +42,7 @@ function cloud(over: Partial<SurveyUploadPointCloud> = {}): SurveyUploadPointClo
     displayEveryNth: null,
     displayPointCount: null,
     originShift: null,
+    recording: null,
     estimate: {
       full: { voxelCm: null, points: 12_400_000, estimatedTileBytes: 900_000_000, estimatedSeconds: 400 },
       voxels: [
@@ -169,6 +170,29 @@ describe('the point-cloud card', () => {
     expect(screen.queryByTestId('point-cloud-choice-needed')).toBeNull();
     expect(screen.getByTestId('point-cloud-choose')).toHaveTextContent('Tile again');
     expect(screen.getByTestId('point-cloud-estimate-row-voxel-2')).toHaveTextContent('In use');
+  });
+
+  it('shows what reading a raw recording found beside the cloud’s facts, and no such block for a single file', () => {
+    const recording = {
+      chunkCount: 12,
+      sensorCount: 2,
+      hasCalibration: true,
+      hasGnss: false,
+      durationSeconds: 125,
+      pointCount: 12_400_000,
+      imuHasHeader: true,
+      bytes: 3 * 1024 ** 3,
+    };
+    render(<PointCloudCard upload={upload({ pointCloud: cloud({ recording }) })} canWrite={false} />);
+    const block = screen.getByTestId('point-cloud-recording');
+    expect(screen.getByTestId('point-cloud-recording-chunks')).toHaveTextContent('12');
+    expect(block).toHaveTextContent('2 minutes');
+    expect(block).toHaveTextContent('3.0 GB');
+    expect(screen.getByTestId('point-cloud-recording-gnss')).toHaveTextContent('No');
+    cleanup();
+
+    render(<PointCloudCard upload={upload()} canWrite={false} />);
+    expect(screen.queryByTestId('point-cloud-recording')).not.toBeInTheDocument();
   });
 
   it('draws nothing before the header has been read', () => {

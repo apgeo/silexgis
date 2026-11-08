@@ -1547,7 +1547,7 @@
     "exportListFailed": "The list could not be exported. A very large selection is refused rather than cut short: narrow the filter and export in parts.",
     "searchPlaceholder": "Search by name…",
     "uploadPrompt": "Click or drag vector files here to upload",
-    "uploadHint": "GPX, KML, KMZ, GeoJSON, zipped shapefile, CSV with coordinate columns, WKT — imported in the background.",
+    "uploadHint": "GPX, KML, KMZ, GeoJSON, zipped shapefile, CSV with coordinate columns, WKT — imported in the background. Up to 150 MB per file.",
     "uploadQueued": "{{name}} uploaded — import queued.",
     "upload": {
       "sending": "Uploading — {{sent}} of {{total}}",
@@ -4464,6 +4464,103 @@
     "paths": "Paths"
   },
   "settings": {
+    "scanProfiles": {
+      "title": "Processing profiles",
+      "intro": "Named sets of settings a scan processing step runs with. Keep them for yourself, for a caving group or for the whole installation, choose one when you upload a recording, and carry HDMapping's own parameter files in and out.",
+      "stepLabel": "Processing step",
+      "step": {
+        "odometry": "HDMapping odometry (raw recordings)",
+        "downsample": "Thinning a cloud for display",
+        "tile": "Tiling a cloud for viewing",
+        "estimate": "Estimating what thinning keeps"
+      },
+      "scope": {
+        "installation": "The whole installation",
+        "cavingGroup": "Caving groups",
+        "personal": "Mine",
+        "group": "Caving group",
+        "pickGroup": "Choose a caving group"
+      },
+      "new": "New profile",
+      "view": "View",
+      "builtIn": "Built-in",
+      "emptyScope": "No profiles here.",
+      "loadFailed": "The profiles could not be loaded.",
+      "duplicate": "Duplicate {{name}}",
+      "duplicated": "A copy was saved among your own profiles.",
+      "export": "Save {{name}} as a file",
+      "exportToml": "HDMapping parameter file (TOML)",
+      "exportJson": "SilexGIS profile file (JSON)",
+      "exportFailed": "The file could not be saved.",
+      "delete": "Delete {{name}}",
+      "deleteConfirm": "Delete the profile \"{{name}}\"? Runs that already used it keep their settings.",
+      "deleted": "Profile deleted.",
+      "origin": {
+        "imported": "Imported from {{file}}"
+      },
+      "errors": {
+        "valuesInvalid": "Some settings were refused:",
+        "builtIn": "A built-in profile is never changed; save your changes as a copy.",
+        "forbidden": "You may not keep profiles there."
+      },
+      "editor": {
+        "titleNew": "New profile: {{step}}",
+        "titleEdit": "Profile: {{name}}",
+        "schemaFailed": "The settings of this step could not be loaded.",
+        "builtInNotice": "Built-in profiles are never changed. Change the settings below and save them as your own copy.",
+        "notYoursNotice": "You may not change this profile. Change the settings below and save them as your own copy.",
+        "toolVersion": "Settings of version {{version}}",
+        "noWorkerYet": "The processing service has not run yet, so the installed program's settings are not known. Profiles of this step can be edited once it has started.",
+        "name": "Name",
+        "description": "Description",
+        "scope": "Kept for",
+        "onlyChanged": "Only what differs from the defaults",
+        "changedCount_one": "{{count}} setting differs from the defaults",
+        "changedCount": "{{count}} settings differ from the defaults",
+        "saveAs": "Save as…",
+        "saveCopy": "Save as my copy…",
+        "saveAsTitle": "Save as a new profile",
+        "copyName": "{{name}} (copy)",
+        "saved": "Profile saved."
+      },
+      "form": {
+        "general": "General",
+        "defaultIs": "Default: {{value}}",
+        "reset": "Put {{key}} back to its default",
+        "changedCount_one": "{{count}} changed",
+        "changedCount": "{{count}} changed",
+        "nothingChanged": "Every setting is at its default.",
+        "noSettings": "This step has no settings.",
+        "listInvalid": "Write numbers separated by commas."
+      },
+      "import": {
+        "open": "Import a file",
+        "title": "Import a parameter file",
+        "pick": "Drop a parameter file here, or click to choose one",
+        "hint": "An HDMapping TOML file (the one odometry writes next to every run will do) or a profile file saved from SilexGIS.",
+        "reading": "Reading the file…",
+        "accepted": "The file can be kept as a profile.",
+        "refusedTitle": "The file cannot be kept: some values are of the wrong kind or out of range.",
+        "versionDiffers": "The file was written by version {{file}}; the installed version is {{installed}}. Check the settings before you use them.",
+        "step": "Step",
+        "format": "Read as",
+        "taken": "Settings taken from the file",
+        "defaulted": "Settings the file left out, filled from the defaults",
+        "unknown": "Settings the installed version does not have, left out",
+        "fixed": "Fixed settings the file changed, kept at their defaults",
+        "droppedSections": "Sections that are never part of a profile, left out",
+        "namePlaceholder": "The name the file gives, or its file name",
+        "keep": "Keep as a profile",
+        "saved": "Profile imported.",
+        "errors": {
+          "unreadable": "The file could not be read as TOML or JSON.",
+          "notAProfile": "The file is not a parameter file this installation knows.",
+          "defaultsUnknown": "The processing service has not run yet, so there is nothing to check the file against. Try again once it has started.",
+          "stepUnknown": "The file is for a processing step this installation does not have.",
+          "refused": "The file was refused; see the report."
+        }
+      }
+    },
     "title": "Settings",
     "nav": {
       "profile": "Profile",
@@ -4477,6 +4574,7 @@
       "sync": "Sync",
       "access-keys": "Access keys",
       "survey-uploads": "Survey uploads",
+      "scan-profiles": "Scans · Processing profiles",
       "advanced": "Advanced"
     },
     "visibility": {
@@ -7076,6 +7174,52 @@
         "sending": "Sending the file…",
         "completing": "Finishing…"
       }
+    },
+    "recording": {
+      "kindFile": "One cloud file",
+      "kindRecording": "Scanner recording folder",
+      "chooseFolder": "Drop the scanner's recording folder here, or click to pick it",
+      "folderHint": "lidarNNNN.laz files with their imuNNNN.csv logs, and optionally .sn, .gnss, .nmea and calibration.json. Camera folders are left out. At most {{max}} and {{files}} files together.",
+      "files": "Files to send",
+      "size": "Size",
+      "chunks": "Lidar chunks",
+      "leftOut": "Left out",
+      "leftOutHint": "Camera pictures, other folders and files a recording does not hold are not sent.",
+      "fileName": "File",
+      "fileSize": "Size",
+      "problem": {
+        "noLidar": "The folder holds no lidar chunk (lidarNNNN.laz).",
+        "unpaired": "Lidar chunk {{chunk}} has no IMU log (imuNNNN.csv) beside it.",
+        "tooManyFiles": "A recording may hold at most {{max}} files.",
+        "tooLarge": "A recording may be at most {{max}} together.",
+        "fileTooLarge": "{{name}} is larger than the {{max}} a single file may be.",
+        "duplicate": "Two files are named {{name}}.",
+        "empty": "{{name}} is empty."
+      },
+      "gnssHint": "The recording holds a GNSS log, so it is a location: its files are shown only to those who may see the cave's exact position.",
+      "runRoom": "Processing it needs room on the processing worker's disk while it runs:",
+      "profile": "Odometry profile",
+      "profileDefaults": "HDMapping's defaults",
+      "profileDiffers_one": "Differs from the defaults in {{count}} setting",
+      "profileDiffers": "Differs from the defaults in {{count}} settings",
+      "profileIsDefault": "Runs with HDMapping's defaults.",
+      "profileHint": "The profile you choose is remembered for your next recording.",
+      "scope": {
+        "installation": "Installation",
+        "cavingGroup": "Group",
+        "personal": "Personal"
+      },
+      "sendingFile": "Sending file {{done}} of {{total}}…",
+      "upload": "Upload recording",
+      "uploaded": "The recording was sent. Processing starts shortly.",
+      "factsTitle": "Recording",
+      "sensors": "Sensors",
+      "duration": "Duration",
+      "calibration": "Calibration",
+      "gnss": "GNSS log",
+      "unknown": "Not known",
+      "yes": "Yes",
+      "no": "No"
     },
     "fileRoles": {
       "archive": "Survey archive",

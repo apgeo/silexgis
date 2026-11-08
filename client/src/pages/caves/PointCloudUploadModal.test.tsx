@@ -17,6 +17,14 @@ import '../../i18n';
  */
 
 const uploadMutate = vi.fn();
+const recordingMutate = vi.fn();
+
+/** Invented odometry profiles: the defaults built in, a faster one, and the caller's own, chosen last. */
+const profiles = [
+  { id: 'p-defaults', stepId: 'hdmapping.odometry', name: 'HDMapping defaults', scope: 'installation', builtIn: true, values: { values: {} } },
+  { id: 'p-fast', stepId: 'hdmapping.odometry', name: 'Fast preview', scope: 'installation', builtIn: true, values: { values: { lidar: { nr_iter: 300 } } } },
+];
+let remembered: { stepId: string; profileId: string; chosenAt: string }[] = [];
 
 /** An invented room answer: 10 GB of 100 used, nothing against the scans' cap, and whether it fits. */
 function roomFor(addingBytes: number, missingBytes = 0) {
@@ -42,9 +50,20 @@ vi.mock('../../api/hooks.ts', async () => {
   return {
     ...actual,
     useSurveyUploadCapabilities: () => ({
-      data: { pointCloud: { maxFileBytes: 1024, maxFilesPerUpload: 1, acceptedExtensions: ['.laz', '.las'] } },
+      data: {
+        pointCloud: {
+          maxFileBytes: 1024,
+          maxFilesPerUpload: 1,
+          acceptedExtensions: ['.laz', '.las'],
+          recording: { maxFileBytes: 1024, maxTotalBytes: 4096, maxFiles: 10, acceptedExtensions: ['.laz', '.csv'], odometryWorkerFactor: 22 },
+        },
+      },
     }),
     useUploadPointCloud: () => ({ mutateAsync: uploadMutate, isPending: false }),
+    useUploadRecording: () => ({ mutateAsync: recordingMutate, isPending: false }),
+    useProcessingProfiles: () => ({ data: profiles }),
+    useRememberedProcessingProfiles: () => ({ data: remembered }),
+    useScanStepParameterSchema: () => ({ data: { defaults: { values: { lidar: { nr_iter: 1000 } } } } }),
     useStorageRoom: (params: { addingBytes: number | null | undefined; scan?: boolean }) => {
       roomAsked.push(params);
       return { data: params.addingBytes == null ? undefined : roomFor(params.addingBytes, missing) };
@@ -72,6 +91,8 @@ function choose(file: File) {
 
 beforeEach(() => {
   uploadMutate.mockReset().mockResolvedValue({ id: 'u1', statusPageUrl: '/caves/c1/surveys/s1/uploads/u1', cave: { id: 'c1' } });
+  recordingMutate.mockReset().mockResolvedValue({ id: 'u2', statusPageUrl: '/caves/c1/surveys/s2/uploads/u2', cave: { id: 'c1' } });
+  remembered = [];
   navigate.mockReset();
   missing = 0;
   roomAsked.length = 0;
@@ -119,5 +140,59 @@ describe('the point-cloud upload dialog', () => {
     expect(screen.getByTestId('storage-room-shortfall')).toHaveTextContent('100 B missing under the point-cloud cap');
     expect(screen.getByRole('button', { name: 'Upload point cloud' })).toBeDisabled();
     expect(uploadMutate).not.toHaveBeenCalled();
+  });
+
+  it('takes a recording folder, leaves the camera pictures out, shows the files and size and the room, and sends it with the remembered profile', async () => {
+    remembered = [{ stepId: 'hdmapping.odometry', profileId: 'p-fast', chosenAt: '2026-11-08T00:00:00Z' }];
+    show();
+    fireEvent.click(screen.getByText('Scanner recording folder'));
+
+    const inFolder = (path: string, size: number) => {
+      const file = new File([new Uint8Array(size)], path.slice(path.lastIndexOf('/') + 1));
+      Object.defineProperty(file, 'webkitRelativePath', { value: path });
+      return file;
+    };
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(input).toHaveAttribute('webkitdirectory');
+    fireEvent.change(input, {
+      target: {
+        files: [
+          inFolder('Galeria/lidar0000.laz', 300),
+          inFolder('Galeria/imu0000.csv', 20),
+          inFolder('Galeria/CAMERA_1/photo_0001.jpg', 900),
+        ],
+      },
+    });
+
+    await waitFor(() => expect(screen.getByTestId('point-cloud-recording-count')).toHaveTextContent('2'));
+    expect(screen.getByTestId('point-cloud-recording-size')).toHaveTextContent('320 B');
+    expect(screen.getByTestId('point-cloud-recording-skipped')).toHaveTextContent('1');
+    expect(screen.getByTestId('point-cloud-title')).toHaveValue('Galeria');
+    // The upload's room, and the run's on the worker's disk at the published factor.
+    expect(roomAsked.some((p) => p.addingBytes === 320 && p.scan === true)).toBe(true);
+    expect(roomAsked.some((p) => p.addingBytes === 320 * 22 && p.scan === true)).toBe(true);
+    // The profile used last is pre-selected and said to differ from the defaults.
+    expect(screen.getByTestId('point-cloud-profile')).toHaveTextContent('Fast preview');
+    expect(screen.getByTestId('point-cloud-profile-differs')).toHaveTextContent('1 setting');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upload recording' }));
+    await waitFor(() => expect(recordingMutate).toHaveBeenCalledTimes(1));
+    const request = recordingMutate.mock.calls[0]![0];
+    expect(request.files.map((f: File) => f.name)).toEqual(['imu0000.csv', 'lidar0000.laz']);
+    expect(request.surveyTitle).toBe('Galeria');
+    expect(request.profiles).toEqual(['p-fast']);
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/caves/c1/surveys/s2/uploads/u2'));
+  });
+
+  it('offers nothing to send for a folder the server would refuse, and says why', async () => {
+    show();
+    fireEvent.click(screen.getByText('Scanner recording folder'));
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File([new Uint8Array(10)], 'lidar0003.laz')] } });
+
+    await waitFor(() => expect(screen.getByTestId('point-cloud-recording-problem-unpaired')).toHaveTextContent('chunk 3'));
+    expect(screen.getByTestId('point-cloud-profile-default')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upload recording' })).toBeDisabled();
+    expect(recordingMutate).not.toHaveBeenCalled();
   });
 });
