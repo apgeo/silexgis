@@ -17,6 +17,7 @@ import {
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import StorageRoomSummary from '../../components/storage/StorageRoomSummary.tsx';
 import { formatBytes } from '../../components/storage/storageFigures.ts';
+import { parameterGroups } from '../../components/scanProfiles/parameterSchema.ts';
 import { changedProfileKeys, preferredProfileId } from '../../components/surveyUploads/recordingProfile.ts';
 
 export type RecordingFile = RecordingCandidate & { file: File };
@@ -72,13 +73,16 @@ export default function RecordingFolderSection({
   const { data: profiles } = useProcessingProfiles(ODOMETRY_STEP_ID);
   const { data: remembered } = useRememberedProcessingProfiles(ODOMETRY_STEP_ID);
   const { data: schema } = useScanStepParameterSchema(ODOMETRY_STEP_ID);
-  const defaults = schema?.defaults;
+  const groups = useMemo(
+    () => (schema ? parameterGroups(schema.schema, schema.defaults) : undefined),
+    [schema],
+  );
 
   const offered = useMemo(() => profiles ?? [], [profiles]);
   const shown =
-    profileId !== undefined ? profileId : preferredProfileId(ODOMETRY_STEP_ID, offered, remembered, defaults);
+    profileId !== undefined ? profileId : preferredProfileId(ODOMETRY_STEP_ID, offered, remembered, groups);
   const chosen = offered.find((profile) => profile.id === shown);
-  const changed = chosen && defaults !== undefined ? changedProfileKeys(chosen.values, defaults) : [];
+  const changed = chosen && groups !== undefined ? changedProfileKeys(chosen.values, groups) : [];
   const fits = selection && selection.problems.length === 0;
 
   useEffect(() => {
@@ -197,7 +201,7 @@ export default function RecordingFolderSection({
             </Tag>
             <Typography.Text type="secondary">{changed.map((key) => key.replace(/^values\./, '')).join(', ')}</Typography.Text>
           </Flex>
-        ) : (
+        ) : groups === undefined ? null : (
           <Typography.Text type="secondary" data-testid="point-cloud-profile-default">
             {t('surveyUploads.recording.profileIsDefault')}
           </Typography.Text>

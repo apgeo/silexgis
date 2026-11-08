@@ -1,31 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { ProcessingProfile, ProcessingProfileChoice } from '../../api/hooks.ts';
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function same(a: unknown, b: unknown): boolean {
-  return Array.isArray(a) || Array.isArray(b) ? JSON.stringify(a) === JSON.stringify(b) : a === b;
-}
+import { changedFields, type ParameterGroup } from '../scanProfiles/parameterSchema.ts';
 
 /**
  * The keys a profile's values change from the step's defaults, as dotted paths
- * (`values.filter_points.decimation`), in the order the profile holds them.
+ * (`values.filter_points.decimation`), in form order.
  *
- * A profile holds only the keys it sets and is laid over the defaults when it runs, so a key it
- * does not name is the default, and a key it names with the default's own value changes nothing.
- * A key the defaults do not have counts as changed: it is not what runs unasked.
+ * The rule itself lives in the profile editor's helpers (a field counts when the profile names it
+ * and the value is not the default), so the upload dialog and the editor always agree. A key the
+ * schema does not describe is not a setting of the step and is not counted.
  */
-export function changedProfileKeys(values: unknown, defaults: unknown, prefix = ''): string[] {
-  if (!isPlainObject(values)) {
-    return values === undefined || same(values, defaults) ? [] : [prefix];
-  }
-  const base = isPlainObject(defaults) ? defaults : {};
-  return Object.entries(values).flatMap(([key, value]) => {
-    const path = prefix ? `${prefix}.${key}` : key;
-    return isPlainObject(value) ? changedProfileKeys(value, base[key], path) : same(value, base[key]) ? [] : [path];
-  });
+export function changedProfileKeys(values: unknown, groups: readonly ParameterGroup[]): string[] {
+  return changedFields(groups, values).map((field) => field.path.join('.'));
 }
 
 /**
@@ -37,7 +23,7 @@ export function preferredProfileId(
   stepId: string,
   profiles: readonly ProcessingProfile[],
   remembered: readonly ProcessingProfileChoice[] | undefined,
-  defaults: unknown,
+  groups: readonly ParameterGroup[] | undefined,
 ): string | null {
   const offered = profiles.filter((profile) => profile.stepId === stepId);
   const last = remembered?.find((choice) => choice.stepId === stepId)?.profileId;
@@ -45,7 +31,7 @@ export function preferredProfileId(
     return last;
   }
   return (
-    offered.find((profile) => profile.builtIn && changedProfileKeys(profile.values, defaults).length === 0)?.id ??
+    offered.find((profile) => profile.builtIn && groups !== undefined && changedProfileKeys(profile.values, groups).length === 0)?.id ??
     null
   );
 }

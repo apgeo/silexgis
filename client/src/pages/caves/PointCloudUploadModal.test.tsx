@@ -63,7 +63,20 @@ vi.mock('../../api/hooks.ts', async () => {
     useUploadRecording: () => ({ mutateAsync: recordingMutate, isPending: false }),
     useProcessingProfiles: () => ({ data: profiles }),
     useRememberedProcessingProfiles: () => ({ data: remembered }),
-    useScanStepParameterSchema: () => ({ data: { defaults: { values: { lidar: { nr_iter: 1000 } } } } }),
+    useScanStepParameterSchema: () => ({
+      data: {
+        defaults: { values: { lidar: { nr_iter: 1000 } } },
+        schema: {
+          type: 'object',
+          properties: {
+            values: {
+              type: 'object',
+              properties: { lidar: { type: 'object', properties: { nr_iter: { type: 'integer' } } } },
+            },
+          },
+        },
+      },
+    }),
     useStorageRoom: (params: { addingBytes: number | null | undefined; scan?: boolean }) => {
       roomAsked.push(params);
       return { data: params.addingBytes == null ? undefined : roomFor(params.addingBytes, missing) };
