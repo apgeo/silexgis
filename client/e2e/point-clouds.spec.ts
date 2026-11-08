@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { readFileSync } from 'node:fs';
 import { expect, type Page } from '@playwright/test';
 import { asPerson, registerAccount, signedInElsewhere, tryAsPerson } from './arrange.ts';
 import { test } from './consoleGuard.ts';
 import { gotoRoute, login } from './helpers.ts';
+import { bearerToken } from './rastermapApi.ts';
 
 // A point cloud's way through the product: dropped on a cave, described by its header on the
 // card, looked at on its own, and put on the earth by entrance and bearing. The browser lane runs
@@ -321,4 +323,124 @@ test('a reader without the exact position is told neither where the scan is nor 
   } finally {
     await theirs.context.close();
   }
+});
+
+/** The east, north and up metres from one station to another, near enough for a few hundred metres. */
+function offsetMetres(
+  from: { longitude: number; latitude: number; altitudeM: number | null },
+  to: { longitude: number; latitude: number; altitudeM: number | null },
+): [number, number, number] {
+  const metresPerDegree = 111_320;
+  return [
+    (to.longitude - from.longitude) * metresPerDegree * Math.cos((from.latitude * Math.PI) / 180),
+    (to.latitude - from.latitude) * metresPerDegree,
+    (to.altitudeM ?? 0) - (from.altitudeM ?? 0),
+  ];
+}
+
+test('a scan is placed by control points on the cave line plot, its residuals shown and the pairs sent again', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await login(page);
+  const caveId = await caveWithEntrance(page, `E2E Scan Control ${Date.now()}`, false);
+
+  // The cave's line plot, whose stations the scan is placed by: the upstream viewer's own demo
+  // survey, which the repository carries as a fixture.
+  const uploaded = await page.request.post(`/api/v1/caves/${caveId}/survey-models`, {
+    headers: { Authorization: `Bearer ${await bearerToken(page)}` },
+    multipart: {
+      file: { name: 'P8_Master.3d', mimeType: 'application/octet-stream', buffer: readFileSync('e2e/fixtures/P8_Master.3d') },
+    },
+  });
+  expect(uploaded.ok(), `the survey upload answered ${uploaded.status()}`).toBeTruthy();
+  const linePlotId = ((await uploaded.json()) as { id: string }).id;
+  await expect
+    .poll(async () => (await asPerson<{ status: string }>(page, 'GET', `/api/v1/survey-models/${linePlotId}`)).status, {
+      timeout: 90_000,
+      message: 'the line plot was never read',
+    })
+    .toBe('ready');
+  // The first line plot a cave receives is its current one, which is the one a scan is placed by.
+
+  type Station = { name: string; longitude: number; latitude: number; altitudeM: number | null };
+  const stations = (
+    await asPerson<{ items: Station[] }>(page, 'GET', `/api/v1/survey-models/${linePlotId}/stations?pageSize=200`)
+  ).items;
+  // Two stations a sensible distance apart, so neither the scan points nor the stations are too close.
+  const first = stations[0];
+  const second = stations.find((s) => {
+    const [e, n] = offsetMetres(first, s);
+    const d = Math.hypot(e, n);
+    return d > 5 && d < 300;
+  });
+  expect(second, 'the fixture has two stations between 5 and 300 m apart').toBeDefined();
+  const [east, north, up] = offsetMetres(first, second!);
+
+  const upload = await uploadLas(page, caveId, 'E2E control-point scan');
+  expect(upload.status, JSON.stringify(upload)).toBe('succeeded');
+  const modelId = upload.pointCloud!.modelId;
+
+  // Placed by the two pairs over the API first: the scan's frame already north-aligned, so the
+  // scan points are the stations' own offsets and the fit comes out close to exact.
+  const placed = await asPerson<{ placementSource: string; placementControlPoints: { rmsM: number } | null }>(
+    page,
+    'PUT',
+    `/api/v1/survey-models/${modelId}/placement/control-points`,
+    {
+      pairs: [
+        { scanX: 0, scanY: 0, scanZ: 0, station: first.name },
+        { scanX: east, scanY: north, scanZ: up, station: second!.name },
+      ],
+      fitTilt: false,
+    },
+  );
+  expect(placed.placementSource).toBe('controlPoints');
+  expect(placed.placementControlPoints!.rmsM).toBeLessThan(0.5);
+
+  // Canned tiles, as above: the model listing is rewritten to name a tileset, and it is served here.
+  const tilesetUrl = `/api/v1/survey-models/${modelId}/tiles/tileset.json?token=e2e`;
+  await page.route(`**/api/v1/caves/${caveId}/survey-models`, async (route) => {
+    const answer = (await (await route.fetch()).json()) as { id: string; tilesetUrl: string | null }[];
+    await route.fulfill({ json: answer.map((m) => (m.id === modelId ? { ...m, tilesetUrl } : m)) });
+  });
+  await page.route(`**/api/v1/survey-models/${modelId}/tiles/**`, async (route) => {
+    if (route.request().url().includes('tileset.json')) {
+      await route.fulfill({ contentType: 'application/json', body: tilesetJson });
+    } else {
+      await route.fulfill({ contentType: 'application/octet-stream', body: tinyPnts(200) });
+    }
+  });
+
+  await gotoRoute(page, `/caves/${caveId}`);
+  const state = page.getByTestId(`scan-placement-state-${modelId}`);
+  await expect(state).toContainText('Placed by control points', { timeout: 15_000 });
+  await expect(state).toContainText('RMS');
+
+  // The placer opens on the pairs the scan was placed by, with their residuals.
+  await page.getByTestId(`scan-place-points-${modelId}`).click();
+  const panel = page.getByTestId('scan-control-points');
+  await expect(panel).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('scan-control-station-0')).toHaveValue(first.name);
+  await expect(page.getByTestId('scan-control-station-1')).toHaveValue(second!.name);
+  await expect(page.getByTestId('scan-control-residuals').locator('tbody tr')).toHaveCount(2);
+  await expect(page.getByTestId('point-cloud-surface')).toHaveAttribute('data-status', 'loaded', { timeout: 60_000 });
+
+  // Picking arms the click on the cloud; the click itself needs a depth buffer the software
+  // renderer does not answer reliably, so the pick is proved against the engine's double and
+  // the browser proves the control, and that the pairs go to the server and come back fitted.
+  await page.getByTestId('scan-control-pick-0').click();
+  await expect(page.getByTestId('scan-control-pick-0')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('point-cloud-measure')).toBeDisabled();
+  await page.getByTestId('scan-control-pick-0').click();
+
+  const sent = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/v1/survey-models/${modelId}/placement/control-points`) &&
+      response.request().method() === 'PUT',
+  );
+  await page.getByTestId('scan-control-save').click();
+  expect((await sent).status()).toBe(200);
+  await expect(page.getByText('The scan is placed by its control points.')).toBeVisible();
+  await expect(page.getByTestId('scan-control-rms')).toContainText('m');
 });
