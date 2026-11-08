@@ -455,20 +455,22 @@ public sealed class PointCloudProcessing(
     }
 
     /// <summary>
-    /// Fills a recording's odometry parameters in, when the recipe still carries an empty set, with
-    /// the defaults the HDMapping worker dumped from the program it runs, and writes the recipe
-    /// back so the upload records the whole set the step ran with. Unchanged when there is no
-    /// odometry step, the set is already resolved, or no worker has dumped its defaults — a worker
-    /// that has not cannot run the step either, and the run says so where the step is reached.
+    /// Completes a recording's odometry parameters — an empty set, or a profile's set that names
+    /// only what it changes — with the defaults the HDMapping worker dumped from the program it
+    /// runs, and writes the recipe back so the upload records the whole set the step ran with.
+    /// Unchanged when there is no odometry step, the set is already whole, or no worker has dumped
+    /// its defaults — a worker that has not cannot run the step either, and the run says so where
+    /// the step is reached.
     /// </summary>
     private async Task<ScanRecipe> ResolveOdometryAsync(SurveyUpload upload, ScanRecipe recipe, CancellationToken ct)
     {
-        if (!PointCloudRecipes.OdometryUnresolved(recipe) || handoff.ReadOdometryDefaults() is not { } defaults)
+        if (handoff.ReadOdometryDefaults() is not { } defaults
+            || PointCloudRecipes.CompletedOdometryValues(recipe, HdmappingParameterSchema.EditableDefaults(defaults)) is not { } completed)
         {
             return recipe;
         }
 
-        var resolved = PointCloudRecipes.WithOdometryValues(recipe, defaults);
+        var resolved = PointCloudRecipes.WithOdometryValues(recipe, completed);
         var stored = ScanRecipes.ToOptionsJson(resolved with { RerunFrom = null });
         await db.SurveyUploads.Where(u => u.Id == upload.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(u => u.Options, stored), ct);

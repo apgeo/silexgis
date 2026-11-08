@@ -38,6 +38,7 @@ public static partial class SurveyUploadEndpoints
         IOptions<ScanOptions> scans,
         ITypedPropertiesValidator schemas,
         StorageFiguresService storage,
+        ProcessingProfileResolver profiles,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -77,6 +78,7 @@ public static partial class SurveyUploadEndpoints
         // account's standing choices say; a point cloud's run is a recipe of steps with their
         // parameters resolved now, so a rerun repeats exactly this.
         string runOptions;
+        IReadOnlyDictionary<string, Guid> chosenProfiles = new Dictionary<string, Guid>();
         if (ScanOrigins.IsScan(origin))
         {
             // A device may decide how much to show before the estimate; otherwise the run
@@ -94,7 +96,16 @@ public static partial class SurveyUploadEndpoints
                 return ApiProblems.BadRequest(DisplayInvalidCode, string.Join("; ", errors));
             }
 
-            runOptions = ScanRecipes.ToOptionsJson(recipe);
+            // The profiles named are copied into the recipe now, so the upload holds the values
+            // and never a reference that a later edit of the profile would change.
+            var (resolution, profileProblem) = await profiles.ApplyAsync(ctx, recipe, request.Profiles, ct);
+            if (profileProblem is not null)
+            {
+                return ApiProblems.BadRequest(profileProblem.Code, profileProblem.Detail);
+            }
+
+            chosenProfiles = resolution!.Chosen;
+            runOptions = ScanRecipes.ToOptionsJson(resolution.Recipe);
         }
         else
         {
@@ -270,6 +281,7 @@ public static partial class SurveyUploadEndpoints
             return ApiProblems.Conflict(BusyCode, "Another upload of this survey arrived at the same moment; send it again.");
         }
 
+        await profiles.RememberAsync(ctx.UserId, chosenProfiles, ct);
         var dto = await ToDtoAsync(db, tokens, links, options.Value, upload, cave, writable: true, ct);
         return TypedResults.Created($"/api/v1/survey-uploads/{upload.Id}", dto);
     }

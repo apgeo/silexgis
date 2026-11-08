@@ -438,6 +438,8 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, PointCloudPipelineHandler>();
         services.AddSingleton<Scans.ScanWorkerHandoff>();
         services.AddScoped<Scans.PointCloudProcessing>();
+        services.AddScoped<Scans.ScanStepParameterSchemas>();
+        services.AddScoped<Scans.ProcessingProfileResolver>();
         services.AddScoped<IProcessingJobHandler, SurveyUploadSweepHandler>();
         // Which compiler is the installation's choice, made once at start-up: none unless it asked.
         var compilerChoice = configuration.GetSection(Surveys.SurveyCompilerOptions.SectionName).Get<Surveys.SurveyCompilerOptions>();

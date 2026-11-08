@@ -5108,6 +5108,87 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("processing_jobs", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.ProcessingProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("origin");
+
+                    b.Property<Guid?>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<short>("Scope")
+                        .HasColumnType("smallint")
+                        .HasColumnName("scope");
+
+                    b.Property<string>("StepId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("step_id");
+
+                    b.Property<string>("ToolVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tool_version");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Values")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("values")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.HasKey("Id")
+                        .HasName("pk_processing_profiles");
+
+                    b.HasIndex(new[] { "CavingGroupId" }, "ix_processing_profiles_caving_group_id")
+                        .HasDatabaseName("ix_processing_profiles_caving_group_id");
+
+                    b.HasIndex(new[] { "OwnerUserId" }, "ix_processing_profiles_owner_user_id")
+                        .HasDatabaseName("ix_processing_profiles_owner_user_id");
+
+                    b.HasIndex(new[] { "StepId", "Scope" }, "ix_processing_profiles_step_scope")
+                        .HasDatabaseName("ix_processing_profiles_step_scope");
+
+                    b.ToTable("processing_profiles", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_processing_profiles_group_scope", "(scope = 1) = (caving_group_id is not null)");
+
+                            t.HasCheckConstraint("ck_processing_profiles_personal_owner", "scope <> 2 or owner_user_id is not null");
+                        });
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.RasterMap", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5649,6 +5730,77 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_scan_artifacts_upload_step_params");
 
                     b.ToTable("scan_artifacts", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ScanProfileChoice", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("StepId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("step_id");
+
+                    b.Property<DateTimeOffset>("ChosenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("chosen_at");
+
+                    b.Property<Guid>("ProfileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("profile_id");
+
+                    b.HasKey("UserId", "StepId")
+                        .HasName("pk_user_scan_profile_choices");
+
+                    b.HasIndex(new[] { "ProfileId" }, "ix_user_scan_profile_choices_profile_id")
+                        .HasDatabaseName("ix_user_scan_profile_choices_profile_id");
+
+                    b.ToTable("user_scan_profile_choices", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ScanStepDefaults", b =>
+                {
+                    b.Property<string>("StepId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("step_id");
+
+                    b.Property<string>("NativeText")
+                        .HasColumnType("text")
+                        .HasColumnName("native_text");
+
+                    b.Property<string>("SoftwareVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("software_version");
+
+                    b.Property<DateTimeOffset>("StoredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("stored_at");
+
+                    b.Property<string>("ToolVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tool_version");
+
+                    b.Property<string>("Values")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("values")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<DateTimeOffset?>("WrittenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("written_at");
+
+                    b.HasKey("StepId")
+                        .HasName("pk_scan_step_defaults");
+
+                    b.ToTable("scan_step_defaults", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SpeleolocImportSession", b =>
@@ -10699,6 +10851,21 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_photo_import_sessions_users_user_id");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.ProcessingProfile", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_processing_profiles_caving_groups_caving_group_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_processing_profiles_users_owner_user_id");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.RasterMap", b =>
                 {
                     b.HasOne("SilexGis.Domain.Entities.Feature", null)
@@ -10818,6 +10985,23 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_scan_artifacts_survey_uploads_survey_upload_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ScanProfileChoice", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.ProcessingProfile", null)
+                        .WithMany()
+                        .HasForeignKey("ProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_scan_profile_choices_processing_profiles_profile_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_scan_profile_choices_users_user_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SpeleolocImportSession", b =>

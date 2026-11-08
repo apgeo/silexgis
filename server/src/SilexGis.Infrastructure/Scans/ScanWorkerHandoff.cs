@@ -9,6 +9,15 @@ namespace SilexGis.Infrastructure.Scans;
 /// <summary>A step the worker announced it can run, with the tool and version it runs it with.</summary>
 public sealed record ScanWorkerStep(string Id, string Tool, string Version);
 
+/// <summary>A step's default parameters as a worker dumped them from the program it runs.</summary>
+/// <param name="Version">The version the worker names the step's tool by; empty when the file names none.</param>
+/// <param name="SoftwareVersion">The program's own version word.</param>
+/// <param name="Values">The defaults by the program's own sections.</param>
+/// <param name="NativeText">The program's own text of the dump.</param>
+/// <param name="WrittenAt">When the worker wrote the file.</param>
+public sealed record ScanWorkerDefaults(
+    string StepId, string Version, string? SoftwareVersion, JsonElement Values, string? NativeText, DateTimeOffset? WrittenAt);
+
 /// <summary>What the worker wrote at its start: who it is and what it can do.</summary>
 public sealed record ScanWorkerCapabilities(string Worker, IReadOnlyList<ScanWorkerStep> Steps)
 {
@@ -163,6 +172,51 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
                 && values.EnumerateObject().Any()
                 ? values.Clone()
                 : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        {
+            logger.LogWarning(e, "HDMapping's default parameters at {Path} could not be read", path);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The whole of HDMapping's default-parameter dump as the worker wrote it — the values, the
+    /// version it names, the program's own TOML text and when it was written; null when no such
+    /// worker has started, or what it wrote does not read.
+    /// </summary>
+    public ScanWorkerDefaults? ReadOdometryDefaultsDocument()
+    {
+        var path = Path.Combine(Root, DefaultsDirectory, OdometryDefaultsFile);
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("values", out var values)
+                || values.ValueKind != JsonValueKind.Object
+                || !values.EnumerateObject().Any())
+            {
+                return null;
+            }
+
+            DateTimeOffset? writtenAt = Text(root, "writtenAt") is { } written
+                && DateTimeOffset.TryParse(written, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed)
+                ? parsed.ToUniversalTime()
+                : null;
+            return new ScanWorkerDefaults(
+                Text(root, "step") ?? Domain.Scans.HdmappingOdometryStep.StepId,
+                Text(root, "version") ?? "",
+                Text(root, "softwareVersion"),
+                values.Clone(),
+                Text(root, "toml"),
+                writtenAt);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
         {

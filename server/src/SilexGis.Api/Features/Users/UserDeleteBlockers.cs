@@ -69,6 +69,8 @@ public static class UserDeleteBlockers
             (db, id, ct) => db.GeoreferencedMaps.IgnoreQueryFilters().CountAsync(x => x.OwnerUserId == id, ct)),
         new("import_batches", typeof(ImportBatch), ["ConfirmedByUserId"],
             (db, id, ct) => db.ImportBatches.IgnoreQueryFilters().CountAsync(x => x.ConfirmedByUserId == id, ct)),
+        new("processing_profiles", typeof(ProcessingProfile), ["OwnerUserId"],
+            (db, id, ct) => db.ProcessingProfiles.CountAsync(x => x.OwnerUserId == id, ct)),
         new("raster_maps", typeof(RasterMap), ["OwnerUserId"],
             (db, id, ct) => db.RasterMaps.IgnoreQueryFilters().CountAsync(x => x.OwnerUserId == id, ct)),
         new("survey_uploads", typeof(SurveyUpload), ["RequestedBy"],

@@ -373,6 +373,7 @@ public static partial class SurveyUploadEndpoints
         SurveyUploadPublicLinkService links,
         IOptions<SurveyUploadOptions> options,
         ITypedPropertiesValidator schemas,
+        ProcessingProfileResolver profiles,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -405,10 +406,13 @@ public static partial class SurveyUploadEndpoints
 
         // A point cloud's options are its recipe, which a survey's pipeline request says nothing
         // about. A choice of how much to show makes a new recipe; a step to do again without one
-        // keeps the recipe the upload has, thinning included, and only marks the step.
+        // keeps the recipe the upload has, thinning included, and only marks the step. Profiles
+        // named are then copied into whichever recipe that is.
+        IReadOnlyDictionary<string, Guid> chosenProfiles = new Dictionary<string, Guid>();
         if (ScanOrigins.IsScan(upload.Source))
         {
             var current = ScanRecipes.FromOptionsJson(upload.Options);
+            ScanRecipe? rebuilt = null;
             if (request?.Display is { } display)
             {
                 // A recording keeps the odometry parameters it was processed with: a new choice
@@ -423,15 +427,36 @@ public static partial class SurveyUploadEndpoints
                     return ApiProblems.BadRequest(DisplayInvalidCode, string.Join("; ", errors));
                 }
 
-                upload.Options = ScanRecipes.ToOptionsJson(recipe);
+                // Every other step keeps the values the upload had, a profile's included; only
+                // the thinning is the new choice. Profiles named in the request are laid over after.
+                rebuilt = current is null
+                    ? recipe
+                    : recipe with
+                    {
+                        Steps = [.. recipe.Steps.Select(s => s.StepId == PointCloudDownsampleStep.StepId
+                            ? s
+                            : current.Steps.FirstOrDefault(c => c.StepId == s.StepId) ?? s)],
+                    };
             }
-            else if (request?.FromStep is { } fromStep)
+            else if (request?.FromStep is not null || request?.Profiles is { Count: > 0 })
             {
                 var kept = current
                     ?? (upload.Source == SurveyOrigin.Mandeye
                         ? PointCloudRecipes.ForRecording(schemas, null, null, null, out _)!
                         : PointCloudRecipes.Default(schemas));
-                upload.Options = ScanRecipes.ToOptionsJson(kept with { RerunFrom = fromStep });
+                rebuilt = kept with { RerunFrom = request?.FromStep };
+            }
+
+            if (rebuilt is not null)
+            {
+                var (resolution, profileProblem) = await profiles.ApplyAsync(ctx, rebuilt, request?.Profiles, ct);
+                if (profileProblem is not null)
+                {
+                    return ApiProblems.BadRequest(profileProblem.Code, profileProblem.Detail);
+                }
+
+                chosenProfiles = resolution!.Chosen;
+                upload.Options = ScanRecipes.ToOptionsJson(resolution.Recipe);
             }
         }
         else if (request?.Pipeline is { } pipeline)
@@ -461,6 +486,7 @@ public static partial class SurveyUploadEndpoints
             await transaction.CommitAsync(ct);
         }
 
+        await profiles.RememberAsync(ctx.UserId, chosenProfiles, ct);
         await db.Entry(upload).ReloadAsync(ct);
 
         return Accepted(await ToDtoAsync(db, tokens, links, options.Value, upload, found.Cave, writable: true, ct));

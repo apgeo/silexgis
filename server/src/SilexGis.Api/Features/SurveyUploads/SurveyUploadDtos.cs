@@ -4,6 +4,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Scans;
 using SilexGis.Domain.Surveys;
+using SilexGis.Infrastructure.Scans;
 
 namespace SilexGis.Api.Features.SurveyUploads;
 
@@ -138,6 +139,12 @@ public sealed record SurveyUploadPublicLinkMintRequest(SurveyUploadLinkAudience?
 /// tiles a cloud under the installation's thresholds and stops at the estimate for one over
 /// them, waiting for a rerun that chooses. Ignored for a survey tool's upload.
 /// </param>
+/// <param name="Profiles">
+/// A point cloud's processing profiles, at most one per step: each one's values are laid over the
+/// step's defaults and the upload stores the result, never the profile. A step no profile is named
+/// for runs with its defaults. Each one named is remembered as the caller's last choice for its
+/// step. Ignored for a survey tool's upload.
+/// </param>
 public sealed record SurveyUploadOpenRequest(
     string Source,
     SurveyUploadClientInfo? Client,
@@ -151,14 +158,19 @@ public sealed record SurveyUploadOpenRequest(
     SurveyUploadPipelineRequest? Pipeline,
     Visibility? DocumentsVisibility,
     SurveyUploadPublicLinkRequest? PublicLink = null,
-    SurveyUploadDisplayRequest? Display = null);
+    SurveyUploadDisplayRequest? Display = null,
+    IReadOnlyList<Guid>? Profiles = null);
 
 /// <summary>Runs an upload's processing again, with the options it ran with or with new ones.</summary>
 /// <param name="Pipeline">A survey archive's options; ignored for a point cloud.</param>
 /// <param name="Display">A point cloud's choice of how much to show: the recipe is rebuilt around it. Null keeps the recipe as it is, thinning included.</param>
 /// <param name="FromStep">A point cloud's step to do again even where an earlier run's product would do; the steps after it follow. Applies to this rerun only.</param>
+/// <param name="Profiles">A point cloud's processing profiles for this run, at most one per step, resolved into the recipe as with an upload; the steps no profile is named for keep the values they had.</param>
 public sealed record SurveyUploadRerunRequest(
-    SurveyUploadPipelineRequest? Pipeline, SurveyUploadDisplayRequest? Display = null, string? FromStep = null);
+    SurveyUploadPipelineRequest? Pipeline,
+    SurveyUploadDisplayRequest? Display = null,
+    string? FromStep = null,
+    IReadOnlyList<Guid>? Profiles = null);
 
 /// <summary>How much of a point cloud to show: <c>full</c>, one point per <c>voxel</c> of <c>voxelCm</c>, or <c>everyNth</c> point.</summary>
 public sealed record SurveyUploadDisplayRequest(string Method, double? VoxelCm = null, int? EveryNth = null);
@@ -480,6 +492,8 @@ public sealed class SurveyUploadOpenRequestValidator : AbstractValidator<SurveyU
         RuleFor(x => x.Pipeline!).SetValidator(new SurveyUploadPipelineRequestValidator()).When(x => x.Pipeline is not null);
         RuleFor(x => x.PublicLink!.Audience).IsInEnum().When(x => x.PublicLink?.Audience is not null);
         RuleFor(x => x.Display!).SetValidator(new SurveyUploadDisplayRequestValidator()).When(x => x.Display is not null);
+        RuleFor(x => x.Profiles!.Count).LessThanOrEqualTo(ProcessingProfileResolver.MaxProfiles)
+            .OverridePropertyName("profiles").When(x => x.Profiles is not null);
     }
 }
 
@@ -497,6 +511,8 @@ public sealed class SurveyUploadRerunRequestValidator : AbstractValidator<Survey
         RuleFor(x => x.Display!).SetValidator(new SurveyUploadDisplayRequestValidator()).When(x => x.Display is not null);
         RuleFor(x => x.FromStep).Must(id => ScanSteps.Find(id!) is not null).When(x => x.FromStep is not null)
             .WithMessage("The step to run again from is not one this server knows.");
+        RuleFor(x => x.Profiles!.Count).LessThanOrEqualTo(ProcessingProfileResolver.MaxProfiles)
+            .OverridePropertyName("profiles").When(x => x.Profiles is not null);
     }
 }
 

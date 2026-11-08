@@ -157,6 +157,42 @@ public static class PointCloudRecipes
         };
     }
 
+    /// <summary>The recipe with one step's parameters replaced, hashed afresh; unchanged when the recipe has no such step.</summary>
+    public static ScanRecipe WithStepParameters(ScanRecipe recipe, string stepId, JsonElement parameters)
+    {
+        ArgumentNullException.ThrowIfNull(recipe);
+        return recipe with
+        {
+            Steps = [.. recipe.Steps.Select(s => s.StepId == stepId ? ScanRecipes.Step(s.StepId, parameters) : s)],
+        };
+    }
+
+    /// <summary>
+    /// The odometry parameters the recipe carries, completed with the program's defaults for every
+    /// key they do not name; null when the recipe has no odometry step or nothing would change.
+    /// </summary>
+    /// <remarks>
+    /// A set chosen from a profile names only the keys the profile changes, and while no worker has
+    /// dumped its defaults there is nothing to complete it with. The run completes it once the
+    /// defaults are known, so the upload still records the whole set the step ran with. An empty
+    /// set becomes the defaults themselves.
+    /// </remarks>
+    public static JsonElement? CompletedOdometryValues(ScanRecipe recipe, JsonElement defaults)
+    {
+        ArgumentNullException.ThrowIfNull(recipe);
+        var step = recipe.Steps.FirstOrDefault(s => s.StepId == HdmappingOdometryStep.StepId);
+        if (step is null || defaults.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var current = step.Parameters.TryGetProperty("values", out var values) && values.ValueKind == JsonValueKind.Object
+            ? values
+            : default;
+        var completed = ProcessingProfileValues.LayOver(defaults, current);
+        return current.ValueKind == JsonValueKind.Object && JsonElement.DeepEquals(completed, current) ? null : completed;
+    }
+
     /// <summary>Whether the recipe's odometry step still waits for its parameters to be resolved: it carries an empty set.</summary>
     public static bool OdometryUnresolved(ScanRecipe recipe)
     {

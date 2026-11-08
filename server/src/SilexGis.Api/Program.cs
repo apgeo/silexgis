@@ -53,6 +53,7 @@ using SilexGis.Api.Features.Filters;
 using SilexGis.Api.Features.ResLinks;
 using SilexGis.Api.Features.FeatureShares;
 using SilexGis.Api.Features.QrLanding;
+using SilexGis.Api.Features.ScanProfiles;
 using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.Statistics;
 using SilexGis.Api.Features.Sync;
@@ -714,6 +715,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapTerrainDerivativeEndpoints();
     api.MapSyncEndpoints();
     api.MapSurveyUploadEndpoints();
+    api.MapProcessingProfileEndpoints();
     api.MapStorageEndpoints();
     api.MapStorageReportEndpoints();
 
@@ -730,6 +732,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
 
         await db.Database.MigrateAsync();
         await TaxonomySeeder.SeedAsync(db);
+        await ProcessingProfileSeeder.SeedAsync(db);
         // Pins carried across from the table phones' pins were kept in arrive with their pixels
         // only; the fraction the browser draws them at is worked out here, by the one conversion
         // there is, rather than by a copy of it in the migration. Nothing to do on every later start.

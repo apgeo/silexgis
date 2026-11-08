@@ -215,6 +215,12 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<ScanArtifact> ScanArtifacts => Set<ScanArtifact>();
 
+    public DbSet<ProcessingProfile> ProcessingProfiles => Set<ProcessingProfile>();
+
+    public DbSet<ScanStepDefaults> ScanStepDefaults => Set<ScanStepDefaults>();
+
+    public DbSet<ScanProfileChoice> ScanProfileChoices => Set<ScanProfileChoice>();
+
     /// <summary>What one archived compilation log said about the survey it was written for.</summary>
     public DbSet<SurveyCompilation> SurveyCompilations => Set<SurveyCompilation>();
 
