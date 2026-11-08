@@ -54,6 +54,9 @@
     <PackageReference Include="DocumentFormat.OpenXml" />
     <PackageReference Include="EFCore.NamingConventions" />
     <PackageReference Include="JsonSchema.Net" />
+    <!-- Reads and writes HDMapping's parameter files (TOML 1.0) so a profile can be imported
+         and exported while no processing worker is running. -->
+    <PackageReference Include="Tomlyn" />
     <PackageReference Include="MailKit" />
     <PackageReference Include="Magick.NET-Q8-AnyCPU" />
     <PackageReference Include="MaxRev.Gdal.Core" />
