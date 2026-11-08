@@ -12,7 +12,7 @@ vi.mock('cesium', () => import('./cesiumTestDouble.ts'));
 // for — so every test below releases what it acquired, and the module is back to having no scene
 // by the time the next one runs.
 const engine = await import('./cesiumTestDouble.ts');
-const { acquireScene3D } = await import('./scene3dContext.ts');
+const { acquireScene3D, createLocalScan3D } = await import('./scene3dContext.ts');
 type Scene3DSession = ReturnType<typeof acquireScene3D>;
 
 function container(): HTMLElement {
@@ -3071,5 +3071,286 @@ describe('a picture of the scene', () => {
 
     // The globe is still the smooth one, and a picture of it owes that source nothing.
     expect(session.engine.getVisibleCredits()).toEqual([]);
+  });
+});
+
+describe('point clouds the scene loads', () => {
+  const scene = () => engine.engineState.widgets[0].scene;
+  const TILES_URL = '/api/v1/survey-models/s1/tiles/tileset.json?token=abc';
+  const OTHER_URL = '/api/v1/survey-models/s2/tiles/tileset.json?token=def';
+
+  /** A scan whose origin is at 1100 m, in a cave whose top is fifty metres above, facing 30° east of north. */
+  const anchor = () => ({
+    longitude: 25.2,
+    latitude: 45.5,
+    altitudeM: 1100,
+    surveyTopAltitudeM: 1150,
+    headingDeg: 30,
+  });
+  const anchored = { absolute: false, offsetM: 0 };
+  const overRelief = { absolute: true, offsetM: 43 };
+  const detail = { maximumScreenSpaceError: 16, cacheBytes: 512 * 1024 * 1024 };
+
+  const loadedClouds = () =>
+    scene().primitives.items.filter(
+      (item): item is InstanceType<typeof engine.Cesium3DTileset> => item instanceof engine.Cesium3DTileset,
+    );
+
+  it('reads the tileset with shading on, places it by the altitude rule and turns it to its bearing', async () => {
+    const session = acquire();
+    const before = scene().renderRequests;
+
+    const loading = session.engine.loadPointCloud('scan', { url: TILES_URL, anchor: anchor(), placement: anchored, detail });
+    expect(session.engine.pointCloudStatus('scan')).toBe('loading');
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await loading;
+
+    expect(session.engine.pointCloudStatus('scan')).toBe('loaded');
+    const [cloud] = loadedClouds();
+    expect(cloud.url).toBe(TILES_URL);
+    // Attenuation and eye-dome lighting together: the second does nothing without the first.
+    expect(cloud.pointCloudShading).toEqual({ attenuation: true, eyeDomeLighting: true });
+    expect(cloud.maximumScreenSpaceError).toBe(16);
+    expect(cloud.cacheBytes).toBe(512 * 1024 * 1024);
+    // The same vertical answer a mesh of this cave gets: hung fifty metres below the surface.
+    expect(cloud.modelMatrix.origin.longitudeDegrees).toBe(25.2);
+    expect(cloud.modelMatrix.origin.height).toBe(-50);
+    // And the one thing a mesh never has: the frame is turned by the scan's bearing.
+    expect(cloud.modelMatrix.headingDegrees).toBeCloseTo(30);
+    expect(scene().renderRequests).toBeGreaterThan(before);
+    session.release();
+  });
+
+  it('colours by height unless told otherwise, and never with any transparency', async () => {
+    const session = acquire();
+    const loading = session.engine.loadPointCloud('scan', { url: TILES_URL, anchor: anchor(), placement: anchored, detail });
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await loading;
+
+    const [cloud] = loadedClouds();
+    const height = cloud.style!.style.color!;
+    // The ramp reads the world position along the cloud's up axis, not the tile-relative one.
+    expect(height).toContain('POSITION_ABSOLUTE');
+    expect(height).toContain('dot(');
+    expect(height).not.toMatch(/, 0\.[0-9]+\)\s*$/);
+
+    session.engine.setPointCloudStyle('scan', { colorBy: 'intensity', intensityMax: 4095 });
+    expect(cloud.style!.style.color).toContain('${intensity}');
+    expect(cloud.style!.style.color).toContain('4095');
+
+    session.engine.setPointCloudStyle('scan', { colorBy: 'rgb' });
+    expect(cloud.style!.style.color).toBe('${COLOR}');
+    session.release();
+  });
+
+  it('moves a loaded cloud with the models when the ground changes, without reading it again', async () => {
+    const session = acquire();
+    const loading = session.engine.loadPointCloud('scan', { url: TILES_URL, anchor: anchor(), placement: anchored, detail });
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await loading;
+
+    session.engine.setModelPlacement(overRelief);
+
+    expect(loadedClouds()[0].modelMatrix.origin.height).toBe(1143);
+    expect(loadedClouds()[0].modelMatrix.headingDegrees).toBeCloseTo(30);
+    expect(engine.engineState.pointCloudRequests).toHaveLength(1);
+    session.release();
+  });
+
+  it('re-places the same tileset under the same id instead of reading it twice', async () => {
+    const session = acquire();
+    const first = session.engine.loadPointCloud('scan', { url: TILES_URL, anchor: anchor(), placement: anchored, detail });
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await first;
+
+    await session.engine.loadPointCloud('scan', {
+      url: TILES_URL,
+      anchor: { ...anchor(), headingDeg: 90 },
+      placement: anchored,
+      detail,
+    });
+
+    expect(engine.engineState.pointCloudRequests).toHaveLength(1);
+    expect(loadedClouds()).toHaveLength(1);
+    expect(loadedClouds()[0].modelMatrix.headingDegrees).toBeCloseTo(90);
+    session.release();
+  });
+
+  it('applies a new detail budget to every loaded cloud and to the next one read', async () => {
+    const session = acquire();
+    const loading = session.engine.loadPointCloud('scan', { url: TILES_URL, anchor: anchor(), placement: anchored, detail });
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await loading;
+
+    session.engine.setPointCloudDetail({ maximumScreenSpaceError: 32, cacheBytes: 1024 });
+    expect(loadedClouds()[0].maximumScreenSpaceError).toBe(32);
+    expect(loadedClouds()[0].cacheBytes).toBe(1024);
+
+    const second = session.engine.loadPointCloud('other', {
+      url: OTHER_URL,
+      anchor: anchor(),
+      placement: anchored,
+      detail: { maximumScreenSpaceError: 8, cacheBytes: 2048 },
+    });
+    engine.Cesium3DTileset.deliver(OTHER_URL);
+    await second;
+    // The budget handed with the load is the one in force from then on, for both.
+    expect(loadedClouds()[1].maximumScreenSpaceError).toBe(8);
+    expect(loadedClouds()[0].maximumScreenSpaceError).toBe(32);
+    session.release();
+  });
+
+  it('gives the tiles back when a cloud is removed, and hides one without unloading it', async () => {
+    const session = acquire();
+    const loading = session.engine.loadPointCloud('scan', { url: TILES_URL, anchor: anchor(), placement: anchored, detail });
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await loading;
+    const [cloud] = loadedClouds();
+
+    session.engine.setPointCloudVisible('scan', false);
+    expect(cloud.show).toBe(false);
+    expect(cloud.destroyed).toBe(false);
+
+    session.engine.removePointCloud('scan');
+    expect(cloud.destroyed).toBe(true);
+    expect(loadedClouds()).toHaveLength(0);
+    expect(session.engine.pointCloudStatus('scan')).toBeUndefined();
+    // Removing what is not there is not an error.
+    session.engine.removePointCloud('scan');
+    session.release();
+  });
+
+  it('drops a tileset that lands after the cloud was removed, and marks one that could not be read', async () => {
+    const session = acquire();
+    const loading = session.engine.loadPointCloud('scan', { url: TILES_URL, anchor: anchor(), placement: anchored, detail });
+    session.engine.removePointCloud('scan');
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await loading;
+    expect(loadedClouds()).toHaveLength(0);
+
+    const failing = session.engine.loadPointCloud('scan', { url: OTHER_URL, anchor: anchor(), placement: anchored, detail });
+    engine.Cesium3DTileset.deliver(OTHER_URL, new Error('404'));
+    await expect(failing).rejects.toThrow('404');
+    expect(session.engine.pointCloudStatus('scan')).toBe('failed');
+    session.release();
+  });
+
+  it('does not put a tileset that lands after teardown into a scene that is gone', async () => {
+    const session = acquire();
+    const loading = session.engine.loadPointCloud('scan', { url: TILES_URL, anchor: anchor(), placement: anchored, detail });
+    session.release();
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await loading;
+    expect(engine.engineState.widgets[0].destroyCount).toBe(1);
+  });
+});
+
+describe('a scan on its own', () => {
+  const TILES_URL = '/api/v1/survey-models/s1/tiles/tileset.json?token=abc';
+  const detail = { maximumScreenSpaceError: 32, cacheBytes: 128 * 1024 * 1024 };
+
+  it('is built with no globe, no sky and no basemap', () => {
+    const local = createLocalScan3D(container());
+    const options = engine.engineState.widgetOptions.at(-1)!;
+    expect(options.globe).toBe(false);
+    expect(options.skyBox).toBe(false);
+    expect(options.skyAtmosphere).toBe(false);
+    expect(options.baseLayer).toBe(false);
+    expect(options.requestRenderMode).toBe(true);
+    local.destroy();
+    expect(local.isDestroyed()).toBe(true);
+    local.destroy(); // twice is a no-op
+  });
+
+  it('reads the tileset at the synthetic origin, shaded, and parks the camera orbiting its centre', async () => {
+    const local = createLocalScan3D(container());
+    const scene = engine.engineState.widgets.at(-1)!.scene;
+
+    const loading = local.load({ url: TILES_URL, detail });
+    expect(local.status()).toBe('loading');
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await loading;
+
+    expect(local.status()).toBe('loaded');
+    const [cloud] = scene.primitives.items as InstanceType<typeof engine.Cesium3DTileset>[];
+    expect(cloud.modelMatrix.origin).toEqual({ longitudeDegrees: 0, latitudeDegrees: 0, height: 0 });
+    expect(cloud.pointCloudShading).toEqual({ attenuation: true, eyeDomeLighting: true });
+    expect(cloud.maximumScreenSpaceError).toBe(32);
+    // The camera is locked to a frame at the cloud's centre: with no planet to orbit, that is
+    // what the default drag turns around.
+    expect(scene.camera.lookingAt).toBeDefined();
+    expect(scene.camera.lookingAt!.transform.origin).toEqual(cloud.boundingSphere.center);
+    expect((scene.camera.lookingAt!.offset as { range: number }).range).toBeGreaterThan(cloud.boundingSphere.radius);
+
+    local.setStyle({ colorBy: 'intensity' });
+    expect(cloud.style!.style.color).toContain('${intensity}');
+    local.setDetail({ maximumScreenSpaceError: 8, cacheBytes: 1 });
+    expect(cloud.cacheBytes).toBe(1);
+    local.destroy();
+  });
+
+  it('measures the distance between two clicks on the drawn cloud, and clears when turned off', async () => {
+    const local = createLocalScan3D(container());
+    const scene = engine.engineState.widgets.at(-1)!.scene;
+    const loading = local.load({ url: TILES_URL, detail });
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await loading;
+    const reported: unknown[] = [];
+    local.subscribeMeasurement((measurement) => reported.push(measurement));
+    const at = (x: number, y: number, z: number) =>
+      new engine.Cartesian3(x, y, z) as unknown as typeof scene.pickedPosition;
+
+    // No handler listens until the measure is on: an ordinary drag must not take points.
+    const handlersBefore = engine.engineState.eventHandlers.length;
+    local.setMeasuring(true);
+    local.setMeasuring(true); // twice is one handler
+    expect(engine.engineState.eventHandlers).toHaveLength(handlersBefore + 1);
+    const handler = engine.engineState.eventHandlers.at(-1)!;
+    const click = () => handler.raise(engine.ScreenSpaceEventType.LEFT_CLICK, { position: new engine.Cartesian2(10, 10) });
+
+    // A click on the void — no depth under the pointer — takes nothing.
+    scene.pickedPosition = undefined;
+    click();
+    expect(local.measurement()).toBeUndefined();
+
+    scene.pickedPosition = at(0, 0, 0);
+    click();
+    expect(local.measurement()).toEqual({ points: 1 });
+
+    scene.pickedPosition = at(3, 4, 0);
+    click();
+    expect(local.measurement()).toEqual({ points: 2, distanceM: 5 });
+    const lines = scene.primitives.items.find((item) => item instanceof engine.PolylineCollection) as InstanceType<
+      typeof engine.PolylineCollection
+    >;
+    expect(lines.polylines).toHaveLength(1);
+    expect(lines.polylines[0].positions).toHaveLength(2);
+    expect(lines.polylines[0].width).toBe(3);
+
+    // A third click is a new measurement, not a longer path.
+    scene.pickedPosition = at(1, 1, 1);
+    click();
+    expect(local.measurement()).toEqual({ points: 1 });
+    expect(lines.polylines).toHaveLength(0);
+
+    local.setMeasuring(false);
+    expect(local.measurement()).toBeUndefined();
+    expect(handler.destroyed).toBe(true);
+    expect(reported).toEqual([{ points: 1 }, { points: 2, distanceM: 5 }, undefined, { points: 1 }, undefined]);
+    local.destroy();
+  });
+
+  it('reports a tileset that could not be read, and drops one that lands after teardown', async () => {
+    const local = createLocalScan3D(container());
+    const failing = local.load({ url: TILES_URL, detail });
+    engine.Cesium3DTileset.deliver(TILES_URL, new Error('403'));
+    await expect(failing).rejects.toThrow('403');
+    expect(local.status()).toBe('failed');
+
+    const late = local.load({ url: TILES_URL, detail });
+    local.destroy();
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await late;
+    expect(local.status()).toBeUndefined();
   });
 });

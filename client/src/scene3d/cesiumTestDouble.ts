@@ -38,6 +38,8 @@ export interface FakeWidgetOptions {
   /** `false` skips creating the star field, sun and moon rather than hiding them. */
   skyBox?: unknown;
   skyAtmosphere?: unknown;
+  /** `false` builds a scene with no planet in it at all, which is what a scan on its own is shown in. */
+  globe?: unknown;
   msaaSamples?: number;
   terrainProvider?: unknown;
   terrain?: unknown;
@@ -105,6 +107,8 @@ export const engineState = {
    * something else underneath it, and those are the cases worth having a test for.
    */
   modelRequests: [] as FakeModelRequest[],
+  /** Every tileset root the scene asked to read, in order; landed by hand like model reads. */
+  pointCloudRequests: [] as FakePointCloudRequest[],
   /**
    * Every read of a drawing surface as a file, in order, with what the surface held at the time.
    *
@@ -126,6 +130,8 @@ export const engineState = {
     engineState.terrainFailures = new Set();
     engineState.modelRequests = [];
     Model.forget();
+    engineState.pointCloudRequests = [];
+    Cesium3DTileset.forget();
     engineState.captures = [];
     engineState.captureFails = false;
   },
@@ -189,11 +195,84 @@ export const Material = {
 export { CesiumMath as Math };
 export { FakeEvent as Event };
 
-export const Cartesian3 = {
-  fromDegrees(longitudeDegrees: number, latitudeDegrees: number, height = 0): FakeCartesian3 {
+/**
+ * A position. Built by `fromDegrees` it is the geographic triple the rest of this stand-in reads;
+ * built with the constructor it is a plain vector, which is all the point-cloud styling's frame
+ * arithmetic needs of it.
+ */
+export class Cartesian3 {
+  x: number;
+  y: number;
+  z: number;
+
+  constructor(x = 0, y = 0, z = 0) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+  }
+
+  static fromDegrees(longitudeDegrees: number, latitudeDegrees: number, height = 0): FakeCartesian3 {
     return { longitudeDegrees, latitudeDegrees, height };
-  },
-};
+  }
+
+  static normalize(value: Cartesian3, result: Cartesian3): Cartesian3 {
+    const length = Math.hypot(value.x, value.y, value.z) || 1;
+    result.x = value.x / length;
+    result.y = value.y / length;
+    result.z = value.z / length;
+    return result;
+  }
+
+  static dot(a: Cartesian3, b: Cartesian3): number {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+  }
+
+  static distance(a: Cartesian3, b: Cartesian3): number {
+    return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  }
+
+  static clone(value: Cartesian3): Cartesian3 {
+    return new Cartesian3(value.x, value.y, value.z);
+  }
+}
+
+export class Cartesian4 {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+
+  constructor(x = 0, y = 0, z = 0, w = 0) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+    this.w = w;
+  }
+}
+
+export class HeadingPitchRoll {
+  heading: number;
+  pitch: number;
+  roll: number;
+
+  constructor(heading = 0, pitch = 0, roll = 0) {
+    this.heading = heading;
+    this.pitch = pitch;
+    this.roll = roll;
+  }
+}
+
+export class HeadingPitchRange {
+  heading: number;
+  pitch: number;
+  range: number;
+
+  constructor(heading = 0, pitch = 0, range = 0) {
+    this.heading = heading;
+    this.pitch = pitch;
+    this.range = range;
+  }
+}
 
 export class Cartesian2 {
   x: number;
@@ -857,6 +936,13 @@ class FakeCamera {
   /** Raised once the camera has come to rest; a test raises it to stand in for navigating. */
   readonly moveEnd = new FakeEvent();
 
+  /** The frame the camera was locked to orbit, and from where; undefined until `lookAtTransform`. */
+  lookingAt: { transform: FakeMatrix4; offset: HeadingPitchRange | FakeCartesian3 | undefined } | undefined = undefined;
+
+  lookAtTransform(transform: FakeMatrix4, offset?: HeadingPitchRange | FakeCartesian3) {
+    this.lookingAt = { transform, offset };
+  }
+
   setView(options: FakeViewOptions) {
     this.apply(options);
   }
@@ -1021,13 +1107,127 @@ export class BillboardCollection {
  */
 export interface FakeMatrix4 {
   origin: FakeCartesian3;
+  /** Present when the frame was turned about its up axis; a plain east-north-up frame has none. */
+  headingDegrees?: number;
 }
 
 export const Transforms = {
   eastNorthUpToFixedFrame(origin: FakeCartesian3): FakeMatrix4 {
     return { origin };
   },
+  headingPitchRollToFixedFrame(origin: FakeCartesian3, orientation: HeadingPitchRoll): FakeMatrix4 {
+    return { origin, headingDegrees: CesiumMath.toDegrees(orientation.heading) };
+  },
 };
+
+/**
+ * Only the two columns the scene reads off a frame: its up axis, which in this stand-in is always
+ * straight up, and its origin, whose height is the one component the frame arithmetic can see.
+ */
+export const Matrix4 = {
+  getColumn(matrix: FakeMatrix4, index: number, result: Cartesian4): Cartesian4 {
+    if (index === 2) {
+      result.x = 0;
+      result.y = 0;
+      result.z = 1;
+    } else if (index === 3) {
+      result.x = 0;
+      result.y = 0;
+      result.z = matrix.origin.height;
+    }
+    result.w = index === 3 ? 1 : 0;
+    return result;
+  },
+};
+
+/** One `Cesium3DTileset.fromUrl` the scene made, with the options it passed. */
+export interface FakePointCloudRequest {
+  url: string;
+  options: FakeTilesetOptions;
+}
+
+export interface FakeTilesetOptions {
+  modelMatrix?: FakeMatrix4;
+  show?: boolean;
+  maximumScreenSpaceError?: number;
+  cacheBytes?: number;
+  pointCloudShading?: { attenuation?: boolean; eyeDomeLighting?: boolean };
+}
+
+/** A style in the tileset styling language, kept as the object it was built from. */
+export class Cesium3DTileStyle {
+  readonly style: { color?: string; pointSize?: string | number };
+
+  constructor(style: { color?: string; pointSize?: string | number } = {}) {
+    this.style = style;
+  }
+}
+
+/**
+ * A tiled point cloud. Like a model, every read stays pending until a test lands it by URL, for
+ * the same reason: the states worth testing exist only while the root is in the air.
+ */
+export class Cesium3DTileset {
+  readonly url: string;
+  modelMatrix: FakeMatrix4;
+  show: boolean;
+  maximumScreenSpaceError: number;
+  cacheBytes: number;
+  readonly pointCloudShading: { attenuation?: boolean; eyeDomeLighting?: boolean };
+  style: Cesium3DTileStyle | undefined = undefined;
+  /** A ten-metre ball about the frame's origin; what the height ramp and the camera read. */
+  readonly boundingSphere: { center: FakeCartesian3; radius: number };
+  destroyed = false;
+
+  constructor(request: FakePointCloudRequest) {
+    this.url = request.url;
+    this.modelMatrix = request.options.modelMatrix ?? { origin: Cartesian3.fromDegrees(0, 0, 0) };
+    this.show = request.options.show ?? true;
+    this.maximumScreenSpaceError = request.options.maximumScreenSpaceError ?? 16;
+    this.cacheBytes = request.options.cacheBytes ?? 512 * 1024 * 1024;
+    this.pointCloudShading = request.options.pointCloudShading ?? {};
+    this.boundingSphere = { center: this.modelMatrix.origin, radius: 10 };
+  }
+
+  private static waiting = new Map<
+    string,
+    { request: FakePointCloudRequest; resolve: (tileset: Cesium3DTileset) => void; reject: (error: unknown) => void }
+  >();
+
+  static fromUrl(url: string, options: FakeTilesetOptions = {}): Promise<Cesium3DTileset> {
+    const request: FakePointCloudRequest = { url, options };
+    engineState.pointCloudRequests.push(request);
+    return new Promise<Cesium3DTileset>((resolve, reject) => {
+      Cesium3DTileset.waiting.set(url, { request, resolve, reject });
+    });
+  }
+
+  /** Lands a read the scene is waiting on; with an error, refuses it instead. */
+  static deliver(url: string, error?: unknown) {
+    const pending = Cesium3DTileset.waiting.get(url);
+    if (!pending) {
+      throw new Error(`no tileset read is waiting for ${url}`);
+    }
+    Cesium3DTileset.waiting.delete(url);
+    if (error === undefined) {
+      pending.resolve(new Cesium3DTileset(pending.request));
+    } else {
+      pending.reject(error);
+    }
+  }
+
+  static isWaitingFor(url: string): boolean {
+    return Cesium3DTileset.waiting.has(url);
+  }
+
+  static forget() {
+    Cesium3DTileset.waiting.clear();
+  }
+
+  destroy() {
+    this.destroyed = true;
+  }
+}
 
 /** One read of a drawing surface as a file. */
 export interface FakeCapture {
@@ -1127,6 +1327,10 @@ class FakePrimitiveCollection {
   add<T>(primitive: T): T {
     this.items.push(primitive);
     return primitive;
+  }
+
+  contains(primitive: unknown): boolean {
+    return this.items.includes(primitive);
   }
 
   /** Removing a primitive destroys it, the way the real collection does. */
@@ -1294,6 +1498,8 @@ class FakeScene {
    * being changed rather than merely restated.
    */
   readonly postProcessStages = { fxaa: { enabled: false } };
+  /** What a scene with no globe shows behind everything; the real default is black. */
+  backgroundColor: Color = Color.fromCssColorString('#000000');
   /**
    * What the ground is drawn from. The real scene starts on the bare ellipsoid and hands whatever
    * is assigned here down to its globe, so this is where a test sees an elevation model arrive.

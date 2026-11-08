@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { create } from 'zustand';
+import type { PointDetailLevel } from '../scene3d/pointCloudDetail.ts';
 import { persist } from 'zustand/middleware';
 import type { MovieGifCalibration } from '../caveview/movie/movieOutput.ts';
 import type { MovieSettings } from '../caveview/movie/movieSettings.ts';
@@ -106,12 +107,29 @@ interface UiPrefsState {
   meshesInViewMaxBytes?: number;
   setMeshesInViewLimits: (limits: { minZoom?: number; maxCaves?: number; maxBytes?: number }) => void;
   /**
+   * The same three limits for the placed scans of the caves in view, kept apart from the walls'
+   * because a tileset archive is one to two orders of magnitude larger than a wall mesh and one
+   * budget cannot serve both.
+   */
+  scansInViewMinZoom?: number;
+  scansInViewMaxCaves?: number;
+  scansInViewMaxBytes?: number;
+  setScansInViewLimits: (limits: { minZoom?: number; maxCaves?: number; maxBytes?: number }) => void;
+  /**
    * The size above which the 3D view asks before downloading the walls of a selected cave, in
    * bytes; 0 asks every time. Per browser, because whether fifty megabytes is a lot is a fact
    * about the connection in front of the person. Undefined follows the installation's default.
    */
   meshAskAboveBytes?: number;
   setMeshAskAboveBytes: (bytes: number | undefined) => void;
+  /**
+   * How much detail the 3D scenes ask for when drawing a point cloud: one of three levels, each
+   * a pair of the engine's screen-space error and tile cache. Per browser like the mesh budgets,
+   * because it is a fact about the graphics card in front of the person. Undefined means the
+   * default for this kind of device: low where the pointer is coarse, normal elsewhere.
+   */
+  pointDetail?: PointDetailLevel;
+  setPointDetail: (level: PointDetailLevel | undefined) => void;
   /**
    * Local mirror of the appearance settings the server also holds. The mirror is what paints —
    * it rehydrates synchronously, so the first render already has the right theme — while the
@@ -366,6 +384,13 @@ export const useUiPrefsStore = create<UiPrefsState>()(
         }),
       meshAskAboveBytes: undefined,
       setMeshAskAboveBytes: (bytes) => set({ meshAskAboveBytes: bytes }),
+      scansInViewMinZoom: undefined,
+      scansInViewMaxCaves: undefined,
+      scansInViewMaxBytes: undefined,
+      setScansInViewLimits: ({ minZoom, maxCaves, maxBytes }) =>
+        set({ scansInViewMinZoom: minZoom, scansInViewMaxCaves: maxCaves, scansInViewMaxBytes: maxBytes }),
+      pointDetail: undefined,
+      setPointDetail: (level) => set({ pointDetail: level }),
       setAppearance: (patch) => set((state) => ({ appearance: { ...state.appearance, ...patch } })),
       setKarstLinkTreatment: (treatment) => set({ karstLinkTreatment: treatment }),
       setSavedFilterAudience: (audience) => set({ savedFilterAudience: audience }),
@@ -452,7 +477,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
     }),
     {
       name: 'silexgis.uiPrefs',
-      version: 8,
+      version: 10,
       // Without a migrate, raising the version makes zustand discard the whole stored blob —
       // wiping everyone's pinned types, landing page and centerline budgets to add one field.
       migrate: (persisted, from) => {
@@ -463,6 +488,10 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           meshesInViewMinZoom: from < 7 ? undefined : state.meshesInViewMinZoom,
           meshesInViewMaxCaves: from < 7 ? undefined : state.meshesInViewMaxCaves,
           meshesInViewMaxBytes: from < 7 ? undefined : state.meshesInViewMaxBytes,
+          pointDetail: from < 9 ? undefined : state.pointDetail,
+          scansInViewMinZoom: from < 10 ? undefined : state.scansInViewMinZoom,
+          scansInViewMaxCaves: from < 10 ? undefined : state.scansInViewMaxCaves,
+          scansInViewMaxBytes: from < 10 ? undefined : state.scansInViewMaxBytes,
         };
         // Every version before this one predates preferences belonging to an account: such a
         // cache says nothing about whose they are, so its account preferences are dropped rather

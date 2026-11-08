@@ -51,6 +51,10 @@ const TEST_ONLY_MEMBERS = new Set([
   'Model.static:isWaitingFor',
   'Model.static:forget',
   'Model.static:waiting',
+  'Cesium3DTileset.static:deliver',
+  'Cesium3DTileset.static:isWaitingFor',
+  'Cesium3DTileset.static:forget',
+  'Cesium3DTileset.static:waiting',
 ]);
 
 const BUILT_IN_FUNCTION_KEYS = new Set(['length', 'name', 'prototype']);
