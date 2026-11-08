@@ -163,6 +163,25 @@ try {
   process.exit(1);
 }
 
+// The scan worker's hand-off directory, per API port for the same reason the pid file is. The
+// browser lane runs no scan worker, so nothing processes a point cloud or a recording here; what
+// is put in it is only the file an HDMapping worker writes when it starts — the installed
+// program's default parameters — taken from an invented fixture, so the processing-profile pages
+// can check an imported parameter file against something, as they do on an installation whose
+// worker has run once. Processing stays off: a recording still stops where odometry would start.
+const SCAN_HANDOFF_DIR = join(
+  repoRoot, 'client', 'node_modules', '.cache', `silexgis-e2e-scans-${API_PORT}`);
+
+/** Puts the invented HDMapping defaults where the API reads a worker's, replacing any earlier run's. */
+function prepareScanHandoff() {
+  rmSync(SCAN_HANDOFF_DIR, { recursive: true, force: true });
+  const defaults = join(SCAN_HANDOFF_DIR, 'defaults');
+  mkdirSync(defaults, { recursive: true });
+  writeFileSync(
+    join(defaults, 'hdmapping.odometry.json'),
+    readFileSync(join(repoRoot, 'client', 'e2e', 'fixtures', 'e2e-hdmapping-odometry-defaults.json')));
+}
+
 const apiEnv = {
   ...process.env,
   ASPNETCORE_ENVIRONMENT: 'Development',
@@ -196,6 +215,7 @@ const apiEnv = {
   // The SPA is served from the e2e dev port, so that is where the authorization server has to
   // be willing to send a browser back to. Without this every sign-in dies at the redirect.
   SILEXGIS__Auth__AdditionalRedirectUris__0: `http://localhost:${DEV_PORT}/auth/callback`,
+  SILEXGIS__Scans__HandoffRoot: SCAN_HANDOFF_DIR,
 };
 
 function run(cmd, argv, opts = {}) {
@@ -363,6 +383,7 @@ try {
 
     // Migrations run at start-up, so seeding is what forces them: this both creates the
     // schema and loads the demo dataset the specs read, and it exits when it is done.
+    prepareScanHandoff();
     step('Migrating and seeding the demo dataset');
     if (run('dotnet', ['run', '--no-build', '--no-launch-profile', '--', 'seed-demo'],
       { cwd: apiDir, env: apiEnv }) !== 0) {

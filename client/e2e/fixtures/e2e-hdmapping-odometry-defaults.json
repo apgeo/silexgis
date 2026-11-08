@@ -1,0 +1,16 @@
+{
+  "step": "hdmapping.odometry",
+  "tool": "hdmapping",
+  "version": "9.9.9@e2e0000",
+  "softwareVersion": "9.9.9",
+  "commit": "e2e0000",
+  "writtenAt": "2026-11-08T10:00:00Z",
+  "values": {
+    "version_info": { "software_version": "9.9.9", "config_version": "1.0" },
+    "paths": { "current_output_dir": "/work" },
+    "misc": { "clear_color": [0.1, 0.2, 0.3] },
+    "odometry_control": { "iterations": 30, "step_motion": true, "resolution": 0.3 },
+    "filtering": { "min_distance": 0.5, "max_distance": 70.0 }
+  },
+  "toml": "[odometry_control]\niterations = 30\nstep_motion = true\nresolution = 0.3\n\n[filtering]\nmin_distance = 0.5\nmax_distance = 70.0\n"
+}

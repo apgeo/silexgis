@@ -54,6 +54,8 @@ export const specs = {
     'cave-club-fields.spec.ts',
     // The cave page's survey-model rows for a scan and the scan's placement control.
     'point-clouds.spec.ts',
+    // The cave page's point-cloud dialog in its recording-folder form.
+    'scan-recordings.spec.ts',
   ],
   cavingGroups: [
     'announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts', 'caver-caving-groups.spec.ts',
@@ -148,6 +150,8 @@ export const specs = {
     'public-trip-as-installed.spec.ts',
   ],
   qr: ['qr-landing.spec.ts'],
+  // Processing profiles for scan steps: the settings page, its import report and its export.
+  scanProfiles: ['scan-profiles.spec.ts'],
   resLinks: [
     'reslinks.spec.ts', 'annotated-text.spec.ts', 'cave-grant-link.spec.ts', 'place-map.spec.ts',
     // A place a phone mapped to a survey station, listed and removed on the place's page.
@@ -184,6 +188,8 @@ export const specs = {
     'access-keys.spec.ts', 'survey-uploads.spec.ts', 'public-survey.spec.ts', 'survey-viewer.spec.ts',
     // A point cloud dropped on a cave: its facts, the downsample choice, the scan card and its placement.
     'point-clouds.spec.ts',
+    // A scanner's recording folder dropped on a cave, and the card's facts of what reading it found.
+    'scan-recordings.spec.ts',
   ],
   sync: [
     'settings.spec.ts', 'review-queue.spec.ts', 'review-uploader.spec.ts',
@@ -248,6 +254,7 @@ export const clientAreas = {
   // The upload-review parts shared by the reviewer's pages and the uploader's list on the imports tab.
   'client/src/components/review/': ['sync', 'imports'],
   'client/src/components/surveyUploads/': 'surveyUploads',
+  'client/src/components/scanProfiles/': 'scanProfiles',
   'client/src/components/caveview/': ['surveys', 'trips'],
   'client/src/components/documents/': 'documents',
   'client/src/components/events/': 'events',
@@ -278,6 +285,8 @@ export const clientAreas = {
   'client/src/pages/cavers/': 'cavers',
   'client/src/pages/caves/': 'caves',
   'client/src/pages/caves/CaveSurveysSection': 'surveyUploads',
+  'client/src/pages/caves/PointCloudUploadModal': 'surveyUploads',
+  'client/src/pages/caves/RecordingFolderSection': 'surveyUploads',
   'client/src/pages/cavingGroups/': 'cavingGroups',
   'client/src/pages/checklists/': 'checklists',
   'client/src/pages/dashboard/': 'dashboard',
@@ -297,6 +306,7 @@ export const clientAreas = {
   'client/src/pages/settings/': 'settings',
   'client/src/pages/settings/AccessKeysSettingsPage': 'surveyUploads',
   'client/src/pages/settings/SurveyUploadSettingsPage': 'surveyUploads',
+  'client/src/pages/settings/ScanProfileSettingsPage': 'scanProfiles',
   'client/src/pages/surveyUploads/': 'surveyUploads',
   'client/src/pages/public/PublicSurveyResultPage': 'surveyUploads',
   'client/src/pages/statistics/': 'statistics',
