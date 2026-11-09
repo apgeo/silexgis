@@ -80,12 +80,37 @@ public class SurveyPlacementTests
             new ProjCoordinateProjector(),
             new SurveySourceDeclaration(
                 SourceEpsg: null, OriginLongitude: 0, OriginLatitude: 0, OriginHeightM: 700),
-            () => throw new InvalidOperationException("a local file needs no footprint"));
+            () => (100, 0));
 
         var (longitude, latitude, altitude) = placement.ToWorld(100, 0, -30);
 
         (longitude * 111_319.49).ShouldBe(100, tolerance: 0.01);
         latitude.ShouldBe(0, tolerance: 1e-12);
         altitude.ShouldBe(670);
+    }
+
+    [Fact]
+    public void A_file_declared_local_whose_numbers_are_a_projected_grid_is_refused()
+    {
+        // A UTM 35N export placed as metres from a point lands 360 km east and 5,000 km north of
+        // that point: every stage succeeds and the cave is drawn nowhere anyone will look.
+        Should.Throw<SurveySourceException>(() => SurveyPlacement.Resolve(
+                new ProjCoordinateProjector(),
+                new SurveySourceDeclaration(
+                    SourceEpsg: null, OriginLongitude: 25.2, OriginLatitude: 45.5, OriginHeightM: 1900),
+                () => (360_150, 5_042_130)))
+            .Message.ShouldContain("projected");
+    }
+
+    [Fact]
+    public void A_local_file_tens_of_kilometres_across_is_still_placed()
+    {
+        var placement = SurveyPlacement.Resolve(
+            new ProjCoordinateProjector(),
+            new SurveySourceDeclaration(
+                SourceEpsg: null, OriginLongitude: 25.2, OriginLatitude: 45.5, OriginHeightM: 1900),
+            () => (30_000, -20_000));
+
+        placement.Anchor.Longitude.ShouldBe(25.2);
     }
 }
