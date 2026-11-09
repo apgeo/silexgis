@@ -114,8 +114,11 @@ public sealed class StorageReportService(
                 .GroupBy(a => new { a.Kind, Original = a.StepId == ScanSteps.UploadStepId })
                 .Select(g => new { g.Key.Kind, g.Key.Original, Bytes = g.Sum(a => a.SizeBytes), Files = g.Count() })
                 .ToListAsync(ct))
+            // Originals of every kind (an uploaded cloud, a raw recording) share one row, so the
+            // label is the key: rows that spell the same are summed rather than listed twice.
+            .GroupBy(r => r.Original ? "original" : Spelled(r.Kind.ToString()))
+            .Select(g => new StorageKindTotal(g.Key, g.Sum(r => r.Bytes), g.Sum(r => r.Files)))
             .OrderByDescending(r => r.Bytes)
-            .Select(r => new StorageKindTotal(r.Original ? "original" : Spelled(r.Kind.ToString()), r.Bytes, r.Files))
             .ToList();
 
         var workDirectories = WorkDirectories();

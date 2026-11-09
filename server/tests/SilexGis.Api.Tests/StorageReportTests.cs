@@ -280,11 +280,26 @@ public sealed class StorageReportTests : IAsyncLifetime, IDisposable, IClassFixt
             .ShouldBe(3);
         File.Exists(Path.Combine(filesRoot, scan.OriginalPath)).ShouldBeTrue();
 
+        // A raw recording kept beside the cloud is an original of another kind; both share the
+        // one "original" row, so the page never lists the same label twice. The class shares its
+        // database, so the count is compared before and after rather than taken as a total.
+        static int Originals(System.Text.Json.JsonElement r) => r.GetProperty("scanByKind").EnumerateArray()
+            .Single(k => k.GetProperty("kind").GetString() == "original").GetProperty("files").GetInt32();
+        var before = Originals(await MeasureAsync());
+        await using (var seed = factory.Services.CreateAsyncScope())
+        {
+            var seedDb = seed.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var originalFile = await seedDb.StoredFiles.SingleAsync(f => f.Id == scan.OriginalFileId);
+            seedDb.ScanArtifacts.Add(Artefact(scan.UploadId, null, ScanArtifactKind.RawRecording, originalFile, ScanSteps.UploadStepId));
+            await seedDb.SaveChangesAsync();
+        }
+
         // The report counts originals apart from what processing made of them.
         var report = await MeasureAsync();
         report.GetProperty("scanByKind").EnumerateArray()
             .Single(k => k.GetProperty("kind").GetString() == "original")
             .GetProperty("bytes").GetInt64().ShouldBeGreaterThan(0);
+        Originals(report).ShouldBe(before + 1);
     }
 
     [Fact]
