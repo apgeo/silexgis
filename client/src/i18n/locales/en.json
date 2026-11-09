@@ -4425,7 +4425,9 @@
       "controlPointsStationsTooClose": "The stations are less than a metre apart. Pair points with stations further apart.",
       "controlPointsOffsetTooFar": "A picked point lies implausibly far from the scan's zero point.",
       "controlPointsTiltInLine": "For a tilt, one picked point must lie at least a metre off the line through the others.",
-      "controlPointsTiltTooLarge": "The pairs ask for a tilt larger than a levelled scan can be off. Check the pairs, or place without the tilt."
+      "controlPointsTiltTooLarge": "The pairs ask for a tilt larger than a levelled scan can be off. Check the pairs, or place without the tilt.",
+      "controlPointsPlacementOffEarth": "The fit put the scan off the Earth. Check that each point was paired with its own station.",
+      "controlPointsStationOffEarth": "A station lies off the Earth. Check the station coordinates of the line plot."
     },
     "reading": "The survey is being read into its stations and shots. The plot can be viewed already; this list updates itself when the reading is done.",
     "readingFailed": "The survey could not be read.",

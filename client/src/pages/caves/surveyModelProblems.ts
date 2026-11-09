@@ -39,6 +39,8 @@ export const SURVEY_MODEL_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'survey_model.control_points_offset_too_far': 'surveyModels.problems.controlPointsOffsetTooFar',
   'survey_model.control_points_tilt_in_line': 'surveyModels.problems.controlPointsTiltInLine',
   'survey_model.control_points_tilt_too_large': 'surveyModels.problems.controlPointsTiltTooLarge',
+  'survey_model.control_points_placement_off_earth': 'surveyModels.problems.controlPointsPlacementOffEarth',
+  'survey_model.control_points_station_off_earth': 'surveyModels.problems.controlPointsStationOffEarth',
   'cave.not_found': 'surveyModels.problems.caveNotFound',
   'acl.forbidden': 'surveyModels.problems.forbidden',
 };

@@ -4438,7 +4438,9 @@
       "controlPointsStationsTooClose": "Stațiile sunt la mai puțin de un metru una de alta. Asociază puncte cu stații mai depărtate.",
       "controlPointsOffsetTooFar": "Un punct ales este neverosimil de departe de punctul zero al scanării.",
       "controlPointsTiltInLine": "Pentru o înclinare, un punct ales trebuie să fie la cel puțin un metru de linia care trece prin celelalte.",
-      "controlPointsTiltTooLarge": "Perechile cer o înclinare mai mare decât poate avea o scanare nivelată. Verifică perechile sau plasează fără înclinare."
+      "controlPointsTiltTooLarge": "Perechile cer o înclinare mai mare decât poate avea o scanare nivelată. Verifică perechile sau plasează fără înclinare.",
+      "controlPointsPlacementOffEarth": "Potrivirea scoate scanarea de pe Pământ. Verifică dacă fiecare punct a fost asociat cu propria stație.",
+      "controlPointsStationOffEarth": "O stație se află în afara Pământului. Verifică coordonatele stațiilor din planul liniar."
     },
     "reading": "Topografia este citită în stațiile și vizele ei. Planul poate fi deja vizualizat; lista se actualizează singură când citirea s-a încheiat.",
     "readingFailed": "Topografia nu a putut fi citită.",
