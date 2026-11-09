@@ -69,6 +69,8 @@ not a protection.
 | **Entrances and sinkholes against the terrain** | Counted over the entrances and sinkholes you may place and no others, so no count, share or ratio changes when a protected one is added. No position is returned. Needs permission to read elevation data |
 | **Import duplicate checking** | Only objects whose exact position you may see are measured against — a protected cave you cannot locate is not silently used as a match |
 | **A `.stl` origin** | The pre-filled origin says it is deliberately approximate and asks for the true point |
+| **Point clouds (laser scans)** | The scan, its figures and its own viewer: the ordinary survey-file rules, because its tiles are drawn in the scan's own metres and carry no position. Its **placement**, the scan **in the 3D scene**, its **trajectory**, and the download of an **original that carries real coordinates** (a cloud whose header names a coordinate system, a recording with a satellite log): not given at all. See [Point clouds](../features/point-clouds.md#who-sees-what) |
+| **Map sheets linked to a cave** | The placement editor warns that sharing the sheet's original document shares the cave's location |
 | **QR landing pages** | No cave, no place, no position — for anybody, account or not |
 | **The phone sync API** | A position you may not have is **simply absent** |
 | **Links** | A link shows each reader only the ends they may see |

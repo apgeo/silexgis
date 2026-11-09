@@ -163,7 +163,6 @@ nothing they held.
 |---|---|
 | The account: the person can no longer sign in | Their entry on the [caver roster](../features/people-and-clubs.md#the-caver-roster), now with no account attached |
 | | The trips they were on, which keep naming them |
-| | Everything they added, which stays with the club |
 
 The roster outlives the logins attached to it on purpose: deleting the person would orphan the
 record of what they did. Removing a person from the roster is a separate act — see
@@ -171,6 +170,14 @@ record of what they did. Removing a person from the roster is a separate act —
 
 Members cannot delete their own account from their settings; they are told to ask an
 administrator.
+
+**An account that still owns records cannot be deleted.** If the person still owns caves or
+other map features, documents, geodata files, georeferenced maps, photo albums, events,
+expeditions, checklists, confirmed imports or any other kind of record — deleted ones included,
+since they can still be restored — **Delete** is refused and the page names each kind with its
+count: *"This account still owns records: … Hand them over or remove them first; deleting the
+account would orphan them."* Nothing is reassigned or removed for you. To shut somebody out of an
+account that owns records, **lock** it instead.
 
 ## What the page refuses
 
@@ -182,6 +189,7 @@ refusal says so in words.
 | Locking, deleting or resetting the second factor of **your own** account | *"You cannot lock your own account."* · *"You cannot delete your own account."* · *"You manage your own second factor from your security settings."* — see [Security](../features/account-and-settings.md#security) |
 | Locking or deleting **the last full administrator** who can sign in | *"This is the last full administrator who can sign in. Make somebody else a full administrator first, or the installation would have nobody to administer it."* |
 | Locking, unlocking, deleting or resetting the second factor of **a full administrator's account**, unless you are one yourself | *"Only a full administrator can lock, unlock, delete or reset the second factor of a full administrator's account."* — otherwise a delegated right over accounts would be a way to take the highest seat down |
+| Deleting an account that **still owns records** | *"This account still owns records: … Hand them over or remove them first; deleting the account would orphan them."* — with each kind and its count |
 | Resetting the second factor of an account that has none switched on | *"This account has no second factor switched on, so there is nothing to reset."* |
 | Sending the invitation again to an account that can already be signed in to | *"This account can already be signed in to. Its owner resets their own password."* |
 

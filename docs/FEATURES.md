@@ -33,6 +33,8 @@ feature and walkthroughs of whole jobs.
   *all of* or *any of*, nested and negated, built in a condition editor; a number typed with signs
   (`>= 100`) is read as the comparison it means. A filter can ask **where** — within a distance of a
   point, an outline, a feature, a named area or another saved filter's result, or inside an outline
+  (on the map, the outline can also be the map view or a shape drawn on it, and a distance can be
+  measured from the object selected on the map; none of these is kept in a saved filter or view)
   — and a list can be ordered **nearest first**. Both are answered on the position each reader is
   shown, never on the stored one: a protected cave a reader may not place is measured at the grid
   point they are shown, and never ranked by distance at all. A filter is saved by name, **private,
@@ -42,6 +44,8 @@ feature and walkthroughs of whole jobs.
   The feature list and its exports are driven by the same document, so the table and the file hold
   the same rows, and photographs, geofiles, georeferenced maps, survey models and cabinets can be
   filtered the same way.
+- **Search means what you typed** — `%` and `_` in the search box, the feature list's search and
+  the tag catalogue are ordinary characters, never wildcards.
 - **Positions in the format you work in** — a position is shown, copied and typed in nine formats:
   decimal degrees, degrees and decimal minutes, degrees-minutes-seconds, UTM, MGRS, Stereo 70 (the
   Romanian national grid, with its datum shift), the Swiss LV95 and LV03 grids where they apply,
@@ -125,7 +129,22 @@ feature and walkthroughs of whole jobs.
   the review survives closing the tab, each candidate says whether there is already something
   within fifty metres, and the whole confirmation comes back out again in one press if the
   mapping turns out to have been wrong. The rules are yours to edit, and to send to another club
-  as a file.
+  as a file. A vector file may be up to 150 MB, and every dropped file shows its progress and,
+  when it is refused, why.
+- **Map sheets from GeoTIFFs, PDFs and scans, placed by hand** — a georeferenced GeoTIFF or PDF is
+  laid on the map as it is, a PDF cut to its own map frame; a scan, a photograph or a plain PDF
+  waits to be placed. The placement editor drags the four corners, matches two points, or fits any
+  number of control points — typed in WGS 84 or a national grid, or taken from survey stations
+  pinned on the sheet — by six transformations from similarity to a thin-plate spline, each point's
+  residual shown and outliers marked, the server's own warp previewed over the background at every
+  change. An outline keeps the legend and margins off the map, a PDF can be redrawn with another
+  page, layers or resolution, and a placement is exchanged with other georeferencing tools as a
+  IIIF Georeference Annotation.
+- **Every map-format export leaves a record** — exporting caves, features, the listed geodata files
+  or one geodata file writes an audit entry: who, which layer and format, how many rows and whether
+  a filter narrowed it, naming only the rows whose positions were moved or withheld for protection
+  and never a position. Cave and feature files start with an id column, so a row can be traced back
+  to its record.
 - **Photographs become the places they show** — drop a trip's worth of pictures and the ones taken
   at the same hole arrive as one candidate with a gallery, not as forty points to reject one at a
   time. Each place says how it was placed and how much that is worth: the fix the camera recorded,
@@ -167,6 +186,31 @@ feature and walkthroughs of whole jobs.
   photographs with a camera, and the 3D view marks the selected cave's the same way, each opening
   the pictures taken there. A second survey viewer, LochViewer, is offered on trial beside the
   usual one.
+- **Laser scans of a cave** — a LiDAR point cloud is kept among a cave's surveys. It arrives as a
+  finished `.laz` / `.las` file, or as the **raw recording folder of a MANDEYE scanner**, which the
+  server turns into a point cloud itself with **HDMapping** (odometry, export, a check of the
+  export) in an isolated worker an installation may run or leave out; every file of a recording is
+  kept, so it can be processed again. A large cloud is estimated first and the person chooses how
+  much of it to show — the whole cloud, or one point per so many centimetres, with a suggested
+  row — before it is tiled for the browser. The processing settings are **profiles**, personal,
+  per caving group or for the installation, edited in a form drawn from the installed HDMapping's
+  own settings, imported from and exported to HDMapping's `.toml` files with a key-by-key report,
+  and recorded with every run. A scan is viewed on its own in its own metres — coloured by recorded
+  colour, intensity or height, with a two-point measure — and, once placed, in the 3D view beside
+  the cave's survey, nearest caves first within a budget. It is placed from the file's own
+  coordinate system, from the recording's satellite fixes, by entrance and bearing, or by pairing
+  points of the scan with stations of the cave's line plot, with each pair's residual shown and
+  outliers flagged. The tiles carry no position, so the scan itself follows the ordinary survey-file
+  rules; where it is, and an original that carries real coordinates, need the right to see the
+  cave's exact location.
+- **Storage that is capped, watched and explained** — an installation caps its whole store, its
+  point clouds and each account; what does not fit is refused before an upload or a processing run
+  starts, and the dialogs show the room left beforehand. Full administrators are notified as the
+  store or a disk crosses its notice and warning levels, and a storage page measures daily what
+  fills the store — by kind, cave and account, the largest files, the growth and the date it would
+  be full — and deletes, group by group and after confirmation, what is no longer needed:
+  superseded scan copies, failed runs' work, older survey versions' products and expired uploads.
+  Uploaded originals are never offered.
 - **Survey closure** — archive the compilation log beside the model and the cave page reports how
   well the survey closes, in the compiler's own words: every loop it found, with both its relative
   error and its absolute error in metres, its length, its stations and its per-axis components. The
@@ -418,6 +462,11 @@ feature and walkthroughs of whole jobs.
   open it and read the conversation there. If the remark itself is deleted the link still takes you to
   the right page; if the document goes, the line in your list says the subject is no longer available
   rather than sending you to a dead link.
+- **Camps and club events tell the people they concern** — a camp changed or called off tells the
+  people on its roster (never in draft, never the person who made the change, only those who may
+  read it), being put on a roster tells you, and a first invitation to a club event tells the
+  person invited. A trip notice decides whether you may open the trip at the moment you open it,
+  and a finished geodata import or map conversion names the file or map.
 - **You choose what you are told about and where you are told it** — the notifications page is a
   grid: the kinds of thing that happen down one side, the ways of reaching you across the top. For
   each pair you say nothing, as it happens, or once a day in a single summary — and a daily summary
@@ -770,6 +819,10 @@ feature and walkthroughs of whole jobs.
   factor of somebody who has lost both their authenticator and their recovery codes — which signs
   them out everywhere and tells them. Everybody changes their own password from their security
   settings, which signs them out everywhere too.
+- **An account that owns records is not deleted out from under them** — deleting an account that
+  still owns caves, documents, geodata, maps, albums, events, expeditions, checklists or confirmed
+  imports (deleted ones included) is refused, and the page names each kind with its count. Nothing
+  is reassigned behind your back; lock the account to shut somebody out instead.
 - **Email and SMS that an operator controls** — any SMTP server, any SMS gateway that speaks
   HTTP, and the wording of every message editable per language from the admin pages. Configure
   nothing and the app still runs, but nothing is delivered: the log records only the recipient and
@@ -788,7 +841,8 @@ feature and walkthroughs of whole jobs.
   map that takes focus and pans and zooms from the keyboard, the list of shortcuts behind **?**,
   list rows that open with Enter, and a picture's regions drawn and picked with the arrow keys. A
   light theme, a dark one, or whichever the system uses, with a keyboard focus ring that stays
-  visible on both.
+  visible on both, and an optional **higher contrast** — darker text, visible field outlines and a
+  stronger focus ring — in either.
 - **Looking after itself, and saying so** — background work that failed for a passing reason, a
   database restart or a timeout, is tried again by itself; a long import says how far it has got;
   and sweeps and backfills wait behind work somebody is waiting for. An error a signed-in person's

@@ -20,6 +20,10 @@ Everything here lives on a **cave's page**.
 **Upload model.** Accepted: **Therion `.lox`**, **Survex `.3d`**, or **cave walls as a binary
 `.stl`** — up to 100 MB.
 
+A **laser scan** goes in through the same card — **Upload point cloud** takes a `.laz` / `.las`
+file or a raw MANDEYE scanner recording — and has a page of its own:
+[Point clouds (LiDAR scans)](point-clouds.md).
+
 State: *Waiting its turn → In progress → Ready*, or *Could not be processed*.
 
 A model is drawn in the **survey viewer** (CaveView.js) and, for walls, in the

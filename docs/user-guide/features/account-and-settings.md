@@ -174,6 +174,7 @@ you are still asked for your code** after signing in through one.
 | | |
 |---|---|
 | **Theme** | Match my system · Light · Dark |
+| **Higher contrast** | Darker text, outlines you can see on every field, and a stronger focus ring, in the light and the dark theme |
 | **Density** | Comfortable · Compact |
 | **Reduce motion** | Turns off animations and map fly-to movement |
 | **Overview map on the map** | The small inset showing where the map's view lies in a wider area |
@@ -299,6 +300,23 @@ as they are; the button in the walls' card does the reverse. Each card hands bac
 numbers, so undoing an experiment with one does not discard what you tuned for the other.
 
 These two bound the flat map only: the 3D view draws survey lines by the installation's numbers.
+
+### Point clouds
+
+**Point detail** — *Low*, *Normal* or *High* — decides how finely a
+[laser scan](point-clouds.md) is drawn, in the 3D view and in the scan's own viewer. Finer detail
+fetches more tiles and keeps more of them in graphics memory. Left unset, a phone or tablet uses
+*Low* and a computer *Normal*; the page says which this device uses.
+
+**Scans of every cave in view (3D)** has three numbers, like the walls': the zoom from which scans
+are drawn, how many caves' scans at once, and how many megabytes of tiles are held at once. See
+[Point clouds of the caves in view](3d-view.md#point-clouds-of-the-caves-in-view).
+
+## Processing profiles
+
+**Settings → Processing profiles** keeps the named settings that laser-scan processing runs with —
+yours, a caving group's or the installation's. They are described with the scans:
+[Processing profiles](point-clouds.md#processing-profiles).
 
 ---
 

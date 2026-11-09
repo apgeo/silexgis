@@ -135,6 +135,10 @@ administrator downloaded, served by the installation alone. → [Own basemap](ad
 **Permission group** — A named ruleset with members. Not a caving group.
 → [Permissions](admin/permissions.md)
 
+**Point cloud** — A laser scan of a cave: millions of measured points of its walls, kept among the
+cave's surveys as a **scan**. Drawn in its own metres until it is placed on the map.
+→ [Point clouds](features/point-clouds.md)
+
 **Position quality** — How an entrance's coordinates were obtained: unknown, GPS, from map,
 estimated. The difference between "walk here" and "search this slope".
 
@@ -145,6 +149,10 @@ on the positions you are shown, never on positions withheld from you.
 
 **Printed code** — A QR label bolted at a cave. Scanning it confirms only that the code is
 registered. → [Sharing](features/sharing-and-public-pages.md#printed-qr-codes)
+
+**Processing profile** — A named set of settings a scan-processing step runs with (HDMapping's
+odometry, thinning, tiling); personal, a caving group's or the installation's.
+→ [Processing profiles](features/point-clouds.md#processing-profiles)
 
 **Protected location** — See *Location protection*.
 
@@ -165,6 +173,9 @@ Sharing one gives the question only, and it never keeps a place to measure from.
 **Saved view** — A named map configuration: extent, layers, filters. Shareable by a link that
 shows only what is public in its own right.
 → [Saved views](features/saved-views-and-windows.md#saved-views)
+
+**Scan** — See *Point cloud*. A *raw recording* is the folder a MANDEYE scanner wrote, which the
+server turns into a point cloud.
 
 **Second factor reset** — What an administrator does for a member who has lost both their
 authenticator and their recovery codes: **Reset second factor** switches every second factor

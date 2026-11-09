@@ -154,6 +154,20 @@ their own browser, up to the installation's ceiling, under
 [Settings › Advanced](account-and-settings.md#advanced) — the panel links there while this mode
 is chosen.
 
+## Point clouds of the caves in view
+
+The **Scans** switch in the layer list draws the laser scans of the caves in view — one per cave,
+its current scan or else the newest — once each is tiled and
+[placed on the map](point-clouds.md#placing-a-scan-on-the-map). It works like the walls of every
+cave in view, with fewer caves and more megabytes, because a scan is far larger than a wall model:
+it starts from a zoom, takes the nearest caves first up to a number of caves and a total size, and
+lets go of what leaves the view. Those three numbers are the installation's, and each person can
+lower them for their own browser under
+[Settings › Advanced](account-and-settings.md#point-clouds), where the point detail is set too.
+
+A scan is drawn only for a reader who may see the cave's exact location; for anybody else it is
+neither drawn nor counted. See [Point clouds (LiDAR scans)](point-clouds.md).
+
 ## Following the map's filter
 
 The scene reads the map's filter, as the flat map does: under a filter it draws the entrances,
