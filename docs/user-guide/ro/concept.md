@@ -12,8 +12,8 @@ SilexGIS este o aplicație web pentru stocarea, vizualizarea și editarea datelo
 și carst. Poate fi instalat / folosit de un grup / club de speologie, de o echipă de explorare sau de o singură persoană în mod independent. Se instalează pe un server
 propriu, se creează conturile care trebuie create, și de atunci încolo aplicația este registrul,
 arhiva, harta și jurnalul acelui grup, într-un singur loc. Este software liber
-(AGPL-3.0-or-later) și vine dintr-un club real — Silex Brașov — care a ținut mai întâi toate
-acestea pe hârtie și în foi de calcul.
+(AGPL-3.0-or-later) și vine din nevoile de explorare ale unui club real, care a ținut mai întâi toate
+acestea pe rând, pe hârtie și în foi de calcul, apoi organizate în diverse sisteme software, inclusiv în sisteme GIS generice ca QGIS.
 
 ## Nu este un site public
 
