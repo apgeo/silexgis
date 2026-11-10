@@ -38,6 +38,7 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 - [Importul unui sezon de puncte GPS](workflows/import-a-gps-file.md)
 - [Transformarea fotografiilor unei ture în locuri](workflows/photographs-to-places.md)
 - [Planificarea, desfășurarea și redactarea unei ture](workflows/plan-and-log-a-trip.md)
+- [Aducerea unei scanări laser a unei peșteri](workflows/bring-in-a-laser-scan.md)
 - [Clasarea arhivei clubului](workflows/file-the-archive.md)
 - [Partajarea muncii tale](workflows/share-your-work.md)
 

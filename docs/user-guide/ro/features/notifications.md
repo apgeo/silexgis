@@ -32,6 +32,10 @@ Feluri de a ajunge la tine: **În aplicație · E-mail · SMS.**
 | Schimbări în grupurile de speologie | |
 | Cineva îmi dă acces la ceva | O acordare de permisiune |
 | Sunt adăugat la o tură | |
+| O tură la care particip a fost publicată ca pagină pe care o poate citi oricine are linkul | Vezi [Urmărirea în direct și turele publicate](live-tracking.md) |
+| O tură înregistrată pe un telefon are nevoie să fie verificată de cineva, sau nu a putut fi transformată în raport de tură | Vezi [Înregistrări de pe telefon](phone-recordings.md) |
+| Un cont ale cărui încărcări sunt verificate a trimis ceva ce așteaptă un verificator | Pentru cei care au dreptul de verificare; vezi [Verificarea încărcărilor](upload-review.md) |
+| Un verificator a decis asupra a ceva ce am încărcat | **Acceptată**, **Acceptată în parte** sau **Respinsă** |
 | Planificarea turelor | Invitat la o tură sau la un eveniment de club, o tură la care participi se schimbă, o tură are nevoie de acces pe care îl poți acorda, sau o tură ori un eveniment de club la care ai răspuns se apropie |
 | O expediție pe lista căreia mă aflu este modificată sau anulată | Și când ești trecut pe lista unei expediții |
 | Cineva răspunde la un comentariu scris de mine | |

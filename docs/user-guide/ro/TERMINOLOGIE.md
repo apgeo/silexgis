@@ -408,7 +408,7 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Trajectory | Traiectorie |
 | Odometry profile | Profil de odometrie |
 | Processing profile | Profil de procesare |
-| Mine / Caving groups / The whole installation (a profile's scope) | Ale mele / Grupuri speologice / Toată instalarea |
+| Mine / Caving groups / The whole installation (a profile's scope) | Ale mele / Grupuri de speologie / Toată instalarea |
 | Built-in (a profile) | Inclus |
 | Point detail: Low / Normal / High | Detaliul punctelor: Redus / Normal / Ridicat |
 | Scans of every cave in view (3D) | Scanările tuturor peșterilor din vedere (3D) |
@@ -417,8 +417,8 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Place on the map / Correct the placement / Remove placement (a scan) | Plasează pe hartă / Corectează plasarea / Elimină plasarea |
 | Place by control points / Pick / Fit and place | Plasează după puncte de control / Alege / Potrivește și plasează |
 | Also fit a small tilt | Potrivește și o mică înclinare |
-| Placed from the file's coordinates / from the recording's satellite fixes | Plasată din coordonatele fișierului / Plasat după pozițiile prin satelit ale înregistrării |
-| Placed by hand / Placed by control points | Plasată manual / Plasat după puncte de control |
+| Placed from the file's coordinates / from the recording's satellite fixes | Plasată din coordonatele fișierului / Plasată după pozițiile prin satelit ale înregistrării |
+| Placed by hand / Placed by control points | Plasată manual / Plasată după puncte de control |
 | Bearing (of the scan's north) | Azimut |
 | Control points | Puncte de control |
 | Whole store / Point clouds / Your account (room left) | Tot depozitul / Nori de puncte / Contul tău |
@@ -434,8 +434,7 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 
 O hartă scanată se **poziționează** (*Poziționează pe hartă…*, *poziție*), o scanare laser se
 **plasează** (*Plasează pe hartă*, *plasare*): așa le numește interfața, iar ghidul păstrează
-deosebirea. Scopul profilurilor apare în interfață ca *Grupuri speologice*; în text rămâne
-termenul stabilit **grup de speologie**.
+deosebirea.
 
 ## Alte
 

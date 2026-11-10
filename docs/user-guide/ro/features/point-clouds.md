@@ -109,7 +109,7 @@ procesarea nu este disponibilă aici.
 rulează un pas de procesare: odometria HDMapping, apoi estimarea, rărirea și împărțirea în dale
 ale unui nor.
 
-- **Trei niveluri.** *Ale mele* (văzute doar de tine), *Grupuri speologice* (ale unui grup de
+- **Trei niveluri.** *Ale mele* (văzute doar de tine), *Grupuri de speologie* (ale unui grup de
   speologie) sau *Toată instalarea*. Crearea și modificarea profilurilor de grup și de instalare cer dreptul
   **scan-profiles** (în interfață, domeniul *Scanări · Profiluri de procesare*); unul personal nu
   cere nimic în afară de un cont.
@@ -171,7 +171,7 @@ Există patru feluri, de la cel mai puțin la cel mai mult de lucru:
 2. **Din pozițiile prin satelit ale înregistrării.** O înregistrare brută cu un jurnal `.gnss` și
    fără altă plasare primește o **primă plasare** din pozițiile ei și din traiectorie: unde era și
    încotro era îndreptată. Un jurnal `.nmea` singur nu ajunge, pentru că nu poate fi potrivit cu
-   ceasul propriu al scanerului. *Plasat după pozițiile prin satelit ale înregistrării* — un punct
+   ceasul propriu al scanerului. *Plasată după pozițiile prin satelit ale înregistrării* — un punct
    de pornire pe care punctele de control îl rafinează apoi.
 3. **După intrare și azimut.** **Plasează pe hartă** pune punctul zero propriu al scanării într-o
    poziție și la o altitudine — este propusă intrarea principală a peșterii — și o rotește astfel
@@ -185,7 +185,7 @@ Există patru feluri, de la cel mai puțin la cel mai mult de lucru:
    arată, pentru fiecare pereche, cât de departe de stația ei ajunge punctul scanării — pe
    orizontală, pe verticală și în total — și RMS-ul tuturor. O pereche mai depărtată decât pragul
    instalării (jumătate de metru, dacă nu spune altfel) este semnalată: de obicei a fost
-   împerecheată cu stația greșită. *Plasat după puncte de control · RMS …*.
+   împerecheată cu stația greșită. *Plasată după puncte de control · RMS …*.
 
 ## Pereți dintr-o scanare
 

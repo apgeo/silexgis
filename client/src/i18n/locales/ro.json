@@ -4994,9 +4994,9 @@
           "raster_maps": "hărți scanate",
           "survey_uploads": "încărcări de topografii",
           "survey_upload_public_links": "linkuri publice de încărcare a topografiilor",
-          "trips": "ieșiri",
-          "trip_recordings": "înregistrări de ieșire",
-          "trip_tracking_shares": "linkuri de urmărire a ieșirilor",
+          "trips": "ture",
+          "trip_recordings": "înregistrări de ture",
+          "trip_tracking_shares": "linkuri de urmărire a turelor",
           "upload_batches": "loturi de încărcare"
         },
         "emailTaken": "Există deja un cont cu această adresă.",

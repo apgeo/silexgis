@@ -15,6 +15,7 @@ Walkthroughs of whole jobs, start to finish. Each links out to the
 | [Import a season of GPS waypoints](import-a-gps-file.md) | A GPS unit gets emptied at the end of a season |
 | [Turn a trip's photographs into places](photographs-to-places.md) | You came back with a memory card and no waypoints |
 | [Plan a trip, run it, and write it up](plan-and-log-a-trip.md) | The whole life of a trip |
+| [Bring in a laser scan of a cave](bring-in-a-laser-scan.md) | A team came back with a handheld scanner's recording |
 | [File the club archive](file-the-archive.md) | A box of paper, a hard drive of scans, decades of bulletins |
 | [Share your work with someone](share-your-work.md) | A landowner, a journal, another club, the public |
 

@@ -32,6 +32,10 @@ Ways of reaching you: **In the app · Email · Text message.**
 | Caving group membership changes | |
 | Someone shares something with me | A permission grant |
 | I am added to a trip | |
+| A trip I am on was published as a page anybody with the link can read | See [Live tracking and published trips](live-tracking.md) |
+| A trip recorded on a phone needs somebody to look at it, or could not be made into a trip report | See [Phone recordings](phone-recordings.md) |
+| An account whose uploads are reviewed sent something that waits for a reviewer | For those who hold the review right; see [Reviewing uploads](upload-review.md) |
+| A reviewer decided about something I uploaded | **Accepted**, **Partly accepted** or **Rejected** |
 | Trip planning | Invited to a trip or a club event, a trip you are on changes, a trip needs access you can grant, or a trip or club event you answered about is coming up |
 | An expedition I am on the roster of is changed or called off | Also when you are put on an expedition's roster |
 | Someone replies to a comment I wrote | |
