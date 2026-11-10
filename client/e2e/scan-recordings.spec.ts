@@ -165,3 +165,142 @@ test('a recording folder is picked on a cave, sent without its camera pictures a
     expect(remembered.map((choice) => choice.profileId)).toContain(declared.profiles[0]);
   }
 });
+
+/**
+ * Sends the invented recording with its odometry to be done on another computer, and returns the
+ * upload's id once the dialog has handed over to its page. The server accepts the choice; the
+ * browser lane runs no scan processing, so its run still stops where the odometry would start.
+ */
+async function sendWithOdometryElsewhere(page: Page, folder: string): Promise<{ caveId: string; uploadId: string }> {
+  await login(page);
+  const caveId = await cave(page, `E2E Odometry elsewhere ${Date.now()}`);
+  await gotoRoute(page, `/caves/${caveId}`);
+  await page.getByTestId('survey-model-upload-point-cloud').click();
+  await page.getByTestId('point-cloud-kind').getByText('Scanner recording folder').click();
+  await page.getByTestId('point-cloud-folder').setInputFiles(folder);
+  await expect(page.getByTestId('point-cloud-recording-summary')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('point-cloud-odometry-elsewhere').check();
+
+  const opening = page.waitForRequest(
+    (request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/survey-uploads',
+  );
+  await page.getByRole('button', { name: 'Upload recording' }).click();
+  expect(((await opening).postDataJSON() as { externalSteps: string[] }).externalSteps).toEqual(['hdmapping.odometry']);
+  await page.waitForURL(/\/surveys\/[^/]+\/uploads\/[^/]+$/, { timeout: 60_000 });
+  await expect(page.getByTestId('survey-upload-message')).toBeVisible({ timeout: 90_000 });
+  return { caveId, uploadId: page.url().split('/').pop()! };
+}
+
+/**
+ * Answers the upload's own status request with the server's real answer, changed by `change` — the
+ * state a run reaches only with a scan worker, which the browser lane does not run. Everything
+ * else the page asks goes to the server as it is.
+ */
+async function answerStatusWith(page: Page, uploadId: string, change: (dto: Record<string, unknown>) => void) {
+  const real = await asPerson<Record<string, unknown>>(page, 'GET', `/api/v1/survey-uploads/${uploadId}`);
+  change(real);
+  await page.route(
+    (url) => url.pathname === `/api/v1/survey-uploads/${uploadId}`,
+    (route) =>
+      route.request().method() === 'GET'
+        ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(real) })
+        : route.fallback(),
+  );
+  return real;
+}
+
+test('a recording whose odometry is run elsewhere offers its inputs for download and takes the session back under its fixed name', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const folder = test.info().outputPath('Elsewhere_e2e');
+  writeRecording(folder);
+  const { uploadId } = await sendWithOdometryElsewhere(page, folder);
+
+  const waiting = await answerStatusWith(page, uploadId, (dto) => {
+    dto.status = 'succeeded';
+    dto.stage = 'awaitingExternal';
+    dto.external = {
+      stepId: 'hdmapping.odometry',
+      stepName: 'LiDAR odometry',
+      tool: 'hdmapping',
+      outputs: [{ names: ['session.zip'], received: false }],
+    };
+  });
+  // The bundle is the server's to build from a stopped run; here it stands in, so the download's
+  // wiring — the upload's own route, with the bearer token, saved under the server's name — is what is checked.
+  await page.route(
+    (url) => url.pathname === `/api/v1/survey-uploads/${uploadId}/external/bundle`,
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/zip',
+        headers: { 'Content-Disposition': 'attachment; filename="scan.hdmapping-odometry.zip"' },
+        body: Buffer.from('PK\u0005\u0006' + '\u0000'.repeat(18), 'binary'),
+      }),
+  );
+  let sentAs: string | undefined;
+  await page.route(
+    (url) => url.pathname.startsWith(`/api/v1/survey-uploads/${uploadId}/external/`) && !url.pathname.endsWith('/bundle'),
+    (route) => {
+      sentAs = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop()!);
+      return route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...waiting, status: 'queued', stage: null, external: null }),
+      });
+    },
+  );
+  await page.reload();
+
+  const panel = page.getByTestId('scan-external-wait');
+  await expect(panel).toContainText('LiDAR odometry');
+  await expect(page.getByTestId('survey-upload-status')).toHaveText('Waiting for a step done on another computer');
+  // Read and inspected; the odometry and everything after it still to come.
+  await expect(page.getByTestId('survey-upload-stage-inspect')).toBeVisible();
+
+  const download = page.waitForEvent('download');
+  await page.getByTestId('scan-external-bundle').click();
+  expect((await download).suggestedFilename()).toBe('scan.hdmapping-odometry.zip');
+
+  // The session comes back under whatever name the desktop gave it, and is sent under the step's.
+  const session = test.info().outputPath('my refined run.zip');
+  writeFileSync(session, Buffer.from('PK\u0005\u0006' + '\u0000'.repeat(18), 'binary'));
+  await page.getByTestId('scan-external-send-session.zip').locator('xpath=ancestor::span[contains(@class,"ant-upload")]//input[@type="file"]').setInputFiles(session);
+  await expect.poll(() => sentAs).toBe('session.zip');
+});
+
+test('a finished scan offers its session for refining, and the server refuses a refined session for a scan it made none for', async ({
+  page,
+  consoleErrors,
+}) => {
+  test.setTimeout(180_000);
+  consoleErrors.allow(/status of 400/, 'the refined session is sent for a scan the server made no session for, and refused on purpose');
+  const folder = test.info().outputPath('Refine_e2e');
+  writeRecording(folder);
+  const { uploadId } = await sendWithOdometryElsewhere(page, folder);
+
+  await answerStatusWith(page, uploadId, (dto) => {
+    dto.status = 'succeeded';
+    dto.stage = 'store';
+    (dto.pointCloud as Record<string, unknown>).sessionUrl = '/api/v1/files/invented-session';
+  });
+  await page.reload();
+
+  const refine = page.getByTestId('scan-refine');
+  await expect(refine).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('scan-refine-session')).toHaveAttribute('href', '/api/v1/files/invented-session');
+
+  // The refined session goes to the real server as the next version of the scan's survey. This
+  // recording never had a session made here, so the server refuses it, and says why.
+  const session = test.info().outputPath('refined.zip');
+  writeFileSync(session, Buffer.from('PK\u0005\u0006' + '\u0000'.repeat(18), 'binary'));
+  const opening = page.waitForRequest(
+    (request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/survey-uploads',
+  );
+  await page.getByTestId('scan-refine-send').locator('xpath=ancestor::span[contains(@class,"ant-upload")]//input[@type="file"]').setInputFiles(session);
+  const declared = (await opening).postDataJSON() as { caveSurvey: { id: string } | null; files: { name: string }[] };
+  expect(declared.caveSurvey).not.toBeNull();
+  expect(declared.files.map((file) => file.name)).toEqual(['session.zip']);
+  await expect(page.getByText('A refined session is sent as the next version of a scan this server processed from a recording.')).toBeVisible();
+});
