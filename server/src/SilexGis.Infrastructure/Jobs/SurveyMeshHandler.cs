@@ -96,7 +96,8 @@ public sealed class SurveyMeshHandler(
             model.SourceEpsg,
             model.Anchor?.X,
             model.Anchor?.Y,
-            model.AnchorHeightM ?? 0);
+            model.AnchorHeightM ?? 0,
+            await SurveyModelPlacement.CavePositionAsync(db, model.CaveFeatureId, ct));
 
         var workPath = Path.Combine(Path.GetTempPath(), $"silexgis-mesh-{Guid.NewGuid():N}.glb");
 
@@ -165,6 +166,7 @@ public sealed class SurveyMeshHandler(
             model.AppliedRotationDeg = conversion.AppliedRotationDeg;
             model.TriangleCount = conversion.TrianglesRead - conversion.DegenerateDropped;
             model.SourcePrecisionLost = conversion.SourcePrecisionLost;
+            SurveyModelPlacement.Record(model, conversion.Advice);
             model.Status = SurveyModelStatus.Ready;
             model.ProcessingError = null;
             await db.SaveChangesAsync(ct);
@@ -220,6 +222,7 @@ public sealed class SurveyMeshHandler(
                 failed.ProcessingError = e is SurveySourceException
                     ? e.Message
                     : "The model could not be converted.";
+                SurveyModelPlacement.Record(failed, (e as SurveySourceException)?.Advice);
                 await db.SaveChangesAsync(CancellationToken.None);
             }
 

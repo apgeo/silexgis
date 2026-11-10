@@ -9,8 +9,18 @@ namespace SilexGis.Infrastructure.Surveys;
 /// worth showing the person who uploaded it — the wrong format, an export written as text, a
 /// coordinate system nobody here can resolve. Deliberately distinct from the failures that are
 /// ours, which are recorded but not described to them.
+/// <para>
+/// Where the reason is that the file was declared in the wrong coordinates and another declaration
+/// would place it at its cave, that declaration travels with the exception so the person can be
+/// offered it rather than left to guess.
+/// </para>
 /// </summary>
-public sealed class SurveySourceException(string message) : Exception(message);
+public sealed class SurveySourceException(string message, SurveyPlacementAdvice? advice = null)
+    : Exception(message)
+{
+    /// <summary>A declaration that would place the file at its cave, when one was found.</summary>
+    public SurveyPlacementAdvice? Advice { get; } = advice;
+}
 
 /// <summary>
 /// A triangle mesh with shared vertices, in the coordinates its file used.

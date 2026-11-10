@@ -583,6 +583,38 @@ export function useReadSurveyModelAgain() {
   });
 }
 
+export type SurveyModelPlacement = components['schemas']['SurveyModelPlacementRequest'];
+
+/**
+ * Says again where a model's stored file sits — a projected grid, or a position for its zero
+ * point — and has it read again under that answer, without uploading it again. Refreshed the way
+ * another reading is, for the same reasons.
+ */
+export function useChangeSurveyModelPlacement() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: ({
+      id,
+      placement,
+    }: {
+      id: string;
+      caveId: string;
+      placement: SurveyModelPlacement;
+    }): Promise<SurveyModelInfo> =>
+      unwrap(
+        api.PUT('/api/v1/survey-models/{id}/placement', {
+          params: { path: { id } },
+          body: placement,
+        }),
+      ),
+    onSettled: (_data, _error, { id, caveId }) => {
+      invalidate(caveId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModel(id) });
+    },
+  });
+}
+
 export type SurveySourceInfo = components['schemas']['SurveySourceDto'];
 export type SurveySourceKind = SurveySourceInfo['kind'];
 

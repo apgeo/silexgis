@@ -131,7 +131,8 @@ public sealed class SurveyGraphHandler(
                 model.SourceEpsg ?? SurveyPlacement.EpsgFrom(parsed.CoordinateSystem),
                 model.Anchor?.X,
                 model.Anchor?.Y,
-                model.AnchorHeightM ?? 0);
+                model.AnchorHeightM ?? 0,
+                await SurveyModelPlacement.CavePositionAsync(db, model.CaveFeatureId, ct));
 
             // Which legs are shots at the passage wall, settled once for everything below. The
             // extraction works this out for itself as well — it has to, or a caller that is not
@@ -217,6 +218,7 @@ public sealed class SurveyGraphHandler(
                 // what tells a stored station name from the way the viewer addresses the same
                 // station, and a stale one silently misaddresses every station in the model.
                 model.RootSurveyName = extraction.RootSurveyName;
+                SurveyModelPlacement.Record(model, extraction.Placement.Advice);
                 model.Status = SurveyModelStatus.Ready;
                 model.ProcessingError = null;
                 await db.SaveChangesAsync(ct);
@@ -258,7 +260,8 @@ public sealed class SurveyGraphHandler(
                 await RecordFailureAsync(
                     payload.SurveyModelId,
                     e is SurveySourceException ? e.Message : "The survey could not be read.",
-                    holdsAReading);
+                    holdsAReading,
+                    (e as SurveySourceException)?.Advice);
             }
 
             throw;
@@ -509,7 +512,8 @@ public sealed class SurveyGraphHandler(
     /// all: see the body.
     /// </para>
     /// </summary>
-    private async Task RecordFailureAsync(Guid surveyModelId, string reason, bool holdsAReading)
+    private async Task RecordFailureAsync(
+        Guid surveyModelId, string reason, bool holdsAReading, SurveyPlacementAdvice? advice)
     {
         ForgetPendingChanges();
 
@@ -538,6 +542,7 @@ public sealed class SurveyGraphHandler(
 
         model.Status = SurveyModelStatus.Failed;
         model.ProcessingError = reason;
+        SurveyModelPlacement.Record(model, advice);
         await db.SaveChangesAsync(CancellationToken.None);
     }
 

@@ -113,4 +113,95 @@ public class SurveyPlacementTests
 
         placement.Anchor.Longitude.ShouldBe(25.2);
     }
+
+    // ---- noticing a wrong declaration ------------------------------------------
+
+    /// <summary>A survey's middle in UTM zone 34N, and where that puts the cave it belongs to.</summary>
+    private static (double X, double Y) Zone34Footprint => (650_000, 4_990_000);
+
+    private static (double Longitude, double Latitude) CaveUnder(int epsg, (double X, double Y) footprint)
+    {
+        var at = new ProjCoordinateProjector().ToWgs84(epsg, footprint.X, footprint.Y).ShouldNotBeNull();
+        return (at.Longitude, at.Latitude);
+    }
+
+    [Fact]
+    public void A_grid_file_declared_local_is_refused_with_the_grid_that_places_it_at_its_cave()
+    {
+        var footprint = Zone34Footprint;
+
+        var refusal = Should.Throw<SurveySourceException>(() => SurveyPlacement.Resolve(
+            new ProjCoordinateProjector(),
+            new SurveySourceDeclaration(
+                SourceEpsg: null, OriginLongitude: 22.9, OriginLatitude: 45.0, OriginHeightM: 800,
+                CavePosition: CaveUnder(32634, footprint)),
+            () => footprint));
+
+        var advice = refusal.Advice.ShouldNotBeNull();
+        advice.SourceEpsg.ShouldBe(32634);
+        advice.SuggestedOffByKm.ShouldNotBeNull().ShouldBeLessThan(0.01);
+        refusal.Message.ShouldContain("EPSG:32634");
+    }
+
+    [Fact]
+    public void A_file_declared_in_the_neighbouring_zone_is_placed_and_carries_the_right_one()
+    {
+        // The mistake that nothing refuses: read in the next zone the same numbers land hundreds
+        // of kilometres to one side, in a perfectly ordinary place.
+        var footprint = Zone34Footprint;
+
+        var placement = SurveyPlacement.Resolve(
+            new ProjCoordinateProjector(),
+            new SurveySourceDeclaration(
+                SourceEpsg: 32635, OriginLongitude: null, OriginLatitude: null, OriginHeightM: 800,
+                CavePosition: CaveUnder(32634, footprint)),
+            () => footprint);
+
+        var advice = placement.Advice.ShouldNotBeNull();
+        advice.SourceEpsg.ShouldBe(32634);
+        advice.OffByKm.ShouldNotBeNull().ShouldBeGreaterThan(300);
+    }
+
+    [Fact]
+    public void A_local_file_declared_on_a_grid_is_advised_to_be_read_as_local_metres()
+    {
+        var placement = SurveyPlacement.Resolve(
+            new ProjCoordinateProjector(),
+            new SurveySourceDeclaration(
+                SourceEpsg: 32635, OriginLongitude: null, OriginLatitude: null, OriginHeightM: 800,
+                CavePosition: (25.2, 45.5)),
+            () => (120, -40));
+
+        var advice = placement.Advice.ShouldNotBeNull();
+        advice.UseLocalMetres.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void A_file_declared_in_its_own_grid_carries_no_advice()
+    {
+        var footprint = Zone34Footprint;
+
+        var placement = SurveyPlacement.Resolve(
+            new ProjCoordinateProjector(),
+            new SurveySourceDeclaration(
+                SourceEpsg: 32634, OriginLongitude: null, OriginLatitude: null, OriginHeightM: 800,
+                CavePosition: CaveUnder(32634, footprint)),
+            () => footprint);
+
+        placement.Advice.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Without_a_cave_position_nothing_is_advised()
+    {
+        var footprint = Zone34Footprint;
+
+        var placement = SurveyPlacement.Resolve(
+            new ProjCoordinateProjector(),
+            new SurveySourceDeclaration(
+                SourceEpsg: 32635, OriginLongitude: null, OriginLatitude: null, OriginHeightM: 800),
+            () => footprint);
+
+        placement.Advice.ShouldBeNull();
+    }
 }

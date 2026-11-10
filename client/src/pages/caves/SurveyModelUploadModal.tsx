@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
 import { InboxOutlined } from '@ant-design/icons';
-import { Alert, App, Checkbox, Form, InputNumber, Modal, Radio, Typography, Upload } from 'antd';
+import { Alert, App, Checkbox, Form, Modal, Typography, Upload } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
-  useCaveSummary,
   useSurveyModels,
   useUploadSurveyModel,
   type SurveyModelInfo,
@@ -12,14 +11,12 @@ import {
 } from '../../api/hooks.ts';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import { surveyModelProblemMessage } from './surveyModelProblems.ts';
+import { SurveyPlacementFields } from './SurveyPlacementFields.tsx';
+import { useExactCaveOrigin, type SurveyPlacementForm } from './surveyPlacement.ts';
 
 /** What the server accepts, and the cap it refuses past. */
 const ACCEPTED_EXTENSIONS = '.lox,.3d,.stl';
 const MAX_MODEL_BYTES = 100 * 1024 * 1024;
-
-/** Deepest and highest a cave's zero level can plausibly sit, matching what the server accepts. */
-const LOWEST_HEIGHT_M = -500;
-const HIGHEST_HEIGHT_M = 9000;
 
 /**
  * How much the uploader has to say about where a file sits, which the file's own format decides.
@@ -67,13 +64,7 @@ function currentOfKind(
   return models?.find((model) => model.isCurrent && (model.format === 'stl') === mesh);
 }
 
-interface DeclarationForm {
-  coordinates: 'local' | 'projected';
-  sourceEpsg?: number;
-  originLongitude?: number;
-  originLatitude?: number;
-  originHeightM?: number;
-}
+type DeclarationForm = SurveyPlacementForm;
 
 /**
  * Uploading a survey model, and collecting what reading it cannot work out for itself.
@@ -89,12 +80,8 @@ interface DeclarationForm {
  * a country whose caves sit between 200 and 2000 — so the altitude of the file's zero plane is
  * asked for separately.
  *
- * <b>Why the origin is only sometimes offered.</b> A local export is the ordinary case and the
- * cave's own entrance is usually its origin, so the entrance position is filled in — but a cave
- * whose location is protected shows a deliberately-blurred position to accounts without
- * exact-location access, and seeding the form with that would write a wrong anchor into the
- * database and look like a successful upload. The offer is made only when the server says the
- * position this account holds is the true one.
+ * The cave's entrance is offered as a local file's origin only when the position this account
+ * holds is the true one; see {@link useExactCaveOrigin}.
  */
 export default function SurveyModelUploadModal({
   caveId,
@@ -111,37 +98,9 @@ export default function SurveyModelUploadModal({
   const [file, setFile] = useState<File>();
   const [tooLarge, setTooLarge] = useState(false);
   const upload = useUploadSurveyModel();
-  const { data: summary } = useCaveSummary(caveId);
   const { data: models } = useSurveyModels(caveId);
   const [takeOver, setTakeOver] = useState(false);
-
-  // The true position, or nothing. Both halves are read: the capability the caller was granted,
-  // and the record's own statement that what it sent is not blurred.
-  const entrance = summary?.mainEntrance;
-  const exactOrigin =
-    summary?.permissions.canViewExactLocation === true &&
-    entrance?.approximateLocation === false &&
-    entrance.geom
-      ? {
-          longitude: Number(entrance.geom.coordinates[0]),
-          latitude: Number(entrance.geom.coordinates[1]),
-        }
-      : undefined;
-
-  // Why there is nothing to offer, which is three different things and must not be said as one.
-  //
-  // Only one of them is a protection decision. Telling somebody their own unprotected cave is
-  // being blurred from them is simply false, and it invites a support question about a rule that
-  // is not in force — so the blurring is claimed only when the server actually said so, a cave
-  // with no entrance position on record is described as what it is, and a summary still on its way
-  // says nothing at all rather than accusing the installation of something while it loads.
-  const originProblem: 'obfuscated' | 'noEntrance' | undefined = !summary
-    ? undefined
-    : exactOrigin
-      ? undefined
-      : summary.permissions.canViewExactLocation !== true || entrance?.approximateLocation === true
-        ? 'obfuscated'
-        : 'noEntrance';
+  const { exactOrigin, originProblem } = useExactCaveOrigin(caveId);
 
   const need = declarationNeed(file);
   const asked = need !== 'none';
@@ -156,7 +115,6 @@ export default function SurveyModelUploadModal({
   // line plot may be a corrected re-export or a survey of one side passage, and only its uploader
   // knows which — so the cave goes on being represented by the model it has unless this is ticked.
   const holder = currentOfKind(models, file);
-  const coordinates = Form.useWatch('coordinates', form) ?? 'local';
 
   // The two halves separately, because the effect below depends on the numbers rather than on the
   // object holding them: a fresh object every render would re-run it on every render.
@@ -317,81 +275,12 @@ export default function SurveyModelUploadModal({
             )}
           </Typography.Paragraph>
 
-          <Form.Item name="coordinates">
-            <Radio.Group>
-              <Radio value="local">{t('surveyModels.coordinatesLocal')}</Radio>
-              <Radio value="projected">{t('surveyModels.coordinatesProjected')}</Radio>
-            </Radio.Group>
-          </Form.Item>
-
-          {coordinates === 'projected' ? (
-            <>
-              <Typography.Paragraph type="secondary">
-                {t('surveyModels.coordinatesProjectedHint')}
-              </Typography.Paragraph>
-              <Form.Item
-                name="sourceEpsg"
-                label={t('surveyModels.sourceEpsg')}
-                rules={[{ required: demanded, message: t('surveyModels.problems.crsInvalid') }]}
-              >
-                <InputNumber min={1} step={1} style={{ width: 200 }} />
-              </Form.Item>
-            </>
-          ) : (
-            <>
-              <Typography.Paragraph type="secondary">
-                {t('surveyModels.coordinatesLocalHint')}
-              </Typography.Paragraph>
-              {exactOrigin && (
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  title={t('surveyModels.originFromEntrance')}
-                />
-              )}
-              {originProblem && (
-                <Alert
-                  type="warning"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  title={
-                    originProblem === 'obfuscated'
-                      ? t('surveyModels.originObfuscated')
-                      : t('surveyModels.originNoEntrance')
-                  }
-                />
-              )}
-              <Form.Item
-                name="originLongitude"
-                label={t('surveyModels.originLongitude')}
-                rules={[{ required: demanded, message: t('surveyModels.problems.originInvalid') }]}
-              >
-                <InputNumber min={-180} max={180} step={0.00001} style={{ width: 200 }} />
-              </Form.Item>
-              <Form.Item
-                name="originLatitude"
-                label={t('surveyModels.originLatitude')}
-                rules={[{ required: demanded, message: t('surveyModels.problems.originInvalid') }]}
-              >
-                <InputNumber min={-90} max={90} step={0.00001} style={{ width: 200 }} />
-              </Form.Item>
-            </>
-          )}
-
-          <Form.Item
-            name="originHeightM"
-            label={t('surveyModels.originHeightM')}
-            extra={t('surveyModels.originHeightHint')}
-            rules={[{ required: demanded, message: t('surveyModels.problems.heightInvalid') }]}
-          >
-            <InputNumber
-              min={LOWEST_HEIGHT_M}
-              max={HIGHEST_HEIGHT_M}
-              step={1}
-              style={{ width: 200 }}
-            />
-          </Form.Item>
+          <SurveyPlacementFields
+            form={form}
+            demanded={demanded}
+            exactOrigin={exactOrigin}
+            originProblem={originProblem}
+          />
         </Form>
       )}
     </Modal>

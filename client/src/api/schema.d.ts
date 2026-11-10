@@ -409,6 +409,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-models/{id}/placement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Says again where the stored file sits — a projected coordinate system, or a position for its zero point — and queues a reading under that answer (Write on the cave). Refused while a reading is queued or running. */
+        put: operations["surveyModelChangePlacement"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/survey-models/{id}/reading": {
         parameters: {
             query?: never;
@@ -15465,6 +15482,15 @@ export interface components {
             meshSizeBytes: null | number;
             sourcePrecisionLost: boolean;
             /** Format: int32 */
+            sourceEpsg: null | number;
+            /** Format: double */
+            placementOffByKm: null | number;
+            /** Format: int32 */
+            suggestedSourceEpsg: null | number;
+            suggestsLocalMetres: boolean;
+            /** Format: double */
+            suggestedOffByKm: null | number;
+            /** Format: int32 */
             droppedShotCount: null | number;
             /** Format: int32 */
             mergedStationCount: null | number;
@@ -15478,6 +15504,16 @@ export interface components {
         };
         /** @enum {unknown} */
         SurveyModelFormat: "lox" | "survex3d" | "stl";
+        SurveyModelPlacementRequest: {
+            /** Format: int32 */
+            sourceEpsg: null | number;
+            /** Format: double */
+            originLongitude: null | number;
+            /** Format: double */
+            originLatitude: null | number;
+            /** Format: double */
+            originHeightM: number;
+        };
         /** @enum {unknown} */
         SurveyModelStatus: "ready" | "pending" | "processing" | "failed";
         SurveyModelUpdateRequest: {
@@ -19363,6 +19399,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyModelChangePlacement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurveyModelPlacementRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
                 };
             };
             /** @description Unauthorized */

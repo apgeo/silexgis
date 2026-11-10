@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   CheckCircleOutlined,
   DeleteOutlined,
+  EnvironmentOutlined,
   ExportOutlined,
   EyeOutlined,
   PictureOutlined,
@@ -29,6 +30,8 @@ import SurveyModelViewerModal from '../../components/caveview/SurveyModelViewerM
 import LazyTrackingMovieDialog from '../../components/caveview/movie/LazyTrackingMovieDialog.tsx';
 import { openModelWindow } from '../../caveview/openModelWindow.ts';
 import SurveyModelUploadModal from './SurveyModelUploadModal.tsx';
+import SurveyModelPlacementModal, { type PlacementChange } from './SurveyModelPlacementModal.tsx';
+import { formatKm, hasPlacementSuggestion } from './surveyPlacement.ts';
 import { surveyModelProblemMessage } from './surveyModelProblems.ts';
 
 /**
@@ -63,6 +66,53 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
   /** The model a movie is being made on, or null while the movie dialog is closed. */
   const [movieModelId, setMovieModelId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  /** The model whose placement is being said again, or null while that dialog is closed. */
+  const [placing, setPlacing] = useState<PlacementChange | null>(null);
+
+  // What a reading found about where the survey was declared to sit: how far from its cave it
+  // landed, and the declaration that would put it there. Shown on a failed model and on a ready
+  // one alike — a survey placed in the wrong zone reads perfectly well and is drawn hundreds of
+  // kilometres away, which nothing else on this page would say. The fix is offered, never applied:
+  // the person who knows the survey confirms it.
+  const placementNote = (model: SurveyModelInfo) => {
+    if (!hasPlacementSuggestion(model)) {
+      return null;
+    }
+    const epsg = typeof model.suggestedSourceEpsg === 'number' ? model.suggestedSourceEpsg : null;
+    const useLabel =
+      epsg === null
+        ? t('surveyModels.placement.useLocal')
+        : t('surveyModels.placement.useEpsg', { epsg });
+    return (
+      <Flex vertical gap={2} align="flex-start" data-testid={`survey-model-placement-note-${model.id}`}>
+        {typeof model.placementOffByKm === 'number' && (
+          <Typography.Text type="warning" style={{ fontSize: 12 }}>
+            {t('surveyModels.placement.far', { km: formatKm(model.placementOffByKm) })}
+          </Typography.Text>
+        )}
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {epsg === null
+            ? t('surveyModels.placement.suggestLocal')
+            : typeof model.suggestedOffByKm !== 'number'
+              ? t('surveyModels.placement.suggestEpsgUnmeasured', { epsg })
+              : t('surveyModels.placement.suggestEpsg', {
+                  epsg,
+                  km: formatKm(model.suggestedOffByKm),
+                })}
+        </Typography.Text>
+        {canEdit && !surveyModelWorkOutstanding(model) && (
+          <Button
+            size="small"
+            icon={<EnvironmentOutlined />}
+            onClick={() => setPlacing({ model, fromSuggestion: true })}
+            data-testid={`survey-model-use-suggestion-${model.id}`}
+          >
+            {useLabel}
+          </Button>
+        )}
+      </Flex>
+    );
+  };
 
   const stateCell = (model: SurveyModelInfo) => {
     // Both kinds of upload now have work waiting on them, and it is not the same work: walls are
@@ -79,6 +129,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
             {model.processingError ??
               t(walls ? 'surveyModels.conversionFailed' : 'surveyModels.readingFailed')}
           </Typography.Text>
+          {placementNote(model)}
         </Flex>
       );
     }
@@ -132,6 +183,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
             </Typography.Text>
           </Tooltip>
         )}
+        {placementNote(model)}
       </Flex>
     );
   };
@@ -282,6 +334,22 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
                     </Tooltip>
                   </Popconfirm>
                 )}
+                {/* Where the file sits, said again, for a model that is not being read: the file
+                    is read again under the new answer, so the same rule applies as to reading it
+                    again. Offered on every model, not only on one a reading found fault with —
+                    nothing can notice a wrong declaration on a cave with no position. */}
+                {canEdit && !surveyModelWorkOutstanding(model) && (
+                  <Tooltip title={t('surveyModels.placement.change')}>
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<EnvironmentOutlined />}
+                      aria-label={t('surveyModels.placement.change')}
+                      onClick={() => setPlacing({ model, fromSuggestion: false })}
+                      data-testid={`survey-model-change-placement-${model.id}`}
+                    />
+                  </Tooltip>
+                )}
                 {canEdit && (
                   <Popconfirm
                     title={t('surveyModels.deleteConfirm')}
@@ -321,6 +389,13 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
           caveId={caveId}
           open={uploading}
           onClose={() => setUploading(false)}
+        />
+      )}
+      {canEdit && (
+        <SurveyModelPlacementModal
+          caveId={caveId}
+          change={placing}
+          onClose={() => setPlacing(null)}
         />
       )}
 
