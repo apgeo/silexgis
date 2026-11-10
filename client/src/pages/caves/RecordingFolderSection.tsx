@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo } from 'react';
 import { FolderOpenOutlined } from '@ant-design/icons';
-import { Alert, Descriptions, Flex, Select, Table, Tag, Typography, Upload } from 'antd';
+import { Alert, Checkbox, Descriptions, Flex, Select, Table, Tag, Typography, Upload } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   candidateOf,
@@ -57,6 +57,8 @@ export default function RecordingFolderSection({
   profileId,
   onProfile,
   onShownProfile,
+  odometryElsewhere,
+  onOdometryElsewhere,
   disabled,
 }: {
   limits: SurveyRecordingCapabilities;
@@ -67,6 +69,9 @@ export default function RecordingFolderSection({
   onProfile: (id: string | null) => void;
   /** Told the profile on screen whenever it changes, chosen or preselected: what the upload sends. */
   onShownProfile: (id: string | null) => void;
+  /** Whether the odometry is run on another computer instead of the server's worker. */
+  odometryElsewhere: boolean;
+  onOdometryElsewhere: (elsewhere: boolean) => void;
   disabled: boolean;
 }) {
   const { t } = useTranslation();
@@ -173,8 +178,13 @@ export default function RecordingFolderSection({
           {fits && (
             <>
               <StorageRoomSummary addingBytes={selection.totalBytes} scan />
-              <Typography.Text type="secondary">{t('surveyUploads.recording.runRoom')}</Typography.Text>
-              <StorageRoomSummary addingBytes={selection.totalBytes * limits.odometryWorkerFactor} scan processing />
+              {/* Done elsewhere, the odometry's cache never lands on the worker's disk. */}
+              {!odometryElsewhere && (
+                <>
+                  <Typography.Text type="secondary">{t('surveyUploads.recording.runRoom')}</Typography.Text>
+                  <StorageRoomSummary addingBytes={selection.totalBytes * limits.odometryWorkerFactor} scan processing />
+                </>
+              )}
             </>
           )}
         </>
@@ -207,6 +217,18 @@ export default function RecordingFolderSection({
           </Typography.Text>
         )}
         <Typography.Text type="secondary">{t('surveyUploads.recording.profileHint')}</Typography.Text>
+      </Flex>
+
+      <Flex vertical gap={4}>
+        <Checkbox
+          checked={odometryElsewhere}
+          disabled={disabled}
+          onChange={(event) => onOdometryElsewhere(event.target.checked)}
+          data-testid="point-cloud-odometry-elsewhere"
+        >
+          {t('surveyUploads.recording.odometryElsewhere')}
+        </Checkbox>
+        <Typography.Text type="secondary">{t('surveyUploads.recording.odometryElsewhereHint')}</Typography.Text>
       </Flex>
     </Flex>
   );

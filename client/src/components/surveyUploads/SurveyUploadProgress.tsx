@@ -14,6 +14,8 @@ export interface SurveyUploadProgressView {
   error: { code: string; message: string | null } | null;
   stages: StageProgress[];
   artefacts: readonly SurveyUploadArtefactView[];
+  /** Whether the run stopped before a step done on another computer: ended, but not finished. */
+  awaitingExternal?: boolean;
 }
 
 const COMPILE_FAILED = 'survey_pipeline.compile_failed';
@@ -50,7 +52,8 @@ export default function SurveyUploadProgressPanel({
 }) {
   const { t } = useTranslation();
   const failed = view.status === 'failed';
-  const succeeded = view.status === 'succeeded';
+  const awaiting = view.awaitingExternal === true;
+  const succeeded = view.status === 'succeeded' && !awaiting;
   const errorText = !view.error
     ? null
     : view.error.code === COMPILE_FAILED && !logShown
@@ -77,7 +80,7 @@ export default function SurveyUploadProgressPanel({
       />
 
       <Typography.Text type="secondary" data-testid="survey-upload-status">
-        {t(`surveyUploads.status.${view.status}`)}
+        {awaiting ? t('surveyUploads.external.status') : t(`surveyUploads.status.${view.status}`)}
       </Typography.Text>
 
       {failed && view.error ? (

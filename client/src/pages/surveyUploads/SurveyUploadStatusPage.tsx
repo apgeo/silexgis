@@ -9,6 +9,7 @@ import { formatSize } from '../../components/attachments/fileFormat.ts';
 import { ApiError } from '../../api/client.ts';
 import {
   displayRequestOf,
+  surveyUploadAwaitingExternal,
   surveyUploadIsPointCloud,
   surveyUploadIsRecording,
   surveyUploadLinkHref,
@@ -116,6 +117,7 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
     error: upload.error,
     stages: surveyUploadStageStates({ status: upload.status, stage: upload.stage, compile: upload.compile, pointCloud, recording }),
     artefacts: upload.artefacts,
+    awaitingExternal: surveyUploadAwaitingExternal(upload),
   };
 
   const onRerun = async () => {

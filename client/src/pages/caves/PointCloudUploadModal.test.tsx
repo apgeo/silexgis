@@ -194,7 +194,32 @@ describe('the point-cloud upload dialog', () => {
     expect(request.files.map((f: File) => f.name)).toEqual(['imu0000.csv', 'lidar0000.laz']);
     expect(request.surveyTitle).toBe('Galeria');
     expect(request.profiles).toEqual(['p-fast']);
+    // Nothing was asked to run elsewhere: the server's worker runs every step.
+    expect(request.externalSteps).toEqual([]);
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/caves/c1/surveys/s2/uploads/u2'));
+  });
+
+  it('sends a recording with its odometry to be run on another computer when that is ticked, and drops the worker’s room from the figures', async () => {
+    show();
+    fireEvent.click(screen.getByText('Scanner recording folder'));
+    const inFolder = (path: string, size: number) => {
+      const file = new File([new Uint8Array(size)], path.slice(path.lastIndexOf('/') + 1));
+      Object.defineProperty(file, 'webkitRelativePath', { value: path });
+      return file;
+    };
+    fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: { files: [inFolder('Galeria/lidar0000.laz', 300), inFolder('Galeria/imu0000.csv', 20)] },
+    });
+    await waitFor(() => expect(screen.getByTestId('point-cloud-recording-count')).toHaveTextContent('2'));
+    roomAsked.length = 0;
+
+    fireEvent.click(screen.getByTestId('point-cloud-odometry-elsewhere'));
+    await waitFor(() => expect(roomAsked.some((p) => p.addingBytes === 320)).toBe(true));
+    expect(roomAsked.some((p) => p.addingBytes === 320 * 22)).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upload recording' }));
+    await waitFor(() => expect(recordingMutate).toHaveBeenCalledTimes(1));
+    expect(recordingMutate.mock.calls[0]![0].externalSteps).toEqual(['hdmapping.odometry']);
   });
 
   it('offers nothing to send for a folder the server would refuse, and says why', async () => {

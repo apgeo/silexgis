@@ -207,7 +207,8 @@ export function titleFromRecordingFolder(folder: string): string {
 /**
  * Whether an upload is a raw recording's: by its facts once the run has read it, and before that
  * by the IMU logs it was declared with — a recording always has one beside each lidar chunk, and
- * a single point cloud never has any.
+ * a single point cloud never has any. A refined session sent back as a recording's next version
+ * runs the recording's later stages, so its one session archive counts too.
  */
 export function surveyUploadIsRecording(upload: {
   pointCloud?: { recording: unknown } | null;
@@ -215,7 +216,11 @@ export function surveyUploadIsRecording(upload: {
 }): boolean {
   return (
     !!upload.pointCloud?.recording ||
-    upload.files.some((file) => file.role === 'archive' && recordingFileKind(file.name)?.kind === 'imu')
+    upload.files.some(
+      (file) =>
+        file.role === 'archive' &&
+        (recordingFileKind(file.name)?.kind === 'imu' || file.name.toLowerCase() === REFINED_SESSION_NAME),
+    )
   );
 }
 
@@ -225,6 +230,8 @@ export interface RecordingUploadRequest {
   surveyTitle: string;
   /** The processing profiles chosen, at most one per step; none means every step runs with its defaults. */
   profiles?: readonly string[];
+  /** The steps, by id, the person will do on another computer instead of the server's worker. */
+  externalSteps?: readonly string[];
   /** Where the upload has got to; while sending, which file of how many. */
   onPhase?: (phase: PointCloudUploadPhase, progress?: { done: number; total: number }) => void;
 }
@@ -239,7 +246,7 @@ export interface RecordingUploadRequest {
 export function useUploadRecording() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ caveId, files, surveyTitle, profiles, onPhase }: RecordingUploadRequest) => {
+    mutationFn: async ({ caveId, files, surveyTitle, profiles, externalSteps, onPhase }: RecordingUploadRequest) => {
       onPhase?.('opening');
       const opened = await unwrap(
         api.POST('/api/v1/survey-uploads', {
@@ -257,6 +264,7 @@ export function useUploadRecording() {
             documentsVisibility: null,
             display: null,
             profiles: profiles && profiles.length > 0 ? [...profiles] : null,
+            externalSteps: externalSteps && externalSteps.length > 0 ? [...externalSteps] : null,
           },
         }),
       );
@@ -271,6 +279,67 @@ export function useUploadRecording() {
           }),
         );
       }
+      onPhase?.('completing');
+      return unwrap(api.POST('/api/v1/survey-uploads/{id}/complete', { params: { path: { id: opened.id } } }));
+    },
+    onSuccess: (upload) => {
+      queryClient.setQueryData(queryKeys.surveyUpload(upload.id), upload);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveys(upload.cave.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModels(upload.cave.id) });
+    },
+  });
+}
+
+/** The name a refined HDMapping session is sent under, whatever it was called on the desktop. */
+export const REFINED_SESSION_NAME = 'session.zip';
+
+export interface RefinedSessionUploadRequest {
+  /** The scan's survey, which names its cave too: the refined session becomes its next version. */
+  caveSurveyId: string;
+  surveyTitle: string;
+  /** The session folder zipped, with `session.mjs` at its root. */
+  file: File;
+  onPhase?: (phase: PointCloudUploadPhase) => void;
+}
+
+/**
+ * Sends a session refined in HDMapping's desktop program as the next version of the scan it was
+ * made from: an upload of the scan's survey with the one archive declared under the session's
+ * fixed name. Its run starts at the export, against the recording already on the server.
+ */
+export function useUploadRefinedSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ caveSurveyId, surveyTitle, file, onPhase }: RefinedSessionUploadRequest) => {
+      onPhase?.('opening');
+      const opened = await unwrap(
+        api.POST('/api/v1/survey-uploads', {
+          body: {
+            source: 'mandeye',
+            client: { name: 'SilexGIS web', version: null },
+            // The survey alone: it names its cave, and the server refuses a cave named twice.
+            cave: null,
+            caveSurvey: { id: caveSurveyId },
+            newCave: null,
+            surveyTitle,
+            surveyName: null,
+            description: null,
+            files: [{ name: REFINED_SESSION_NAME, size: file.size, role: 'archive' }],
+            pipeline: null,
+            documentsVisibility: null,
+            display: null,
+          },
+        }),
+      );
+      onPhase?.('sending');
+      await unwrap(
+        api.PUT('/api/v1/survey-uploads/{id}/files/{name}', {
+          params: { path: { id: opened.id, name: REFINED_SESSION_NAME } },
+          body: file as never,
+          bodySerializer: (b: unknown) => b as Blob,
+          headers: { 'Content-Type': 'application/octet-stream' },
+        }),
+      );
       onPhase?.('completing');
       return unwrap(api.POST('/api/v1/survey-uploads/{id}/complete', { params: { path: { id: opened.id } } }));
     },

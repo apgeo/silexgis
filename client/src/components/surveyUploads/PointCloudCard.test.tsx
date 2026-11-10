@@ -12,6 +12,12 @@ vi.mock('../storage/StorageRoomSummary.tsx', () => ({
   ),
 }));
 
+// The panels of a step done elsewhere are tested on their own; here only which one the card draws.
+vi.mock('./ScanExternalSteps.tsx', () => ({
+  ExternalStepPanel: ({ id }: { id: string }) => <div data-testid="external-panel" data-id={id} />,
+  RefineOnDesktopPanel: ({ sessionUrl }: { sessionUrl: string }) => <div data-testid="refine-panel" data-url={sessionUrl} />,
+}));
+
 const { default: PointCloudCard } = await import('./PointCloudCard.tsx');
 
 /**
@@ -215,5 +221,42 @@ describe('the scan viewer button', () => {
   it('is absent while there is nothing tiled to look at', () => {
     render(<PointCloudCard upload={upload()} canWrite />);
     expect(screen.queryByTestId('point-cloud-view')).toBeNull();
+  });
+});
+
+describe('a step done on another computer, on the card', () => {
+  const where = {
+    id: 'u1',
+    cave: { id: 'c1', name: 'Invented cave', url: '/caves/c1' },
+    caveSurvey: { id: 's1', title: 'Scan one' },
+  };
+  const external = { stepId: 'hdmapping.odometry', stepName: 'LiDAR odometry', tool: 'hdmapping', outputs: [] };
+
+  it('offers the download and the upload back to a writer while the run waits, and only says so to a reader', () => {
+    const waiting = { ...upload({ stage: 'awaitingExternal', pointCloud: cloud({ estimate: null }) }), ...where, external };
+    render(<PointCloudCard upload={waiting} canWrite />);
+    expect(screen.getByTestId('external-panel')).toHaveAttribute('data-id', 'u1');
+    expect(screen.queryByTestId('scan-external-wait-reader')).toBeNull();
+    expect(screen.queryByTestId('refine-panel')).toBeNull();
+    cleanup();
+
+    render(<PointCloudCard upload={{ ...waiting, external: null }} canWrite={false} />);
+    expect(screen.queryByTestId('external-panel')).toBeNull();
+    expect(screen.getByTestId('scan-external-wait-reader')).toBeInTheDocument();
+  });
+
+  it('offers a finished scan’s session for refining to a writer given its address, and to nobody else', () => {
+    const finished = { ...upload({ stage: 'store', pointCloud: cloud({ sessionUrl: '/files/session' }) }), ...where };
+    render(<PointCloudCard upload={finished} canWrite />);
+    expect(screen.getByTestId('refine-panel')).toHaveAttribute('data-url', '/files/session');
+    cleanup();
+
+    render(<PointCloudCard upload={finished} canWrite={false} />);
+    expect(screen.queryByTestId('refine-panel')).toBeNull();
+    cleanup();
+
+    // Without the exact location the server sends no session address, and nothing is offered.
+    render(<PointCloudCard upload={{ ...finished, pointCloud: cloud({ sessionUrl: null }) }} canWrite />);
+    expect(screen.queryByTestId('refine-panel')).toBeNull();
   });
 });

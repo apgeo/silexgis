@@ -7130,7 +7130,8 @@
       "tile": "Tiling",
       "odometry": "Running the odometry",
       "export": "Exporting the point cloud",
-      "check": "Checking the export"
+      "check": "Checking the export",
+      "awaitingExternal": "Waiting for a step done elsewhere"
     },
     "stageStates": {
       "skipped": "Not needed"
@@ -7255,7 +7256,9 @@
       "gnss": "GNSS log",
       "unknown": "Not known",
       "yes": "Yes",
-      "no": "No"
+      "no": "No",
+      "odometryElsewhere": "Run the odometry on another computer",
+      "odometryElsewhereHint": "The processing stops before the odometry and offers the recording and its parameters as a download; you run HDMapping yourself and send the session back."
     },
     "fileRoles": {
       "archive": "Survey archive",
@@ -7302,7 +7305,13 @@
       "publicLinkForbidden": "Making a public link takes the right to share the cave.",
       "publicLinkProtected": "The cave's position is protected. A link to its results is made only when asked for explicitly, knowing that they show where its passages are.",
       "forbidden": "You may see this cave but not change it.",
-      "requestFailed": "That did not work. Please try again."
+      "requestFailed": "That did not work. Please try again.",
+      "notAwaitingExternal": "This upload is not waiting for a step done on another computer.",
+      "externalOutputUnknown": "The waiting step makes no file by that name.",
+      "externalOutputInvalid": "The file is not what the step makes: check that it is the right file, whole.",
+      "externalOutputTooLarge": "The file is larger than this installation takes for one scan file.",
+      "externalStepInvalid": "That step cannot be done on another computer for this upload.",
+      "sessionNeedsScan": "A refined session is sent as the next version of a scan this server processed from a recording."
     },
     "page": {
       "versionsTitle": "Versions of this survey",
@@ -7397,6 +7406,23 @@
       "survey-list-html": "List of surveys (HTML)",
       "continuation-list-html": "List of continuations (HTML)",
       "shp": "GIS shapefile (SHP)"
+    },
+    "external": {
+      "title": "Waiting for “{{step}}”, done on another computer",
+      "explain": "Download what the step reads — the inputs, the parameters for {{tool}} and a README with the command — run it on your computer, then send back what it made. When the last file is in, the processing carries on here.",
+      "download": "Download the inputs",
+      "sendBack": "Send back, each file under any name — it is stored under the name shown:",
+      "send": "Choose the file…",
+      "receivedTag": "Received",
+      "received": "{{name}} received.",
+      "resumed": "{{name}} received; the processing carries on.",
+      "status": "Waiting for a step done on another computer",
+      "waitingReader": "The processing waits for a step done on another computer by somebody who may edit the cave.",
+      "refineTitle": "Refine on a desktop",
+      "refineExplain": "Download the HDMapping session, refine it in HDMapping’s desktop program, zip the session folder’s contents (session.mjs at the root) and send it back. It becomes this scan’s next version, processed again from the export.",
+      "refineDownload": "Download the session",
+      "refineSend": "Send the refined session…",
+      "refinedSent": "Refined session sent as the scan’s next version."
     }
   },
   "surveySources": {

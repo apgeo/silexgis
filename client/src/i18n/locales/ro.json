@@ -7143,7 +7143,8 @@
       "tile": "Împărțire în dale",
       "odometry": "Calcul odometrie",
       "export": "Exportul norului de puncte",
-      "check": "Verificarea exportului"
+      "check": "Verificarea exportului",
+      "awaitingExternal": "Așteaptă un pas făcut pe alt calculator"
     },
     "stageStates": {
       "skipped": "Nu era nevoie"
@@ -7268,7 +7269,9 @@
       "gnss": "Jurnal GNSS",
       "unknown": "Necunoscut",
       "yes": "Da",
-      "no": "Nu"
+      "no": "Nu",
+      "odometryElsewhere": "Rulează odometria pe alt calculator",
+      "odometryElsewhereHint": "Procesarea se oprește înainte de odometrie și oferă înregistrarea și parametrii ei pentru descărcare; rulezi tu HDMapping și trimiți sesiunea înapoi."
     },
     "fileRoles": {
       "archive": "Arhiva topografiei",
@@ -7315,7 +7318,13 @@
       "publicLinkForbidden": "Pentru un link public trebuie să ai dreptul de a partaja peștera.",
       "publicLinkProtected": "Poziția peșterii este protejată. Un link la rezultatele ei se face doar dacă e cerut explicit, știind că arată pe unde trec galeriile.",
       "forbidden": "Poți vedea această peșteră, dar nu o poți modifica.",
-      "requestFailed": "Nu a mers. Încearcă din nou."
+      "requestFailed": "Nu a mers. Încearcă din nou.",
+      "notAwaitingExternal": "Această încărcare nu așteaptă un pas făcut pe alt calculator.",
+      "externalOutputUnknown": "Pasul așteptat nu produce niciun fișier cu acest nume.",
+      "externalOutputInvalid": "Fișierul nu este ce produce pasul: verifică dacă este fișierul potrivit, întreg.",
+      "externalOutputTooLarge": "Fișierul este mai mare decât acceptă această instalare pentru un fișier de scanare.",
+      "externalStepInvalid": "Acest pas nu poate fi făcut pe alt calculator pentru această încărcare.",
+      "sessionNeedsScan": "O sesiune rafinată se trimite ca următoarea versiune a unei scanări procesate de acest server dintr-o înregistrare."
     },
     "page": {
       "versionsTitle": "Versiunile acestei topografii",
@@ -7410,6 +7419,23 @@
       "survey-list-html": "Lista topografiilor (HTML)",
       "continuation-list-html": "Lista continuărilor (HTML)",
       "shp": "Shapefile GIS (SHP)"
+    },
+    "external": {
+      "title": "Așteaptă „{{step}}”, făcut pe alt calculator",
+      "explain": "Descarcă ce citește pasul — fișierele de intrare, parametrii pentru {{tool}} și un README cu comanda —, rulează-l pe calculatorul tău, apoi trimite înapoi ce a produs. Când a sosit ultimul fișier, procesarea continuă aici.",
+      "download": "Descarcă fișierele de intrare",
+      "sendBack": "Trimite înapoi fiecare fișier, cu orice nume — este păstrat sub numele afișat:",
+      "send": "Alege fișierul…",
+      "receivedTag": "Primit",
+      "received": "{{name}} a fost primit.",
+      "resumed": "{{name}} a fost primit; procesarea continuă.",
+      "status": "Așteaptă un pas făcut pe alt calculator",
+      "waitingReader": "Procesarea așteaptă un pas făcut pe alt calculator de cineva care poate modifica peștera.",
+      "refineTitle": "Rafinare pe un calculator",
+      "refineExplain": "Descarcă sesiunea HDMapping, rafineaz-o în programul HDMapping pentru calculator, arhivează conținutul dosarului sesiunii (cu session.mjs la rădăcină) și trimite-o înapoi. Devine următoarea versiune a acestei scanări, procesată din nou de la export.",
+      "refineDownload": "Descarcă sesiunea",
+      "refineSend": "Trimite sesiunea rafinată…",
+      "refinedSent": "Sesiunea rafinată a fost trimisă ca următoarea versiune a scanării."
     }
   },
   "surveySources": {

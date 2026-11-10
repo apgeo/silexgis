@@ -11,6 +11,7 @@ import {
   normaliseAlwaysOutputs,
   pointCloudChoiceNeeded,
   suggestedDisplayChoice,
+  surveyUploadAwaitingExternal,
   surveyUploadIsPointCloud,
   surveyUploadLinkHref,
   surveyUploadListPollInterval,
@@ -100,6 +101,17 @@ describe('point-cloud uploads', () => {
     expect(statesOf({ status: 'failed', stage: 'check', pointCloud: true, recording: true })).toEqual([
       'done', 'done', 'done', 'done', 'failed', 'pending', 'pending', 'pending',
     ]);
+  });
+
+  it('shows a run stopped before a step done elsewhere as read and nothing more, with every later stage still to come', () => {
+    expect(statesOf({ status: 'succeeded', stage: 'awaitingExternal', pointCloud: true, recording: true })).toEqual([
+      'done', 'done', 'pending', 'pending', 'pending', 'pending', 'pending', 'pending',
+    ]);
+    expect(surveyUploadAwaitingExternal({ status: 'succeeded', stage: 'awaitingExternal' })).toBe(true);
+    expect(surveyUploadAwaitingExternal({ status: 'succeeded', stage: 'store' })).toBe(false);
+    expect(surveyUploadAwaitingExternal({ status: 'queued', stage: 'awaitingExternal' })).toBe(false);
+    // A waiting run is not polled: nothing changes until somebody sends the step's products.
+    expect(surveyUploadPollInterval('succeeded')).toBe(false);
   });
 
   it('knows a cloud by its facts, or before the header is read by its one archive file’s name', () => {

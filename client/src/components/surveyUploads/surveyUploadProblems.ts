@@ -42,6 +42,12 @@ export const SURVEY_UPLOAD_REQUEST_ERROR_KEYS: Record<string, string> = {
   'survey_upload.public_links_disabled': 'surveyUploads.problems.publicLinksDisabled',
   'survey_upload.public_link_forbidden': 'surveyUploads.problems.publicLinkForbidden',
   'survey_upload.public_link_refused_protected': 'surveyUploads.problems.publicLinkProtected',
+  'survey_upload.not_awaiting_external': 'surveyUploads.problems.notAwaitingExternal',
+  'survey_upload.external_output_unknown': 'surveyUploads.problems.externalOutputUnknown',
+  'survey_upload.external_output_invalid': 'surveyUploads.problems.externalOutputInvalid',
+  'survey_upload.external_output_too_large': 'surveyUploads.problems.externalOutputTooLarge',
+  'survey_upload.external_step_invalid': 'surveyUploads.problems.externalStepInvalid',
+  'survey_upload.session_needs_scan': 'surveyUploads.problems.sessionNeedsScan',
   'acl.forbidden': 'surveyUploads.problems.forbidden',
 };
 

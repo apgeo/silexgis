@@ -7,11 +7,13 @@ import Button from '../Button.tsx';
 import PointCloudViewerModal from '../scene3d/PointCloudViewerModal.tsx';
 import { formatSize } from '../attachments/fileFormat.ts';
 import StorageRoomSummary from '../storage/StorageRoomSummary.tsx';
+import { ExternalStepPanel, RefineOnDesktopPanel } from './ScanExternalSteps.tsx';
 import { formatBytes, originalBytesOf, runAddsBytes } from '../storage/storageFigures.ts';
 import {
   displayChoiceUsed,
   pointCloudChoiceNeeded,
   suggestedDisplayChoice,
+  surveyUploadAwaitingExternal,
   type PointCloudAdviceLevel,
   type PointCloudDisplayChoice,
   type SurveyUpload,
@@ -60,7 +62,8 @@ export default function PointCloudCard({
   onChoose,
   choosing = false,
 }: {
-  upload: Pick<SurveyUpload, 'status' | 'stage' | 'pointCloud' | 'files'>;
+  upload: Pick<SurveyUpload, 'status' | 'stage' | 'pointCloud' | 'files'> &
+    Partial<Pick<SurveyUpload, 'id' | 'cave' | 'caveSurvey' | 'external'>>;
   /** What the viewer is titled with; the survey's title where the card has one. */
   name?: string;
   canWrite: boolean;
@@ -76,6 +79,12 @@ export default function PointCloudCard({
   }
 
   const choiceNeeded = pointCloudChoiceNeeded(upload);
+  const awaiting = surveyUploadAwaitingExternal(upload);
+  // Refining on a desktop starts from a run that finished, with the session it made (or was sent)
+  // and a survey to send the refined one to as its next version. The server sends the session's
+  // address only with the exact location; a run still waiting has nothing to refine yet.
+  const refinable =
+    canWrite && upload.status === 'succeeded' && !awaiting && !!cloud.sessionUrl && !!upload.cave && !!upload.caveSurvey;
   // The uploaded original carries real coordinates when its header names a coordinate system, so
   // the server offers its link only with the exact position; the card says why the link is gone
   // rather than leaving a row that silently lacks a button.
@@ -98,6 +107,14 @@ export default function PointCloudCard({
       }
     >
       <Flex vertical gap={12}>
+        {awaiting && canWrite && upload.id && upload.external && (
+          <ExternalStepPanel id={upload.id} external={upload.external} />
+        )}
+        {awaiting && !(canWrite && upload.external) && (
+          <Typography.Text type="secondary" data-testid="scan-external-wait-reader">
+            {t('surveyUploads.external.waitingReader')}
+          </Typography.Text>
+        )}
         <Facts cloud={cloud} language={i18n.language} />
         {cloud.recording && <RecordingFacts recording={cloud.recording} language={i18n.language} />}
         {originalWithheld && (
@@ -114,6 +131,9 @@ export default function PointCloudCard({
             onChoose={onChoose}
             choosing={choosing}
           />
+        )}
+        {refinable && upload.cave && upload.caveSurvey && (
+          <RefineOnDesktopPanel upload={{ cave: upload.cave, caveSurvey: upload.caveSurvey }} sessionUrl={cloud.sessionUrl!} />
         )}
       </Flex>
       {cloud.tilesetUrl !== null && (

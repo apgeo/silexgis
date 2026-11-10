@@ -27,6 +27,7 @@ export type SurveyOrigin = components['schemas']['SurveyOrigin'];
 export type SurveyUploadPointCloud = components['schemas']['SurveyUploadPointCloudDto'];
 export type SurveyUploadPointCloudEstimateRow = components['schemas']['SurveyUploadPointCloudEstimateRowDto'];
 export type SurveyUploadDisplayRequest = components['schemas']['SurveyUploadDisplayRequest'];
+export type SurveyUploadExternalWait = components['schemas']['SurveyUploadExternalWaitDto'];
 
 /** How often an unfinished upload is asked about, in milliseconds. */
 export const SURVEY_UPLOAD_POLL_MS = 2000;
@@ -125,6 +126,16 @@ export function pointCloudChoiceNeeded(
     upload.pointCloud.estimate !== null &&
     upload.pointCloud.tilesetUrl === null
   );
+}
+
+/**
+ * Whether a scan's run stopped before a step done on another computer: it ended at the stage that
+ * says so, and waits for the step's products to be sent back. Only a caller who may write the cave
+ * is told which step and what to send (`external`); anybody who may read the upload sees that it
+ * waits.
+ */
+export function surveyUploadAwaitingExternal(upload: Pick<SurveyUpload, 'status' | 'stage'>): boolean {
+  return upload.status === 'succeeded' && upload.stage === 'awaitingExternal';
 }
 
 /**
@@ -243,6 +254,13 @@ export function surveyUploadStageStates(input: StageInputs): StageProgress[] {
         }
         return { stage, state: i < index ? 'done' : i === index ? 'failed' : 'pending' };
       case 'succeeded':
+        // Stopped before a step done on another computer: the upload was read and nothing of the
+        // processing has been done here yet, so the stages up to the inspection are done and every
+        // later one is still to come — none of them skipped, as a finished run's would be.
+        if (input.stage === 'awaitingExternal') {
+          const inspected = order.indexOf('inspect');
+          return { stage, state: i <= inspected ? 'done' : 'pending' };
+        }
         if (index < 0) {
           return { stage, state: 'done' };
         }
@@ -430,6 +448,36 @@ export function useRerunSurveyUpload() {
         api.POST('/api/v1/survey-uploads/{id}/rerun', {
           params: { path: { id } },
           body: { pipeline: pipeline ?? null, display: display ?? null, fromStep: fromStep ?? null },
+        }),
+      ),
+    onSuccess: (upload) => {
+      queryClient.setQueryData(queryKeys.surveyUpload(upload.id), upload);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveys(upload.cave.id) });
+    },
+  });
+}
+
+/** The address of the download of what a waiting step reads: its inputs, parameters and instructions, as one zip. */
+export function surveyUploadExternalBundleUrl(id: string): string {
+  return `/api/v1/survey-uploads/${encodeURIComponent(id)}/external/bundle`;
+}
+
+/**
+ * Sends one product of the step a scan's run waits for, under the name the step takes it back
+ * under — whatever the file was called on the computer that made it. The answer is the upload as
+ * it now stands: still waiting when the step makes more than this one, queued again once the last
+ * is in, and the page then polls the run as it carries on.
+ */
+export function useSendExternalOutput() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name, file }: { id: string; name: string; file: Blob }) =>
+      unwrap(
+        api.PUT('/api/v1/survey-uploads/{id}/external/{name}', {
+          params: { path: { id, name } },
+          body: file as never,
+          bodySerializer: (b: unknown) => b as Blob,
+          headers: { 'Content-Type': 'application/octet-stream' },
         }),
       ),
     onSuccess: (upload) => {

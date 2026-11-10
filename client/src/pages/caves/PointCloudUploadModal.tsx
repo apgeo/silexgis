@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   DEFAULT_RECORDING_CAPABILITIES,
   isPointCloudFileName,
+  ODOMETRY_STEP_ID,
   POINT_CLOUD_EXTENSIONS,
   recordingSelection,
   titleFromRecordingFolder,
@@ -69,6 +70,7 @@ export default function PointCloudUploadModal({
   const [picked, setPicked] = useState<RecordingFile[]>();
   const [profileId, setProfileId] = useState<string | null>();
   const [shownProfile, setShownProfile] = useState<string | null>(null);
+  const [odometryElsewhere, setOdometryElsewhere] = useState(false);
   const [phase, setPhase] = useState<PointCloudUploadPhase>();
   const [sent, setSent] = useState<{ done: number; total: number }>();
   const { data: capabilities } = useSurveyUploadCapabilities();
@@ -106,6 +108,7 @@ export default function PointCloudUploadModal({
     setFile(undefined);
     setPicked(undefined);
     setProfileId(undefined);
+    setOdometryElsewhere(false);
     setPhase(undefined);
     setSent(undefined);
     onClose();
@@ -145,6 +148,7 @@ export default function PointCloudUploadModal({
           files: selection!.files.map((candidate) => candidate.file),
           surveyTitle: title,
           profiles: shownProfile ? [shownProfile] : [],
+          externalSteps: odometryElsewhere ? [ODOMETRY_STEP_ID] : [],
           onPhase,
         });
         message.success(t('surveyUploads.recording.uploaded'));
@@ -197,6 +201,8 @@ export default function PointCloudUploadModal({
           profileId={profileId}
           onProfile={setProfileId}
           onShownProfile={setShownProfile}
+          odometryElsewhere={odometryElsewhere}
+          onOdometryElsewhere={setOdometryElsewhere}
           disabled={pending}
         />
       ) : (
