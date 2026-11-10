@@ -34,6 +34,7 @@ linking out to the reference pages for detail.
 - [Import a season of GPS waypoints](workflows/import-a-gps-file.md)
 - [Turn a trip's photographs into places](workflows/photographs-to-places.md)
 - [Plan a trip, run it, and write it up](workflows/plan-and-log-a-trip.md)
+- [Bring in a laser scan of a cave](workflows/bring-in-a-laser-scan.md)
 - [File the club archive](workflows/file-the-archive.md)
 - [Share your work with someone](workflows/share-your-work.md)
 
