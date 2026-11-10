@@ -183,6 +183,43 @@ public sealed class SurveyUploadSurfaceTests : IAsyncLifetime, IDisposable, ICla
     }
 
     [Fact]
+    public async Task A_surface_request_left_by_a_run_that_did_not_save_is_not_made_by_a_later_plain_rerun()
+    {
+        var caveId = await CreateCaveAsync();
+        var (uploadId, scanId) = await TiledScanAsync(caveId);
+        await PlaceAsync(owner, scanId, headingDeg: 0);
+
+        var asked = await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{uploadId}/surface", new { });
+        asked.StatusCode.ShouldBe(HttpStatusCode.Accepted, await asked.Content.ReadAsStringAsync());
+
+        // The run ended without saving: failed, its stored recipe still holding the request.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.SurveyUploads.Where(u => u.Id == uploadId)
+                .ExecuteUpdateAsync(x => x.SetProperty(u => u.Status, SurveyUploadStatus.Failed));
+            await db.ProcessingJobs.Where(j => j.Kind == ProcessingJobKinds.PointCloudPipeline && j.Status == ProcessingJobStatus.Queued)
+                .ExecuteUpdateAsync(x => x.SetProperty(j => j.Status, ProcessingJobStatus.Failed));
+            var held = ScanRecipes.FromOptionsJson((await db.SurveyUploads.AsNoTracking().SingleAsync(u => u.Id == uploadId)).Options).ShouldNotBeNull();
+            held.Surface.ShouldNotBeNull();
+        }
+
+        var rerun = await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{uploadId}/rerun", new { });
+        rerun.StatusCode.ShouldBe(HttpStatusCode.Accepted, await rerun.Content.ReadAsStringAsync());
+        await RunPipelineAsync(uploadId);
+
+        worker.Steps.ShouldNotContain(MeshSurfaceStep.StepId);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.SurveyModels.CountAsync(m => m.CaveFeatureId == caveId && m.Format == SurveyModelFormat.Stl)).ShouldBe(0);
+            var recipe = ScanRecipes.FromOptionsJson((await db.SurveyUploads.AsNoTracking().SingleAsync(u => u.Id == uploadId)).Options).ShouldNotBeNull();
+            recipe.Surface.ShouldBeNull();
+            recipe.Steps.ShouldNotContain(s => s.StepId == MeshSurfaceStep.StepId);
+        }
+    }
+
+    [Fact]
     public async Task A_profile_chooses_the_values_and_another_cave_may_be_chosen_while_a_profile_of_another_step_is_refused()
     {
         var caveId = await CreateCaveAsync();

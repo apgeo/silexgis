@@ -429,6 +429,15 @@ public static partial class SurveyUploadEndpoints
         if (ScanOrigins.IsScan(upload.Source))
         {
             var current = ScanRecipes.FromOptionsJson(upload.Options);
+            // A surface asked for once belongs to the run that was asked for it. One that failed or
+            // was refused left its request in the stored recipe; a later run, perhaps by somebody
+            // who may not write to the cave it names, must not make that wall mesh unasked.
+            if (current is not null && (current.Surface is not null || current.Steps.Any(s => s.StepId == MeshSurfaceStep.StepId)))
+            {
+                current = PointCloudRecipes.WithoutSurface(current);
+                upload.Options = ScanRecipes.ToOptionsJson(current);
+            }
+
             ScanRecipe? rebuilt = null;
             if (request?.Display is { } display)
             {
