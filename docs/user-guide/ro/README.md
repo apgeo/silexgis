@@ -57,6 +57,7 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Peșteri și intrări](features/caves-and-entrances.md) ·
 [Fenomene de suprafață](features/surface-features.md) ·
 [Topografii, drumuiri și modele 3D](features/surveys-and-models.md) ·
+[Nori de puncte (scanări LiDAR)](features/point-clouds.md) ·
 [Măsurători și statistici](features/measurements-and-statistics.md) ·
 [Fișiere de geodate](features/geodata.md) ·
 [Hărți raster georeferențiate](features/georeferenced-maps.md) ·
@@ -107,6 +108,7 @@ instalarea propriu-zisă se află în [INSTALL.md](../../INSTALL.md) și
 - [Vocabularele care aparțin clubului](admin/vocabularies.md)
 - [Mesagerie și trimitere](admin/messaging.md)
 - [Generarea reliefului](admin/terrain-builds.md)
+- [Spațiu de stocare](admin/storage.md)
 - [Operațiuni de întreținere](admin/maintenance.md)
 
 ---
@@ -116,6 +118,9 @@ instalarea propriu-zisă se află în [INSTALL.md](../../INSTALL.md) și
 Este scris ca să fie modificat. Dacă ceva de aici este greșit, învechit sau lipsește,
 schimbă — vezi [Cum se modifică acest ghid](editing-this-guide.md) pentru convenții,
 structura fișierelor și felul în care se poate cere unui agent să îl extindă coerent.
+
+**Limbi.** Ghidul există în engleză și în română, pagină cu pagină — vezi
+[ghidul în engleză (English)](../README.md). Engleza este canonică; româna o urmează.
 
 **Stadiu:** a doua iterație. Scris pe baza aplicației așa cum este acum; fiecare pagină poate
 fi corectată de oamenii care o folosesc efectiv.

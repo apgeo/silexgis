@@ -45,10 +45,10 @@ ca pe un lucru separat de **faptul că o peșteră există**, și poate oferi al
 primul.
 
 O peșteră marcată cu **locație protejată** rămâne lizibilă: numele, descrierea, documentele,
-istoricul ei. Ce se reține sunt **coordonatele exacte** — iar reținerea se face pe server, pe
-fiecare cale care ar putea-o scurge: harta, tabelele, exporturile, vederile partajate,
-fotografiile (a căror poziție de capturare ar da-o de gol), e-mailurile de notificare,
-rapoartele.
+istoricul ei. Ce se reține, față de oricine nu are dreptul anume de a le vedea, sunt
+**coordonatele exacte** — iar reținerea se face pe server, pe fiecare cale care ar putea-o
+scurge: harta, tabelele, exporturile, vederile partajate, fotografiile (a căror poziție de
+capturare ar da-o de gol), e-mailurile de notificare, rapoartele.
 
 Subiectul este tratat integral în [Protecția locațiilor](admin/location-protection.md). Merită
 citit chiar dacă nu administrezi nimic, pentru că explică de ce doi oameni care se uită la

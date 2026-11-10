@@ -20,6 +20,10 @@ Tot ce urmează trăiește pe **pagina unei peșteri**.
 **Încarcă model.** Acceptate: **Therion `.lox`**, **Survex `.3d`**, sau **pereți de peșteră ca
 `.stl` binar** — până la 100 MB.
 
+O **scanare laser** intră prin același card — **Încarcă nor de puncte** primește un fișier `.laz` /
+`.las` sau o înregistrare brută de la un scaner MANDEYE — și are o pagină proprie:
+[Nori de puncte (scanări LiDAR)](point-clouds.md).
+
 Stare: *Așteaptă la rând → În curs → Gata*, sau *Nu a putut fi procesat*.
 
 Un model este desenat în **vizualizatorul topografic** (CaveView.js) și, pentru pereți, în

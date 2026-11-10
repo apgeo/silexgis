@@ -16,22 +16,31 @@ celuilalt.
 
 ```
 docs/user-guide/
-├── README.md …               versiunea engleză (canonică)
-├── workflows/ features/ admin/
-└── ro/                       versiunea română — aceleași nume de fișiere
-    ├── README.md
-    ├── TERMINOLOGIE.md       corespondența EN/RO a termenilor
-    ├── workflows/
-    ├── features/
-    └── admin/
+├── README.md                  pagina principală și cuprinsul complet (engleză, canonică)
+├── concept.md                 ce este aplicația
+├── first-steps.md             primii pași, pentru orientare
+├── core-concepts.md           cele șase idei pe care e construit totul
+├── glossary.md                vocabularul
+├── editing-this-guide.md      pagina aceasta
+├── workflows/                 treburi întregi, de la cap la coadă
+├── features/                  câte o pagină pentru fiecare parte a aplicației
+├── admin/                     pentru cine are drepturi de administrare
+└── ro/                        ghidul în română — aceleași nume de fișiere
+    ├── TERMINOLOGIE.md        corespondența EN/RO a termenilor
+    ├── workflows/ features/ admin/
+    └── …
 ```
 
 **Markdown simplu, fără pas de construcție, fără generator de site.** Se randează pe GitHub, în
 orice vizualizator de Markdown, într-un editor, și poate fi lipit într-un wiki. Linkurile sunt
 relative, deci arborele poate fi mutat sau publicat ca atare.
 
+Ghidul există în **engleză și în română**, ca aplicația însăși. Fiecare pagină există în ambele
+limbi, sub același nume de fișier, și are sub titlu un comutator de limbă.
+
 **Engleza este canonică.** Când o pagină se schimbă, se schimbă întâi în engleză, apoi în română.
-O pagină românească rămasă în urmă este un defect, nu o variantă.
+O pagină românească rămasă în urmă este un defect, nu o variantă — spune-o deschis, în loc să
+lași cele două versiuni să se depărteze.
 
 ## Ce este fiecare director
 
