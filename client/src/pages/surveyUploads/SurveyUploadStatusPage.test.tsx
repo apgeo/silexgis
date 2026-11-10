@@ -30,6 +30,9 @@ vi.mock('../../api/hooks.ts', async () => {
     useCaveSummary: () => ({ data: { permissions: { canWrite } } }),
     useStorageRoom: () => ({ data: undefined }),
     useRerunSurveyUpload: () => ({ mutateAsync: rerunMutate, isPending: false }),
+    // The scan card's "make a surface" asks for the cave's models to know whether the scan is placed.
+    useSurveyModels: () => ({ data: [], isPending: false }),
+    useMakeScanSurface: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useMintSurveyUploadPublicLink: () => ({ mutateAsync: mintMutate, isPending: false }),
     useRevokeSurveyUploadPublicLink: () => ({ mutateAsync: revokeMutate, isPending: false }),
     useSurveyUploadPreferences: () => ({

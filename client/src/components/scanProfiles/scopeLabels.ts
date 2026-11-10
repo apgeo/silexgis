@@ -14,4 +14,5 @@ export const STEP_LABEL_KEYS: Record<string, string> = {
   'pointcloud.downsample': 'settings.scanProfiles.step.downsample',
   'py3dtiles.tile': 'settings.scanProfiles.step.tile',
   'pointcloud.estimate': 'settings.scanProfiles.step.estimate',
+  'mesh.surface': 'settings.scanProfiles.step.surface',
 };

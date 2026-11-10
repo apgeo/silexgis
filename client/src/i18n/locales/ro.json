@@ -4522,7 +4522,8 @@
         "odometry": "Odometria HDMapping (înregistrări brute)",
         "downsample": "Rărirea unui nor pentru afișare",
         "tile": "Împărțirea unui nor în dale pentru vizualizare",
-        "estimate": "Estimarea a ce păstrează rărirea"
+        "estimate": "Estimarea a ce păstrează rărirea",
+        "surface": "Refacerea suprafeței pereților"
       },
       "scope": {
         "installation": "Toată instalarea",
@@ -7307,7 +7308,34 @@
       "view": "Vezi",
       "log": "Jurnalul compilatorului"
     },
+    "surface": {
+      "title": "Suprafața pereților",
+      "intro": "Serverul poate reface din puncte pereții peșterii ca o rețea de triunghiuri și o poate salva ca model de pereți al unei peșteri, așezat acolo unde e plasată scanarea.",
+      "needsPlacement": "Plasează întâi scanarea: suprafața ei se salvează acolo unde e plasată scanarea.",
+      "make": "Fă o suprafață…",
+      "dialogTitle": "Fă o suprafață a scanării",
+      "profile": "Profil",
+      "profileDefaults": "Valorile proprii ale pasului de suprafață",
+      "cave": "Salveaz-o ca model de pereți al peșterii",
+      "scanCave": "Peștera acestei scanări ({{cave}})",
+      "otherCave": "Altă peșteră",
+      "otherCavePlaceholder": "Caută o peșteră",
+      "savedAs": "Suprafața se adaugă la modelele de pereți ale peșterii. Devine cea desenată de scena 3D doar dacă peștera nu are încă niciunul; altfel setează-o ca model curent din lista peșterii.",
+      "send": "Fă suprafața",
+      "started": "Suprafața se face.",
+      "running": "Se face o suprafață. Va fi salvată ca model de pereți al peșterii {{cave}}.",
+      "saved": "Suprafața e salvată ca model de pereți al peșterii {{cave}}. Va fi pregătită pentru scena 3D în câteva momente.",
+      "openCave": "Deschide peștera",
+      "failed": "Suprafața nu a fost făcută. Progresul de mai sus spune de ce."
+    },
     "problems": {
+      "surfaceUnplaced": "Suprafața a fost făcută, dar nu a fost salvată: scanarea nu mai e plasată sau peștera aleasă pentru ea nu mai există. Plasează scanarea și fă din nou suprafața.",
+      "surfaceNeedsTiles": "O suprafață se face dintr-o scanare procesată și împărțită în dale.",
+      "surfaceNeedsPlacement": "Plasează întâi scanarea: suprafața ei se salvează acolo unde e plasată scanarea.",
+      "surfaceProfileStep": "Acel profil nu este unul pentru făcut suprafețe.",
+      "profileUnknown": "Acel profil nu mai există sau nu îl poți folosi.",
+      "profileValuesInvalid": "Valorile acelui profil nu se mai potrivesc pasului. Deschide-l în setări și salvează-l din nou.",
+      "caveNotFound": "Acea peșteră nu există sau nu poți salva pereți pentru ea.",
       "filesMissing": "Un fișier al acestei încărcări nu mai este în depozitul serverului. Cere administratorului să-l restaureze, apoi rulează încărcarea din nou.",
       "archiveInvalid": "Arhiva nu este o arhivă de topografie TopoDroid sau este prea veche ori deteriorată ca să fie citită. Exportă din nou topografia din TopoDroid și încarc-o de la capăt.",
       "archiveTooLarge": "Arhiva conține mai mult decât citește acest server. Exportă o topografie mai mică.",

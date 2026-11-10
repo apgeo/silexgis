@@ -27,6 +27,7 @@ export const SURVEY_UPLOAD_RUN_ERROR_KEYS: Record<string, string> = {
   'survey_pipeline.crs_unknown': 'surveyUploads.problems.crsUnknown',
   'survey_pipeline.store_failed': 'surveyUploads.problems.storeFailed',
   'survey_pipeline.storage_insufficient': 'surveyUploads.problems.storageInsufficient',
+  'survey_pipeline.surface_unplaced': 'surveyUploads.problems.surfaceUnplaced',
 };
 
 /**
@@ -48,6 +49,12 @@ export const SURVEY_UPLOAD_REQUEST_ERROR_KEYS: Record<string, string> = {
   'survey_upload.external_output_too_large': 'surveyUploads.problems.externalOutputTooLarge',
   'survey_upload.external_step_invalid': 'surveyUploads.problems.externalStepInvalid',
   'survey_upload.session_needs_scan': 'surveyUploads.problems.sessionNeedsScan',
+  'survey_upload.surface_needs_tiles': 'surveyUploads.problems.surfaceNeedsTiles',
+  'survey_upload.surface_needs_placement': 'surveyUploads.problems.surfaceNeedsPlacement',
+  'survey_upload.surface_profile_step': 'surveyUploads.problems.surfaceProfileStep',
+  'survey_upload.profile_unknown': 'surveyUploads.problems.profileUnknown',
+  'survey_upload.profile_values_invalid': 'surveyUploads.problems.profileValuesInvalid',
+  'cave.not_found': 'surveyUploads.problems.caveNotFound',
   'acl.forbidden': 'surveyUploads.problems.forbidden',
 };
 

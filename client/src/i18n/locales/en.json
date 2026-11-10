@@ -4509,7 +4509,8 @@
         "odometry": "HDMapping odometry (raw recordings)",
         "downsample": "Thinning a cloud for display",
         "tile": "Tiling a cloud for viewing",
-        "estimate": "Estimating what thinning keeps"
+        "estimate": "Estimating what thinning keeps",
+        "surface": "Making a surface of the walls"
       },
       "scope": {
         "installation": "The whole installation",
@@ -7294,7 +7295,34 @@
       "view": "View",
       "log": "Compiler's log"
     },
+    "surface": {
+      "title": "Surface of the walls",
+      "intro": "The server can rebuild the cave's walls from the points as a mesh and save it as a wall mesh of a cave, standing where the scan stands.",
+      "needsPlacement": "Place the scan first: its surface is saved standing where the scan stands.",
+      "make": "Make a surface…",
+      "dialogTitle": "Make a surface of the scan",
+      "profile": "Profile",
+      "profileDefaults": "The surface step's own values",
+      "cave": "Save it as a wall mesh of",
+      "scanCave": "This scan's cave ({{cave}})",
+      "otherCave": "Another cave",
+      "otherCavePlaceholder": "Search for a cave",
+      "savedAs": "The surface is added to the cave's wall meshes. It becomes the one the 3D scene draws only if the cave has none yet; otherwise make it current from the cave's list.",
+      "send": "Make the surface",
+      "started": "The surface is being made.",
+      "running": "Making a surface. It will be saved as a wall mesh of {{cave}}.",
+      "saved": "The surface is saved as a wall mesh of {{cave}}. It is prepared for the 3D scene in a moment.",
+      "openCave": "Open the cave",
+      "failed": "The surface was not made. The progress above says why."
+    },
     "problems": {
+      "surfaceUnplaced": "The surface was made but not saved: the scan is no longer placed, or the cave chosen for it is gone. Place the scan and make the surface again.",
+      "surfaceNeedsTiles": "A surface is made of a scan that has been processed and tiled.",
+      "surfaceNeedsPlacement": "Place the scan first: its surface is saved standing where the scan stands.",
+      "surfaceProfileStep": "That profile is not one for making a surface.",
+      "profileUnknown": "That profile is no longer there, or you cannot use it.",
+      "profileValuesInvalid": "That profile's values no longer fit the step. Open it in the settings and save it again.",
+      "caveNotFound": "That cave is not there, or you cannot save walls for it.",
       "filesMissing": "A file of this upload is no longer in the server's store. Ask the administrator to restore it, then run the upload again.",
       "archiveInvalid": "The archive is not a TopoDroid survey archive, or is too old or damaged to read. Export the survey again from TopoDroid and upload it afresh.",
       "archiveTooLarge": "The archive holds more than this server reads. Export a smaller survey.",

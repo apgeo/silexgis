@@ -18,6 +18,13 @@ vi.mock('./ScanExternalSteps.tsx', () => ({
   RefineOnDesktopPanel: ({ sessionUrl }: { sessionUrl: string }) => <div data-testid="refine-panel" data-url={sessionUrl} />,
 }));
 
+// Making a surface is tested on its own; here only whether the card offers it.
+vi.mock('./ScanSurfacePanel.tsx', () => ({
+  default: ({ upload }: { upload: { id: string; cave: { id: string } } }) => (
+    <div data-testid="surface-panel" data-id={upload.id} data-cave={upload.cave.id} />
+  ),
+}));
+
 // The viewer is tested on its own; here only what the card hands it.
 vi.mock('../scene3d/PointCloudViewerModal.tsx', () => ({
   default: ({ open, centreline }: { open: boolean; centreline?: unknown }) => (
@@ -275,6 +282,20 @@ describe('a step done on another computer, on the card', () => {
     // Without the exact location the server sends no session address, and nothing is offered.
     render(<PointCloudCard upload={{ ...finished, pointCloud: cloud({ sessionUrl: null }) }} canWrite />);
     expect(screen.queryByTestId('refine-panel')).toBeNull();
+  });
+
+  it('offers making a surface to a writer of a finished scan, and never on a read-only card or while a step waits', () => {
+    const finished = { ...upload({ stage: 'store' }), ...where };
+    render(<PointCloudCard upload={finished} canWrite />);
+    expect(screen.getByTestId('surface-panel')).toHaveAttribute('data-cave', 'c1');
+    cleanup();
+
+    render(<PointCloudCard upload={finished} canWrite={false} />);
+    expect(screen.queryByTestId('surface-panel')).toBeNull();
+    cleanup();
+
+    render(<PointCloudCard upload={{ ...finished, stage: 'awaitingExternal', external }} canWrite />);
+    expect(screen.queryByTestId('surface-panel')).toBeNull();
   });
 });
 

@@ -9,6 +9,7 @@ import { formatSize } from '../attachments/fileFormat.ts';
 import StorageRoomSummary from '../storage/StorageRoomSummary.tsx';
 import { ExternalStepPanel, RefineOnDesktopPanel } from './ScanExternalSteps.tsx';
 import ScanPictures from './ScanPictures.tsx';
+import ScanSurfacePanel from './ScanSurfacePanel.tsx';
 import { formatBytes, originalBytesOf, runAddsBytes } from '../storage/storageFigures.ts';
 import {
   displayChoiceUsed,
@@ -135,6 +136,11 @@ export default function PointCloudCard({
           />
         )}
         {cloud.pictures && <ScanPictures pictures={cloud.pictures} />}
+        {/* Making a surface writes a wall mesh of a cave, so it is offered only beside a run the
+            caller may start; the card on the cave page is drawn read-only and never offers it. */}
+        {canWrite && upload.id && upload.cave && !awaiting && (
+          <ScanSurfacePanel upload={{ id: upload.id, status: upload.status, cave: upload.cave, pointCloud: cloud }} />
+        )}
         {refinable && upload.cave && upload.caveSurvey && (
           <RefineOnDesktopPanel upload={{ cave: upload.cave, caveSurvey: upload.caveSurvey }} sessionUrl={cloud.sessionUrl!} />
         )}

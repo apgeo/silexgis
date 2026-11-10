@@ -459,6 +459,33 @@ export function useRerunSurveyUpload() {
   });
 }
 
+/** The step id of the worker step that makes a scan's surface; its profiles are listed under it. */
+export const SURFACE_STEP_ID = 'mesh.surface';
+
+/**
+ * Asks for a surface to be made of a processed, placed scan and saved as a wall mesh of a cave —
+ * the scan's own when no cave is named — with a profile of the surface step, or the step's own
+ * values when none is named. The answer is the upload queued again, so the page polls the run as
+ * it goes. The profile used becomes the remembered one, so the profile lists are asked again.
+ */
+export function useMakeScanSurface() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, caveId, profileId }: { id: string; caveId?: string | null; profileId?: string | null }) =>
+      unwrap(
+        api.POST('/api/v1/survey-uploads/{id}/surface', {
+          params: { path: { id } },
+          body: { caveId: caveId ?? null, profileId: profileId ?? null },
+        }),
+      ),
+    onSuccess: (upload) => {
+      queryClient.setQueryData(queryKeys.surveyUpload(upload.id), upload);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveys(upload.cave.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.processingProfilesAll });
+    },
+  });
+}
+
 /** The address of the download of what a waiting step reads: its inputs, parameters and instructions, as one zip. */
 export function surveyUploadExternalBundleUrl(id: string): string {
   return `/api/v1/survey-uploads/${encodeURIComponent(id)}/external/bundle`;

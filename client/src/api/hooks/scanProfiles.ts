@@ -18,7 +18,8 @@ export const PROCESSING_PROFILE_SCOPES: readonly ProcessingProfileScope[] = ['in
 
 /**
  * The processing steps a profile can be kept for, in the order a person meets them: HDMapping's
- * odometry first because it is the one with many settings worth keeping, then the cloud steps.
+ * odometry first because it is the one with many settings worth keeping, then the cloud steps,
+ * then the surface a processed scan can be made into.
  * Steps with no parameters (reading the header, the export, the check) have nothing to keep.
  */
 export const PROFILE_STEP_IDS = [
@@ -26,6 +27,7 @@ export const PROFILE_STEP_IDS = [
   'pointcloud.downsample',
   'py3dtiles.tile',
   'pointcloud.estimate',
+  'mesh.surface',
 ] as const;
 
 /** The step whose parameters HDMapping's own TOML file can carry in and out. */
