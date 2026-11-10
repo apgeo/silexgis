@@ -1,6 +1,6 @@
 # Tells the shared documentation repository (apgeo/speotopo-docs) that the Markdown here
 # changed, so the SilexGIS site there (sites/silexgis) is rebuilt and the pages at
-# speotopo.ro/SilexGIS/docs/ follow within minutes. That repository does the building, link
+# speotopo.ro/silexgis/docs/ follow within minutes. That repository does the building, link
 # checking and uploading; this job only sends the signal.
 #
 # Needs a secret DOCS_SITE_TOKEN: a fine-grained token limited to that repository with
