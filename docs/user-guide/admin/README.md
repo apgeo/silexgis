@@ -54,7 +54,7 @@ change that would leave no active Full Administrator able to sign in.
 | [Published trips](../features/live-tracking.md#everything-published-for-full-administrators) | Full Administrators — it lists every trip's links whatever the trip's own access rules say, and can take all of them back |
 | Detection rules | Anybody who can create features. Only *promoting* a set to what a group or the installation inherits is an administrator's act |
 | [Storage](storage.md) | Full Administrators |
-| [Processing profiles](../features/point-clouds.md#processing-profiles) of a caving group or the installation | Rights over **scan-profiles** (Create, Write, Delete to manage them; Read to see every group's). Personal profiles need no right |
+| [Processing profiles](../features/point-clouds.md#processing-profiles) of a caving group or the installation | Rights over the **Scans · Processing profiles** domain (Create, Write, Delete to manage them; Read to see every group's). Personal profiles need no right |
 | [Maintenance sweeps](maintenance.md) | **Run** on the **jobs** domain (no interface page yet — triggered through the API) |
 
 ## Accounts

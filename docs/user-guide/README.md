@@ -53,6 +53,7 @@ linking out to the reference pages for detail.
 [Caves and entrances](features/caves-and-entrances.md) ·
 [Surface features](features/surface-features.md) ·
 [Surveys, centerlines and 3D models](features/surveys-and-models.md) ·
+[Point clouds (LiDAR scans)](features/point-clouds.md) ·
 [Measurements and statistics](features/measurements-and-statistics.md) ·
 [Geodata files](features/geodata.md) ·
 [Georeferenced raster maps](features/georeferenced-maps.md) ·
@@ -102,6 +103,7 @@ install is in [INSTALL.md](../INSTALL.md) and [DEPLOY-SERVER.md](../DEPLOY-SERVE
 - [Vocabularies your club owns](admin/vocabularies.md)
 - [Messaging and delivery](admin/messaging.md)
 - [Building terrain](admin/terrain-builds.md)
+- [Storage](admin/storage.md)
 - [Maintenance sweeps](admin/maintenance.md)
 
 ---

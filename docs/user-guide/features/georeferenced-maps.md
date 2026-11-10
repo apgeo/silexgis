@@ -28,12 +28,12 @@ Each is converted to Cloud-Optimized GeoTIFF in the background: *Queued → Proc
 A sheet that carries its own place — a GeoTIFF, or a PDF exported with georeferencing — is ready
 as it is; a georeferenced PDF is cut to its map frame, so the legend and the margins stay off the
 map. A sheet that carries **no place** — a scan, a plain PDF, a GeoTIFF that turns out to hold no
-position — is drawn and then **waits to be placed** instead of failing: it is marked so in the
-list, with **Place on map…**.
+position — is drawn and then **waits to be placed** instead of failing: the list marks it
+*Needs placement*, with **Place on map…**.
 
 For a PDF, the page is drawn once at a resolution the installation chooses for the sheet's scale.
-**A sheet can be drawn again** with another page, other layers of the document, or another
-resolution, without uploading it a second time.
+**Redraw…** draws a sheet again with another page, other layers of the document, or another
+resolution, without uploading it a second time; a placement made by hand is kept.
 
 ## Placing a sheet on the map
 

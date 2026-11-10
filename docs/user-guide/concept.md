@@ -5,7 +5,7 @@
 [← Back to the guide](README.md) · Next: [First steps](first-steps.md)
 
 ---
-cece
+
 ## In one paragraph
 
 SilexGIS is a web application for storing, viewing and editing cave and karst data. A caving

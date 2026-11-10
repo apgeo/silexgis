@@ -314,7 +314,7 @@ are drawn, how many caves' scans at once, and how many megabytes of tiles are he
 
 ## Processing profiles
 
-**Settings → Processing profiles** keeps the named settings that laser-scan processing runs with —
+**Settings → Scans · Processing profiles** keeps the named settings that laser-scan processing runs with —
 yours, a caving group's or the installation's. They are described with the scans:
 [Processing profiles](point-clouds.md#processing-profiles).
 

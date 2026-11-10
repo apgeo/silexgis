@@ -1,6 +1,6 @@
 # Point clouds (LiDAR scans)
 
-🇬🇧 **English** · 🇷🇴 Română: not translated yet
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/point-clouds.md)
 
 [← Feature reference](README.md) · Related: [Surveys, centerlines and 3D models](surveys-and-models.md) ·
 [3D view](3d-view.md) · [Storage](../admin/storage.md)
@@ -99,19 +99,20 @@ not running, the upload is kept and ends with a note saying that processing is n
 
 ## Processing profiles
 
-**Settings → Processing profiles** keeps named sets of settings that a processing step runs with:
+**Settings → Scans · Processing profiles** keeps named sets of settings that a processing step runs with:
 the HDMapping odometry, and the estimating, thinning and tiling of a cloud.
 
 - **Three scopes.** *Mine* (seen by you alone), a *caving group*'s, or *the whole installation*'s.
-  Making and changing group and installation profiles needs the **scan-profiles** right; a
+  Making and changing group and installation profiles needs rights on the **Scans · Processing
+  profiles** domain; a
   personal one needs nothing more than an account.
 - **Built-in profiles** ship with the installation — HDMapping's defaults, a fast preview, and a
   profile meant for narrow cave passages whose values are still to be tuned on cave recordings.
-  They are read-only; **copy** one to change it.
+  They are read-only; **Duplicate** one to change it.
 - **The editor is drawn from the step's own list of settings**, grouped as HDMapping groups them,
   with each default shown and the values you changed highlighted. For HDMapping, the list comes from
   the version actually installed, so a newer HDMapping brings its new settings with it.
-- **Import** an HDMapping parameter file (`.toml`) or a profile saved as JSON. Before anything is
+- **Import a file** — an HDMapping parameter file (`.toml`) or a profile saved as JSON. Before anything is
   kept, a report says, key by key, what was taken, what was unknown and dropped, what was missing
   and filled from the defaults, and what was refused for being of the wrong kind or out of range;
   it also names a difference of HDMapping version. **Export** writes the profile back out — as

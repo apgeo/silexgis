@@ -1,6 +1,6 @@
 # Storage
 
-🇬🇧 **English** · 🇷🇴 Română: not translated yet
+🇬🇧 **English** · 🇷🇴 [Română](../ro/admin/storage.md)
 
 [← Administration](README.md) · Related: [Point clouds](../features/point-clouds.md)
 
