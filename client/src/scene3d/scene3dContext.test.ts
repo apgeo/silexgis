@@ -2769,6 +2769,20 @@ describe('models the scene loads', () => {
     session.release();
   });
 
+  it('reads a model as already facing east, so its walls line up with its survey lines', async () => {
+    const session = acquire();
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL);
+    await loading;
+
+    expect(engine.engineState.modelRequests[0].forwardAxis).toBe(engine.Axis.X);
+    session.release();
+  });
+
   it('moves a loaded model when the ground changes, without reading the file again', async () => {
     const session = acquire();
     const loading = session.engine.loadModel('cave-mesh', {

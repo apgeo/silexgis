@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'cesium/Source/Widgets/CesiumWidget/CesiumWidget.css';
 import {
+  Axis,
   type Billboard,
   BillboardCollection,
   Cartesian2,
@@ -1349,6 +1350,12 @@ class CesiumScene3D implements Scene3DCore {
       model = await Model.fromGltfAsync({
         url: options.url,
         modelMatrix: this.modelMatrix(entry),
+        // The meshes this draws are written Y-up with east along +X and north along -Z, so the
+        // model matrix's east-north-up frame receives them as they are once Y is turned up. The
+        // library's default assumes the glTF convention of a +Z-facing model and turns it to face
+        // +X as well, which is a quarter turn about the vertical: every cave's walls would stand
+        // at right angles to its own survey lines.
+        forwardAxis: Axis.X,
         // A converted survey mesh identifies nothing: it carries geometry and no attributes worth
         // naming, so a click on it should reach the survey lines drawn through it, which do say
         // which cave this is. Not taking part in hit testing also keeps the cost of a click
