@@ -32,7 +32,7 @@
     "geotiff": "^3.0.5",
     "i18next": "^26.5.11",
     "i18next-browser-languagedetector": "^8.2.3",
-    "mgrs": "^1.0.0",
+    "mgrs": "^2.2.0",
     "oidc-client-ts": "^3.5.0",
     "ol": "~10.9.0",
     "ol-mapbox-style": "^13.8.0",
