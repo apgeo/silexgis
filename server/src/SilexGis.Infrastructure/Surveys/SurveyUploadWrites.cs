@@ -136,6 +136,28 @@ public static class SurveyUploadWrites
     }
 
     /// <summary>
+    /// The run stopped at a step done on another computer. It ended — succeeded, at the stage
+    /// that says it waits — and keeps its progress where it got to, since the work after the step
+    /// is still to do. The upload of the step's outputs queues it again.
+    /// </summary>
+    public static Task AwaitExternalAsync(SilexGisDbContext db, Guid uploadId, string? message, CancellationToken ct)
+    {
+        var words = Head(message, SurveyUploadConfiguration.MessageLength);
+        var now = DateTimeOffset.UtcNow;
+
+        return db.SurveyUploads
+            .Where(u => u.Id == uploadId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.Status, SurveyUploadStatus.Succeeded)
+                .SetProperty(u => u.Stage, SurveyUploadStage.AwaitingExternal)
+                .SetProperty(u => u.Message, words)
+                .SetProperty(u => u.ErrorCode, (string?)null)
+                .SetProperty(u => u.ErrorMessage, (string?)null)
+                .SetProperty(u => u.FinishedAt, now)
+                .SetProperty(u => u.UpdatedAt, now), ct);
+    }
+
+    /// <summary>
     /// The run stopped. The reason is a stable code and a sentence for the person who sent the
     /// survey; the progress stays where the run had got to, so the bar shows how far it came.
     /// </summary>

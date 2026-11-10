@@ -80,7 +80,8 @@ public sealed class PointCloudProcessing(
     /// <param name="Tiled">Whether the cloud is tiled at the end — by this run or an earlier one.</param>
     /// <param name="TilesReused">Whether the tiles are an earlier run's.</param>
     /// <param name="ChoiceNeeded">Whether the run stopped after the estimate, waiting for a choice of how much to show.</param>
-    public sealed record Outcome(PointCloudFacts Facts, bool Tiled, bool TilesReused, bool ChoiceNeeded = false);
+    /// <param name="AwaitingExternal">The name of the step done on another computer the run stopped before, or null when it did not.</param>
+    public sealed record Outcome(PointCloudFacts Facts, bool Tiled, bool TilesReused, bool ChoiceNeeded = false, string? AwaitingExternal = null);
 
     /// <summary>
     /// Runs the recipe's worker steps for a cloud whose header has been read and recorded. Reports
@@ -110,7 +111,11 @@ public sealed class PointCloudProcessing(
         // The cloud of record: the uploaded original, or — for a raw recording — what the export
         // made of it, once the export step has run or been reused.
         var cloud = uploaded.FirstOrDefault(a => a.Kind == ScanArtifactKind.PointCloudLaz);
-        if (cloud is null && recording.Length == 0)
+
+        // A refined session sent as a scan's next version is the upload's own session: the run
+        // starts at the export, which reads it as it reads one the odometry made.
+        var sentSession = uploaded.FirstOrDefault(a => a.Kind == ScanArtifactKind.HdmSession);
+        if (cloud is null && recording.Length == 0 && sentSession is null)
         {
             throw new SurveyPipelineException(SurveyPipelineFailures.FilesMissing, "The upload's original is not among its recorded files.");
         }
@@ -130,7 +135,7 @@ public sealed class PointCloudProcessing(
         recipe = await ResolveOdometryAsync(upload, recipe, ct);
 
         // The products of the steps as they stand, by kind, for the steps that read them.
-        ScanArtifact? session = null;
+        ScanArtifact? session = sentSession;
         ScanArtifact? trajectory = null;
         ScanArtifact? display = null;
         ScanArtifact? tiles = null;
@@ -188,6 +193,23 @@ public sealed class PointCloudProcessing(
                 }
 
                 continue;
+            }
+
+            if (recipe.RunsElsewhere(step.StepId))
+            {
+                // Done on another computer: the run stops here, recording what the step is to
+                // read, so the download offers exactly those inputs and an upload of the step's
+                // outputs is matched to them. The products of the steps before it are kept, and
+                // the run that the upload queues reuses them, and the uploaded outputs, and goes on.
+                var waiting = recipe with { RerunFrom = null, Waiting = new ScanExternalWait(step.StepId, inputIds) };
+                var stored = ScanRecipes.ToOptionsJson(waiting);
+                await db.SurveyUploads.Where(u => u.Id == upload.Id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(u => u.Options, stored), ct);
+                model.PointCloud = facts.ToJson();
+                model.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+                logger.LogInformation("Survey upload {UploadId}: waiting for {Step} to be done on another computer", upload.Id, step.StepId);
+                return new Outcome(facts, Tiled: false, TilesReused: false, AwaitingExternal: definition.DisplayName);
             }
 
             if (capabilities.Find(step.StepId) is null)
@@ -790,7 +812,17 @@ public sealed class PointCloudProcessing(
         }
 
         await db.SaveChangesAsync(ct);
+        await RemoveReplacedAsync(model, step.StepId, earlier, made, ct);
+        return made;
+    }
 
+    /// <summary>
+    /// Removes a step's earlier products once their replacements are stored: the rows, then the
+    /// stored files. A model shown from a replaced file is moved to the new export first.
+    /// </summary>
+    private async Task RemoveReplacedAsync(
+        SurveyModel model, string stepId, List<ScanArtifact> earlier, List<ScanArtifact> made, CancellationToken ct)
+    {
         if (earlier.Count > 0)
         {
             var replacedFiles = earlier.Select(a => a.FileId).ToList();
@@ -821,12 +853,153 @@ public sealed class PointCloudProcessing(
                 }
                 catch (IOException e)
                 {
-                    logger.LogWarning(e, "The earlier product {Path} of {Step} could not be deleted", file.StoragePath, step.StepId);
+                    logger.LogWarning(e, "The earlier product {Path} of {Step} could not be deleted", file.StoragePath, stepId);
                 }
             }
         }
+    }
 
-        return made;
+    /// <summary>
+    /// Why a file sent back for a step done elsewhere is not the product it is named as, or null
+    /// when it is. A smoke test per kind, enough to refuse the wrong file while the person who
+    /// sent it is still there rather than an hour later in the worker: a cloud's header must read,
+    /// a session must be an archive whose members stay inside it with <c>session.mjs</c> at its
+    /// root (where the export looks for it), a trajectory must be a text table and a report
+    /// JSON.
+    /// </summary>
+    public static async Task<string?> ExternalOutputProblemAsync(ScanArtifactKind kind, string path, CancellationToken ct)
+    {
+        try
+        {
+            switch (kind)
+            {
+                case ScanArtifactKind.PointCloudLaz:
+                    await using (var stream = File.OpenRead(path))
+                    {
+                        PointCloudUploadRun.Inspect(stream);
+                    }
+
+                    return null;
+
+                case ScanArtifactKind.HdmSession:
+                    using (var archive = System.IO.Compression.ZipFile.OpenRead(path))
+                    {
+                        if (archive.Entries.Any(e => !ScanExternalOutputs.IsContainedMember(e.FullName)))
+                        {
+                            return "The session archive names a file outside itself.";
+                        }
+
+                        return archive.Entries.Any(e => e.FullName.Replace('\\', '/') == "session.mjs")
+                            ? null
+                            : "The session archive holds no session.mjs at its root: zip the contents of the session folder, not the folder.";
+                    }
+
+                case ScanArtifactKind.Trajectory:
+                    using (var reader = new StreamReader(path))
+                    {
+                        var line = await reader.ReadLineAsync(ct);
+                        // HDMapping writes its trajectory with spaces between the columns; other
+                        // tools use commas, tabs or semicolons. Any of them is a table of numbers.
+                        return line is { Length: > 0 and < 65_536 } && line.IndexOfAny([',', ' ', '\t', ';']) > 0
+                            ? null
+                            : "The trajectory is not a text table of columns.";
+                    }
+
+                case ScanArtifactKind.Report:
+                    if (new FileInfo(path).Length > MaxReportBytes)
+                    {
+                        return "The report is too large to be a report.";
+                    }
+
+                    await using (var stream = File.OpenRead(path))
+                    {
+                        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+                    }
+
+                    return null;
+
+                default:
+                    return "This kind of product is not taken back from another computer.";
+            }
+        }
+        catch (SurveyPipelineException e)
+        {
+            return "The point cloud does not read: " + e.Message;
+        }
+        catch (InvalidDataException)
+        {
+            return "The session archive does not read as a zip archive.";
+        }
+        catch (JsonException)
+        {
+            return "The report does not read as JSON.";
+        }
+    }
+
+    private const long MaxReportBytes = 16L * 1024 * 1024;
+
+    /// <summary>
+    /// Records a file sent back for a step done elsewhere as that step's product: a file of the
+    /// scan's document, and an artefact made by the step from the inputs it waited with and with
+    /// the parameters the recipe holds for it — exactly the row a worker's run would have left,
+    /// so the run that carries on reuses it. An earlier product of the same step and kind is
+    /// removed after the new one is in. The file must already be in the store and checked.
+    /// </summary>
+    public async Task<ScanArtifact> StoreExternalOutputAsync(
+        SurveyUpload upload, ScanRecipeStep step, ScanExternalWait wait, ScanArtifactKind kind, string fileName, StoredContent content, CancellationToken ct)
+    {
+        var definition = ScanSteps.Find(step.StepId)
+            ?? throw new InvalidOperationException($"The scan step {step.StepId} is not registered.");
+        var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.SurveyUploadId == upload.Id, ct)
+            ?? throw new SurveyPipelineException(SurveyPipelineFailures.FilesMissing, "The upload has no scan to add the product to.");
+        var versionId = await db.StoredFiles.AsNoTracking()
+            .Where(f => f.Id == model.FileId).Select(f => f.DocumentVersionId).FirstAsync(ct);
+        var earlier = await db.ScanArtifacts
+            .Where(a => a.SurveyUploadId == upload.Id && a.StepId == step.StepId && a.Kind == kind)
+            .ToListAsync(ct);
+
+        var format = ScanExternalOutputs.FormatOf(fileName);
+        var stored = documents.AddFile(
+            versionId,
+            new StoredContent(
+                content.StoragePath,
+                OutputName(upload, step.StepId, kind, "." + format),
+                MediaTypeOf(format),
+                content.SizeBytes,
+                content.Sha256,
+                FileKind.Survey));
+        var artefact = new ScanArtifact
+        {
+            SurveyUploadId = upload.Id,
+            SurveyModelId = model.Id,
+            Kind = kind,
+            Format = format,
+            FileId = stored.Id,
+            SizeBytes = content.SizeBytes,
+            Sha256 = content.Sha256,
+            StepId = step.StepId,
+            Tool = definition.Tool,
+            // Made on a computer this server knows nothing about: no version is claimed for it.
+            ToolVersion = null,
+            ParamsHash = step.ParamsHash,
+            InputArtifactIds = [.. wait.InputArtifactIds],
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        db.ScanArtifacts.Add(artefact);
+        await db.SaveChangesAsync(ct);
+        await RemoveReplacedAsync(model, step.StepId, earlier, [artefact], ct);
+        return artefact;
+    }
+
+    /// <summary>
+    /// Whether every product of the waiting step is now stored for the inputs and parameters it
+    /// waited with — the same match a run makes before it reuses a step's products.
+    /// </summary>
+    public async Task<bool> ExternalOutputsCompleteAsync(Guid uploadId, ScanRecipeStep step, ScanExternalWait wait, CancellationToken ct)
+    {
+        var definition = ScanSteps.Find(step.StepId)
+            ?? throw new InvalidOperationException($"The scan step {step.StepId} is not registered.");
+        return await ReusableAsync(uploadId, step, definition, [.. wait.InputArtifactIds], ct) is not null;
     }
 
     private PointCloudFacts WithEstimate(PointCloudFacts facts, JsonElement data)

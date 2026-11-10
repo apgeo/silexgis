@@ -187,6 +187,105 @@ public static class MandeyeUploadRun
         return model;
     }
 
+    /// <summary>
+    /// What a refined session's run knows before the export: the facts of the scan it refines —
+    /// the latest earlier version of the same survey that a run described — with that version's
+    /// processing taken off, since none of it was done to this session. A failure when the survey
+    /// holds no such version: the session is exported against nothing this server knows.
+    /// </summary>
+    /// <remarks>
+    /// The recording's facts come across with the header's, GNSS included, so a session refined
+    /// from a georeferenced recording stays one: its original and its products keep needing the
+    /// exact location, as the version it came from did.
+    /// </remarks>
+    public static async Task<PointCloudFacts> RefinedFactsAsync(SilexGisDbContext db, SurveyUpload upload, CancellationToken ct)
+    {
+        var formats = SurveyModelKinds.FormatsOf(SurveyModelKind.PointCloud);
+        var earlier = await (
+            from model in db.SurveyModels.AsNoTracking()
+            join version in db.SurveyUploads.AsNoTracking() on model.SurveyUploadId equals version.Id
+            where version.CaveSurveyId == upload.CaveSurveyId
+                && version.Id != upload.Id
+                && version.VersionAt < upload.VersionAt
+                && version.Source == SurveyOrigin.Mandeye
+                && model.PointCloud != null
+                && formats.Contains(model.Format)
+            orderby version.VersionAt descending
+            select model.PointCloud)
+            .FirstOrDefaultAsync(ct);
+        var facts = PointCloudFacts.FromJson(earlier)
+            ?? throw new SurveyPipelineException(
+                SurveyPipelineFailures.RecordingInvalid,
+                "The refined session cannot be processed: the survey holds no earlier version of the scan it was refined from.");
+        return facts with
+        {
+            TileBytes = null,
+            TileCount = null,
+            TilerVersion = null,
+            DisplayVoxelM = null,
+            DisplayPointCount = null,
+            DisplayEveryNth = null,
+            OriginShift = null,
+            Estimate = null,
+            Advice = null,
+        };
+    }
+
+    /// <summary>
+    /// Records a refined session's facts on the upload's scan model, making the model on the first
+    /// run, and the session itself as the upload's own HDMapping session, so the export reads it
+    /// the way it reads a session the odometry made. Until the export replaces it, the model is
+    /// shown from the session's file — which the exact-location gate guards as the scanner's path —
+    /// and a rerun after an export keeps showing the export.
+    /// </summary>
+    public static async Task<SurveyModel> RecordSessionAsync(
+        SilexGisDbContext db, SurveyUpload upload, ArchivedRecordingFile session, PointCloudFacts facts, CancellationToken ct)
+    {
+        var exportStored = await db.ScanArtifacts.AnyAsync(
+            a => a.SurveyUploadId == upload.Id && a.StepId == HdmappingExportStep.StepId && a.Kind == ScanArtifactKind.PointCloudLaz, ct);
+        var formats = SurveyModelKinds.FormatsOf(SurveyModelKind.PointCloud);
+        var existing = exportStored
+            ? await db.SurveyModels.FirstOrDefaultAsync(m => m.SurveyUploadId == upload.Id && formats.Contains(m.Format), ct)
+            : null;
+        var keptFileId = existing?.FileId;
+        var keptFormat = existing?.Format;
+        var keptFacts = existing is null ? null : PointCloudFacts.FromJson(existing.PointCloud);
+        var (model, made) = await PointCloudUploadRun.ModelOfAsync(db, upload, session.FileId, SurveyModelFormat.Laz, facts, ct);
+        if (existing is not null && keptFileId is { } shown && keptFacts is not null)
+        {
+            model.FileId = shown;
+            model.Format = keptFormat ?? model.Format;
+            model.PointCloud = (keptFacts with { Recording = facts.Recording }).ToJson();
+        }
+
+        var known = await db.ScanArtifacts.FirstOrDefaultAsync(
+            a => a.SurveyUploadId == upload.Id && a.StepId == ScanSteps.UploadStepId && a.FileId == session.FileId, ct);
+        if (known is not null)
+        {
+            known.SurveyModelId = model.Id;
+        }
+        else
+        {
+            db.ScanArtifacts.Add(new ScanArtifact
+            {
+                SurveyUploadId = upload.Id,
+                SurveyModelId = model.Id,
+                Kind = ScanArtifactKind.HdmSession,
+                Format = "zip",
+                FileId = session.FileId,
+                SizeBytes = session.SizeBytes,
+                Sha256 = session.Sha256,
+                StepId = ScanSteps.UploadStepId,
+                Tool = ScanSteps.ApiTool,
+                ParamsHash = ScanRecipes.ParamsHash("{}"),
+                CreatedAt = DateTimeOffset.UtcNow,
+            });
+        }
+
+        await PointCloudUploadRun.SaveAsync(db, model, made, ct);
+        return model;
+    }
+
     /// <summary>A recording file's format as an artefact names it: its extension, lower case, without the dot.</summary>
     private static string FormatOf(string name)
     {

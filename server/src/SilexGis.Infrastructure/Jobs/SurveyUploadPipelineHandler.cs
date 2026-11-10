@@ -557,16 +557,25 @@ public class SurveyUploadPipelineHandler(
 
         var recipe = ScanRecipes.FromOptionsJson(upload.Options)
             ?? throw new SurveyPipelineException(SurveyPipelineFailures.Unexpected, "The upload carries no recipe to run.");
-        if (recipe.RerunFrom is not null)
+        if (recipe.RerunFrom is not null || recipe.Waiting is not null)
         {
             // A step asked to be done again is done again by this run and no other: the request
             // is taken off the stored recipe now, so a later plain rerun reuses as it always did.
-            var once = ScanRecipes.ToOptionsJson(recipe with { RerunFrom = null });
+            // A wait for a step done elsewhere is over once a run starts; it waits again, with
+            // what it then waits for, if it reaches that step without its products.
+            var once = ScanRecipes.ToOptionsJson(recipe with { RerunFrom = null, Waiting = null });
             await db.SurveyUploads.Where(u => u.Id == upload.Id)
                 .ExecuteUpdateAsync(s => s.SetProperty(u => u.Options, once), ct);
+            recipe = recipe with { Waiting = null };
         }
 
         var outcome = await pointClouds.RunAsync(upload, model, facts, earlier, recipe, entering, ct);
+        if (outcome.AwaitingExternal is { } waitingFor)
+        {
+            await SurveyUploadWrites.AwaitExternalAsync(db, upload.Id, SurveyPipelineNotes.AwaitingExternal(waitingFor), ct);
+            return;
+        }
+
         if (outcome.ChoiceNeeded)
         {
             // Stopped after the estimate, at its own stage: the table and the advice are on the
@@ -603,7 +612,26 @@ public class SurveyUploadPipelineHandler(
         var files = archived
             .Select(f => new ArchivedRecordingFile(f.Name, f.StoragePath, f.FileId, f.SizeBytes, f.Sha256))
             .ToList();
-        var facts = await MandeyeUploadRun.InspectAsync(files, OpenAsync, ct);
+
+        // A refined session — the session archive alone, sent as the next version of a scan —
+        // has no recording to inspect: the archive is checked to be a session the export can
+        // read, and the scan it refines lends its facts until the export replaces them.
+        var refined = MandeyeRecording.IsRefinedSession(files.Select(f => f.Name));
+        PointCloudFacts facts;
+        if (refined)
+        {
+            if (await PointCloudProcessing.ExternalOutputProblemAsync(
+                    ScanArtifactKind.HdmSession, fileStore.GetAbsolutePath(files[0].StoragePath), ct) is { } problem)
+            {
+                throw new SurveyPipelineException(SurveyPipelineFailures.RecordingInvalid, "The refined session cannot be processed: " + problem);
+            }
+
+            facts = await MandeyeUploadRun.RefinedFactsAsync(db, upload, ct);
+        }
+        else
+        {
+            facts = await MandeyeUploadRun.InspectAsync(files, OpenAsync, ct);
+        }
 
         // What an earlier run wrote — the export's header, the estimate, the tiling — is read
         // before the recording's facts are written over it, so a rerun that reuses that
@@ -612,11 +640,13 @@ public class SurveyUploadPipelineHandler(
             .Where(m => m.SurveyUploadId == upload.Id && m.PointCloud != null)
             .Select(m => m.PointCloud)
             .FirstOrDefaultAsync(ct));
-        var model = await MandeyeUploadRun.RecordAsync(db, upload, files, facts, ct);
+        var model = refined
+            ? await MandeyeUploadRun.RecordSessionAsync(db, upload, files[0], facts, ct)
+            : await MandeyeUploadRun.RecordAsync(db, upload, files, facts, ct);
 
         if (!pointClouds.Enabled)
         {
-            stage = SurveyUploadStage.Odometry;
+            stage = refined ? SurveyUploadStage.Export : SurveyUploadStage.Odometry;
             entering(stage);
             await SurveyUploadWrites.SucceedAsync(db, upload.Id, stage, SurveyPipelineNotes.NoOdometry, ct);
             return;
@@ -624,15 +654,25 @@ public class SurveyUploadPipelineHandler(
 
         var recipe = ScanRecipes.FromOptionsJson(upload.Options)
             ?? throw new SurveyPipelineException(SurveyPipelineFailures.Unexpected, "The upload carries no recipe to run.");
-        if (recipe.RerunFrom is not null)
+        if (recipe.RerunFrom is not null || recipe.Waiting is not null)
         {
-            // As for a point cloud: a step asked to be done again is done again by this run only.
-            var once = ScanRecipes.ToOptionsJson(recipe with { RerunFrom = null });
+            // As for a point cloud: a step asked to be done again is done again by this run only,
+            // and a wait for a step done elsewhere ends when a run starts.
+            var once = ScanRecipes.ToOptionsJson(recipe with { RerunFrom = null, Waiting = null });
             await db.SurveyUploads.Where(u => u.Id == upload.Id)
                 .ExecuteUpdateAsync(s => s.SetProperty(u => u.Options, once), ct);
+            recipe = recipe with { Waiting = null };
         }
 
         var outcome = await pointClouds.RunAsync(upload, model, facts, earlier, recipe, entering, ct);
+        if (outcome.AwaitingExternal is { } waitingFor)
+        {
+            // Stopped before a step done on another computer: its inputs are offered for download,
+            // and uploading its outputs queues the run again, which reuses them and carries on.
+            await SurveyUploadWrites.AwaitExternalAsync(db, upload.Id, SurveyPipelineNotes.AwaitingExternal(waitingFor), ct);
+            return;
+        }
+
         if (outcome.ChoiceNeeded)
         {
             await SurveyUploadWrites.SucceedAsync(
