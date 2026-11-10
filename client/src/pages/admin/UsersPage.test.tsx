@@ -339,7 +339,7 @@ describe('UsersPage', () => {
       blocking: [{ kind: 'trips', count: 3 }, { kind: 'albums', count: 1 }],
     });
     expect(userAdminProblem(refusal, i18n.getFixedT('en'))).toContain('trips (3), photo albums (1)');
-    expect(userAdminProblem(refusal, i18n.getFixedT('ro'))).toContain('ieșiri (3), albume foto (1)');
+    expect(userAdminProblem(refusal, i18n.getFixedT('ro'))).toContain('ture (3), albume foto (1)');
     // Without the list the refusal is still a refusal, not a blank.
     const bare = new ApiError(409, 'user.delete_blocked');
     expect(userAdminProblem(bare, i18n.getFixedT('en'))).toBe(i18n.getFixedT('en')('common.saveFailed'));
