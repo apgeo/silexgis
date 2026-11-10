@@ -115,6 +115,15 @@ public static class SurveyUploadPublicLinks
         SurveyOrigin origin, SurveyUploadStatus status, SurveyUploadStage? stage, bool compile)
     {
         var order = SurveyPipelineProgress.Order(origin);
+        if (stage == SurveyUploadStage.AwaitingExternal)
+        {
+            // A run waiting for a step done elsewhere has read its upload and done nothing of the
+            // processing on this server yet: the steps up to the inspection are done and every
+            // one after it is still to come — none of them is skipped, as a finished run's are.
+            var inspected = order.ToList().IndexOf(SurveyUploadStage.Inspect);
+            return [.. order.Select((st, i) => (st, i <= inspected ? SurveyUploadStageState.Done : SurveyUploadStageState.Pending))];
+        }
+
         var index = stage is { } s ? order.ToList().IndexOf(s) : -1;
         return [.. order.Select((st, i) => (st, StateOf(status, index, i, compile, st)))];
     }

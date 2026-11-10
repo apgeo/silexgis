@@ -90,7 +90,11 @@ public static partial class MandeyeRecording
     /// <summary>The name of a multi-sensor scanner's calibration file.</summary>
     public const string CalibrationName = "calibration.json";
 
-    /// <summary>The extensions a recording's files may carry, lower-case, with the dot.</summary>
+    /// <summary>
+    /// The extensions a recording's files may carry, lower-case, with the dot. A refined
+    /// session's one archive is not among them: it is sent under its fixed name, not picked
+    /// from a recording folder.
+    /// </summary>
     public static readonly IReadOnlyList<string> Extensions = [".laz", ".csv", ".sn", ".gnss", ".nmea", ".json"];
 
     /// <summary>
@@ -162,12 +166,22 @@ public static partial class MandeyeRecording
     /// a recording is its original), each within the per-file cap, together within the
     /// recording's cap, no more files than allowed, and every lidar chunk paired with its IMU log.
     /// </summary>
+    /// <remarks>
+    /// The one other shape a scan's upload of this origin takes is a single <c>session.zip</c>: an
+    /// HDMapping session refined on a desktop, sent as the next version of the scan it was made
+    /// from. Its run starts at the export.
+    /// </remarks>
     public static SurveyUploadFileProblem? Problem(
         IReadOnlyList<SurveyUploadFileClaim>? files, long maxFileBytes, long maxTotalBytes, int maxFiles)
     {
         if (files is null || files.Count == 0)
         {
             return new SurveyUploadFileProblem("A recording upload declares the files of the recording folder.");
+        }
+
+        if (files.Any(f => IsSessionName(f.Name)))
+        {
+            return SessionProblem(files, maxFileBytes);
         }
 
         if (files.Count > maxFiles)
@@ -251,6 +265,46 @@ public static partial class MandeyeRecording
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether a name is the one a refined HDMapping session is sent under. Compared without
+    /// regard to case, as a desktop whose file system ignores case may have renamed it.
+    /// </summary>
+    public static bool IsSessionName(string? name) =>
+        string.Equals(name, ScanExternalOutputs.SessionName, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether the files an upload declared are a refined session rather than a recording: the
+    /// session archive alone.
+    /// </summary>
+    public static bool IsRefinedSession(IEnumerable<string?> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        var list = names.ToList();
+        return list.Count == 1 && IsSessionName(list[0]);
+    }
+
+    private static SurveyUploadFileProblem? SessionProblem(IReadOnlyList<SurveyUploadFileClaim> files, long maxFileBytes)
+    {
+        if (files.Count != 1)
+        {
+            // A session is refined from a recording already on the server, so the recording is
+            // never sent again with it; a session beside recording files is two uploads in one.
+            return new SurveyUploadFileProblem(
+                $"A refined session is uploaded alone, as {ScanExternalOutputs.SessionName}: the recording it was made from is already on the server.",
+                files.First(f => !IsSessionName(f.Name)).Name);
+        }
+
+        var session = files[0];
+        if (session.Role != SurveyUploadFileRole.Archive)
+        {
+            return new SurveyUploadFileProblem("The session is declared as the archive.", session.Name);
+        }
+
+        return session.Size <= 0 || session.Size > maxFileBytes
+            ? new SurveyUploadFileProblem($"The session is between 1 byte and {maxFileBytes} bytes.", session.Name)
+            : null;
     }
 
     /// <summary>

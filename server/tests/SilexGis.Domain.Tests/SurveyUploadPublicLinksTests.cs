@@ -159,6 +159,15 @@ public class SurveyUploadPublicLinksTests
             .ShouldBe(["done", "failed", "pending", "pending", "pending"]);
     }
 
+    [Fact]
+    public void A_run_waiting_for_a_step_done_elsewhere_has_done_its_reading_and_nothing_after()
+    {
+        // Stopped before the odometry, which is done on another computer: archived and inspected,
+        // and every later stage still to come rather than skipped.
+        States(SurveyUploadStatus.Succeeded, SurveyUploadStage.AwaitingExternal, compile: false, SurveyOrigin.Mandeye)
+            .ShouldBe(["done", "done", "pending", "pending", "pending", "pending", "pending", "pending"]);
+    }
+
     private static SurveyUploadLinkDecision Decide(
         bool installationOn = true,
         bool accountOn = true,

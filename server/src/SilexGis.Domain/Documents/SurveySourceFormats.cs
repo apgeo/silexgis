@@ -91,11 +91,14 @@ public static class SurveySourceFormats
 
     /// <summary>
     /// The kind a file name claims within an upload of this origin: a raw recording's files are
-    /// all its original, whatever their extension; any other upload's are claimed by extension.
+    /// all its original, whatever their extension, and the one session archive a scan's refined
+    /// version is sent as is an HDMapping session; any other upload's are claimed by extension.
     /// </summary>
     public static SurveySourceKind? ClaimedKind(string? fileName, SurveyOrigin origin) =>
         origin == SurveyOrigin.Mandeye
-            ? Scans.MandeyeRecording.Classify(fileName) is null ? null : SurveySourceKind.LidarRawSession
+            ? Scans.MandeyeRecording.IsSessionName(fileName)
+                ? SurveySourceKind.HdmSession
+                : Scans.MandeyeRecording.Classify(fileName) is null ? null : SurveySourceKind.LidarRawSession
             : ClaimedKind(fileName);
 
     /// <summary>
@@ -147,7 +150,7 @@ public static class SurveySourceFormats
     /// <summary>What a file of this kind must be, for the refusal to say what was expected.</summary>
     public static SurveySourceEvidence EvidenceFor(SurveySourceKind kind) => kind switch
     {
-        SurveySourceKind.TopoDroidArchive => SurveySourceEvidence.ZipArchive,
+        SurveySourceKind.TopoDroidArchive or SurveySourceKind.HdmSession => SurveySourceEvidence.ZipArchive,
         SurveySourceKind.PointCloud => SurveySourceEvidence.LasFile,
         _ => SurveySourceEvidence.Text,
     };
@@ -199,7 +202,7 @@ public static class SurveySourceFormats
         SurveySourceKind.TherionConfig => "application/x-therion-config",
         SurveySourceKind.TherionLog => "application/x-therion-log",
         SurveySourceKind.SurvexSource => "application/x-survex",
-        SurveySourceKind.TopoDroidArchive => FileFormats.ZipContainerMimeType,
+        SurveySourceKind.TopoDroidArchive or SurveySourceKind.HdmSession => FileFormats.ZipContainerMimeType,
         SurveySourceKind.PointCloud => PointCloudMediaType,
         _ => FileFormats.UnknownMimeType,
     };

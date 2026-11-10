@@ -34,8 +34,33 @@ public sealed record ScanRecipeStep(string StepId, JsonElement Parameters, strin
 /// a run that has estimated a cloud over the installation's thresholds stops there to ask rather
 /// than tile the whole thing unasked.
 /// </param>
-public sealed record ScanRecipe(IReadOnlyList<ScanRecipeStep> Steps, string? RerunFrom = null, bool DisplayChosen = false)
+/// <param name="External">
+/// The ids of the steps this upload has done on another computer instead of by the server's
+/// worker, or null for none. A step whose definition always runs elsewhere need not be named.
+/// Not part of any step's parameters: a step done elsewhere with the same values makes the same
+/// product, so its artefact is matched exactly as a worker's would be.
+/// </param>
+/// <param name="Waiting">
+/// Where the last run stopped for a step done elsewhere — the step and the artefacts it was to
+/// read — or null when it is waiting for none. Written by the run when it stops, read by the
+/// download of the step's inputs and by the upload of its outputs, cleared when the run is queued
+/// again.
+/// </param>
+public sealed record ScanRecipe(
+    IReadOnlyList<ScanRecipeStep> Steps,
+    string? RerunFrom = null,
+    bool DisplayChosen = false,
+    IReadOnlyList<string>? External = null,
+    ScanExternalWait? Waiting = null)
 {
+    /// <summary>
+    /// Whether this upload has the step done on another computer: named so in the recipe, or a
+    /// step that only ever runs elsewhere.
+    /// </summary>
+    public bool RunsElsewhere(string stepId) =>
+        External?.Contains(stepId, StringComparer.Ordinal) == true
+        || ScanSteps.Find(stepId)?.WhereItRuns == ScanStepLocation.External;
+
     /// <summary>Whether a run may reuse an earlier run's artefact of this step.</summary>
     public bool MayReuse(string stepId)
     {
@@ -145,6 +170,29 @@ public static class PointCloudRecipes
         return cloud with { Steps = steps };
     }
 
+    /// <summary>
+    /// The recipe of a refined HDMapping session sent as a scan's next version: a recording's
+    /// recipe without the odometry, which was done — and refined — on the desktop the session
+    /// comes from. The run starts at the export, and from there is a recording's.
+    /// </summary>
+    public static ScanRecipe? ForRefinedSession(
+        ITypedPropertiesValidator schemas, PointCloudDisplayChoice? choice, string? rerunFrom, out IReadOnlyList<string> errors)
+    {
+        var recording = ForRecording(schemas, choice, rerunFrom, odometry: null, out errors);
+        return recording is null
+            ? null
+            : recording with { Steps = [.. recording.Steps.Where(s => s.StepId != HdmappingOdometryStep.StepId)] };
+    }
+
+    /// <summary>
+    /// Whether a stored recipe is a refined session's: it exports a session it never made. A
+    /// rerun rebuilds such a recipe without the odometry, as the upload was opened.
+    /// </summary>
+    public static bool StartsFromSession(ScanRecipe? recipe) =>
+        recipe is not null
+        && recipe.Steps.Any(s => s.StepId == HdmappingExportStep.StepId)
+        && !recipe.Steps.Any(s => s.StepId == HdmappingOdometryStep.StepId);
+
     /// <summary>The recipe with its odometry step's parameter set replaced, hashed afresh; unchanged when it has no odometry step.</summary>
     public static ScanRecipe WithOdometryValues(ScanRecipe recipe, JsonElement values)
     {
@@ -155,6 +203,27 @@ public static class PointCloudRecipes
         {
             Steps = [.. recipe.Steps.Select(s => s.StepId == HdmappingOdometryStep.StepId ? ScanRecipes.Step(s.StepId, parameters.RootElement) : s)],
         };
+    }
+
+    /// <summary>
+    /// The recipe with a step switched to be done on another computer, or null when the step is
+    /// not one that may be: a step the recipe does not hold, one the API does itself (reading
+    /// a header is not offered as a download), or one whose products have no name to be sent back under. Switching a step already switched changes nothing.
+    /// </summary>
+    public static ScanRecipe? WithExternal(ScanRecipe recipe, string stepId)
+    {
+        ArgumentNullException.ThrowIfNull(recipe);
+        if (!recipe.Steps.Any(s => s.StepId == stepId)
+            || ScanSteps.Find(stepId) is not { WhereItRuns: not ScanStepLocation.Api } step
+            || step.Outputs.Count == 0
+            || step.Outputs.Any(k => ScanExternalOutputs.NamesFor(k).Count == 0))
+        {
+            return null;
+        }
+
+        return recipe.RunsElsewhere(stepId)
+            ? recipe
+            : recipe with { External = [.. recipe.External ?? [], stepId] };
     }
 
     /// <summary>The recipe with one step's parameters replaced, hashed afresh; unchanged when the recipe has no such step.</summary>

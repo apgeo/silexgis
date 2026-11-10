@@ -139,6 +139,16 @@ public class SurveyPipelineProgressTests
         var inSomeRun = Enum.GetValues<SurveyOrigin>().SelectMany(SurveyPipelineProgress.Order).ToHashSet();
         foreach (var stage in Enum.GetValues<SurveyUploadStage>())
         {
+            if (stage == SurveyUploadStage.AwaitingExternal)
+            {
+                // Not work but a pause between two stages, written only when a run stops: it owns
+                // no share of the bar and is in no run's list of stages, which show the stages on
+                // either side of it.
+                inSomeRun.ShouldNotContain(stage);
+                Should.Throw<ArgumentOutOfRangeException>(() => SurveyPipelineProgress.Band(stage));
+                continue;
+            }
+
             var (start, end) = SurveyPipelineProgress.Band(stage);
             start.ShouldBeInRange(0, 100, stage.ToString());
             end.ShouldBeInRange(start + 1, 100, stage.ToString());

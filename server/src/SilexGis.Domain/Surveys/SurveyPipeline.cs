@@ -256,6 +256,13 @@ public static class SurveyPipelineNotes
             System.Globalization.CultureInfo.InvariantCulture,
             $"Estimated: {pointsInFile:N0} points. Choose how much to show, then run again.");
 
+    /// <summary>
+    /// The note of a scan's run that reached a step done on another computer and stopped there:
+    /// its inputs are offered as a download, and uploading what the step makes carries the run on.
+    /// </summary>
+    public static string AwaitingExternal(string stepName) =>
+        $"Waiting for a step done on another computer: {stepName}. Download its inputs, run it, then upload what it made.";
+
     /// <summary>The note of a point-cloud run that tiled the cloud: how much was shown and what it came to.</summary>
     public static string Tiled(long pointsTiled, long pointsInFile, long tileBytes, bool reused) =>
         string.Create(

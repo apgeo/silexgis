@@ -70,6 +70,14 @@ public enum SurveyUploadStage : short
 
     /// <summary>Checking the exported point cloud before it is treated as the scan of record.</summary>
     Check = 11,
+
+    /// <summary>
+    /// Not work but a pause: the run reached a step that is done on another computer, offered its
+    /// inputs as a download, and waits for the step's outputs to be uploaded. The upload is
+    /// succeeded at this stage — the run ended, nothing failed — and the upload of the outputs
+    /// queues it again.
+    /// </summary>
+    AwaitingExternal = 12,
 }
 
 /// <summary>
