@@ -8,6 +8,7 @@ import PointCloudViewerModal from '../scene3d/PointCloudViewerModal.tsx';
 import { formatSize } from '../attachments/fileFormat.ts';
 import StorageRoomSummary from '../storage/StorageRoomSummary.tsx';
 import { ExternalStepPanel, RefineOnDesktopPanel } from './ScanExternalSteps.tsx';
+import ScanPictures from './ScanPictures.tsx';
 import { formatBytes, originalBytesOf, runAddsBytes } from '../storage/storageFigures.ts';
 import {
   displayChoiceUsed,
@@ -20,6 +21,7 @@ import {
   type SurveyUploadPointCloud,
   type SurveyUploadPointCloudEstimateRow,
   type SurveyUploadRecording,
+  useSurveyModelCentreline,
 } from '../../api/hooks.ts';
 
 /** One row of the estimate table, keyed so a radio can name it. */
@@ -132,21 +134,51 @@ export default function PointCloudCard({
             choosing={choosing}
           />
         )}
+        {cloud.pictures && <ScanPictures pictures={cloud.pictures} />}
         {refinable && upload.cave && upload.caveSurvey && (
           <RefineOnDesktopPanel upload={{ cave: upload.cave, caveSurvey: upload.caveSurvey }} sessionUrl={cloud.sessionUrl!} />
         )}
       </Flex>
-      {cloud.tilesetUrl !== null && (
-        <PointCloudViewerModal
-          open={viewing}
+      {viewing && cloud.tilesetUrl !== null && (
+        <CardScanViewer
+          cloud={cloud}
           tilesetUrl={cloud.tilesetUrl}
           name={name ?? t('surveyUploads.pointCloud.title')}
-          hasRgb={cloud.hasRgb}
-          hasIntensity={cloud.hasIntensity === true}
           onClose={() => setViewing(false)}
         />
       )}
     </Card>
+  );
+}
+
+/**
+ * The scan viewer as the card opens it. Mounted only while open, so the centreline is read only
+ * when somebody looks: it is drawn in the viewer and nowhere on the card. The server says a scan
+ * has one only to a reader with the exact location, since the line is the shape of the cave the
+ * scanner went through.
+ */
+function CardScanViewer({
+  cloud,
+  tilesetUrl,
+  name,
+  onClose,
+}: {
+  cloud: SurveyUploadPointCloud;
+  tilesetUrl: string;
+  name: string;
+  onClose(): void;
+}) {
+  const centreline = useSurveyModelCentreline(cloud.modelId, cloud.hasCentreline);
+  return (
+    <PointCloudViewerModal
+      open
+      tilesetUrl={tilesetUrl}
+      name={name}
+      hasRgb={cloud.hasRgb}
+      hasIntensity={cloud.hasIntensity === true}
+      onClose={onClose}
+      centreline={centreline.data?.coordinates.map(([x = 0, y = 0, z = 0]) => ({ x, y, z }))}
+    />
   );
 }
 

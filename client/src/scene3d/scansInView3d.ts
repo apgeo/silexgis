@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { fetchCaveScansInView, type CaveScanInView, type CaveScansInView, type MapConfig } from '../api/hooks.ts';
+import {
+  fetchCaveScansInView,
+  fetchSurveyModelCentreline,
+  type CaveScanInView,
+  type CaveScansInView,
+  type MapConfig,
+} from '../api/hooks.ts';
 import { handleMapFilterError, mapFilterParams, onMapFilterChange } from '../map/mapFilters.ts';
 import { ANCHORED_TO_SURFACE, samePlacement, type Altitude3DPlacement } from './altitude3d.ts';
 import { mapZoomFor } from './pseudoZoom.ts';
@@ -9,6 +15,7 @@ import type {
   Scene3DPointCloudAnchor,
   Scene3DPointCloudDetail,
   Scene3DPointClouds,
+  Scene3DScanPoint,
 } from './scene3dEngine.ts';
 import type { SurveyTopLookup } from './surveyMeshesInView3d.ts';
 import { boundsToBbox } from './viewBounds3d.ts';
@@ -193,6 +200,8 @@ interface HeldScan {
   anchor: Scene3DPointCloudAnchor;
   sizeBytes: number;
   status: 'loading' | 'drawn' | 'failed';
+  /** The scan's centreline in its tiles' metres, once it has been read. */
+  centreline?: readonly Scene3DScanPoint[];
 }
 
 /**
@@ -265,6 +274,7 @@ export function attachScansInView3d(
     // setting the person changed while the scene was open.
     detail: detailOf(),
     visible: true,
+    ...(entry.centreline ? { centreline: entry.centreline } : {}),
   });
 
   const start = (item: CaveScanInView) => {
@@ -296,6 +306,26 @@ export function attachScansInView3d(
       () => settled('drawn'),
       () => settled('failed'),
     );
+    if (item.hasCentreline) {
+      // Read beside the tiles, in the tiles' own metres, and handed to the engine as a re-placing
+      // of the same cloud: the engine draws it under the cloud's transform once the tiles are in,
+      // so the line moves with every later re-placement. The line is an addition to the scan, so
+      // a failed read leaves the scan drawn without it rather than counted as failed.
+      fetchSurveyModelCentreline(item.surveyModelId).then(
+        (line) => {
+          if (detached || held.get(item.caveId) !== entry || entry.status === 'failed') {
+            return;
+          }
+          entry.centreline = line.coordinates.map(([x = 0, y = 0, z = 0]) => ({ x, y, z }));
+          void engine.loadPointCloud(scanInViewId(item.caveId), optionsOf(entry)).catch(() => {
+            // Re-placing what is already loaded cannot fail for a reason the viewer can act on.
+          });
+        },
+        () => {
+          // No line, and nothing the viewer can do about it; the scan itself stands.
+        },
+      );
+    }
   };
 
   const apply = (answer: CaveScansInView, activeLimits: ScansInView3DLimits) => {

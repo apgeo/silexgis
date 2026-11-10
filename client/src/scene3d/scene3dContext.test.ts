@@ -3175,6 +3175,45 @@ describe('point clouds the scene loads', () => {
     session.release();
   });
 
+  it('draws a scan’s centreline under the cloud’s own transform once the tiles land, moves it with the cloud and takes it away with it', async () => {
+    const session = acquire();
+    const centrelineOf = () =>
+      scene().primitives.items.find(
+        (item): item is InstanceType<typeof engine.PolylineCollection> =>
+          item instanceof engine.PolylineCollection && item.polylines.some((line) => line.id === 'scan-centreline'),
+      );
+    const loading = session.engine.loadPointCloud('scan', { url: TILES_URL, anchor: anchor(), placement: anchored, detail });
+    // The line arrives while the tiles are still being read: kept, not drawn alone where no scan is yet.
+    void session.engine.loadPointCloud('scan', {
+      url: TILES_URL,
+      anchor: anchor(),
+      placement: anchored,
+      detail,
+      centreline: [
+        { x: 0, y: 0, z: 0 },
+        { x: 4, y: 3, z: -1 },
+        { x: 9, y: 3, z: -2 },
+      ],
+    });
+    expect(centrelineOf()).toBeUndefined();
+    engine.Cesium3DTileset.deliver(TILES_URL);
+    await loading;
+
+    const line = centrelineOf()!;
+    expect(line.polylines[0].positions).toHaveLength(3);
+    // In the tiles' own metres, under the very transform the cloud is drawn with.
+    expect(line.polylines[0].positions[1]).toMatchObject({ x: 4, y: 3, z: -1 });
+    expect(line.modelMatrix).toEqual(loadedClouds()[0].modelMatrix);
+
+    session.engine.setModelPlacement(overRelief);
+    expect(line.modelMatrix!.origin.height).toBe(1143);
+    expect(engine.engineState.pointCloudRequests).toHaveLength(1);
+
+    session.engine.removePointCloud('scan');
+    expect(centrelineOf()).toBeUndefined();
+    session.release();
+  });
+
   it('re-places the same tileset under the same id instead of reading it twice', async () => {
     const session = acquire();
     const first = session.engine.loadPointCloud('scan', { url: TILES_URL, anchor: anchor(), placement: anchored, detail });
@@ -3397,6 +3436,21 @@ describe('a scan on its own', () => {
     expect(marks.polylines).toHaveLength(6);
     local.setMarks([]);
     expect(marks.polylines).toHaveLength(0);
+
+    // The centreline goes under the scene's fixed frame, exactly as the tiles do.
+    local.setCentreline([
+      { x: 0, y: 0, z: 0 },
+      { x: 2, y: 1, z: 0 },
+    ]);
+    const centreline = () =>
+      scene.primitives.items.find(
+        (item): item is InstanceType<typeof engine.PolylineCollection> =>
+          item instanceof engine.PolylineCollection && item.polylines.some((polyline) => polyline.id === 'scan-centreline'),
+      );
+    expect(centreline()!.polylines[0].positions).toHaveLength(2);
+    expect(centreline()!.modelMatrix).toBeDefined();
+    local.setCentreline([]);
+    expect(centreline()).toBeUndefined();
     local.destroy();
   });
 

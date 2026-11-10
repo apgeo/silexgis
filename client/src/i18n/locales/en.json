@@ -3865,7 +3865,8 @@
       "measureHint": "Click two points on the scan.",
       "measureFirstPoint": "One point taken — click the second.",
       "measureDistance": "{{metres}} m between the two points",
-      "localFrameHint": "Shown in its own metres, not on the map: dragging turns it, scrolling moves closer."
+      "localFrameHint": "Shown in its own metres, not on the map: dragging turns it, scrolling moves closer.",
+      "centreline": "Centreline"
     },
     "unsupportedTitle": "This browser cannot show the 3D view",
     "unsupportedHint": "The 3D view needs WebGL 2, which this browser or its graphics driver does not provide. Try an up-to-date browser, or keep using the 2D map.",
@@ -7149,6 +7150,17 @@
       "therion": "Therion",
       "other": "Other",
       "pointcloud": "Point cloud"
+    },
+    "pictures": {
+      "title": "Plan and profile",
+      "plan": "Top view of the scan",
+      "profile": "Extended profile of the scan along its centreline",
+      "planCaption": "Top view · {{pixelCm}} cm a pixel · {{width}} × {{height}} pixels",
+      "profileCaption": "Extended profile along the centreline · {{pixelCm}} cm a pixel · {{lengthM}} m unrolled",
+      "noProfile": "No extended profile: the scan has no centreline to unroll it along.",
+      "byHeight": "Coloured by height above the scan’s lowest point",
+      "byIntensity": "Coloured by return strength",
+      "metres": "{{value}} m"
     },
     "pointCloud": {
       "title": "Point cloud",

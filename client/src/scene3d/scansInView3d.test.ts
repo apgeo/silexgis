@@ -27,6 +27,7 @@ function scan(caveId: string, sizeBytes: number): CaveScanInView {
     pointCount: 1,
     tiledPointCount: 1,
     sizeBytes,
+    hasCentreline: false,
   };
 }
 

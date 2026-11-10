@@ -808,6 +808,12 @@ export interface Scene3DPointCloudOptions {
   style?: Scene3DPointCloudStyle;
   /** Whether it is drawn once loaded; defaults to true. */
   visible?: boolean;
+  /**
+   * The scan's centreline, in the tiles' own metres, drawn as a line under the same transform as
+   * the cloud so it moves with every re-placement. Left out on a re-load, the line drawn stays; an
+   * empty list takes it away.
+   */
+  centreline?: readonly Scene3DScanPoint[];
 }
 
 export type Scene3DPointCloudStatus = Scene3DModelStatus;
@@ -889,6 +895,11 @@ export interface Scene3DLocalScan {
    * see which places they have already paired.
    */
   setMarks(points: readonly Scene3DScanPoint[]): void;
+  /**
+   * Draws the scan's centreline — the scanner's path, simplified — through the cloud, in the
+   * tiles' own metres, replacing the line drawn before; an empty list takes it away.
+   */
+  setCentreline(points: readonly Scene3DScanPoint[]): void;
 }
 
 /**

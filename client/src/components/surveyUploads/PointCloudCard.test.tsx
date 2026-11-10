@@ -18,6 +18,22 @@ vi.mock('./ScanExternalSteps.tsx', () => ({
   RefineOnDesktopPanel: ({ sessionUrl }: { sessionUrl: string }) => <div data-testid="refine-panel" data-url={sessionUrl} />,
 }));
 
+// The viewer is tested on its own; here only what the card hands it.
+vi.mock('../scene3d/PointCloudViewerModal.tsx', () => ({
+  default: ({ open, centreline }: { open: boolean; centreline?: unknown }) => (
+    <div data-testid="viewer-asked" data-open={String(open)} data-centreline={JSON.stringify(centreline ?? null)} />
+  ),
+}));
+
+// The centreline is a server read; here only when the card asks for it and what it does with it.
+const centrelineAsked = vi.fn((_modelId: string | undefined, _enabled: boolean) => ({
+  data: undefined as { coordinates: number[][] } | undefined,
+}));
+vi.mock('../../api/hooks.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/hooks.ts')>()),
+  useSurveyModelCentreline: (modelId: string | undefined, enabled: boolean) => centrelineAsked(modelId, enabled),
+}));
+
 const { default: PointCloudCard } = await import('./PointCloudCard.tsx');
 
 /**
@@ -48,6 +64,7 @@ function cloud(over: Partial<SurveyUploadPointCloud> = {}): SurveyUploadPointClo
     displayEveryNth: null,
     displayPointCount: null,
     originShift: null,
+    hasCentreline: false,
     recording: null,
     estimate: {
       full: { voxelCm: null, points: 12_400_000, estimatedTileBytes: 900_000_000, estimatedSeconds: 400 },
@@ -258,5 +275,97 @@ describe('a step done on another computer, on the card', () => {
     // Without the exact location the server sends no session address, and nothing is offered.
     render(<PointCloudCard upload={{ ...finished, pointCloud: cloud({ sessionUrl: null }) }} canWrite />);
     expect(screen.queryByTestId('refine-panel')).toBeNull();
+  });
+});
+
+describe('the plan and profile pictures', () => {
+  const pictures = {
+    planUrl: '/api/v1/files/p/content?token=t',
+    profileUrl: '/api/v1/files/q/content?token=t',
+    colourBy: 'height',
+    valueLow: 0,
+    valueHigh: 12.5,
+    pixelM: 0.05,
+    planSize: [400, 300],
+    profilePixelM: 0.05,
+    profileSize: [900, 200],
+    profileLengthM: 45.2,
+  };
+
+  it('shows the top view and the extended profile with their pixel size and a height legend', () => {
+    render(<PointCloudCard upload={upload({ pointCloud: cloud({ pictures }) })} canWrite={false} />);
+    expect(screen.getByAltText('Top view of the scan')).toHaveAttribute('src', pictures.planUrl);
+    expect(screen.getByAltText('Extended profile of the scan along its centreline')).toHaveAttribute('src', pictures.profileUrl);
+    expect(screen.getByTestId('scan-picture-plan-caption')).toHaveTextContent('5 cm a pixel · 400 × 300 pixels');
+    expect(screen.getByTestId('scan-picture-profile-caption')).toHaveTextContent('45.2 m unrolled');
+    const legend = screen.getByTestId('scan-pictures-legend');
+    expect(legend).toHaveTextContent('Coloured by height');
+    expect(legend).toHaveTextContent('12.5 m');
+  });
+
+  it('says why there is no profile when the scan had no centreline, and reads an intensity scale as a number', () => {
+    render(
+      <PointCloudCard
+        upload={upload({
+          pointCloud: cloud({
+            pictures: {
+              ...pictures,
+              profileUrl: null,
+              profilePixelM: null,
+              profileSize: null,
+              profileLengthM: null,
+              colourBy: 'intensity',
+              valueHigh: 4000,
+            },
+          }),
+        })}
+        canWrite={false}
+      />,
+    );
+    expect(screen.queryByAltText('Extended profile of the scan along its centreline')).toBeNull();
+    expect(screen.getByTestId('scan-picture-no-profile')).toBeInTheDocument();
+    const legend = screen.getByTestId('scan-pictures-legend');
+    expect(legend).toHaveTextContent('return strength');
+    expect(legend).not.toHaveTextContent(' m');
+  });
+
+  it('draws no picture block before a run has drawn them', () => {
+    render(<PointCloudCard upload={upload()} canWrite={false} />);
+    expect(screen.queryByTestId('scan-pictures')).toBeNull();
+  });
+});
+
+describe('the centreline in the scan viewer', () => {
+  const tiled = { tilesetUrl: '/api/v1/survey-models/m1/tiles/tileset.json?token=t', tileBytes: 1, tileCount: 1 };
+
+  it('is read only once the viewer is opened, and handed to it as points in the tiles’ metres', () => {
+    centrelineAsked.mockReturnValue({
+      data: {
+        coordinates: [
+          [0, 0, 0],
+          [3, 4, -1],
+        ],
+      },
+    });
+    centrelineAsked.mockClear();
+    render(<PointCloudCard upload={upload({ pointCloud: cloud({ ...tiled, hasCentreline: true }) })} canWrite={false} />);
+    expect(centrelineAsked).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('viewer-asked')).toBeNull();
+    fireEvent.click(screen.getByTestId('point-cloud-view'));
+    expect(centrelineAsked).toHaveBeenLastCalledWith('m1', true);
+    expect(JSON.parse(screen.getByTestId('viewer-asked').dataset.centreline!)).toEqual([
+      { x: 0, y: 0, z: 0 },
+      { x: 3, y: 4, z: -1 },
+    ]);
+    centrelineAsked.mockReset();
+    centrelineAsked.mockReturnValue({ data: undefined });
+  });
+
+  it('is never asked for a scan the server says has none — which is every scan, without the exact location', () => {
+    centrelineAsked.mockClear();
+    render(<PointCloudCard upload={upload({ pointCloud: cloud({ ...tiled, hasCentreline: false }) })} canWrite={false} />);
+    fireEvent.click(screen.getByTestId('point-cloud-view'));
+    expect(centrelineAsked).toHaveBeenLastCalledWith('m1', false);
+    expect(screen.getByTestId('viewer-asked').dataset.centreline).toBe('null');
   });
 });

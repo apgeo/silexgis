@@ -68,6 +68,10 @@ function fakeScene() {
     setMarks: (points: unknown) => {
       scene.marks.push(points);
     },
+    centrelines: [] as unknown[],
+    setCentreline: (points: unknown) => {
+      scene.centrelines.push(points);
+    },
     subscribePick: (listener: (point: { x: number; y: number; z: number }) => void) => {
       scene.pickListeners.push(listener);
       return () => {};
@@ -221,6 +225,44 @@ describe('the scan viewer', () => {
     expect(screen.getByTestId('point-cloud-measure')).toBeDisabled();
     act(() => built[0].pick({ x: 4, y: 5, z: 6 }));
     expect(onPick).toHaveBeenCalledWith({ x: 4, y: 5, z: 6 });
+  });
+
+  it('draws the centreline through the cloud once it is drawn, and takes it away when switched off', async () => {
+    const centreline = [
+      { x: 0, y: 0, z: 0 },
+      { x: 4, y: 1, z: -0.5 },
+    ];
+    render(
+      <PointCloudViewerModal
+        open
+        tilesetUrl={URL}
+        name="Hall"
+        hasRgb={false}
+        hasIntensity={false}
+        onClose={() => {}}
+        centreline={centreline}
+      />,
+    );
+    await waitFor(() => expect(built).toHaveLength(1));
+    // Nothing is drawn into a scene whose cloud has not landed.
+    expect(built[0].centrelines).toEqual([]);
+    await act(async () => {
+      built[0].land();
+    });
+    expect(built[0].centrelines.at(-1)).toEqual(centreline);
+
+    fireEvent.click(screen.getByTestId('point-cloud-centreline'));
+    expect(built[0].centrelines.at(-1)).toEqual([]);
+  });
+
+  it('offers no centreline switch for a scan that has none', async () => {
+    render(<PointCloudViewerModal open tilesetUrl={URL} name="Hall" hasRgb={false} hasIntensity={false} onClose={() => {}} />);
+    await waitFor(() => expect(built).toHaveLength(1));
+    await act(async () => {
+      built[0].land();
+    });
+    expect(screen.queryByTestId('point-cloud-centreline')).toBeNull();
+    expect(built[0].centrelines).toEqual([]);
   });
 
   it('says so when the tileset cannot be read', async () => {

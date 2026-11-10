@@ -300,6 +300,34 @@ interface LoadedPointCloud {
   status: Scene3DPointCloudStatus;
   /** Absent while the root is still being read, and after the cloud has been taken out again. */
   tileset?: Cesium3DTileset;
+  /** The scan's centreline in the tiles' own metres, kept so it can be drawn when the tiles land. */
+  centrelinePoints?: readonly Scene3DScanPoint[];
+  /** The centreline as drawn, under the cloud's own transform; absent when there is none. */
+  centreline?: PolylineCollection;
+}
+
+/** How a scan's centreline is drawn, in the scan viewer and on the map alike. */
+const CENTRELINE_COLOR = '#ffd60a';
+const CENTRELINE_WIDTH = 3;
+
+/**
+ * A scan's centreline as a line collection under the given transform, its vertices in the tiles'
+ * own metres. The transform is the collection's own rather than baked into the vertices, so a
+ * re-placed cloud moves its line by one matrix set and nothing is rebuilt. Undefined for fewer
+ * than two points, which draw no line.
+ */
+function centrelineCollection(points: readonly Scene3DScanPoint[], modelMatrix: Matrix4): PolylineCollection | undefined {
+  if (points.length < 2) {
+    return undefined;
+  }
+  const collection = new PolylineCollection({ modelMatrix });
+  collection.add({
+    positions: points.map((point) => new Cartesian3(point.x, point.y, point.z)),
+    width: CENTRELINE_WIDTH,
+    material: Material.fromType(Material.ColorType, { color: Color.fromCssColorString(CENTRELINE_COLOR) }),
+    id: 'scan-centreline',
+  });
+  return collection;
 }
 
 /**
@@ -1534,6 +1562,9 @@ class CesiumScene3D implements Scene3DCore {
       moved = true;
       if (!this.widget.isDestroyed() && entry.tileset) {
         entry.tileset.modelMatrix = this.pointCloudMatrix(entry);
+        if (entry.centreline) {
+          entry.centreline.modelMatrix = entry.tileset.modelMatrix;
+        }
       }
     }
     if (moved) {
@@ -1589,6 +1620,9 @@ class CesiumScene3D implements Scene3DCore {
       held.placement = options.placement;
       held.visible = options.visible ?? held.visible;
       held.style = options.style ?? held.style;
+      if (options.centreline !== undefined) {
+        this.drawPointCloudCentreline(held, options.centreline);
+      }
       this.placePointCloud(held);
       return;
     }
@@ -1602,6 +1636,7 @@ class CesiumScene3D implements Scene3DCore {
       style: options.style ?? { colorBy: 'height' },
       visible: options.visible ?? true,
       status: 'loading',
+      ...(options.centreline !== undefined ? { centrelinePoints: options.centreline } : {}),
     };
     this.pointClouds.set(id, entry);
 
@@ -1628,6 +1663,9 @@ class CesiumScene3D implements Scene3DCore {
     entry.status = 'loaded';
     this.widget.scene.primitives.add(tileset);
     applyPointCloudDetail(tileset, this.pointCloudDetail);
+    if (entry.centrelinePoints !== undefined) {
+      this.drawPointCloudCentreline(entry, entry.centrelinePoints);
+    }
     this.placePointCloud(entry);
   }
 
@@ -1637,6 +1675,10 @@ class CesiumScene3D implements Scene3DCore {
       return;
     }
     this.pointClouds.delete(id);
+    if (entry.centreline && !this.widget.isDestroyed()) {
+      this.widget.scene.primitives.remove(entry.centreline);
+    }
+    entry.centreline = undefined;
     if (this.widget.isDestroyed() || !entry.tileset) {
       return;
     }
@@ -1656,6 +1698,9 @@ class CesiumScene3D implements Scene3DCore {
       return;
     }
     entry.tileset.show = visible;
+    if (entry.centreline) {
+      entry.centreline.show = visible;
+    }
     this.requestRender();
   }
 
@@ -1715,9 +1760,37 @@ class CesiumScene3D implements Scene3DCore {
     if (!this.widget.isDestroyed() && entry.tileset) {
       entry.tileset.modelMatrix = this.pointCloudMatrix(entry);
       entry.tileset.show = entry.visible;
+      if (entry.centreline) {
+        entry.centreline.modelMatrix = entry.tileset.modelMatrix;
+        entry.centreline.show = entry.visible;
+      }
       this.stylePointCloud(entry);
     }
     this.requestRender();
+  }
+
+  /**
+   * Replaces a cloud's centreline. Drawn only once the cloud's tiles are in the scene — a line
+   * standing alone where a scan has not appeared yet would say where the cave is with nothing to
+   * show for it — so before then the points are only kept, and the load draws them.
+   */
+  private drawPointCloudCentreline(entry: LoadedPointCloud, points: readonly Scene3DScanPoint[]): void {
+    entry.centrelinePoints = points;
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    if (entry.centreline) {
+      this.widget.scene.primitives.remove(entry.centreline);
+      entry.centreline = undefined;
+    }
+    if (!entry.tileset) {
+      return;
+    }
+    const drawn = centrelineCollection(points, this.pointCloudMatrix(entry));
+    if (drawn) {
+      drawn.show = entry.visible;
+      entry.centreline = this.widget.scene.primitives.add(drawn);
+    }
   }
 
   private stylePointCloud(entry: LoadedPointCloud): void {
@@ -2756,6 +2829,7 @@ class CesiumLocalScan3D implements Scene3DLocalScan {
   private pickHandler: ScreenSpaceEventHandler | undefined;
   private readonly pickListeners = new Set<(point: Scene3DScanPoint) => void>();
   private markLines: PolylineCollection | undefined;
+  private centreline: PolylineCollection | undefined;
 
   constructor(container: HTMLElement) {
     this.widget = new CesiumWidget(container, {
@@ -2904,6 +2978,23 @@ class CesiumLocalScan3D implements Scene3DLocalScan {
         this.markLines!.add({ positions: [from, to], width: 2, material, id: `mark-${index}` });
       }
     });
+    this.requestRender();
+  }
+
+  setCentreline(points: readonly Scene3DScanPoint[]): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    if (this.centreline) {
+      this.widget.scene.primitives.remove(this.centreline);
+      this.centreline = undefined;
+    }
+    // The tiles are drawn untransformed under this scene's fixed frame, so the line, in the same
+    // tiles' metres, goes under that same frame and lies exactly through the cloud.
+    const drawn = centrelineCollection(points, this.frame);
+    if (drawn) {
+      this.centreline = this.widget.scene.primitives.add(drawn);
+    }
     this.requestRender();
   }
 

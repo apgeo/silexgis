@@ -52,6 +52,7 @@ function cloud(over: Partial<SurveyUploadPointCloud> = {}): SurveyUploadPointClo
     displayEveryNth: null,
     displayPointCount: null,
     originShift: null,
+    hasCentreline: false,
     recording: null,
     estimate: {
       full: { voxelCm: null, points: 12_400_000, estimatedTileBytes: 900_000_000, estimatedSeconds: 400 },

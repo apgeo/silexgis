@@ -53,6 +53,7 @@ export const queryKeys = {
   // A survey's stations whose names begin with what somebody has typed. Under the survey's own
   // prefix, so anything that makes the survey be asked for again makes its names be asked again.
   surveyModelStationSearch: (id: string, q: string) => ['survey-model', id, 'stations', q] as const,
+  surveyModelCentreline: (id: string) => ['survey-model', id, 'centreline'] as const,
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
   surveyCompilations: (caveId: string) => ['survey-compilations', caveId] as const,
   caveExternalIds: (caveId: string) => ['cave-external-ids', caveId] as const,

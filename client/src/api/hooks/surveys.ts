@@ -828,6 +828,31 @@ export async function fetchCaveScansInView(
   return unwrap(api.GET('/api/v1/map/cave-scans', { params: { query: { bbox, maxCaves, ...filter } } }));
 }
 
+/** A scan's centreline: the scanner's path, simplified, as the server hands it out. */
+export type SurveyModelCentreline = components['schemas']['SurveyModelCentrelineDto'];
+
+/**
+ * The centreline a scan's run drew from the scanner's path, in the frame its tiles were written
+ * in — so a viewer draws it under exactly the transform it draws the tiles with, placed or not.
+ * Imperative, for the 3D scene's scans-in-view loader; the scan viewer uses the hook below.
+ * The server withholds it without the exact-location right, as it does the path it came from.
+ */
+export async function fetchSurveyModelCentreline(surveyModelId: string): Promise<SurveyModelCentreline> {
+  return unwrap(
+    api.GET('/api/v1/survey-models/{id}/centreline', { params: { path: { id: surveyModelId }, query: { frame: 'tiles' } } }),
+  );
+}
+
+/** The scan viewer's read of a centreline; asked only when the scan says it has one. */
+export function useSurveyModelCentreline(surveyModelId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.surveyModelCentreline(surveyModelId ?? ''),
+    queryFn: () => fetchSurveyModelCentreline(surveyModelId!),
+    enabled: enabled && surveyModelId !== undefined,
+    // No staleTime: a rerun keeps the same model id, so the line is read afresh each time the viewer opens.
+  });
+}
+
 /** Whether a model is a point cloud: the one kind that is tiled, viewed locally and placed by a bearing. */
 export function isPointCloudModel(model: { format: SurveyModelInfo['format'] }): boolean {
   return model.format === 'laz' || model.format === 'las';

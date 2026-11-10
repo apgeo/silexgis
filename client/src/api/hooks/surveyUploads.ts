@@ -25,6 +25,8 @@ export type SurveyUploadStatus = components['schemas']['SurveyUploadStatus'];
 export type SurveyUploadStage = components['schemas']['SurveyUploadStage'];
 export type SurveyOrigin = components['schemas']['SurveyOrigin'];
 export type SurveyUploadPointCloud = components['schemas']['SurveyUploadPointCloudDto'];
+/** A scan's top view and extended profile, and what their legend needs. */
+export type SurveyUploadPointCloudPictures = components['schemas']['SurveyUploadPointCloudPicturesDto'];
 export type SurveyUploadPointCloudEstimateRow = components['schemas']['SurveyUploadPointCloudEstimateRowDto'];
 export type SurveyUploadDisplayRequest = components['schemas']['SurveyUploadDisplayRequest'];
 export type SurveyUploadExternalWait = components['schemas']['SurveyUploadExternalWaitDto'];

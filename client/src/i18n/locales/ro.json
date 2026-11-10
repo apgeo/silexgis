@@ -3865,7 +3865,8 @@
       "measureHint": "Dă clic pe două puncte ale scanării.",
       "measureFirstPoint": "Un punct luat — dă clic pe al doilea.",
       "measureDistance": "{{metres}} m între cele două puncte",
-      "localFrameHint": "Afișată în metrii ei proprii, nu pe hartă: tragerea o rotește, derularea apropie."
+      "localFrameHint": "Afișată în metrii ei proprii, nu pe hartă: tragerea o rotește, derularea apropie.",
+      "centreline": "Linia centrală"
     },
     "unsupportedTitle": "Acest browser nu poate afișa vizualizarea 3D",
     "unsupportedHint": "Vizualizarea 3D are nevoie de WebGL 2, pe care acest browser sau driverul său grafic nu îl oferă. Încearcă un browser actualizat sau folosește în continuare harta 2D.",
@@ -7162,6 +7163,17 @@
       "therion": "Therion",
       "other": "Altă sursă",
       "pointcloud": "Nor de puncte"
+    },
+    "pictures": {
+      "title": "Plan și profil",
+      "plan": "Vederea de sus a scanării",
+      "profile": "Profilul desfășurat al scanării de-a lungul liniei centrale",
+      "planCaption": "Vedere de sus · {{pixelCm}} cm pe pixel · {{width}} × {{height}} pixeli",
+      "profileCaption": "Profil desfășurat de-a lungul liniei centrale · {{pixelCm}} cm pe pixel · {{lengthM}} m desfășurați",
+      "noProfile": "Fără profil desfășurat: scanarea nu are o linie centrală de-a lungul căreia să fie desfășurat.",
+      "byHeight": "Colorat după înălțimea deasupra celui mai jos punct al scanării",
+      "byIntensity": "Colorat după intensitatea reflexiei",
+      "metres": "{{value}} m"
     },
     "pointCloud": {
       "title": "Nor de puncte",

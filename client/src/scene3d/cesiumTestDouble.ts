@@ -1049,6 +1049,12 @@ export interface FakePolyline {
 export class PolylineCollection {
   readonly polylines: FakePolyline[] = [];
   show = true;
+  /** The transform the whole collection is drawn under, when one was given. */
+  modelMatrix: FakeMatrix4 | undefined;
+
+  constructor(options?: { modelMatrix?: FakeMatrix4 }) {
+    this.modelMatrix = options?.modelMatrix;
+  }
   /** Set when the scene takes the collection out of the primitives list. */
   destroyed = false;
 

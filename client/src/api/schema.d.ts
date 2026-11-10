@@ -461,6 +461,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-models/{id}/centreline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The centreline a point cloud's run drew from the scanner's path: in the tiles' own frame (`frame=tiles`, the default) for the scan viewer, or as longitude, latitude and height through the scan's placement (`frame=world`) for the map. Withheld without the exact-location permission; refused before the scan is tiled, and in the world frame before it is placed. */
+        get: operations["surveyModelCentrelineCentreline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/survey-models/{id}/tiles/{path}": {
         parameters: {
             query?: never;
@@ -10243,6 +10260,7 @@ export interface components {
             tiledPointCount: null | number;
             /** Format: int64 */
             sizeBytes: number;
+            hasCentreline: boolean;
         };
         CaveScansInViewDto: {
             items: components["schemas"]["CaveScanInViewDto"][];
@@ -15985,6 +16003,14 @@ export interface components {
             errorZM: number;
             stations: string;
         };
+        SurveyModelCentrelineDto: {
+            /** Format: uuid */
+            surveyModelId: string;
+            frame: string;
+            coordinates: number[][];
+            /** Format: double */
+            lengthM: number;
+        };
         SurveyModelControlPointDto: {
             /** Format: double */
             scanX: number;
@@ -16535,6 +16561,9 @@ export interface components {
             advice: null | components["schemas"]["SurveyUploadPointCloudAdviceDto"];
             recording: null | components["schemas"]["SurveyUploadRecordingDto"];
             sessionUrl?: null | string;
+            /** @default false */
+            hasCentreline: boolean;
+            pictures?: null | components["schemas"]["SurveyUploadPointCloudPicturesDto"];
         };
         SurveyUploadPointCloudEstimateDto: {
             full: components["schemas"]["SurveyUploadPointCloudEstimateRowDto"];
@@ -16549,6 +16578,23 @@ export interface components {
             estimatedTileBytes: null | number;
             /** Format: int32 */
             estimatedSeconds: null | number;
+        };
+        SurveyUploadPointCloudPicturesDto: {
+            planUrl: string;
+            profileUrl: null | string;
+            colourBy: string;
+            /** Format: double */
+            valueLow: number;
+            /** Format: double */
+            valueHigh: number;
+            /** Format: double */
+            pixelM: number;
+            planSize: number[];
+            /** Format: double */
+            profilePixelM: null | number;
+            profileSize: null | number[];
+            /** Format: double */
+            profileLengthM: null | number;
         };
         SurveyUploadPreferencesDto: {
             alwaysOutputs: string[];
@@ -20280,6 +20326,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyModelCentrelineCentreline: {
+        parameters: {
+            query?: {
+                frame?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyModelCentrelineDto"];
                 };
             };
             /** @description Bad Request */

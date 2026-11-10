@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert, Flex, Modal, Radio, Spin, Typography } from 'antd';
+import { Alert, Checkbox, Flex, Modal, Radio, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import Button from '../Button.tsx';
 import { coarsePointer } from '../../map/pointer.ts';
@@ -37,6 +37,12 @@ interface PointCloudViewerModalProps {
   };
   /** Drawn beside the cloud: what the viewer was opened for, when that is more than looking. */
   aside?: ReactNode;
+  /**
+   * The scan's centreline — the scanner's path, simplified — in the tiles' own metres, drawn
+   * through the cloud with a switch to hide it. Left out when the scan has none or the viewer may
+   * not see it.
+   */
+  centreline?: readonly Scene3DScanPoint[];
 }
 
 const COLORING_LABEL_KEYS: Record<Scene3DPointCloudColoring, string> = {
@@ -64,6 +70,7 @@ export default function PointCloudViewerModal({
   onClose,
   picking,
   aside,
+  centreline,
 }: PointCloudViewerModalProps) {
   const { t, i18n } = useTranslation();
   const pointDetail = useUiPrefsStore((s) => s.pointDetail);
@@ -77,6 +84,7 @@ export default function PointCloudViewerModal({
   const [coloring, setColoring] = useState<Scene3DPointCloudColoring>(() => defaultColoring(hasRgb, hasIntensity));
   const [measuring, setMeasuring] = useState(false);
   const [measurement, setMeasurement] = useState<Scene3DMeasurement | undefined>(undefined);
+  const [showCentreline, setShowCentreline] = useState(true);
   // The pick handler is read through a ref so the scene, built once, always calls the latest one.
   const onPick = useRef(picking?.onPick);
   onPick.current = picking?.onPick;
@@ -154,6 +162,11 @@ export default function PointCloudViewerModal({
       scene.current?.setMarks(marks);
     }
   }, [marks, status]);
+  useEffect(() => {
+    if (status === 'loaded' && centreline) {
+      scene.current?.setCentreline(showCentreline ? centreline : []);
+    }
+  }, [centreline, showCentreline, status]);
 
   const choose = (next: Scene3DPointCloudColoring) => {
     setColoring(next);
@@ -222,6 +235,15 @@ export default function PointCloudViewerModal({
           >
             {t(measuring ? 'scene3d.pointCloud.measureOff' : 'scene3d.pointCloud.measure')}
           </Button>
+          {centreline !== undefined && centreline.length >= 2 && (
+            <Checkbox
+              checked={showCentreline}
+              onChange={(event) => setShowCentreline(event.target.checked)}
+              data-testid="point-cloud-centreline"
+            >
+              {t('scene3d.pointCloud.centreline')}
+            </Checkbox>
+          )}
           {measureReadout !== null && (
             <Typography.Text data-testid="point-cloud-measure-readout" aria-live="polite">
               {measureReadout}
