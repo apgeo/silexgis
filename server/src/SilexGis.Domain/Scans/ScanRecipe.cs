@@ -46,12 +46,20 @@ public sealed record ScanRecipeStep(string StepId, JsonElement Parameters, strin
 /// download of the step's inputs and by the upload of its outputs, cleared when the run is queued
 /// again.
 /// </param>
+/// <param name="Surface">
+/// The surface somebody asked to be made of the scan and saved as a cave's walls — which cave, and
+/// by whom — or null when none is asked for. Carried beside the surface step rather than in its
+/// parameters, because where the product goes says nothing about what the worker makes. One-shot,
+/// like <paramref name="RerunFrom"/>: the run that saves the surface removes the request and the
+/// step from the stored recipe, so a later rerun does not make a second wall mesh unasked.
+/// </param>
 public sealed record ScanRecipe(
     IReadOnlyList<ScanRecipeStep> Steps,
     string? RerunFrom = null,
     bool DisplayChosen = false,
     IReadOnlyList<string>? External = null,
-    ScanExternalWait? Waiting = null)
+    ScanExternalWait? Waiting = null,
+    ScanSurfaceRequest? Surface = null)
 {
     /// <summary>
     /// Whether this upload has the step done on another computer: named so in the recipe, or a
@@ -227,6 +235,38 @@ public static class PointCloudRecipes
         return recipe.RunsElsewhere(stepId)
             ? recipe
             : recipe with { External = [.. recipe.External ?? [], stepId] };
+    }
+
+    /// <summary>
+    /// The recipe with a surface asked for: the surface step at its defaults appended after every
+    /// other step (or put back to its defaults where the recipe has one already), marked to be done
+    /// again, and the request recorded. Every step before it is reused as it stands, so asking for a
+    /// surface neither thins nor tiles the cloud again. A profile is laid over the step afterwards,
+    /// exactly as over any other step.
+    /// </summary>
+    public static ScanRecipe WithSurface(ScanRecipe recipe, ScanSurfaceRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(recipe);
+        ArgumentNullException.ThrowIfNull(request);
+        var surface = ScanRecipes.StepWithDefaults(ScanSteps.Find(MeshSurfaceStep.StepId)!);
+        return recipe with
+        {
+            Steps = [.. recipe.Steps.Where(s => s.StepId != MeshSurfaceStep.StepId), surface],
+            RerunFrom = MeshSurfaceStep.StepId,
+            Surface = request,
+        };
+    }
+
+    /// <summary>The recipe with the surface step and its request taken out again: what is stored once the surface is saved.</summary>
+    public static ScanRecipe WithoutSurface(ScanRecipe recipe)
+    {
+        ArgumentNullException.ThrowIfNull(recipe);
+        return recipe with
+        {
+            Steps = [.. recipe.Steps.Where(s => s.StepId != MeshSurfaceStep.StepId)],
+            RerunFrom = recipe.RerunFrom == MeshSurfaceStep.StepId ? null : recipe.RerunFrom,
+            Surface = null,
+        };
     }
 
     /// <summary>The recipe with one step's parameters replaced, hashed afresh; unchanged when the recipe has no such step.</summary>
@@ -497,3 +537,8 @@ public static class ScanRecipes
         }
     }
 }
+
+/// <summary>A surface asked to be made of a scan and saved as a cave's wall mesh.</summary>
+/// <param name="CaveId">The cave the surface is saved for: the scan's own, unless the person chose another they may write and place.</param>
+/// <param name="RequestedBy">Who asked: the owner of the wall mesh's document and the account its reading is queued for.</param>
+public sealed record ScanSurfaceRequest(Guid CaveId, Guid RequestedBy);

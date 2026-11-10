@@ -102,7 +102,7 @@ public sealed class ProcessingProfileUseTests : IAsyncLifetime, IDisposable, ICl
         var (viewerId, viewer) = await UserAsync(GlobalRoles.Viewer, "viewer");
 
         var listed = await ListAsync(viewer, Odometry);
-        foreach (var builtIn in BuiltInProcessingProfiles.All)
+        foreach (var builtIn in BuiltInProcessingProfiles.All.Where(p => p.StepId == Odometry))
         {
             var row = listed.Single(p => p.Id == builtIn.Id);
             row.BuiltIn.ShouldBeTrue();

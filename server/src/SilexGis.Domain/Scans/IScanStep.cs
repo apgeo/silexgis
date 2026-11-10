@@ -418,6 +418,98 @@ public sealed class PointCloudRasterStep : IScanStep
         """;
 }
 
+/// <summary>
+/// A surface of the cloud for showing as a cave's walls, made by the worker with Open3D: the cloud
+/// reduced to one mean point per voxel, normals estimated over a radius and turned toward where
+/// the scanner was (its trajectory, when the scan has one), screened Poisson reconstruction, the
+/// faces carried by the fewest points trimmed away, and the rest decimated to a triangle count.
+/// Written as a binary STL in the scan's tile frame, so it carries no coordinate and lines up with
+/// the tiles under the scan's placement. Not part of any recipe an upload is given: it is asked for
+/// on a processed scan, and its product is saved as a wall mesh of the cave the person chose.
+/// </summary>
+/// <remarks>
+/// The triangle count is capped so the surface is never larger than the largest wall mesh a person
+/// may upload (100 MB, 50 bytes a triangle in a binary STL), since it goes the same way from there.
+/// </remarks>
+public sealed class MeshSurfaceStep : IScanStep
+{
+    public const string StepId = "mesh.surface";
+
+    /// <summary>The most triangles a surface may be decimated to: two million, 100 MB as a binary STL.</summary>
+    public const int MaxTriangles = 2_000_000;
+
+    public string Id => StepId;
+
+    public string DisplayName => "Make a surface of the walls";
+
+    public string Tool => "open3d";
+
+    public IReadOnlyList<ScanArtifactKind> Inputs => [ScanArtifactKind.PointCloudLaz, ScanArtifactKind.Trajectory];
+
+    public IReadOnlyList<ScanArtifactKind> Outputs => [ScanArtifactKind.MeshStl];
+
+    public ScanStepLocation WhereItRuns => ScanStepLocation.Worker;
+
+    public string ParameterSchemaJson => """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "voxelCm": {
+              "description": "The cloud is reduced to one mean point per cube of this size, in centimetres, before anything else. Larger is faster and smoother; smaller keeps finer detail.",
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 50,
+              "default": 2
+            },
+            "normalRadiusCm": {
+              "description": "How far around each point, in centimetres, its neighbours are looked for to work out which way the wall faces there.",
+              "type": "number",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 6
+            },
+            "normalNeighbours": {
+              "description": "The most neighbours used to work out which way the wall faces at a point.",
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 200,
+              "default": 30
+            },
+            "poissonDepth": {
+              "description": "The depth of the reconstruction's octree: each step finer doubles the detail across and costs about four times the memory.",
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 12,
+              "default": 9
+            },
+            "densityTrimPercent": {
+              "description": "The share of the surface, in percent, carried by the fewest points that is removed: the reconstruction also closes over space no scan reached, and those faces have almost no points behind them.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 30,
+              "default": 2
+            },
+            "targetTriangles": {
+              "description": "The number of triangles the surface is decimated to when the reconstruction made more.",
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 2000000,
+              "default": 500000
+            },
+            "orientCellM": {
+              "description": "For a scan without a trajectory: the size, in metres, of the cells whose middle each point's wall is turned to face.",
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 50,
+              "default": 3
+            }
+          },
+          "additionalProperties": false
+        }
+        """;
+}
+
 /// <summary>The steps this server knows, by id. A list in code, never a scan of assemblies.</summary>
 public static class ScanSteps
 {
@@ -442,6 +534,7 @@ public static class ScanSteps
         new PointCloudCheckStep(),
         new ScanCentrelineStep(),
         new PointCloudRasterStep(),
+        new MeshSurfaceStep(),
     ];
 
     private static readonly Dictionary<string, IScanStep> ById =

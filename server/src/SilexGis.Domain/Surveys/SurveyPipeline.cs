@@ -110,6 +110,12 @@ public static class SurveyPipelineFailures
     public const string StorageInsufficient = "survey_pipeline.storage_insufficient";
 
     /// <summary>
+    /// A surface was made of a scan but could not be saved as a cave's walls: the scan is no longer
+    /// placed, or the cave it was asked for is gone. The scan keeps the surface as its own product.
+    /// </summary>
+    public const string SurfaceUnplaced = "survey_pipeline.surface_unplaced";
+
+    /// <summary>
     /// Something went wrong that the run did not expect. The server's own log has the whole of it;
     /// the upload's row says only that, because the inside of the server is not the uploader's to
     /// read.

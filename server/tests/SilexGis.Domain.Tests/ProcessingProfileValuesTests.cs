@@ -82,15 +82,26 @@ public sealed class ProcessingProfileValuesTests
     }
 
     [Fact]
-    public void The_built_ins_are_distinct_odometry_sets_in_the_shape_a_recipe_stores()
+    public void The_built_ins_are_distinct_sets_in_the_shape_a_recipe_stores()
     {
         BuiltInProcessingProfiles.All.Select(p => p.Id).Distinct().Count().ShouldBe(BuiltInProcessingProfiles.All.Count);
         BuiltInProcessingProfiles.All.Select(p => p.Name).Distinct().Count().ShouldBe(BuiltInProcessingProfiles.All.Count);
-        foreach (var builtIn in BuiltInProcessingProfiles.All)
+        foreach (var builtIn in BuiltInProcessingProfiles.All.Where(p => p.StepId == HdmappingOdometryStep.StepId))
         {
-            builtIn.StepId.ShouldBe(HdmappingOdometryStep.StepId);
             Json(builtIn.ValuesJson).GetProperty("values").ValueKind.ShouldBe(JsonValueKind.Object);
         }
+
+        // A surface profile is the step's own parameters, a plain object of keys its schema names.
+        var surface = new MeshSurfaceStep();
+        var known = Json(surface.ParameterSchemaJson).GetProperty("properties").EnumerateObject().Select(p => p.Name).ToHashSet();
+        var surfaces = BuiltInProcessingProfiles.All.Where(p => p.StepId == MeshSurfaceStep.StepId).ToList();
+        surfaces.Select(p => p.Id).ShouldBe([BuiltInProcessingProfiles.SurfaceDefaultsId, BuiltInProcessingProfiles.SurfaceQuickLookId]);
+        foreach (var builtIn in surfaces)
+        {
+            Json(builtIn.ValuesJson).EnumerateObject().Select(p => p.Name).ShouldAllBe(name => known.Contains(name));
+        }
+
+        BuiltInProcessingProfiles.All.Select(p => p.StepId).Distinct().ShouldBe([HdmappingOdometryStep.StepId, MeshSurfaceStep.StepId], ignoreOrder: true);
 
         Json(BuiltInProcessingProfiles.All.Single(p => p.Id == BuiltInProcessingProfiles.HdmappingDefaultsId).ValuesJson)
             .GetProperty("values").EnumerateObject().ShouldBeEmpty();

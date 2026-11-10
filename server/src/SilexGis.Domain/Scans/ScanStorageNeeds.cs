@@ -30,6 +30,15 @@ public static class ScanStorageNeeds
     public const long PictureBytes = 256L * 1024 * 1024;
 
     /// <summary>
+    /// Room allowed for a surface, in bytes: 320 MiB. Its binary STL is at most
+    /// <see cref="MeshSurfaceStep.MaxTriangles"/> triangles of 50 bytes (about 95 MiB), and saving
+    /// it as a wall mesh stores it once more, set down on the earth, and once again as the drawable
+    /// model, which is no larger. All three are counted against the step, so a surface that could
+    /// be made but not kept is refused before the worker spends an hour on it.
+    /// </summary>
+    public const long SurfaceBytes = 320L * 1024 * 1024;
+
+    /// <summary>
     /// How many times the recording the odometry step needs on the worker's volume. Measured on two
     /// recordings, HDMapping's step 1 writes a cache of 17 to 20 times the raw size beside its input
     /// before it removes it; the copy of the recording and the session it leaves add about one more
@@ -63,6 +72,7 @@ public static class ScanStorageNeeds
         {
             PointCloudEstimateStep.StepId or PointCloudCheckStep.StepId or ScanCentrelineStep.StepId => ReportBytes,
             PointCloudRasterStep.StepId => PictureBytes,
+            MeshSurfaceStep.StepId => SurfaceBytes,
             PointCloudDownsampleStep.StepId => input,
             Py3dtilesTileStep.StepId => TileBytes(input, estimate, voxelCm),
 

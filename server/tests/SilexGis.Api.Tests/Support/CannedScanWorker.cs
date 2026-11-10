@@ -27,6 +27,9 @@ internal sealed class CannedScanWorker : IAsyncDisposable
     /// <summary>The step of every job taken, in order.</summary>
     public List<string> Steps { get; } = [];
 
+    /// <summary>The request of every job taken, in order, as written.</summary>
+    public List<JsonElement> Requests { get; } = [];
+
     public CannedScanWorker(string handoffRoot)
     {
         jobsRoot = Path.Combine(handoffRoot, "jobs");
@@ -53,6 +56,7 @@ internal sealed class CannedScanWorker : IAsyncDisposable
                         lock (Steps)
                         {
                             Steps.Add(document.RootElement.GetProperty("step").GetString()!);
+                            Requests.Add(document.RootElement.Clone());
                         }
 
                         await answer(directory, document.RootElement.Clone());

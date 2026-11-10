@@ -177,6 +177,7 @@ public static partial class SurveyUploadEndpoints
             .WithSummary("Abandons an upload still receiving files. The files already sent stay archived.");
 
         MapExternalStepEndpoints(uploads, fileCap);
+        MapSurfaceEndpoints(uploads);
         MapPublicLinkEndpoints(api);
         MapViewerEndpoints(api);
         return api;

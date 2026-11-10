@@ -160,6 +160,10 @@ public class StorageRulesTests
         // The plan and profile pictures: bounded by their pixel limit, not by the cloud they read.
         ScanStorageNeeds.For(PointCloudRasterStep.StepId, 5_000_000_000, null, null)
             .ShouldBe(new ScanStepNeed(ScanStorageNeeds.PictureBytes, 5_000_000_000 + ScanStorageNeeds.PictureBytes));
+        // A surface: bounded by its triangle cap, counted for the scan's copy and the wall mesh's two files.
+        ScanStorageNeeds.For(MeshSurfaceStep.StepId, 5_000_000_000, null, null)
+            .ShouldBe(new ScanStepNeed(ScanStorageNeeds.SurfaceBytes, 5_000_000_000 + ScanStorageNeeds.SurfaceBytes));
+        (3L * MeshSurfaceStep.MaxTriangles * 50).ShouldBeLessThanOrEqualTo(ScanStorageNeeds.SurfaceBytes);
 
         // The whole run: session, export, check report and tiles kept; the odometry's peak on the worker.
         const long raw = 100_000_000;

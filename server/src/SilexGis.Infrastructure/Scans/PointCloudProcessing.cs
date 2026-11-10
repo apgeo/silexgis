@@ -65,6 +65,7 @@ public sealed class PointCloudProcessing(
     ICoordinateProjector projector,
     IOptions<ScanOptions> options,
     StorageFiguresService storage,
+    ScanSurfaceSaving surfaces,
     ILogger<PointCloudProcessing> logger)
 {
     private const string LazMediaType = "application/vnd.laszip";
@@ -177,6 +178,9 @@ public sealed class PointCloudProcessing(
                 // still drawn, and only the profile along the line is not.
                 PointCloudRasterStep.StepId => centreline is null ? [Needed(cloud, "the exported cloud")] : [Needed(cloud, "the exported cloud"), centreline],
                 Py3dtilesTileStep.StepId => [display ?? Needed(cloud, "the point cloud")],
+                // The whole cloud, never the thinned copy: the surface is made at its own voxel. The
+                // trajectory, when the scan has one, says which way each wall faces.
+                MeshSurfaceStep.StepId => trajectory is null ? [Needed(cloud, "the point cloud")] : [Needed(cloud, "the point cloud"), trajectory],
                 _ => new[] { Needed(cloud, "the point cloud") },
             };
             var inputIds = inputs.Select(a => a.Id).ToArray();
@@ -251,7 +255,7 @@ public sealed class PointCloudProcessing(
             await SurveyUploadWrites.ProgressAsync(
                 db, upload.Id, stage, SurveyPipelineProgress.Band(stage, origin).Start, definition.DisplayName + ".", ct);
 
-            var (result, directory) = await RunStepAsync(upload, step, definition, inputs, stage, ct);
+            var (result, directory) = await RunStepAsync(upload, step, definition, inputs, stage, WorkerParameters(step, facts), ct);
             try
             {
                 await SurveyUploadWrites.RecordCompileAsync(
@@ -266,6 +270,10 @@ public sealed class PointCloudProcessing(
 
                 var made = await StoreOutputsAsync(upload, model, versionId, step, definition, result, inputs, directory, ct);
                 Take(made, kept: false);
+                if (step.StepId == MeshSurfaceStep.StepId)
+                {
+                    await surfaces.SaveAsync(upload, model, recipe, made, directory, ct);
+                }
                 facts = step.StepId switch
                 {
                     PointCloudEstimateStep.StepId => WithEstimate(facts, result.Data),
@@ -724,6 +732,9 @@ public sealed class PointCloudProcessing(
         // under stages of their own.
         PointCloudCheckStep.StepId or ScanCentrelineStep.StepId or PointCloudRasterStep.StepId => SurveyUploadStage.Check,
         Py3dtilesTileStep.StepId => SurveyUploadStage.Tile,
+        // A surface is made of a scan that is already tiled, and ends in a wall mesh being
+        // stored: it is reported under the last stage a scan's run has.
+        MeshSurfaceStep.StepId => SurveyUploadStage.Store,
         _ => SurveyUploadStage.Downsample,
     };
 
@@ -738,8 +749,32 @@ public sealed class PointCloudProcessing(
     private static ScanArtifact Needed(ScanArtifact? artefact, string what) =>
         artefact ?? throw new SurveyPipelineException(SurveyPipelineFailures.FilesMissing, $"This step needs {what}, and the run has none.");
 
+    /// <summary>
+    /// The parameters the worker is sent for a step: the recipe's, and for the surface the shift the
+    /// tiles were made about, so the surface is written in the tiles' own frame and stands where
+    /// they do under the scan's placement. The shift is not part of the step's parameters or of
+    /// their hash: it follows from the cloud, which is already among the step's inputs.
+    /// </summary>
+    private static JsonElement WorkerParameters(ScanRecipeStep step, PointCloudFacts facts)
+    {
+        if (step.StepId != MeshSurfaceStep.StepId || ScanPlacement.TilesZeroPoint(facts) is not { } zero
+            || step.Parameters.ValueKind != JsonValueKind.Object)
+        {
+            return step.Parameters;
+        }
+
+        var values = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var property in step.Parameters.EnumerateObject())
+        {
+            values[property.Name] = property.Value;
+        }
+
+        values["originShift"] = JsonSerializer.SerializeToElement(new[] { zero.X, zero.Y, zero.Z });
+        return JsonSerializer.SerializeToElement(values);
+    }
+
     private async Task<(ScanJobResult Result, string Directory)> RunStepAsync(
-        SurveyUpload upload, ScanRecipeStep step, IScanStep definition, ScanArtifact[] inputs, SurveyUploadStage stage, CancellationToken ct)
+        SurveyUpload upload, ScanRecipeStep step, IScanStep definition, ScanArtifact[] inputs, SurveyUploadStage stage, JsonElement parameters, CancellationToken ct)
     {
         var jobName = $"{upload.Id:N}-{step.StepId.Replace('.', '-')}";
         var directory = await handoff.BeginAsync(jobName, ct);
@@ -760,7 +795,7 @@ public sealed class PointCloudProcessing(
             named[InputName(input.Kind)] = fileName;
         }
 
-        await ScanWorkerHandoff.IssueAsync(directory, step.StepId, step.Parameters, named, options.Value.JobTimeout, ct);
+        await ScanWorkerHandoff.IssueAsync(directory, step.StepId, parameters, named, options.Value.JobTimeout, ct);
 
         try
         {
@@ -1214,6 +1249,7 @@ public sealed class PointCloudProcessing(
         ScanArtifactKind.Centreline => "centreline",
         ScanArtifactKind.PlanImage => "planImage",
         ScanArtifactKind.ProfileImage => "profileImage",
+        ScanArtifactKind.MeshStl => "meshStl",
         _ => kind.ToString(),
     };
 
@@ -1228,6 +1264,7 @@ public sealed class PointCloudProcessing(
         "centreline" => ScanArtifactKind.Centreline,
         "planImage" => ScanArtifactKind.PlanImage,
         "profileImage" => ScanArtifactKind.ProfileImage,
+        "meshStl" => ScanArtifactKind.MeshStl,
         _ => null,
     };
 
@@ -1244,6 +1281,7 @@ public sealed class PointCloudProcessing(
             ScanArtifactKind.Centreline => stem + ".centreline" + extension,
             ScanArtifactKind.PlanImage => stem + ".plan" + extension,
             ScanArtifactKind.ProfileImage => stem + ".profile" + extension,
+            ScanArtifactKind.MeshStl => stem + ".surface" + extension,
             ScanArtifactKind.Report when stepId == PointCloudCheckStep.StepId => stem + ".check" + extension,
             ScanArtifactKind.Report => stem + ".estimate" + extension,
             _ => stem + extension,
@@ -1259,6 +1297,7 @@ public sealed class PointCloudProcessing(
         "csv" => "text/csv",
         "geojson" => "application/geo+json",
         "png" => "image/png",
+        "stl" => ScanSurfaceSaving.StlMediaType,
         _ => "application/octet-stream",
     };
 

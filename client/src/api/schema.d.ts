@@ -8906,6 +8906,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-uploads/{id}/surface": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Makes a surface of a processed, placed scan with a processing profile, and saves it as a wall mesh of the chosen cave (the scan's own by default). */
+        post: operations["makeSurveyUploadSurface"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/survey-uploads/{id}/public-link": {
         parameters: {
             query?: never;
@@ -16658,6 +16675,12 @@ export interface components {
         };
         /** @enum {unknown} */
         SurveyUploadStatus: "receiving" | "queued" | "running" | "succeeded" | "failed" | "abandoned";
+        SurveyUploadSurfaceRequest: {
+            /** Format: uuid */
+            caveId?: null | string;
+            /** Format: uuid */
+            profileId?: null | string;
+        };
         SurveyUploadSurveyDto: {
             title: string;
             name: null | string;
@@ -44375,6 +44398,77 @@ export interface operations {
                     "application/json": components["schemas"]["SurveyUploadDto"];
                 };
             };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    makeSurveyUploadSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["SurveyUploadSurfaceRequest"];
+            };
+        };
+        responses: {
             /** @description Accepted */
             202: {
                 headers: {

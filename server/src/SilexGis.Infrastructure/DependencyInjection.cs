@@ -438,6 +438,7 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, PointCloudPipelineHandler>();
         services.AddSingleton<Scans.ScanWorkerHandoff>();
         services.AddScoped<Scans.PointCloudProcessing>();
+        services.AddScoped<Scans.ScanSurfaceSaving>();
         services.AddScoped<Scans.ScanStepParameterSchemas>();
         services.AddScoped<Scans.ProcessingProfileResolver>();
         services.AddScoped<IProcessingJobHandler, SurveyUploadSweepHandler>();

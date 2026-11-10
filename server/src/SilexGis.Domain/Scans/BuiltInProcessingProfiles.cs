@@ -27,6 +27,13 @@ public sealed record BuiltInProcessingProfile(Guid Id, string StepId, string Nam
 /// "Cave, narrow passages" ships with the defaults' values. Its own values are still to be tuned
 /// on a cave recording, and its description says so, so nobody mistakes it for a tuned set.
 /// </para>
+/// <para>
+/// The surface step's profiles hold its parameters as a plain object, like every step whose
+/// schema is the registry's own; only the odometry's are wrapped under <c>values</c>, because
+/// theirs are the program's sections. "Surface defaults" names nothing and means the step's
+/// schema defaults; "Quick surface" coarsens the voxel, the normal radius with it, the octree
+/// depth and the triangle count.
+/// </para>
 /// </remarks>
 public static class BuiltInProcessingProfiles
 {
@@ -35,6 +42,10 @@ public static class BuiltInProcessingProfiles
     public static readonly Guid FastPreviewId = new("019a6000-0000-7000-8000-000000000002");
 
     public static readonly Guid CaveNarrowPassagesId = new("019a6000-0000-7000-8000-000000000003");
+
+    public static readonly Guid SurfaceDefaultsId = new("019a6000-0000-7000-8000-000000000004");
+
+    public static readonly Guid SurfaceQuickLookId = new("019a6000-0000-7000-8000-000000000005");
 
     public static IReadOnlyList<BuiltInProcessingProfile> All { get; } =
     [
@@ -56,6 +67,18 @@ public static class BuiltInProcessingProfiles
             "Cave, narrow passages",
             "Meant for tight cave passages. Its values are still to be tuned on a cave recording; until then it runs with HDMapping's defaults.",
             """{"values":{}}"""),
+        new(
+            SurfaceDefaultsId,
+            MeshSurfaceStep.StepId,
+            "Surface defaults",
+            "The surface step's own values: 2 cm voxels, a Poisson depth of 9, 2 % of the least-supported faces trimmed, decimated to half a million triangles. First values, still to be tuned on cave scans.",
+            "{}"),
+        new(
+            SurfaceQuickLookId,
+            MeshSurfaceStep.StepId,
+            "Quick surface",
+            "A rougher surface made faster, to see whether a scan is worth a full one: 5 cm voxels, a Poisson depth of 8 and at most 200,000 triangles. First values, not yet measured against a reference.",
+            """{"voxelCm":5,"normalRadiusCm":15,"poissonDepth":8,"targetTriangles":200000}"""),
     ];
 
     public static bool IsBuiltIn(Guid id) => All.Any(p => p.Id == id);
