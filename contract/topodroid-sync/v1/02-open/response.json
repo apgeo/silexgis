@@ -60,5 +60,6 @@
   "createdAt": "<timestamp>",
   "expiresAt": "<timestamp>",
   "startedAt": null,
-  "finishedAt": null
+  "finishedAt": null,
+  "external": null
 }

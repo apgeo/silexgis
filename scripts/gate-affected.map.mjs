@@ -360,7 +360,7 @@ export const groups = {
     'SurveyTopologyTests', 'SurveyWallBuilderTests', 'SurveyWallsTests',
     // A cave's surveys and the uploads that are versions of them, and the run that reads them.
     'SurveyUploadSchemaTests', 'SurveyUploadRouteTests', 'SurveyUploadPipelineTests', 'SurveyUploadPointCloudTests', 'SurveyUploadPointCloudWorkerTests',
-    'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests',
+    'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadExternalStepTests',
     // A scan's tiles, delivered one archive entry at a time by the address its upload hands out.
     'SurveyModelTileTests', 'CaveScansInViewTests', 'SurveyModelPlacementTests', 'ScanAutoPlacementTests',
     // A point cloud's processing steps, whose parameter schemas the installation's validator reads.
@@ -434,7 +434,7 @@ export const groups = {
     'SurveyUploadRouteTests', 'SurveyUploadSchemaTests', 'SurveyUploadPreferenceTests',
     'AccessKeySurfaceTests', 'AccessKeyTests', 'OptionsDocumentationTests', 'SurveySourceTests',
     'SurveyUploadPipelineTests', 'TopoDroidArchiveReaderTests', 'SurveyUploadContractTests',
-    'SurveyUploadPointCloudTests', 'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'ScanStepSchemaTests',
+    'SurveyUploadPointCloudTests', 'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadExternalStepTests', 'ScanStepSchemaTests',
     'ProcessingProfileUseTests',
     // The real compiler in its sandbox, where the machine has it.
     'SurveyUploadTherionTests',
@@ -686,8 +686,8 @@ export const crossCutting = {
     'RosterTrusteeRightsBoundTests', 'SavedFilterTests', 'SpeleolocTripImportTests',
     'SpeologieCatalogueTests', 'StagedImportTests', 'StorageReportTests',
     'SurveyCompilationTests', 'SurveyModelPlacementTests', 'SurveyModelReadingTests',
-    'SurveyModelTests', 'SurveySourceTests', 'SurveyUploadMandeyeTests',
-    'SurveyUploadMandeyeWorkerTests', 'SurveyUploadPipelineTests',
+    'SurveyModelTests', 'SurveySourceTests', 'SurveyUploadExternalStepTests',
+    'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadPipelineTests',
     'SurveyUploadPointCloudTests', 'SurveyUploadPreferenceTests', 'SurveyUploadPublicLinkTests',
     'SurveyUploadRouteTests', 'SurveyUploadViewerTests', 'SyncDocumentStreamTests',
     'SyncPeopleTests', 'SyncSetTests', 'SyncSettingsTests', 'SyncStagedUploadTests',
@@ -746,8 +746,8 @@ export const crossCutting = {
     'SurveyGraphTests', 'SurveyModelPlacementTests', 'SurveyModelReadingTests',
     'SurveyModelTests', 'SurveyModelTileTests', 'SurveyModelTrackedTripCountsTests',
     'SurveyModelTrackedTripReplayTests', 'SurveyModelTrackedTripsTests',
-    'SurveySegmentSubstrateTests', 'SurveySourceTests', 'SurveyUploadMandeyeTests',
-    'SurveyUploadMandeyeWorkerTests', 'SurveyUploadPipelineTests',
+    'SurveySegmentSubstrateTests', 'SurveySourceTests', 'SurveyUploadExternalStepTests',
+    'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadPipelineTests',
     'SurveyUploadPointCloudTests', 'SurveyUploadPointCloudWorkerTests',
     'SurveyUploadPublicLinkTests', 'SurveyUploadRouteTests', 'SurveyUploadSchemaTests',
     'SurveyUploadViewerTests', 'SurveyWallsTests', 'SyncDocumentLinkTests',

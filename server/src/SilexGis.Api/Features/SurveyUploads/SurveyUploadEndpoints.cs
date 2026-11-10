@@ -88,6 +88,12 @@ public static partial class SurveyUploadEndpoints
     /// <summary>The choice of how much of a point cloud to show does not satisfy the thinning step's parameters.</summary>
     public const string DisplayInvalidCode = "survey_upload.display_invalid";
 
+    /// <summary>A step named as done on another computer is not one the upload's recipe runs on a worker.</summary>
+    public const string ExternalStepInvalidCode = "survey_upload.external_step_invalid";
+
+    /// <summary>A refined session was sent without naming, or for a survey that is not, a recording processed here.</summary>
+    public const string SessionNeedsScanCode = "survey_upload.session_needs_scan";
+
     /// <summary>The page size a listing uses when it names none, and the most it may ask for.</summary>
     public const int DefaultPageSize = 50;
 
@@ -170,6 +176,7 @@ public static partial class SurveyUploadEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithSummary("Abandons an upload still receiving files. The files already sent stay archived.");
 
+        MapExternalStepEndpoints(uploads, fileCap);
         MapPublicLinkEndpoints(api);
         MapViewerEndpoints(api);
         return api;
@@ -427,10 +434,13 @@ public static partial class SurveyUploadEndpoints
                 // A recording keeps the odometry parameters it was processed with: a new choice
                 // of how much to show changes what follows the export, not the odometry.
                 var choice = new PointCloudDisplayChoice(display.Method, display.VoxelCm, display.EveryNth);
-                var recipe = upload.Source == SurveyOrigin.Mandeye
-                    ? PointCloudRecipes.ForRecording(
-                        schemas, choice, request.FromStep, current?.Steps.FirstOrDefault(s => s.StepId == HdmappingOdometryStep.StepId), out var errors)
-                    : PointCloudRecipes.For(schemas, choice, request.FromStep, out errors);
+                // A refined session's recipe has no odometry to keep: it starts at the export.
+                var recipe = upload.Source != SurveyOrigin.Mandeye
+                    ? PointCloudRecipes.For(schemas, choice, request.FromStep, out var errors)
+                    : PointCloudRecipes.StartsFromSession(current)
+                        ? PointCloudRecipes.ForRefinedSession(schemas, choice, request.FromStep, out errors)
+                        : PointCloudRecipes.ForRecording(
+                            schemas, choice, request.FromStep, current?.Steps.FirstOrDefault(s => s.StepId == HdmappingOdometryStep.StepId), out errors);
                 if (recipe is null)
                 {
                     return ApiProblems.BadRequest(DisplayInvalidCode, string.Join("; ", errors));
@@ -438,6 +448,7 @@ public static partial class SurveyUploadEndpoints
 
                 // Every other step keeps the values the upload had, a profile's included; only
                 // the thinning is the new choice. Profiles named in the request are laid over after.
+                // The steps the upload has done on another computer stay so.
                 rebuilt = current is null
                     ? recipe
                     : recipe with
@@ -445,6 +456,7 @@ public static partial class SurveyUploadEndpoints
                         Steps = [.. recipe.Steps.Select(s => s.StepId == PointCloudDownsampleStep.StepId
                             ? s
                             : current.Steps.FirstOrDefault(c => c.StepId == s.StepId) ?? s)],
+                        External = current.External,
                     };
             }
             else if (request?.FromStep is not null || request?.Profiles is { Count: > 0 })
@@ -871,6 +883,9 @@ public static partial class SurveyUploadEndpoints
                 && current.FileId == cloud.FileId)
             || (upload.Source == SurveyOrigin.Mandeye
                 && f.Role == SurveyUploadFileRole.Archive
+                // A refined session holds the scanner's path, which is a position whatever the
+                // cloud's header says: like the session a run makes, it needs the exact location.
+                && !MandeyeRecording.IsSessionName(f.Name)
                 && cloud is { Facts.IsGeoreferenced: false });
 
         // What the run produced is listed apart from what the device sent and what the run was
@@ -920,6 +935,16 @@ public static partial class SurveyUploadEndpoints
         // longer download.
         var (publicLink, publicLinkRefusal) = await links.StateAsync(upload, showAddress: exact, ct);
 
+        // The scan's latest session, whichever way it came — made by the odometry, sent back for
+        // a step done elsewhere, or sent as a refined version — offered only with the exact location.
+        Guid? sessionFileId = cloud is not null && exact
+            ? await db.ScanArtifacts.AsNoTracking()
+                .Where(a => a.SurveyUploadId == upload.Id && a.Kind == ScanArtifactKind.HdmSession)
+                .OrderByDescending(a => a.CreatedAt)
+                .Select(a => (Guid?)a.FileId)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
         return new SurveyUploadDto(
             upload.Id,
             upload.Status,
@@ -932,7 +957,10 @@ public static partial class SurveyUploadEndpoints
             upload.VersionAt,
             upload.CreatedCave,
             new SurveyUploadSurveyDto(upload.SurveyTitle, upload.SurveyName, upload.SurveyDate, upload.Team),
-            cloud is null ? null : PointCloudDto(tokens, cloud.ModelId, cloud.ConvertedFileId, cloud.Facts, exact),
+            cloud is null ? null : PointCloudDto(tokens, cloud.ModelId, cloud.ConvertedFileId, cloud.Facts, exact) with
+            {
+                SessionUrl = sessionFileId is { } session ? ContentUrl(tokens, session) : null,
+            },
             [.. files.Where(f => f.Role is not (SurveyUploadFileRole.Output or SurveyUploadFileRole.Log)).Select(f => new SurveyUploadFileDto(
                 f.Name,
                 f.Role,
@@ -958,7 +986,37 @@ public static partial class SurveyUploadEndpoints
             upload.CreatedAt,
             upload.ExpiresAt,
             upload.StartedAt,
-            upload.FinishedAt);
+            upload.FinishedAt,
+            writable ? await ExternalWaitDtoAsync(db, upload, ct) : null);
+    }
+
+    /// <summary>
+    /// The step a scan's run waits for, with each product's names and whether it has arrived; null
+    /// when the run is not stopped before a step done elsewhere. A product counts as arrived when
+    /// an artefact of its kind is recorded for the step, its parameters and exactly the inputs the
+    /// wait names — what the run that carries on will reuse.
+    /// </summary>
+    private static async Task<SurveyUploadExternalWaitDto?> ExternalWaitDtoAsync(SilexGisDbContext db, SurveyUpload upload, CancellationToken ct)
+    {
+        if (WaitOf(upload) is not { } waiting)
+        {
+            return null;
+        }
+
+        var made = await db.ScanArtifacts.AsNoTracking()
+            .Where(a => a.SurveyUploadId == upload.Id && a.StepId == waiting.Step.StepId && a.ParamsHash == waiting.Step.ParamsHash)
+            .Select(a => new { a.Kind, a.InputArtifactIds })
+            .ToListAsync(ct);
+        var inputs = waiting.Wait.InputArtifactIds.ToHashSet();
+        var arrived = made
+            .Where(a => a.InputArtifactIds.Length == inputs.Count && a.InputArtifactIds.All(inputs.Contains))
+            .Select(a => a.Kind)
+            .ToHashSet();
+        return new SurveyUploadExternalWaitDto(
+            waiting.Step.StepId,
+            waiting.Definition.DisplayName,
+            waiting.Definition.Tool,
+            [.. waiting.Definition.Outputs.Select(kind => new SurveyUploadExternalOutputDto(ScanExternalOutputs.NamesFor(kind), arrived.Contains(kind)))]);
     }
 
     private sealed record Revision(Guid FileId, long SizeBytes);

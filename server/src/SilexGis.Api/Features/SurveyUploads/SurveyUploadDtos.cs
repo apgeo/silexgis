@@ -163,6 +163,13 @@ public sealed record SurveyUploadPublicLinkMintRequest(SurveyUploadLinkAudience?
 /// for runs with its defaults. Each one named is remembered as the caller's last choice for its
 /// step. Ignored for a survey tool's upload.
 /// </param>
+/// <param name="ExternalSteps">
+/// A scan's steps, by id, that this upload has done on another computer instead of by the
+/// server's worker — such as <c>hdmapping.odometry</c> for a recording whose odometry is run on
+/// a desktop. The run stops before each with its inputs offered as a download and carries on
+/// when the step's outputs are uploaded. Each must be a step of the upload's recipe that a
+/// worker would otherwise run. Refused for a survey tool's upload.
+/// </param>
 public sealed record SurveyUploadOpenRequest(
     string Source,
     SurveyUploadClientInfo? Client,
@@ -177,7 +184,8 @@ public sealed record SurveyUploadOpenRequest(
     Visibility? DocumentsVisibility,
     SurveyUploadPublicLinkRequest? PublicLink = null,
     SurveyUploadDisplayRequest? Display = null,
-    IReadOnlyList<Guid>? Profiles = null);
+    IReadOnlyList<Guid>? Profiles = null,
+    IReadOnlyList<string>? ExternalSteps = null);
 
 /// <summary>Runs an upload's processing again, with the options it ran with or with new ones.</summary>
 /// <param name="Pipeline">A survey archive's options; ignored for a point cloud.</param>
@@ -251,6 +259,12 @@ public sealed record SurveyUploadPointCloudCrsDto(int? HorizontalEpsg, int? Vert
 /// <param name="Estimate">What a thinned copy would keep at each voxel size, once the worker has estimated it.</param>
 /// <param name="Advice">The installation's advice on thinning, with the thresholds it was judged by.</param>
 /// <param name="Recording">What reading a raw recording found, when the cloud came from one; measurements only, no position.</param>
+/// <param name="SessionUrl">
+/// A signed, short-lived address of the scan's HDMapping session — what the odometry made, or
+/// the session sent back for it — for refining in HDMapping's desktop program and sending back
+/// as the scan's next version. The session holds the scanner's path, so with the exact-location
+/// right only; null without it, and for a scan that has no session.
+/// </param>
 public sealed record SurveyUploadPointCloudDto(
     Guid ModelId,
     long PointCount,
@@ -275,7 +289,8 @@ public sealed record SurveyUploadPointCloudDto(
     double[]? OriginShift,
     SurveyUploadPointCloudEstimateDto? Estimate,
     SurveyUploadPointCloudAdviceDto? Advice,
-    SurveyUploadRecordingDto? Recording);
+    SurveyUploadRecordingDto? Recording,
+    string? SessionUrl = null);
 
 /// <summary>What an inspection read of a raw scanner recording.</summary>
 /// <param name="ChunkCount">How many lidar/IMU chunk pairs the recording holds.</param>
@@ -409,6 +424,11 @@ public sealed record SurveyUploadPublicLinkDto(
 /// <param name="ExpiresAt">When an upload still receiving files is abandoned.</param>
 /// <param name="StartedAt">When the first run started.</param>
 /// <param name="FinishedAt">When the last run finished.</param>
+/// <param name="External">
+/// The step a scan's run stopped before because it is done on another computer, and what to send
+/// back for it; null when the run is not waiting for one, and for a caller who may not write to
+/// the cave (the download and the upload back both need Write).
+/// </param>
 public sealed record SurveyUploadDto(
     Guid Id,
     SurveyUploadStatus Status,
@@ -435,7 +455,24 @@ public sealed record SurveyUploadDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset ExpiresAt,
     DateTimeOffset? StartedAt,
-    DateTimeOffset? FinishedAt);
+    DateTimeOffset? FinishedAt,
+    SurveyUploadExternalWaitDto? External = null);
+
+/// <summary>A scan's step done on another computer, which the run waits for.</summary>
+/// <param name="StepId">The step's registry id, such as <c>hdmapping.odometry</c>.</param>
+/// <param name="StepName">The step's name, in English, as the download's README gives it.</param>
+/// <param name="Tool">The program that does the step, such as <c>hdmapping</c>.</param>
+/// <param name="Outputs">Each product the step makes, the names it may be sent back under, and whether it has arrived.</param>
+public sealed record SurveyUploadExternalWaitDto(
+    string StepId,
+    string StepName,
+    string Tool,
+    IReadOnlyList<SurveyUploadExternalOutputDto> Outputs);
+
+/// <summary>One product of a step done on another computer.</summary>
+/// <param name="Names">The file names it is accepted under; the first is the one to use.</param>
+/// <param name="Received">Whether it has been sent back already.</param>
+public sealed record SurveyUploadExternalOutputDto(IReadOnlyList<string> Names, bool Received);
 
 /// <summary>
 /// What the survey's versions older than its newest one still hold of what their runs produced —
@@ -526,7 +563,14 @@ public sealed class SurveyUploadOpenRequestValidator : AbstractValidator<SurveyU
         RuleFor(x => x.Display!).SetValidator(new SurveyUploadDisplayRequestValidator()).When(x => x.Display is not null);
         RuleFor(x => x.Profiles!.Count).LessThanOrEqualTo(ProcessingProfileResolver.MaxProfiles)
             .OverridePropertyName("profiles").When(x => x.Profiles is not null);
+        // A recipe holds a handful of steps; a longer list is not a choice anybody made.
+        RuleFor(x => x.ExternalSteps!.Count).LessThanOrEqualTo(MaxExternalSteps)
+            .OverridePropertyName("externalSteps").When(x => x.ExternalSteps is not null);
+        RuleForEach(x => x.ExternalSteps).NotEmpty().MaximumLength(100).When(x => x.ExternalSteps is not null);
     }
+
+    /// <summary>The most steps one upload may name as done on another computer.</summary>
+    public const int MaxExternalSteps = 16;
 }
 
 public sealed class SurveyUploadPublicLinkMintRequestValidator : AbstractValidator<SurveyUploadPublicLinkMintRequest>

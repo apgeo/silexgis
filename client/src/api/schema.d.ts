@@ -8855,6 +8855,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-uploads/{id}/external/bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The inputs, parameters and instructions of the step this upload waits for, to be done on another computer, as one zip. */
+        get: operations["getSurveyUploadExternalBundle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/{id}/external/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sends one product of the step this upload waits for, under the name the download's README gives it; the last one queues the run again. */
+        put: operations["putSurveyUploadExternalOutput"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/survey-uploads/{id}/public-link": {
         parameters: {
             query?: never;
@@ -16290,10 +16324,21 @@ export interface components {
             startedAt: null | string;
             /** Format: date-time */
             finishedAt: null | string;
+            external?: null | components["schemas"]["SurveyUploadExternalWaitDto"];
         };
         SurveyUploadErrorDto: {
             code: string;
             message: null | string;
+        };
+        SurveyUploadExternalOutputDto: {
+            names: string[];
+            received: boolean;
+        };
+        SurveyUploadExternalWaitDto: {
+            stepId: string;
+            stepName: string;
+            tool: string;
+            outputs: components["schemas"]["SurveyUploadExternalOutputDto"][];
         };
         SurveyUploadFiguresDto: {
             compiler: null | components["schemas"]["SurveyLogFiguresDto"];
@@ -16409,6 +16454,7 @@ export interface components {
             publicLink?: null | components["schemas"]["SurveyUploadPublicLinkRequest"];
             display?: null | components["schemas"]["SurveyUploadDisplayRequest"];
             profiles?: null | string[];
+            externalSteps?: null | string[];
         };
         SurveyUploadOrientationDto: {
             basis: components["schemas"]["SurveySegmentBasis"];
@@ -16488,6 +16534,7 @@ export interface components {
             estimate: null | components["schemas"]["SurveyUploadPointCloudEstimateDto"];
             advice: null | components["schemas"]["SurveyUploadPointCloudAdviceDto"];
             recording: null | components["schemas"]["SurveyUploadRecordingDto"];
+            sessionUrl?: null | string;
         };
         SurveyUploadPointCloudEstimateDto: {
             full: components["schemas"]["SurveyUploadPointCloudEstimateRowDto"];
@@ -16554,7 +16601,7 @@ export interface components {
             firstModelOfCreatedCave: boolean;
         };
         /** @enum {unknown} */
-        SurveyUploadStage: "archive" | "unpack" | "scaffold" | "compile" | "store" | "read" | "inspect" | "downsample" | "tile" | "odometry" | "export" | "check";
+        SurveyUploadStage: "archive" | "unpack" | "scaffold" | "compile" | "store" | "read" | "inspect" | "downsample" | "tile" | "odometry" | "export" | "check" | "awaitingExternal";
         /** @enum {unknown} */
         SurveyUploadStageState: "pending" | "active" | "done" | "failed" | "skipped";
         SurveyUploadStatisticsDto: {
@@ -44101,6 +44148,143 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    getSurveyUploadExternalBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    putSurveyUploadExternalOutput: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": components["schemas"]["Stream"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadDto"];
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Unauthorized */

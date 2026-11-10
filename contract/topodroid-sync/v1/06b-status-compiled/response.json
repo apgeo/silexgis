@@ -176,5 +176,6 @@
   "createdAt": "<timestamp>",
   "expiresAt": "<timestamp>",
   "startedAt": "<timestamp>",
-  "finishedAt": "<timestamp>"
+  "finishedAt": "<timestamp>",
+  "external": null
 }

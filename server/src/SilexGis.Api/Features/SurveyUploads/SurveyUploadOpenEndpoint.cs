@@ -79,6 +79,8 @@ public static partial class SurveyUploadEndpoints
         // parameters resolved now, so a rerun repeats exactly this.
         string runOptions;
         IReadOnlyDictionary<string, Guid> chosenProfiles = new Dictionary<string, Guid>();
+        var refinedSession = origin == SurveyOrigin.Mandeye
+            && MandeyeRecording.IsRefinedSession(request.Files.Select(f => f.Name));
         if (ScanOrigins.IsScan(origin))
         {
             // A device may decide how much to show before the estimate; otherwise the run
@@ -88,9 +90,20 @@ public static partial class SurveyUploadEndpoints
                 : null;
             // A raw recording's recipe runs odometry, export and a check first; its odometry
             // parameters are resolved by the run against the defaults of the version that runs.
-            var recipe = origin == SurveyOrigin.Mandeye
-                ? PointCloudRecipes.ForRecording(schemas, choice, rerunFrom: null, odometry: null, out var errors)
-                : PointCloudRecipes.For(schemas, choice, rerunFrom: null, out errors);
+            // A refined session — the session archive alone — starts at the export, and is only
+            // ever the next version of a scan this server already processed.
+            if (refinedSession && request.CaveSurvey is null)
+            {
+                return ApiProblems.BadRequest(
+                    SessionNeedsScanCode,
+                    "A refined session is uploaded as the next version of the scan it was made from: name that scan's survey.");
+            }
+
+            var recipe = origin != SurveyOrigin.Mandeye
+                ? PointCloudRecipes.For(schemas, choice, rerunFrom: null, out var errors)
+                : refinedSession
+                    ? PointCloudRecipes.ForRefinedSession(schemas, choice, rerunFrom: null, out errors)
+                    : PointCloudRecipes.ForRecording(schemas, choice, rerunFrom: null, odometry: null, out errors);
             if (recipe is null)
             {
                 return ApiProblems.BadRequest(DisplayInvalidCode, string.Join("; ", errors));
@@ -105,7 +118,31 @@ public static partial class SurveyUploadEndpoints
             }
 
             chosenProfiles = resolution!.Chosen;
-            runOptions = ScanRecipes.ToOptionsJson(resolution.Recipe);
+
+            // The steps the person does on another computer are switched now, after the profiles
+            // are laid over, so the values they carry to the desktop are the resolved ones.
+            var resolved = resolution.Recipe;
+            foreach (var stepId in request.ExternalSteps?.Distinct(StringComparer.Ordinal) ?? [])
+            {
+                var switched = PointCloudRecipes.WithExternal(resolved, stepId);
+                if (switched is null)
+                {
+                    return ApiProblems.BadRequest(
+                        ExternalStepInvalidCode,
+                        $"The step {stepId} is not one this upload's processing runs on a worker, so it cannot be done on another computer instead.",
+                        "externalSteps",
+                        stepId);
+                }
+
+                resolved = switched;
+            }
+
+            runOptions = ScanRecipes.ToOptionsJson(resolved);
+        }
+        else if (request.ExternalSteps is { Count: > 0 })
+        {
+            return ApiProblems.BadRequest(
+                ExternalStepInvalidCode, "Only a scan's processing has steps that can be done on another computer.");
         }
         else
         {
@@ -138,6 +175,20 @@ public static partial class SurveyUploadEndpoints
             if (!await SurveyModelAccess.WritableAsync(access, ctx, surveyCave, ct))
             {
                 return ApiProblems.Forbidden();
+            }
+
+            // A refined session is exported against the recording its scan was made from, so the
+            // survey must be a recording's that a run here turned into a session.
+            if (refinedSession
+                && (survey.Source != SurveyOrigin.Mandeye
+                    || !await db.ScanArtifacts.AnyAsync(
+                        a => a.Kind == ScanArtifactKind.HdmSession
+                            && db.SurveyUploads.Any(u => u.Id == a.SurveyUploadId && u.CaveSurveyId == survey.Id),
+                        ct)))
+            {
+                return ApiProblems.BadRequest(
+                    SessionNeedsScanCode,
+                    "A refined session is the next version of a recording this server processed; this survey holds none.");
             }
 
             cave = surveyCave;

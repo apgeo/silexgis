@@ -36,6 +36,8 @@ public sealed class AccessKeySurfaceTests(PostgresFixture postgres) : IDisposabl
         ("POST", "/api/v1/survey-uploads/{id:guid}/complete", "the device says every file arrived, which queues the run; Write on the cave"),
         ("POST", "/api/v1/survey-uploads/{id:guid}/rerun", "the device runs a finished upload again with other outputs; Write on the cave"),
         ("DELETE", "/api/v1/survey-uploads/{id:guid}", "the device gives up a session still receiving; what arrived stays archived"),
+        ("GET", "/api/v1/survey-uploads/{id:guid}/external/bundle", "the computer that does a step of a scan's processing by hand takes the step's inputs and parameters; Write on the cave and its exact location"),
+        ("PUT", "/api/v1/survey-uploads/{id:guid}/external/{name}", "the same computer sends back what the step made, which carries the run on; Write on the cave and its exact location"),
         ("POST", "/api/v1/survey-uploads/{id:guid}/public-link", "the device's result screen makes a new link to the results, choosing who it opens for; Write and the right to share the cave, and a protected cave only with the caver's explicit acknowledgement"),
         ("DELETE", "/api/v1/survey-uploads/{id:guid}/public-link", "the device's result screen withdraws the link it was handed; Write on the cave"),
     ];
