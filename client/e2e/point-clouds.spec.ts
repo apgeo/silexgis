@@ -444,3 +444,67 @@ test('a scan is placed by control points on the cave line plot, its residuals sh
   await expect(page.getByText('The scan is placed by its control points.')).toBeVisible();
   await expect(page.getByTestId('scan-control-rms')).toContainText('m');
 });
+
+test('a placed scan is made into a surface for another cave, and the result points at that cave', async ({ page }) => {
+  test.setTimeout(180_000);
+  await login(page);
+  const caveId = await caveWithEntrance(page, `E2E Surface scan ${Date.now()}`, false);
+  const otherName = `E2E Surface walls ${Date.now()}`;
+  const otherId = await caveWithEntrance(page, otherName, false);
+  const upload = await uploadLas(page, caveId, 'E2E surface survey');
+  expect(upload.status, JSON.stringify(upload)).toBe('succeeded');
+  const modelId = upload.pointCloud!.modelId;
+  await asPerson(page, 'PUT', `/api/v1/survey-models/${modelId}/placement`, {
+    longitude: 25.2093,
+    latitude: 45.5187,
+    heightM: 1200,
+    headingDeg: 0,
+  });
+
+  // The browser lane has no worker, so the scan is never tiled and the server would refuse the
+  // surface as having nothing to make it of. Both are canned: the upload's answer names a tileset,
+  // and the request is answered as the server answers one it took — the upload queued again —
+  // after which the upload's own answer (finished) stands for the run having saved the walls.
+  // What this proves is the client's side: the action once placed, the cave chosen, the body sent
+  // and the result pointed at; the run itself is proved by the server's tests.
+  const tiled = { tilesetUrl: `/api/v1/survey-models/${modelId}/tiles/tileset.json`, tileBytes: 4096, tileCount: 1 };
+  await page.route(`**/api/v1/survey-uploads/${upload.id}`, async (route) => {
+    const answer = (await (await route.fetch()).json()) as UploadAnswer & { pointCloud: Record<string, unknown> };
+    answer.pointCloud = { ...answer.pointCloud, ...tiled };
+    await route.fulfill({ json: answer });
+  });
+  let sent: unknown = null;
+  await page.route(`**/api/v1/survey-uploads/${upload.id}/surface`, async (route) => {
+    sent = route.request().postDataJSON();
+    await route.fulfill({
+      status: 202,
+      json: { ...upload, status: 'queued', pointCloud: { ...upload.pointCloud, ...tiled } },
+    });
+  });
+
+  await gotoRoute(page, upload.statusPageUrl);
+  const surface = page.getByTestId('scan-surface');
+  await expect(surface).toBeVisible({ timeout: 15_000 });
+  await expect(surface.getByTestId('scan-surface-make')).toBeEnabled({ timeout: 15_000 });
+  await surface.getByTestId('scan-surface-make').click();
+
+  const dialog = page.getByRole('dialog', { name: 'Make a surface of the scan' });
+  await expect(dialog).toBeVisible();
+  // The built-in that changes nothing is preselected for somebody who never made a surface.
+  await expect(dialog.getByTestId('scan-surface-profile')).toContainText('Surface defaults');
+  await dialog.getByText('Another cave').click();
+  await expect(dialog.getByRole('button', { name: 'Make the surface' })).toBeDisabled();
+  // The cave search opens from its button; its rows are matched on the name typed.
+  await dialog.getByTestId('scan-surface-other-cave').click();
+  await page.getByTestId('scan-surface-other-cave-input').fill(otherName);
+  await page.getByTestId('scan-surface-other-cave-row').filter({ hasText: otherName }).first().click({ timeout: 15_000 });
+  await dialog.getByRole('button', { name: 'Make the surface' }).click();
+
+  await expect.poll(() => sent, { timeout: 15_000 }).not.toBeNull();
+  expect((sent as { caveId: string }).caveId).toBe(otherId);
+  expect((sent as { profileId: string | null }).profileId).not.toBeNull();
+  const saved = page.getByTestId('scan-surface-saved');
+  await expect(saved).toContainText(otherName, { timeout: 30_000 });
+  await saved.getByTestId('scan-surface-open-cave').click();
+  await expect(page).toHaveURL(new RegExp(`/caves/${otherId}$`));
+});
