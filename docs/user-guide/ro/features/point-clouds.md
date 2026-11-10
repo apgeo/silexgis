@@ -130,6 +130,19 @@ ale unui nor.
 Profilul folosit la fiecare rulare este scris în evidența acelei rulări, așa că o scanare poate
 spune oricând ce setări au produs-o.
 
+### Linia centrală, planul și profilul
+
+După verificare, serverul desenează din înregistrare încă două lucruri:
+
+- O **linie centrală**: traiectoria parcursă, simplificată la o linie (un vârf doar acolo unde drumul se
+  abate cu mai mult de 0,2 m). **Vezi scanarea** o desenează în galben prin nor, cu un comutator
+  **Linia centrală** pentru a o ascunde, iar harta 3D o desenează împreună cu fiecare scanare plasată. Nu
+  este scrisă în datele topografice ale peșterii.
+- Un **plan** (vedere de sus) și un **profil** desfășurat (înălțimea față de distanța parcursă
+  de-a lungul liniei centrale), ca imagini pe cardul scanării. Fiecare pixel are 5 cm; culoarea este după
+  înălțimea podelei sau după intensitate, cu o legendă sub imagini. O înregistrare prea scurtă
+  pentru o linie primește planul și o notă în loc de profil.
+
 ## Vizualizarea unei scanări
 
 **Vezi scanarea** o desenează **de sine stătător**, în metrii ei proprii, nu pe hartă: trage ca
@@ -182,7 +195,7 @@ poziție**. Așadar:
 
 - Cardul scanării, cifrele ei, scanarea de sine stătătoare și descărcarea norului procesat urmează
   **regulile obișnuite pentru fișierele topografice ale peșterii**.
-- **Unde se află scanarea** — plasarea ei, scanarea în scena 3D, traiectoria — cere dreptul de a
+- **Unde se află scanarea** — plasarea ei, scanarea în scena 3D, traiectoria și linia centrală — cere dreptul de a
   vedea **locația exactă** a peșterii, ca orice altă cale care ar dezvălui poziția unei peșteri
   protejate.
 - Un **original care poartă el însuși coordonate reale** — un nor al cărui antet numește un sistem

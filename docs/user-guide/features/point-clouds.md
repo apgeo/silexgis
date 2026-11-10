@@ -121,6 +121,19 @@ the HDMapping odometry, and the estimating, thinning and tiling of a cloud.
 The profile used for each run is written into that run's record, so a scan can always say which
 settings made it.
 
+### Centreline, plan and profile
+
+After the check the server draws two more things from a recording:
+
+- A **centreline**: the walked trajectory simplified to a line (a vertex only where the path bends
+  by more than 0.2 m). **View the scan** draws it in yellow through the cloud, with a
+  **Centreline** switch to hide it, and the 3D map draws it with each placed scan. It is not
+  written into the cave's survey data.
+- A **plan** (a top view) and an extended **profile** (height against the distance walked along
+  the centreline), as pictures on the scan card. Each pixel is 5 cm; colour is by the height of
+  the floor or by intensity, with a legend under the pictures. A recording too short to give a line
+  gets the plan and a note instead of the profile.
+
 ## Looking at a scan
 
 **View the scan** draws it **on its own**, in its own metres and not on the map: drag to turn it,
@@ -167,7 +180,8 @@ the scan's own metres and carry no position**. So:
 
 - The scan card, its figures, the scan on its own, and the download of the processed cloud follow
   the **ordinary rules for the cave's survey files**.
-- **Where the scan is** — its placement, the scan in the 3D scene, the trajectory — needs the right
+- **Where the scan is** — its placement, the scan in the 3D scene, the trajectory and the
+  centreline — needs the right
   to see the cave's **exact location**, like every other path that would give a protected cave's
   position away.
 - An **original that itself carries real coordinates** — a cloud whose header names a coordinate
