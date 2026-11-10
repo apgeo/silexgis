@@ -91,7 +91,7 @@ Above the list:
 |---|---|
 | **Show these on the map** | Opens the map drawing what this filter finds |
 | **Select all found (n) on the map** | Makes the result, up to 200, the map's selection — see [Between a list and the map](search-and-filters.md#between-a-list-and-the-map) |
-| **Export** | GeoJSON, GPX, KML, CSV or zipped shapefile of everything the filter finds, not only this page |
+| **Export** | GeoJSON, GPX, KML, CSV or zipped shapefile of everything the filter finds, not only this page; each row starts with the feature's id, and the export is [recorded](history-and-audit.md#map-format-exports) |
 | **Deleted caves and features** | [Puts back](caves-and-entrances.md#deleted-caves-and-features) what you may restore |
 
 With the map open beside the list, pointing at a row rings that feature on the map, and picking

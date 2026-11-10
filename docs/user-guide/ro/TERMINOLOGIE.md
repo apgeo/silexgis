@@ -92,6 +92,8 @@ persoana a treia rămân așa cum sunt.
 | Detection rules | Reguli de detectare |
 | Message texts | Texte mesaje |
 | Settings | Setări |
+| Storage (an administration page) | Spațiu de stocare |
+| Scans · Processing profiles (a Settings page) | Scanări · Profiluri de procesare |
 | Categories (under Statistics) | Categorii |
 
 ## Obiecte
@@ -110,6 +112,8 @@ persoana a treia rămân așa cum sunt.
 | Lead / continuation | Continuare |
 | Trip | Tură |
 | Camp / expedition | Tabără |
+| Expedition (notification kinds only) | Expediție — numai în setările notificărilor; în text rămâne *tabără* |
+| Hill (a feature kind) | Deal |
 | Caver | Speolog |
 | Short name (a caver's) | Nume scurt |
 | Caving group | Grup de speologie |
@@ -205,6 +209,8 @@ persoana a treia rămân așa cum sunt.
 | Remove this person / Merge a duplicate instead | Elimină persoana / Unifică un duplicat în loc |
 | First started / Started again (a watch) | Începută prima dată / Începută din nou |
 | Import a sheet | Importă o foaie |
+| Create cavers the roster lacks | Creează speologii pe care lista nu îi are |
+| People left off their trips | Persoane lăsate pe dinafară |
 | This cave's named places | Locurile numite ale acestei peșteri |
 | Declare a place | Declară un loc |
 | No depth (a place named without one) | Fără adâncime |
@@ -278,6 +284,8 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Saved filter / Saved filters | Filtru salvat / Filtre salvate |
 | Save as filter… | Salvează ca filtru… |
 | Apply a saved filter… | Aplică un filtru salvat… |
+| the map view / an outline drawn on the map / the selected object (Position, on the map) | vederea hărții / un contur desenat pe hartă / obiectul selectat |
+| Draw on the map… / Take the view again | Desenează pe hartă… / Ia din nou vederea |
 | Advanced filter… | Filtru avansat… |
 | Condition | Condiție |
 | Field · Comparison · Value | Câmp · Comparație · Valoare |
@@ -342,6 +350,7 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Reset second factor | Resetează al doilea factor |
 | Coordinates (a settings section; also an entrance's field) | Coordonate |
 | This browser only (the accessibility settings kept on one device) | Doar în acest browser |
+| Higher contrast (an accessibility setting) | Contrast mărit |
 
 ## Relief, topografii și hărți scanate
 
@@ -361,6 +370,72 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | LochViewer (trial) | LochViewer (de probă) |
 | Add map / Define points / Re-place (a georeferenced map) | Adaugă hartă / Definește puncte / Replasează |
 | Plan / Profile / Other view (what a scanned map shows) | Plan / Profil / Altă vedere |
+| Sheet (a raster map sheet being placed) | Planșă |
+| Place on map… / Adjust placement… (a map sheet) | Poziționează pe hartă… / Ajustează poziția… |
+| Placement (of a map sheet) / Remove placement | Poziție, poziționare / Șterge poziția |
+| Corners / Two points / Control points (ways of placing a sheet) | Colțuri / Două puncte / Puncte de control |
+| Perspective / Keep parallel (corner placement) | Perspectivă / Laturi paralele |
+| Type the corners | Scrie coordonatele colțurilor |
+| Transformation | Transformare |
+| Similarity / Affine / Perspective | Similaritate / Afină / Perspectivă |
+| Polynomial, 2nd order / 3rd order | Polinomială de gradul 2 / de gradul 3 |
+| Thin-plate spline | Spline cu plăci subțiri |
+| Residual | Abatere |
+| Outline / Draw outline / Use the map frame | Contur / Desenează conturul / Folosește chenarul hărții |
+| Use pinned stations | Folosește stațiile marcate pe planșă |
+| Export placement / Import placement | Exportă poziția / Importă poziția |
+| Needs placement (a map sheet's state) | De poziționat |
+| Redraw… (a map sheet) | Redesenează… |
+| Clear finished (upload rows) | Șterge cele terminate |
+
+## Nori de puncte și spațiu de stocare
+
+| Engleză | Română |
+|---|---|
+| Point cloud | Nor de puncte (pl. nori de puncte) |
+| Scan (a point cloud among a cave's surveys) | Scanare |
+| Raw recording (a scanner's folder) | Înregistrare brută |
+| Upload point cloud | Încarcă nor de puncte |
+| One cloud file / Scanner recording folder | Un fișier nor de puncte / Dosarul unei înregistrări de scaner |
+| Lidar chunks / IMU log / GNSS log | Bucăți lidar / Jurnal IMU / Jurnal GNSS |
+| Reading the header / Estimating and thinning / Tiling | Citirea antetului / Estimare și rărire / Împărțire în dale |
+| Running the odometry / Exporting the point cloud / Checking the export | Calcul odometrie / Exportul norului de puncte / Verificarea exportului |
+| Thinning · Tiles · Tiling | Rărire · Dale · Împărțire în dale |
+| How much to show / Suggested | Cât de mult se afișează / Sugerat |
+| Tile with this choice / Tile again with this choice | Împarte în dale cu această alegere / Împarte din nou în dale cu această alegere |
+| View the scan / Whole scan / Colour by / Measure | Vezi scanarea / Toată scanarea / Colorare după / Măsoară |
+| Recorded colour / Intensity / Height | Culoarea înregistrată / Intensitate / Înălțime |
+| Trajectory | Traiectorie |
+| Odometry profile | Profil de odometrie |
+| Processing profile | Profil de procesare |
+| Mine / Caving groups / The whole installation (a profile's scope) | Ale mele / Grupuri speologice / Toată instalarea |
+| Built-in (a profile) | Inclus |
+| Point detail: Low / Normal / High | Detaliul punctelor: Redus / Normal / Ridicat |
+| Scans of every cave in view (3D) | Scanările tuturor peșterilor din vedere (3D) |
+| Scans (the 3D view's layer switch) | Scanări |
+| Placement (of a scan) | Plasare |
+| Place on the map / Correct the placement / Remove placement (a scan) | Plasează pe hartă / Corectează plasarea / Elimină plasarea |
+| Place by control points / Pick / Fit and place | Plasează după puncte de control / Alege / Potrivește și plasează |
+| Also fit a small tilt | Potrivește și o mică înclinare |
+| Placed from the file's coordinates / from the recording's satellite fixes | Plasată din coordonatele fișierului / Plasat după pozițiile prin satelit ale înregistrării |
+| Placed by hand / Placed by control points | Plasată manual / Plasat după puncte de control |
+| Bearing (of the scan's north) | Azimut |
+| Control points | Puncte de control |
+| Whole store / Point clouds / Your account (room left) | Tot depozitul / Nori de puncte / Contul tău |
+| Cap (a storage limit) | Limită |
+| Measure now | Măsoară acum |
+| What could be deleted / Delete | Ce s-ar putea șterge / Șterge |
+| Superseded point-cloud copies | Copii înlocuite ale norilor de puncte |
+| Work of failed runs | Lucrul rulărilor eșuate |
+| Older survey versions' products | Produsele versiunilor vechi ale topografiilor |
+| Expired uploads | Încărcări expirate |
+| Uploaded originals | Originale încărcate |
+| Storage is filling up (the notification) | Spațiul de stocare se umple |
+
+O hartă scanată se **poziționează** (*Poziționează pe hartă…*, *poziție*), o scanare laser se
+**plasează** (*Plasează pe hartă*, *plasare*): așa le numește interfața, iar ghidul păstrează
+deosebirea. Scopul profilurilor apare în interfață ca *Grupuri speologice*; în text rămâne
+termenul stabilit **grup de speologie**.
 
 ## Alte
 

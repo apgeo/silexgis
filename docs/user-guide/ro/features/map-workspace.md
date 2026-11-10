@@ -65,7 +65,7 @@ numește în locul lui.
 | **Fotografii geolocalizate** | Fotografiile care poartă o poziție. Când o imagine cuprinde mai multe decât încap într-un răspuns, rândul stratului spune *„Nu sunt afișate toate fotografiile de aici — apropie harta pentru a le vedea pe celelalte."* |
 | **Hartă de căldură (intrări)** | Densitate în loc de puncte individuale |
 | **Densitatea peșterilor (grilă)** | Câte peșteri se află în fiecare celulă a unei grile, numărate de server |
-| **Indice de carstificare (zone)** | Fiecare zonă carstică și masiv din imagine, colorat după cât de carstificat apare |
+| **Indice de carstificare (zone)** | Fiecare zonă carstică, masiv și deal din imagine, colorat după cât de carstificat apare |
 
 ### Straturile carstice
 
@@ -83,7 +83,7 @@ timp e pornit, fiecare are un rând sub lista de straturi, cu o legendă a culor
   0–1, 1–5, 5–20 și peste 20 de peșteri pe km², stabilite de administrator). Se schimbă doar
   culorile, nu numărătorile. O imagine salvată păstrează alegerea. Dacă imaginea e prea largă
   chiar și pentru celula cea mai mare, rândul o spune: mărește harta.
-- **Indice de carstificare (zone)** colorează fiecare zonă carstică și masiv după clasa
+- **Indice de carstificare (zone)** colorează fiecare zonă carstică, masiv și deal după clasa
   indicelui, de la *foarte scăzut* la *foarte ridicat*; o zonă care nu poate fi măsurată este gri,
   cu margine întreruptă. O zonă carstică din interiorul unui masiv se desenează peste el. Indică
   o zonă pentru numele și clasa ei; un clic o deschide, iar pagina ei are statisticile complete.

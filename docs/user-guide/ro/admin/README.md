@@ -20,6 +20,7 @@ Pentru instalare, actualizare, copii de siguranță și TLS, vezi
 | [Vocabularele care aparțin clubului](vocabularies.md) | Tipuri de documente, tipuri de obiecte, scopuri de tură, roluri în tură, roluri în tabără, modele de raport, relații, reguli de detectare, texte de mesaje, seturi de obiecte |
 | [Mesagerie și trimitere](messaging.md) | E-mail, SMS, texte de mesaje, politica de autentificare, urmărirea plecării mesajelor |
 | [Generarea reliefului](terrain-builds.md) | Transformarea datelor de elevație în terenul pe care îl desenează scena 3D |
+| [Spațiu de stocare](storage.md) | Limitele a ce stochează instalarea, avertizările pe măsură ce se umple, ce o umple și ștergerea a ce nu mai trebuie |
 | [Operațiuni de întreținere](maintenance.md) | Recuperarea textului, a paginilor de document și a pozițiilor fotografiilor pentru fișiere sosite înainte ca acestea să funcționeze; unde se înregistrează erorile văzute în browserele membrilor |
 | [Ture publicate](../features/live-tracking.md#tot-ce-este-publicat-pentru-administratorii-deplini) | Toate linkurile de urmărire date de instalare și ce deschide fiecare; înlocuirea unui link, retragerea publicării unei ture sau a tot ce este publicat și avertismentul „peșteră protejată în apropiere?" |
 
@@ -52,6 +53,8 @@ orice modificare care ar lăsa niciun administrator deplin activ capabil să se 
 | Relații între obiecte | Administratori deplini |
 | [Ture publicate](../features/live-tracking.md#tot-ce-este-publicat-pentru-administratorii-deplini) | Administratori deplini (pagina îi numește *administratori deplini*) — arată linkurile tuturor turelor, indiferent de regulile de acces ale fiecărei ture, și le poate retrage pe toate |
 | Reguli de detectare | Oricine poate crea obiecte. Doar *promovarea* unui set la ce moștenește un grup sau instalarea este act de administrator |
+| [Spațiu de stocare](storage.md) | Administratori deplini |
+| [Profilurile de procesare](../features/point-clouds.md#profiluri-de-procesare) ale unui grup de speologie sau ale instalării | Drepturi pe **scan-profiles** (Creare, Scriere, Ștergere pentru a le administra; Citire pentru a le vedea pe ale tuturor grupurilor). Profilurile personale nu cer niciun drept |
 | [Operațiuni de întreținere](maintenance.md) | **Rulare** pe domeniul **jobs** (încă fără pagină în interfață — se declanșează prin API) |
 
 ## Conturi

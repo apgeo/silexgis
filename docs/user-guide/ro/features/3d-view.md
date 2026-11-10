@@ -163,6 +163,22 @@ schimba pentru propriul browser, până la plafonul instalării, în
 [Setări › Avansat](account-and-settings.md#avansat) — panoul trimite acolo cât timp acest mod
 este ales.
 
+## Norii de puncte ai peșterilor din vedere
+
+Comutatorul **Scanări** din lista de straturi desenează scanările laser ale peșterilor din vedere
+— câte una pe peșteră, scanarea ei curentă sau, altfel, cea mai nouă — după ce fiecare este
+împărțită în dale și [plasată pe hartă](point-clouds.md#plasarea-unei-scanări-pe-hartă).
+Funcționează ca pereții tuturor peșterilor din vedere, cu mai puține peșteri și mai mulți
+megaocteți, pentru că o scanare este mult mai mare decât un model de pereți: pornește de la un
+anumit zoom, ia întâi peșterile cele mai apropiate, până la un număr de peșteri și o mărime
+totală, și eliberează ce iese din vedere. Cele trei numere sunt ale instalării, iar fiecare
+persoană le poate coborî pentru propriul browser în
+[Setări › Avansat](account-and-settings.md#nori-de-puncte), unde se stabilește și detaliul
+punctelor.
+
+O scanare este desenată doar pentru cine poate vedea locația exactă a peșterii; pentru oricine
+altcineva nu este nici desenată, nici numărată. Vezi [Nori de puncte (scanări LiDAR)](point-clouds.md).
+
 ## Urmarea filtrului hărții
 
 Scena citește filtrul hărții, ca harta plană: sub un filtru desenează intrările, fenomenele de

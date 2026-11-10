@@ -134,6 +134,10 @@ calculată din contur (suprafață, circularitate, direcția axei lungi…).
 **Model de raport** — Un model scris de club pentru documentul Word pe care îl generează o tură.
 Poate cere doar lucruri care i-au fost deja date cititorului.
 
+**Nor de puncte** — O scanare laser a unei peșteri: milioane de puncte măsurate ale pereților ei,
+păstrate printre topografiile peșterii ca **scanare**. Desenat în metrii lui proprii până când este
+plasat pe hartă. → [Nori de puncte](features/point-clouds.md)
+
 **Nume scurt** *(al unui speolog)* — Cum i se spune cuiva în echipă — numele cu care este scris
 un jurnal de suprafață. Apare la turele publicate în locul numelui întreg și este recunoscut
 întreg când o foaie de rapoarte numește pe cineva prin el. Gol, se folosește numele întreg.
@@ -142,6 +146,10 @@ un jurnal de suprafață. Apare la turele publicate în locul numelui întreg ș
 **Obiect** — Modelul unic pe care îl împarte tot ce se află pe hartă. **Felul** lui este unul
 dintre *Obiect, Peșteră, Intrare de peșteră, Drumuire*.
 → [Noțiuni de bază](core-concepts.md#1-tot-ce-este-pe-hartă-este-un-obiect)
+
+**Profil de procesare** — Un set de setări cu nume după care rulează un pas de procesare a
+scanărilor (odometria HDMapping, rărirea, împărțirea în dale); personal, al unui grup de speologie
+sau al instalării. → [Profiluri de procesare](features/point-clouds.md#profiluri-de-procesare)
 
 **Protecția locațiilor** — Mecanismul care reține poziția exactă a unei înregistrări păstrând
 înregistrarea lizibilă. Acțiunea lui de permisiune este **Locație exactă**.
@@ -167,6 +175,9 @@ membrul de pe toate dispozitivele și îl anunță prin e-mail. Apoi acesta se a
 parola și își configurează din nou un al doilea factor. Refuzată pentru propriul cont.
 → [Conturi](admin/accounts.md) ·
 [Autentificare în doi pași](features/account-and-settings.md#autentificare-în-doi-pași)
+
+**Scanare** — Vezi *Nor de puncte*. O *înregistrare brută* este dosarul scris de un scaner
+MANDEYE, pe care serverul îl transformă în nor de puncte.
 
 **Selecție** *(hartă)* — Ce este selectat pe hartă: un lucru sau mai multe. Se umple prin clic sau
 — până la 200 — din *Selectează pe hartă tot ce s-a găsit* al unei liste. Ține cât sesiunea și nu

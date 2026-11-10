@@ -95,6 +95,14 @@ public sealed class SurveyPlacement
     /// </summary>
     private const double MaxGridScaleDeviation = 0.01;
 
+    /// <summary>
+    /// How far the middle of a file declared in local metres may be from its zero point. The
+    /// largest cave systems reach a few tens of kilometres from their fixed station; a projected
+    /// grid's numbers are hundreds of thousands to millions. A hundred kilometres sits well clear
+    /// of both.
+    /// </summary>
+    private const double MaxLocalReachM = 100_000;
+
     private readonly double turnCos;
     private readonly double turnSin;
     private readonly double degreesPerMetreNorth;
@@ -166,8 +174,9 @@ public sealed class SurveyPlacement
     /// Decides where a file sits from what its uploader declared.
     /// </summary>
     /// <param name="footprintCentre">
-    /// The middle of the file's own footprint, in its own coordinates. Asked for lazily because a
-    /// local file does not need it, and because computing it means walking every point of the file.
+    /// The middle of the file's own footprint, in its own coordinates. A projected file is anchored
+    /// at it; a local file is only checked against it, after its declaration has been found
+    /// complete, so a file refused for a missing origin is never walked.
     /// </param>
     /// <exception cref="SurveySourceException">
     /// The declaration cannot be used: a local file with no position for its zero point, a
@@ -192,6 +201,20 @@ public sealed class SurveyPlacement
             {
                 throw new SurveySourceException(
                     "This file's coordinates are local, so it needs the position its zero point sits at.");
+            }
+
+            // A file declared local whose numbers sit far from zero was written on a projected
+            // grid. Placed as metres from the given point it lands hundreds or thousands of
+            // kilometres away — off the map and outside any 3D view — while every stage reports
+            // success, so it is refused here with the reason rather than drawn nowhere.
+            var (localX, localY) = footprintCentre();
+            if (Math.Sqrt((localX * localX) + (localY * localY)) > MaxLocalReachM)
+            {
+                throw new SurveySourceException(
+                    $"This file's coordinates are around {localX:F0} east and {localY:F0} north — far too "
+                    + "large to be metres from one point of a cave. They look like a projected grid "
+                    + "(such as UTM or a national grid): upload it again declared as a projected "
+                    + "coordinate system, with that grid's EPSG code.");
             }
 
             return new SurveyPlacement((0, 0, 0), new ProjectedPoint(lon, lat, 0), declaration.OriginHeightM);

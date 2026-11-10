@@ -229,6 +229,10 @@ Whoever opens it sees:
 - **the compiler's log**: its last lines on the page, and the whole log to download — after a
   compile that failed, where it says what went wrong, as after one that worked.
 
+**The page opens in the language of whoever sent the survey** — the interface language of their
+account — unless the visitor has already chosen a language in that browser. The language switch
+on the page works as everywhere else.
+
 ### What the public link never shows
 
 - **The TopoDroid archive or the Therion source files.**

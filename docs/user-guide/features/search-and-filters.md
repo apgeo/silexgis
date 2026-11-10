@@ -24,6 +24,10 @@ and the name and region of the cave it belongs to — that cave named only if yo
 document gives its type and the cabinets it is filed in. The line never carries a coordinate, an
 altitude, an address or a location note.
 
+**What you type is matched as written.** A `%` or `_` in the search box — or in the feature
+list's name search, or the tag catalogue's — is an ordinary character, not a wildcard: `M_1`
+finds names containing `M_1`, not every `M` followed by any character and a `1`.
+
 ### Searching inside documents
 
 The distinctive part. A document hit **quotes the sentence that matched** and opens the
@@ -132,8 +136,11 @@ It only ever takes away from what you can already see.
 
 - **Write your own: Conditions…** The button in the map's filter row opens the same condition
   editor as the cave registry and the feature list, on the feature world: any field of a cave or
-  a feature, the type and — beside a type condition — that type's own properties included. The
-  spatial *Position* field is not offered on the map for now. **Apply** filters the map with what
+  a feature, the type and — beside a type condition — that type's own properties included, and
+  [Position](#position-conditions) with three places only the map can give: **the map view**
+  (what the map shows when you choose it; **Take the view again** after moving the map),
+  **an outline drawn on the map** (**Draw on the map…**), and, to measure a distance from, **the
+  selected object** — whatever is selected on the map. **Apply** filters the map with what
   you wrote; reopening the editor shows the conditions in force. When the map is drawn through a
   saved filter, the editor opens on a copy of its conditions, and applying turns the map's filter
   into the edited conditions without changing the saved filter. Inside the editor you can also
@@ -151,7 +158,7 @@ It only ever takes away from what you can already see.
   narrowed by anything more than a tag shows its area and background but no caves, because a
   link has nobody to run the filter as; the share dialog says so.
 - **A place stays out of saved views.** A filter that holds a place of its own — a typed point, a
-  pasted outline, or the place *Nearest* is measured from — works in the map's address but is
+  map view, a drawn or pasted outline, or the place *Nearest* is measured from — works in the map's address but is
   never saved in a view, because a view is shown to everyone it is shared with. Saving one says
   so; measure from an object or a named area instead, or apply a saved filter.
 
@@ -323,6 +330,11 @@ Where caves and features are filtered, the editor offers **Position**, with two 
 | **within** | A **Distance in metres** (1 to 200,000), then what it is **Measured from**: **an object** picked with the [selector](#the-selector), **a point** typed as **Longitude** and **Latitude**, or **a saved filter's results** |
 | **inside** | An **Outline**: **a named area** picked with the selector, or **a pasted polygon** — a GeoJSON Polygon, or a Feature holding one, of at most 2,000 positions |
 
+In the map's own condition editor, **Measured from** also offers **the selected object** (the
+object selected on the map — *"Select an object on the map first."* when there is none), and
+**Outline** also offers **the map view** and **an outline drawn on the map**. These are answered
+exactly like an object picked with the selector and a pasted polygon.
+
 **A position condition is answered on the positions you are shown.** A record you may see exactly
 is measured where it is; a protected point you may not is measured at the rounded position the
 map shows you; a protected line or outline you may not see exactly never matches. So the
@@ -337,7 +349,7 @@ condition never tells you more about where something is than the map already doe
 - A pasted polygon that is not a single valid polygon is explained under the box before anything
   is sent.
 
-**A typed point, a pasted polygon or a place to measure nearest first from is never saved** —
+**A typed point, a map view, a drawn or pasted outline or a place to measure nearest first from is never saved** —
 not in a saved filter, and not in a saved view. *"Use an object or a named area instead."* A
 condition measured from an object or inside a named area can be saved.
 
@@ -429,6 +441,10 @@ one whose position you may not see — opens its page instead, which says which.
 that asks nothing about features, or that you cannot run, is not applied: *"That saved filter
 does not ask about features, or cannot be run with your access, so it was not applied to the
 map."* A saved filter's row shows its description under its name.
+
+While a feature is selected on the map and the selector is narrowed to kinds that all have a
+position, it can also sort its rows **Nearest** first, measured from that selected feature —
+answered, as every position question is, on the positions you are shown.
 
 ---
 

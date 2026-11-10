@@ -24,6 +24,11 @@ arată tipul, plus numele și regiunea peșterii de care ține — peștera fiin
 ai voie s-o citești; un document își arată tipul și dulapurile în care este clasat. Rândul nu
 conține niciodată o coordonată, o altitudine, o adresă sau o notă de localizare.
 
+**Ce scrii este căutat așa cum l-ai scris.** Un `%` sau un `_` în caseta de căutare — ori în
+căutarea după denumire a listei de obiecte, ori în cea a catalogului de etichete — este un
+caracter obișnuit, nu un metacaracter: `M_1` găsește denumirile care conțin `M_1`, nu orice `M`
+urmat de un caracter oarecare și de un `1`.
+
 ### Căutarea în interiorul documentelor
 
 Partea distinctivă. Un rezultat de document **citează propoziția care s-a potrivit** și deschide
@@ -139,7 +144,10 @@ filtru despre intrări păstrează acele intrări. Nu face decât să scoată di
 - **Scrie-ți propriul filtru: Condiții…** Butonul din rândul de filtre al hărții deschide același
   editor de condiții ca registrul peșterilor și lista de obiecte, pe lumea obiectelor: orice câmp
   al unei peșteri sau al unui obiect, inclusiv tipul și — lângă o condiție de tip — proprietățile
-  proprii ale acelui tip. Câmpul spațial *Poziție* nu este oferit deocamdată pe hartă.
+  proprii ale acelui tip, precum și [Poziție](#condiții-de-poziție) cu trei locuri pe care doar
+  harta le poate da: **vederea hărții** (ce arată harta în clipa în care o alegi; **Ia din nou
+  vederea** după ce ai mutat harta), **un contur desenat pe hartă** (**Desenează pe hartă…**) și,
+  ca loc de la care se măsoară o distanță, **obiectul selectat** — orice este selectat pe hartă.
   **Aplică** filtrează harta cu ce ai scris; redeschis, editorul arată condițiile în vigoare.
   Când harta este desenată printr-un filtru salvat, editorul se deschide pe o copie a condițiilor
   lui, iar aplicarea transformă filtrul hărții în condițiile editate, fără să schimbe filtrul
@@ -159,7 +167,7 @@ filtru despre intrări păstrează acele intrări. Nu face decât să scoată di
   pentru că în spatele unui link nu este nimeni ca care să ruleze filtrul; dialogul de partajare
   spune asta.
 - **Un loc nu intră în vederile salvate.** Un filtru care conține un loc anume — un punct
-  introdus, un contur lipit sau locul de la care se măsoară *Cel mai apropiat* — funcționează în
+  introdus, o vedere a hărții, un contur desenat sau lipit ori locul de la care se măsoară *Cel mai apropiat* — funcționează în
   adresa hărții, dar nu se salvează niciodată într-o vedere, pentru că o vedere este arătată
   tuturor celor cu care este partajată. Salvarea uneia spune asta; măsoară în schimb de la un
   obiect sau de la o zonă numită, ori aplică un filtru salvat.
@@ -342,6 +350,11 @@ Acolo unde se filtrează peșteri și obiecte, editorul oferă **Poziție**, cu 
 | **în raza** | **Distanța în metri** (de la 1 la 200.000), apoi locul de la care se măsoară — **Măsurat de la**: **un obiect** ales cu [selectorul](#selectorul), **un punct** scris ca **Longitudine** și **Latitudine**, sau **rezultatele unui filtru salvat** |
 | **în interiorul** | Un **Contur**: **o zonă numită** aleasă cu selectorul, sau **un poligon lipit** — un Polygon GeoJSON sau un Feature care conține unul, de cel mult 2.000 de poziții |
 
+În editorul de condiții al hărții, **Măsurat de la** oferă în plus **obiectul selectat** (obiectul
+selectat pe hartă — *„Selectează mai întâi un obiect pe hartă."* când nu există unul), iar
+**Contur** oferă în plus **vederea hărții** și **un contur desenat pe hartă**. Ele primesc răspuns
+exact ca un obiect ales cu selectorul și ca un poligon lipit.
+
 **O condiție de poziție primește răspuns după pozițiile care îți sunt arătate.** O înregistrare
 pe care o poți vedea exact este măsurată acolo unde este; un punct protejat pe care nu îl
 poți vedea exact este măsurat în poziția rotunjită pe care ți-o arată harta; o linie sau un
@@ -357,8 +370,8 @@ nu îți spune niciodată despre locul unui lucru mai mult decât harta.
 - Un poligon lipit care nu este un singur poligon valid este explicat sub casetă înainte să se
   trimită ceva.
 
-**Un punct introdus, un poligon lipit sau locul de la care se ordonează „cel mai apropiat” nu se
-salvează niciodată** — nici într-un filtru salvat, nici într-o vedere salvată. *„Folosește în
+**Un punct introdus, o vedere a hărții, un contur desenat sau lipit ori locul de la care se
+ordonează „cel mai apropiat” nu se salvează niciodată** — nici într-un filtru salvat, nici într-o vedere salvată. *„Folosește în
 schimb un obiect sau o zonă numită."* O condiție măsurată de la un obiect sau în interiorul unei
 zone numite se poate salva.
 
@@ -457,6 +470,11 @@ așeza pentru tine — neplasat niciodată sau unul a cărui poziție nu ai voie
 întreabă nimic despre obiecte, sau pe care nu îl poți rula, nu este aplicat: *„Filtrul salvat
 nu se referă la obiecte sau nu poate fi rulat cu accesul tău, așa că nu a fost aplicat
 hărții."* Rândul unui filtru salvat îi arată descrierea sub nume.
+
+Cât timp un obiect este selectat pe hartă și selectorul este restrâns la feluri care au toate o
+poziție, își poate ordona rândurile și după **Cel mai apropiat**, măsurat de la acel obiect
+selectat — cu răspuns dat, ca la orice întrebare despre poziție, după pozițiile care îți sunt
+arătate.
 
 ---
 

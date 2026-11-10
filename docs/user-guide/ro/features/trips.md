@@ -508,6 +508,13 @@ pentru tine, corectează celulele în tabel înainte de import.
 
 Un nume ambiguu este altceva: pe el îl lămurești pe ecran, alegând despre cine este vorba.
 
+Un al treilea fel trece ușor neobservat: nume care nu se potrivesc cu nimeni, dar **ar putea**
+deveni o persoană, cât timp **Creează speologii pe care lista nu îi are** este oprit. Nu se creează
+nimic, deci și acești oameni lipsesc de pe turele lor. Rezumatul îi numără la **Persoane lăsate pe
+dinafară** — afișat chiar și când este zero —, iar o notă deasupra butonului enumeră numele (primele
+douăzeci, apoi câte mai sunt) și spune că pornirea opțiunii îi adaugă. Ca și la celelalte, numele
+lor rămân în textul turei.
+
 ### După
 
 Confirmarea depune totul ca un singur lot. Turele importate sunt **tăcute** — nu se anunță nimeni,

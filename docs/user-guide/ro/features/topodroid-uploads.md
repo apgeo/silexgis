@@ -233,6 +233,10 @@ Cine îl deschide vede:
 - **jurnalul compilatorului**: ultimele lui rânduri pe pagină și tot jurnalul de descărcat — după o
   compilare eșuată, unde spune ce nu a mers, ca și după una reușită.
 
+**Pagina se deschide în limba celui care a trimis topografia** — limba interfeței contului său —
+dacă vizitatorul nu și-a ales deja o limbă în acel browser. Comutatorul de limbă de pe pagină
+funcționează ca peste tot în rest.
+
 ### Ce nu arată niciodată linkul public
 
 - **Arhiva TopoDroid sau fișierele sursă Therion.**

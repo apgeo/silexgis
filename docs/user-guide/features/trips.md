@@ -498,6 +498,12 @@ importing.
 
 An ambiguous name is different: you settle it on the screen by picking which person is meant.
 
+A third kind is easy to miss: names that match nobody but **could** become a person, while
+**Create cavers the roster lacks** is off. Nothing is created, so those people are left off their
+trips too. The summary counts them as **People left off their trips** — shown even at zero — and
+a notice above the button lists the names (the first twenty, then how many more) and says that
+turning the switch on adds them. As with the others, their names stay in the trip's own text.
+
 ### After
 
 Confirming files the whole thing as one batch. Imported trips are **silent** — nobody is

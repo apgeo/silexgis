@@ -29,10 +29,11 @@ detail those walkthroughs link into.
 | [Caves and entrances](caves-and-entrances.md) | The cave record in full, its sections, its entrances |
 | [Surface features](surface-features.md) | Everything else on the map: types, categories, properties, hierarchy |
 | [Surveys, centerlines and 3D models](surveys-and-models.md) | Therion, Survex, walls, centerlines, survey sources |
+| [Point clouds (LiDAR scans)](point-clouds.md) | Laser scans of a cave: uploading a cloud or a raw MANDEYE recording, processing profiles, viewing, placing on the map |
 | [Measurements and statistics](measurements-and-statistics.md) | What the application computes, and what it refuses to compute |
 | [Geodata files](geodata.md) | Vector import and export, the imports register |
 | [The national cave catalogue](cave-catalogue.md) | Searching speologie.org and importing caves from it |
-| [Georeferenced raster maps](georeferenced-maps.md) | Geological and topographic sheets as map overlays |
+| [Georeferenced raster maps](georeferenced-maps.md) | Geological and topographic sheets as map overlays: GeoTIFFs, PDFs and scans, and placing a sheet by its corners or by control points |
 
 ## The library
 

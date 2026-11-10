@@ -32,7 +32,8 @@ Feluri de a ajunge la tine: **În aplicație · E-mail · SMS.**
 | Schimbări în grupurile de speologie | |
 | Cineva îmi dă acces la ceva | O acordare de permisiune |
 | Sunt adăugat la o tură | |
-| Planificarea turelor | Invitat la o tură, o tură la care participi se schimbă, o tură are nevoie de acces pe care îl poți acorda, sau o tură ori un eveniment de club la care ai răspuns se apropie |
+| Planificarea turelor | Invitat la o tură sau la un eveniment de club, o tură la care participi se schimbă, o tură are nevoie de acces pe care îl poți acorda, sau o tură ori un eveniment de club la care ai răspuns se apropie |
+| O expediție pe lista căreia mă aflu este modificată sau anulată | Și când ești trecut pe lista unei expediții |
 | Cineva răspunde la un comentariu scris de mine | |
 | Cineva comentează la ceva ce îmi aparține | |
 | Cineva scrie unui grup din care fac parte | Un anunț |
@@ -75,6 +76,10 @@ deschizi sau tot deodată.
 - Un rând despre ceva pe care **nu îl mai poți deschide** spune exact asta, în locul unui nume
   și al unui link. Ești în continuare anunțat că s-a întâmplat — ascunderea ar fi propriul ei
   fel de scurgere — dar nimic despre lucrul în sine nu supraviețuiește pierderii accesului.
+- Un rând despre o **tură** — ai fost adăugat, invitat, s-a schimbat sau a fost anulată — decide
+  dacă ai voie să deschizi tura **în clipa în care deschizi rândul**, nu doar când a fost scris; un
+  rând despre un **import de geodate** sau o **conversie de hartă** încheiate numește fișierul sau
+  harta despre care este vorba.
 - Un rând care spune că **cineva invitat pe o tură nu poate deschide o peșteră** duce la
   **Permisiunile** acelei peșteri, deschise despre acea persoană — vezi
   [O invitație nu acordă nimic](trips.md#o-invitație-nu-acordă-nimic).
@@ -97,6 +102,12 @@ deschizi sau tot deodată.
 - O **ciornă** nu anunță pe nimeni, fiindcă a-ți spune că o ciornă s-a schimbat ar însemna a-ți
   spune că există.
 - O scriere care **nu a schimbat nimic** nu trimite nimic.
+
+**Anunțurile despre expediții** urmează aceleași reguli ca cele despre ture: o tabără modificată
+sau anulată le spune celor de pe lista ei, niciodată persoanei care a făcut schimbarea, niciodată
+cât timp este ciornă, și doar celor care au voie s-o citească. Când ești trecut pe o listă, ești
+anunțat. **Invitarea cuiva la un eveniment de club** pentru prima dată îi spune doar acelei
+persoane.
 
 ---
 
