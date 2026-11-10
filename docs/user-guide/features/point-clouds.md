@@ -173,6 +173,26 @@ There are four ways, from the least to the most work:
    threshold (half a metre unless it says otherwise) is flagged: usually it was paired with the
    wrong station. *Placed by control points · RMS …*.
 
+## Walls from a scan
+
+A placed scan can be turned into **walls** for the cave: on the scan's status page, **Make a
+surface…** (under *Surface of the walls*, for somebody who may change the cave) asks the server to
+rebuild the walls from the points as a mesh. In the dialog choose:
+
+- a **profile** of the surface step — *Surface defaults*, *Quick surface* (rougher, to see whether
+  a scan is worth a full one) or one of your own. Its values are the voxel size the cloud is
+  reduced to, the radius over which the way each wall faces is worked out, the depth of the
+  reconstruction, the share of least-supported faces trimmed away and the number of triangles the
+  mesh is reduced to. The shipped values are first values, not yet tuned on cave scans.
+- the **cave** the walls are saved for: this scan's cave, or **another cave** you may change and
+  see the exact location of.
+
+The status page follows the run. When it ends, the surface is added to that cave's
+[models](surveys-and-models.md) as an `.stl` wall mesh, standing where the scan stands, and the
+page links to the cave. It becomes the walls the 3D scene draws only when the cave has none yet;
+otherwise **Make current** on the cave's list switches to it. The mesh is a copy: placing the scan
+again later moves the scan, not walls already made from it.
+
 ## Who sees what
 
 A scan is a picture of a cave's inside, and the scanner's frame is its own: **the tiles are drawn in
@@ -204,7 +224,6 @@ are warned as the store fills; see [Storage](../admin/storage.md).
 - Processing a recording **on another computer** (for instance in HDMapping's own desktop
   programme) and bringing the result back.
 - A **centreline** and **plan and profile pictures** drawn from the trajectory.
-- **Walls** made from a scan, for the 3D scene's walls layer.
 - Joining several recordings into one scan.
 
 ---

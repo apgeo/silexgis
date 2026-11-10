@@ -187,6 +187,27 @@ Există patru feluri, de la cel mai puțin la cel mai mult de lucru:
    instalării (jumătate de metru, dacă nu spune altfel) este semnalată: de obicei a fost
    împerecheată cu stația greșită. *Plasat după puncte de control · RMS …*.
 
+## Pereți dintr-o scanare
+
+O scanare plasată poate fi transformată în **pereți** pentru peșteră: pe pagina de stare a
+scanării, **Fă o suprafață…** (sub *Suprafața pereților*, pentru cine poate modifica peștera) îi
+cere serverului să refacă din puncte pereții ca o rețea de triunghiuri. În dialog alegi:
+
+- un **profil** al pasului de suprafață — *Surface defaults*, *Quick surface* (mai grosier, ca să
+  vezi dacă o scanare merită una completă) sau unul de-al tău. Valorile lui sunt mărimea voxelului
+  la care se reduce norul, raza pe care se stabilește încotro e îndreptat fiecare perete, adâncimea
+  reconstrucției, partea de fețe cel mai puțin susținute care se taie și numărul de triunghiuri la
+  care se reduce rețeaua. Valorile livrate sunt primele valori, încă nereglate pe scanări de
+  peșteri.
+- **peștera** pentru care se salvează pereții: peștera acestei scanări sau **altă peșteră** pe care
+  o poți modifica și a cărei locație exactă o poți vedea.
+
+Pagina de stare urmărește rularea. La final, suprafața se adaugă la
+[modelele](surveys-and-models.md) acelei peșteri ca model de pereți `.stl`, așezat acolo unde e
+plasată scanarea, iar pagina dă legătura către peșteră. Devine pereții desenați de scena 3D doar
+dacă peștera nu are încă niciunul; altfel **Setează ca model curent** din lista peșterii trece la
+ea. Rețeaua e o copie: o nouă plasare a scanării mută scanarea, nu pereții deja făcuți din ea.
+
 ## Cine ce vede
 
 O scanare este o imagine a interiorului unei peșteri, iar sistemul de referință al scanerului este
@@ -219,7 +240,6 @@ Administratorii sunt avertizați pe măsură ce depozitul se umple; vezi
 - Procesarea unei înregistrări **pe alt calculator** (de exemplu în programul desktop propriu
   HDMapping) și aducerea înapoi a rezultatului.
 - O **drumuire** și **imagini de plan și profil** desenate din traiectorie.
-- **Pereți** făcuți dintr-o scanare, pentru stratul de pereți al scenei 3D.
 - Unirea mai multor înregistrări într-o singură scanare.
 
 ---
