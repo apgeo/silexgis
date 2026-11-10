@@ -255,6 +255,26 @@ UTM grid. Give the **EPSG code**.
 Also note: the heights in these files are measured from the export's own origin, not from sea
 level.
 
+### When the placement is wrong
+
+If you choose the wrong option, SilexGIS notices when it reads the file, as long as the cave
+has a position on record. It catches two mistakes:
+
+- **A projected file uploaded as metres from a point.** The reading fails and says the numbers
+  are far too large to be metres from a point.
+- **The wrong EPSG code**, for example the neighbouring UTM zone. The survey is read, but the
+  model's row says how many kilometres from the cave it landed.
+
+In both cases SilexGIS also tries the UTM zone the cave is in, the two zones beside it, and the
+common European national grids, Stereo70 among them. If one of them places the survey at the
+cave, the row names it, for example *Read as EPSG:32634, it lands 0.5 km from the cave*, and
+offers a button to use it. If the numbers are small enough to be metres from a point, the button
+offers that instead. Either button opens the placement form already filled in. Check the
+altitude, then confirm, and the stored file is read again. You don't need to upload it again.
+
+**Change placement** (the pin icon on any model's row) opens the same form, so you can change a
+model's declaration even when nothing was found wrong with it.
+
 Once converted, the walls are drawn in the [3D scene](3d-view.md#walls-of-the-selected-cave)
 for the selected cave only. The model list shows the converted mesh's size in megabytes beside
 its triangle count, and the scene names the size while it fetches — and, above a set size,
@@ -269,7 +289,11 @@ You do not have to export an `.stl` to see walls. When a line plot is read, wall
 that same model out of what the file itself holds, and out of nothing else:
 
 - **A `.lox` with scraps** — the wall surfaces Therion modelled from your drawings — is drawn with
-  exactly those surfaces.
+  exactly those surfaces. Therion writes surfaces only for the passages you drew. A passage that
+  was surveyed but never drawn, and whose dimensions were measured, gets a tube as described in
+  the next point. Its walls then sit beside the drawn ones instead of being left out of the model.
+  A leg counts as drawn when a drawn wall passes within its widest measured dimension, plus 3 m,
+  of the leg's middle.
 - **A `.lox` without scraps, or a `.3d`**, gets a tube along every leg whose **passage dimensions**
   (left, right, up, down) were measured at both of its ends. Each measured station becomes a ring
   through its four measured points — left and right laid level across the passage, up and down
