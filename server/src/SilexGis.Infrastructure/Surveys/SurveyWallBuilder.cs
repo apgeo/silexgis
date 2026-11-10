@@ -15,6 +15,12 @@ public enum SurveyWallSource
 
     /// <summary>Tubes around the legs whose passage dimensions were measured.</summary>
     PassageDimensions = 2,
+
+    /// <summary>
+    /// The compiler's wall surfaces, and tubes around the measured legs those surfaces do not
+    /// reach.
+    /// </summary>
+    ScrapsAndPassageDimensions = 3,
 }
 
 /// <summary>
@@ -113,13 +119,130 @@ public static class SurveyWallBuilder
         var passageLegs = model.Shots.Count(shot => (shot.Flags & NotPassage) == 0);
 
         var scraps = FromScraps(model, placement, passageLegs);
-        if (scraps is not null)
+        if (scraps is { Mesh: { } drawn })
+        {
+            return WithUndrawnPassages(scraps, drawn, model, placement, passageLegs);
+        }
+
+        return scraps ?? FromPassageDimensions(model, placement, passageLegs);
+    }
+
+    /// <summary>
+    /// How much farther than the widest measured wall of a leg the drawn walls may stand from the
+    /// middle of it and still be taken for that leg's passage. Drawn walls follow the map, not the
+    /// four distances, and a map drawn over a survey is routinely a metre or two off its readings.
+    /// </summary>
+    private const double DrawnWallSlackM = 3;
+
+    /// <summary>
+    /// The file's own wall surfaces, with tubes added around the measured legs they leave out.
+    ///
+    /// <para>
+    /// A compiler writes wall surfaces only for the passages somebody drew, and a survey is rarely
+    /// drawn whole: the passages surveyed and never mapped have no surface, and taking the surfaces
+    /// alone leaves them out of the model altogether — large stretches of a cave missing from its
+    /// own 3D model, with nothing on screen saying why. Where such a leg had its walls measured, the
+    /// tube those measurements give is the passage as far as the survey knows it, exactly as it is
+    /// for a file with no surfaces at all; where it did not, it stays a line.
+    /// </para>
+    ///
+    /// <para>
+    /// A leg counts as drawn when a drawn wall passes within its own widest measurement, plus
+    /// <see cref="DrawnWallSlackM"/>, of its middle. A tube is never laid inside a drawn passage
+    /// beside the drawing of it, which would show one passage twice.
+    /// </para>
+    /// </summary>
+    private static SurveyWalls WithUndrawnPassages(
+        SurveyWalls scraps, IndexedMesh drawn, CaveModel model, SurveyPlacement placement, int passageLegs)
+    {
+        var measured = new List<PassageSection[]>();
+        AddMeasuredLegs(model, placement, measured);
+        AddMeasuredPassages(model, placement, measured);
+        if (measured.Count == 0)
         {
             return scraps;
         }
 
-        return FromPassageDimensions(model, placement, passageLegs);
+        var coverage = new WallCoverage(drawn);
+        var runs = new List<PassageSection[]>();
+        foreach (var run in measured)
+        {
+            var undrawn = new List<PassageSection>();
+            for (var i = 0; i + 1 < run.Length; i++)
+            {
+                if (Drawn(run[i], run[i + 1], coverage))
+                {
+                    Close(undrawn, runs);
+                    continue;
+                }
+
+                if (undrawn.Count == 0)
+                {
+                    undrawn.Add(run[i]);
+                }
+
+                undrawn.Add(run[i + 1]);
+            }
+
+            Close(undrawn, runs);
+        }
+
+        if (runs.Count == 0)
+        {
+            return scraps;
+        }
+
+        // The drawn surfaces are kept whole whatever happens to the tubes: coarser tubes first,
+        // then none, rather than a drawing with holes in it.
+        var sides = PassageTubes.FullSides;
+        if (drawn.TriangleCount + TrianglesAt(runs, sides) > MaxTriangles)
+        {
+            sides = PassageTubes.FewerSides;
+            if (drawn.TriangleCount + TrianglesAt(runs, sides) > MaxTriangles)
+            {
+                return scraps;
+            }
+        }
+
+        var mesh = new WallMeshAssembler();
+        var vertices = new int[drawn.VertexCount];
+        for (var v = 0; v < vertices.Length; v++)
+        {
+            vertices[v] = mesh.Vertex(new LocalPoint(
+                drawn.Positions[v * 3], drawn.Positions[(v * 3) + 1], drawn.Positions[(v * 3) + 2]));
+        }
+
+        for (var t = 0; t < drawn.Indices.Length; t += 3)
+        {
+            mesh.Triangle(vertices[drawn.Indices[t]], vertices[drawn.Indices[t + 1]], vertices[drawn.Indices[t + 2]]);
+        }
+
+        var walledLegs = 0;
+        foreach (var run in runs)
+        {
+            PassageTubes.Append(mesh, run, sides);
+            walledLegs += run.Length - 1;
+        }
+
+        return mesh.ToMesh() is { } built
+            ? new SurveyWalls(built, SurveyWallSource.ScrapsAndPassageDimensions, sides, walledLegs, passageLegs, null)
+            : scraps;
     }
+
+    /// <summary>Whether a drawn wall passes close enough to the stretch between two sections.</summary>
+    private static bool Drawn(PassageSection from, PassageSection to, WallCoverage coverage)
+    {
+        var middle = new LocalPoint(
+            (from.Station.East + to.Station.East) / 2,
+            (from.Station.North + to.Station.North) / 2,
+            (from.Station.Up + to.Station.Up) / 2);
+        return coverage.Within(middle, Math.Max(Widest(from.Walls), Widest(to.Walls)) + DrawnWallSlackM);
+    }
+
+    private static double Widest(WallDistances walls) =>
+        Math.Max(
+            Math.Max(walls.Left ?? 0, walls.Right ?? 0),
+            Math.Max(walls.Up ?? 0, walls.Down ?? 0));
 
     /// <summary>
     /// The compiler's own wall surfaces, joined into one mesh; null when the file has none that
