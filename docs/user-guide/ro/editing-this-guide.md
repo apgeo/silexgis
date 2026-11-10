@@ -129,8 +129,7 @@ Cere ce vrei în cuvinte obișnuite. Câteva formulări care funcționează bine
 1. `client/src/i18n/locales/en.json` și `ro.json` — ce spune efectiv interfața
 2. `client/src/App.tsx` și `client/src/components/navItems.tsx` — ce pagini există și cum sunt
    grupate
-3. `README.md` din depozit — narațiunea funcțiilor, în vocea aplicației
-4. `.claude/docs/` — specificația, pentru intenție și pentru ce nu explicitează interfața
+3. `README.md` din depozit și `docs/FEATURES.md` — narațiunea funcțiilor, în vocea aplicației
 
 ---
 

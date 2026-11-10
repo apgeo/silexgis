@@ -80,8 +80,8 @@ that is already stored.
   station named another way, a figure newly recorded, walls newly built from a plot,
 - survey models uploaded before such an upgrade behave differently from ones uploaded after it.
 
-**Start it with** `POST /api/v1/jobs/survey-reading-backfill`, as an account holding the
-job-execution right.
+**Started** like the other sweeps, by an account holding the job-execution right; the installation
+guide gives the request to send.
 
 It replaces what each earlier reading produced; nothing is uploaded and no model changes its
 identity, so trips tracked on a model stay on it. A model does not record which version read it,
