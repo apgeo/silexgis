@@ -113,7 +113,7 @@ TILE_POINTS_PER_SECOND = 600_000.0
 TILE_FIXED_SECONDS = 17.0
 CHUNK_POINTS = 2_000_000
 
-STEPS = ("pointcloud.estimate", "pointcloud.downsample", "py3dtiles.tile")
+STEPS = ("pointcloud.estimate", "pointcloud.downsample", "py3dtiles.tile", "pointcloud.raster")
 LOG_TAIL_LINES = 30
 
 # Which worker this is. Two may share one hand-off directory: the tiler (every installation that
@@ -228,6 +228,7 @@ def capabilities() -> dict:
         if "laspy" in versions and "numpy" in versions:
             steps.append({"id": "pointcloud.estimate", "tool": "laspy", "version": versions["laspy"]})
             steps.append({"id": "pointcloud.downsample", "tool": "laspy", "version": versions["laspy"]})
+            steps.append({"id": "pointcloud.raster", "tool": "numpy", "version": versions["numpy"]})
         if "py3dtiles" in versions:
             steps.append({"id": "py3dtiles.tile", "tool": "py3dtiles", "version": versions["py3dtiles"]})
     elif ROLE == "hdmapping" and PUBLISHED_DEFAULTS is not None:
@@ -1473,6 +1474,259 @@ def step_check(job: "Job") -> None:
         raise CheckFailed("the cloud failed its check: " + "; ".join(problems))
 
 
+# -- plan and profile images ---------------------------------------------------------------------
+
+# The most an image of the plan or the profile may hold. A long cave at the asked pixel size would
+# need more; the pixel is then made larger, and the result says so, rather than a picture written
+# that no browser would open.
+RASTER_MAX_SIDE = 16384
+RASTER_MAX_PIXELS = 32_000_000
+# A colour scale from dark violet through blue and green to yellow, readable by people who do not
+# tell red from green, and printable in grey.
+RASTER_RAMP = ((68, 1, 84), (59, 82, 139), (33, 145, 140), (94, 201, 98), (253, 231, 37))
+
+
+def png_bytes(rgba) -> bytes:
+    """An 8-bit RGBA picture as a PNG, written with the standard library: rows unfiltered, zlib."""
+    import struct
+    import zlib
+    import numpy as np
+
+    height, width = int(rgba.shape[0]), int(rgba.shape[1])
+    rows = np.zeros((height, width * 4 + 1), dtype=np.uint8)
+    rows[:, 1:] = rgba.reshape(height, width * 4)
+
+    def chunk(kind: bytes, body: bytes) -> bytes:
+        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header)
+            + chunk(b"IDAT", zlib.compress(rows.tobytes(), 6)) + chunk(b"IEND", b""))
+
+
+def raster_pixel(width_m: float, height_m: float, pixel_m: float) -> float:
+    """The asked pixel size, or the smallest larger one that keeps the picture inside the limits."""
+    width_m, height_m = max(width_m, pixel_m), max(height_m, pixel_m)
+    return max(pixel_m, width_m / RASTER_MAX_SIDE, height_m / RASTER_MAX_SIDE,
+               math.sqrt(width_m * height_m / RASTER_MAX_PIXELS)) * 1.000001
+
+
+def coloured(values, low: float, high: float):
+    """Cell values to colours on the ramp; a cell no point fell in (NaN) is left transparent."""
+    import numpy as np
+
+    filled = np.isfinite(values)
+    span = high - low if high > low else 1.0
+    t = np.clip((np.where(filled, values, low) - low) / span, 0.0, 1.0) * (len(RASTER_RAMP) - 1)
+    lower = np.minimum(t.astype(np.int32), len(RASTER_RAMP) - 2)
+    frac = (t - lower)[..., None]
+    ramp = np.asarray(RASTER_RAMP, dtype=np.float32)
+    rgb = ramp[lower] * (1.0 - frac) + ramp[lower + 1] * frac
+    rgba = np.zeros(values.shape + (4,), dtype=np.uint8)
+    rgba[..., :3] = np.round(rgb).astype(np.uint8)
+    rgba[..., 3] = np.where(filled, 255, 0)
+    return rgba
+
+
+def read_centreline(path: Path):
+    """The vertices of the centreline the application drew, as an (n, 3) array, or None when the
+    file is not a LineString of at least two finite vertices."""
+    import numpy as np
+
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        coordinates = value["geometry"]["coordinates"]
+        line = np.asarray([[float(c) for c in vertex[:3]] for vertex in coordinates], dtype=np.float64)
+    except (OSError, ValueError, KeyError, TypeError, IndexError):
+        return None
+    if line.ndim != 2 or line.shape[0] < 2 or line.shape[1] != 3 or not np.all(np.isfinite(line)):
+        return None
+    return line
+
+
+def centreline_samples(line, spacing: float):
+    """The line walked at a fixed spacing: each sample's position, the distance walked to it, and
+    the direction of travel there."""
+    import numpy as np
+
+    steps = np.diff(line[:, :2], axis=0)
+    lengths = np.hypot(steps[:, 0], steps[:, 1])
+    keep = lengths > 1e-9
+    starts, steps, lengths = line[:-1][keep], steps[keep], lengths[keep]
+    if len(lengths) == 0:
+        return None
+    walked = np.concatenate(([0.0], np.cumsum(lengths)))
+    total = float(walked[-1])
+    at = np.arange(0.0, total + spacing / 2, spacing)
+    segment = np.clip(np.searchsorted(walked, at, side="right") - 1, 0, len(lengths) - 1)
+    along = (at - walked[segment])[:, None]
+    direction = steps[segment] / lengths[segment][:, None]
+    xy = starts[segment, :2] + direction * along
+    return xy, at, direction, total
+
+
+def nearest_samples(cells_xy, samples_xy, job: Job):
+    """For each cell centre, the index of the nearest sample, by brute force in blocks."""
+    import numpy as np
+
+    nearest = np.empty(len(cells_xy), dtype=np.int32)
+    block = max(1, 4_000_000 // max(1, len(samples_xy)))
+    for start in range(0, len(cells_xy), block):
+        job.check()
+        part = cells_xy[start:start + block]
+        dx = part[:, None, 0] - samples_xy[None, :, 0]
+        dy = part[:, None, 1] - samples_xy[None, :, 1]
+        nearest[start:start + block] = np.argmin(dx * dx + dy * dy, axis=1)
+    return nearest
+
+
+def step_raster(job: Job) -> None:
+    """A top view of the cloud and an extended profile along the centreline, as PNG pictures at a
+    set pixel size, coloured by height or by the points' intensity. The top view keeps, per cell,
+    the lowest point (the floor); the profile unrolls the passage along the centreline, so the
+    horizontal axis is the distance walked along it and the vertical one the height. Heights are
+    given as metres above the cloud's lowest point, and nothing in the pictures or in the result is
+    a coordinate. Without a centreline only the top view is drawn."""
+    import laspy
+    import numpy as np
+
+    job.tool, job.tool_version = "numpy", tool_versions().get("numpy", "")
+    source = job.input("pointCloudLaz")
+    inputs = job.request.get("inputs") or {}
+    asked_pixel_m = float(job.parameter("pixelCm", 5)) / 100.0
+    colour_by = str(job.parameter("colourBy", "height"))
+    if not (0.005 <= asked_pixel_m <= 1.0):
+        raise Refused("pixelCm must be between 0.5 and 100")
+    if colour_by not in ("height", "intensity"):
+        raise Refused("colourBy must be height or intensity")
+    line = None
+    if "centreline" in inputs:
+        line = read_centreline(job.input("centreline"))
+        if line is None:
+            job.log("the centreline does not read as a line of two vertices or more; no profile is drawn")
+
+    with laspy.open(source) as reader:
+        header = reader.header
+        declared = max(1, int(header.point_count))
+        mins = np.asarray(header.mins, dtype=np.float64)
+        maxs = np.asarray(header.maxs, dtype=np.float64)
+        has_intensity = "intensity" in set(header.point_format.dimension_names)
+    if colour_by == "intensity" and not has_intensity:
+        job.log("the cloud has no intensity; the pictures are coloured by height")
+        colour_by = "height"
+    width_m, height_m = float(maxs[0] - mins[0]), float(maxs[1] - mins[1])
+    pixel_m = raster_pixel(width_m, height_m, asked_pixel_m)
+    plan_w = max(1, int(math.ceil(max(width_m, pixel_m) / pixel_m)))
+    plan_h = max(1, int(math.ceil(max(height_m, pixel_m) / pixel_m)))
+
+    # Cells of a coarse grid that hold points, for finding which part of the centreline a point
+    # stands beside: a point takes the place along the line of the sample nearest its cell.
+    coarse_m = 1.0
+    plan_value = np.full(plan_w * plan_h, np.inf if colour_by == "height" else 0.0, dtype=np.float64)
+    plan_count = np.zeros(plan_w * plan_h, dtype=np.int64)
+    coarse_w = max(1, int(math.ceil(max(width_m, coarse_m) / coarse_m)))
+    coarse_h = max(1, int(math.ceil(max(height_m, coarse_m) / coarse_m)))
+    occupied = np.zeros(coarse_w * coarse_h, dtype=bool) if line is not None else None
+    passes = 2 if line is not None else 1
+    counted = 0
+    with laspy.open(source) as reader:
+        for chunk in reader.chunk_iterator(CHUNK_POINTS):
+            job.check()
+            x, y, z = np.asarray(chunk.x), np.asarray(chunk.y), np.asarray(chunk.z)
+            good = np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
+            x, y, z = x[good], y[good], z[good]
+            col = np.clip(((x - mins[0]) / pixel_m).astype(np.int64), 0, plan_w - 1)
+            row = np.clip(((maxs[1] - y) / pixel_m).astype(np.int64), 0, plan_h - 1)
+            cell = row * plan_w + col
+            if colour_by == "height":
+                np.minimum.at(plan_value, cell, z - mins[2])
+            else:
+                np.add.at(plan_value, cell, np.asarray(chunk.intensity)[good].astype(np.float64))
+            np.add.at(plan_count, cell, 1)
+            if occupied is not None:
+                cc = np.clip(((x - mins[0]) / coarse_m).astype(np.int64), 0, coarse_w - 1)
+                cr = np.clip(((y - mins[1]) / coarse_m).astype(np.int64), 0, coarse_h - 1)
+                occupied[cr * coarse_w + cc] = True
+            counted += len(chunk)
+            job.progress(0.9 * counted / declared / passes, f"top view: {counted:,} of {declared:,} points")
+
+    filled = plan_count > 0
+    if colour_by == "height":
+        plan = np.where(filled, plan_value, np.nan)
+    else:
+        plan = np.where(filled, plan_value / np.maximum(plan_count, 1), np.nan)
+    plan = plan.reshape(plan_h, plan_w)
+    if not filled.any():
+        raise CheckFailed("the cloud holds no point with finite coordinates")
+    low, high = (float(v) for v in np.percentile(plan[np.isfinite(plan)], (2, 98)))
+    if colour_by == "height":
+        # One height scale for both pictures: the whole cloud's, floor to ceiling.
+        low, high = 0.0, max(float(maxs[2] - mins[2]), pixel_m)
+    plan_file = job.directory / "plan.png"
+    plan_file.write_bytes(png_bytes(coloured(plan, low, high)))
+    job.produced("planImage", plan_file)
+    data = {
+        "pixelM": round(pixel_m, 4),
+        "askedPixelM": round(asked_pixel_m, 4),
+        "colourBy": colour_by,
+        "valueLow": round(low, 3),
+        "valueHigh": round(high, 3),
+        "plan": {"width": plan_w, "height": plan_h},
+    }
+
+    samples = centreline_samples(line, max(0.25, pixel_m)) if line is not None else None
+    if samples is not None:
+        samples_xy, walked, direction, total = samples
+        if len(samples_xy) > 20_000:
+            samples_xy, walked, direction, total = centreline_samples(line, total / 20_000)
+        spacing = float(walked[1] - walked[0]) if len(walked) > 1 else max(0.25, pixel_m)
+        cells = np.flatnonzero(occupied)
+        centres = np.column_stack((mins[0] + (cells % coarse_w + 0.5) * coarse_m,
+                                   mins[1] + (cells // coarse_w + 0.5) * coarse_m))
+        nearest_of_cell = np.full(coarse_w * coarse_h, -1, dtype=np.int32)
+        nearest_of_cell[cells] = nearest_samples(centres, samples_xy, job)
+        profile_len = total + spacing
+        z_span = float(maxs[2] - mins[2])
+        profile_pixel = raster_pixel(profile_len, z_span, pixel_m)
+        prof_w = max(1, int(math.ceil(max(profile_len, profile_pixel) / profile_pixel)))
+        prof_h = max(1, int(math.ceil(max(z_span, profile_pixel) / profile_pixel)))
+        prof_value = np.zeros(prof_w * prof_h, dtype=np.float64)
+        prof_count = np.zeros(prof_w * prof_h, dtype=np.int64)
+        counted = 0
+        with laspy.open(source) as reader:
+            for chunk in reader.chunk_iterator(CHUNK_POINTS):
+                job.check()
+                x, y, z = np.asarray(chunk.x), np.asarray(chunk.y), np.asarray(chunk.z)
+                good = np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
+                x, y, z = x[good], y[good], z[good]
+                cc = np.clip(((x - mins[0]) / coarse_m).astype(np.int64), 0, coarse_w - 1)
+                cr = np.clip(((y - mins[1]) / coarse_m).astype(np.int64), 0, coarse_h - 1)
+                nearest = nearest_of_cell[cr * coarse_w + cc]
+                # The place along the line: the nearest sample's, moved along the direction of
+                # travel by as far as the point lies ahead of or behind it, within half a spacing.
+                ahead = ((x - samples_xy[nearest, 0]) * direction[nearest, 0]
+                         + (y - samples_xy[nearest, 1]) * direction[nearest, 1])
+                s = walked[nearest] + np.clip(ahead, -spacing / 2, spacing / 2) + spacing / 2
+                col = np.clip((s / profile_pixel).astype(np.int64), 0, prof_w - 1)
+                row = np.clip(((maxs[2] - z) / profile_pixel).astype(np.int64), 0, prof_h - 1)
+                cell = row * prof_w + col
+                if colour_by == "height":
+                    np.add.at(prof_value, cell, z - mins[2])
+                else:
+                    np.add.at(prof_value, cell, np.asarray(chunk.intensity)[good].astype(np.float64))
+                np.add.at(prof_count, cell, 1)
+                counted += len(chunk)
+                job.progress(0.45 + 0.45 * counted / declared, f"profile: {counted:,} of {declared:,} points")
+        profile = np.where(prof_count > 0, prof_value / np.maximum(prof_count, 1), np.nan).reshape(prof_h, prof_w)
+        profile_file = job.directory / "profile.png"
+        profile_file.write_bytes(png_bytes(coloured(profile, low, high)))
+        job.produced("profileImage", profile_file)
+        data["profile"] = {"width": prof_w, "height": prof_h, "pixelM": round(profile_pixel, 4),
+                           "lengthM": round(total, 2)}
+    job.progress(1.0, "pictures written")
+    job.data = data
+
+
 RUNNERS = {
     "pointcloud.estimate": step_estimate,
     "pointcloud.downsample": step_downsample,
@@ -1481,6 +1735,7 @@ RUNNERS = {
     "hdmapping.odometry": step_odometry,
     "hdmapping.export": step_export,
     "pointcloud.check": step_check,
+    "pointcloud.raster": step_raster,
 }
 
 
@@ -1759,6 +2014,38 @@ def self_test(root: Path) -> int:
         expect(tiled["data"]["pointCount"] == down["data"]["pointsOut"], "the display copy was tiled")
         expect(not (jobs / "tile" / "tiles").exists() and not (jobs / "tile" / "local.laz").exists(),
                "the tile job leaves only its products behind")
+
+    # The pictures: a top view of the tube and a profile unrolled along its axis, 8 m long.
+    class Text:
+        def __init__(self, text: str):
+            self.text = text
+
+        def write(self, path: Path) -> None:
+            path.write_text(self.text, encoding="utf-8")
+
+    axis = {"type": "Feature", "properties": {},
+            "geometry": {"type": "LineString", "coordinates": [[500_000.0, 4_700_000.0, 300.0], [500_008.0, 4_700_000.0, 300.0]]}}
+    for colour in ("height", "intensity"):
+        drawn = job(f"raster-{colour}", "pointcloud.raster", {"pixelCm": 10, "colourBy": colour},
+                    {"pointCloudLaz": "cloud.laz", "centreline": "centreline.geojson"},
+                    {"cloud.laz": jobs / "estimate" / "cloud.laz", "centreline.geojson": Text(json.dumps(axis))})
+        expect(drawn["status"] == "ok", f"pictures by {colour} drawn: {drawn['status']} {drawn['reason']}")
+        if drawn["status"] != "ok":
+            continue
+        data = drawn["data"]
+        expect(sorted(o["kind"] for o in drawn["outputs"]) == ["planImage", "profileImage"], "a top view and a profile")
+        for name, size in (("plan.png", data["plan"]), ("profile.png", data["profile"])):
+            head = (jobs / f"raster-{colour}" / name).read_bytes()[:24]
+            expect(head[:8] == b"\x89PNG\r\n\x1a\n" and struct.unpack(">II", head[16:24]) == (size["width"], size["height"]),
+                   f"{name} is a PNG of {size['width']}x{size['height']}")
+        expect(data["colourBy"] == colour, f"coloured by {colour}")
+        expect(abs(data["profile"]["lengthM"] - 8.0) < 0.01, f"the profile is the axis's length: {data['profile']['lengthM']}")
+        # 8 m by about 3 m at 10 cm; the profile runs a quarter-metre sample spacing past the line's end.
+        expect(data["plan"]["width"] in (80, 81) and 29 <= data["plan"]["height"] <= 33
+               and 80 <= data["profile"]["width"] <= 84 and 29 <= data["profile"]["height"] <= 33,
+               f"10 cm pixels: {data['plan']}, {data['profile']}")
+        largest = max(abs(v) for v in (data["valueLow"], data["valueHigh"], data["profile"]["lengthM"]))
+        expect(largest < 70_000, f"the pictures' figures carry no coordinate (largest {largest})")
 
     unknown = job("unknown", "nothing.at.all", {}, {}, {})
     expect(unknown["status"] == "refused", "an unknown step is refused")

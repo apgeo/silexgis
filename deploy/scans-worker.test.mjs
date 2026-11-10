@@ -96,6 +96,14 @@ describe('what the loop puts on the tiler command line', () => {
     assert.match(worker, /"originShift": centre/);
   });
 
+  it('draws the plan and profile pictures in the tiler, writing PNG with the standard library', () => {
+    assert.match(worker, /^STEPS = \([^)]*"pointcloud\.raster"[^)]*\)$/m);
+    assert.match(worker, /"pointcloud\.raster": step_raster,/);
+    // No imaging package: the image already has numpy, and a PNG is zlib and a few chunk headers.
+    assert.doesNotMatch(worker, /^\s*(import PIL|from PIL|import matplotlib|import imageio)/m);
+    assert.match(worker, /zlib\.compress\(rows\.tobytes\(\), 6\)/);
+  });
+
   it('gives the tiler a place for its compiled-function cache on the read-only filesystem', () => {
     assert.match(image, /NUMBA_CACHE_DIR=\/tmp\/numba-cache/);
     assert.match(overlay, /- \/tmp:size=256m/);
