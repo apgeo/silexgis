@@ -253,8 +253,10 @@ test('a recording whose odometry is run elsewhere offers its inputs for download
   );
   await page.reload();
 
+  // The panel needs the cave's permissions, which are asked for only once the upload has loaded
+  // after the reload's sign-in round trip; until they arrive the card shows the reader's wording.
   const panel = page.getByTestId('scan-external-wait');
-  await expect(panel).toContainText('LiDAR odometry');
+  await expect(panel).toContainText('LiDAR odometry', { timeout: 30_000 });
   await expect(page.getByTestId('survey-upload-status')).toHaveText('Waiting for a step done on another computer');
   // Read and inspected; the odometry and everything after it still to come.
   await expect(page.getByTestId('survey-upload-stage-inspect')).toBeVisible();
