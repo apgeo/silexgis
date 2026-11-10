@@ -54,6 +54,16 @@ describe('the worker image', () => {
     assert.match(image, /"numpy==2\.3\.5"/);
   });
 
+  it('adds Open3D for surfaces as its CPU-only build, pinned, without its viewers\' dependencies', () => {
+    // The default open3d wheel carries CUDA and is four times the size; no machine here has a GPU.
+    // Its declared dependencies (dash, flask, notebooks) serve viewers the worker never starts.
+    assert.match(image, /pip install --no-cache-dir --no-deps "open3d-cpu==0\.20\.0"/);
+    // Without these the module fails to load, though nothing draws.
+    assert.match(image, /python3-venv libgomp1 libegl1 libgl1 libx11-6 libusb-1\.0-0/);
+    const tiler = image.slice(image.indexOf('AS tiler'), image.indexOf('AS hdmapping'));
+    assert.ok(tiler.includes('open3d-cpu'), 'the surface is made by the tiler');
+  });
+
   it('has a tiler target that the overlay builds, and keeps HDMapping behind another', () => {
     assert.match(image, /^FROM ubuntu:24\.04 AS tiler$/m);
     assert.match(image, /^FROM tiler AS hdmapping$/m);
@@ -102,6 +112,20 @@ describe('what the loop puts on the tiler command line', () => {
     // No imaging package: the image already has numpy, and a PNG is zlib and a few chunk headers.
     assert.doesNotMatch(worker, /^\s*(import PIL|from PIL|import matplotlib|import imageio)/m);
     assert.match(worker, /zlib\.compress\(rows\.tobytes\(\), 6\)/);
+  });
+
+  it('makes surfaces in the tiler, announced only where Open3D is installed', () => {
+    assert.match(worker, /^STEPS = \([^)]*"mesh\.surface"[^)]*\)$/m);
+    assert.match(worker, /"mesh\.surface": step_surface,/);
+    assert.match(worker, /if "open3d" in versions and "laspy" in versions and "numpy" in versions:\n\s+steps\.append\(\{"id": SURFACE_STEP, "tool": "open3d"/);
+    // The surface is written about the tiles' shift, so it lines up with them and carries no
+    // coordinate; the binary STL is written with numpy, not by a mesh library's own writer.
+    assert.match(worker, /shift = params\["originShift"\]/);
+    assert.match(worker, /def write_binary_stl\(/);
+    // The package imports its plotly viewer, and with it dash and plotly, which are not installed:
+    // a stand-in for that one module is put in place before the import.
+    assert.match(worker, /sys\.modules\[name\] = stand_in/);
+    assert.match(worker, /job\.produced\("meshStl", out\)/);
   });
 
   it('gives the tiler a place for its compiled-function cache on the read-only filesystem', () => {
@@ -199,6 +223,33 @@ describe('the loop, run against a hand-off directory with the system Python', ()
       assert.equal(result(root, 'withdrawn').status, 'cancelled');
       assert.equal(result(root, 'abandoned').status, 'interrupted');
       assert.ok(!existsSync(join(root, 'jobs', 'abandoned', 'worker.log')), 'nothing ran');
+    });
+  });
+
+  it('refuses a surface whose parameters are out of bounds before it loads any tool', { skip: available ? false : 'python3 is not available' }, () => {
+    withRoot((root) => {
+      const cases = {
+        deep: { parameters: { poissonDepth: 40 }, reason: /poissonDepth must be between 5 and 12/ },
+        fraction: { parameters: { targetTriangles: 1500.5 }, reason: /targetTriangles must be a whole number/ },
+        word: { parameters: { voxelCm: 'two' }, reason: /voxelCm must be a number/ },
+        shift: { parameters: { originShift: [1, 2] }, reason: /originShift must be three finite numbers/ },
+      };
+      for (const [name, { parameters }] of Object.entries(cases)) {
+        mkdirSync(join(root, 'jobs', name));
+        writeFileSync(join(root, 'jobs', name, 'cloud.laz'), '');
+        writeFileSync(join(root, 'jobs', name, 'request.json'),
+          JSON.stringify({ step: 'mesh.surface', parameters, inputs: { pointCloudLaz: 'cloud.laz' } }));
+      }
+      mkdirSync(join(root, 'jobs', 'nocloud'));
+      writeFileSync(join(root, 'jobs', 'nocloud', 'request.json'), JSON.stringify({ step: 'mesh.surface', parameters: {}, inputs: {} }));
+      sweep(root);
+      for (const [name, { reason }] of Object.entries(cases)) {
+        const answer = result(root, name);
+        assert.equal(answer.status, 'refused', name);
+        assert.match(answer.reason, reason);
+      }
+      assert.equal(result(root, 'nocloud').status, 'refused');
+      assert.match(result(root, 'nocloud').reason, /no input of kind pointCloudLaz/);
     });
   });
 

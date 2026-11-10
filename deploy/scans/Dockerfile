@@ -49,15 +49,27 @@ RUN cmake -S hdmapping -B build -DCMAKE_BUILD_TYPE=Release \
     && mkdir -p /out && find build -type f -executable \( -name lidar_odometry_step_1 -o -name multi_view_tls_registration_step_2 \) -exec cp {} /out/ \;
 
 # ---- The tiler: the worker loop and the Python tools ---------------------------------------------
+# It also makes surfaces from clouds (Open3D), which adds about 300 MB to the image.
 FROM ubuntu:24.04 AS tiler
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      ca-certificates python3 python3-venv \
+      ca-certificates python3 python3-venv libgomp1 libegl1 libgl1 libx11-6 libusb-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 # Every package pinned. py3dtiles below 12 cannot read LAZ and has no --spec-version or
 # --extra-fields; laspy's LAZ backend (lazrs) is what makes a .laz readable at all. What this
 # image writes is a property of these exact versions, and the application records them per run.
 RUN python3 -m venv /opt/py && /opt/py/bin/pip install --no-cache-dir \
       "py3dtiles[las]==12.1.1" "laspy[lazrs]==2.7.0" "lazrs==0.8.2" "numpy==2.3.5"
+# Open3D makes a cloud into a surface (normals, screened Poisson, quadric decimation). It is the
+# CPU-only build: a quarter the size of the default wheel, which carries CUDA, and none of the
+# machines this runs on has a GPU. It is installed without its declared dependencies on purpose:
+# those (dash, flask, nbformat, ipywidgets) serve its web and notebook viewers, which this worker
+# never starts, and the geometry it uses needs numpy alone. Its module links the EGL, OpenGL, X11
+# and USB libraries its viewer and camera support use, and fails to load without them even though
+# nothing here draws (the system packages above); its TensorFlow and PyTorch operator libraries are
+# loaded only on request and are removed, as nothing here has either framework.
+RUN /opt/py/bin/pip install --no-cache-dir --no-deps "open3d-cpu==0.20.0" \
+    && rm -f /opt/py/lib/python3.12/site-packages/open3d/open3d_tf_ops.so \
+             /opt/py/lib/python3.12/site-packages/open3d/open3d_torch_ops.so
 
 # The application and this worker write into the same volume, one after the other: the
 # application copies a cloud into a job directory, this worker writes the tiles beside it, and the

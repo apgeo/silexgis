@@ -50,6 +50,13 @@ The steps:
                             cloud is first shifted to its own centre, so the tiles carry no
                             coordinates at all — the shift is reported in the result and is the
                             application's to keep as the scan's placement. Writes tiles.zip.
+    pointcloud.raster       a top view and an extended profile of the cloud as PNG pictures.
+                            Writes plan.png and profile.png.
+    mesh.surface            a surface of the cloud for a cave's walls: voxel means, normals turned
+                            toward the scanner's trajectory, screened Poisson (Open3D), the
+                            least-supported faces trimmed, decimated to a triangle count. Written
+                            about the tiles' shift, like them carrying no coordinate. Writes
+                            surface.stl (binary).
 
 and, in the HDMapping worker (SILEXGIS_SCANS_WORKER_ROLE=hdmapping), for raw scanner recordings:
 
@@ -69,8 +76,8 @@ the job directory it is working in; and it does not retry — a job it took and 
 container was stopped mid-run) is answered "interrupted" rather than run again, because only the
 application can decide whether its half-written outputs are worth anything.
 
-Only the standard library is needed to run the loop and answer a request; laspy, numpy and py3dtiles
-are imported when a step needs them, so the protocol can be exercised without them.
+Only the standard library is needed to run the loop and answer a request; laspy, numpy, py3dtiles
+and open3d are imported when a step needs them, so the protocol can be exercised without them.
 """
 from __future__ import annotations
 
@@ -113,7 +120,7 @@ TILE_POINTS_PER_SECOND = 600_000.0
 TILE_FIXED_SECONDS = 17.0
 CHUNK_POINTS = 2_000_000
 
-STEPS = ("pointcloud.estimate", "pointcloud.downsample", "py3dtiles.tile", "pointcloud.raster")
+STEPS = ("pointcloud.estimate", "pointcloud.downsample", "py3dtiles.tile", "pointcloud.raster", "mesh.surface")
 LOG_TAIL_LINES = 30
 
 # Which worker this is. Two may share one hand-off directory: the tiler (every installation that
@@ -208,6 +215,14 @@ def tool_versions() -> dict[str, str]:
                 versions[package] = version(package)
             except Exception:  # noqa: BLE001 - absent is a fact to report, not an error
                 pass
+        # Open3D is installed as its CPU-only build, which is the same module under another
+        # distribution name; either is reported as open3d.
+        for distribution in ("open3d-cpu", "open3d"):
+            try:
+                versions["open3d"] = version(distribution)
+                break
+            except Exception:  # noqa: BLE001
+                pass
     except Exception:  # noqa: BLE001
         pass
     return versions
@@ -231,6 +246,8 @@ def capabilities() -> dict:
             steps.append({"id": "pointcloud.raster", "tool": "numpy", "version": versions["numpy"]})
         if "py3dtiles" in versions:
             steps.append({"id": "py3dtiles.tile", "tool": "py3dtiles", "version": versions["py3dtiles"]})
+        if "open3d" in versions and "laspy" in versions and "numpy" in versions:
+            steps.append({"id": SURFACE_STEP, "tool": "open3d", "version": versions["open3d"]})
     elif ROLE == "hdmapping" and PUBLISHED_DEFAULTS is not None:
         version = hdmapping_version(PUBLISHED_DEFAULTS.get("softwareVersion"))
         steps.append({"id": "hdmapping.preflight", "tool": "scan-worker", "version": WORKER_VERSION})
@@ -1727,6 +1744,313 @@ def step_raster(job: Job) -> None:
     job.data = data
 
 
+# -- a surface made from the points ------------------------------------------------------------
+
+SURFACE_STEP = "mesh.surface"
+# The most points the surface is built from, after the voxel: Poisson's octree and the normal
+# search hold every one of them in memory several times over. Past it the voxel is too small for
+# the cloud, and the step says so rather than run the container out of memory.
+SURFACE_MAX_POINTS = 12_000_000
+# The trajectory is walked at this spacing before each point is matched to the nearest place the
+# scanner passed; finer adds nothing to which way a wall faces.
+SURFACE_TRAJECTORY_SPACING_M = 0.25
+SURFACE_TRAJECTORY_MAX_SAMPLES = 4_000
+# Points are matched to the trajectory a cell of this size at a time: every point of a cell looks
+# toward the same place.
+SURFACE_MATCH_CELL_M = 1.0
+# The parameters, their defaults and their bounds. The defaults are a first guess at a cave
+# passage scanned at centimetre density, still to be tuned on recordings.
+SURFACE_PARAMETERS = {
+    "voxelCm": (2.0, 0.5, 50.0),
+    "normalRadiusCm": (6.0, 1.0, 200.0),
+    "normalNeighbours": (30, 5, 200),
+    "poissonDepth": (9, 5, 12),
+    "densityTrimPercent": (2.0, 0.0, 30.0),
+    "targetTriangles": (500_000, 1_000, 10_000_000),
+    "orientCellM": (3.0, 0.5, 50.0),
+}
+
+
+def load_open3d():
+    """Open3D, imported without its notebook viewer.
+
+    Importing the package imports its viewers, and one of them (the plotly one) imports dash and
+    plotly at once: a quarter of a gigabyte of web-server packages that the image deliberately does
+    not install, because nothing here shows anything. The module that would import them is put in
+    place first as an empty stand-in whose functions refuse, so the package loads with the
+    geometry it is wanted for."""
+    import sys
+    import types
+
+    name = "open3d.visualization.draw_plotly"
+    if name not in sys.modules:
+        stand_in = types.ModuleType(name)
+
+        def absent(*_args, **_kwargs):
+            raise RuntimeError("the plotly viewer is not installed in this worker")
+
+        stand_in.get_plotly_fig = stand_in.draw_plotly = stand_in.draw_plotly_server = absent
+        sys.modules[name] = stand_in
+    import open3d
+    return open3d
+
+
+def surface_parameters(job: Job) -> dict:
+    """The step's parameters, each a number inside its bounds, whole where it must be whole;
+    anything else is refused naming the parameter."""
+    values = {}
+    for name, (default, low, high) in SURFACE_PARAMETERS.items():
+        value = job.parameter(name, default)
+        whole = isinstance(default, int)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise Refused(f"{name} must be a number")
+        if whole and value != int(value):
+            raise Refused(f"{name} must be a whole number")
+        if not (low <= value <= high):
+            raise Refused(f"{name} must be between {low:g} and {high:g}")
+        values[name] = int(value) if whole else float(value)
+    shift = job.parameter("originShift", None)
+    if shift is not None:
+        if (not isinstance(shift, list) or len(shift) != 3
+                or not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in shift)):
+            raise Refused("originShift must be three finite numbers")
+        values["originShift"] = [float(v) for v in shift]
+    return values
+
+
+def voxel_centroids(job: Job, source: Path, shift, voxel_m: float, fraction_end: float):
+    """The cloud reduced to the mean point of each occupied voxel, in metres about the shift, read a
+    chunk at a time. Cells straddling two chunks are merged, so the result does not depend on how
+    the file is chunked. Returns the points (n, 3) and the number read."""
+    import laspy
+    import numpy as np
+
+    with laspy.open(source) as reader:
+        summary = read_cloud_summary(reader)
+    ensure_extent(summary, source, job)
+    total = max(1, summary["pointCount"])
+    mins = np.asarray(summary["min"], dtype=np.float64) - np.asarray(shift)
+    maxs = np.asarray(summary["max"], dtype=np.float64) - np.asarray(shift)
+    counts = voxel_grid(mins, maxs, voxel_m)
+    if counts is None:
+        raise Refused(f"the cloud's extent is too large for a {voxel_m * 100:g} cm voxel")
+    keys = np.empty(0, dtype=np.int64)
+    sums = np.empty((0, 3), dtype=np.float64)
+    weights = np.empty(0, dtype=np.int64)
+    read = 0
+    with laspy.open(source) as reader:
+        for chunk in reader.chunk_iterator(CHUNK_POINTS):
+            job.check()
+            xyz = np.column_stack((np.asarray(chunk.x) - shift[0], np.asarray(chunk.y) - shift[1],
+                                   np.asarray(chunk.z) - shift[2]))
+            xyz = xyz[np.all(np.isfinite(xyz), axis=1)]
+            read += len(chunk)
+            if len(xyz) == 0:
+                continue
+            all_keys = np.concatenate((keys, voxel_keys(np.clip(xyz, mins, maxs), mins, counts, voxel_m)))
+            all_sums = np.concatenate((sums, xyz))
+            all_weights = np.concatenate((weights, np.ones(len(xyz), dtype=np.int64)))
+            keys, inverse = np.unique(all_keys, return_inverse=True)
+            sums = np.column_stack([np.bincount(inverse, weights=all_sums[:, i], minlength=len(keys)) for i in range(3)])
+            weights = np.bincount(inverse, weights=all_weights, minlength=len(keys)).astype(np.int64)
+            if len(keys) > SURFACE_MAX_POINTS:
+                raise Refused(f"more than {SURFACE_MAX_POINTS:,} voxels hold points at {voxel_m * 100:g} cm; "
+                              "choose a larger voxel")
+            job.progress(fraction_end * read / total, f"voxels: {len(keys):,} from {read:,} of {total:,} points")
+    return sums / weights[:, None], read
+
+
+def read_trajectory_positions(path: Path, shift):
+    """The scanner's positions from HDMapping's trajectory (nine numbers a line, the position third
+    to fifth), in metres about the shift, or None when fewer than two lines read."""
+    import numpy as np
+
+    positions = []
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            fields = re.split(r"[,\s]+", line.strip())
+            if len(fields) != 9:
+                continue
+            try:
+                xyz = [float(f) for f in fields[2:5]]
+            except ValueError:
+                continue
+            if all(math.isfinite(v) for v in xyz):
+                positions.append(xyz)
+    if len(positions) < 2:
+        return None
+    line = np.asarray(positions, dtype=np.float64) - np.asarray(shift)
+    # Walked at a fixed spacing: a scanner standing still writes thousands of poses in one place.
+    kept = [line[0]]
+    for point in line[1:]:
+        if np.linalg.norm(point - kept[-1]) >= SURFACE_TRAJECTORY_SPACING_M:
+            kept.append(point)
+    samples = np.asarray(kept)
+    if len(samples) > SURFACE_TRAJECTORY_MAX_SAMPLES:
+        samples = samples[np.linspace(0, len(samples) - 1, SURFACE_TRAJECTORY_MAX_SAMPLES).astype(np.int64)]
+    return samples
+
+
+def nearest_of(points, samples, job: Job):
+    """For each point, the index of the nearest sample, by brute force in blocks."""
+    import numpy as np
+
+    nearest = np.empty(len(points), dtype=np.int64)
+    block = max(1, 8_000_000 // max(1, len(samples)))
+    for start in range(0, len(points), block):
+        job.check()
+        part = points[start:start + block]
+        distance = ((part[:, None, :] - samples[None, :, :]) ** 2).sum(axis=2)
+        nearest[start:start + block] = np.argmin(distance, axis=1)
+    return nearest
+
+
+def facing_targets(points, trajectory, cell_m: float, job: Job):
+    """Where each point's normal should face. A cave has no outside to point normals away from, so
+    they are turned toward where the scanner was: the nearest place along the trajectory, matched a
+    cell at a time. Without a trajectory, each point faces the mean of the points in its coarse
+    cell, which inside a passage lies in the open space between its walls."""
+    import numpy as np
+
+    cell = SURFACE_MATCH_CELL_M if trajectory is not None else cell_m
+    cells = np.floor((points - points.min(axis=0)) / cell).astype(np.int64)
+    keys, inverse = np.unique(cells, axis=0, return_inverse=True)
+    inverse = inverse.reshape(-1)
+    if trajectory is not None:
+        centres = (keys + 0.5) * cell + points.min(axis=0)
+        return trajectory[nearest_of(centres, trajectory, job)][inverse]
+    means = np.column_stack([np.bincount(inverse, weights=points[:, i], minlength=len(keys)) for i in range(3)])
+    means /= np.bincount(inverse, minlength=len(keys))[:, None]
+    return means[inverse]
+
+
+def write_binary_stl(path: Path, vertices, triangles) -> None:
+    """A binary STL: an 80-byte header, the facet count, then per facet its normal, its three
+    corners as 32-bit floats, and two bytes nobody reads."""
+    import numpy as np
+
+    corners = vertices[triangles].astype(np.float64)
+    normals = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    length = np.linalg.norm(normals, axis=1)
+    normals = np.where(length[:, None] > 0, normals / np.maximum(length, 1e-30)[:, None], 0.0)
+    record = np.dtype([("normal", "<f4", (3,)), ("corners", "<f4", (3, 3)), ("attribute", "<u2")])
+    facets = np.zeros(len(triangles), dtype=record)
+    facets["normal"] = normals
+    facets["corners"] = corners
+    with path.open("wb") as handle:
+        handle.write(b"SilexGIS surface from a point cloud".ljust(80, b" "))
+        handle.write(struct.pack("<I", len(triangles)))
+        handle.write(facets.tobytes())
+
+
+def step_surface(job: Job) -> None:
+    """A closed-over surface of the cloud as a binary STL, for showing as a cave's walls.
+
+    The cloud is reduced to one mean point per voxel, normals are estimated over a radius and
+    turned toward where the scanner was, and screened Poisson reconstruction (Open3D's) makes a
+    watertight surface of them. Poisson also closes over space no scan reached, and the faces it
+    invents there are carried by few points: the vertices whose point density is lowest (the trim
+    percentile) are removed with them. The rest is decimated to the target triangle count and
+    written out.
+
+    The surface is written in the scan's tile frame: metres about the shift the tiles were made
+    with (the request's originShift, or the cloud's own centre exactly as the tiling step takes it),
+    so the mesh lines up with the tiles under the scan's placement and carries no coordinate."""
+    params = surface_parameters(job)
+    source = job.input("pointCloudLaz")
+    inputs = job.request.get("inputs") or {}
+    trajectory_file = job.input("trajectory") if "trajectory" in inputs else None
+
+    import laspy
+    import numpy as np
+
+    o3d = load_open3d()
+    job.tool, job.tool_version = "open3d", tool_versions().get("open3d", "")
+    o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
+    if "originShift" in params:
+        shift = params["originShift"]
+    else:
+        with laspy.open(source) as reader:
+            summary = read_cloud_summary(reader)
+        ensure_extent(summary, source, job)
+        shift = [float(np.floor((summary["min"][i] + summary["max"][i]) / 2.0)) for i in range(3)]
+
+    voxel_m = params["voxelCm"] / 100.0
+    points, read = voxel_centroids(job, source, shift, voxel_m, 0.25)
+    if len(points) < 100:
+        raise CheckFailed(f"only {len(points):,} voxels hold points; a surface needs far more")
+
+    trajectory = None
+    if trajectory_file is not None:
+        trajectory = read_trajectory_positions(trajectory_file, shift)
+        if trajectory is None:
+            job.log("the trajectory holds fewer than two positions; normals face the passage instead")
+    job.check()
+    job.progress(0.28, f"normals of {len(points):,} points")
+    cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points))
+    cloud.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(
+        radius=params["normalRadiusCm"] / 100.0, max_nn=params["normalNeighbours"]))
+    normals = np.asarray(cloud.normals)
+    targets = facing_targets(points, trajectory, params["orientCellM"], job)
+    away = np.einsum("ij,ij->i", normals, targets - points) < 0
+    normals[away] *= -1.0
+    cloud.normals = o3d.utility.Vector3dVector(normals)
+
+    job.check()
+    job.progress(0.35, f"Poisson reconstruction at depth {params['poissonDepth']}")
+    mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+        cloud, depth=params["poissonDepth"], n_threads=int(TILE_JOBS))
+    del cloud
+    poisson_triangles = len(mesh.triangles)
+    densities = np.asarray(densities)
+    trimmed = 0
+    if params["densityTrimPercent"] > 0 and len(densities):
+        low = np.percentile(densities, params["densityTrimPercent"])
+        remove = densities < low
+        trimmed = int(remove.sum())
+        mesh.remove_vertices_by_mask(remove.tolist())
+    # Poisson's surface runs on past the scan, out to a box around it; nothing beyond the points'
+    # own extent (by a few voxels) was measured.
+    margin = 3 * voxel_m
+    box = o3d.geometry.AxisAlignedBoundingBox(points.min(axis=0) - margin, points.max(axis=0) + margin)
+    mesh = mesh.crop(box)
+    mesh.remove_degenerate_triangles()
+    mesh.remove_unreferenced_vertices()
+
+    job.check()
+    target = params["targetTriangles"]
+    if len(mesh.triangles) > target:
+        job.progress(0.8, f"decimating {len(mesh.triangles):,} triangles to {target:,}")
+        mesh = mesh.simplify_quadric_decimation(target_number_of_triangles=target)
+        mesh.remove_degenerate_triangles()
+        mesh.remove_unreferenced_vertices()
+    vertices = np.asarray(mesh.vertices)
+    triangles = np.asarray(mesh.triangles)
+    if len(triangles) == 0:
+        raise CheckFailed("the reconstruction left no triangles; try a larger voxel or a smaller trim")
+
+    job.check()
+    job.progress(0.95, f"writing {len(triangles):,} triangles")
+    out = job.directory / "surface.stl"
+    write_binary_stl(out, vertices, triangles)
+    job.produced("meshStl", out)
+    job.data = {
+        "pointsIn": int(read),
+        "voxelPoints": int(len(points)),
+        "orientation": "trajectory" if trajectory is not None else "cellMean",
+        "normalsTurned": int(away.sum()),
+        "poissonTriangles": int(poisson_triangles),
+        "verticesTrimmed": trimmed,
+        "triangles": int(len(triangles)),
+        "vertices": int(len(vertices)),
+        "stlBytes": out.stat().st_size,
+        "originShift": shift,
+        "localMin": [round(float(v), 3) for v in vertices.min(axis=0)],
+        "localMax": [round(float(v), 3) for v in vertices.max(axis=0)],
+        "parameters": {name: params[name] for name in SURFACE_PARAMETERS},
+    }
+
+
 RUNNERS = {
     "pointcloud.estimate": step_estimate,
     "pointcloud.downsample": step_downsample,
@@ -1736,6 +2060,7 @@ RUNNERS = {
     "hdmapping.export": step_export,
     "pointcloud.check": step_check,
     "pointcloud.raster": step_raster,
+    "mesh.surface": step_surface,
 }
 
 
@@ -1920,7 +2245,8 @@ def serve(once: bool) -> int:
 # -- the self-test -----------------------------------------------------------------------------
 
 def self_test(root: Path) -> int:
-    """A tiny generated cloud through estimate, downsample and tile, printing a verdict only."""
+    """A tiny generated cloud through estimate, downsample, tile, the pictures and the surface,
+    printing a verdict only."""
     import laspy
     import numpy as np
 
@@ -2046,6 +2372,54 @@ def self_test(root: Path) -> int:
                f"10 cm pixels: {data['plan']}, {data['profile']}")
         largest = max(abs(v) for v in (data["valueLow"], data["valueHigh"], data["profile"]["lengthM"]))
         expect(largest < 70_000, f"the pictures' figures carry no coordinate (largest {largest})")
+
+    # The surface: the tube made into a mesh, once with the scanner's path along its axis and once
+    # without one, its walls facing inward both times, and no coordinate in the file.
+    try:
+        load_open3d()
+        has_open3d = True
+    except ImportError:
+        has_open3d = False
+        print("skip the surface: open3d is not installed here")
+    if has_open3d:
+        poses = "\n".join(f"{i}, 0, {500_000.0 + 0.1 * i:.3f}, 4700000.0, 300.0, 0, 0, 0, 1" for i in range(81))
+        parameters = {"voxelCm": 5, "normalRadiusCm": 20, "poissonDepth": 7, "densityTrimPercent": 2,
+                      "targetTriangles": 4_000}
+        # The tiles were made from the display copy, whose centre is not the original's; the
+        # application hands the tiles' shift over, so the surface lands in their frame. Without it
+        # the surface takes the original cloud's own centre.
+        tiles_shift = tiled["data"]["originShift"] if tiled["status"] == "ok" else [500_003.0, 4_699_999.0, 300.0]
+        for name, inputs, files, shift in (
+                ("surface", {"pointCloudLaz": "cloud.laz", "trajectory": "trajectory.csv"},
+                 {"cloud.laz": jobs / "estimate" / "cloud.laz", "trajectory.csv": Text(poses)}, tiles_shift),
+                ("surface-bare", {"pointCloudLaz": "cloud.laz"}, {"cloud.laz": jobs / "estimate" / "cloud.laz"},
+                 None)):
+            made = job(name, "mesh.surface", dict(parameters, **({"originShift": shift} if shift else {})), inputs, files)
+            expect(made["status"] == "ok", f"{name} made: {made['status']} {made['reason']}")
+            if made["status"] != "ok":
+                continue
+            data = made["data"]
+            expect([o["kind"] for o in made["outputs"]] == ["meshStl"], "one STL")
+            stl = (jobs / name / "surface.stl").read_bytes()
+            count = struct.unpack("<I", stl[80:84])[0]
+            expect(len(stl) == 84 + 50 * count and count == data["triangles"] and 0 < count <= 4_000,
+                   f"a binary STL of {count:,} triangles, at most the target")
+            facets = np.frombuffer(stl[84:], dtype=np.dtype([("n", "<f4", (3,)), ("v", "<f4", (3, 3)), ("a", "<u2")]))
+            corners = facets["v"].astype(np.float64)
+            expect(float(np.abs(corners).max()) < 1000, "the STL carries no coordinate")
+            centre = corners.mean(axis=1)
+            normal = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+            # Inward on the tube's wall: toward its axis, which runs along x at y = z = 0 here.
+            wall = np.hypot(centre[:, 1], centre[:, 2]) > 1.0
+            inward = (normal[wall, 1] * -centre[wall, 1] + normal[wall, 2] * -centre[wall, 2]) > 0
+            share = float(inward.mean()) if inward.size else 0.0
+            expect(share > 0.9, f"{name}: the walls face inward ({share:.0%}, oriented by {data['orientation']})")
+            with laspy.open(jobs / "estimate" / "cloud.laz") as reader:
+                own_centre = [float(np.floor((lo + hi) / 2.0)) for lo, hi in zip(reader.header.mins, reader.header.maxs)]
+            expect(data["originShift"] == (shift or own_centre), f"{name}: written about {'the tiles' if shift else 'its own'} shift")
+        refused = job("surface-refused", "mesh.surface", {"poissonDepth": 40}, {"pointCloudLaz": "cloud.laz"},
+                      {"cloud.laz": jobs / "estimate" / "cloud.laz"})
+        expect(refused["status"] == "refused" and "poissonDepth" in refused["reason"], "a depth out of bounds is refused")
 
     unknown = job("unknown", "nothing.at.all", {}, {}, {})
     expect(unknown["status"] == "refused", "an unknown step is refused")
