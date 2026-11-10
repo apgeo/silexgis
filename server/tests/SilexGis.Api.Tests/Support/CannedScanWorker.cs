@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Security.Cryptography;
 using System.Text.Json;
+using Shouldly;
 
 namespace SilexGis.Api.Tests.Support;
 
@@ -77,6 +78,41 @@ internal sealed class CannedScanWorker : IAsyncDisposable
         var steps = stepIds.Select(id => new { id, tool = id.StartsWith("py3dtiles", StringComparison.Ordinal) ? "py3dtiles" : id.StartsWith("hdmapping", StringComparison.Ordinal) ? "hdmapping" : "laspy", version = "test-1.0" });
         File.WriteAllText(Path.Combine(handoffRoot, "capabilities.json"), JsonSerializer.Serialize(new { worker = "canned", steps }));
     }
+
+    /// <summary>
+    /// Answers the plan-and-profile step as the worker does: a one-pixel PNG for the top view, and
+    /// one for the profile when the request hands over a centreline, with the figures a legend needs.
+    /// </summary>
+    public static void Pictures(string directory, JsonElement request)
+    {
+        var inputs = request.GetProperty("inputs");
+        File.Exists(Path.Combine(directory, inputs.GetProperty("pointCloudLaz").GetString()!)).ShouldBeTrue();
+        var withLine = inputs.TryGetProperty("centreline", out var line);
+        var outputs = new List<object> { Output(directory, "planImage", "plan.png", OnePixelPng) };
+        if (withLine)
+        {
+            File.Exists(Path.Combine(directory, line.GetString()!)).ShouldBeTrue();
+            outputs.Add(Output(directory, "profileImage", "profile.png", OnePixelPng));
+        }
+
+        Finish(
+            directory, "ok", [.. outputs],
+            new
+            {
+                pixelM = 0.05,
+                askedPixelM = 0.05,
+                colourBy = "height",
+                valueLow = 0.0,
+                valueHigh = 3.5,
+                plan = new { width = 1, height = 1 },
+                profile = withLine ? new { width = 1, height = 1, pixelM = 0.05, lengthM = 50.0 } : null,
+            },
+            tool: "numpy", toolVersion: "2.3.5");
+    }
+
+    // A valid 1×1 opaque RGBA PNG.
+    private static readonly byte[] OnePixelPng = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
 
     /// <summary>Writes one product into the job directory and answers how the result should name it.</summary>
     public static object Output(string directory, string kind, string file, byte[] bytes)

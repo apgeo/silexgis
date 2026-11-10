@@ -136,7 +136,8 @@ public static class PointCloudRecipes
 
     /// <summary>
     /// The recipe of a raw scanner recording: the recording inspected, its odometry run, the
-    /// session exported into one cloud and the export checked, and from there exactly a point
+    /// session exported into one cloud, the export checked, the trajectory drawn as a
+    /// centreline and the plan and profile pictures drawn, and from there exactly a point
     /// cloud's recipe for the same choice — the thinning estimated, the cloud thinned when chosen,
     /// the result tiled. Answers null and the schema's errors as <see cref="For"/> does.
     /// </summary>
@@ -166,6 +167,8 @@ public static class PointCloudRecipes
                 : Resolved(schemas, HdmappingOdometryStep.StepId, null, out _)!,
             Resolved(schemas, HdmappingExportStep.StepId, null, out _)!,
             Resolved(schemas, PointCloudCheckStep.StepId, null, out _)!,
+            Resolved(schemas, ScanCentrelineStep.StepId, null, out _)!,
+            Resolved(schemas, PointCloudRasterStep.StepId, null, out _)!,
         ]);
         return cloud with { Steps = steps };
     }

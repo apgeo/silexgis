@@ -116,6 +116,22 @@ public static class ScanAutoPlacement
         model.PlacementControlPoints = record.ToJson();
     }
 
+    /// <summary>The placement the model's columns hold, or null when it is not placed — no anchor or no height.</summary>
+    public static ScanPlacement? Read(SurveyModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        return model.Anchor is { } anchor && model.AnchorHeightM is { } height
+            ? new ScanPlacement(
+                anchor.X,
+                anchor.Y,
+                height,
+                model.PlacementHeadingDeg ?? 0,
+                model.PlacementSource ?? ScanPlacementSource.Manual,
+                model.PlacementPitchDeg ?? 0,
+                model.PlacementRollDeg ?? 0)
+            : null;
+    }
+
     /// <summary>Leaves the model unplaced: its tiles keep their frame and lose their place on the earth.</summary>
     public static void Clear(SurveyModel model)
     {

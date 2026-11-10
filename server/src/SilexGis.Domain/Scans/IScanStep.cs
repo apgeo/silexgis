@@ -331,6 +331,93 @@ public sealed class PointCloudCheckStep : IScanStep
         """;
 }
 
+/// <summary>
+/// The scanner's trajectory simplified into a centreline, in the API process: no tool, a few
+/// milliseconds of arithmetic over a text file. Writes the line as GeoJSON in the scan's own frame;
+/// nothing of it is written into the cave's survey.
+/// </summary>
+public sealed class ScanCentrelineStep : IScanStep
+{
+    public const string StepId = "scan.centreline";
+
+    public string Id => StepId;
+
+    public string DisplayName => "Draw a centreline from the scanner's path";
+
+    public string Tool => ScanSteps.ApiTool;
+
+    public IReadOnlyList<ScanArtifactKind> Inputs => [ScanArtifactKind.Trajectory];
+
+    public IReadOnlyList<ScanArtifactKind> Outputs => [ScanArtifactKind.Centreline];
+
+    public ScanStepLocation WhereItRuns => ScanStepLocation.Api;
+
+    public string ParameterSchemaJson => """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "toleranceM": {
+              "description": "How far, in metres, a pose of the trajectory may stand from the simplified line before it is kept as a vertex.",
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10,
+              "default": 0.2
+            }
+          },
+          "additionalProperties": false
+        }
+        """;
+}
+
+/// <summary>
+/// A top view of the cloud and an extended profile along its centreline, drawn by the worker as
+/// PNG pictures at a set pixel size and coloured by height or by the points' intensity. The top
+/// view keeps each cell's lowest point (the floor); the profile unrolls the passage along the
+/// centreline, distance walked across and height up. The pictures are in the scan's own frame and
+/// carry no coordinate — heights are metres above the cloud's lowest point — so they follow the
+/// scan's ordinary file rules, as the tiles do. Without a centreline only the top view is drawn.
+/// </summary>
+public sealed class PointCloudRasterStep : IScanStep
+{
+    public const string StepId = "pointcloud.raster";
+
+    public string Id => StepId;
+
+    public string DisplayName => "Draw the plan and profile pictures";
+
+    public string Tool => "numpy";
+
+    public IReadOnlyList<ScanArtifactKind> Inputs => [ScanArtifactKind.PointCloudLaz, ScanArtifactKind.Centreline];
+
+    public IReadOnlyList<ScanArtifactKind> Outputs => [ScanArtifactKind.PlanImage, ScanArtifactKind.ProfileImage];
+
+    public ScanStepLocation WhereItRuns => ScanStepLocation.Worker;
+
+    public string ParameterSchemaJson => """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "pixelCm": {
+              "description": "The size of one pixel of the pictures, in centimetres. A cave too long for a picture of at most 16,384 pixels a side at this size is drawn at a larger one.",
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 100,
+              "default": 5
+            },
+            "colourBy": {
+              "description": "What the colours show: the height, or the points' intensity (height when the cloud has none).",
+              "type": "string",
+              "enum": ["height", "intensity"],
+              "default": "height"
+            }
+          },
+          "additionalProperties": false
+        }
+        """;
+}
+
 /// <summary>The steps this server knows, by id. A list in code, never a scan of assemblies.</summary>
 public static class ScanSteps
 {
@@ -353,6 +440,8 @@ public static class ScanSteps
         new HdmappingOdometryStep(),
         new HdmappingExportStep(),
         new PointCloudCheckStep(),
+        new ScanCentrelineStep(),
+        new PointCloudRasterStep(),
     ];
 
     private static readonly Dictionary<string, IScanStep> ById =

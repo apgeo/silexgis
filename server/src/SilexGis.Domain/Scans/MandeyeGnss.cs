@@ -144,8 +144,9 @@ public static class MandeyeGnss
             points.Add(new TrajectoryPoint((long)time, px, py, pz));
         }
 
-        points.Sort((a, b) => a.TimeNs.CompareTo(b.TimeNs));
-        return points;
+        // A stable order: a recording without a clock writes every pose at time zero, and its
+        // poses must then stay in the order they were written, which is the order they were taken.
+        return [.. points.OrderBy(p => p.TimeNs)];
     }
 
     /// <summary>The trajectory's position at a time, between the two poses either side; null outside its span.</summary>

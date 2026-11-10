@@ -15,7 +15,7 @@ namespace SilexGis.Infrastructure.Scans;
 /// thinned copy made from it, which keeps the coordinates and the header's records; so is every
 /// file of a raw recording that heard GNSS, and the cloud exported from it. Such a file is handed
 /// out only to a caller who may see the cave's exact location, and so, always, are the scanner's
-/// trajectory and the HDMapping session that holds it. The tiles are not
+/// trajectory, the HDMapping session that holds it and the centreline drawn from it. The tiles are not
 /// covered: they are written in the cloud's own frame, and the shift that would place them is
 /// withheld on its own.
 /// </summary>
@@ -47,10 +47,11 @@ public static class PointCloudFileAccess
             where version.DocumentId == subject.Document.Id
             select new { artefact.SurveyUploadId, artefact.FileId, artefact.Kind })
             .ToListAsync(ct);
-        // The scanner's path, and the HDMapping session that holds it, are where the scanner went:
-        // like a centreline, they are a position whatever frame they are written in.
+        // The scanner's path, the HDMapping session that holds it, and the centreline drawn from
+        // it are where the scanner went: a position whatever frame they are written in.
         var track = artefacts.FirstOrDefault(a =>
-            a.FileId == subject.File.Id && a.Kind is ScanArtifactKind.Trajectory or ScanArtifactKind.HdmSession);
+            a.FileId == subject.File.Id
+            && a.Kind is ScanArtifactKind.Trajectory or ScanArtifactKind.HdmSession or ScanArtifactKind.Centreline);
         var clouds = artefacts
             .Where(a => a.Kind is ScanArtifactKind.PointCloudLaz or ScanArtifactKind.PointCloudLazDisplay or ScanArtifactKind.RawRecording)
             .ToList();

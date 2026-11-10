@@ -944,6 +944,15 @@ public static partial class SurveyUploadEndpoints
                 .Select(a => (Guid?)a.FileId)
                 .FirstOrDefaultAsync(ct)
             : null;
+        var hasCentreline = cloud is not null && exact
+            && await db.ScanArtifacts.AsNoTracking()
+                .AnyAsync(a => a.SurveyUploadId == upload.Id && a.Kind == ScanArtifactKind.Centreline, ct);
+
+        // The pictures carry no coordinate — they are drawn in the scan's own frame, heights above
+        // its lowest point — so, like the tiles, they go to everybody who may read the upload.
+        var pictures = cloud?.Facts.Pictures is { } drawn
+            ? await PicturesDtoAsync(db, tokens, upload.Id, drawn, ct)
+            : null;
 
         return new SurveyUploadDto(
             upload.Id,
@@ -960,6 +969,8 @@ public static partial class SurveyUploadEndpoints
             cloud is null ? null : PointCloudDto(tokens, cloud.ModelId, cloud.ConvertedFileId, cloud.Facts, exact) with
             {
                 SessionUrl = sessionFileId is { } session ? ContentUrl(tokens, session) : null,
+                HasCentreline = hasCentreline,
+                Pictures = pictures,
             },
             [.. files.Where(f => f.Role is not (SurveyUploadFileRole.Output or SurveyUploadFileRole.Log)).Select(f => new SurveyUploadFileDto(
                 f.Name,
@@ -1048,6 +1059,34 @@ public static partial class SurveyUploadEndpoints
         }
 
         return found;
+    }
+
+    private static async Task<SurveyUploadPointCloudPicturesDto?> PicturesDtoAsync(
+        SilexGisDbContext db, IFileAccessTokenService tokens, Guid uploadId, PointCloudPictures drawn, CancellationToken ct)
+    {
+        var files = await db.ScanArtifacts.AsNoTracking()
+            .Where(a => a.SurveyUploadId == uploadId && (a.Kind == ScanArtifactKind.PlanImage || a.Kind == ScanArtifactKind.ProfileImage))
+            .OrderByDescending(a => a.CreatedAt)
+            .Select(a => new { a.Kind, a.FileId })
+            .ToListAsync(ct);
+        var plan = files.FirstOrDefault(f => f.Kind == ScanArtifactKind.PlanImage);
+        if (plan is null)
+        {
+            return null;
+        }
+
+        var profile = files.FirstOrDefault(f => f.Kind == ScanArtifactKind.ProfileImage);
+        return new SurveyUploadPointCloudPicturesDto(
+            ContentUrl(tokens, plan.FileId),
+            profile is null ? null : ContentUrl(tokens, profile.FileId),
+            drawn.ColourBy,
+            drawn.ValueLow,
+            drawn.ValueHigh,
+            drawn.PixelM,
+            drawn.PlanSize,
+            profile is null ? null : drawn.ProfilePixelM,
+            profile is null ? null : drawn.ProfileSize,
+            profile is null ? null : drawn.ProfileLengthM);
     }
 
     /// <summary>

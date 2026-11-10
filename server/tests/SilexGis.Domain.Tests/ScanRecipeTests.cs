@@ -140,7 +140,7 @@ public class ScanRecipeTests
         errors.ShouldBeEmpty();
         recipe.Steps.Select(s => s.StepId).ShouldBe([
             PointCloudInspectStep.StepId, HdmappingOdometryStep.StepId, HdmappingExportStep.StepId, PointCloudCheckStep.StepId,
-            PointCloudEstimateStep.StepId, Py3dtilesTileStep.StepId,
+            ScanCentrelineStep.StepId, PointCloudRasterStep.StepId, PointCloudEstimateStep.StepId, Py3dtilesTileStep.StepId,
         ]);
         recipe.DisplayChosen.ShouldBeFalse();
 

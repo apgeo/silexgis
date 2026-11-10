@@ -11,6 +11,38 @@ namespace SilexGis.Domain.Scans;
 public sealed record PointCloudCrs(int? HorizontalEpsg, int? VerticalEpsg, string? Wkt);
 
 /// <summary>
+/// What the plan and profile pictures of a scan are: the pixel size of each, their size in pixels,
+/// and the ends of the colour scale they share. Heights are metres above the cloud's lowest point,
+/// so nothing here is a position, whatever frame the cloud is in.
+/// </summary>
+public sealed record PointCloudPictures
+{
+    /// <summary>The top view's pixel, in metres: the size asked for, or larger for a cave too big to draw at it.</summary>
+    public double PixelM { get; init; }
+
+    /// <summary>"height" or "intensity".</summary>
+    public required string ColourBy { get; init; }
+
+    /// <summary>The value the colour scale starts at: metres above the lowest point, or an intensity.</summary>
+    public double ValueLow { get; init; }
+
+    /// <summary>The value the colour scale ends at.</summary>
+    public double ValueHigh { get; init; }
+
+    /// <summary>The top view's width and height in pixels.</summary>
+    public required int[] PlanSize { get; init; }
+
+    /// <summary>The profile's width and height in pixels; null when no profile was drawn (no centreline).</summary>
+    public int[]? ProfileSize { get; init; }
+
+    /// <summary>The profile's pixel, in metres.</summary>
+    public double? ProfilePixelM { get; init; }
+
+    /// <summary>The length of the centreline the profile is unrolled along, in metres.</summary>
+    public double? ProfileLengthM { get; init; }
+}
+
+/// <summary>
 /// What is known about a point cloud, in two layers: what its header said when it was inspected,
 /// and what tiling added. Stored as the model's <c>point_cloud</c> document and shown on the
 /// scan's card; nothing queries it.
@@ -101,6 +133,12 @@ public sealed record PointCloudFacts
     /// </summary>
     public MandeyeRecordingFacts? Recording { get; init; }
 
+    /// <summary>
+    /// The plan and profile pictures the run drew, when it drew them: their pixel sizes and the
+    /// colour scale, for a legend. No coordinate is among them.
+    /// </summary>
+    public PointCloudPictures? Pictures { get; init; }
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -158,6 +196,7 @@ public sealed record PointCloudFacts
         Estimate = earlier.Estimate,
         Advice = earlier.Advice,
         Recording = Recording ?? earlier.Recording,
+        Pictures = earlier.Pictures,
     };
 
     /// <summary>

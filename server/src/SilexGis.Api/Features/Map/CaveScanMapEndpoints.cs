@@ -44,6 +44,10 @@ namespace SilexGis.Api.Features.Map;
 /// tile. Stated before anything is fetched because it is what a scene budgets by; a tiles reader
 /// fetches by level of detail, so what it actually takes is usually less.
 /// </param>
+/// <param name="HasCentreline">
+/// Whether the scan's run drew a centreline from the scanner's path; the line itself, set down
+/// through the same placement, is read from the survey model's centreline route in the world frame.
+/// </param>
 public sealed record CaveScanInViewDto(
     Guid CaveId,
     string? CaveName,
@@ -58,7 +62,8 @@ public sealed record CaveScanInViewDto(
     double RollDeg,
     long? PointCount,
     long? TiledPointCount,
-    long SizeBytes);
+    long SizeBytes,
+    bool HasCentreline);
 
 /// <summary>The placed point clouds of the caves in a view, nearest the middle of it first.</summary>
 /// <param name="Items">
@@ -165,7 +170,8 @@ public static class CaveScanMapEndpoints
                 row.RollDeg,
                 row.PointCount,
                 row.TiledPointCount,
-                row.SizeBytes))
+                row.SizeBytes,
+                row.HasCentreline))
             .ToList();
 
         return TypedResults.Ok(new CaveScansInViewDto(items, rows.Count));

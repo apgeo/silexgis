@@ -366,6 +366,7 @@ public static class SurveyModelEndpoints
             .WithTags("SurveyModels")
             .WithSummary("Deletes the survey model (Write on the cave); the stored file is kept. Refused while a trip's live tracking is armed on it.");
         api.MapSurveyModelPlacementEndpoints();
+        api.MapSurveyModelCentrelineEndpoints();
 
         return api;
     }

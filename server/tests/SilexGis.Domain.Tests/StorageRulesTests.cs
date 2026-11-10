@@ -157,6 +157,9 @@ public class StorageRulesTests
         ScanStorageNeeds.For(HdmappingExportStep.StepId, 1000, null, null).ShouldBe(new ScanStepNeed(1000, 3000));
         ScanStorageNeeds.For(PointCloudCheckStep.StepId, 1000, null, null)
             .ShouldBe(new ScanStepNeed(ScanStorageNeeds.ReportBytes, 1000 + ScanStorageNeeds.ReportBytes));
+        // The plan and profile pictures: bounded by their pixel limit, not by the cloud they read.
+        ScanStorageNeeds.For(PointCloudRasterStep.StepId, 5_000_000_000, null, null)
+            .ShouldBe(new ScanStepNeed(ScanStorageNeeds.PictureBytes, 5_000_000_000 + ScanStorageNeeds.PictureBytes));
 
         // The whole run: session, export, check report and tiles kept; the odometry's peak on the worker.
         const long raw = 100_000_000;

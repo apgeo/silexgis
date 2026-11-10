@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Scans;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -29,7 +30,8 @@ public sealed record CaveScanMapRow(
     double RollDeg,
     long? PointCount,
     long? TiledPointCount,
-    long SizeBytes);
+    long SizeBytes,
+    bool HasCentreline);
 
 /// <summary>
 /// Dapper SQL for the placed point clouds of the caves in a view (raw SQL lives only in *Sql.cs
@@ -158,7 +160,10 @@ public static class CaveScanMapSql
                    (c.point_cloud->>'pointCount')::bigint AS "PointCount",
                    COALESCE((c.point_cloud->>'displayPointCount')::bigint,
                             (c.point_cloud->>'pointCount')::bigint) AS "TiledPointCount",
-                   sf.size_bytes AS "SizeBytes"
+                   sf.size_bytes AS "SizeBytes",
+                   EXISTS (SELECT 1 FROM scan_artifacts a
+                           WHERE a.survey_model_id = c.id
+                             AND a.kind = {(short)ScanArtifactKind.Centreline}) AS "HasCentreline"
             FROM chosen c
             JOIN features f ON f.id = c.cave_feature_id
             JOIN files sf ON sf.id = c.converted_file_id

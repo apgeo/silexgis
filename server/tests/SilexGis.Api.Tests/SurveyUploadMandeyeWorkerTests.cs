@@ -76,7 +76,7 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
         // Both workers announced, and the HDMapping one's dumped defaults beside them.
         CannedScanWorker.Announce(
             handoffRoot,
-            HdmappingOdometryStep.StepId, HdmappingExportStep.StepId, PointCloudCheckStep.StepId,
+            HdmappingOdometryStep.StepId, HdmappingExportStep.StepId, PointCloudCheckStep.StepId, PointCloudRasterStep.StepId,
             PointCloudEstimateStep.StepId, PointCloudDownsampleStep.StepId, Py3dtilesTileStep.StepId);
         Directory.CreateDirectory(Path.Combine(handoffRoot, "defaults"));
         File.WriteAllText(Path.Combine(handoffRoot, "defaults", "hdmapping.odometry.json"), JsonSerializer.Serialize(new
@@ -122,7 +122,7 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
         await RunPipelineAsync(id);
 
         worker.Steps.ShouldBe([
-            HdmappingOdometryStep.StepId, HdmappingExportStep.StepId, PointCloudCheckStep.StepId,
+            HdmappingOdometryStep.StepId, HdmappingExportStep.StepId, PointCloudCheckStep.StepId, PointCloudRasterStep.StepId,
             PointCloudEstimateStep.StepId, Py3dtilesTileStep.StepId,
         ]);
         var shown = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
@@ -189,7 +189,7 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
 
         // The odometry is kept; the export and everything built on it are made again.
         worker.Steps.ShouldBe([
-            HdmappingExportStep.StepId, PointCloudCheckStep.StepId, PointCloudEstimateStep.StepId, Py3dtilesTileStep.StepId,
+            HdmappingExportStep.StepId, PointCloudCheckStep.StepId, PointCloudRasterStep.StepId, PointCloudEstimateStep.StepId, Py3dtilesTileStep.StepId,
         ]);
         var second = await ArtefactsAsync(id);
         second.Single(a => a.Kind == ScanArtifactKind.HdmSession).Id.ShouldBe(first.Single(a => a.Kind == ScanArtifactKind.HdmSession).Id);
@@ -399,8 +399,14 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
         var sessionFile = artefacts.Single(a => a.Kind == ScanArtifactKind.HdmSession).FileId;
         var tilesFile = artefacts.Single(a => a.Kind == ScanArtifactKind.PointCloudTiles).FileId;
         var rawFile = artefacts.First(a => a.Kind == ScanArtifactKind.RawRecording).FileId;
+        var centrelineFile = artefacts.Single(a => a.Kind == ScanArtifactKind.Centreline).FileId;
+        var planFile = artefacts.Single(a => a.Kind == ScanArtifactKind.PlanImage).FileId;
+        var profileFile = artefacts.Single(a => a.Kind == ScanArtifactKind.ProfileImage).FileId;
+        var modelId = artefacts.Single(a => a.Kind == ScanArtifactKind.Centreline).SurveyModelId;
 
         // With the exact location: everything served, and the extent's place shown.
+        (await reader.GetAsync($"/api/v1/files/{centrelineFile}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await reader.GetAsync($"/api/v1/survey-models/{modelId}/centreline")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await reader.GetAsync($"/api/v1/files/{exportFile}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await reader.GetAsync($"/api/v1/files/{trajectoryFile}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await reader.GetAsync($"/api/v1/files/{sessionFile}")).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -408,6 +414,9 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
         var granted = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
         granted.GetProperty("pointCloud").GetProperty("georeferenced").GetBoolean().ShouldBeTrue();
         granted.GetProperty("pointCloud").GetProperty("min").GetArrayLength().ShouldBe(3);
+        granted.GetProperty("pointCloud").GetProperty("hasCentreline").GetBoolean().ShouldBeTrue();
+        (await reader.GetAsync($"/api/v1/files/{planFile}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await reader.GetAsync($"/api/v1/files/{profileFile}")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Without it: the track, the session, the georeferenced export and the recording are
         // withheld whoever learns their ids; the tiles, in their own frame, stay readable.
@@ -417,9 +426,213 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
         (await reader.GetAsync($"/api/v1/files/{sessionFile}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await reader.GetAsync($"/api/v1/files/{rawFile}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await reader.GetAsync($"/api/v1/files/{tilesFile}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        // The centreline drawn from the track is the track's: its file and its route are withheld
+        // in every frame, and the upload no longer says there is one.
+        (await reader.GetAsync($"/api/v1/files/{centrelineFile}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/v1/survey-models/{modelId}/centreline")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/v1/survey-models/{modelId}/centreline?frame=world")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         var withheld = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
         withheld.GetProperty("pointCloud").GetProperty("min").ValueKind.ShouldBe(JsonValueKind.Null);
         withheld.GetProperty("pointCloud").GetProperty("originShift").ValueKind.ShouldBe(JsonValueKind.Null);
+        withheld.GetProperty("pointCloud").GetProperty("hasCentreline").GetBoolean().ShouldBeFalse();
+        // The plan and profile pictures are drawn in the scan's own frame, heights above its
+        // lowest point, and carry no coordinate: like the tiles, they stay readable.
+        (await reader.GetAsync($"/api/v1/files/{planFile}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await reader.GetAsync($"/api/v1/files/{profileFile}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var pictures = withheld.GetProperty("pointCloud").GetProperty("pictures");
+        (await reader.GetAsync(pictures.GetProperty("planUrl").GetString())).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await reader.GetAsync(pictures.GetProperty("profileUrl").GetString())).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task The_trajectory_is_drawn_as_a_centreline_served_over_the_tiles_and_through_the_placement()
+    {
+        // The invented walk: eleven poses in a straight line, fifty metres along the frame's +Y,
+        // which the satellite fixes put due east.
+        worker.Answer = Hdmapping(exportPoints: 7, trajectoryText: WalkTrajectory());
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var id = await SendAsync(owner, "Centreline scan", caveId, Recording(gnss: true, gnssText: WalkFixes()));
+        await RunPipelineAsync(id);
+
+        // Drawn in the API, not by the worker, and from the export's trajectory.
+        worker.Steps.ShouldNotContain(ScanCentrelineStep.StepId);
+        var artefacts = await ArtefactsAsync(id);
+        var trajectory = artefacts.Single(a => a.Kind == ScanArtifactKind.Trajectory);
+        var centreline = artefacts.Single(a => a.Kind == ScanArtifactKind.Centreline);
+        centreline.StepId.ShouldBe(ScanCentrelineStep.StepId);
+        centreline.Tool.ShouldBe(ScanSteps.ApiTool);
+        centreline.Format.ShouldBe("geojson");
+        centreline.InputArtifactIds.ShouldBe([trajectory.Id]);
+        var modelId = centreline.SurveyModelId.ShouldNotBeNull();
+
+        // Not written into the survey: the cave has no survey legs or stations from it.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var stored = await db.StoredFiles.AsNoTracking().SingleAsync(f => f.Id == centreline.FileId);
+            stored.OriginalName.ShouldBe("Centreline scan.centreline.geojson");
+            stored.MimeType.ShouldBe("application/geo+json");
+        }
+
+        var shown = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        shown.GetProperty("pointCloud").GetProperty("hasCentreline").GetBoolean().ShouldBeTrue();
+
+        // Over the tiles: the walk's two ends, less the half metre the tiles are shifted by.
+        var tiles = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{modelId}/centreline");
+        tiles.GetProperty("frame").GetString().ShouldBe("tiles");
+        tiles.GetProperty("lengthM").GetDouble().ShouldBe(50, 1e-6);
+        var vertices = tiles.GetProperty("coordinates").EnumerateArray()
+            .Select(v => v.EnumerateArray().Select(c => c.GetDouble()).ToArray()).ToList();
+        vertices.Count.ShouldBe(2);
+        vertices[0].ShouldBe([-0.5, -0.5, -0.5]);
+        vertices[1].ShouldBe([-0.5, 49.5, -0.5]);
+
+        // Through the placement: the last pose stands on the last good fix, fifty metres east.
+        var world = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{modelId}/centreline?frame=world");
+        world.GetProperty("frame").GetString().ShouldBe("world");
+        var last = world.GetProperty("coordinates")[1];
+        (Math.Abs(last[0].GetDouble() - (WalkLongitude + (50.0 / MetresPerDegreeLongitude))) * MetresPerDegreeLongitude).ShouldBeLessThan(1.0);
+        (Math.Abs(last[1].GetDouble() - WalkLatitude) * 111320.0).ShouldBeLessThan(1.0);
+
+        // The map's scan layer says the line is there to be drawn.
+        var map = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/map/cave-scans?bbox={string.Create(CultureInfo.InvariantCulture, $"{WalkLongitude - 0.01},{WalkLatitude - 0.01},{WalkLongitude + 0.01},{WalkLatitude + 0.01}")}");
+        map.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("surveyModelId").GetGuid() == modelId)
+            .GetProperty("hasCentreline").GetBoolean().ShouldBeTrue();
+
+        // A frame nobody defined is refused, and nobody signed out is told anything.
+        var unknown = await owner.GetAsync($"/api/v1/survey-models/{modelId}/centreline?frame=plan");
+        unknown.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await unknown.Content.ReadAsStringAsync());
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync($"/api/v1/survey-models/{modelId}/centreline")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // Taken off the earth, the line is still drawn over the tiles and has no place on the map.
+        (await owner.DeleteAsync($"/api/v1/survey-models/{modelId}/placement")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.GetAsync($"/api/v1/survey-models/{modelId}/centreline")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var unplaced = await owner.GetAsync($"/api/v1/survey-models/{modelId}/centreline?frame=world");
+        unplaced.StatusCode.ShouldBe(HttpStatusCode.Conflict, await unplaced.Content.ReadAsStringAsync());
+        (await unplaced.Content.ReadAsStringAsync()).ShouldContain("survey_model.not_placed");
+    }
+
+    [Fact]
+    public async Task The_plan_and_profile_pictures_are_drawn_from_the_export_and_its_centreline_and_shown_to_every_reader()
+    {
+        worker.Answer = Hdmapping(exportPoints: 7, trajectoryText: WalkTrajectory());
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var id = await SendAsync(owner, "Pictured scan", caveId, Recording(gnss: false));
+        await RunPipelineAsync(id);
+
+        // Drawn by the worker, after the check and the centreline, from the export and the line.
+        worker.Steps.ShouldContain(PointCloudRasterStep.StepId);
+        var artefacts = await ArtefactsAsync(id);
+        var exported = artefacts.Single(a => a.Kind == ScanArtifactKind.PointCloudLaz);
+        var centreline = artefacts.Single(a => a.Kind == ScanArtifactKind.Centreline);
+        var plan = artefacts.Single(a => a.Kind == ScanArtifactKind.PlanImage);
+        var profile = artefacts.Single(a => a.Kind == ScanArtifactKind.ProfileImage);
+        foreach (var picture in new[] { plan, profile })
+        {
+            picture.StepId.ShouldBe(PointCloudRasterStep.StepId);
+            picture.Format.ShouldBe("png");
+            picture.Tool.ShouldBe("numpy");
+            picture.InputArtifactIds.ShouldBe([exported.Id, centreline.Id]);
+        }
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var files = await db.StoredFiles.AsNoTracking().Where(f => f.Id == plan.FileId || f.Id == profile.FileId).ToListAsync();
+            files.Select(f => f.OriginalName).Order().ShouldBe(["Pictured scan.plan.png", "Pictured scan.profile.png"]);
+            files.ShouldAllBe(f => f.MimeType == "image/png");
+        }
+
+        var shown = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        shown.GetProperty("status").GetString().ShouldBe("succeeded", shown.ToString());
+        var pictures = shown.GetProperty("pointCloud").GetProperty("pictures");
+        pictures.GetProperty("colourBy").GetString().ShouldBe("height");
+        pictures.GetProperty("pixelM").GetDouble().ShouldBe(0.05);
+        pictures.GetProperty("valueHigh").GetDouble().ShouldBe(3.5);
+        pictures.GetProperty("profileLengthM").GetDouble().ShouldBe(50.0);
+        var planFile = await owner.GetAsync(pictures.GetProperty("planUrl").GetString());
+        planFile.StatusCode.ShouldBe(HttpStatusCode.OK);
+        planFile.Content.Headers.ContentType!.MediaType.ShouldBe("image/png");
+        (await owner.GetAsync(pictures.GetProperty("profileUrl").GetString())).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_trajectory_too_short_for_a_line_still_gets_a_top_view_and_no_profile()
+    {
+        worker.Answer = Hdmapping(exportPoints: 7, trajectoryText: "1 0 0 0 0 0 0 0 1\n");
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var id = await SendAsync(owner, "Short scan", caveId, Recording(gnss: false));
+        await RunPipelineAsync(id);
+
+        var artefacts = await ArtefactsAsync(id);
+        artefacts.ShouldNotContain(a => a.Kind == ScanArtifactKind.Centreline);
+        artefacts.ShouldNotContain(a => a.Kind == ScanArtifactKind.ProfileImage);
+        var exported = artefacts.Single(a => a.Kind == ScanArtifactKind.PointCloudLaz);
+        artefacts.Single(a => a.Kind == ScanArtifactKind.PlanImage).InputArtifactIds.ShouldBe([exported.Id]);
+
+        var shown = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        shown.GetProperty("status").GetString().ShouldBe("succeeded", shown.ToString());
+        var pictures = shown.GetProperty("pointCloud").GetProperty("pictures");
+        pictures.GetProperty("planUrl").GetString().ShouldNotBeNullOrEmpty();
+        pictures.GetProperty("profileUrl").ValueKind.ShouldBe(JsonValueKind.Null);
+        pictures.GetProperty("profileSize").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // A top view without a profile is a whole product: a plain rerun keeps it.
+        var first = artefacts.Single(a => a.Kind == ScanArtifactKind.PlanImage);
+        (await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{id}/rerun", new { })).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        await RunPipelineAsync(id);
+        (await ArtefactsAsync(id)).Single(a => a.Kind == ScanArtifactKind.PlanImage).Id.ShouldBe(first.Id);
+    }
+
+    [Fact]
+    public async Task A_rerun_from_the_export_draws_the_centreline_again_and_keeps_one()
+    {
+        worker.Answer = Hdmapping(exportPoints: 7);
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var id = await SendAsync(owner, "Redrawn scan", caveId, Recording(gnss: false));
+        await RunPipelineAsync(id);
+        var first = (await ArtefactsAsync(id)).Single(a => a.Kind == ScanArtifactKind.Centreline);
+
+        // From the tiling: the centreline is kept as it was.
+        var tiling = await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{id}/rerun", new { fromStep = Py3dtilesTileStep.StepId });
+        tiling.StatusCode.ShouldBe(HttpStatusCode.Accepted, await tiling.Content.ReadAsStringAsync());
+        await RunPipelineAsync(id);
+        (await ArtefactsAsync(id)).Single(a => a.Kind == ScanArtifactKind.Centreline).Id.ShouldBe(first.Id);
+
+        // From the export: a new trajectory, a new line, the old one and its file gone.
+        worker.Answer = Hdmapping(exportPoints: 7, trajectoryText: WalkTrajectory());
+        var export = await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{id}/rerun", new { fromStep = HdmappingExportStep.StepId });
+        export.StatusCode.ShouldBe(HttpStatusCode.Accepted, await export.Content.ReadAsStringAsync());
+        await RunPipelineAsync(id);
+        var second = (await ArtefactsAsync(id)).Single(a => a.Kind == ScanArtifactKind.Centreline);
+        second.Id.ShouldNotBe(first.Id);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.StoredFiles.AsNoTracking().AnyAsync(f => f.Id == first.FileId)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_rerun_from_the_export_with_a_trajectory_too_short_for_a_line_removes_the_old_line()
+    {
+        worker.Answer = Hdmapping(exportPoints: 7, trajectoryText: WalkTrajectory());
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var id = await SendAsync(owner, "Shortened scan", caveId, Recording(gnss: false));
+        await RunPipelineAsync(id);
+        var first = (await ArtefactsAsync(id)).Single(a => a.Kind == ScanArtifactKind.Centreline);
+        var modelId = first.SurveyModelId.ShouldNotBeNull();
+        (await owner.GetAsync($"/api/v1/survey-models/{modelId}/centreline")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        worker.Answer = Hdmapping(exportPoints: 7, trajectoryText: "1 0 0 0 0 0 0 0 1\n");
+        var export = await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{id}/rerun", new { fromStep = HdmappingExportStep.StepId });
+        export.StatusCode.ShouldBe(HttpStatusCode.Accepted, await export.Content.ReadAsStringAsync());
+        await RunPipelineAsync(id);
+
+        (await ArtefactsAsync(id)).ShouldNotContain(a => a.Kind == ScanArtifactKind.Centreline);
+        (await owner.GetAsync($"/api/v1/survey-models/{modelId}/centreline")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var shown = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        shown.GetProperty("pointCloud").GetProperty("hasCentreline").GetBoolean().ShouldBeFalse();
     }
 
     // ---- helpers ----
@@ -477,6 +690,10 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
                 CannedScanWorker.Finish(directory, "ok", [cloud, track], new { export = new { pointsWritten = exportPoints } }, tool: "hdmapping");
                 break;
             }
+
+            case PointCloudRasterStep.StepId:
+                CannedScanWorker.Pictures(directory, request);
+                break;
 
             case PointCloudCheckStep.StepId:
             {

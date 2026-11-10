@@ -137,6 +137,7 @@ public sealed class PointCloudProcessing(
         // The products of the steps as they stand, by kind, for the steps that read them.
         ScanArtifact? session = sentSession;
         ScanArtifact? trajectory = null;
+        ScanArtifact? centreline = null;
         ScanArtifact? display = null;
         ScanArtifact? tiles = null;
         var tilesReused = false;
@@ -171,6 +172,10 @@ public sealed class PointCloudProcessing(
                     : throw new SurveyPipelineException(SurveyPipelineFailures.FilesMissing, "The recipe runs odometry, and the upload holds no recording."),
                 HdmappingExportStep.StepId => [Needed(session, "the odometry's session")],
                 PointCloudCheckStep.StepId => trajectory is null ? [Needed(cloud, "the exported cloud")] : [Needed(cloud, "the exported cloud"), trajectory],
+                ScanCentrelineStep.StepId => [Needed(trajectory, "the scanner's trajectory")],
+                // A trajectory too short to draw a line from leaves no centreline: the top view is
+                // still drawn, and only the profile along the line is not.
+                PointCloudRasterStep.StepId => centreline is null ? [Needed(cloud, "the exported cloud")] : [Needed(cloud, "the exported cloud"), centreline],
                 Py3dtilesTileStep.StepId => [display ?? Needed(cloud, "the point cloud")],
                 _ => new[] { Needed(cloud, "the point cloud") },
             };
@@ -192,6 +197,15 @@ public sealed class PointCloudProcessing(
                     return new Outcome(facts, Tiled: false, TilesReused: false, ChoiceNeeded: true);
                 }
 
+                continue;
+            }
+
+            if (definition.WhereItRuns == ScanStepLocation.Api)
+            {
+                // Work the API does itself: no worker, no hand-off, a product of a few kilobytes.
+                await SurveyUploadWrites.ProgressAsync(
+                    db, upload.Id, stage, SurveyPipelineProgress.Band(stage, origin).Start, definition.DisplayName + ".", ct);
+                Take(await RunInApiAsync(upload, model, versionId, step, definition, inputs, ct), kept: false);
                 continue;
             }
 
@@ -256,6 +270,7 @@ public sealed class PointCloudProcessing(
                 {
                     PointCloudEstimateStep.StepId => WithEstimate(facts, result.Data),
                     PointCloudDownsampleStep.StepId => WithDisplay(facts, result.Data),
+                    PointCloudRasterStep.StepId => WithPictures(facts, result.Data),
                     Py3dtilesTileStep.StepId => WithTiles(facts, result.Data, made.FirstOrDefault(a => a.Kind == ScanArtifactKind.PointCloudTiles), result.ToolVersion),
                     _ => facts,
                 };
@@ -326,6 +341,9 @@ public sealed class PointCloudProcessing(
                     case ScanArtifactKind.Trajectory:
                         trajectory = product;
                         break;
+                    case ScanArtifactKind.Centreline:
+                        centreline = product;
+                        break;
                     case ScanArtifactKind.PointCloudLazDisplay:
                         display = product;
                         break;
@@ -389,6 +407,83 @@ public sealed class PointCloudProcessing(
             logger.LogWarning(e, "The satellite fixes of a recording could not be read; its scan is left unplaced.");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Runs a step the API does itself and stores what it made, as a worker's product is stored:
+    /// a file of the scan's document and an artefact of the step, the earlier product of the same
+    /// step removed once the new one is in. A step that has nothing to make from what it read —
+    /// a trajectory of fewer than two poses — stores nothing and fails nothing.
+    /// </summary>
+    private async Task<List<ScanArtifact>> RunInApiAsync(
+        SurveyUpload upload, SurveyModel model, Guid versionId, ScanRecipeStep step, IScanStep definition, ScanArtifact[] inputs, CancellationToken ct)
+    {
+        if (step.StepId != ScanCentrelineStep.StepId)
+        {
+            throw new SurveyPipelineException(SurveyPipelineFailures.WorkerUnavailable, $"This server has no way to run the step {step.StepId} itself.");
+        }
+
+        var path = await db.StoredFiles.AsNoTracking()
+            .Where(f => f.Id == inputs[0].FileId).Select(f => f.StoragePath).FirstOrDefaultAsync(ct)
+            ?? throw new SurveyPipelineException(SurveyPipelineFailures.FilesMissing, "The scanner's trajectory can no longer be found in the file store.");
+        var text = await ReadTextAsync(path, MaxTrajectoryBytes, ct)
+            ?? throw new SurveyPipelineException(SurveyPipelineFailures.ExportInvalid, "The scanner's trajectory is missing from the file store or too large to read.");
+
+        var poses = MandeyeGnss.ParseTrajectory(text);
+        var tolerance = step.Parameters.TryGetProperty("toleranceM", out var t) && t.ValueKind == JsonValueKind.Number && t.GetDouble() > 0
+            ? t.GetDouble()
+            : ScanCentreline.DefaultToleranceM;
+        var line = ScanCentreline.Simplify(ScanCentreline.FromTrajectory(poses), tolerance);
+        var earlier = await db.ScanArtifacts.Where(a => a.SurveyUploadId == upload.Id && a.StepId == step.StepId).ToListAsync(ct);
+        if (line.Count < 2)
+        {
+            logger.LogInformation("Survey upload {UploadId}: the trajectory has fewer than two poses; no centreline is drawn", upload.Id);
+            // A line drawn from a trajectory this run has replaced must not outlive it.
+            await RemoveReplacedAsync(model, step.StepId, earlier, [], ct);
+            return [];
+        }
+
+        var bytes = ScanCentreline.ToGeoJson(line, tolerance, poses.Count);
+        const string extension = ".geojson";
+        string storagePath;
+        using (var read = new MemoryStream(bytes, writable: false))
+        {
+            storagePath = await fileStore.SaveAsync(read, extension, ct);
+        }
+
+        var sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        var format = extension.TrimStart('.');
+        var stored = documents.AddFile(
+            versionId,
+            new StoredContent(
+                storagePath,
+                OutputName(upload, step.StepId, ScanArtifactKind.Centreline, extension),
+                MediaTypeOf(format),
+                bytes.LongLength,
+                sha256,
+                FileKind.Survey));
+        var artefact = new ScanArtifact
+        {
+            SurveyUploadId = upload.Id,
+            SurveyModelId = model.Id,
+            Kind = ScanArtifactKind.Centreline,
+            Format = format,
+            FileId = stored.Id,
+            SizeBytes = bytes.LongLength,
+            Sha256 = sha256,
+            StepId = step.StepId,
+            Tool = definition.Tool,
+            ToolVersion = null,
+            ParamsHash = step.ParamsHash,
+            InputArtifactIds = inputs.Select(a => a.Id).ToArray(),
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        db.ScanArtifacts.Add(artefact);
+        await db.SaveChangesAsync(ct);
+        await RemoveReplacedAsync(model, step.StepId, earlier, [artefact], ct);
+        logger.LogInformation(
+            "Survey upload {UploadId}: centreline of {Vertices} vertices drawn from {Poses} poses", upload.Id, line.Count, poses.Count);
+        return [artefact];
     }
 
     private async Task<string?> ReadTextAsync(string storagePath, long maxBytes, CancellationToken ct)
@@ -522,6 +617,14 @@ public sealed class PointCloudProcessing(
             : null;
     }
 
+    // What a step is expected to have made from the inputs it was handed. The pictures step draws
+    // the profile only along a centreline: handed the cloud alone, the top view is all it makes,
+    // and that is a whole product a rerun may keep.
+    private static IEnumerable<ScanArtifactKind> ExpectedOutputs(IScanStep definition, int inputCount) =>
+        definition.Id == PointCloudRasterStep.StepId && inputCount < 2
+            ? [ScanArtifactKind.PlanImage]
+            : definition.Outputs.Distinct();
+
     /// <summary>
     /// An earlier run's products of this step with these inputs and parameters — one of every
     /// kind the step makes, each with its stored file still there — or null when any is missing,
@@ -535,7 +638,7 @@ public sealed class PointCloudProcessing(
             .OrderByDescending(a => a.CreatedAt)
             .ToListAsync(ct);
         var kept = new List<ScanArtifact>();
-        foreach (var kind in definition.Outputs.Distinct())
+        foreach (var kind in ExpectedOutputs(definition, inputIds.Length))
         {
             ScanArtifact? found = null;
             foreach (var candidate in candidates.Where(c => c.Kind == kind && c.InputArtifactIds.SequenceEqual(inputIds)))
@@ -616,7 +719,10 @@ public sealed class PointCloudProcessing(
     {
         HdmappingOdometryStep.StepId => SurveyUploadStage.Odometry,
         HdmappingExportStep.StepId => SurveyUploadStage.Export,
-        PointCloudCheckStep.StepId => SurveyUploadStage.Check,
+        // Drawing the centreline is a few milliseconds, and the pictures one or two passes over the
+        // exported cloud: both are reported with the check of the export they read rather than
+        // under stages of their own.
+        PointCloudCheckStep.StepId or ScanCentrelineStep.StepId or PointCloudRasterStep.StepId => SurveyUploadStage.Check,
         Py3dtilesTileStep.StepId => SurveyUploadStage.Tile,
         _ => SurveyUploadStage.Downsample,
     };
@@ -1040,6 +1146,40 @@ public sealed class PointCloudProcessing(
         DisplayPointCount = Long(data, "pointsOut"),
     };
 
+    // What the worker said of the pictures it drew: figures only — pixel sizes, picture sizes and
+    // the colour scale's ends, the latter as metres above the cloud's lowest point or as intensity.
+    private static PointCloudFacts WithPictures(PointCloudFacts facts, JsonElement data)
+    {
+        if (Number(data, "pixelM") is not { } pixel || Object(data, "plan") is not { } plan)
+        {
+            return facts with { Pictures = null };
+        }
+
+        var profile = Object(data, "profile");
+        return facts with
+        {
+            Pictures = new PointCloudPictures
+            {
+                PixelM = pixel,
+                ColourBy = data.TryGetProperty("colourBy", out var by) && by.ValueKind == JsonValueKind.String && by.GetString() == "intensity"
+                    ? "intensity"
+                    : "height",
+                ValueLow = Number(data, "valueLow") ?? 0,
+                ValueHigh = Number(data, "valueHigh") ?? 0,
+                PlanSize = Size(plan),
+                ProfileSize = profile is { } pr ? Size(pr) : null,
+                ProfilePixelM = profile is { } pp ? Number(pp, "pixelM") : null,
+                ProfileLengthM = profile is { } pl ? Number(pl, "lengthM") : null,
+            },
+        };
+
+        static JsonElement? Object(JsonElement element, string name) =>
+            element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Object ? value : null;
+
+        static int[] Size(JsonElement picture) =>
+            [(int)Math.Clamp(Long(picture, "width") ?? 0, 0, int.MaxValue), (int)Math.Clamp(Long(picture, "height") ?? 0, 0, int.MaxValue)];
+    }
+
     private static PointCloudFacts WithTiles(PointCloudFacts facts, JsonElement data, ScanArtifact? tiles, string toolVersion) => facts with
     {
         TileBytes = tiles?.SizeBytes ?? Long(data, "archiveBytes"),
@@ -1071,6 +1211,9 @@ public sealed class PointCloudProcessing(
         ScanArtifactKind.Report => "report",
         ScanArtifactKind.RawRecording => "rawRecording",
         ScanArtifactKind.HdmSession => "hdmSession",
+        ScanArtifactKind.Centreline => "centreline",
+        ScanArtifactKind.PlanImage => "planImage",
+        ScanArtifactKind.ProfileImage => "profileImage",
         _ => kind.ToString(),
     };
 
@@ -1082,6 +1225,9 @@ public sealed class PointCloudProcessing(
         "trajectory" => ScanArtifactKind.Trajectory,
         "estimate" or "report" => ScanArtifactKind.Report,
         "hdmSession" => ScanArtifactKind.HdmSession,
+        "centreline" => ScanArtifactKind.Centreline,
+        "planImage" => ScanArtifactKind.PlanImage,
+        "profileImage" => ScanArtifactKind.ProfileImage,
         _ => null,
     };
 
@@ -1095,6 +1241,9 @@ public sealed class PointCloudProcessing(
             ScanArtifactKind.PointCloudLazDisplay => stem + ".display" + extension,
             ScanArtifactKind.HdmSession => stem + ".session" + extension,
             ScanArtifactKind.Trajectory => stem + ".trajectory" + extension,
+            ScanArtifactKind.Centreline => stem + ".centreline" + extension,
+            ScanArtifactKind.PlanImage => stem + ".plan" + extension,
+            ScanArtifactKind.ProfileImage => stem + ".profile" + extension,
             ScanArtifactKind.Report when stepId == PointCloudCheckStep.StepId => stem + ".check" + extension,
             ScanArtifactKind.Report => stem + ".estimate" + extension,
             _ => stem + extension,
@@ -1108,6 +1257,8 @@ public sealed class PointCloudProcessing(
         "las" => LasMediaType,
         "json" => "application/json",
         "csv" => "text/csv",
+        "geojson" => "application/geo+json",
+        "png" => "image/png",
         _ => "application/octet-stream",
     };
 

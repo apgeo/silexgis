@@ -24,6 +24,12 @@ public static class ScanStorageNeeds
     public const long ReportBytes = 1024 * 1024;
 
     /// <summary>
+    /// Room allowed for the plan and profile pictures, in bytes: 256 MiB. Each is at most 32 million
+    /// pixels of four bytes, written compressed, so two of them never need more than this.
+    /// </summary>
+    public const long PictureBytes = 256L * 1024 * 1024;
+
+    /// <summary>
     /// How many times the recording the odometry step needs on the worker's volume. Measured on two
     /// recordings, HDMapping's step 1 writes a cache of 17 to 20 times the raw size beside its input
     /// before it removes it; the copy of the recording and the session it leaves add about one more
@@ -55,7 +61,8 @@ public static class ScanStorageNeeds
         var input = Math.Max(0, inputBytes);
         var output = stepId switch
         {
-            PointCloudEstimateStep.StepId or PointCloudCheckStep.StepId => ReportBytes,
+            PointCloudEstimateStep.StepId or PointCloudCheckStep.StepId or ScanCentrelineStep.StepId => ReportBytes,
+            PointCloudRasterStep.StepId => PictureBytes,
             PointCloudDownsampleStep.StepId => input,
             Py3dtilesTileStep.StepId => TileBytes(input, estimate, voxelCm),
 

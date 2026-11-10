@@ -73,7 +73,7 @@ public sealed class SurveyUploadExternalStepTests : IAsyncLifetime, IDisposable,
 
         CannedScanWorker.Announce(
             handoffRoot,
-            HdmappingOdometryStep.StepId, HdmappingExportStep.StepId, PointCloudCheckStep.StepId,
+            HdmappingOdometryStep.StepId, HdmappingExportStep.StepId, PointCloudCheckStep.StepId, PointCloudRasterStep.StepId,
             PointCloudEstimateStep.StepId, PointCloudDownsampleStep.StepId, Py3dtilesTileStep.StepId);
         Directory.CreateDirectory(Path.Combine(handoffRoot, "defaults"));
         File.WriteAllText(Path.Combine(handoffRoot, "defaults", "hdmapping.odometry.json"), JsonSerializer.Serialize(new
@@ -177,7 +177,7 @@ public sealed class SurveyUploadExternalStepTests : IAsyncLifetime, IDisposable,
         await RunPipelineAsync(id);
 
         worker.Steps.ShouldBe([
-            HdmappingExportStep.StepId, PointCloudCheckStep.StepId, PointCloudEstimateStep.StepId, Py3dtilesTileStep.StepId,
+            HdmappingExportStep.StepId, PointCloudCheckStep.StepId, PointCloudRasterStep.StepId, PointCloudEstimateStep.StepId, Py3dtilesTileStep.StepId,
         ]);
         var done = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
         done.GetProperty("status").GetString().ShouldBe("succeeded", done.ToString());
@@ -327,7 +327,7 @@ public sealed class SurveyUploadExternalStepTests : IAsyncLifetime, IDisposable,
         var second = await SendAsync(reader, "Desk scan", caveId, [("session.zip", session)], caveSurveyId: surveyId);
         await RunPipelineAsync(second);
         worker.Steps.ShouldBe([
-            HdmappingExportStep.StepId, PointCloudCheckStep.StepId, PointCloudEstimateStep.StepId, Py3dtilesTileStep.StepId,
+            HdmappingExportStep.StepId, PointCloudCheckStep.StepId, PointCloudRasterStep.StepId, PointCloudEstimateStep.StepId, Py3dtilesTileStep.StepId,
         ]);
         var refined = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{second}");
         refined.GetProperty("status").GetString().ShouldBe("succeeded", refined.ToString());
@@ -470,6 +470,10 @@ public sealed class SurveyUploadExternalStepTests : IAsyncLifetime, IDisposable,
                     ],
                     tool: "hdmapping");
                 break;
+            case PointCloudRasterStep.StepId:
+                CannedScanWorker.Pictures(directory, request);
+                break;
+
             case PointCloudCheckStep.StepId:
                 CannedScanWorker.Finish(directory, "ok", [CannedScanWorker.Output(directory, "report", "check.json", "{}"u8.ToArray())], new { pointCount = 7 });
                 break;

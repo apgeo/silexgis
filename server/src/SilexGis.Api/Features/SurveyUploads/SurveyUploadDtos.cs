@@ -265,6 +265,16 @@ public sealed record SurveyUploadPointCloudCrsDto(int? HorizontalEpsg, int? Vert
 /// as the scan's next version. The session holds the scanner's path, so with the exact-location
 /// right only; null without it, and for a scan that has no session.
 /// </param>
+/// <param name="HasCentreline">
+/// Whether a centreline was drawn from the scanner's path, to be read from the survey model's
+/// centreline route. Like the path itself it is a position, so false without the exact-location
+/// right whatever the run made.
+/// </param>
+/// <param name="Pictures">
+/// The plan and profile pictures the run drew, with signed addresses good for a session. They are
+/// drawn in the scan's own frame and carry no coordinate, like the tiles, so they go to everybody
+/// who may read the upload; null until a run has drawn them.
+/// </param>
 public sealed record SurveyUploadPointCloudDto(
     Guid ModelId,
     long PointCount,
@@ -290,7 +300,32 @@ public sealed record SurveyUploadPointCloudDto(
     SurveyUploadPointCloudEstimateDto? Estimate,
     SurveyUploadPointCloudAdviceDto? Advice,
     SurveyUploadRecordingDto? Recording,
-    string? SessionUrl = null);
+    string? SessionUrl = null,
+    bool HasCentreline = false,
+    SurveyUploadPointCloudPicturesDto? Pictures = null);
+
+/// <summary>A scan's top view and extended profile, as PNG pictures, and what a legend needs to explain them.</summary>
+/// <param name="PlanUrl">A signed address of the top view: each cell coloured by the lowest point in it (the floor), or by the points' mean intensity.</param>
+/// <param name="ProfileUrl">A signed address of the extended profile, unrolled along the centreline; null when the scan has no centreline.</param>
+/// <param name="ColourBy"><c>height</c> or <c>intensity</c>.</param>
+/// <param name="ValueLow">Where the colour scale starts: metres above the cloud's lowest point, or an intensity.</param>
+/// <param name="ValueHigh">Where the colour scale ends.</param>
+/// <param name="PixelM">The top view's pixel, in metres.</param>
+/// <param name="PlanSize">The top view's width and height, in pixels.</param>
+/// <param name="ProfilePixelM">The profile's pixel, in metres.</param>
+/// <param name="ProfileSize">The profile's width and height, in pixels.</param>
+/// <param name="ProfileLengthM">The length of the centreline the profile is unrolled along, in metres.</param>
+public sealed record SurveyUploadPointCloudPicturesDto(
+    string PlanUrl,
+    string? ProfileUrl,
+    string ColourBy,
+    double ValueLow,
+    double ValueHigh,
+    double PixelM,
+    int[] PlanSize,
+    double? ProfilePixelM,
+    int[]? ProfileSize,
+    double? ProfileLengthM);
 
 /// <summary>What an inspection read of a raw scanner recording.</summary>
 /// <param name="ChunkCount">How many lidar/IMU chunk pairs the recording holds.</param>
