@@ -9374,7 +9374,7 @@
     "legend": {
       "title": "Legend",
       "more": "More items to load",
-      "restricted": "An item you may not see (small square mark)"
+      "restricted": "An item you may not see"
     },
     "toolbar": {
       "label": "Graph controls",

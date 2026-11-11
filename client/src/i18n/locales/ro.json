@@ -9387,7 +9387,7 @@
     "legend": {
       "title": "Legendă",
       "more": "Mai multe elemente de încărcat",
-      "restricted": "Un element pe care nu ai voie să-l vezi (semn pătrat mic)"
+      "restricted": "Un element pe care nu ai voie să-l vezi"
     },
     "toolbar": {
       "label": "Comenzile grafului",

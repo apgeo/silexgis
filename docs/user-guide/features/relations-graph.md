@@ -28,6 +28,11 @@ Opening it from an item makes that item the **starting item**.
 
 ## What the graph shows
 
+Each item is a coloured dot with a small picture of what it is: a cave, an entrance, a survey
+line, a pin for any other place, a document, a trip, a person, a club, a map view, a survey model,
+a geodata file, a cabinet, an expedition's tent, a tag or an attached file. An item you may not
+open is an empty dashed ring with a padlock, and has no name.
+
 At first: the starting item and what is directly related to it. To go further, choose a
 neighbour and press **Expand selected** (or double-click it). Everything already on screen stays
 where it is, and the new items appear beside the one you expanded.
@@ -38,8 +43,8 @@ Every kind of relation is drawn, in its own colour:
 > participants · Expeditions · Cabinets · Tags · Group membership · Survey models
 
 When an item has more relations of one kind than fit in one step, a **+N more** dot is drawn
-beside it. Press it to load the next batch. A **Legend** under the drawing explains the colours
-and shapes.
+beside it. Press it to load the next batch. A **Legend** under the drawing explains the pictures
+and colours.
 
 Select an item, then **Details** in the toolbar opens a drawer with the item's title, a button that
 opens its page, and the relations it has in the graph. Selecting a line shows how the two ends

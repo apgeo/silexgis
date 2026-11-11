@@ -28,6 +28,12 @@ Dacă îl deschizi dintr-un element, acela devine **primul element**.
 
 ## Ce arată graful
 
+Fiecare element este un punct colorat cu un mic desen a ceea ce este: o peșteră, o intrare, o linie
+topo, un reper pentru orice alt loc, un document, o tură, o persoană, un club, o vedere de hartă, un
+model topo, un fișier de date geografice, un dulap, cortul unei expediții, o etichetă sau un fișier
+atașat. Un element pe care nu ai voie să-l deschizi este un cerc gol, punctat, cu un lacăt, și nu are
+nume.
+
 La început: primul element și ce este legat direct de el. Ca să mergi mai departe, alege un vecin și
 apasă **Extinde elementul ales** (sau dă dublu clic pe el). Tot ce era pe ecran rămâne la locul lui, iar
 elementele noi apar lângă cel extins.
@@ -38,8 +44,8 @@ Fiecare fel de relație este desenat, cu culoarea lui:
 > Expediții · Dulapuri · Etichete · Apartenență la grupuri · Modele topo
 
 Când un element are mai multe relații de un fel decât încap într-un pas, lângă el apare un punct
-**+N în plus**. Apasă-l ca să încarci următorul lot. **Legenda** de sub desen explică culorile și
-formele.
+**+N în plus**. Apasă-l ca să încarci următorul lot. **Legenda** de sub desen explică desenele și
+culorile.
 
 După ce selectezi un element, **Detalii** din bara de comenzi deschide un panou cu titlul elementului, un
 buton care îi deschide pagina și relațiile lui din graf. Dacă alegi o linie, vezi cum se raportează
