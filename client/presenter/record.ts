@@ -379,6 +379,43 @@ function clock(seconds: number): string {
   return `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m${String(s % 60).padStart(2, '0')}s`;
 }
 
+// A map server that refuses or drops its tiles leaves the globe bare, and the scene still counts as
+// finished drawing, because a failed tile is a finished one. Nothing in the picture says so, so the
+// failures are counted per server, with the frames they fell on, and named as they begin.
+function watchOtherHosts(page: Page, base: string) {
+  const own = new URL(base).host;
+  const state = {
+    frame: 0,
+    byHost: {} as Record<string, { failures: number; firstFrame: number; lastFrame: number; example: string }>,
+  };
+  const note = (url: string, why: string) => {
+    let host: string;
+    try {
+      host = new URL(url).host;
+    } catch {
+      return;
+    }
+    if (host === own || url.startsWith('data:') || url.startsWith('blob:')) {
+      return;
+    }
+    const entry = state.byHost[host];
+    if (entry) {
+      entry.failures += 1;
+      entry.lastFrame = state.frame;
+      return;
+    }
+    state.byHost[host] = { failures: 1, firstFrame: state.frame, lastFrame: state.frame, example: why };
+    console.log(`warning: ${host} failed (${why}) at frame ${state.frame}; its map may be missing from the picture`);
+  };
+  page.on('requestfailed', (request) => note(request.url(), request.failure()?.errorText ?? 'failed'));
+  page.on('response', (response) => {
+    if (response.status() >= 400) {
+      note(response.url(), `HTTP ${response.status()}`);
+    }
+  });
+  return state;
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const scenario = await loadScenario(options.scenarioPath);
@@ -422,6 +459,7 @@ async function main() {
   const page = await context.newPage();
   page.on('pageerror', (error) => console.log(`page error: ${error.message}`));
   const token = watchToken(page);
+  const failures = watchOtherHosts(page, target.url);
 
   const started = Date.now();
   await signIn(page, target);
@@ -509,6 +547,7 @@ async function main() {
         run.seek(time);
         return run.settle(60_000);
       }, t);
+      failures.frame = n;
       const settledAfter = Date.now() - before;
       if (!settled) {
         unsettled += 1;
@@ -554,6 +593,7 @@ async function main() {
     await page.evaluate(() => (window as unknown as { __presenterRun: { play(): Promise<void> } }).__presenterRun.play());
   }
 
+  report.failedRequests = failures.byHost;
   report.totalSeconds = Math.round((Date.now() - started) / 1000);
   if (options.mode !== 'play') {
     writeFileSync(path.join(runDir, 'run.json'), `${JSON.stringify(report, null, 2)}\n`);

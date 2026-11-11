@@ -14,6 +14,12 @@ Needs Node 24, the client's dependencies, and ffmpeg (on the PATH, or Docker to 
 `linuxserver/ffmpeg` image). The movie is written to `presenter-output/<scenario>/<time>/movie.mp4`
 (or under `$PRESENTER_OUT`, or `--out <dir>`), with `run.json` beside it.
 
+Read `run.json` before using a movie. `unsettledFrames` counts pictures taken before the scene
+finished drawing. `failedRequests` lists every other server (map tiles, terrain) that refused or
+dropped a request, with the frames it happened on. A map server that fails leaves the ground bare,
+but the scene still counts as finished, so only this list shows it. Re-record the affected stretch
+with `--from`/`--to --keep-frames` and splice it in.
+
 ## Modes
 
 | Mode | What happens | When |
