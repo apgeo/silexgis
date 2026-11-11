@@ -51,6 +51,7 @@ export const SURVEY_UPLOAD_REQUEST_ERROR_KEYS: Record<string, string> = {
   'survey_upload.session_needs_scan': 'surveyUploads.problems.sessionNeedsScan',
   'survey_upload.surface_needs_tiles': 'surveyUploads.problems.surfaceNeedsTiles',
   'survey_upload.surface_needs_placement': 'surveyUploads.problems.surfaceNeedsPlacement',
+  'survey_upload.surface_protected_cave': 'surveyUploads.problems.surfaceProtectedCave',
   'survey_upload.surface_profile_step': 'surveyUploads.problems.surfaceProfileStep',
   'survey_upload.profile_unknown': 'surveyUploads.problems.profileUnknown',
   'survey_upload.profile_values_invalid': 'surveyUploads.problems.profileValuesInvalid',

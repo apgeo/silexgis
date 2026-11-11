@@ -60,6 +60,12 @@ public static partial class SurveyUploadEndpoints
     /// <summary>The profile named is not one for the surface step.</summary>
     public const string SurfaceProfileStepCode = "survey_upload.surface_profile_step";
 
+    /// <summary>
+    /// The scan's cave is protected and the cave asked for is not: the surface would show readers
+    /// of the other cave where the protected cave's passages are.
+    /// </summary>
+    public const string SurfaceProtectedCaveCode = "survey_upload.surface_protected_cave";
+
     private static void MapSurfaceEndpoints(RouteGroupBuilder uploads)
     {
         uploads.MapPost("/{id:guid}/surface", SurfaceAsync)
@@ -142,6 +148,19 @@ public static partial class SurveyUploadEndpoints
         if (!await SurveyModelAccess.WritableAsync(access, ctx, cave, ct))
         {
             return ApiProblems.Forbidden();
+        }
+
+        // Walls saved for another cave stand where the scan stands and show its passages to that
+        // cave's readers. A protected cave's walls go only to a cave that is protected as well.
+        if (cave.Id != found.Cave.Id)
+        {
+            var unprotected = await protection.UnprotectedByAncestryIdsAsync([found.Cave.Id, cave.Id], ct);
+            if (!unprotected.Contains(found.Cave.Id) && unprotected.Contains(cave.Id))
+            {
+                return ApiProblems.Conflict(
+                    SurfaceProtectedCaveCode,
+                    "The scan's cave is protected and the cave named is not: its walls would show where the protected cave's passages are. Save the surface for the scan's own cave, or protect the other cave first.");
+            }
         }
 
         var current = ScanRecipes.FromOptionsJson(upload.Options)

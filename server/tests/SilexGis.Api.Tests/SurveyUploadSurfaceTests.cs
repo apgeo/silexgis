@@ -261,6 +261,23 @@ public sealed class SurveyUploadSurfaceTests : IAsyncLifetime, IDisposable, ICla
     }
 
     [Fact]
+    public async Task A_protected_caves_surface_is_saved_only_for_a_cave_that_is_protected_too()
+    {
+        var guarded = await CreateCaveAsync(locationProtected: true);
+        var open = await CreateCaveAsync();
+        var alsoGuarded = await CreateCaveAsync(locationProtected: true);
+        var (uploadId, scanId) = await TiledScanAsync(guarded);
+        await PlaceAsync(owner, scanId, headingDeg: 0);
+
+        await ShouldBeProblemAsync(
+            await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{uploadId}/surface", new { caveId = open }),
+            HttpStatusCode.Conflict, SurveyUploadEndpoints.SurfaceProtectedCaveCode);
+
+        var asked = await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{uploadId}/surface", new { caveId = alsoGuarded });
+        asked.StatusCode.ShouldBe(HttpStatusCode.Accepted, await asked.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Asking_needs_a_signed_in_writer_who_may_place_both_caves_and_a_placed_tiled_scan()
     {
         var caveId = await CreateCaveAsync();

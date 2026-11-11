@@ -7359,6 +7359,7 @@
       "surfaceUnplaced": "The surface was made but not saved: the scan is no longer placed, or the cave chosen for it is gone. Place the scan and make the surface again.",
       "surfaceNeedsTiles": "A surface is made of a scan that has been processed and tiled.",
       "surfaceNeedsPlacement": "Place the scan first: its surface is saved standing where the scan stands.",
+      "surfaceProtectedCave": "The scan's cave is protected and the cave chosen is not: its walls would show where the protected cave's passages are. Save the surface for the scan's own cave, or protect the other cave first.",
       "surfaceProfileStep": "That profile is not one for making a surface.",
       "profileUnknown": "That profile is no longer there, or you cannot use it.",
       "profileValuesInvalid": "That profile's values no longer fit the step. Open it in the settings and save it again.",

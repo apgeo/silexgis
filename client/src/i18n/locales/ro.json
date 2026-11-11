@@ -7372,6 +7372,7 @@
       "surfaceUnplaced": "Suprafața a fost făcută, dar nu a fost salvată: scanarea nu mai e plasată sau peștera aleasă pentru ea nu mai există. Plasează scanarea și fă din nou suprafața.",
       "surfaceNeedsTiles": "O suprafață se face dintr-o scanare procesată și împărțită în dale.",
       "surfaceNeedsPlacement": "Plasează întâi scanarea: suprafața ei se salvează acolo unde e plasată scanarea.",
+      "surfaceProtectedCave": "Peștera scanării este protejată, iar peștera aleasă nu este: pereții ei ar arăta unde sunt galeriile peșterii protejate. Salvează suprafața pentru peștera scanării sau protejează întâi cealaltă peșteră.",
       "surfaceProfileStep": "Acel profil nu este unul pentru făcut suprafețe.",
       "profileUnknown": "Acel profil nu mai există sau nu îl poți folosi.",
       "profileValuesInvalid": "Valorile acelui profil nu se mai potrivesc pasului. Deschide-l în setări și salvează-l din nou.",
