@@ -506,6 +506,127 @@ public sealed class SurveyModelReadingTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
+    public async Task A_grid_survey_declared_local_offers_its_grid_and_is_placed_once_that_is_chosen()
+    {
+        // The middle of a survey written on UTM zone 35N, and its cave standing right there.
+        const double easting = 360_000;
+        const double northing = 5_042_000;
+        var cave = new SilexGis.Infrastructure.Geodata.ProjCoordinateProjector().ToWgs84(32635, easting, northing).ShouldNotBeNull();
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        await PlaceCaveAsync(caveId, cave.Longitude, cave.Latitude);
+
+        // Declared as metres from a point, which is the mistake: refused, with the grid that fits.
+        var modelId = await UploadAsync(caveId, "Grid.lox", NamedRootCave(easting, northing), DeclareOrigin);
+        await RunQueuedReadingAsync(modelId, expectFailure: true);
+
+        var failed = await GetModelAsync(owner, modelId);
+        failed.GetProperty("status").GetString().ShouldBe("failed");
+        failed.GetProperty("suggestedSourceEpsg").GetInt32().ShouldBe(32635);
+        failed.GetProperty("suggestsLocalMetres").GetBoolean().ShouldBeFalse();
+        failed.GetProperty("suggestedOffByKm").GetDouble().ShouldBeLessThan(1);
+
+        // Chosen, without uploading the file again.
+        var changed = await owner.PutAsJsonAsync(
+            $"/api/v1/survey-models/{modelId}/placement", new { sourceEpsg = 32635, originHeightM = 1500 });
+        changed.StatusCode.ShouldBe(HttpStatusCode.OK, await changed.Content.ReadAsStringAsync());
+        var waiting = await changed.Content.ReadFromJsonAsync<JsonElement>();
+        waiting.GetProperty("status").GetString().ShouldBe("pending");
+        waiting.GetProperty("sourceEpsg").GetInt32().ShouldBe(32635);
+        waiting.GetProperty("suggestedSourceEpsg").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // Asked twice while that reading waits, it is refused as any second reading is.
+        var again = await owner.PutAsJsonAsync(
+            $"/api/v1/survey-models/{modelId}/placement", new { sourceEpsg = 32634, originHeightM = 1500 });
+        again.StatusCode.ShouldBe(HttpStatusCode.Conflict, await again.Content.ReadAsStringAsync());
+
+        await RunQueuedReadingAsync(modelId);
+
+        var read = await GetModelAsync(owner, modelId);
+        read.GetProperty("status").GetString().ShouldBe("ready", read.ToString());
+        read.GetProperty("sourceEpsg").GetInt32().ShouldBe(32635);
+        read.GetProperty("anchorHeightM").GetDouble().ShouldBe(1500);
+        read.GetProperty("suggestedSourceEpsg").ValueKind.ShouldBe(JsonValueKind.Null);
+        read.GetProperty("placementOffByKm").ValueKind.ShouldBe(JsonValueKind.Null);
+        SilexGis.Infrastructure.Surveys.SurveyPlacementCheck.DistanceKm(
+                (read.GetProperty("anchorLongitude").GetDouble(), read.GetProperty("anchorLatitude").GetDouble()),
+                (cave.Longitude, cave.Latitude))
+            .ShouldBeLessThan(0.1);
+    }
+
+    [Fact]
+    public async Task A_survey_read_in_the_wrong_zone_is_placed_and_offers_the_right_one()
+    {
+        // Written on zone 34N, declared as zone 35N: nothing refuses it, and it lands far away.
+        const double easting = 650_000;
+        const double northing = 4_990_000;
+        var cave = new SilexGis.Infrastructure.Geodata.ProjCoordinateProjector().ToWgs84(32634, easting, northing).ShouldNotBeNull();
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        await PlaceCaveAsync(caveId, cave.Longitude, cave.Latitude);
+
+        var modelId = await UploadAsync(caveId, "Zone.lox", NamedRootCave(easting, northing), form =>
+        {
+            form.Add(new StringContent("32635"), "sourceEpsg");
+            form.Add(new StringContent("800"), "originHeightM");
+        });
+        await RunQueuedReadingAsync(modelId);
+
+        var read = await GetModelAsync(owner, modelId);
+        read.GetProperty("status").GetString().ShouldBe("ready", read.ToString());
+        read.GetProperty("placementOffByKm").GetDouble().ShouldBeGreaterThan(300);
+        read.GetProperty("suggestedSourceEpsg").GetInt32().ShouldBe(32634);
+    }
+
+    [Fact]
+    public async Task Changing_where_a_survey_sits_is_for_its_caves_writers_and_is_checked()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var modelId = await UploadLocalLoxAsync(caveId, NamedRootCave());
+        await RunQueuedReadingAsync(modelId);
+        var url = $"/api/v1/survey-models/{modelId}/placement";
+
+        using var anonymous = factory.CreateClient();
+        (await anonymous.PutAsJsonAsync(url, new { sourceEpsg = 32635, originHeightM = 800 })).StatusCode
+            .ShouldBe(HttpStatusCode.Unauthorized);
+        (await reader.PutAsJsonAsync(url, new { sourceEpsg = 32635, originHeightM = 800 })).StatusCode
+            .ShouldBe(HttpStatusCode.Forbidden);
+        (await owner.PutAsJsonAsync($"/api/v1/survey-models/{Guid.NewGuid()}/placement",
+                new { sourceEpsg = 32635, originHeightM = 800 })).StatusCode
+            .ShouldBe(HttpStatusCode.NotFound);
+
+        // Local metres need the position of the zero point; an altitude must be plausible.
+        (await owner.PutAsJsonAsync(url, new { originHeightM = 800 })).StatusCode
+            .ShouldBe(HttpStatusCode.BadRequest);
+        (await owner.PutAsJsonAsync(url, new { sourceEpsg = 32635, originHeightM = 20_000 })).StatusCode
+            .ShouldBe(HttpStatusCode.BadRequest);
+        (await owner.PutAsJsonAsync(url, new { sourceEpsg = -4, originHeightM = 800 })).StatusCode
+            .ShouldBe(HttpStatusCode.BadRequest);
+
+        // Nothing refused changed the model or queued anything.
+        (await QueuedReadingsAsync(modelId)).ShouldBe(0);
+        var unchanged = await GetModelAsync(owner, modelId);
+        unchanged.GetProperty("sourceEpsg").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // A local declaration is accepted and keeps the model drawing while it is read again.
+        var moved = await owner.PutAsJsonAsync(
+            url, new { originLongitude = 25.3, originLatitude = 45.6, originHeightM = 900 });
+        moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+        var waiting = await moved.Content.ReadFromJsonAsync<JsonElement>();
+        waiting.GetProperty("status").GetString().ShouldBe("ready");
+        waiting.GetProperty("readingAgain").GetBoolean().ShouldBeTrue();
+        (await QueuedReadingsAsync(modelId)).ShouldBe(1);
+    }
+
+    /// <summary>Puts the cave at a position, as its entrance being mapped would.</summary>
+    private async Task PlaceCaveAsync(Guid caveId, double longitude, double latitude)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var feature = await db.Features.SingleAsync(f => f.Id == caveId);
+        feature.Geom = new Point(longitude, latitude) { SRID = 4326 };
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
     public async Task The_sweep_over_every_survey_is_an_operators_to_start()
     {
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"srd-adm-{suffix}@t.local");
@@ -583,7 +704,7 @@ public sealed class SurveyModelReadingTests : IAsyncLifetime, IDisposable, IClas
     /// A survey tree two levels deep with a named root: one station in the root survey and two in
     /// a sub-survey. Invented, and the smallest file whose root survey has a name to record.
     /// </summary>
-    private static byte[] NamedRootCave()
+    private static byte[] NamedRootCave(double eastOffset = 0, double northOffset = 0)
     {
         var model = new CaveModel
         {
@@ -595,9 +716,9 @@ public sealed class SurveyModelReadingTests : IAsyncLifetime, IDisposable, IClas
             ],
             Stations =
             [
-                new CaveStation { Id = 1, SurveyId = 1, Name = "0", Position = new CaveVector3(0, 0, 0) },
-                new CaveStation { Id = 2, SurveyId = 2, Name = "1", Position = new CaveVector3(10, 0, -5) },
-                new CaveStation { Id = 3, SurveyId = 2, Name = "2", Position = new CaveVector3(20, 0, -9) },
+                new CaveStation { Id = 1, SurveyId = 1, Name = "0", Position = new CaveVector3(eastOffset, northOffset, 0) },
+                new CaveStation { Id = 2, SurveyId = 2, Name = "1", Position = new CaveVector3(eastOffset + 10, northOffset, -5) },
+                new CaveStation { Id = 3, SurveyId = 2, Name = "2", Position = new CaveVector3(eastOffset + 20, northOffset, -9) },
             ],
             Shots =
             [

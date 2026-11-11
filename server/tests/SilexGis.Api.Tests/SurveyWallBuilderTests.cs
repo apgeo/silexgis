@@ -254,8 +254,8 @@ public class SurveyWallBuilderTests
 
         var walls = SurveyWallBuilder.Build(model, PlainMetres);
 
-        // The surfaces win outright. The compiler writes its own dimension-built walls into the
-        // same place, so tubes added beside them would draw those passages twice.
+        // The surfaces win where they reach. The leg runs down the drawn passage, so a tube around
+        // it would draw that passage twice.
         walls.Source.ShouldBe(SurveyWallSource.Scraps);
         walls.RingSides.ShouldBe(0);
         var mesh = walls.Mesh.ShouldNotBeNull();
@@ -264,6 +264,65 @@ public class SurveyWallBuilderTests
         ShouldHaveVertex(mesh, 4, 3, 0);
         ShouldHaveVertex(mesh, 0, 3, 2);
     }
+
+    [Fact]
+    public void A_measured_passage_the_surfaces_leave_out_gets_its_tube_beside_them()
+    {
+        // A drawn passage around the first leg, and a second leg ninety metres on that nobody
+        // drew but whose walls were measured. Taking the surfaces alone left it out of the model.
+        var measured = new CaveLrud(1, 1, 1, 1);
+        var model = Lox(
+            [(1, "A", 0, 0, 0), (2, "B", 10, 0, 0), (3, "C", 100, 0, 0)],
+            [Shot(1, 2, measured, measured), Shot(2, 3, measured, measured)],
+            scraps: [DrawnAround(0, 10)]);
+
+        var walls = SurveyWallBuilder.Build(model, PlainMetres);
+
+        walls.Source.ShouldBe(SurveyWallSource.ScrapsAndPassageDimensions);
+        walls.WalledLegs.ShouldBe(1);
+        walls.RingSides.ShouldBe(PassageTubes.FullSides);
+        var mesh = walls.Mesh.ShouldNotBeNull();
+        mesh.TriangleCount.ShouldBe(4 + (int)PassageTubes.TriangleCount(sections: 2, sides: 8));
+        ShouldHaveVertex(mesh, 100, 1, 0);
+        // The drawn passage is drawn once: no ring stands at its first station.
+        Vertices(mesh).ShouldNotContain(v => Math.Abs(v.East) < 1e-9 && Math.Abs(v.North - 1) < 1e-9 && Math.Abs(v.Up) < 1e-9);
+    }
+
+    [Fact]
+    public void A_passage_the_surfaces_leave_out_and_nobody_measured_stays_a_line()
+    {
+        var measured = new CaveLrud(1, 1, 1, 1);
+        var model = Lox(
+            [(1, "A", 0, 0, 0), (2, "B", 10, 0, 0), (3, "C", 100, 0, 0)],
+            [Shot(1, 2, measured, measured), Shot(2, 3, measured, null)],
+            scraps: [DrawnAround(0, 10)]);
+
+        var walls = SurveyWallBuilder.Build(model, PlainMetres);
+
+        walls.Source.ShouldBe(SurveyWallSource.Scraps);
+        walls.Mesh.ShouldNotBeNull().TriangleCount.ShouldBe(4);
+    }
+
+    /// <summary>
+    /// A drawn passage two metres wide and two high along the east axis between two distances:
+    /// its two side walls, as a compiler writes a surface.
+    /// </summary>
+    private static CaveScrap DrawnAround(double fromEast, double toEast) => new()
+    {
+        Id = 1,
+        Points =
+        [
+            new CaveVector3(fromEast, -1, -1), new CaveVector3(toEast, -1, -1),
+            new CaveVector3(toEast, -1, 1), new CaveVector3(fromEast, -1, 1),
+            new CaveVector3(fromEast, 1, -1), new CaveVector3(toEast, 1, -1),
+            new CaveVector3(toEast, 1, 1), new CaveVector3(fromEast, 1, 1),
+        ],
+        Triangles =
+        [
+            new CaveTriangle(0, 1, 2), new CaveTriangle(0, 2, 3),
+            new CaveTriangle(4, 6, 5), new CaveTriangle(4, 7, 6),
+        ],
+    };
 
     [Fact]
     public void Faces_of_a_wall_surface_that_carry_no_surface_are_not_written()

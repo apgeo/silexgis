@@ -108,6 +108,29 @@ public sealed record SurveyModelDto(
     /// </summary>
     bool SourcePrecisionLost,
     /// <summary>
+    /// The projected coordinate system the file was declared in; null for a file declared as
+    /// metres about a point, or one left to name its own system.
+    /// </summary>
+    int? SourceEpsg,
+    /// <summary>
+    /// How far from its cave the file landed as declared, when that was far enough to doubt the
+    /// declaration; null when it landed near its cave or could not be placed at all.
+    /// </summary>
+    double? PlacementOffByKm,
+    /// <summary>
+    /// A projected system that places the file at its cave where the declared one does not, found
+    /// by trying the grids a survey there is commonly written in. Offered, never applied: the
+    /// person who knows the survey decides, through the placement route.
+    /// </summary>
+    int? SuggestedSourceEpsg,
+    /// <summary>
+    /// The file's numbers are metres about a point although a projected system was declared, so
+    /// declaring it as local is what would place it.
+    /// </summary>
+    bool SuggestsLocalMetres,
+    /// <summary>How far from its cave the file would land as suggested, when that is known.</summary>
+    double? SuggestedOffByKm,
+    /// <summary>
     /// How many legs of the traverse could not be attached to a station, and how many stations
     /// stood where another already did and became one node. Null until a line plot has been read.
     ///
@@ -207,6 +230,29 @@ public sealed record SurveyModelUpdateRequest(
     string Name,
     string? Description,
     DateOnly? SurveyedAt);
+
+/// <summary>
+/// Where a stored survey file sits, said again: a projected coordinate system, or a position for
+/// the file's own zero point; and in either case the altitude its zero level is at.
+/// </summary>
+public sealed record SurveyModelPlacementRequest(
+    int? SourceEpsg,
+    double? OriginLongitude,
+    double? OriginLatitude,
+    double OriginHeightM);
+
+public sealed class SurveyModelPlacementRequestValidator : AbstractValidator<SurveyModelPlacementRequest>
+{
+    public SurveyModelPlacementRequestValidator()
+    {
+        RuleFor(x => x.SourceEpsg).GreaterThan(0).When(x => x.SourceEpsg is not null);
+        RuleFor(x => x.OriginLongitude).InclusiveBetween(-180, 180).When(x => x.SourceEpsg is null);
+        RuleFor(x => x.OriginLatitude).InclusiveBetween(-90, 90).When(x => x.SourceEpsg is null);
+        RuleFor(x => x.OriginLongitude).NotNull().When(x => x.SourceEpsg is null);
+        RuleFor(x => x.OriginLatitude).NotNull().When(x => x.SourceEpsg is null);
+        RuleFor(x => x.OriginHeightM).InclusiveBetween(-500, 9000);
+    }
+}
 
 public sealed class SurveyModelUpdateRequestValidator : AbstractValidator<SurveyModelUpdateRequest>
 {
@@ -359,6 +405,10 @@ public static class SurveyModelEndpoints
         api.MapPut("/survey-models/{id:guid}/current", MakeCurrentAsync)
             .WithTags("SurveyModels")
             .WithSummary("Makes this the model its cave is represented by, among the cave's models of the same kind (Write on the cave).");
+        api.MapPut("/survey-models/{id:guid}/placement", ChangePlacementAsync)
+            .WithValidation<SurveyModelPlacementRequest>()
+            .WithTags("SurveyModels")
+            .WithSummary("Says again where the stored file sits — a projected coordinate system, or a position for its zero point — and queues a reading under that answer (Write on the cave). Refused while a reading is queued or running.");
         api.MapPost("/survey-models/{id:guid}/reading", ReadAgainAsync)
             .WithTags("SurveyModels")
             .WithSummary("Queues another reading of the model's stored file (Write on the cave). Refused while a reading is queued or running.");
@@ -948,6 +998,79 @@ public static class SurveyModelEndpoints
         return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
     }
 
+    /// <summary>
+    /// Replaces the declaration a model was uploaded with and reads its stored file again under
+    /// the new one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is how a survey declared in the wrong coordinates is put right without being uploaded
+    /// again: the file is already stored, and only the answer about what its numbers mean was
+    /// wrong. The gates are those of reading it again, for the same reasons.
+    /// </para>
+    /// <para>
+    /// The new declaration is written in the same commit as the queued reading, so a reading can
+    /// only ever run under the answer that asked for it. What an earlier reading suggested is
+    /// cleared with it: it was advice about the declaration being replaced, and the reading this
+    /// queues checks the new one afresh.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> ChangePlacementAsync(
+        Guid id,
+        SurveyModelPlacementRequest request,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IAccessService access,
+        FeatureProtection protection,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
+        var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
+        if (model is null || cave is null
+            || !await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct))
+        {
+            return ApiProblems.NotFound("survey_model.not_found");
+        }
+
+        if (!await SurveyModelAccess.WritableAsync(access, ctx, cave, ct))
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        var (declaration, problem) = UploadDeclaration.ReadRequired(
+            request.SourceEpsg, request.OriginLongitude, request.OriginLatitude, request.OriginHeightM);
+        if (problem is not null)
+        {
+            return problem;
+        }
+
+        model.SourceEpsg = declaration!.SourceEpsg;
+        // A projected file's anchor is derived from its own coordinates by the reading, so the
+        // anchor the old declaration produced is cleared rather than left to say where the file
+        // is under an answer that no longer stands.
+        model.Anchor = declaration.Origin;
+        model.AnchorHeightM = declaration.OriginHeightM;
+        SurveyModelPlacement.Record(model, advice: null);
+
+        // Saved by the queueing, in its transaction: a refusal leaves the row as it was.
+        if (await SurveyModelReading.QueueAgainAsync(db, model, ctx.UserId, ct)
+            == SurveyReadingRequest.AlreadyInProgress)
+        {
+            return ApiProblems.Conflict(
+                "survey_model.reading_in_progress",
+                "This model is already being read. Wait for that reading to finish before asking for another.");
+        }
+
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
+    }
+
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         HttpContext http,
@@ -1149,6 +1272,11 @@ public static class SurveyModelEndpoints
         m.TriangleCount,
         m.ConvertedFileId is { } sized && meshSizes is not null && meshSizes.TryGetValue(sized, out var bytes) ? bytes : null,
         m.SourcePrecisionLost,
+        m.SourceEpsg,
+        m.PlacementOffByKm,
+        m.SuggestedSourceEpsg,
+        m.SuggestsLocalMetres,
+        m.SuggestedOffByKm,
         m.DroppedShotCount,
         m.MergedStationCount,
         m.AnonymousStationCount,

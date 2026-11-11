@@ -9,17 +9,17 @@ import {
   usePlaceSurveyModel,
   useUnplaceSurveyModel,
   type SurveyModelInfo,
-  type SurveyModelPlacementRequest,
+  type ScanPlacementRequest,
 } from '../../api/hooks.ts';
 import { surveyModelProblemMessage } from './surveyModelProblems.ts';
 import ScanControlPointsPlacer from './ScanControlPointsPlacer.tsx';
 
 /** Where a placement came from, as the row words it; literal keys so the parity checks see each one. */
 const SOURCE_LABEL_KEYS: Record<NonNullable<SurveyModelInfo['placementSource']>, string> = {
-  manual: 'surveyModels.placement.byHand',
-  fileCrs: 'surveyModels.placement.fromFile',
-  controlPoints: 'surveyModels.placement.byControlPoints',
-  gnss: 'surveyModels.placement.fromGnss',
+  manual: 'surveyModels.scanPlacement.byHand',
+  fileCrs: 'surveyModels.scanPlacement.fromFile',
+  controlPoints: 'surveyModels.scanPlacement.byControlPoints',
+  gnss: 'surveyModels.scanPlacement.fromGnss',
 };
 
 interface PlacementForm {
@@ -81,7 +81,7 @@ export default function ScanPlacementControl({
 
   const submit = async () => {
     const values = await form.validateFields();
-    const placement: SurveyModelPlacementRequest = {
+    const placement: ScanPlacementRequest = {
       longitude: values.longitude,
       latitude: values.latitude,
       heightM: values.heightM,
@@ -89,10 +89,10 @@ export default function ScanPlacementControl({
     };
     try {
       await place.mutateAsync({ id: model.id, caveId, placement });
-      message.success(t('surveyModels.placement.placed'));
+      message.success(t('surveyModels.scanPlacement.placed'));
       setOpen(false);
     } catch (error) {
-      message.error(surveyModelProblemMessage(error, t, 'surveyModels.placement.failed'));
+      message.error(surveyModelProblemMessage(error, t, 'surveyModels.scanPlacement.failed'));
     }
   };
 
@@ -108,28 +108,28 @@ export default function ScanPlacementControl({
         <Tag color="geekblue" data-testid={`scan-placement-state-${model.id}`}>
           {t(SOURCE_LABEL_KEYS[model.placementSource ?? 'manual'])}
           {model.placementHeadingDeg !== null && (
-            <> · {t('surveyModels.placement.bearing', { degrees: Math.round(model.placementHeadingDeg) })}</>
+            <> · {t('surveyModels.scanPlacement.bearing', { degrees: Math.round(model.placementHeadingDeg) })}</>
           )}
           {model.placementControlPoints && (
             <>
               {' · '}
-              {t('surveyModels.placement.rms', {
+              {t('surveyModels.scanPlacement.rms', {
                 metres: (Math.round(model.placementControlPoints.rmsM * 100) / 100).toString(),
               })}
             </>
           )}
         </Tag>
       ) : (
-        <Tag data-testid={`scan-placement-state-${model.id}`}>{t('surveyModels.placement.notPlaced')}</Tag>
+        <Tag data-testid={`scan-placement-state-${model.id}`}>{t('surveyModels.scanPlacement.notPlaced')}</Tag>
       )}
       {canEdit && (
         <>
-          <Tooltip title={t(placed ? 'surveyModels.placement.correct' : 'surveyModels.placement.place')}>
+          <Tooltip title={t(placed ? 'surveyModels.scanPlacement.correct' : 'surveyModels.scanPlacement.place')}>
             <Button
               size="small"
               type="text"
               icon={<EnvironmentOutlined />}
-              aria-label={t(placed ? 'surveyModels.placement.correct' : 'surveyModels.placement.place')}
+              aria-label={t(placed ? 'surveyModels.scanPlacement.correct' : 'surveyModels.scanPlacement.place')}
               onClick={openDialog}
               data-testid={`scan-place-${model.id}`}
             />
@@ -157,17 +157,17 @@ export default function ScanPlacementControl({
           )}
           {placed && (
             <Popconfirm
-              title={t('surveyModels.placement.removeConfirm')}
+              title={t('surveyModels.scanPlacement.removeConfirm')}
               onConfirm={async () => {
                 try {
                   await unplace.mutateAsync({ id: model.id, caveId });
                 } catch (error) {
-                  message.error(surveyModelProblemMessage(error, t, 'surveyModels.placement.failed'));
+                  message.error(surveyModelProblemMessage(error, t, 'surveyModels.scanPlacement.failed'));
                 }
               }}
             >
               <Button size="small" type="text" data-testid={`scan-unplace-${model.id}`}>
-                {t('surveyModels.placement.remove')}
+                {t('surveyModels.scanPlacement.remove')}
               </Button>
             </Popconfirm>
           )}
@@ -175,36 +175,36 @@ export default function ScanPlacementControl({
       )}
       <Modal
         open={open}
-        title={t(placed ? 'surveyModels.placement.correct' : 'surveyModels.placement.place')}
+        title={t(placed ? 'surveyModels.scanPlacement.correct' : 'surveyModels.scanPlacement.place')}
         onCancel={() => setOpen(false)}
         onOk={() => void submit()}
-        okText={t('surveyModels.placement.save')}
+        okText={t('surveyModels.scanPlacement.save')}
         confirmLoading={place.isPending}
         destroyOnHidden
       >
         <Flex vertical gap={12} data-testid="scan-placement-dialog">
-          <Typography.Text type="secondary">{t('surveyModels.placement.hint')}</Typography.Text>
+          <Typography.Text type="secondary">{t('surveyModels.scanPlacement.hint')}</Typography.Text>
           {!placed && exactEntrance === undefined && (
             <Typography.Text type="warning" data-testid="scan-placement-no-entrance">
-              {t('surveyModels.placement.noEntrance')}
+              {t('surveyModels.scanPlacement.noEntrance')}
             </Typography.Text>
           )}
           {model.placementSource === 'fileCrs' && (
-            <Typography.Text type="secondary">{t('surveyModels.placement.fromFileHint')}</Typography.Text>
+            <Typography.Text type="secondary">{t('surveyModels.scanPlacement.fromFileHint')}</Typography.Text>
           )}
           <Form form={form} layout="vertical" requiredMark={false}>
             <Flex gap={12} wrap>
               <Form.Item
                 name="longitude"
                 label={t('surveyModels.originLongitude')}
-                rules={[{ required: true, message: t('surveyModels.placement.required') }]}
+                rules={[{ required: true, message: t('surveyModels.scanPlacement.required') }]}
               >
                 <InputNumber min={-180} max={180} step={0.00001} style={{ width: 160 }} data-testid="scan-placement-longitude" />
               </Form.Item>
               <Form.Item
                 name="latitude"
                 label={t('surveyModels.originLatitude')}
-                rules={[{ required: true, message: t('surveyModels.placement.required') }]}
+                rules={[{ required: true, message: t('surveyModels.scanPlacement.required') }]}
               >
                 <InputNumber min={-90} max={90} step={0.00001} style={{ width: 160 }} data-testid="scan-placement-latitude" />
               </Form.Item>
@@ -213,15 +213,15 @@ export default function ScanPlacementControl({
               <Form.Item
                 name="heightM"
                 label={t('surveyModels.originHeightM')}
-                rules={[{ required: true, message: t('surveyModels.placement.required') }]}
+                rules={[{ required: true, message: t('surveyModels.scanPlacement.required') }]}
               >
                 <InputNumber min={-500} max={9000} style={{ width: 160 }} data-testid="scan-placement-height" />
               </Form.Item>
               <Form.Item
                 name="headingDeg"
-                label={t('surveyModels.placement.heading')}
-                tooltip={t('surveyModels.placement.headingHint')}
-                rules={[{ required: true, message: t('surveyModels.placement.required') }]}
+                label={t('surveyModels.scanPlacement.heading')}
+                tooltip={t('surveyModels.scanPlacement.headingHint')}
+                rules={[{ required: true, message: t('surveyModels.scanPlacement.required') }]}
               >
                 <InputNumber min={0} max={360} style={{ width: 160 }} data-testid="scan-placement-heading" />
               </Form.Item>

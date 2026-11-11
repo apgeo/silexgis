@@ -6398,6 +6398,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("double precision")
                         .HasColumnName("placement_heading_deg");
 
+                    b.Property<double?>("PlacementOffByKm")
+                        .HasColumnType("double precision")
+                        .HasColumnName("placement_off_by_km");
+
                     b.Property<double?>("PlacementPitchDeg")
                         .HasColumnType("double precision")
                         .HasColumnName("placement_pitch_deg");
@@ -6439,6 +6443,18 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<short>("Status")
                         .HasColumnType("smallint")
                         .HasColumnName("status");
+
+                    b.Property<double?>("SuggestedOffByKm")
+                        .HasColumnType("double precision")
+                        .HasColumnName("suggested_off_by_km");
+
+                    b.Property<int?>("SuggestedSourceEpsg")
+                        .HasColumnType("integer")
+                        .HasColumnName("suggested_source_epsg");
+
+                    b.Property<bool>("SuggestsLocalMetres")
+                        .HasColumnType("boolean")
+                        .HasColumnName("suggests_local_metres");
 
                     b.Property<Guid?>("SurveyUploadId")
                         .HasColumnType("uuid")

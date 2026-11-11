@@ -4389,6 +4389,21 @@
     "readAgainHint": "The file stored for this model is read again, and what the last reading produced is replaced by what this one produces. Nothing has to be uploaded. Use it after an upgrade that reads surveys better, or when a reading failed for a reason that has since gone.",
     "readAgainStarted": "The reading is queued. This list updates itself when it is done.",
     "readAgainFailed": "The reading could not be started",
+    "placement": {
+      "change": "Change placement",
+      "title": "Where this survey sits in the world",
+      "hint": "The stored file is read again under this answer; nothing has to be uploaded again. Until that reading is done, what the last one produced stays in use.",
+      "far": "Placed as declared, this survey lands {{km}} km from its cave.",
+      "suggestEpsg": "Read as EPSG:{{epsg}}, it lands {{km}} km from the cave.",
+      "suggestEpsgUnmeasured": "Read as EPSG:{{epsg}}, it would sit at the cave.",
+      "suggestLocal": "Its numbers are small enough to be metres from a point rather than a projected grid.",
+      "suggestedHere": "Filled in with the suggested placement. Check the altitude before reading the survey again.",
+      "useEpsg": "Use EPSG:{{epsg}}",
+      "useLocal": "Use metres from a point",
+      "submit": "Read again with this placement",
+      "started": "The survey is being read again with the new placement. This list updates itself when it is done.",
+      "failed": "The placement could not be changed"
+    },
     "readingAgain": "Being read again",
     "convertingAgain": "Being converted again",
     "currentHint": "The current line plot is what the map and the measurements read; the current wall mesh is what the 3D scene draws. The first model of each kind stays current until you choose another here; choosing a line plot also makes its centerline the cave's shape on the map.",
@@ -4435,7 +4450,7 @@
     "plotDeclaration": "Where this survey sits in the world",
     "plotDeclarationRequiredHint": "A .lox file has no field for a coordinate system, so it never says where it is. Say what its numbers mean — without this the survey cannot be placed, and nothing can be read out of it.",
     "plotDeclarationOptionalHint": "A .3d file states its own coordinate system only when the survey was compiled with one. If this one does, that is used and what you give here is ignored; if it does not, this is the only thing that can place it.",
-    "placement": {
+    "scanPlacement": {
       "notPlaced": "Not placed",
       "byHand": "Placed by hand",
       "fromFile": "Placed from the file's coordinates",

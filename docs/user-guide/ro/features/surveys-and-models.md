@@ -272,6 +272,27 @@ sau UTM. Dă **codul EPSG**.
 De reținut și: înălțimile din aceste fișiere se măsoară de la originea proprie a exportului, nu
 de la nivelul mării.
 
+### Când poziționarea este greșită
+
+Dacă alegi opțiunea greșită, SilexGIS observă acest lucru când citește fișierul, cu condiția ca
+peștera să aibă o poziție înregistrată. Prinde două greșeli:
+
+- **Un fișier proiectat încărcat ca metri față de un punct.** Citirea eșuează și spune că
+  numerele sunt mult prea mari pentru a fi metri față de un punct.
+- **Un cod EPSG greșit**, de exemplu fusul UTM vecin. Topografia este citită, dar rândul
+  modelului spune la câți kilometri de peșteră a ajuns.
+
+În ambele cazuri, SilexGIS încearcă și fusul UTM în care se află peștera, cele două fusuri
+vecine și grilele naționale europene obișnuite, printre ele Stereo70. Dacă una dintre ele pune
+topografia la peșteră, rândul o numește, de exemplu *Citită ca EPSG:32634, ajunge la 0.5 km de
+peșteră*, și oferă un buton pentru a o folosi. Dacă numerele sunt destul de mici pentru a fi
+metri față de un punct, butonul oferă asta. Oricare buton deschide formularul de poziționare
+deja completat. Verifică altitudinea, apoi confirmă, iar fișierul păstrat este citit din nou. Nu
+trebuie să-l încarci din nou.
+
+**Schimbă poziționarea** (pictograma cu acul de pe rândul oricărui model) deschide același
+formular, așa că poți schimba declarația unui model chiar dacă nu s-a găsit nimic greșit la ea.
+
 Odată convertiți, pereții sunt desenați în [scena 3D](3d-view.md#pereții-peșterii-selectate)
 numai pentru peștera selectată. Lista de modele arată mărimea rețelei convertite în megaocteți
 lângă numărul de triunghiuri, iar scena spune mărimea cât timp o descarcă (iar peste o anumită
@@ -286,7 +307,11 @@ Nu trebuie să exporți un `.stl` ca să vezi pereți. Când un model de drumuir
 același model se construiesc pereți din ce conține fișierul însuși, și din nimic altceva:
 
 - **Un `.lox` cu schițe (scraps)** — suprafețele de perete pe care Therion le-a modelat din
-  desenele tale — este desenat exact cu acele suprafețe.
+  desenele tale — este desenat exact cu acele suprafețe. Therion scrie suprafețe numai pentru
+  galeriile pe care le-ai desenat. O galerie topografiată dar nedesenată, ale cărei dimensiuni au
+  fost măsurate, primește un tub, ca la punctul următor. Pereții ei stau atunci lângă cei desenați,
+  în loc să lipsească din model. O viză contează ca desenată când un perete desenat trece, față de
+  mijlocul vizei, la cel mult cea mai mare dimensiune măsurată a ei plus 3 m.
 - **Un `.lox` fără schițe, sau un `.3d`**, primește un tub de-a lungul fiecărei vize ale cărei
   **dimensiuni de galerie** (stânga, dreapta, sus, jos) au fost măsurate la ambele capete. Fiecare
   stație măsurată devine un inel prin cele patru puncte măsurate — stânga și dreapta așezate

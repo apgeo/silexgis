@@ -98,7 +98,7 @@ export default function ScanControlPointsPlacer({
       setResult(placed.placementControlPoints);
       message.success(t('surveyModels.controlPoints.placed'));
     } catch (error) {
-      message.error(surveyModelProblemMessage(error, t, 'surveyModels.placement.failed'));
+      message.error(surveyModelProblemMessage(error, t, 'surveyModels.scanPlacement.failed'));
     }
   };
 

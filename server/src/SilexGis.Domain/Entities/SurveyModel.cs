@@ -188,6 +188,28 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     public bool SourcePrecisionLost { get; set; }
 
     /// <summary>
+    /// How far from its cave the file landed as declared, when that was far enough to doubt the
+    /// declaration. Null when it landed near its cave, could not be placed, or the cave has no
+    /// position to compare with.
+    /// </summary>
+    public double? PlacementOffByKm { get; set; }
+
+    /// <summary>
+    /// The projected system that would place the file at its cave, found by trying the grids a
+    /// survey there is commonly written in, when the declared one does not. Null otherwise.
+    /// </summary>
+    public int? SuggestedSourceEpsg { get; set; }
+
+    /// <summary>
+    /// The file's numbers are metres about a point although a projected system was declared for
+    /// them, so it should be declared as local instead.
+    /// </summary>
+    public bool SuggestsLocalMetres { get; set; }
+
+    /// <summary>How far from its cave the file would land as suggested, when that is known.</summary>
+    public double? SuggestedOffByKm { get; set; }
+
+    /// <summary>
     /// How many legs the extraction could not attach to the station network, or null before a
     /// line-plot model has been read.
     ///

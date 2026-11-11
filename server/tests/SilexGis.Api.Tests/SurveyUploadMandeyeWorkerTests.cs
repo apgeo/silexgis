@@ -353,7 +353,7 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
         (Math.Abs(lat - WalkLatitude) * 111320.0).ShouldBeLessThan(1.0);
 
         // A hand placement made afterwards is not taken back by the fixes when the tiles are made again.
-        var byHand = await owner.PutAsJsonAsync($"/api/v1/survey-models/{model.Id}/placement",
+        var byHand = await owner.PutAsJsonAsync($"/api/v1/survey-models/{model.Id}/scan-placement",
             new { longitude = 25.5, latitude = 45.9, heightM = 700, headingDeg = 10 });
         byHand.StatusCode.ShouldBe(HttpStatusCode.OK, await byHand.Content.ReadAsStringAsync());
         var rerun = await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{id}/rerun", new { fromStep = Py3dtilesTileStep.StepId });
@@ -507,7 +507,7 @@ public sealed class SurveyUploadMandeyeWorkerTests : IAsyncLifetime, IDisposable
         (await anonymous.GetAsync($"/api/v1/survey-models/{modelId}/centreline")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
         // Taken off the earth, the line is still drawn over the tiles and has no place on the map.
-        (await owner.DeleteAsync($"/api/v1/survey-models/{modelId}/placement")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.DeleteAsync($"/api/v1/survey-models/{modelId}/scan-placement")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await owner.GetAsync($"/api/v1/survey-models/{modelId}/centreline")).StatusCode.ShouldBe(HttpStatusCode.OK);
         var unplaced = await owner.GetAsync($"/api/v1/survey-models/{modelId}/centreline?frame=world");
         unplaced.StatusCode.ShouldBe(HttpStatusCode.Conflict, await unplaced.Content.ReadAsStringAsync());

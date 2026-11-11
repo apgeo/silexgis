@@ -1276,7 +1276,11 @@ export interface FakeModelRequest {
   url: string;
   modelMatrix: FakeMatrix4;
   allowPicking: boolean | undefined;
+  forwardAxis: number | undefined;
 }
+
+/** The library's axis names, with its own values. */
+export const Axis = { X: 0, Y: 1, Z: 2 } as const;
 
 /**
  * A loaded model.
@@ -1311,11 +1315,13 @@ export class Model {
     url: string;
     modelMatrix: FakeMatrix4;
     allowPicking?: boolean;
+    forwardAxis?: number;
   }): Promise<Model> {
     const request: FakeModelRequest = {
       url: options.url,
       modelMatrix: options.modelMatrix,
       allowPicking: options.allowPicking,
+      forwardAxis: options.forwardAxis,
     };
     engineState.modelRequests.push(request);
     return new Promise<Model>((resolve, reject) => {

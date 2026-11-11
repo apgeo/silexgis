@@ -34,11 +34,16 @@ namespace SilexGis.Infrastructure.Surveys;
 /// measured from is knowledge that only the surveyor has.
 /// </para>
 /// </param>
+/// <param name="CavePosition">
+/// Where the cave the file belongs to is, when it has a position: what the placement is checked
+/// against, so that a file declared in the wrong coordinates is noticed and the right ones offered.
+/// </param>
 public sealed record SurveySourceDeclaration(
     int? SourceEpsg,
     double? OriginLongitude,
     double? OriginLatitude,
-    double OriginHeightM);
+    double OriginHeightM,
+    (double Longitude, double Latitude)? CavePosition = null);
 
 /// <summary>
 /// Where a survey file's own numbers sit in the world: which point the file is written about, where
@@ -95,14 +100,6 @@ public sealed class SurveyPlacement
     /// </summary>
     private const double MaxGridScaleDeviation = 0.01;
 
-    /// <summary>
-    /// How far the middle of a file declared in local metres may be from its zero point. The
-    /// largest cave systems reach a few tens of kilometres from their fixed station; a projected
-    /// grid's numbers are hundreds of thousands to millions. A hundred kilometres sits well clear
-    /// of both.
-    /// </summary>
-    private const double MaxLocalReachM = 100_000;
-
     private readonly double turnCos;
     private readonly double turnSin;
     private readonly double degreesPerMetreNorth;
@@ -113,11 +110,13 @@ public sealed class SurveyPlacement
         (double X, double Y, double Z) origin,
         ProjectedPoint anchor,
         double originHeightM,
-        ProjectedPoint? gridStepNorth = null)
+        ProjectedPoint? gridStepNorth = null,
+        SurveyPlacementAdvice? advice = null)
     {
         Origin = origin;
         Anchor = anchor;
         OriginHeightM = originHeightM;
+        Advice = advice;
 
         var radians = AppliedRotationDeg * Math.PI / 180.0;
         turnCos = Math.Cos(radians);
@@ -165,6 +164,12 @@ public sealed class SurveyPlacement
     public double OriginHeightM { get; }
 
     /// <summary>
+    /// A declaration that would place the file at its cave, when the one it was given places it
+    /// far from there. The file is placed as declared regardless: the person decides.
+    /// </summary>
+    public SurveyPlacementAdvice? Advice { get; }
+
+    /// <summary>
     /// The turn from grid north to true north that has already been applied to every point this
     /// placement produced. Recorded for the audit trail; applying it again turns the cave twice.
     /// </summary>
@@ -207,14 +212,19 @@ public sealed class SurveyPlacement
             // grid. Placed as metres from the given point it lands hundreds or thousands of
             // kilometres away — off the map and outside any 3D view — while every stage reports
             // success, so it is refused here with the reason rather than drawn nowhere.
-            var (localX, localY) = footprintCentre();
-            if (Math.Sqrt((localX * localX) + (localY * localY)) > MaxLocalReachM)
+            var local = footprintCentre();
+            if (SurveyPlacementCheck.LooksProjected(local))
             {
+                var advice = SurveyPlacementCheck.ForLocalFileOnAGrid(projector, local, declaration.CavePosition);
                 throw new SurveySourceException(
-                    $"This file's coordinates are around {localX:F0} east and {localY:F0} north — far too "
+                    $"This file's coordinates are around {local.X:F0} east and {local.Y:F0} north — far too "
                     + "large to be metres from one point of a cave. They look like a projected grid "
-                    + "(such as UTM or a national grid): upload it again declared as a projected "
-                    + "coordinate system, with that grid's EPSG code.");
+                    + "(such as UTM or a national grid): declare it as a projected coordinate system, "
+                    + "with that grid's EPSG code."
+                    + (advice is { SourceEpsg: { } code }
+                        ? $" Read as EPSG:{code} it lands {advice.SuggestedOffByKm:F1} km from the cave."
+                        : string.Empty),
+                    advice);
             }
 
             return new SurveyPlacement((0, 0, 0), new ProjectedPoint(lon, lat, 0), declaration.OriginHeightM);
@@ -225,16 +235,33 @@ public sealed class SurveyPlacement
         // precision. The centre of its own footprint is the closest such point to every part of it.
         var (centreX, centreY) = footprintCentre();
 
-        var anchor = projector.ToWgs84(epsg, centreX, centreY)
-            ?? throw new SurveySourceException(
-                $"EPSG:{epsg} is not a coordinate system this installation can resolve, so the "
-                + "file's coordinates cannot be placed.");
+        var resolved = projector.ToWgs84(epsg, centreX, centreY);
+        var onTheWorld = resolved is { } r && Math.Abs(r.Latitude) <= 90 && Math.Abs(r.Longitude) <= 180;
 
-        if (Math.Abs(anchor.Latitude) > 90 || Math.Abs(anchor.Longitude) > 180)
+        // Checked against the cave before anything else, so that a declaration that cannot place
+        // the file at all is refused with the one that would, and one that places it somewhere
+        // implausible is still placed but carries the alternative.
+        var projectedAdvice = SurveyPlacementCheck.ForProjectedFile(
+            projector,
+            epsg,
+            (centreX, centreY),
+            onTheWorld ? (resolved!.Value.Longitude, resolved.Value.Latitude) : null,
+            declaration.CavePosition);
+
+        if (resolved is not { } anchor)
+        {
+            throw new SurveySourceException(
+                $"EPSG:{epsg} is not a coordinate system this installation can resolve, so the "
+                + "file's coordinates cannot be placed.",
+                projectedAdvice);
+        }
+
+        if (!onTheWorld)
         {
             throw new SurveySourceException(
                 $"Read as EPSG:{epsg}, this file's coordinates fall outside the world. Check the "
-                + "coordinate system the survey was exported in.");
+                + "coordinate system the survey was exported in.",
+                projectedAdvice);
         }
 
         // Where a step due grid-north from the anchor actually lands, which is what says how much
@@ -244,7 +271,7 @@ public sealed class SurveyPlacement
         // at all.
         var stepped = projector.ToWgs84(epsg, centreX, centreY + GridStepM);
 
-        return new SurveyPlacement((centreX, centreY, 0), anchor, declaration.OriginHeightM, stepped);
+        return new SurveyPlacement((centreX, centreY, 0), anchor, declaration.OriginHeightM, stepped, projectedAdvice);
     }
 
     /// <summary>

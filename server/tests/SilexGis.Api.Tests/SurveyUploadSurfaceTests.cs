@@ -440,7 +440,7 @@ public sealed class SurveyUploadSurfaceTests : IAsyncLifetime, IDisposable, ICla
 
     private static async Task PlaceAsync(HttpClient client, Guid scanId, double headingDeg)
     {
-        var placed = await client.PutAsJsonAsync($"/api/v1/survey-models/{scanId}/placement", new
+        var placed = await client.PutAsJsonAsync($"/api/v1/survey-models/{scanId}/scan-placement", new
         {
             longitude = 25.5,
             latitude = 45.25,

@@ -255,7 +255,7 @@ test('a reader without the exact position is told neither where the scan is nor 
   const upload = await uploadLas(page, caveId, 'E2E protected scan');
   expect(upload.status, JSON.stringify(upload)).toBe('succeeded');
   const modelId = upload.pointCloud!.modelId;
-  await asPerson(page, 'PUT', `/api/v1/survey-models/${modelId}/placement`, {
+  await asPerson(page, 'PUT', `/api/v1/survey-models/${modelId}/scan-placement`, {
     longitude: 25.2093,
     latitude: 45.5187,
     heightM: 1200,
@@ -386,7 +386,7 @@ test('a scan is placed by control points on the cave line plot, its residuals sh
   const placed = await asPerson<{ placementSource: string; placementControlPoints: { rmsM: number } | null }>(
     page,
     'PUT',
-    `/api/v1/survey-models/${modelId}/placement/control-points`,
+    `/api/v1/survey-models/${modelId}/scan-placement/control-points`,
     {
       pairs: [
         { scanX: 0, scanY: 0, scanZ: 0, station: first.name },
@@ -436,7 +436,7 @@ test('a scan is placed by control points on the cave line plot, its residuals sh
 
   const sent = page.waitForResponse(
     (response) =>
-      response.url().includes(`/api/v1/survey-models/${modelId}/placement/control-points`) &&
+      response.url().includes(`/api/v1/survey-models/${modelId}/scan-placement/control-points`) &&
       response.request().method() === 'PUT',
   );
   await page.getByTestId('scan-control-save').click();
@@ -454,7 +454,7 @@ test('a placed scan is made into a surface for another cave, and the result poin
   const upload = await uploadLas(page, caveId, 'E2E surface survey');
   expect(upload.status, JSON.stringify(upload)).toBe('succeeded');
   const modelId = upload.pointCloud!.modelId;
-  await asPerson(page, 'PUT', `/api/v1/survey-models/${modelId}/placement`, {
+  await asPerson(page, 'PUT', `/api/v1/survey-models/${modelId}/scan-placement`, {
     longitude: 25.2093,
     latitude: 45.5187,
     heightM: 1200,

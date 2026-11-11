@@ -27,15 +27,15 @@ namespace SilexGis.Api.Features.Caves;
 /// The compass bearing the tiles' +Y axis is to point along, degrees clockwise from true north.
 /// Any finite value is read; it is stored in [0, 360).
 /// </param>
-public sealed record SurveyModelPlacementRequest(
+public sealed record ScanPlacementRequest(
     double Longitude,
     double Latitude,
     double HeightM,
     double HeadingDeg);
 
-public sealed class SurveyModelPlacementRequestValidator : AbstractValidator<SurveyModelPlacementRequest>
+public sealed class ScanPlacementRequestValidator : AbstractValidator<ScanPlacementRequest>
 {
-    public SurveyModelPlacementRequestValidator()
+    public ScanPlacementRequestValidator()
     {
         // Whether the three together are a place on earth a cave is at is the placement's own
         // rule, and this is where it is applied to a request. The per-member rules below say the
@@ -169,20 +169,20 @@ public static class SurveyModelPlacementEndpoints
 {
     public static RouteGroupBuilder MapSurveyModelPlacementEndpoints(this RouteGroupBuilder api)
     {
-        api.MapPut("/survey-models/{id:guid}/placement", PlaceAsync)
-            .WithValidation<SurveyModelPlacementRequest>()
+        api.MapPut("/survey-models/{id:guid}/scan-placement", PlaceAsync)
+            .WithValidation<ScanPlacementRequest>()
             .WithTags("SurveyModels")
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithSummary("Places a point cloud, or places it again: its tiles' zero point at a position and altitude, its frame turned to a bearing (Write on the cave, with its exact location). The tiles are not touched. Refused for a line plot or a wall mesh.");
-        api.MapPut("/survey-models/{id:guid}/placement/control-points", PlaceByControlPointsAsync)
+        api.MapPut("/survey-models/{id:guid}/scan-placement/control-points", PlaceByControlPointsAsync)
             .WithValidation<SurveyModelControlPointsRequest>()
             .WithTags("SurveyModels")
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithSummary("Places a point cloud by pairs of a point picked in the scan and a station of the cave's current line plot: the translation and heading (and, when asked, a small tilt) that bring the points closest to their stations, stored with each pair's residual and their RMS; pairs over the installation's warning distance are flagged (Write on the cave, with its exact location). The tiles are not touched.");
-        api.MapDelete("/survey-models/{id:guid}/placement", UnplaceAsync)
+        api.MapDelete("/survey-models/{id:guid}/scan-placement", UnplaceAsync)
             .WithTags("SurveyModels")
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
@@ -192,7 +192,7 @@ public static class SurveyModelPlacementEndpoints
 
     private static async Task<Results<Ok<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> PlaceAsync(
         Guid id,
-        SurveyModelPlacementRequest request,
+        ScanPlacementRequest request,
         HttpContext http,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,

@@ -129,7 +129,7 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         var archiveBefore = await ArchiveIdAsync(scan.ModelId);
         var jobsBefore = await JobCountAsync();
 
-        var placed = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement",
+        var placed = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement",
             new { longitude = lon, latitude = lat, heightM = 980, headingDeg = -45 });
         placed.StatusCode.ShouldBe(HttpStatusCode.OK, await placed.Content.ReadAsStringAsync());
         var dto = await placed.Content.ReadFromJsonAsync<JsonElement>();
@@ -156,7 +156,7 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         item.GetProperty("tilesetUrl").GetString().ShouldStartWith($"/api/v1/survey-models/{scan.ModelId}/tiles/tileset.json?token=");
 
         // Corrected: a changed row, nothing queued, the same archive.
-        var corrected = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement",
+        var corrected = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement",
             new { longitude = lon, latitude = lat, heightM = 990, headingDeg = 10.5 });
         corrected.StatusCode.ShouldBe(HttpStatusCode.OK, await corrected.Content.ReadAsStringAsync());
         (await corrected.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("placementHeadingDeg").GetDouble().ShouldBe(10.5);
@@ -168,7 +168,7 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         root.StatusCode.ShouldBe(HttpStatusCode.OK, "the address handed out before the placement still opens");
 
         // Taken away: viewable in its own frame still, off the map.
-        var unplaced = await owner.DeleteAsync($"/api/v1/survey-models/{scan.ModelId}/placement");
+        var unplaced = await owner.DeleteAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement");
         unplaced.StatusCode.ShouldBe(HttpStatusCode.OK, await unplaced.Content.ReadAsStringAsync());
         var gone = await unplaced.Content.ReadFromJsonAsync<JsonElement>();
         gone.GetProperty("anchorLongitude").ValueKind.ShouldBe(JsonValueKind.Null);
@@ -190,7 +190,7 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
             new { longitude = 25, latitude = 45, heightM = -600, headingDeg = 0 },
         })
         {
-            var refused = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement", body);
+            var refused = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement", body);
             refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, JsonSerializer.Serialize(body));
         }
 
@@ -207,21 +207,21 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         var scan = await TiledScanAsync(owner, caveId);
         var body = new { longitude = 25.4472, latitude = 45.5312, heightM = 952, headingDeg = 90 };
 
-        (await nobody.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement", body))
+        (await nobody.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement", body))
             .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        (await nobody.DeleteAsync($"/api/v1/survey-models/{scan.ModelId}/placement"))
+        (await nobody.DeleteAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement"))
             .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
-        var placed = await reader.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement", body);
+        var placed = await reader.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement", body);
         placed.StatusCode.ShouldBe(HttpStatusCode.OK, await placed.Content.ReadAsStringAsync());
         (await reader.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{scan.ModelId}"))
             .GetProperty("placementHeadingDeg").GetDouble().ShouldBe(90);
 
         // May see the cave and its position, may not write it: forbidden, and still reads the placement.
         await GrantAsync(caveId, "read, viewExactLocation");
-        var forbidden = await reader.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement", body with { headingDeg = 180 });
+        var forbidden = await reader.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement", body with { headingDeg = 180 });
         forbidden.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await forbidden.Content.ReadAsStringAsync());
-        (await reader.DeleteAsync($"/api/v1/survey-models/{scan.ModelId}/placement")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await reader.DeleteAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await reader.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{scan.ModelId}"))
             .GetProperty("placementHeadingDeg").GetDouble().ShouldBe(90, "a refused write changes nothing");
 
@@ -229,9 +229,9 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         // theirs to find, and the placement — the position by another name — is told to nobody
         // without the right, however much else they may do to the cave.
         await GrantAsync(caveId, "read, write");
-        var closed = await reader.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement", body);
+        var closed = await reader.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement", body);
         closed.StatusCode.ShouldBe(HttpStatusCode.NotFound, await closed.Content.ReadAsStringAsync());
-        (await reader.DeleteAsync($"/api/v1/survey-models/{scan.ModelId}/placement")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.DeleteAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await reader.GetAsync($"/api/v1/survey-models/{scan.ModelId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/survey-models")).GetArrayLength().ShouldBe(0);
         (await ScansAtAsync(reader, 25.4472, 45.5312)).GetProperty("total").GetInt32().ShouldBe(0);
@@ -267,14 +267,14 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         }
 
         var body = new { longitude = 25.4472, latitude = 45.5312, heightM = 952, headingDeg = 0 };
-        var refused = await owner.PutAsJsonAsync($"/api/v1/survey-models/{linePlotId}/placement", body);
+        var refused = await owner.PutAsJsonAsync($"/api/v1/survey-models/{linePlotId}/scan-placement", body);
         refused.StatusCode.ShouldBe(HttpStatusCode.Conflict, await refused.Content.ReadAsStringAsync());
         (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString().ShouldBe("survey_model.not_placeable");
-        var refusedToo = await owner.DeleteAsync($"/api/v1/survey-models/{linePlotId}/placement");
+        var refusedToo = await owner.DeleteAsync($"/api/v1/survey-models/{linePlotId}/scan-placement");
         refusedToo.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
         // The scan beside it is placed, as a scan is.
-        (await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement", body)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement", body)).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -348,7 +348,7 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
             // The worker is tiling; meanwhile somebody places the scan on an entrance by hand.
             var upload = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{uploadId}");
             modelId = upload.GetProperty("pointCloud").GetProperty("modelId").GetGuid();
-            var placed = await owner.PutAsJsonAsync($"/api/v1/survey-models/{modelId}/placement",
+            var placed = await owner.PutAsJsonAsync($"/api/v1/survey-models/{modelId}/scan-placement",
                 new { longitude = 25.4472, latitude = 45.5312, heightM = 952, headingDeg = 300 });
             placedWhileTiling = placed.StatusCode;
         };
@@ -399,7 +399,7 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         await LinePlotAsync(caveId, scan.ModelId, wrongBy: 2);
         var jobsBefore = await JobCountAsync();
 
-        var placed = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement/control-points", new
+        var placed = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement/control-points", new
         {
             pairs = Picks.Select(p => new { scanX = p.X, scanY = p.Y, scanZ = p.Z, station = p.Station }),
         });
@@ -423,7 +423,7 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         read.GetProperty("placementControlPoints").GetProperty("pairs").GetArrayLength().ShouldBe(4);
 
         // A placement by hand replaces it, and the pairs no longer describe it.
-        var byHand = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement",
+        var byHand = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement",
             new { longitude = 25.4472, latitude = 45.5312, heightM = 952, headingDeg = 10 });
         byHand.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await byHand.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("placementControlPoints").ValueKind.ShouldBe(JsonValueKind.Null);
@@ -436,7 +436,7 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         var scan = await TiledScanAsync(owner, caveId);
         await LinePlotAsync(caveId, scan.ModelId, wrongBy: 0);
 
-        var placed = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/placement/control-points", new
+        var placed = await owner.PutAsJsonAsync($"/api/v1/survey-models/{scan.ModelId}/scan-placement/control-points", new
         {
             pairs = Picks.Select(p => new { scanX = p.X, scanY = p.Y, scanZ = p.Z, station = p.Station }),
             fitTilt = true,
@@ -458,7 +458,7 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
     {
         var caveId = await CreateCaveAsync();
         var scan = await TiledScanAsync(owner, caveId);
-        var url = $"/api/v1/survey-models/{scan.ModelId}/placement/control-points";
+        var url = $"/api/v1/survey-models/{scan.ModelId}/scan-placement/control-points";
         var two = Picks.Take(2).Select(p => new { scanX = p.X, scanY = p.Y, scanZ = p.Z, station = p.Station }).ToArray();
 
         // No line plot yet: no stations to place by.
@@ -491,7 +491,7 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         var caveId = await CreateCaveAsync(locationProtected: true);
         var scan = await TiledScanAsync(owner, caveId);
         await LinePlotAsync(caveId, scan.ModelId, wrongBy: 0);
-        var url = $"/api/v1/survey-models/{scan.ModelId}/placement/control-points";
+        var url = $"/api/v1/survey-models/{scan.ModelId}/scan-placement/control-points";
         var body = new { pairs = Picks.Select(p => new { scanX = p.X, scanY = p.Y, scanZ = p.Z, station = p.Station }) };
 
         (await nobody.PutAsJsonAsync(url, body)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -523,7 +523,7 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
         var caveId = await CreateCaveAsync();
         var scan = await TiledScanAsync(owner, caveId);
         var linePlotId = await LinePlotAsync(caveId, scan.ModelId, wrongBy: 0);
-        var refused = await owner.PutAsJsonAsync($"/api/v1/survey-models/{linePlotId}/placement/control-points", new
+        var refused = await owner.PutAsJsonAsync($"/api/v1/survey-models/{linePlotId}/scan-placement/control-points", new
         {
             pairs = Picks.Select(p => new { scanX = p.X, scanY = p.Y, scanZ = p.Z, station = p.Station }),
         });

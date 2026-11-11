@@ -12,7 +12,8 @@ public sealed record MeshConversionResult(
     int TrianglesRead,
     int DegenerateDropped,
     int VertexCount,
-    bool SourcePrecisionLost);
+    bool SourcePrecisionLost,
+    SurveyPlacementAdvice? Advice = null);
 
 /// <summary>
 /// Turns an uploaded survey mesh into one file the 3D scene can draw, positioned in the world.
@@ -49,7 +50,8 @@ public sealed class SurveyMeshConverter(ICoordinateProjector projector)
             read.TrianglesRead,
             read.DegenerateDropped,
             mesh.VertexCount,
-            read.CoarsestStepM >= StlReader.PrecisionWarningStepM);
+            read.CoarsestStepM >= StlReader.PrecisionWarningStepM,
+            placement.Advice);
     }
 
     /// <summary>Writes every vertex as where it is about the anchor, in ground metres.</summary>
