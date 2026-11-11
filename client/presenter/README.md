@@ -1,0 +1,65 @@
+# Presenter — scripted demonstration movies
+
+Plays a **scenario** in the real application, the way a person would use it, and makes a movie of
+it — or just plays it while you record the screen yourself.
+
+```
+cd client
+node presenter/record.ts presenter/scenarios/grind-3d-tour.ts --target silexgistest            # movie
+node presenter/record.ts presenter/scenarios/grind-3d-tour.ts --target silexgistest --draft    # quick check
+node presenter/record.ts presenter/scenarios/grind-3d-tour.ts --target silexgistest --mode play
+```
+
+Needs Node 24, the client's dependencies, and ffmpeg (on the PATH, or Docker to run the
+`linuxserver/ffmpeg` image). The movie is written to `presenter-output/<scenario>/<time>/movie.mp4`
+(or under `$PRESENTER_OUT`, or `--out <dir>`), with `run.json` beside it.
+
+## Modes
+
+| Mode | What happens | When |
+|---|---|---|
+| `step` (default) | One picture per movie frame, each taken after the 3D scene has finished drawing every tile and model and its data has stopped loading. Encoded to H.264 MP4. | Any machine. Smooth however slowly the scene draws; on a machine without a graphics card, about 30–60 minutes per minute of 1080p30 movie. |
+| `live` | The scenario plays in real time and the browser's frames are kept, then re-timed to a constant frame rate. | A machine that draws the scene at the movie's frame rate (a real graphics card). |
+| `play` | The scenario plays in real time in a visible window; nothing is kept. | You record the screen with your own tool. |
+
+Other switches: `--draft` (1280×720, 8 frames a second, for timing), `--fps`, `--width`,
+`--height`, `--from <s>` and `--to <s>` (record part of it), `--keep-frames`, `--headed`,
+`--probe` (set up, print what the scene holds and save one picture at `--from`), and `--app <dist>`
+(serve a locally built client in place of the site's own scripts, to try a client change before it
+is deployed).
+
+`PRESENTER_DEBUG=1` prints, for every frame, how long the scene took to settle and the picture
+to be taken.
+
+`--target silexgistest` signs in with that instance's published test administrator. Any other
+target (`local` for `http://localhost:8080`, or a URL) takes its account from `PRESENTER_EMAIL` and
+`PRESENTER_PASSWORD`.
+
+## Scenarios
+
+A scenario is plain data (`presenter/scenarios/*.ts` exporting it, or a `.json` file). Its `setup`
+is done before the first frame and not filmed; its `items` run on one clock, in seconds, and may
+overlap — that is how "the camera turns while the basemap changes" is written. Two items that steer
+the same thing (two camera moves, two pointer actions) may not overlap; the recorder refuses such a
+scenario before it starts.
+
+Item kinds (`client/src/presenter/scenario.ts` is the reference):
+
+- `camera` — moves to a pose described **around the drawn cave model**: `heading`/`headingBy`,
+  `pitch`, `range` (in radii of the model's bounding sphere), `lift`. A zero duration jumps; the
+  first one must be at 0 s. A range below about 1 with a low pitch puts the camera underground.
+- `caption`, `title`, `fade` — drawn over the picture.
+- `layerPanel`, `basemap`, `layer`, `basemapOpacity` — done **through the interface** with a
+  visible pointer: open the 3D layer panel, pick a basemap (opening its group), tick a layer, drag
+  the basemap's opacity slider through a list of percentages.
+
+Setup: `cave` (opened in 3D with its walls; among caves matching the name, one that has walls),
+`basemap`, `layersOff`, `hide` (CSS selectors left out of the picture).
+
+## How it works
+
+The application offers a small recording handle on the window **only when the browser is driven
+by automation** (`navigator.webdriver`): set the camera, read where the drawn models are, and wait
+until the scene has finished drawing. The scenario runner (`client/src/presenter/`) is bundled by
+the recorder and put into the page; it moves the camera, the pointer and the overlay from one
+clock, which the recorder either steps frame by frame or lets run in real time.
