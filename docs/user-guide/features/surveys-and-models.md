@@ -306,6 +306,28 @@ taken is drawn as no distance at all rather than guessed. Splays get no tube eit
 measurements *of* the wall, not passages. A survey with neither scraps nor dimensions simply has
 no walls: that is not an error, and the model is still **Ready**.
 
+### Passages without a measured size
+
+The reading counts the passage it could give no walls to — legs with no drawn wall within 5 m of
+their middle and no cross-section with any width — and the model's row says how much there is:
+*"2.9 km of passage (legs: 694) has no measured size … It is shown only as survey lines."*
+
+If you would rather see those passages at a guessed size than not at all, press **Draw at an
+estimated size…** on that row. The dialog opens with a warning, and the warning is the point:
+
+> **These passage sizes are not real.** Every passage without a measured size is drawn as a tube
+> of the one diameter you set — a squeeze and a chamber alike. In the 3D model they look like
+> surveyed passages. Use them to see where the cave goes, never to judge how big a passage is.
+
+You choose the **diameter** (0.2–30 m, 1 m by default) and the **colour** they are built in, and
+the stored file is read again; nothing is uploaded. The estimated tubes are built **apart from the
+walls**, as a separate part of the model in their own colour, so they can never be mistaken for
+walls in the file and the 3D view can hide or recolour them. Once drawn, the row says so in warning
+colour: *"Not measured: 694 legs are drawn at an estimated size of 1 m. These sizes are invented,
+not surveyed."* The button then reads **Estimated passages…**, where you can change the size or
+colour, or switch them off again. Nothing is estimated unless somebody asks, and splays and legs
+flagged as surface or duplicate are never estimated.
+
 The model list shows the triangle count and the size on the plot's own row, with the note *"Walls
 built from this survey's own scraps and passage dimensions"*. A very large system is drawn with
 four-sided rings instead of eight-sided ones; one too large even for that — more than two million

@@ -121,6 +121,15 @@ acolo unde topografia conține schițe sau dimensiuni de galerie măsurate din c
 Vezi [Topografii, drumuiri și modele 3D](surveys-and-models.md#pereții-peșterii-stl) pentru
 încărcare și pentru declarația de coordonate de care are nevoie un `.stl`.
 
+**Galerii de mărime estimată.** Acolo unde galeriile fără mărime măsurată ale unei topografii au
+fost [desenate la o mărime estimată](surveys-and-models.md#galerii-fără-mărime-măsurată),
+comutatorul **Galerii de mărime estimată** de sub **Pereții peșterilor** le arată sau le ascunde
+fără să atingă pereții, iar butoanele de lângă el le colorează: **Ca la construire**, **Ca pereții**
+(pentru a vedea peștera întreagă) sau una dintre cinci culori care se deosebesc de pereți.
+Schimbarea oricăreia redesenează ce este deja încărcat; nu se descarcă nimic din nou. Cât timp
+modelul peșterii selectate are astfel de galerii, panoul spune în culoarea de avertisment câte
+vize sunt desenate la ce mărime estimată și că nu au fost măsurate.
+
 ## Fotografii la stațiile lor
 
 Pentru **peștera selectată**, fiecare fotografie legată de o stație a uneia dintre topografiile ei

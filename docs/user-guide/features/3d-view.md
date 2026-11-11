@@ -116,6 +116,15 @@ holds scraps or measured passage dimensions to build them from.
 See [Surveys, centerlines and 3D models](surveys-and-models.md#cave-walls-stl) for uploading
 and for the coordinate declaration a `.stl` needs.
 
+**Passages of estimated size.** Where a survey's passages without a measured size were
+[drawn at an estimated size](surveys-and-models.md#passages-without-a-measured-size), the
+**Passages of estimated size** switch under **Cave walls** shows or hides them without touching
+the walls, and the buttons beside it colour them: **As built**, **Like the walls** (to see the
+cave whole), or one of five colours that stand out from the walls. Changing either redraws what is
+already loaded; nothing is downloaded again. While the selected cave's model has any, the panel
+says in warning colour how many legs are drawn at which estimated size, and that they were not
+measured.
+
 ## Photographs at their stations
 
 For the **selected cave**, every photograph linked to a station of one of its surveys is marked at

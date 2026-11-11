@@ -326,6 +326,30 @@ laterale nu primesc tub — ele sunt măsurători *ale* peretelui, nu galerii. O
 schițe și fără dimensiuni pur și simplu nu are pereți: nu este o eroare, iar modelul este tot
 **Gata**.
 
+### Galerii fără mărime măsurată
+
+Citirea numără galeriile cărora nu le-a putut da pereți — vize fără niciun perete desenat la mai
+puțin de 5 m de mijlocul lor și fără nicio secțiune cu lățime — iar rândul modelului spune cât
+înseamnă: *„2.9 km de galerie (vize: 694) nu are mărime măsurată … Apare doar ca linii de
+topografie."*
+
+Dacă preferi să vezi aceste galerii la o mărime ghicită decât deloc, apasă **Desenează la o mărime
+estimată…** pe acel rând. Fereastra se deschide cu un avertisment, iar avertismentul este esențial:
+
+> **Aceste mărimi de galerie nu sunt reale.** Fiecare galerie fără mărime măsurată este desenată
+> ca un tub cu diametrul unic stabilit de tine — o strâmtoare la fel ca o sală. În modelul 3D arată
+> ca galerii topografiate. Folosește-le pentru a vedea pe unde merge peștera, niciodată pentru a
+> aprecia cât de mare este o galerie.
+
+Alegi **diametrul** (0,2–30 m, implicit 1 m) și **culoarea** în care sunt construite, iar fișierul
+stocat este citit din nou; nu se încarcă nimic. Tuburile estimate sunt construite **separat de
+pereți**, ca o parte distinctă a modelului, în culoarea lor, așa că nu pot fi confundate cu pereții
+din fișier, iar vederea 3D le poate ascunde sau recolora. Odată desenate, rândul o spune în
+culoarea de avertisment: *„Nemăsurat: 694 vize sunt desenate la o mărime estimată de 1 m. Aceste
+mărimi sunt inventate, nu topografiate."* Butonul devine apoi **Galerii estimate…**, de unde poți
+schimba mărimea sau culoarea ori le poți opri din nou. Nimic nu se estimează dacă nu cere cineva,
+iar vizele laterale și cele marcate ca de suprafață sau duplicate nu sunt estimate niciodată.
+
 Lista de modele arată numărul de triunghiuri și mărimea pe rândul modelului de drumuire, cu nota *„Pereți
 construiți din schițele și dimensiunile de galerie ale acestei topografii"*. Un sistem foarte mare
 este desenat cu inele cu patru laturi în loc de opt; unul prea mare chiar și pentru atât — peste
