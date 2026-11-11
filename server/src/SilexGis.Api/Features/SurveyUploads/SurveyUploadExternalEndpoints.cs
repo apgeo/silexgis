@@ -226,7 +226,7 @@ public static partial class SurveyUploadEndpoints
                 VersionInfoOf(schema.DumpedDefaults),
                 [
                     "HDMapping odometry parameters for one recording, written by SilexGIS.",
-                    $"Written for HDMapping {schema.ToolVersion ?? "(version not recorded)"}.",
+                    $"Written for HDMapping {(schema.ToolVersion is { } version ? OneLineOf(version) : "(version not recorded)")}.",
                 ]);
             return ("parameters.toml", text);
         }
@@ -265,7 +265,7 @@ public static partial class SurveyUploadEndpoints
         text.Append("Tool: ").Append(waiting.Definition.Tool);
         if (!string.IsNullOrEmpty(schema.ToolVersion))
         {
-            text.Append(", version ").Append(schema.ToolVersion).Append(" on the server");
+            text.Append(", version ").Append(OneLineOf(schema.ToolVersion)).Append(" on the server");
         }
 
         text.Append("\n\n");

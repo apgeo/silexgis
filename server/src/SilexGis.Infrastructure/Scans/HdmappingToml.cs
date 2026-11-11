@@ -73,7 +73,9 @@ public static partial class HdmappingToml
         var text = new StringBuilder();
         foreach (var line in heading)
         {
-            text.Append("# ").Append(line).Append('\n');
+            // A heading line can carry text from outside, such as the version a worker names its
+            // program by: a line break in it would end the comment and start a line of TOML.
+            text.Append("# ").Append(line.ReplaceLineEndings(" ")).Append('\n');
         }
 
         if (sections.ValueKind == JsonValueKind.Object)

@@ -357,7 +357,7 @@ public static class ProcessingProfileTransferEndpoints
                     VersionInfo(schema?.DumpedDefaults ?? default, profile.ToolVersion),
                     [
                         $"HDMapping odometry parameters: \"{OneLine(profile.Name)}\", exported from SilexGIS.",
-                        $"Written for HDMapping {profile.ToolVersion ?? "(version not recorded)"}.",
+                        $"Written for HDMapping {(profile.ToolVersion is { } version ? OneLine(version) : "(version not recorded)")}.",
                     ]);
                 return TypedResults.File(Encoding.UTF8.GetBytes(text), HdmappingToml.ContentType, $"{slug}.toml");
             default:
