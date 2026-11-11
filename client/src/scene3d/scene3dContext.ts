@@ -2,6 +2,7 @@
 import 'cesium/Source/Widgets/CesiumWidget/CesiumWidget.css';
 import {
   Axis,
+  BoundingSphere,
   type Billboard,
   BillboardCollection,
   Cartesian2,
@@ -77,6 +78,7 @@ import {
   zoomForGroundSampleDistance,
 } from './pseudoZoom.ts';
 import { viewportBounds } from './viewBounds3d.ts';
+import { exposeScene3dToPresenter, presenterWanted } from './presenterBridge3d.ts';
 import type {
   Scene3DBounds,
   Scene3DCameraOptions,
@@ -929,6 +931,57 @@ class CesiumScene3D implements Scene3DCore {
 
   reportContextRecovered(): void {
     contextLossPolicyFor(this.widget.container).recordRecovered();
+  }
+
+  // ---- what a scripted recording asks of the scene ----
+
+  /**
+   * True when nothing in the scene is still on its way: every ground tile in view and its imagery,
+   * every model and every point cloud's tiles. A model or cloud that failed counts as settled —
+   * it will not arrive, and a recording waiting for it would wait for ever.
+   */
+  isSettled(): boolean {
+    if (this.widget.isDestroyed()) {
+      return true;
+    }
+    if (!this.widget.scene.globe.tilesLoaded) {
+      return false;
+    }
+    for (const entry of this.models.values()) {
+      if (entry.status === 'loading' || (entry.model && !entry.model.ready)) {
+        return false;
+      }
+    }
+    for (const entry of this.pointClouds.values()) {
+      if (entry.status === 'loading' || (entry.visible && entry.tileset && !entry.tileset.tilesLoaded)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** One sphere around every visible model that has finished loading; undefined when there is none. */
+  modelSphere(): { longitude: number; latitude: number; height: number; radius: number } | undefined {
+    const spheres: BoundingSphere[] = [];
+    for (const entry of this.models.values()) {
+      if (entry.visible && entry.model?.ready) {
+        spheres.push(entry.model.boundingSphere);
+      }
+    }
+    if (spheres.length === 0) {
+      return undefined;
+    }
+    const sphere = BoundingSphere.fromBoundingSpheres(spheres);
+    const centre = Cartographic.fromCartesian(sphere.center);
+    if (!centre) {
+      return undefined;
+    }
+    return {
+      longitude: CesiumMath.toDegrees(centre.longitude),
+      latitude: CesiumMath.toDegrees(centre.latitude),
+      height: centre.height,
+      radius: sphere.radius,
+    };
   }
 
   // ---- a picture of the scene ----
@@ -3196,6 +3249,8 @@ export interface Scene3DSession {
 // showing the same scene share this one rather than each building their own.
 let scene: CesiumScene3D | null = null;
 let holders = 0;
+/** Takes the scripted-recording handle off the window again; set only under automation. */
+let hidePresenter: (() => void) | undefined;
 
 /**
  * Creates the scene inside `container`, or joins the one already there, and returns a hold on it.
@@ -3212,7 +3267,10 @@ export function acquireScene3D(container: HTMLElement): Scene3DSession {
   if (scene && scene.container !== container) {
     throw new Error('a 3D scene is already attached to a different container');
   }
-  scene ??= new CesiumScene3D(container);
+  if (!scene) {
+    scene = new CesiumScene3D(container);
+    hidePresenter = presenterWanted() ? exposeScene3dToPresenter(scene) : undefined;
+  }
   holders += 1;
 
   const held = scene;
@@ -3229,6 +3287,8 @@ export function acquireScene3D(container: HTMLElement): Scene3DSession {
       // destroying now would take out a scene somebody else is holding.
       if (holders === 0 && scene === held) {
         scene = null;
+        hidePresenter?.();
+        hidePresenter = undefined;
         held.destroy();
       }
     },
