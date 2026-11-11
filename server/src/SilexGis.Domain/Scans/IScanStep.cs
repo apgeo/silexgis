@@ -481,14 +481,14 @@ public sealed class MeshSurfaceStep : IScanStep
               "type": "integer",
               "minimum": 5,
               "maximum": 12,
-              "default": 9
+              "default": 10
             },
             "densityTrimPercent": {
               "description": "The share of the surface, in percent, carried by the fewest points that is removed: the reconstruction also closes over space no scan reached, and those faces have almost no points behind them.",
               "type": "number",
               "minimum": 0,
               "maximum": 30,
-              "default": 2
+              "default": 5
             },
             "targetTriangles": {
               "description": "The number of triangles the surface is decimated to when the reconstruction made more.",

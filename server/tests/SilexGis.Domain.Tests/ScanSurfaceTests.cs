@@ -19,7 +19,7 @@ public class ScanSurfaceTests
 
         var defaults = ScanSteps.DefaultParameters(step);
         defaults.GetProperty("voxelCm").GetDouble().ShouldBe(2);
-        defaults.GetProperty("poissonDepth").GetInt32().ShouldBe(9);
+        defaults.GetProperty("poissonDepth").GetInt32().ShouldBe(10);
         defaults.GetProperty("targetTriangles").GetInt32().ShouldBe(500_000);
 
         // No surface may be larger than the largest wall mesh a person may upload.

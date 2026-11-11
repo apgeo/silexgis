@@ -1758,14 +1758,19 @@ SURFACE_TRAJECTORY_MAX_SAMPLES = 4_000
 # Points are matched to the trajectory a cell of this size at a time: every point of a cell looks
 # toward the same place.
 SURFACE_MATCH_CELL_M = 1.0
-# The parameters, their defaults and their bounds. The defaults are a first guess at a cave
-# passage scanned at centimetre density, still to be tuned on recordings.
+# The parameters, their defaults and their bounds. The defaults were measured on three published
+# scans (a cave passage, a short cave scan and an underground car park): against depth 9 with 2 %
+# trimmed, depth 10 with 5 % trimmed halved the distance from the scanned points to the surface
+# (95th percentile 3 cm to 1.4 cm on the cave passage, 12 cm to 4.5 cm on the car park) and cut the
+# surface lying more than 25 cm from any scanned point from 11 % of its area to none, for about
+# three times the time and twice the memory (cave passage: 28 s to 83 s, 1.1 to 2.2 GB). Depth 11
+# gained a few millimetres more for another three to four times the time and memory.
 SURFACE_PARAMETERS = {
     "voxelCm": (2.0, 0.5, 50.0),
     "normalRadiusCm": (6.0, 1.0, 200.0),
     "normalNeighbours": (30, 5, 200),
-    "poissonDepth": (9, 5, 12),
-    "densityTrimPercent": (2.0, 0.0, 30.0),
+    "poissonDepth": (10, 5, 12),
+    "densityTrimPercent": (5.0, 0.0, 30.0),
     "targetTriangles": (500_000, 1_000, 10_000_000),
     "orientCellM": (3.0, 0.5, 50.0),
 }

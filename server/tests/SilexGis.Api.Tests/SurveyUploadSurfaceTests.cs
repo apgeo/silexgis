@@ -246,10 +246,10 @@ public sealed class SurveyUploadSurfaceTests : IAsyncLifetime, IDisposable, ICla
         await RunPipelineAsync(uploadId);
 
         var parameters = worker.Requests.Last(r => r.GetProperty("step").GetString() == MeshSurfaceStep.StepId).GetProperty("parameters");
-        parameters.GetProperty("voxelCm").GetDouble().ShouldBe(5);
-        parameters.GetProperty("poissonDepth").GetInt32().ShouldBe(8);
+        parameters.GetProperty("poissonDepth").GetInt32().ShouldBe(9);
         // A key the profile does not name keeps the step's default.
-        parameters.GetProperty("densityTrimPercent").GetDouble().ShouldBe(2);
+        parameters.GetProperty("voxelCm").GetDouble().ShouldBe(2);
+        parameters.GetProperty("densityTrimPercent").GetDouble().ShouldBe(5);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
