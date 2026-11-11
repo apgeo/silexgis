@@ -183,22 +183,44 @@ public static class MandeyeGnss
     }
 
     /// <summary>
+    /// The longest break between two good fixes inside one stretch of open sky. A receiver logs a
+    /// fix a second; a longer silence means the sky was lost — the scanner went underground — and
+    /// the fixes after it belong to a different stretch of walking.
+    /// </summary>
+    public const double RunGapSeconds = 10.0;
+
+    /// <summary>
+    /// How much walking, in time, a placement is fitted over, counted from the fix nearest the cave
+    /// (where the sky was lost, or found again). The scanner's own track drifts the longer it runs: on a published fifteen-minute MANDEYE
+    /// recording it stayed within about a metre of the fixes over any two minutes but strayed tens of
+    /// metres over the whole walk, so a heading fitted over everything was far off. A shorter window
+    /// is widened, away from the cave, until its fixes span <see cref="MinimumTrackM"/>.
+    /// </summary>
+    public const double FitWindowSeconds = 120.0;
+
+    /// <summary>
     /// A first placement from the fixes the scanner logged on the surface, or null when they do
     /// not give one.
     ///
     /// <para>
-    /// The heading is the one that best turns the trajectory's track onto the satellites' track
-    /// over the same stretch of time — a least-squares fit of the trajectory points at the fix
-    /// times to the fixes, level, with no tilt. The position is then taken from the last good fix
-    /// alone: the trajectory point at that fix is put exactly on it. The last fix is the one taken
-    /// nearest the entrance, before the sky was lost, and every metre of the cave is reached from
-    /// there; a position averaged over the whole walk would carry the receiver's wander from the
-    /// car park into the cave.
+    /// The good fixes are split into stretches of open sky wherever they stop for longer than
+    /// <see cref="RunGapSeconds"/>. The scan is placed from the end of the first stretch — the walk
+    /// up to where the sky was lost on the way in, nearest the entrance and nearest in time to the
+    /// cave the scanner went on to record: the walking just before that point
+    /// (<see cref="FitWindowSeconds"/>, widened until it spans <see cref="MinimumTrackM"/>). When the
+    /// walk to the entrance is too short for a heading, the next stretch is used the other way round:
+    /// the walking just after the scanner came back out.
     /// </para>
     /// <para>
-    /// No placement is given when fewer than two good fixes fall inside the trajectory, or when the
-    /// good fixes span less than <see cref="MinimumTrackM"/>: a scanner that stood still outside
-    /// says where it was but not which way it faced.
+    /// The placement is a least-squares fit of the trajectory points at the fix times to the fixes
+    /// over that window, level, with no tilt. Fixes from the rest of the walk are left out: the
+    /// scanner's own track drifts, and on a published recording that went into a bunker and back out
+    /// a fit over everything left the walk in about 90 m from its fixes, against 3 m for this one.
+    /// </para>
+    /// <para>
+    /// No placement is given when no stretch holds good fixes spanning <see cref="MinimumTrackM"/>
+    /// inside the trajectory: a scanner that stood still outside says where it was but not which way
+    /// it faced.
     /// </para>
     /// </summary>
     /// <param name="fixes">Every fix of the recording, in any order.</param>
@@ -217,17 +239,91 @@ public static class MandeyeGnss
             .OrderBy(f => f.TimeNs)
             .Select(f => (Fix: f, Pose: At(trajectory, f.TimeNs)))
             .Where(p => p.Pose is not null)
-            .Select(p => (p.Fix, Pose: p.Pose!.Value))
+            .Select(p => new Located(p.Fix, p.Pose!.Value, Geo.LocalTangentFrame.ToEcef(p.Fix.Longitude, p.Fix.Latitude, Height(p.Fix))))
             .ToList();
-        if (usable.Count < 2)
+
+        var runs = Runs(usable);
+        for (var i = 0; i < runs.Count; i++)
+        {
+            // The first stretch is the walk in, nearest the cave where it ends; any later one is a walk
+            // back out, nearest the cave where it starts. Either way the window reaches away from the cave.
+            var walk = i == 0 ? runs[i].AsEnumerable().Reverse().ToList() : runs[i];
+            var window = Window(walk);
+            if (window is null)
+            {
+                continue;
+            }
+
+            var placed = Fit(window, tilesZero);
+            if (placed is not null)
+            {
+                return placed;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>One good fix with the trajectory's pose at its time and its own position in earth-centred metres.</summary>
+    private sealed record Located(GnssFix Fix, (double X, double Y, double Z) Pose, Geo.EcefPoint Ecef);
+
+    /// <summary>The good fixes, in time order, cut wherever they fall silent for longer than <see cref="RunGapSeconds"/>.</summary>
+    private static List<List<Located>> Runs(List<Located> usable)
+    {
+        var runs = new List<List<Located>>();
+        var gapNs = (long)(RunGapSeconds * 1e9);
+        foreach (var fix in usable)
+        {
+            if (runs.Count == 0 || fix.Fix.TimeNs - runs[^1][^1].Fix.TimeNs > gapNs)
+            {
+                runs.Add([]);
+            }
+
+            runs[^1].Add(fix);
+        }
+
+        return runs;
+    }
+
+    /// <summary>
+    /// The fixes a placement is fitted over, starting from the fix nearest the cave (the walk's first
+    /// entry, called the anchor here): those
+    /// within <see cref="FitWindowSeconds"/> of it, then as many more as it takes to reach
+    /// <see cref="MinimumTrackM"/> from the anchor; null when the whole walk never gets that far.
+    /// </summary>
+    private static List<Located>? Window(List<Located> walk)
+    {
+        if (walk.Count < 2)
         {
             return null;
         }
 
-        var sampled = usable.Count <= MaximumFitFixes
-            ? usable
+        var anchor = walk[0];
+        var windowNs = (long)(FitWindowSeconds * 1e9);
+        var farthest = 0.0;
+        var taken = new List<Located>();
+        foreach (var fix in walk)
+        {
+            var within = Math.Abs(fix.Fix.TimeNs - anchor.Fix.TimeNs) <= windowNs;
+            if (!within && farthest >= MinimumTrackM)
+            {
+                break;
+            }
+
+            taken.Add(fix);
+            farthest = Math.Max(farthest, fix.Ecef.DistanceTo(anchor.Ecef));
+        }
+
+        return farthest >= MinimumTrackM ? taken : null;
+    }
+
+    /// <summary>A level least-squares fit of the window's poses onto its fixes.</summary>
+    private static ScanPlacement? Fit(List<Located> window, (double X, double Y, double Z) tilesZero)
+    {
+        var sampled = window.Count <= MaximumFitFixes
+            ? window
             : Enumerable.Range(0, MaximumFitFixes)
-                .Select(i => usable[(int)Math.Round(i * (usable.Count - 1) / (double)(MaximumFitFixes - 1))])
+                .Select(i => window[(int)Math.Round(i * (window.Count - 1) / (double)(MaximumFitFixes - 1))])
                 .ToList();
 
         var pairs = sampled.Select(p => new ScanControlPair(
@@ -239,37 +335,20 @@ public static class MandeyeGnss
                 Height(p.Fix)))
             .ToList();
 
-        var firstFix = Geo.LocalTangentFrame.ToEcef(usable[0].Fix.Longitude, usable[0].Fix.Latitude, Height(usable[0].Fix));
-        var farthest = usable.Max(p => Geo.LocalTangentFrame.ToEcef(p.Fix.Longitude, p.Fix.Latitude, Height(p.Fix)).DistanceTo(firstFix));
-        if (farthest < MinimumTrackM)
-        {
-            return null;
-        }
-
         var outcome = ScanControlPoints.Fit(pairs, new ScanControlOptions(FitTilt: false, WarnM: double.MaxValue));
         if (outcome.Fit is not { } fit)
         {
             return null;
         }
 
-        // Carry the fitted placement over by the distance between where it puts the last good fix's
-        // pose and where that fix is. A shift of metres turns the east-north-up frame by a few
-        // millionths of a degree, so the heading needs no second round.
-        var (last, lastPose) = usable[^1];
-        var target = Geo.LocalTangentFrame.ToEcef(last.Longitude, last.Latitude, Height(last));
-        var landed = fit.Placement.EcefOf(lastPose.X - tilesZero.X, lastPose.Y - tilesZero.Y, lastPose.Z - tilesZero.Z);
-        var zero = Geo.LocalTangentFrame.ToEcef(fit.Placement.Longitude, fit.Placement.Latitude, fit.Placement.HeightM);
-        var moved = Geo.LocalTangentFrame.ToGeodetic(new Geo.EcefPoint(
-            zero.X + (target.X - landed.X),
-            zero.Y + (target.Y - landed.Y),
-            zero.Z + (target.Z - landed.Z)));
-        var height = Math.Clamp(moved.HeightM, ScanPlacement.LowestHeightM, ScanPlacement.HighestHeightM);
-        if (!ScanPlacement.IsOnEarth(moved.Longitude, moved.Latitude, height))
-        {
-            return null;
-        }
-
-        return new ScanPlacement(moved.Longitude, moved.Latitude, height, fit.Placement.HeadingDeg, ScanPlacementSource.Gnss);
+        // The fit itself is the placement. Moving it on to the anchor fix alone was tried and was
+        // worse: the last fix before the sky is lost is often the poorest of the walk (the receiver is
+        // already under the rock face), and on a published recording the fixes of the last minute
+        // before it landed a median 10 m off that way against 3–4 m from the fit over the window.
+        var placement = fit.Placement;
+        return ScanPlacement.IsOnEarth(placement.Longitude, placement.Latitude, placement.HeightM)
+            ? new ScanPlacement(placement.Longitude, placement.Latitude, placement.HeightM, placement.HeadingDeg, ScanPlacementSource.Gnss)
+            : null;
     }
 
     private static double Height(GnssFix fix) =>

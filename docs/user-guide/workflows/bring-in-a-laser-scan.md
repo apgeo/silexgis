@@ -80,8 +80,9 @@ Check the scan's row on the cave page first. It may already be placed:
 
 - *Placed from the file's coordinates* — the cloud's header named a coordinate system.
 - *Placed from the recording's satellite fixes* — the recording held a `.gnss` log. This is a
-  rough first placement, taken where the scanner last had a satellite fix — usually at the
-  entrance; refine it with control points.
+  rough first placement, fitted to the fixes of the last two minutes of walking before the
+  scanner lost the sky on its way in — usually up to the entrance (or, when that walk was too short,
+  the first minutes after it came back out); refine it with control points.
 
 Otherwise, or to make it exact, press **Place by control points**:
 

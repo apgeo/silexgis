@@ -176,7 +176,8 @@ There are four ways, from the least to the most work:
    is placed automatically once it is tiled — *Placed from the file's coordinates*.
 2. **From the recording's satellite fixes.** A raw recording with a `.gnss` log and no other
    placement is given a **first placement** from its fixes and the trajectory: where it was and
-   which way it was heading. An `.nmea` log alone is not enough, because it cannot be matched to
+   which way it was heading, fitted over the walking just before the scanner lost the sky on its
+   way in, because the scanner's own track drifts over a long walk. An `.nmea` log alone is not enough, because it cannot be matched to
    the scanner's own clock. *Placed from the recording's satellite fixes* — a starting point that
    control points then refine.
 3. **By entrance and bearing.** **Place on the map** puts the scan's own zero point at a position

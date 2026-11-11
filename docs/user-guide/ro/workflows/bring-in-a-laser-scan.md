@@ -82,8 +82,9 @@ Uită-te mai întâi la rândul scanării de pe pagina peșterii. S-ar putea să
 
 - *Plasată din coordonatele fișierului* — antetul norului numea un sistem de coordonate.
 - *Plasată după pozițiile prin satelit ale înregistrării* — înregistrarea avea un jurnal `.gnss`.
-  Este o primă plasare aproximativă, luată acolo unde scanerul a avut ultima poziție prin satelit
-  — de obicei la intrare; rafineaz-o cu puncte de control.
+  Este o primă plasare aproximativă, potrivită pe pozițiile din ultimele două minute de mers
+  înainte ca scanerul să piardă cerul la intrare — de obicei până la intrare (sau, când acel drum a
+  fost prea scurt, primele minute după ce a ieșit din nou); rafineaz-o cu puncte de control.
 
 Altfel, sau ca s-o faci exactă, apasă **Plasează după puncte de control**:
 

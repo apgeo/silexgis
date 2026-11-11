@@ -93,6 +93,98 @@ public class MandeyeGnssTests
         MandeyeGnss.Place(later, trajectory, Zero).ShouldBeNull();
     }
 
+    [Fact]
+    public void A_walk_in_and_back_out_is_placed_from_the_walk_in_alone()
+    {
+        // The scanner's track drifts underground: by the time it comes back out, its own frame has
+        // turned five degrees and slid twelve metres against the satellites. Fitting both stretches
+        // together, or placing from the exit, would carry that into the cave.
+        var truth = new ScanPlacement(25.3, 45.6, 900, 30, ScanPlacementSource.Manual);
+        var drifted = new ScanPlacement(25.30015, 45.6001, 900, 35, ScanPlacementSource.Manual);
+        var (trajectory, fixes) = Segments(
+            (Seconds: 50, Metres: 50, Sky: truth),
+            (Seconds: 300, Metres: 150, Sky: null),
+            (Seconds: 50, Metres: 50, Sky: drifted));
+
+        var placed = MandeyeGnss.Place(fixes, trajectory, Zero).ShouldNotBeNull();
+
+        placed.HeadingDeg.ShouldBe(30, tolerance: 0.01);
+        var lastIn = fixes.Last(f => f.TimeNs <= Second(50));
+        var pose = MandeyeGnss.At(trajectory, lastIn.TimeNs)!.Value;
+        var (lon, lat, _) = placed.PositionOf(pose.X - Zero.X, pose.Y - Zero.Y, pose.Z - Zero.Z);
+        lon.ShouldBe(lastIn.Longitude, tolerance: 1e-8);
+        lat.ShouldBe(lastIn.Latitude, tolerance: 1e-8);
+    }
+
+    [Fact]
+    public void A_walk_in_too_short_for_a_heading_leaves_the_placement_to_the_walk_back_out()
+    {
+        var truth = new ScanPlacement(25.3, 45.6, 900, 30, ScanPlacementSource.Manual);
+        var (trajectory, fixes) = Segments(
+            (Seconds: 10, Metres: 10, Sky: truth),
+            (Seconds: 300, Metres: 150, Sky: null),
+            (Seconds: 50, Metres: 50, Sky: truth));
+
+        var placed = MandeyeGnss.Place(fixes, trajectory, Zero).ShouldNotBeNull();
+
+        placed.HeadingDeg.ShouldBe(30, tolerance: 0.01);
+        var firstOut = fixes.First(f => f.TimeNs > Second(310));
+        var pose = MandeyeGnss.At(trajectory, firstOut.TimeNs)!.Value;
+        var (lon, lat, _) = placed.PositionOf(pose.X - Zero.X, pose.Y - Zero.Y, pose.Z - Zero.Z);
+        lon.ShouldBe(firstOut.Longitude, tolerance: 1e-8);
+        lat.ShouldBe(firstOut.Latitude, tolerance: 1e-8);
+    }
+
+    [Fact]
+    public void A_long_walk_under_open_sky_takes_its_heading_from_the_last_two_minutes_only()
+    {
+        // Ten minutes of fixes without a break, the first eight of which disagree with the scanner's
+        // track by ten degrees: only the walking nearest the anchor decides the heading. (The last stretch
+        // outlasts the window by a little, so the window never reaches the jump between the two.)
+        var truth = new ScanPlacement(25.3, 45.6, 900, 30, ScanPlacementSource.Manual);
+        var early = new ScanPlacement(25.3, 45.6, 900, 40, ScanPlacementSource.Manual);
+        var (trajectory, fixes) = Segments(
+            (Seconds: 480, Metres: 400, Sky: early),
+            (Seconds: (int)MandeyeGnss.FitWindowSeconds + 10, Metres: 110, Sky: truth));
+
+        MandeyeGnss.Place(fixes, trajectory, Zero).ShouldNotBeNull().HeadingDeg.ShouldBe(30, tolerance: 0.01);
+    }
+
+    private static long Second(double seconds) => (long)(seconds * 1e9) + 5_000_000_000L;
+
+    /// <summary>
+    /// A walk along the frame's +X made of stretches, one pose a second: under open sky each pose gets
+    /// a fix where that stretch's placement puts it; underground (no placement) it gets none.
+    /// </summary>
+    private static (List<TrajectoryPoint> Trajectory, List<GnssFix> Fixes) Segments(
+        params (int Seconds, double Metres, ScanPlacement? Sky)[] stretches)
+    {
+        var trajectory = new List<TrajectoryPoint>();
+        var fixes = new List<GnssFix>();
+        var t = 0;
+        var x = Zero.X;
+        foreach (var (seconds, metres, sky) in stretches)
+        {
+            for (var i = 0; i < seconds; i++, t++)
+            {
+                x += metres / seconds;
+                var y = Zero.Y + (0.01 * t);
+                var z = Zero.Z;
+                var time = Second(t);
+                trajectory.Add(new TrajectoryPoint(time, x, y, z));
+                if (sky is not null)
+                {
+                    var (lon, lat, h) = sky.PositionOf(x - Zero.X, y - Zero.Y, z - Zero.Z);
+                    fixes.Add(MandeyeGnss.Parse(string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"{time} {lat:R} {lon:R} {h:R} 1.1 10 37 nan 10:00:00 1 0"))[0]);
+                }
+            }
+        }
+
+        return (trajectory, fixes);
+    }
+
     /// <summary>A straight walk along the frame's +X with a little climb, one pose and one fix a second.</summary>
     private static (List<TrajectoryPoint> Trajectory, List<GnssFix> Fixes) Walk(ScanPlacement truth, double metres)
     {
