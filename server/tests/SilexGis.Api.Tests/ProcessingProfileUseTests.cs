@@ -111,7 +111,7 @@ public sealed class ProcessingProfileUseTests : IAsyncLifetime, IDisposable, ICl
             row.MayDelete.ShouldBeFalse();
         }
 
-        listed.Single(p => p.Id == BuiltInProcessingProfiles.CaveNarrowPassagesId).Description!.ShouldContain("still to be tuned");
+        listed.Single(p => p.Id == BuiltInProcessingProfiles.CaveNarrowPassagesId).Description!.ShouldContain("not yet measured on a cave recording");
 
         await ShouldBeProblemAsync(
             await viewer.PutAsJsonAsync($"/api/v1/scan-profiles/{BuiltInProcessingProfiles.FastPreviewId}", new { name = "Mine", values = new { } }),
