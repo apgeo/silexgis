@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { InboxOutlined } from '@ant-design/icons';
 import { Alert, App, Checkbox, Form, Modal, Typography, Upload } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -141,8 +141,21 @@ export default function SurveyModelUploadModal({
     }
   }, [asked, originLongitude, originLatitude, form]);
 
+  // The declaration form is mounted only once a file needs it, and resetting a form instance that
+  // was never mounted logs a warning; so the reset waits until the form has been shown at least once
+  // (its values outlive it after that, and are the ones a reset has to clear).
+  const formShown = useRef(false);
+  useEffect(() => {
+    if (asked) {
+      formShown.current = true;
+    }
+  }, [asked]);
+
   const close = () => {
-    form.resetFields();
+    if (formShown.current) {
+      form.resetFields();
+      formShown.current = false;
+    }
     setFile(undefined);
     setTooLarge(false);
     setTakeOver(false);
