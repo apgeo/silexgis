@@ -59,17 +59,16 @@ describe('the visual tables', () => {
     expect(Object.keys(CATEGORY_VISUALS).sort()).toEqual([...GRAPH_CATEGORIES].sort());
   });
 
-  it('tell every node type apart by shape and colour together, and by a glyph where it has one', () => {
-    const seen = new Set<string>();
+  it('tell every node type apart by its icon, and give every item type one', () => {
     for (const type of GRAPH_NODE_TYPES) {
-      const v = NODE_VISUALS[type];
-      const id = `${v.shape}/${v.preset}`;
-      expect(seen.has(id), `${type} repeats ${id}`).toBe(false);
-      seen.add(id);
-      expect(PRESET_NAMES).toContain(v.preset);
+      expect(PRESET_NAMES).toContain(NODE_VISUALS[type].preset);
     }
-    const glyphs = GRAPH_NODE_TYPES.map((t) => NODE_VISUALS[t].glyph).filter((g) => g !== '');
-    expect(new Set(glyphs).size).toBe(glyphs.length);
+    const items = GRAPH_NODE_TYPES.filter((t) => t !== 'resLink');
+    const icons = items.map((t) => NODE_VISUALS[t].icon);
+    expect(icons).not.toContain(null);
+    expect(new Set(icons).size).toBe(icons.length);
+    // The hub is a junction, not an item: a small diamond with no icon.
+    expect(NODE_VISUALS.resLink).toMatchObject({ shape: 'diamond', icon: null });
   });
 
   it('draw attachments and tags dashed, and the other categories solid', () => {
@@ -81,16 +80,16 @@ describe('the visual tables', () => {
     const entrance = nodeVisual({ kind: 'node', type: 'feature', isSeed: false, node: { kind: 'caveEntrance' } });
     expect(entrance.shape).toBe('circle');
     expect(entrance.size).toBeLessThan(cave.size);
-    expect(entrance.glyph).not.toBe(cave.glyph);
+    expect(entrance.icon).toBe('entrance');
   });
 
-  it('keep the cave glyph for caves alone: a survey line or any other feature carries its own or none', () => {
-    const glyph = (kind: string | null) => nodeVisual({ kind: 'node', type: 'feature', isSeed: false, node: { kind } }).glyph;
-    expect(glyph('cave')).toBe('C');
-    expect(glyph('centerline')).toBe('~');
-    expect(glyph('generic')).toBe('');
-    // A placeholder whose kind is withheld looks like any feature, not like a particular kind.
-    expect(glyph(null)).toBe('C');
+  it('keep the cave icon for caves alone: a survey line or any other feature carries its own', () => {
+    const icon = (kind: string | null) => nodeVisual({ kind: 'node', type: 'feature', isSeed: false, node: { kind } }).icon;
+    expect(icon('cave')).toBe('cave');
+    expect(icon('centerline')).toBe('surveyLine');
+    expect(icon('generic')).toBe('place');
+    // A feature whose kind is not told looks like the type's own.
+    expect(icon(null)).toBe('cave');
   });
 
   it('fall back to a generic look for an unknown type and category', () => {
@@ -119,7 +118,7 @@ describe('theme', () => {
 describe('paint', () => {
   it('draws a restricted placeholder as a dashed hole with a lock, in no type colour', () => {
     const ph = paintNode(vn({ restricted: true, node: { ...vn().node!, restricted: true, title: null } }), light);
-    expect(ph).toMatchObject({ dashed: true, lock: true, fill: light.background });
+    expect(ph).toMatchObject({ dashed: true, icon: 'lock', iconOnFill: false, fill: light.background });
     expect(Object.values(light.preset)).not.toContain(ph.fill);
   });
 
@@ -136,7 +135,7 @@ describe('paint', () => {
   it('draws the seed larger and a "+N more" stub as a ring', () => {
     expect(paintNode(vn({ isSeed: true }), light).size).toBeGreaterThan(paintNode(vn(), light).size);
     const stub = paintNode(vn({ kind: 'more', type: 'more', node: null }), light);
-    expect(stub).toMatchObject({ dashed: true, glyph: '+' });
+    expect(stub).toMatchObject({ dashed: true, icon: 'more', iconOnFill: false });
   });
 
   it('puts an arrow on directed edges only, never on a stub edge, and lights a selected one', () => {

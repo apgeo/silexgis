@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { iconDataUri } from '../icons.ts';
 import type { LayoutKind } from '../renderer.ts';
 import type { NodeKey } from '../types.ts';
 import type { EdgePaint, GraphTheme, NodePaint, NodeShape } from '../visuals.ts';
@@ -12,12 +13,7 @@ import type { EdgePaint, GraphTheme, NodePaint, NodeShape } from '../visuals.ts'
 /** G6 draws each of these shapes under the same name. */
 export const G6_NODE_TYPE: Record<NodeShape, string> = {
   circle: 'circle',
-  ellipse: 'ellipse',
-  rect: 'rect',
-  triangle: 'triangle',
   diamond: 'diamond',
-  hexagon: 'hexagon',
-  star: 'star',
 };
 
 const LABEL_LIMIT = 30;
@@ -28,35 +24,26 @@ export function truncateLabel(text: string, limit = LABEL_LIMIT): string {
   return chars.length <= limit ? text : `${chars.slice(0, limit - 1).join('')}…`;
 }
 
-/** The width and height of a node of the given shape: a few shapes are not square. */
-export function nodeSize(shape: NodeShape, size: number): number | [number, number] {
-  switch (shape) {
-    case 'ellipse':
-      return [Math.round(size * 1.3), Math.round(size * 0.85)];
-    case 'rect':
-      return [Math.round(size * 1.2), Math.round(size * 0.85)];
-    default:
-      return size;
-  }
-}
+/** The icon fills this share of its badge, leaving a rim of the type's colour around it. */
+export const ICON_SHARE = 0.58;
 
 export type G6Style = Record<string, unknown>;
 
 export function nodeStyle(paint: NodePaint, label: string, theme: GraphTheme): G6Style {
-  const hasGlyph = paint.glyph !== '';
+  const iconSide = Math.round(paint.size * ICON_SHARE);
   const style: G6Style = {
-    size: nodeSize(paint.shape, paint.size),
+    size: paint.size,
     fill: paint.fill,
     stroke: paint.stroke,
     lineWidth: paint.strokeWidth,
     lineDash: paint.dashed ? [4, 3] : [],
     opacity: paint.opacity,
-    // A placeholder or "+N more" stub is hollow, so its glyph is drawn in the text colour, not white.
-    icon: hasGlyph,
-    iconText: paint.glyph,
-    iconFill: paint.dashed ? theme.textSecondary : '#ffffff',
-    iconFontSize: Math.round(paint.size * 0.45),
-    iconFontWeight: 600,
+    // The icon is drawn as an image; on a hollow placeholder or "+N more" ring it takes the text
+    // colour, since white would vanish on the canvas.
+    icon: paint.icon !== null,
+    iconSrc: paint.icon === null ? undefined : iconDataUri(paint.icon, paint.iconOnFill ? '#ffffff' : theme.textSecondary),
+    iconWidth: iconSide,
+    iconHeight: iconSide,
     iconOpacity: paint.opacity,
     label: label !== '',
     labelText: truncateLabel(label),
@@ -68,12 +55,6 @@ export function nodeStyle(paint: NodePaint, label: string, theme: GraphTheme): G
     labelBackground: label !== '',
     labelBackgroundFill: theme.background,
     labelBackgroundOpacity: 0.85 * paint.opacity,
-    badge: paint.lock,
-    // A plain geometric mark rather than a padlock emoji: emoji need a colour-emoji font that many
-    // machines lack and would draw as an empty box. U+25A0 exists in every ordinary text font.
-    badges: paint.lock
-      ? [{ text: '\u25A0', placement: 'right-top', fontSize: 9, fill: theme.textSecondary, backgroundFill: 'transparent' }]
-      : [],
     cursor: 'pointer',
   };
   return style;

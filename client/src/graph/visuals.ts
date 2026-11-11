@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import type { GraphIcon } from './icons.ts';
 import type { GraphCategory, GraphNodeType, HighlightState } from './types.ts';
 import type { ViewEdge, ViewNode } from './view.ts';
 
 /**
- * What the graph looks like, as data: which shape and colour each kind of node and each relation
+ * What the graph looks like, as data: which icon and colour each kind of node and each relation
  * category gets, and how a highlight state changes it. The tables are closed over the type and
  * category lists (a test fails when a new entry in either has no row here), and everything an
  * unknown value falls back to is explicit, so a newer server never breaks the page.
@@ -12,7 +13,11 @@ import type { ViewEdge, ViewNode } from './view.ts';
  * the plain values it gets into its own style options.
  */
 
-export type NodeShape = 'circle' | 'ellipse' | 'rect' | 'triangle' | 'diamond' | 'hexagon' | 'star';
+/**
+ * Every item is a round badge carrying an icon; only a resource link's hub, which is a junction
+ * rather than an item, is a small diamond without one.
+ */
+export type NodeShape = 'circle' | 'diamond';
 
 /** The antd preset colours the graph draws with, plus a neutral for things that are not an item of a kind. */
 export const PRESET_NAMES = [
@@ -33,39 +38,39 @@ export type PresetName = (typeof PRESET_NAMES)[number];
 export interface NodeVisual {
   shape: NodeShape;
   preset: PresetName;
-  /** One character drawn inside the node, so a type reads without its colour. */
-  glyph: string;
+  /** The pictogram drawn inside the node, so a type reads without its colour; none on a hub. */
+  icon: GraphIcon | null;
   size: number;
 }
 
 export const NODE_VISUALS: Record<GraphNodeType, NodeVisual> = {
-  feature: { shape: 'circle', preset: 'blue', glyph: 'C', size: 30 },
-  document: { shape: 'rect', preset: 'orange', glyph: 'D', size: 28 },
-  tripLog: { shape: 'triangle', preset: 'green', glyph: 'T', size: 30 },
-  caver: { shape: 'ellipse', preset: 'magenta', glyph: 'P', size: 30 },
-  cavingGroup: { shape: 'hexagon', preset: 'purple', glyph: 'G', size: 32 },
-  mapView: { shape: 'rect', preset: 'cyan', glyph: 'M', size: 28 },
-  surveyModel: { shape: 'star', preset: 'geekblue', glyph: 'S', size: 32 },
-  geofile: { shape: 'hexagon', preset: 'lime', glyph: 'F', size: 30 },
-  cabinet: { shape: 'rect', preset: 'gold', glyph: 'K', size: 28 },
-  expedition: { shape: 'triangle', preset: 'volcano', glyph: 'E', size: 30 },
-  tag: { shape: 'ellipse', preset: 'neutral', glyph: '#', size: 24 },
-  resLink: { shape: 'diamond', preset: 'purple', glyph: '', size: 16 },
-  file: { shape: 'circle', preset: 'neutral', glyph: 'f', size: 20 },
+  feature: { shape: 'circle', preset: 'blue', icon: 'cave', size: 34 },
+  document: { shape: 'circle', preset: 'orange', icon: 'document', size: 32 },
+  tripLog: { shape: 'circle', preset: 'green', icon: 'trip', size: 32 },
+  caver: { shape: 'circle', preset: 'magenta', icon: 'person', size: 32 },
+  cavingGroup: { shape: 'circle', preset: 'purple', icon: 'group', size: 34 },
+  mapView: { shape: 'circle', preset: 'cyan', icon: 'map', size: 32 },
+  surveyModel: { shape: 'circle', preset: 'geekblue', icon: 'model', size: 32 },
+  geofile: { shape: 'circle', preset: 'lime', icon: 'layers', size: 32 },
+  cabinet: { shape: 'circle', preset: 'gold', icon: 'cabinet', size: 32 },
+  expedition: { shape: 'circle', preset: 'volcano', icon: 'tent', size: 34 },
+  tag: { shape: 'circle', preset: 'neutral', icon: 'tag', size: 28 },
+  resLink: { shape: 'diamond', preset: 'purple', icon: null, size: 16 },
+  file: { shape: 'circle', preset: 'neutral', icon: 'attachment', size: 26 },
 };
 
-/** A feature of kind cave entrance: the feature's colour, a smaller circle. */
-export const ENTRANCE_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'blue', glyph: 'e', size: 20 };
+/** A feature of kind cave entrance: the feature's colour, a smaller badge with the entrance icon. */
+export const ENTRANCE_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'blue', icon: 'entrance', size: 28 };
 
-/** A survey line (centerline) feature: the feature's colour, a wavy-line glyph instead of the cave's "C". */
-export const CENTERLINE_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'blue', glyph: '~', size: 24 };
-/** Any other feature (a bivouac, a sinkhole, a spring…): the feature's colour, a plain smaller circle. */
-export const GENERIC_FEATURE_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'blue', glyph: '', size: 22 };
+/** A survey line (centerline) feature: the feature's colour, survey legs instead of the cave. */
+export const CENTERLINE_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'blue', icon: 'surveyLine', size: 28 };
+/** Any other feature (a bivouac, a sinkhole, a spring…): the feature's colour, a map pin. */
+export const GENERIC_FEATURE_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'blue', icon: 'place', size: 28 };
 
 /** A type this client has never heard of. */
-export const UNKNOWN_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'neutral', glyph: '?', size: 24 };
+export const UNKNOWN_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'neutral', icon: 'unknown', size: 28 };
 /** The "+N more" stub: a small ring that reads as "there is more here". */
-export const MORE_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'neutral', glyph: '+', size: 24 };
+export const MORE_NODE_VISUAL: NodeVisual = { shape: 'circle', preset: 'neutral', icon: 'more', size: 28 };
 /** The seed is drawn larger than its type's usual size, so the page's subject is found at a glance. */
 const SEED_SCALE = 1.25;
 
@@ -145,9 +150,9 @@ export function nodeVisual(vn: Pick<ViewNode, 'kind' | 'type' | 'isSeed'> & { no
   if (vn.kind === 'more') {
     return MORE_NODE_VISUAL;
   }
-  // Only a cave carries the cave's "C": an entrance, a survey line or any other feature is drawn
-  // in the same colour but smaller and with its own glyph (or none), so a neighbourhood does not
-  // show a bivouac or a sinkhole as one more cave.
+  // Only a cave carries the cave icon: an entrance, a survey line or any other feature is drawn in
+  // the same colour but smaller and with its own icon, so a neighbourhood does not show a bivouac
+  // or a sinkhole as one more cave.
   const base = vn.type === 'feature' ? featureVisual(vn.node?.kind ?? null) : nodeTypeVisual(vn.type);
   return vn.isSeed ? { ...base, size: Math.round(base.size * SEED_SCALE) } : base;
 }
@@ -222,9 +227,12 @@ export interface NodePaint {
   strokeWidth: number;
   dashed: boolean;
   opacity: number;
-  glyph: string;
-  /** A restricted placeholder carries a lock mark beside its glyph. */
-  lock: boolean;
+  /**
+   * The pictogram, and whether it sits on the type's colour (drawn white) or on a hollow ring (drawn
+   * in the secondary text colour). A restricted placeholder carries a lock, never its type's icon.
+   */
+  icon: GraphIcon | null;
+  iconOnFill: boolean;
   labelColor: string;
   state: HighlightState;
 }
@@ -261,8 +269,8 @@ export function paintNode(vn: ViewNode, theme: GraphTheme): NodePaint {
     strokeWidth: ring.strokeWidth,
     dashed: placeholder || stub,
     opacity: vn.state === 'faded' ? FADED_OPACITY : 1,
-    glyph: visual.glyph,
-    lock: placeholder,
+    icon: placeholder ? 'lock' : visual.icon,
+    iconOnFill: !(placeholder || stub),
     labelColor: theme.text,
     state: vn.state,
   };

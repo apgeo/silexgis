@@ -3,7 +3,8 @@ import { LAYOUT_KINDS } from '../renderer.ts';
 import { GRAPH_NODE_TYPES } from '../types.ts';
 import { NODE_VISUALS, buildGraphTheme, paintEdge, paintNode } from '../visuals.ts';
 import type { ViewEdge, ViewNode } from '../view.ts';
-import { EDGE_LABEL_LIMIT, G6_NODE_TYPE, edgeStyle, layoutOptions, nodeSize, nodeStyle, showEdgeLabel, truncateLabel } from './styleMap.ts';
+import { iconDataUri } from '../icons.ts';
+import { EDGE_LABEL_LIMIT, G6_NODE_TYPE, edgeStyle, layoutOptions, nodeStyle, showEdgeLabel, truncateLabel } from './styleMap.ts';
 
 const theme = buildGraphTheme({}, false, false);
 
@@ -43,17 +44,18 @@ describe('G6 style mapping', () => {
     }
   });
 
-  it('draws a restricted placeholder hollow, dashed, with a lock badge and no colour hint', () => {
+  it('draws a restricted placeholder hollow, dashed, with a lock in the text colour and no colour hint', () => {
     const style = nodeStyle(paintNode(viewNode({ restricted: true, type: 'document' }), theme), 'Restricted', theme);
     expect(style.fill).toBe(theme.background);
     expect((style.lineDash as number[]).length).toBeGreaterThan(0);
-    expect(style.badge).toBe(true);
+    expect(style.iconSrc).toBe(iconDataUri('lock', theme.textSecondary));
   });
 
-  it('draws an ordinary node filled in its type colour with no badge', () => {
+  it('draws an ordinary node filled in its type colour with its white icon', () => {
     const style = nodeStyle(paintNode(viewNode(), theme), 'Cave S', theme);
     expect(style.fill).toBe(theme.preset.blue);
-    expect(style.badge).toBe(false);
+    expect(style.iconSrc).toBe(iconDataUri('cave', '#ffffff'));
+    expect(style.iconWidth).toBeLessThan(style.size as number);
     expect(style.labelText).toBe('Cave S');
     // Lines passing under the name must not strike through it.
     expect(style.labelBackground).toBe(true);
@@ -71,11 +73,6 @@ describe('G6 style mapping', () => {
     const cut = truncateLabel('x'.repeat(80));
     expect([...cut]).toHaveLength(30);
     expect(cut.endsWith('…')).toBe(true);
-  });
-
-  it('gives round shapes one size and wide shapes two', () => {
-    expect(nodeSize('circle', 30)).toBe(30);
-    expect(Array.isArray(nodeSize('rect', 30))).toBe(true);
   });
 
   it('draws an arrow for a directed edge and none for an undirected one', () => {

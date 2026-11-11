@@ -2,43 +2,26 @@
 import { Flex, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { legendOf } from '../../graph/legend.ts';
-import { categoryVisual, MORE_NODE_VISUAL, nodeTypeVisual, type GraphTheme, type NodeShape, type PresetName } from '../../graph/visuals.ts';
+import { iconDataUri } from '../../graph/icons.ts';
+import { categoryVisual, MORE_NODE_VISUAL, nodeTypeVisual, type GraphTheme, type NodeVisual, type PresetName } from '../../graph/visuals.ts';
 import type { GraphView } from '../../graph/view.ts';
 import type { GraphText } from './useGraphPresentation.ts';
 
 const BOX = 20;
 
-function polygon(points: [number, number][]): string {
-  return points.map(([x, y]) => `${x},${y}`).join(' ');
-}
-
-function hexagonPoints(): string {
-  return polygon(
-    [0, 1, 2, 3, 4, 5].map((i) => [10 + 8 * Math.cos((Math.PI / 3) * i), 10 + 8 * Math.sin((Math.PI / 3) * i)] as [number, number]),
-  );
-}
-
-function starPoints(): string {
-  return polygon(
-    Array.from({ length: 10 }, (_, i) => {
-      const r = i % 2 === 0 ? 9 : 4;
-      const a = -Math.PI / 2 + (Math.PI / 5) * i;
-      return [10 + r * Math.cos(a), 10 + r * Math.sin(a)] as [number, number];
-    }),
-  );
-}
-
-function Shape({ shape, colour }: { shape: NodeShape; colour: string }) {
-  const common = { fill: colour, stroke: colour };
+/** A legend swatch drawn like the canvas draws the node: a filled badge with a white icon, or a hollow dashed ring. */
+function Badge({ visual, colour, hollow, ringColour }: { visual: NodeVisual; colour: string; hollow?: boolean; ringColour: string }) {
+  const iconColour = hollow ? ringColour : '#ffffff';
   return (
     <svg width={BOX} height={BOX} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      {shape === 'circle' && <circle cx="10" cy="10" r="8" {...common} />}
-      {shape === 'ellipse' && <ellipse cx="10" cy="10" rx="9" ry="6" {...common} />}
-      {shape === 'rect' && <rect x="2" y="3" width="16" height="14" rx="2" {...common} />}
-      {shape === 'triangle' && <polygon points="10,2 18,17 2,17" {...common} />}
-      {shape === 'diamond' && <polygon points="10,1 19,10 10,19 1,10" {...common} />}
-      {shape === 'hexagon' && <polygon points={hexagonPoints()} {...common} />}
-      {shape === 'star' && <polygon points={starPoints()} {...common} />}
+      {visual.shape === 'diamond' ? (
+        <polygon points="10,3 17,10 10,17 3,10" fill={colour} />
+      ) : hollow ? (
+        <circle cx="10" cy="10" r="8.5" fill="none" stroke={ringColour} strokeWidth="1.5" strokeDasharray="3 2" />
+      ) : (
+        <circle cx="10" cy="10" r="9.5" fill={colour} />
+      )}
+      {visual.icon !== null && <image href={iconDataUri(visual.icon, iconColour)} x="4" y="4" width="12" height="12" />}
     </svg>
   );
 }
@@ -59,7 +42,7 @@ export interface GraphLegendProps {
 
 /**
  * The key to the picture, as ordinary page content so it can be read, translated and tested like
- * any other. It lists only the kinds of item and relation currently on screen, with the same shape
+ * any other. It lists only the kinds of item and relation currently on screen, with the same icon
  * and colour tables the canvas paints from, so the two cannot drift apart.
  */
 export default function GraphLegend({ view, text, theme }: GraphLegendProps) {
@@ -77,23 +60,20 @@ export default function GraphLegend({ view, text, theme }: GraphLegendProps) {
           const visual = nodeTypeVisual(type);
           return (
             <li key={`type:${type}`} data-testid="graph-legend-type" data-legend-type={type} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Shape shape={visual.shape} colour={colour(visual.preset)} />
+              <Badge visual={visual} colour={colour(visual.preset)} ringColour={theme.textSecondary} />
               <span>{text.typeName(type)}</span>
             </li>
           );
         })}
         {content.hasRestricted && (
           <li data-testid="graph-legend-restricted" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <svg width={BOX} height={BOX} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-              <circle cx="10" cy="10" r="8" fill="none" stroke={theme.textSecondary} strokeWidth="2" strokeDasharray="4 3" />
-              <rect x="14" y="2" width="5" height="5" fill={theme.textSecondary} />
-            </svg>
+            <Badge visual={{ ...MORE_NODE_VISUAL, icon: 'lock' }} colour={theme.background} hollow ringColour={theme.textSecondary} />
             <span>{t('graph.legend.restricted')}</span>
           </li>
         )}
         {content.hasMore && (
           <li data-testid="graph-legend-more" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Shape shape={MORE_NODE_VISUAL.shape} colour={colour(MORE_NODE_VISUAL.preset)} />
+            <Badge visual={MORE_NODE_VISUAL} colour={theme.background} hollow ringColour={theme.textSecondary} />
             <span>{t('graph.legend.more')}</span>
           </li>
         )}
