@@ -200,8 +200,13 @@ feature and walkthroughs of whole jobs.
   the cave's survey, nearest caves first within a budget. It is placed from the file's own
   coordinate system, from the recording's satellite fixes, by entrance and bearing, or by pairing
   points of the scan with stations of the cave's line plot, with each pair's residual shown and
-  outliers flagged. The tiles carry no position, so the scan itself follows the ordinary survey-file
-  rules; where it is, and an original that carries real coordinates, need the right to see the
+  outliers flagged. A recording also gives a **centreline** drawn through the cloud and on the 3D
+  map, and a **plan and an extended profile** as pictures on the scan card; a placed scan can be
+  made into a **surface** saved as the cave's walls for the 3D view. The heavy odometry step can be
+  **run on another computer** — the run stops, offers its inputs and HDMapping's parameters for
+  download, and carries on when the products are sent back — and a session refined by hand in
+  HDMapping's desktop programme comes back as the scan's next version. The tiles carry no position,
+  so the scan itself follows the ordinary survey-file rules; where it is, and an original that carries real coordinates, need the right to see the
   cave's exact location.
 - **Storage that is capped, watched and explained** — an installation caps its whole store, its
   point clouds and each account; what does not fit is refused before an upload or a processing run
@@ -211,6 +216,18 @@ feature and walkthroughs of whole jobs.
   be full — and deletes, group by group and after confirmation, what is no longer needed:
   superseded scan copies, failed runs' work, older survey versions' products and expired uploads.
   Uploaded originals are never offered.
+- **Surveys straight from TopoDroid** — the phone survey app sends a survey to the cave's page from
+  its export window, with a revocable access key that can only upload; the server compiles it
+  (Therion or Survex), keeps every version, and shows a status page and a page of results — the 3D
+  model, the drawings, the line work on a map, the survey's own figures and the compiler's log. A
+  public link, for anyone or for signed-in accounts only, hands the results to somebody else; for a
+  protected cave only when asked for knowingly.
+- **A survey declared in the wrong coordinates is caught** — reading a file whose numbers cannot be
+  metres from a point, or that lands kilometres from its cave, says so and tries the cave's UTM
+  zones and the common national grids; when one places the survey at the cave it is offered, and
+  the stored file is read again under it. Passages a Therion drawing leaves out get walls of their
+  own where their size was measured, and passages without a measured size can be drawn, on request
+  and clearly marked, as tubes of one estimated diameter.
 - **Survey closure** — archive the compilation log beside the model and the cave page reports how
   well the survey closes, in the compiler's own words: every loop it found, with both its relative
   error and its absolute error in metres, its length, its stations and its per-axis components. The
@@ -257,6 +274,12 @@ feature and walkthroughs of whole jobs.
   deleted with it. Some relief measures the elevation library cannot produce — geomorphons,
   curvature, and flow direction, accumulation and the wetness index — are simply absent rather than
   approximated under a borrowed name.
+- **The ground and the cave measured against each other** — a cave's depth profile along its
+  passages, a terrain profile along any line drawn on the map, the depth and height of a system
+  across all its entrances, entrance altitudes compared with the ground beneath them, and an area's
+  entrances and sinkholes set against its own ground by slope, facing and position on the relief —
+  a ratio above 1 says where caves sit more often than the terrain alone would suggest. Every one is answered only over
+  what the reader may place; a cave whose position is protected is refused whole.
 - **Trips** — a trip is logged over the days it actually ran, with who was there, what came of it
   and how long was spent underground, and it can be sketched on a map: a point, a line or an area
   for where it happened. That sketch is shown exactly to everyone who may read the trip, including

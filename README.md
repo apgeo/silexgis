@@ -40,11 +40,19 @@ Previous versions:
 - **Map workspace** — OpenLayers map with base layers and overlays, geometry editing with
   snapping and undo, measurement, and search. Works on a phone, editing included.
 - **3D** — a globe with the surveys drawn in place: Therion `.lox` / Survex `.3d` models, cave
-  walls from `.stl`, centerlines, and optional real relief baked from free elevation data.
+  walls from `.stl` or built from the survey, centerlines, and optional real relief baked from free
+  elevation data, with depth and terrain profiles and the ground measured against the caves.
+- **Laser scans (LiDAR)** — point clouds uploaded as `.laz` / `.las`, or raw MANDEYE scanner
+  recordings processed on the server with HDMapping (or on your own computer), under saved
+  processing profiles; viewed on their own, placed by control points paired with survey stations,
+  drawn in the 3D view, with a centreline, plan and profile pictures and walls made from the scan.
+- **Surveys from TopoDroid** — the phone survey app sends a survey straight to the cave's page; the
+  server compiles it, keeps every version, and shows the results, with a public link to hand them
+  on.
 - **One model for everything on the map** — caves, entrances, centerlines and surface features
   share a single feature model, so anything can contain or be linked to anything else.
-- **Files, media and documents** — photo galleries, audio, video, georeferenced raster overlays,
-  and documents filed in cabinets, read in the browser without downloading and discussed where
+- **Files, media and documents** — photo galleries, audio, video, map sheets (GeoTIFF, PDF or a
+  scanned sheet placed by hand with control points), and documents filed in cabinets, read in the browser without downloading and discussed where
   they live.
 - **Full-text search inside documents** — accent-insensitive, stemmed per language, quoting the
   sentence that matched, and never showing you a document you may not read.
@@ -73,6 +81,9 @@ Previous versions:
   searches speologie.org, the Romanian community register of published caves, and brings the caves
   you pick into your own registry without re-typing them; searching creates nothing. A cave can
   also be matched to its entry in Grottocenter, the international database.
+- **Storage under control** — caps for the whole store, the point clouds and each account,
+  checked before an upload or a run starts, warnings as the store fills, and a page that says what
+  fills it and what can go.
 - **Operator-controlled email and SMS** — any SMTP server, any HTTP SMS gateway, every message
   editable per language; configure nothing and the app still runs.
 - **English and Romanian** throughout, screens, dates and sent messages alike.
