@@ -303,6 +303,104 @@ public class SurveyWallBuilderTests
         walls.Mesh.ShouldNotBeNull().TriangleCount.ShouldBe(4);
     }
 
+    [Fact]
+    public void A_passage_nobody_measured_or_drew_is_counted_and_not_drawn_unless_asked()
+    {
+        var measured = new CaveLrud(1, 1, 1, 1);
+        var model = Lox(
+            [(1, "A", 0, 0, 0), (2, "B", 10, 0, 0), (3, "C", 100, 0, 0)],
+            [Shot(1, 2, measured, measured), Shot(2, 3, measured, null)],
+            scraps: [DrawnAround(0, 10)]);
+
+        var walls = SurveyWallBuilder.Build(model, PlainMetres);
+
+        var unsized = walls.Unsized.ShouldNotBeNull();
+        unsized.Legs.ShouldBe(1);
+        unsized.LengthM.ShouldBe(90, 1e-9);
+        walls.Estimated.ShouldBeNull();
+        walls.EstimatedLegs.ShouldBe(0);
+    }
+
+    [Fact]
+    public void Asked_for_it_a_passage_nobody_measured_gets_a_tube_of_the_estimated_size_apart_from_the_walls()
+    {
+        var measured = new CaveLrud(1, 1, 1, 1);
+        var model = Lox(
+            [(1, "A", 0, 0, 0), (2, "B", 10, 0, 0), (3, "C", 100, 0, 0)],
+            [Shot(1, 2, measured, measured), Shot(2, 3, measured, null)],
+            scraps: [DrawnAround(0, 10)]);
+
+        var walls = SurveyWallBuilder.Build(model, PlainMetres, new EstimatedPassageSize(DiameterM: 4));
+
+        // The walls are what they were without the estimate: the drawing and nothing else.
+        walls.Mesh.ShouldNotBeNull().TriangleCount.ShouldBe(4);
+        walls.EstimatedLegs.ShouldBe(1);
+        var estimated = walls.Estimated.ShouldNotBeNull();
+        estimated.TriangleCount.ShouldBe((int)PassageTubes.TriangleCount(sections: 2, sides: 8));
+        // Two metres to each side of the leg, at both of its ends.
+        ShouldHaveVertex(estimated, 10, 2, 0);
+        ShouldHaveVertex(estimated, 100, -2, 0);
+    }
+
+    [Fact]
+    public void A_leg_nobody_measured_inside_a_drawn_passage_is_not_estimated()
+    {
+        var model = Lox(
+            [(1, "A", 0, 0, 0), (2, "B", 10, 0, 0)],
+            [Shot(1, 2, null, null)],
+            scraps: [DrawnAround(0, 10)]);
+
+        var walls = SurveyWallBuilder.Build(model, PlainMetres, new EstimatedPassageSize(DiameterM: 1));
+
+        walls.Unsized.ShouldNotBeNull().Legs.ShouldBe(0);
+        walls.Estimated.ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_file_with_nothing_measured_is_drawn_only_at_the_estimated_size_and_only_when_asked()
+    {
+        var model = Lox(
+            [(1, "A", 0, 0, 0), (2, "B", 10, 0, 0), (3, "C", 20, 0, 0)],
+            [Shot(1, 2, null, null), Shot(2, 3, null, null)]);
+
+        SurveyWallBuilder.Build(model, PlainMetres).Estimated.ShouldBeNull();
+
+        var walls = SurveyWallBuilder.Build(model, PlainMetres, new EstimatedPassageSize(DiameterM: 1));
+        walls.Mesh.ShouldBeNull();
+        walls.EstimatedLegs.ShouldBe(2);
+        walls.Estimated.ShouldNotBeNull();
+        walls.Unsized.ShouldNotBeNull().LengthM.ShouldBe(20, 1e-9);
+    }
+
+    [Fact]
+    public void A_leg_measured_as_nothing_but_zeros_counts_as_having_no_size()
+    {
+        // Some exporters write zeros where nothing was measured; the tube they give has no surface,
+        // so on screen the passage is as missing as one nobody measured.
+        var zeros = new CaveLrud(0, 0, 0, 0);
+        var model = Lox(
+            [(1, "A", 0, 0, 0), (2, "B", 10, 0, 0)],
+            [Shot(1, 2, zeros, zeros)]);
+
+        var walls = SurveyWallBuilder.Build(model, PlainMetres, new EstimatedPassageSize(DiameterM: 1));
+
+        walls.Unsized.ShouldNotBeNull().Legs.ShouldBe(1);
+        walls.EstimatedLegs.ShouldBe(1);
+    }
+
+    [Fact]
+    public void A_shot_at_the_wall_is_never_estimated()
+    {
+        const uint splay = 16; // the format's own bit for a shot at the wall
+        var model = Lox(
+            [(1, "A", 0, 0, 0), (2, "B", 10, 0, 0), (3, "C", 0, 3, 0)],
+            [Shot(1, 2, null, null), Shot(1, 3, null, null, rawFlags: splay)]);
+
+        var walls = SurveyWallBuilder.Build(model, PlainMetres, new EstimatedPassageSize(DiameterM: 1));
+
+        walls.EstimatedLegs.ShouldBe(1);
+    }
+
     /// <summary>
     /// A drawn passage two metres wide and two high along the east axis between two distances:
     /// its two side walls, as a compiler writes a surface.

@@ -1212,6 +1212,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const meshVisible = overlayVisible[SURVEY_MESH_LAYER_ID] ?? true;
   const wallsMode = useWorkspaceStore((s) => s.scene3dWallsMode);
   const setWallsMode = useWorkspaceStore((s) => s.setScene3dWallsMode);
+  const estimatedPassages = useWorkspaceStore((s) => s.scene3dEstimatedPassages);
+  const setEstimatedPassages = useWorkspaceStore((s) => s.setScene3dEstimatedPassages);
+  // Passages drawn at an estimated size: shown or not, and in which colour, in every mesh held —
+  // a restyle of what is on the card, never a reload.
+  useEffect(() => {
+    engineRef.current?.setEstimatedPassages(estimatedPassages);
+  }, [estimatedPassages, engineVersion]);
   useEffect(() => {
     const mesh = meshRef.current;
     const meshesInView = meshesInViewRef.current;
@@ -1509,6 +1516,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
                 photosState={photosState}
                 wallsMode={wallsMode}
                 onWallsModeChange={setWallsMode}
+                estimatedPassages={estimatedPassages}
+                onEstimatedPassagesChange={setEstimatedPassages}
                 meshState={meshState}
                 meshesInViewState={meshesInViewState}
                 scansVisible={scansVisible}

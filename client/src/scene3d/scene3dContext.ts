@@ -18,6 +18,7 @@ import {
   Color,
   ColorGeometryInstanceAttribute,
   Credit,
+  CustomShader,
   Ellipsoid,
   EllipsoidTerrainProvider,
   Event as EngineEvent,
@@ -51,6 +52,7 @@ import {
   ScreenSpaceEventType,
   Transforms,
   SingleTileImageryProvider,
+  UniformType,
   UrlTemplateImageryProvider,
   VerticalOrigin,
   WallGeometry,
@@ -60,6 +62,12 @@ import {
 } from 'cesium';
 import { coarsePointer } from '../map/pointer.ts';
 import { drawnAltitude, samePlacement } from './altitude3d.ts';
+import {
+  DEFAULT_ESTIMATED_PASSAGES_DISPLAY,
+  ESTIMATED_NODE_NAME,
+  estimatedRecolour,
+  type EstimatedPassagesDisplay,
+} from './estimatedPassages.ts';
 import type { Altitude3DPlacement } from './altitude3d.ts';
 import { eyeLookingAt, wrapRoll } from './camera3d.ts';
 import {
@@ -642,6 +650,8 @@ class CesiumScene3D implements Scene3DCore {
    * down — has arrived for nobody, and throws its own bytes away rather than adding them.
    */
   private readonly models = new Map<string, LoadedModel>();
+  /** Whether, and in what colour, the passages a reading drew at an estimated size are shown. */
+  private estimatedPassages: EstimatedPassagesDisplay = DEFAULT_ESTIMATED_PASSAGES_DISPLAY;
   /** Every point cloud in the scene, under its caller's id; the entry is the load's token as above. */
   private readonly pointClouds = new Map<string, LoadedPointCloud>();
   /** The detail budget every cloud is loaded with; set from the per-browser preference. */
@@ -1567,6 +1577,68 @@ class CesiumScene3D implements Scene3DCore {
     // Placed again on arrival rather than trusting the matrix the read started with: an elevation
     // model attaching during a long read changes where this belongs, and the read does not notice.
     this.placeModel(entry);
+    // A model's nodes are known only once its first frames are drawn, which is after it lands.
+    model.readyEvent.addEventListener(() => {
+      if (this.models.get(id) === entry) {
+        this.styleEstimatedPassages(entry);
+      }
+    });
+    this.styleEstimatedPassages(entry);
+  }
+
+  setEstimatedPassages(display: EstimatedPassagesDisplay): void {
+    if (
+      display.visible === this.estimatedPassages.visible &&
+      display.color === this.estimatedPassages.color
+    ) {
+      return;
+    }
+    this.estimatedPassages = { ...display };
+    for (const entry of this.models.values()) {
+      this.styleEstimatedPassages(entry);
+    }
+  }
+
+  /**
+   * Shows or hides one model's estimated passages, and colours them.
+   *
+   * Hidden by their node, so hiding them draws nothing for them rather than drawing them
+   * transparent. Coloured by a shader that recolours only the vertices the file marks as
+   * estimated, because the library colours a model whole or not at all. A model with no estimated
+   * passages is left exactly as it was: the shader reads a mark only such a file carries.
+   */
+  private styleEstimatedPassages(entry: LoadedModel): void {
+    const model = entry.model;
+    if (this.widget.isDestroyed() || !model || !model.ready) {
+      return;
+    }
+    const node = model.getNode(ESTIMATED_NODE_NAME);
+    if (!node) {
+      return;
+    }
+    node.show = this.estimatedPassages.visible;
+    const recolour = estimatedRecolour(this.estimatedPassages.color);
+    // The library's types say a model always has a shader; it takes none as "draw as the file
+    // says", which is what leaving the estimates in their built colour means.
+    (model as { customShader: CustomShader | undefined }).customShader = recolour
+      ? new CustomShader({
+          uniforms: {
+            u_estimatedColor: {
+              type: UniformType.VEC3,
+              value: new Cartesian3(recolour[0], recolour[1], recolour[2]),
+            },
+          },
+          // The material's colour is linear here, as the file states it, so the chosen colour is
+          // handed over linear too and comes out on screen as the colour that was picked.
+          fragmentShaderText: `
+void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+  if (fsInput.attributes.estimated > 0.5) {
+    material.diffuse = u_estimatedColor;
+  }
+}`,
+        })
+      : undefined;
+    this.requestRender();
   }
 
   removeModel(id: string): void {

@@ -2783,6 +2783,56 @@ describe('models the scene loads', () => {
     session.release();
   });
 
+  it('hides and recolours the passages drawn at an estimated size, and nothing else', async () => {
+    const session = acquire();
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL);
+    await loading;
+    const [model] = loadedModels();
+
+    // Asked before the model knows its nodes, and applied once it does.
+    session.engine.setEstimatedPassages({ visible: false, color: 'walls' });
+    expect(model.customShader).toBeUndefined();
+    model.becomeReady(['walls', 'estimated']);
+
+    expect(model.nodes.get('estimated')!.show).toBe(false);
+    expect(model.nodes.get('walls')!.show).toBe(true);
+    expect(model.show).toBe(true);
+    // Recoloured to exactly the walls' own linear colour, by a shader reading the file's mark.
+    const shader = model.customShader!;
+    expect(shader.fragmentShaderText).toContain('fsInput.attributes.estimated');
+    const colour = shader.uniforms.u_estimatedColor!.value as { x: number; y: number; z: number };
+    expect([colour.x, colour.y, colour.z]).toEqual([0.72, 0.68, 0.62]);
+
+    // Back to the built colour: no shader at all.
+    session.engine.setEstimatedPassages({ visible: true, color: 'built' });
+    expect(model.nodes.get('estimated')!.show).toBe(true);
+    expect(model.customShader).toBeUndefined();
+    session.release();
+  });
+
+  it('leaves a model with no estimated passages exactly as it was', async () => {
+    const session = acquire();
+    session.engine.setEstimatedPassages({ visible: false, color: '#3a7bd5' });
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL);
+    await loading;
+    const [model] = loadedModels();
+    model.becomeReady(['walls']);
+
+    expect(model.customShader).toBeUndefined();
+    expect(model.nodes.get('walls')!.show).toBe(true);
+    session.release();
+  });
+
   it('moves a loaded model when the ground changes, without reading the file again', async () => {
     const session = acquire();
     const loading = session.engine.loadModel('cave-mesh', {

@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import {
   CheckCircleOutlined,
+  ColumnWidthOutlined,
   DeleteOutlined,
   EnvironmentOutlined,
   ExportOutlined,
@@ -34,7 +35,8 @@ import SurveyModelUploadModal from './SurveyModelUploadModal.tsx';
 import PointCloudUploadModal from './PointCloudUploadModal.tsx';
 import ScanPlacementControl from './ScanPlacementControl.tsx';
 import SurveyModelPlacementModal, { type PlacementChange } from './SurveyModelPlacementModal.tsx';
-import { formatKm, hasPlacementSuggestion } from './surveyPlacement.ts';
+import SurveyModelEstimatedPassagesModal from './SurveyModelEstimatedPassagesModal.tsx';
+import { formatKm, formatPassageLength, hasPlacementSuggestion } from './surveyPlacement.ts';
 import { surveyModelProblemMessage } from './surveyModelProblems.ts';
 
 /**
@@ -74,6 +76,61 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
   const [uploadingCloud, setUploadingCloud] = useState(false);
   /** The model whose placement is being said again, or null while that dialog is closed. */
   const [placing, setPlacing] = useState<PlacementChange | null>(null);
+  /** The line plot whose estimated passages are being set, or null while that dialog is closed. */
+  const [estimating, setEstimating] = useState<SurveyModelInfo | null>(null);
+
+  // The passage a reading found no size for, and what was done about it. Drawn at an estimated
+  // size, the warning is the louder of the two: those tubes look like measured passages on screen,
+  // and this row is where anybody who might trust them is told that they are not.
+  const estimateNote = (model: SurveyModelInfo) => {
+    const drawn = typeof model.estimatedLegCount === 'number' ? model.estimatedLegCount : 0;
+    const unsizedLegs = typeof model.unsizedLegCount === 'number' ? model.unsizedLegCount : 0;
+    if (drawn === 0 && unsizedLegs === 0) {
+      return null;
+    }
+    const length =
+      typeof model.unsizedPassageM === 'number' ? formatPassageLength(model.unsizedPassageM) : '';
+    const buttonLabel =
+      drawn > 0 ? t('surveyModels.estimated.change') : t('surveyModels.estimated.offer');
+    return (
+      <Flex vertical gap={2} align="flex-start" data-testid={`survey-model-estimated-note-${model.id}`}>
+        {drawn > 0 ? (
+          <Typography.Text type="warning" style={{ fontSize: 12 }}>
+            <span
+              aria-hidden
+              style={{
+                display: 'inline-block',
+                width: 10,
+                height: 10,
+                marginInlineEnd: 4,
+                borderRadius: 2,
+                // The colour is the datum: it is what these passages are drawn in.
+                background: model.estimatedPassageColor,
+              }}
+            />
+            {t('surveyModels.estimated.drawn', {
+              count: drawn,
+              diameter: model.estimatedPassageDiameterM,
+            })}
+          </Typography.Text>
+        ) : (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t('surveyModels.estimated.unsized', { length, count: unsizedLegs })}
+          </Typography.Text>
+        )}
+        {canEdit && !surveyModelWorkOutstanding(model) && (
+          <Button
+            size="small"
+            icon={<ColumnWidthOutlined />}
+            onClick={() => setEstimating(model)}
+            data-testid={`survey-model-estimate-${model.id}`}
+          >
+            {buttonLabel}
+          </Button>
+        )}
+      </Flex>
+    );
+  };
 
   // What a reading found about where the survey was declared to sit: how far from its cave it
   // landed, and the declaration that would put it there. Shown on a failed model and on a ready
@@ -192,6 +249,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
           </Tooltip>
         )}
         {placementNote(model)}
+        {!walls && !scan && estimateNote(model)}
       </Flex>
     );
   };
@@ -424,6 +482,13 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
           caveId={caveId}
           open={uploadingCloud}
           onClose={() => setUploadingCloud(false)}
+        />
+      )}
+      {canEdit && (
+        <SurveyModelEstimatedPassagesModal
+          caveId={caveId}
+          model={estimating}
+          onClose={() => setEstimating(null)}
         />
       )}
       {canEdit && (

@@ -210,6 +210,39 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     public double? SuggestedOffByKm { get; set; }
 
     /// <summary>
+    /// For a line plot: draw the passages whose size nothing in the file gives — no drawn wall near
+    /// them, no measured cross-section — as tubes of <see cref="EstimatedPassageDiameterM"/>. Off
+    /// unless somebody asks for it, because those tubes are sizes nobody measured.
+    /// </summary>
+    public bool EstimatePassages { get; set; }
+
+    /// <summary>The diameter of an estimated passage, in metres.</summary>
+    public double EstimatedPassageDiameterM { get; set; } = DefaultEstimatedPassageDiameterM;
+
+    /// <summary>The colour estimated passages are built in, as <c>#rrggbb</c>.</summary>
+    public string EstimatedPassageColor { get; set; } = DefaultEstimatedPassageColor;
+
+    public const double DefaultEstimatedPassageDiameterM = 1.0;
+
+    public const string DefaultEstimatedPassageColor = "#e8833a";
+
+    /// <summary>
+    /// For a line plot once read: how many metres of passage have no size in the file — neither
+    /// a drawn wall nearby nor a measured cross-section. Null before a reading, and for a reading
+    /// whose walls could not be built at all.
+    /// </summary>
+    public double? UnsizedPassageM { get; set; }
+
+    /// <summary>How many legs make up <see cref="UnsizedPassageM"/>.</summary>
+    public int? UnsizedLegCount { get; set; }
+
+    /// <summary>
+    /// How many legs the last reading drew as estimated tubes: zero when it was not asked to, or
+    /// could not within the mesh's size limit. Null before a reading.
+    /// </summary>
+    public int? EstimatedLegCount { get; set; }
+
+    /// <summary>
     /// How many legs the extraction could not attach to the station network, or null before a
     /// line-plot model has been read.
     ///

@@ -6368,6 +6368,30 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("dropped_shot_count");
 
+                    b.Property<bool>("EstimatePassages")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("estimate_passages");
+
+                    b.Property<int?>("EstimatedLegCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("estimated_leg_count");
+
+                    b.Property<string>("EstimatedPassageColor")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasDefaultValue("#e8833a")
+                        .HasColumnName("estimated_passage_color");
+
+                    b.Property<double>("EstimatedPassageDiameterM")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(1.0)
+                        .HasColumnName("estimated_passage_diameter_m");
+
                     b.Property<Guid>("FileId")
                         .HasColumnType("uuid")
                         .HasColumnName("file_id");
@@ -6467,6 +6491,14 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<int?>("TriangleCount")
                         .HasColumnType("integer")
                         .HasColumnName("triangle_count");
+
+                    b.Property<int?>("UnsizedLegCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("unsized_leg_count");
+
+                    b.Property<double?>("UnsizedPassageM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("unsized_passage_m");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")

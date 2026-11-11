@@ -426,6 +426,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-models/{id}/estimated-passages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Says whether a line plot's passages without a measured size are drawn at an estimated size, and which size and colour, and queues a reading that builds them (Write on the cave). Refused while a reading is queued or running. */
+        put: operations["surveyModelChangeEstimatedPassages"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/survey-models/{id}/reading": {
         parameters: {
             query?: never;
@@ -16145,6 +16162,16 @@ export interface components {
             suggestsLocalMetres: boolean;
             /** Format: double */
             suggestedOffByKm: null | number;
+            estimatePassages: boolean;
+            /** Format: double */
+            estimatedPassageDiameterM: number;
+            estimatedPassageColor: string;
+            /** Format: double */
+            unsizedPassageM: null | number;
+            /** Format: int32 */
+            unsizedLegCount: null | number;
+            /** Format: int32 */
+            estimatedLegCount: null | number;
             /** Format: int32 */
             droppedShotCount: null | number;
             /** Format: int32 */
@@ -16156,6 +16183,12 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        SurveyModelEstimatedPassagesRequest: {
+            enabled: boolean;
+            /** Format: double */
+            diameterM: number;
+            color: string;
         };
         /** @enum {unknown} */
         SurveyModelFormat: "lox" | "survex3d" | "stl" | "laz" | "las";
@@ -20233,6 +20266,50 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SurveyModelPlacementRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyModelChangeEstimatedPassages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurveyModelEstimatedPassagesRequest"];
             };
         };
         responses: {

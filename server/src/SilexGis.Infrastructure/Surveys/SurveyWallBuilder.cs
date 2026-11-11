@@ -44,7 +44,34 @@ public sealed record SurveyWalls(
     int RingSides,
     int WalledLegs,
     int PassageLegs,
-    string? Reason);
+    string? Reason)
+{
+    /// <summary>
+    /// Tubes of a size nobody measured, around the passages the file gives no size for — only when
+    /// they were asked for, and kept apart from <see cref="Mesh"/> so that whatever draws them can
+    /// tell them from the walls the survey does state.
+    /// </summary>
+    public IndexedMesh? Estimated { get; init; }
+
+    /// <summary>How many legs <see cref="Estimated"/> holds tubes for.</summary>
+    public int EstimatedLegs { get; init; }
+
+    /// <summary>
+    /// The passage the file gives no size for: how many legs and how many metres. Null when that
+    /// was not worked out — the file's own wall surfaces were too many to draw at all.
+    /// </summary>
+    public UnsizedPassages? Unsized { get; init; }
+}
+
+/// <summary>Legs of passage that have no size in the file, and their length in metres.</summary>
+public sealed record UnsizedPassages(int Legs, double LengthM);
+
+/// <summary>
+/// The one size an estimated passage is drawn at, when somebody asked for passages without a
+/// measured size to be drawn at all.
+/// </summary>
+/// <param name="DiameterM">How wide and how high each estimated tube is, in metres.</param>
+public sealed record EstimatedPassageSize(double DiameterM);
 
 /// <summary>
 /// Builds the walls a compiled survey can honestly be given, out of what the file itself says.
@@ -59,13 +86,16 @@ public sealed record SurveyWalls(
 /// </para>
 ///
 /// <para>
-/// <b>What is never done here is the thing that would be easiest: giving every leg a tube.</b> A
+/// <b>What is not done unasked is the thing that would be easiest: giving every leg a tube.</b> A
 /// leg with no measured walls is a line somebody walked along, and nothing in the file says whether
 /// it runs down a crawl or across a chamber. A tube of a default size around it looks, on screen,
-/// exactly like a measured passage — so it is not drawn, a file with nothing measured gets no walls
-/// at all, and that outcome is an answer rather than a failure. A shot at the wall gets no tube
-/// either: it is a measurement <i>of</i> the wall, and a passage drawn around it would be a
-/// passage through the rock.
+/// like a measured passage — so by default it is not drawn, a file with nothing measured gets no
+/// walls at all, and that outcome is an answer rather than a failure. Somebody who would rather see
+/// those passages at a guessed size than not at all can ask for it, and then they are built as a
+/// separate mesh, never merged into the walls the survey states, so the viewer can draw them in a
+/// colour of their own and turn them off. A shot at the wall gets no tube either way: it is a
+/// measurement <i>of</i> the wall, and a passage drawn around it would be a passage through the
+/// rock.
 /// </para>
 ///
 /// <para>
@@ -105,9 +135,11 @@ public static class SurveyWallBuilder
     private const CaveShotFlags NotPassage = CaveShotFlags.Splay | CaveShotFlags.Surface;
 
     /// <summary>
-    /// The walls of <paramref name="source"/>, placed by <paramref name="placement"/>.
+    /// The walls of <paramref name="source"/>, placed by <paramref name="placement"/>; and, when
+    /// <paramref name="estimate"/> is given, tubes of that size around the passages the file gives
+    /// no size for.
     /// </summary>
-    public static SurveyWalls Build(CaveModel source, SurveyPlacement placement)
+    public static SurveyWalls Build(CaveModel source, SurveyPlacement placement, EstimatedPassageSize? estimate = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(placement);
@@ -118,13 +150,147 @@ public static class SurveyWallBuilder
         var model = SurveyWallShots.Flagged(source);
         var passageLegs = model.Shots.Count(shot => (shot.Flags & NotPassage) == 0);
 
+        var measured = new List<PassageSection[]>();
+        AddMeasuredLegs(model, placement, measured);
+        AddMeasuredPassages(model, placement, measured);
+
         var scraps = FromScraps(model, placement, passageLegs);
-        if (scraps is { Mesh: { } drawn })
+        if (scraps is { Mesh: null })
         {
-            return WithUndrawnPassages(scraps, drawn, model, placement, passageLegs);
+            // Too many drawn surfaces to draw at all. Estimated tubes around the rest would be the
+            // only thing on screen, and would read as the whole cave.
+            return scraps;
         }
 
-        return scraps ?? FromPassageDimensions(model, placement, passageLegs);
+        WallCoverage? coverage = null;
+        SurveyWalls walls;
+        if (scraps is { Mesh: { } drawn })
+        {
+            coverage = new WallCoverage(drawn);
+            walls = WithUndrawnPassages(scraps, drawn, coverage, measured, passageLegs);
+        }
+        else
+        {
+            walls = FromPassageDimensions(measured, passageLegs);
+        }
+
+        return WithUnsizedPassages(walls, model, placement, measured, coverage, estimate);
+    }
+
+    /// <summary>
+    /// How near a drawn wall must pass to the middle of a leg nobody measured for the leg to be
+    /// taken for part of the drawn passage. Wider than the allowance a measured leg is given,
+    /// because there is no measured width to start from: this is a typical passage's half-width
+    /// and the same slack for a drawing that is off its survey.
+    /// </summary>
+    private const double UnmeasuredDrawnReachM = 5;
+
+    /// <summary>
+    /// Counts the passage the file gives no size for — legs that are passage, that no measured
+    /// cross-section covers and that no drawn wall comes near — and, when asked to, builds a tube
+    /// of the one estimated size around each of them, as a mesh of its own.
+    ///
+    /// <para>
+    /// One straight tube a leg rather than runs joined at their stations: a guessed size gains
+    /// nothing from a smooth bend, and per-leg tubes need no decision about which legs continue
+    /// which. The estimated tubes are held to what is left of the triangle budget after the walls,
+    /// coarser first and then none, because the walls the survey does state are never thinned to
+    /// make room for guesses.
+    /// </para>
+    /// </summary>
+    private static SurveyWalls WithUnsizedPassages(
+        SurveyWalls walls,
+        CaveModel model,
+        SurveyPlacement placement,
+        List<PassageSection[]> measured,
+        WallCoverage? coverage,
+        EstimatedPassageSize? estimate)
+    {
+        // A leg is sized when a cross-section at either end has some width. One measured as
+        // nothing but zeros at both ends has a tube with no surface: on screen it is as absent as
+        // a leg nobody measured, and some exporters write zeros where nothing was measured at all.
+        var sized = new HashSet<(LocalPoint, LocalPoint)>();
+        foreach (var run in measured)
+        {
+            for (var i = 0; i + 1 < run.Length; i++)
+            {
+                if (Widest(run[i].Walls) <= 0 && Widest(run[i + 1].Walls) <= 0)
+                {
+                    continue;
+                }
+
+                sized.Add((run[i].Station, run[i + 1].Station));
+                sized.Add((run[i + 1].Station, run[i].Station));
+            }
+        }
+
+        var unsized = new List<(LocalPoint From, LocalPoint To)>();
+        var lengthM = 0.0;
+        foreach (var shot in model.Shots)
+        {
+            if ((shot.Flags & NotWalled) != 0
+                || (shot.ToPosition - shot.FromPosition).Length < PassageTubes.ShortestLegM)
+            {
+                continue;
+            }
+
+            var from = Local(placement, shot.FromPosition);
+            var to = Local(placement, shot.ToPosition);
+            if (sized.Contains((from, to)))
+            {
+                continue;
+            }
+
+            var middle = new LocalPoint((from.East + to.East) / 2, (from.North + to.North) / 2, (from.Up + to.Up) / 2);
+            if (coverage is not null && coverage.Within(middle, UnmeasuredDrawnReachM))
+            {
+                continue;
+            }
+
+            unsized.Add((from, to));
+            lengthM += Distance(from, to);
+        }
+
+        var counted = walls with { Unsized = new UnsizedPassages(unsized.Count, lengthM) };
+
+        // Walls the file measures but that could not be drawn leave nothing to set guesses beside:
+        // the guesses alone would be taken for the cave.
+        var measuredButUndrawn = walls.Mesh is null && sized.Count > 0;
+        if (estimate is null || unsized.Count == 0 || !(estimate.DiameterM > 0) || measuredButUndrawn)
+        {
+            return counted;
+        }
+
+        var radius = estimate.DiameterM / 2;
+        var size = new WallDistances(radius, radius, radius, radius);
+        var budget = MaxTriangles - (walls.Mesh?.TriangleCount ?? 0);
+        var sides = PassageTubes.FullSides;
+        if (PassageTubes.TriangleCount(2, sides) * unsized.Count > budget)
+        {
+            sides = PassageTubes.FewerSides;
+            if (PassageTubes.TriangleCount(2, sides) * unsized.Count > budget)
+            {
+                return counted;
+            }
+        }
+
+        var mesh = new WallMeshAssembler();
+        foreach (var (from, to) in unsized)
+        {
+            PassageTubes.Append(mesh, [new PassageSection(from, size), new PassageSection(to, size)], sides);
+        }
+
+        return mesh.ToMesh() is { } built
+            ? counted with { Estimated = built, EstimatedLegs = unsized.Count }
+            : counted;
+    }
+
+    private static double Distance(LocalPoint a, LocalPoint b)
+    {
+        var east = b.East - a.East;
+        var north = b.North - a.North;
+        var up = b.Up - a.Up;
+        return Math.Sqrt((east * east) + (north * north) + (up * up));
     }
 
     /// <summary>
@@ -153,17 +319,13 @@ public static class SurveyWallBuilder
     /// </para>
     /// </summary>
     private static SurveyWalls WithUndrawnPassages(
-        SurveyWalls scraps, IndexedMesh drawn, CaveModel model, SurveyPlacement placement, int passageLegs)
+        SurveyWalls scraps, IndexedMesh drawn, WallCoverage coverage, List<PassageSection[]> measured, int passageLegs)
     {
-        var measured = new List<PassageSection[]>();
-        AddMeasuredLegs(model, placement, measured);
-        AddMeasuredPassages(model, placement, measured);
         if (measured.Count == 0)
         {
             return scraps;
         }
 
-        var coverage = new WallCoverage(drawn);
         var runs = new List<PassageSection[]>();
         foreach (var run in measured)
         {
@@ -300,12 +462,8 @@ public static class SurveyWallBuilder
     /// <summary>
     /// Tubes around every stretch of passage whose walls were measured at both ends.
     /// </summary>
-    private static SurveyWalls FromPassageDimensions(CaveModel model, SurveyPlacement placement, int passageLegs)
+    private static SurveyWalls FromPassageDimensions(List<PassageSection[]> runs, int passageLegs)
     {
-        var runs = new List<PassageSection[]>();
-        AddMeasuredLegs(model, placement, runs);
-        AddMeasuredPassages(model, placement, runs);
-
         if (runs.Count == 0)
         {
             return new SurveyWalls(

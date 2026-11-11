@@ -131,6 +131,25 @@ public sealed record SurveyModelDto(
     /// <summary>How far from its cave the file would land as suggested, when that is known.</summary>
     double? SuggestedOffByKm,
     /// <summary>
+    /// For a line plot: whether the passages the file gives no size for are drawn as tubes of an
+    /// estimated size, and that size and colour. The tubes are sizes nobody measured; they are
+    /// built apart from the walls so a viewer can tell them apart and turn them off.
+    /// </summary>
+    bool EstimatePassages,
+    double EstimatedPassageDiameterM,
+    string EstimatedPassageColor,
+    /// <summary>
+    /// For a line plot once read: how many metres, and how many legs, of passage have no size in
+    /// the file — no drawn wall near them and no measured cross-section. Null before a reading.
+    /// </summary>
+    double? UnsizedPassageM,
+    int? UnsizedLegCount,
+    /// <summary>
+    /// How many legs the last reading drew at the estimated size; zero when it was not asked to or
+    /// could not within the mesh's size limit, null before a reading.
+    /// </summary>
+    int? EstimatedLegCount,
+    /// <summary>
     /// How many legs of the traverse could not be attached to a station, and how many stations
     /// stood where another already did and became one node. Null until a line plot has been read.
     ///
@@ -251,6 +270,26 @@ public sealed class SurveyModelPlacementRequestValidator : AbstractValidator<Sur
         RuleFor(x => x.OriginLongitude).NotNull().When(x => x.SourceEpsg is null);
         RuleFor(x => x.OriginLatitude).NotNull().When(x => x.SourceEpsg is null);
         RuleFor(x => x.OriginHeightM).InclusiveBetween(-500, 9000);
+    }
+}
+
+/// <summary>
+/// Whether a line plot's passages without a measured size are drawn at an estimated one, and at
+/// which diameter and in which colour.
+/// </summary>
+public sealed record SurveyModelEstimatedPassagesRequest(bool Enabled, double DiameterM, string Color);
+
+public sealed class SurveyModelEstimatedPassagesRequestValidator : AbstractValidator<SurveyModelEstimatedPassagesRequest>
+{
+    /// <summary>The narrowest and widest estimated passage, in metres: a squeeze to a large gallery.</summary>
+    public const double SmallestDiameterM = 0.2;
+
+    public const double LargestDiameterM = 30;
+
+    public SurveyModelEstimatedPassagesRequestValidator()
+    {
+        RuleFor(x => x.DiameterM).InclusiveBetween(SmallestDiameterM, LargestDiameterM);
+        RuleFor(x => x.Color).NotNull().Matches("^#[0-9a-fA-F]{6}$");
     }
 }
 
@@ -409,6 +448,10 @@ public static class SurveyModelEndpoints
             .WithValidation<SurveyModelPlacementRequest>()
             .WithTags("SurveyModels")
             .WithSummary("Says again where the stored file sits — a projected coordinate system, or a position for its zero point — and queues a reading under that answer (Write on the cave). Refused while a reading is queued or running.");
+        api.MapPut("/survey-models/{id:guid}/estimated-passages", ChangeEstimatedPassagesAsync)
+            .WithValidation<SurveyModelEstimatedPassagesRequest>()
+            .WithTags("SurveyModels")
+            .WithSummary("Says whether a line plot's passages without a measured size are drawn at an estimated size, and which size and colour, and queues a reading that builds them (Write on the cave). Refused while a reading is queued or running.");
         api.MapPost("/survey-models/{id:guid}/reading", ReadAgainAsync)
             .WithTags("SurveyModels")
             .WithSummary("Queues another reading of the model's stored file (Write on the cave). Refused while a reading is queued or running.");
@@ -1071,6 +1114,67 @@ public static class SurveyModelEndpoints
         return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
     }
 
+    /// <summary>
+    /// Turns the estimated passages of a line plot on or off, or changes their size or colour, and
+    /// reads the stored file again so its mesh is built that way.
+    /// </summary>
+    /// <remarks>
+    /// Built into the mesh rather than drawn by the viewer, because which legs have no size is a
+    /// question about the whole survey — its drawn walls and its measured cross-sections — that
+    /// only the reading answers.
+    /// </remarks>
+    private static async Task<Results<Ok<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> ChangeEstimatedPassagesAsync(
+        Guid id,
+        SurveyModelEstimatedPassagesRequest request,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IAccessService access,
+        FeatureProtection protection,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
+        var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
+        if (model is null || cave is null
+            || !await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct))
+        {
+            return ApiProblems.NotFound("survey_model.not_found");
+        }
+
+        if (!await SurveyModelAccess.WritableAsync(access, ctx, cave, ct))
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        if (!SurveyModelKinds.FormatsOf(SurveyModelKind.LinePlot).Contains(model.Format))
+        {
+            return ApiProblems.BadRequest(
+                "survey_model.not_a_line_plot",
+                "Only a survey line plot has passages whose size can be estimated.");
+        }
+
+        model.EstimatePassages = request.Enabled;
+        model.EstimatedPassageDiameterM = request.DiameterM;
+        model.EstimatedPassageColor = request.Color.ToLowerInvariant();
+
+        // Saved by the queueing, in its transaction: a refusal leaves the row as it was.
+        if (await SurveyModelReading.QueueAgainAsync(db, model, ctx.UserId, ct)
+            == SurveyReadingRequest.AlreadyInProgress)
+        {
+            return ApiProblems.Conflict(
+                "survey_model.reading_in_progress",
+                "This model is already being read. Wait for that reading to finish before asking for another.");
+        }
+
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
+    }
+
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         HttpContext http,
@@ -1277,6 +1381,12 @@ public static class SurveyModelEndpoints
         m.SuggestedSourceEpsg,
         m.SuggestsLocalMetres,
         m.SuggestedOffByKm,
+        m.EstimatePassages,
+        m.EstimatedPassageDiameterM,
+        m.EstimatedPassageColor,
+        m.UnsizedPassageM,
+        m.UnsizedLegCount,
+        m.EstimatedLegCount,
         m.DroppedShotCount,
         m.MergedStationCount,
         m.AnonymousStationCount,

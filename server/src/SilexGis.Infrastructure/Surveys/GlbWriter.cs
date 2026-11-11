@@ -31,6 +31,15 @@ public static class GlbWriter
     private const int ArrayBuffer = 34962;
     private const int ElementArrayBuffer = 34963;
 
+    /// <summary>The colour walls are drawn in, linear RGB: a pale limestone grey.</summary>
+    public static readonly (double R, double G, double B) WallColor = (0.72, 0.68, 0.62);
+
+    /// <summary>The name of the node estimated passages are written under, which a viewer finds them by.</summary>
+    public const string EstimatedNodeName = "estimated";
+
+    /// <summary>The name of the node a survey's walls are written under.</summary>
+    public const string WallsNodeName = "walls";
+
     /// <summary>
     /// Writes the mesh, moved so that <paramref name="origin"/> becomes its zero point.
     ///
@@ -49,18 +58,107 @@ public static class GlbWriter
     public static void Write(IndexedMesh mesh, (double X, double Y, double Z) origin, Stream output)
     {
         ArgumentNullException.ThrowIfNull(mesh);
+        Write([new Part(WallsNodeName, "cave", mesh, WallColor)], flagged: false, origin, output);
+    }
+
+    /// <summary>
+    /// Writes a survey's walls and, apart from them, the tubes of an estimated size around its
+    /// passages that have no size in the file — either may be missing, not both.
+    ///
+    /// <para>
+    /// Two nodes rather than one mesh, so that a viewer can turn the estimates off without turning
+    /// off the walls. Each vertex of both also carries an application attribute,
+    /// <c>_ESTIMATED</c> — one on the estimates, zero on the walls — so that a viewer can recolour
+    /// the estimates alone with a shader; it is written on both because a shader that reads an
+    /// attribute some primitive lacks is switched off for that primitive. Any other glTF viewer
+    /// ignores the attribute and draws the estimates in the colour they were built in.
+    /// </para>
+    /// </summary>
+    /// <param name="estimatedColor">Linear RGB of the estimated tubes.</param>
+    public static void Write(
+        IndexedMesh? walls,
+        IndexedMesh? estimated,
+        (double R, double G, double B) estimatedColor,
+        (double X, double Y, double Z) origin,
+        Stream output)
+    {
+        if (estimated is null)
+        {
+            ArgumentNullException.ThrowIfNull(walls);
+            Write(walls, origin, output);
+            return;
+        }
+
+        var parts = new List<Part>();
+        if (walls is not null)
+        {
+            parts.Add(new Part(WallsNodeName, "cave", walls, WallColor));
+        }
+
+        parts.Add(new Part(EstimatedNodeName, "estimated", estimated, estimatedColor, Flag: 1));
+        Write(parts, flagged: true, origin, output);
+    }
+
+    /// <summary>
+    /// Turns <c>#rrggbb</c> into the linear RGB a glTF material states its colour in, so that the
+    /// colour on screen is the colour that was chosen. Null for anything else.
+    /// </summary>
+    public static (double R, double G, double B)? LinearFromHex(string? hex)
+    {
+        if (hex is not { Length: 7 } || hex[0] != '#'
+            || !int.TryParse(hex.AsSpan(1), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var rgb))
+        {
+            return null;
+        }
+
+        static double Linear(int channel)
+        {
+            var c = channel / 255.0;
+            return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+        }
+
+        return (Linear((rgb >> 16) & 0xFF), Linear((rgb >> 8) & 0xFF), Linear(rgb & 0xFF));
+    }
+
+    /// <summary>One node of the file: a mesh, its material, and its value of the estimate flag.</summary>
+    private sealed record Part(string Node, string Material, IndexedMesh Mesh, (double R, double G, double B) Color, float Flag = 0);
+
+    /// <summary>A part laid out for writing: its arrays, and how many bytes each takes.</summary>
+    private sealed record Laid(Part Part, float[] Positions, float[] Normals, float[]? Flags)
+    {
+        public int IndexBytes => Part.Mesh.Indices.Length * sizeof(uint);
+
+        public int PositionBytes => Positions.Length * sizeof(float);
+
+        public int NormalBytes => Normals.Length * sizeof(float);
+
+        public int FlagBytes => (Flags?.Length ?? 0) * sizeof(float);
+
+        public int Bytes => IndexBytes + PositionBytes + NormalBytes + FlagBytes;
+    }
+
+    private static void Write(IReadOnlyList<Part> parts, bool flagged, (double X, double Y, double Z) origin, Stream output)
+    {
         ArgumentNullException.ThrowIfNull(output);
 
-        var positions = ToGltfAxes(mesh.Positions, origin);
-        var normals = SmoothNormals(positions, mesh.Indices);
+        var laid = new List<Laid>(parts.Count);
+        foreach (var part in parts)
+        {
+            var positions = ToGltfAxes(part.Mesh.Positions, origin);
+            var normals = SmoothNormals(positions, part.Mesh.Indices);
+            float[]? flags = null;
+            if (flagged)
+            {
+                flags = new float[part.Mesh.VertexCount];
+                Array.Fill(flags, part.Flag);
+            }
 
-        var indexBytes = mesh.Indices.Length * sizeof(uint);
-        var positionBytes = positions.Length * sizeof(float);
-        var normalBytes = normals.Length * sizeof(float);
+            laid.Add(new Laid(part, positions, normals, flags));
+        }
 
-        var json = BuildJson(mesh, positions, indexBytes, positionBytes, normalBytes);
+        var json = BuildJson(laid);
         var jsonPadding = Padding(json.Length);
-        var binaryLength = indexBytes + positionBytes + normalBytes;
+        var binaryLength = laid.Sum(l => l.Bytes);
 
         // Every offset in the JSON above is already fixed, so the total is known before a byte of
         // it is written and the file can be produced in one pass rather than buffered whole.
@@ -82,9 +180,16 @@ public static class GlbWriter
 
         WriteWord(output, (uint)binaryLength);
         WriteWord(output, BinaryChunk);
-        WriteIndices(output, mesh.Indices);
-        WriteFloats(output, positions);
-        WriteFloats(output, normals);
+        foreach (var part in laid)
+        {
+            WriteIndices(output, part.Part.Mesh.Indices);
+            WriteFloats(output, part.Positions);
+            WriteFloats(output, part.Normals);
+            if (part.Flags is { } flags)
+            {
+                WriteFloats(output, flags);
+            }
+        }
     }
 
     /// <summary>
@@ -178,15 +283,8 @@ public static class GlbWriter
         return normals;
     }
 
-    private static byte[] BuildJson(
-        IndexedMesh mesh,
-        float[] positions,
-        int indexBytes,
-        int positionBytes,
-        int normalBytes)
+    private static byte[] BuildJson(IReadOnlyList<Laid> parts)
     {
-        var (min, max) = Bounds(positions);
-
         using var buffer = new MemoryStream();
         using (var w = new Utf8JsonWriter(buffer))
         {
@@ -201,82 +299,132 @@ public static class GlbWriter
             w.WriteStartArray("scenes");
             w.WriteStartObject();
             w.WriteStartArray("nodes");
-            w.WriteNumberValue(0);
+            for (var p = 0; p < parts.Count; p++)
+            {
+                w.WriteNumberValue(p);
+            }
+
             w.WriteEndArray();
             w.WriteEndObject();
             w.WriteEndArray();
 
             w.WriteStartArray("nodes");
-            w.WriteStartObject();
-            w.WriteNumber("mesh", 0);
-            w.WriteEndObject();
-            w.WriteEndArray();
-
-            w.WriteStartArray("meshes");
-            w.WriteStartObject();
-            w.WriteStartArray("primitives");
-            w.WriteStartObject();
-            w.WriteStartObject("attributes");
-            w.WriteNumber("POSITION", 1);
-            w.WriteNumber("NORMAL", 2);
-            w.WriteEndObject();
-            w.WriteNumber("indices", 0);
-            w.WriteNumber("material", 0);
-            w.WriteEndObject();
-            w.WriteEndArray();
-            w.WriteEndObject();
-            w.WriteEndArray();
-
-            w.WriteStartArray("materials");
-            w.WriteStartObject();
-            w.WriteString("name", "cave");
-            w.WriteStartObject("pbrMetallicRoughness");
-            w.WriteStartArray("baseColorFactor");
-            foreach (var channel in (ReadOnlySpan<double>)[0.72, 0.68, 0.62, 1.0])
+            for (var p = 0; p < parts.Count; p++)
             {
-                w.WriteNumberValue(channel);
+                w.WriteStartObject();
+                w.WriteString("name", parts[p].Part.Node);
+                w.WriteNumber("mesh", p);
+                w.WriteEndObject();
             }
 
             w.WriteEndArray();
-            w.WriteNumber("metallicFactor", 0);
-            w.WriteNumber("roughnessFactor", 1);
-            w.WriteEndObject();
 
-            // A cave is looked at from the inside, where every wall is presenting its back face.
-            // Left single-sided the model would be an empty hole with a few far walls floating in
-            // it, which reads as a broken upload rather than as a cave.
-            w.WriteBoolean("doubleSided", true);
-            w.WriteEndObject();
+            // Accessors and buffer views run part by part, each part's in the same order: indices,
+            // positions, normals, and the estimate flag where there is one.
+            var perPart = parts[0].Flags is null ? 3 : 4;
+
+            w.WriteStartArray("meshes");
+            for (var p = 0; p < parts.Count; p++)
+            {
+                var first = p * perPart;
+                w.WriteStartObject();
+                w.WriteString("name", parts[p].Part.Node);
+                w.WriteStartArray("primitives");
+                w.WriteStartObject();
+                w.WriteStartObject("attributes");
+                w.WriteNumber("POSITION", first + 1);
+                w.WriteNumber("NORMAL", first + 2);
+                if (perPart == 4)
+                {
+                    w.WriteNumber("_ESTIMATED", first + 3);
+                }
+
+                w.WriteEndObject();
+                w.WriteNumber("indices", first);
+                w.WriteNumber("material", p);
+                w.WriteEndObject();
+                w.WriteEndArray();
+                w.WriteEndObject();
+            }
+
+            w.WriteEndArray();
+
+            w.WriteStartArray("materials");
+            foreach (var part in parts)
+            {
+                w.WriteStartObject();
+                w.WriteString("name", part.Part.Material);
+                w.WriteStartObject("pbrMetallicRoughness");
+                w.WriteStartArray("baseColorFactor");
+                var (r, g, b) = part.Part.Color;
+                foreach (var channel in (ReadOnlySpan<double>)[r, g, b, 1.0])
+                {
+                    w.WriteNumberValue(Math.Round(channel, 6));
+                }
+
+                w.WriteEndArray();
+                w.WriteNumber("metallicFactor", 0);
+                w.WriteNumber("roughnessFactor", 1);
+                w.WriteEndObject();
+
+                // A cave is looked at from the inside, where every wall is presenting its back face.
+                // Left single-sided the model would be an empty hole with a few far walls floating in
+                // it, which reads as a broken upload rather than as a cave.
+                w.WriteBoolean("doubleSided", true);
+                w.WriteEndObject();
+            }
+
             w.WriteEndArray();
 
             w.WriteStartArray("accessors");
+            var bufferView = 0;
+            foreach (var part in parts)
+            {
+                var (min, max) = Bounds(part.Positions);
+                WriteAccessor(w, bufferView: bufferView++, componentType: UnsignedInt, count: part.Part.Mesh.Indices.Length, type: "SCALAR");
 
-            WriteAccessor(w, bufferView: 0, componentType: UnsignedInt, count: mesh.Indices.Length, type: "SCALAR");
+                w.WriteStartObject();
+                w.WriteNumber("bufferView", bufferView++);
+                w.WriteNumber("componentType", Float);
+                w.WriteNumber("count", part.Part.Mesh.VertexCount);
+                w.WriteString("type", "VEC3");
+                // Required on POSITION, and not decoration: a viewer sizes its view and decides whether
+                // the model is on screen at all from these before it reads a single vertex.
+                WriteVector(w, "min", min);
+                WriteVector(w, "max", max);
+                w.WriteEndObject();
 
-            w.WriteStartObject();
-            w.WriteNumber("bufferView", 1);
-            w.WriteNumber("componentType", Float);
-            w.WriteNumber("count", mesh.VertexCount);
-            w.WriteString("type", "VEC3");
-            // Required on POSITION, and not decoration: a viewer sizes its view and decides whether
-            // the model is on screen at all from these before it reads a single vertex.
-            WriteVector(w, "min", min);
-            WriteVector(w, "max", max);
-            w.WriteEndObject();
-
-            WriteAccessor(w, bufferView: 2, componentType: Float, count: mesh.VertexCount, type: "VEC3");
+                WriteAccessor(w, bufferView: bufferView++, componentType: Float, count: part.Part.Mesh.VertexCount, type: "VEC3");
+                if (part.Flags is not null)
+                {
+                    WriteAccessor(w, bufferView: bufferView++, componentType: Float, count: part.Part.Mesh.VertexCount, type: "SCALAR");
+                }
+            }
 
             w.WriteEndArray();
 
             w.WriteStartArray("bufferViews");
-            WriteBufferView(w, offset: 0, length: indexBytes, target: ElementArrayBuffer);
-            WriteBufferView(w, offset: indexBytes, length: positionBytes, target: ArrayBuffer);
-            WriteBufferView(w, offset: indexBytes + positionBytes, length: normalBytes, target: ArrayBuffer);
+            var offset = 0;
+            foreach (var part in parts)
+            {
+                WriteBufferView(w, offset: offset, length: part.IndexBytes, target: ElementArrayBuffer);
+                offset += part.IndexBytes;
+                WriteBufferView(w, offset: offset, length: part.PositionBytes, target: ArrayBuffer);
+                offset += part.PositionBytes;
+                WriteBufferView(w, offset: offset, length: part.NormalBytes, target: ArrayBuffer);
+                offset += part.NormalBytes;
+                if (part.Flags is not null)
+                {
+                    WriteBufferView(w, offset: offset, length: part.FlagBytes, target: ArrayBuffer);
+                    offset += part.FlagBytes;
+                }
+            }
+
             w.WriteEndArray();
 
             w.WriteStartArray("buffers");
             w.WriteStartObject();
-            w.WriteNumber("byteLength", indexBytes + positionBytes + normalBytes);
+            w.WriteNumber("byteLength", offset);
             w.WriteEndObject();
             w.WriteEndArray();
 

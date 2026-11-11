@@ -100,6 +100,25 @@
   margin: 2px 8px 0 24px;
 }
 
+.scene3d-estimated-colours {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 2px 8px 0 24px;
+}
+
+.scene3d-estimated-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid var(--ant-color-border, rgba(0, 0, 0, 0.15));
+  vertical-align: middle;
+}
+
+.scene3d-estimated-swatch--labelled {
+  margin-inline-end: 4px;
+}
+
 /* What the scene says about drawing a catalogue entry: under the name, small, wrapping. */
 .scene3d-layer-note {
   display: block;

@@ -66,3 +66,8 @@ export function hasPlacementSuggestion(model: SurveyModelInfo): boolean {
 export function formatKm(km: number): string {
   return km < 10 ? km.toFixed(1) : Math.round(km).toString();
 }
+
+/** A length of passage, in metres under a kilometre and in kilometres above. */
+export function formatPassageLength(metres: number): string {
+  return metres < 1000 ? `${Math.round(metres)} m` : `${(metres / 1000).toFixed(1)} km`;
+}

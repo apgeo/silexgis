@@ -615,6 +615,38 @@ export function useChangeSurveyModelPlacement() {
   });
 }
 
+export type SurveyModelEstimatedPassages =
+  components['schemas']['SurveyModelEstimatedPassagesRequest'];
+
+/**
+ * Turns a line plot's estimated passages on or off, or changes their size or colour, and has its
+ * stored file read again so its mesh is built that way.
+ */
+export function useChangeSurveyModelEstimatedPassages() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: ({
+      id,
+      estimated,
+    }: {
+      id: string;
+      caveId: string;
+      estimated: SurveyModelEstimatedPassages;
+    }): Promise<SurveyModelInfo> =>
+      unwrap(
+        api.PUT('/api/v1/survey-models/{id}/estimated-passages', {
+          params: { path: { id } },
+          body: estimated,
+        }),
+      ),
+    onSettled: (_data, _error, { id, caveId }) => {
+      invalidate(caveId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModel(id) });
+    },
+  });
+}
+
 export type SurveySourceInfo = components['schemas']['SurveySourceDto'];
 export type SurveySourceKind = SurveySourceInfo['kind'];
 

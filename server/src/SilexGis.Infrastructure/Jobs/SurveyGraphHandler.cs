@@ -162,7 +162,9 @@ public sealed class SurveyGraphHandler(
             // Built before the transaction opens for the reason the topology is measured there:
             // it is arithmetic over the whole file followed by a write to the file store, and
             // neither belongs inside a transaction holding delete locks.
-            walls = await BuildWallsAsync(file, extraction.Placement, upload, model.Id, ct);
+            var estimate = model.EstimatePassages ? new EstimatedPassageSize(model.EstimatedPassageDiameterM) : null;
+            var wallFigures = await BuildWallsAsync(file, extraction.Placement, estimate, model.EstimatedPassageColor, upload, model.Id, ct);
+            walls = wallFigures.Built;
 
             WallsOutcome outcome;
 
@@ -219,6 +221,9 @@ public sealed class SurveyGraphHandler(
                 // station, and a stale one silently misaddresses every station in the model.
                 model.RootSurveyName = extraction.RootSurveyName;
                 SurveyModelPlacement.Record(model, extraction.Placement.Advice);
+                model.UnsizedPassageM = wallFigures.Unsized?.LengthM;
+                model.UnsizedLegCount = wallFigures.Unsized?.Legs;
+                model.EstimatedLegCount = walls is null ? 0 : wallFigures.EstimatedLegs;
                 model.Status = SurveyModelStatus.Ready;
                 model.ProcessingError = null;
                 await db.SaveChangesAsync(ct);
@@ -271,6 +276,12 @@ public sealed class SurveyGraphHandler(
     /// <summary>The mesh one reading built, as the file store holds it.</summary>
     private sealed record BuiltWalls(string StoragePath, long SizeBytes, string Sha256, int TriangleCount);
 
+    /// <summary>
+    /// What building the walls came to: the stored mesh, if any, and how much of the passage the
+    /// file gives no size for — which is worth recording whether or not anything was drawn for it.
+    /// </summary>
+    private sealed record WallFigures(BuiltWalls? Built, UnsizedPassages? Unsized, int EstimatedLegs);
+
     /// <summary>What became of the walls inside the reading's transaction.</summary>
     /// <param name="Recorded">The model now names the mesh this reading built.</param>
     /// <param name="ReplacedStoragePath">
@@ -295,17 +306,31 @@ public sealed class SurveyGraphHandler(
     /// location is protected, and a log is read by people the cave's record is closed to.
     /// </para>
     /// </summary>
-    private async Task<BuiltWalls?> BuildWallsAsync(
-        CaveModel file, SurveyPlacement placement, StoredFile upload, Guid surveyModelId, CancellationToken ct)
+    private async Task<WallFigures> BuildWallsAsync(
+        CaveModel file,
+        SurveyPlacement placement,
+        EstimatedPassageSize? estimate,
+        string estimatedColor,
+        StoredFile upload,
+        Guid surveyModelId,
+        CancellationToken ct)
     {
         try
         {
-            var built = SurveyWallBuilder.Build(file, placement);
-            if (built.Mesh is not { } mesh)
+            var built = SurveyWallBuilder.Build(file, placement, estimate);
+            if (built.Mesh is null && built.Estimated is null)
             {
                 logger.LogInformation(
                     "Survey model {SurveyModelId} has no walls: {Reason}", surveyModelId, built.Reason);
-                return null;
+                return new WallFigures(null, built.Unsized, 0);
+            }
+
+            if (built.Estimated is not null)
+            {
+                // Said in the log as plainly as on the screen: these are not measurements.
+                logger.LogInformation(
+                    "Survey model {SurveyModelId} has {EstimatedLegs} legs drawn as tubes of an ESTIMATED size ({DiameterM} m), sizes nobody measured",
+                    surveyModelId, built.EstimatedLegs, estimate?.DiameterM);
             }
 
             // The vertices are already metres about the anchor, turned onto true north, so the mesh
@@ -313,7 +338,13 @@ public sealed class SurveyGraphHandler(
             // on a built mesh keeps this to tens of megabytes, beside a parsed upload that is
             // already larger.
             using var glb = new MemoryStream();
-            GlbWriter.Write(mesh, (0, 0, 0), glb);
+            GlbWriter.Write(
+                built.Mesh,
+                built.Estimated,
+                GlbWriter.LinearFromHex(estimatedColor) ?? GlbWriter.LinearFromHex(SurveyModel.DefaultEstimatedPassageColor)!.Value,
+                (0, 0, 0),
+                glb);
+            var triangles = (built.Mesh?.TriangleCount ?? 0) + (built.Estimated?.TriangleCount ?? 0);
             var sha256 = Convert.ToHexStringLower(SHA256.HashData(glb.GetBuffer().AsSpan(0, (int)glb.Length)));
 
             glb.Position = 0;
@@ -321,9 +352,9 @@ public sealed class SurveyGraphHandler(
 
             logger.LogInformation(
                 "Survey model {SurveyModelId} has walls built from {Source}: {Triangles} triangles, {WalledLegs} of {PassageLegs} legs walled, {RingSides} sides a ring",
-                surveyModelId, built.Source, mesh.TriangleCount, built.WalledLegs, built.PassageLegs, built.RingSides);
+                surveyModelId, built.Source, triangles, built.WalledLegs, built.PassageLegs, built.RingSides);
 
-            return new BuiltWalls(storagePath, glb.Length, sha256, mesh.TriangleCount);
+            return new WallFigures(new BuiltWalls(storagePath, glb.Length, sha256, triangles), built.Unsized, built.EstimatedLegs);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -331,7 +362,7 @@ public sealed class SurveyGraphHandler(
                 e,
                 "Could not build walls for survey model {SurveyModelId} from {UploadFileId}; it is read without them",
                 surveyModelId, upload.Id);
-            return null;
+            return new WallFigures(null, null, 0);
         }
     }
 

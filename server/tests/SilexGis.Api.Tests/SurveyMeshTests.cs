@@ -144,6 +144,83 @@ public class SurveyMeshTests
     }
 
     [Fact]
+    public void Estimated_passages_are_a_node_of_their_own_marked_vertex_by_vertex()
+    {
+        var walls = StlReader.Read(Stl(Cube(size: 10))).Mesh;
+        var estimated = StlReader.Read(Stl([((0, 0, 0), (10, 0, 0), (0, 10, 0))])).Mesh;
+        using var output = new MemoryStream();
+
+        GlbWriter.Write(walls, estimated, (1, 0, 0), (0, 0, 0), output);
+
+        var bytes = output.ToArray();
+        BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(8)).ShouldBe((uint)bytes.Length);
+        using var json = ReadJsonChunk(bytes);
+        var root = json.RootElement;
+
+        // Two nodes, found by name: the scene turns the second off without touching the first.
+        root.GetProperty("nodes")[0].GetProperty("name").GetString().ShouldBe(GlbWriter.WallsNodeName);
+        root.GetProperty("nodes")[1].GetProperty("name").GetString().ShouldBe(GlbWriter.EstimatedNodeName);
+        root.GetProperty("scenes")[0].GetProperty("nodes").GetArrayLength().ShouldBe(2);
+
+        // Each in its own colour: the walls their usual grey, the estimates the colour they were built in.
+        var materials = root.GetProperty("materials");
+        materials.GetArrayLength().ShouldBe(2);
+        materials[1].GetProperty("pbrMetallicRoughness").GetProperty("baseColorFactor")[0].GetDouble().ShouldBe(1);
+
+        // Both primitives carry the flag, so a shader reading it runs on both; one on the estimates only.
+        var accessors = root.GetProperty("accessors");
+        var wallFlag = root.GetProperty("meshes")[0].GetProperty("primitives")[0].GetProperty("attributes").GetProperty("_ESTIMATED").GetInt32();
+        var estimateFlag = root.GetProperty("meshes")[1].GetProperty("primitives")[0].GetProperty("attributes").GetProperty("_ESTIMATED").GetInt32();
+        accessors[wallFlag].GetProperty("count").GetInt32().ShouldBe(8);
+        accessors[estimateFlag].GetProperty("count").GetInt32().ShouldBe(3);
+        FloatAt(bytes, root, wallFlag, 0).ShouldBe(0f);
+        FloatAt(bytes, root, estimateFlag, 2).ShouldBe(1f);
+    }
+
+    [Fact]
+    public void Estimated_passages_can_be_written_without_any_walls()
+    {
+        var estimated = StlReader.Read(Stl([((0, 0, 0), (10, 0, 0), (0, 10, 0))])).Mesh;
+        using var output = new MemoryStream();
+
+        GlbWriter.Write(walls: null, estimated, (1, 0, 0), (0, 0, 0), output);
+
+        using var json = ReadJsonChunk(output.ToArray());
+        json.RootElement.GetProperty("nodes").GetArrayLength().ShouldBe(1);
+        json.RootElement.GetProperty("nodes")[0].GetProperty("name").GetString().ShouldBe(GlbWriter.EstimatedNodeName);
+    }
+
+    [Theory]
+    [InlineData("#ffffff", 1.0)]
+    [InlineData("#000000", 0.0)]
+    [InlineData("#808080", 0.2158605)]
+    public void A_chosen_colour_is_written_in_the_linear_values_a_material_states(string hex, double linear)
+    {
+        var (r, g, b) = GlbWriter.LinearFromHex(hex).ShouldNotBeNull();
+        r.ShouldBe(linear, 1e-6);
+        g.ShouldBe(linear, 1e-6);
+        b.ShouldBe(linear, 1e-6);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("red")]
+    [InlineData("#12345")]
+    [InlineData("#gggggg")]
+    public void Anything_but_a_six_digit_colour_is_no_colour(string? hex) =>
+        GlbWriter.LinearFromHex(hex).ShouldBeNull();
+
+    /// <summary>One float of an accessor, read out of the binary chunk.</summary>
+    private static float FloatAt(byte[] glb, JsonElement root, int accessor, int index)
+    {
+        var view = root.GetProperty("bufferViews")[root.GetProperty("accessors")[accessor].GetProperty("bufferView").GetInt32()];
+        var jsonLength = (int)BinaryPrimitives.ReadUInt32LittleEndian(glb.AsSpan(12));
+        var binaryStart = 12 + 8 + jsonLength + 8;
+        return BinaryPrimitives.ReadSingleLittleEndian(
+            glb.AsSpan(binaryStart + view.GetProperty("byteOffset").GetInt32() + (index * sizeof(float))));
+    }
+
+    [Fact]
     public void The_declared_buffer_length_matches_the_bytes_that_follow_it()
     {
         var mesh = StlReader.Read(Stl(Cube(size: 10))).Mesh;

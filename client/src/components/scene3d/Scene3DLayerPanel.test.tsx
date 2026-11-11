@@ -8,6 +8,7 @@ import type { MapLayerInfo } from '../../api/hooks.ts';
 import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
 import type { Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
 import { EMPTY_SURVEY_MESH_3D_STATE } from '../../scene3d/surveyMesh3d.ts';
+import { DEFAULT_ESTIMATED_PASSAGES_DISPLAY } from '../../scene3d/estimatedPassages.ts';
 import { EMPTY_STATION_PHOTOS_3D_STATE } from '../../scene3d/stationPhotos3d.ts';
 import {
   EMPTY_SURVEY_MESHES_IN_VIEW_3D_STATE,
@@ -97,6 +98,8 @@ function renderPanel(overrides: Partial<Scene3DLayerPanelProps> = {}) {
     onMeshVisibleChange: vi.fn(),
     wallsMode: 'selected',
     onWallsModeChange: vi.fn(),
+    estimatedPassages: DEFAULT_ESTIMATED_PASSAGES_DISPLAY,
+    onEstimatedPassagesChange: vi.fn(),
     meshState: EMPTY_SURVEY_MESH_3D_STATE,
     photosVisible: true,
     onPhotosVisibleChange: vi.fn(),
@@ -400,6 +403,48 @@ describe('Scene3DLayerPanel', () => {
     });
 
     expect(screen.getByTestId('scene3d-mesh-precision').textContent).toMatch(/local origin/);
+  });
+
+  it('switches passages of estimated size off without touching the walls', () => {
+    const props = renderPanel();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Passages of estimated size' }));
+
+    expect(props.onEstimatedPassagesChange).toHaveBeenCalledWith({ visible: false, color: 'built' });
+    expect(props.onMeshVisibleChange).not.toHaveBeenCalled();
+  });
+
+  it('offers the walls own colour among the colours for passages of estimated size', () => {
+    const props = renderPanel();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Like the walls' }));
+
+    expect(props.onEstimatedPassagesChange).toHaveBeenCalledWith({ visible: true, color: 'walls' });
+  });
+
+  it('says plainly that passages drawn at an estimated size were not measured', () => {
+    renderPanel({
+      meshState: {
+        status: 'drawn',
+        name: 'Coiba Mare',
+        triangleCount: 12,
+        precisionLost: false,
+        estimatedLegs: 40,
+        estimatedDiameterM: 1.5,
+      },
+    });
+
+    const warning = screen.getByTestId('scene3d-estimated-warning').textContent;
+    expect(warning).toMatch(/^Not measured: 40 legs/);
+    expect(warning).toMatch(/1\.5 m/);
+  });
+
+  it('says nothing about estimates for a model that has none', () => {
+    renderPanel({
+      meshState: { status: 'drawn', name: 'Coiba Mare', triangleCount: 12, precisionLost: false },
+    });
+
+    expect(screen.queryByTestId('scene3d-estimated-warning')).toBeNull();
   });
 });
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import type { Altitude3DPlacement } from './altitude3d.ts';
+import type { EstimatedPassagesDisplay } from './estimatedPassages.ts';
 import type { Scene3DContextLossState } from './contextLoss.ts';
 
 // The contract between the application and whatever draws the 3D scene.
@@ -736,6 +737,11 @@ export interface Scene3DModels {
   setModelPlacement(placement: Altitude3DPlacement): void;
   /** What is happening to the model under an id, or undefined when that id holds nothing. */
   modelStatus(id: string): Scene3DModelStatus | undefined;
+  /**
+   * Shows or hides, and colours, the passages a survey's reading drew at an estimated size, in
+   * every model the scene holds and every one it loads after. Models without any are untouched.
+   */
+  setEstimatedPassages(display: EstimatedPassagesDisplay): void;
 }
 
 // ---- point clouds -------------------------------------------------------------

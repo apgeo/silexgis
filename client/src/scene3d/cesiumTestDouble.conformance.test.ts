@@ -51,6 +51,7 @@ const TEST_ONLY_MEMBERS = new Set([
   'Model.static:isWaitingFor',
   'Model.static:forget',
   'Model.static:waiting',
+  'Model.proto:becomeReady',
   'Cesium3DTileset.static:deliver',
   'Cesium3DTileset.static:isWaitingFor',
   'Cesium3DTileset.static:forget',

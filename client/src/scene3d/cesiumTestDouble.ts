@@ -1290,6 +1290,22 @@ export const Axis = { X: 0, Y: 1, Z: 2 } as const;
  * not here, here, and refused — only exist while that is true. Landing is by URL because a scene
  * can legitimately have two reads in the air at once.
  */
+/** The scene's custom shaders, recorded as what they were asked to do. */
+export const UniformType = { VEC3: 'VEC3' } as const;
+
+export class CustomShader {
+  readonly uniforms: Record<string, { type: string; value: unknown }>;
+  readonly fragmentShaderText: string;
+
+  constructor(options: {
+    uniforms?: Record<string, { type: string; value: unknown }>;
+    fragmentShaderText?: string;
+  }) {
+    this.uniforms = options.uniforms ?? {};
+    this.fragmentShaderText = options.fragmentShaderText ?? '';
+  }
+}
+
 export class Model {
   readonly url: string;
   readonly allowPicking: boolean | undefined;
@@ -1297,6 +1313,38 @@ export class Model {
   show = true;
   /** Set when the scene takes the model out of the primitives list, or destroys it directly. */
   destroyed = false;
+  /** False until {@link becomeReady}: the real library knows a model's nodes only once it is drawn. */
+  ready = false;
+  customShader: CustomShader | undefined;
+  readonly readyEvent = {
+    listeners: [] as (() => void)[],
+    addEventListener(listener: () => void) {
+      this.listeners.push(listener);
+      return () => {
+        this.listeners = this.listeners.filter((l) => l !== listener);
+      };
+    },
+  };
+  /** The model's named nodes; a node not named here is not in the file. */
+  readonly nodes = new Map<string, { show: boolean }>();
+
+  getNode(name: string): { show: boolean } | undefined {
+    if (!this.ready) {
+      throw new Error('The model is not loaded. Use Model.readyEvent or wait for Model.ready to be true.');
+    }
+    return this.nodes.get(name);
+  }
+
+  /** What the first frames do to a real model: it learns its nodes and says it is ready. */
+  becomeReady(nodeNames: readonly string[] = []) {
+    for (const name of nodeNames) {
+      this.nodes.set(name, { show: true });
+    }
+    this.ready = true;
+    for (const listener of [...this.readyEvent.listeners]) {
+      listener();
+    }
+  }
 
   // Public only so a test can name the instance type; the scene reaches one solely through
   // `fromGltfAsync`, which is the whole of how the real library hands a model over.

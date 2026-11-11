@@ -20,6 +20,7 @@ const deleteMutate = vi.fn();
 const makeCurrentMutate = vi.fn();
 const readAgainMutate = vi.fn();
 const placementMutate = vi.fn();
+const estimatedMutate = vi.fn();
 
 function model(overrides: Partial<SurveyModelInfo> = {}): SurveyModelInfo {
   return {
@@ -46,6 +47,12 @@ function model(overrides: Partial<SurveyModelInfo> = {}): SurveyModelInfo {
     suggestedSourceEpsg: null,
     suggestsLocalMetres: false,
     suggestedOffByKm: null,
+    estimatePassages: false,
+    estimatedPassageDiameterM: 1,
+    estimatedPassageColor: '#e8833a',
+    unsizedPassageM: null,
+    unsizedLegCount: null,
+    estimatedLegCount: null,
     createdAt: '2026-08-18T06:00:00Z',
     updatedAt: '2026-08-18T06:00:00Z',
     ...overrides,
@@ -112,6 +119,7 @@ vi.mock('../../api/hooks.ts', async () => {
     usePlaceSurveyModelByControlPoints: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useUnplaceSurveyModel: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useChangeSurveyModelPlacement: () => ({ mutateAsync: placementMutate, isPending: false }),
+    useChangeSurveyModelEstimatedPassages: () => ({ mutateAsync: estimatedMutate, isPending: false }),
     // The viewer opened from this section reads the model's links, to show over the model the
     // photographs somebody has hung on its stations. Nothing here is about those, so there are
     // none — but the mock lists what it answers, so a hook left out of it is a crash.
@@ -571,6 +579,65 @@ describe('the survey model list', () => {
 
     expect(await screen.findByText(/Read as EPSG:32635/)).toBeInTheDocument();
     expect(screen.queryByTestId('survey-model-use-suggestion-m1')).not.toBeInTheDocument();
+  });
+
+  it('says how much passage has no measured size, and offers to draw it at an estimated one', async () => {
+    models = [model({ format: 'lox', unsizedPassageM: 2853, unsizedLegCount: 412, estimatedLegCount: 0 })];
+    show();
+
+    expect(
+      await screen.findByText(/^2\.9 km of passage \(legs: 412\) has no measured size/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Draw at an estimated size/ }));
+
+    // The warning comes first and is not optional reading.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByTestId('survey-model-estimated-warning').textContent).toMatch(
+      /These passage sizes are not real/,
+    );
+    expect(within(dialog).getByRole('switch')).toBeChecked();
+    expect(within(dialog).getByLabelText('Diameter')).toHaveValue('1.0');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Read again with these settings' }));
+    await waitFor(() =>
+      expect(estimatedMutate).toHaveBeenCalledWith({
+        id: 'm1',
+        caveId: 'c1',
+        estimated: { enabled: true, diameterM: 1, color: '#e8833a' },
+      }),
+    );
+  });
+
+  it('warns on the row that passages drawn at an estimated size were not measured', async () => {
+    models = [
+      model({
+        format: 'lox',
+        estimatePassages: true,
+        estimatedPassageDiameterM: 1.5,
+        unsizedPassageM: 2853,
+        unsizedLegCount: 412,
+        estimatedLegCount: 412,
+      }),
+    ];
+    show();
+
+    expect(
+      await screen.findByText(/^Not measured: 412 legs are drawn at an estimated size of 1\.5 m/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Estimated passages/ })).toBeInTheDocument();
+  });
+
+  it('says nothing about estimates for a survey whose every passage has a size, or to a reader', async () => {
+    models = [model({ format: 'lox', unsizedPassageM: 0, unsizedLegCount: 0, estimatedLegCount: 0 })];
+    show();
+    expect(await screen.findByText('Ready')).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-model-estimated-note-m1')).not.toBeInTheDocument();
+
+    cleanup();
+    models = [model({ format: 'lox', unsizedPassageM: 90, unsizedLegCount: 1, estimatedLegCount: 0 })];
+    show(false);
+    expect(await screen.findByText(/^90 m of passage/)).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-model-estimate-m1')).not.toBeInTheDocument();
   });
 
   it('stops asking once nothing is left to wait for', () => {

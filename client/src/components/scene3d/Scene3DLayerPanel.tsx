@@ -15,6 +15,11 @@ import { CENTERLINE_DEPTH_BANDS } from '../../scene3d/centerlines3d.ts';
 import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
 import type { Scene3DSurfaceMode, Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
 import type { SurveyMesh3DState } from '../../scene3d/surveyMesh3d.ts';
+import {
+  ESTIMATED_COLOR_PRESETS,
+  WALL_COLOR_HEX,
+  type EstimatedPassagesDisplay,
+} from '../../scene3d/estimatedPassages.ts';
 import type { StationPhotos3DState } from '../../scene3d/stationPhotos3d.ts';
 import type {
   SurveyMeshesInView3DState,
@@ -92,6 +97,12 @@ export interface Scene3DLayerPanelProps {
    */
   wallsMode: SurveyWalls3DMode;
   onWallsModeChange: (mode: SurveyWalls3DMode) => void;
+  /**
+   * Whether the passages a survey's reading drew at an estimated size are shown, and in which
+   * colour: as built, the same as the walls, or one of a few that stand out from them.
+   */
+  estimatedPassages: EstimatedPassagesDisplay;
+  onEstimatedPassagesChange: (display: EstimatedPassagesDisplay) => void;
   /** What the scene is doing about the selected cave's walls, said in words under the switch. */
   meshState: SurveyMesh3DState;
   /** Whether the places of the selected cave's photographs are marked. */
@@ -164,6 +175,8 @@ export default function Scene3DLayerPanel({
   photosState,
   wallsMode,
   onWallsModeChange,
+  estimatedPassages,
+  onEstimatedPassagesChange,
   meshState,
   meshesInViewState,
   scansVisible,
@@ -594,6 +607,63 @@ export default function Scene3DLayerPanel({
               {t('scene3d.meshesInViewLimitsLink')}
             </Link>
           )}
+          {/* Passages a reading drew at an estimated size: shown or not, and in which colour —
+              one choice being the walls' own, for a viewer who wants the cave whole rather than
+              its guesses picked out. A restyle of what is already drawn, never a reload. */}
+          <Checkbox
+            checked={estimatedPassages.visible}
+            disabled={!meshVisible}
+            onChange={(e) => onEstimatedPassagesChange({ ...estimatedPassages, visible: e.target.checked })}
+            data-testid="scene3d-estimated-toggle"
+          >
+            {t('scene3d.estimatedLayer')}
+          </Checkbox>
+          <Radio.Group
+            size="small"
+            optionType="button"
+            className="scene3d-estimated-colours"
+            aria-label={t('scene3d.estimatedColor')}
+            data-testid="scene3d-estimated-colour"
+            disabled={!meshVisible || !estimatedPassages.visible}
+            value={estimatedPassages.color}
+            onChange={(e) =>
+              onEstimatedPassagesChange({ ...estimatedPassages, color: e.target.value as string })
+            }
+          >
+            <Radio.Button value="built">{t('scene3d.estimatedColorBuilt')}</Radio.Button>
+            <Radio.Button value="walls" aria-label={t('scene3d.estimatedColorWalls')}>
+              <span
+                className="scene3d-estimated-swatch scene3d-estimated-swatch--labelled"
+                style={{ background: WALL_COLOR_HEX }}
+              />
+              {t('scene3d.estimatedColorWalls')}
+            </Radio.Button>
+            {ESTIMATED_COLOR_PRESETS.map((hex) => (
+              <Radio.Button
+                key={hex}
+                value={hex}
+                aria-label={t('scene3d.estimatedColorChoice', { color: hex })}
+                title={hex}
+              >
+                {/* The colour is the datum: the one these passages will be drawn in. */}
+                <span className="scene3d-estimated-swatch" style={{ background: hex }} />
+              </Radio.Button>
+            ))}
+          </Radio.Group>
+          {wallsMode === 'selected' &&
+            meshState.status === 'drawn' &&
+            meshState.estimatedLegs !== undefined && (
+              <Typography.Text
+                type="warning"
+                className="scene3d-mesh-hint"
+                data-testid="scene3d-estimated-warning"
+              >
+                {t('scene3d.estimatedWarning', {
+                  count: meshState.estimatedLegs,
+                  diameter: meshState.estimatedDiameterM,
+                })}
+              </Typography.Text>
+            )}
           {/* Said whenever the mesh is on screen, not only while it loads: the survey itself is
               degraded, and the person who can fix it is the one who exported the file. */}
           {wallsMode === 'selected' && meshState.precisionLost && (

@@ -24,6 +24,10 @@ public sealed class SurveyModelConfiguration : IEntityTypeConfiguration<SurveyMo
         builder.Property(x => x.PointCloud).HasColumnType("jsonb");
         builder.Property(x => x.PlacementSource).HasConversion<short>();
         builder.Property(x => x.PlacementControlPoints).HasColumnType("jsonb");
+        // Defaults in the database too, so the rows already there take them when the columns arrive.
+        builder.Property(x => x.EstimatePassages).HasDefaultValue(false);
+        builder.Property(x => x.EstimatedPassageDiameterM).HasDefaultValue(SurveyModel.DefaultEstimatedPassageDiameterM);
+        builder.Property(x => x.EstimatedPassageColor).HasMaxLength(7).HasDefaultValue(SurveyModel.DefaultEstimatedPassageColor);
 
         // Models die with their cave (purge path); the stored file survives.
         builder.HasOne<Cave>().WithMany().HasForeignKey(x => x.CaveFeatureId).OnDelete(DeleteBehavior.Cascade);

@@ -616,6 +616,78 @@ public sealed class SurveyModelReadingTests : IAsyncLifetime, IDisposable, IClas
         (await QueuedReadingsAsync(modelId)).ShouldBe(1);
     }
 
+    [Fact]
+    public async Task Passages_without_a_size_are_counted_and_drawn_at_an_estimated_size_only_when_asked()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var modelId = await UploadLocalLoxAsync(caveId, NamedRootCave());
+        await RunQueuedReadingAsync(modelId);
+
+        // Two legs, nothing measured and nothing drawn: counted, and left as lines.
+        var read = await GetModelAsync(owner, modelId);
+        read.GetProperty("unsizedLegCount").GetInt32().ShouldBe(2, read.ToString());
+        read.GetProperty("unsizedPassageM").GetDouble().ShouldBe(Math.Sqrt(125) + Math.Sqrt(116), 1e-6);
+        read.GetProperty("estimatedLegCount").GetInt32().ShouldBe(0);
+        read.GetProperty("estimatePassages").GetBoolean().ShouldBeFalse();
+        read.GetProperty("meshUrl").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var url = $"/api/v1/survey-models/{modelId}/estimated-passages";
+        var asked = await owner.PutAsJsonAsync(url, new { enabled = true, diameterM = 1.5, color = "#3366CC" });
+        asked.StatusCode.ShouldBe(HttpStatusCode.OK, await asked.Content.ReadAsStringAsync());
+        var waiting = await asked.Content.ReadFromJsonAsync<JsonElement>();
+        waiting.GetProperty("readingAgain").GetBoolean().ShouldBeTrue();
+        waiting.GetProperty("estimatedPassageColor").GetString().ShouldBe("#3366cc");
+
+        await RunQueuedReadingAsync(modelId);
+
+        var estimated = await GetModelAsync(owner, modelId);
+        estimated.GetProperty("estimatePassages").GetBoolean().ShouldBeTrue();
+        estimated.GetProperty("estimatedPassageDiameterM").GetDouble().ShouldBe(1.5);
+        estimated.GetProperty("estimatedLegCount").GetInt32().ShouldBe(2, estimated.ToString());
+        estimated.GetProperty("meshUrl").GetString().ShouldNotBeNullOrEmpty();
+        estimated.GetProperty("triangleCount").GetInt32().ShouldBeGreaterThan(0);
+
+        // Turned off again, the mesh made only of estimates goes with them.
+        (await owner.PutAsJsonAsync(url, new { enabled = false, diameterM = 1.5, color = "#3366cc" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        await RunQueuedReadingAsync(modelId);
+        var off = await GetModelAsync(owner, modelId);
+        off.GetProperty("estimatedLegCount").GetInt32().ShouldBe(0);
+        off.GetProperty("meshUrl").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task Estimating_passages_is_for_a_caves_writers_on_a_line_plot_and_is_checked()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var modelId = await UploadLocalLoxAsync(caveId, NamedRootCave());
+        await RunQueuedReadingAsync(modelId);
+        var url = $"/api/v1/survey-models/{modelId}/estimated-passages";
+        var fine = new { enabled = true, diameterM = 1.0, color = "#e8833a" };
+
+        using var anonymous = factory.CreateClient();
+        (await anonymous.PutAsJsonAsync(url, fine)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await reader.PutAsJsonAsync(url, fine)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await owner.PutAsJsonAsync($"/api/v1/survey-models/{Guid.NewGuid()}/estimated-passages", fine))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        (await owner.PutAsJsonAsync(url, new { enabled = true, diameterM = 0.0, color = "#e8833a" })).StatusCode
+            .ShouldBe(HttpStatusCode.BadRequest);
+        (await owner.PutAsJsonAsync(url, new { enabled = true, diameterM = 100.0, color = "#e8833a" })).StatusCode
+            .ShouldBe(HttpStatusCode.BadRequest);
+        (await owner.PutAsJsonAsync(url, new { enabled = true, diameterM = 1.0, color = "orange" })).StatusCode
+            .ShouldBe(HttpStatusCode.BadRequest);
+
+        // A wall mesh has no legs to estimate.
+        var meshId = await UploadLocalStlAsync(caveId);
+        var onMesh = await owner.PutAsJsonAsync($"/api/v1/survey-models/{meshId}/estimated-passages", fine);
+        onMesh.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await onMesh.Content.ReadAsStringAsync()).ShouldContain("survey_model.not_a_line_plot");
+
+        (await QueuedReadingsAsync(modelId)).ShouldBe(0);
+        (await GetModelAsync(owner, modelId)).GetProperty("estimatePassages").GetBoolean().ShouldBeFalse();
+    }
+
     /// <summary>Puts the cave at a position, as its entrance being mapped would.</summary>
     private async Task PlaceCaveAsync(Guid caveId, double longitude, double latitude)
     {
