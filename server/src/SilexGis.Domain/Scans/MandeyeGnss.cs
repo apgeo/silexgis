@@ -50,9 +50,12 @@ public static class MandeyeGnss
     /// <summary>
     /// The shortest stretch of good fixes, end to end, a heading is taken from. A receiver at the
     /// fix quality a handheld scanner carries wanders by a few metres; a bearing taken over less
-    /// than this is mostly that wander.
+    /// than this is mostly that wander. Measured on a published two-sensor MANDEYE recording, against
+    /// the heading its first two minutes of walking give: about 17° off from a 17 m track, 7° from
+    /// 22 m, 2.4° from 37 m and 1.5° from 54 m. Thirty metres keeps the error to a few degrees —
+    /// still several metres sideways a hundred metres into a cave, which control points then correct.
     /// </summary>
-    public const double MinimumTrackM = 15.0;
+    public const double MinimumTrackM = 30.0;
 
     /// <summary>The most fixes a placement is fitted through; a longer walk is sampled evenly down to this.</summary>
     public const int MaximumFitFixes = ScanControlPoints.MaximumPairs;
