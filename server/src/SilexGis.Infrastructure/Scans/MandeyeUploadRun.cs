@@ -107,10 +107,12 @@ public static class MandeyeUploadRun
             ChunkCount: lidar.Count,
             SensorCount: calibrated ?? (serials.Count > 0 ? serials.Count : null),
             HasCalibration: calibration is not null,
-            // Every declared file holds at least one byte, so a GNSS log that was sent is one
-            // that heard something. Only the .gnss logs count: they carry the lidar clock a
-            // placement needs, while a .nmea-only recording could not be placed from its fixes.
-            HasGnss: classified.Any(c => c.Name!.Kind is MandeyeFileKind.Gnss && c.File.SizeBytes > 0),
+            // Every declared file holds at least one byte, so a satellite log that was sent is one
+            // that heard something. Either kind counts: a .nmea log has no lidar clock to place
+            // the scan by, but its sentences are positions of the track all the same, and this
+            // flag is what makes the recording's files a location. Placing from fixes reads the
+            // .gnss logs alone and simply finds none in a .nmea-only recording.
+            HasGnss: classified.Any(c => c.Name!.Kind is (MandeyeFileKind.Gnss or MandeyeFileKind.Nmea) && c.File.SizeBytes > 0),
             DurationSeconds: MandeyeRecording.DurationSeconds(spans),
             PointCount: points,
             ImuHasHeader: spans[0].HasHeader,

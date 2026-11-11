@@ -65,6 +65,21 @@ public static class PointCloudFileAccess
                 || !(await new FeatureProtection(db, access).ExactViewIdsAsync(ctx, [trackCave.Value], ct)).Contains(trackCave.Value);
         }
 
+        if (artefacts.Count == 0)
+        {
+            // No run has recorded anything about this document yet: a file still arriving, or a
+            // recording whose inspection failed. If it was sent as a scan's original, it is taken to
+            // be a location until a run says otherwise, as a file the run has not read is below.
+            var sentCave = await db.SurveySources.AsNoTracking()
+                .Where(s => s.DocumentId == subject.Document.Id
+                    && s.SurveyUploadId != null
+                    && (s.Kind == SurveySourceKind.PointCloud || s.Kind == SurveySourceKind.LidarRawSession || s.Kind == SurveySourceKind.HdmSession))
+                .Select(s => (Guid?)s.CaveFeatureId)
+                .FirstOrDefaultAsync(ct);
+            return sentCave is not null
+                && !(await new FeatureProtection(db, access).ExactViewIdsAsync(ctx, [sentCave.Value], ct)).Contains(sentCave.Value);
+        }
+
         if (clouds.Count == 0 || artefacts.Any(a => a.FileId == subject.File.Id && !clouds.Contains(a)))
         {
             // Not a scan's document; or a product of the run that is not the cloud — the tiles

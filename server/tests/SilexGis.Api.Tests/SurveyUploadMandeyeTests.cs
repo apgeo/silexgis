@@ -251,6 +251,51 @@ public sealed class SurveyUploadMandeyeTests : IAsyncLifetime, IDisposable, ICla
     }
 
     [Fact]
+    public async Task A_recording_whose_only_satellite_log_is_nmea_is_a_location_too()
+    {
+        // NMEA sentences carry no lidar clock, so the scan cannot be placed from them, but they are
+        // positions of the track all the same.
+        var caveId = await CreateCaveAsync("authenticated", locationProtected: true);
+        await GrantAsync(caveId, "read, write, viewExactLocation");
+        var recording = Recording(gnss: false);
+        recording.Add(("track.nmea", Encoding.ASCII.GetBytes("$GPGGA,000000.00,0000.0000,N,00000.0000,E,1,08,1.0,0.0,M,0.0,M,,*00\n")));
+        var id = await SendAsync(reader, "Entrance scan", caveId, recording);
+        await RunPipelineAsync(id);
+        await GrantAsync(caveId, "read, write");
+
+        var withheld = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        withheld.GetProperty("pointCloud").GetProperty("georeferenced").GetBoolean().ShouldBeTrue();
+        withheld.GetProperty("files").EnumerateArray()
+            .ShouldAllBe(f => f.GetProperty("contentUrl").ValueKind == JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task A_recording_no_run_has_read_is_taken_to_be_a_location_at_the_file_route()
+    {
+        // The run fails before it records anything about the files: nothing says whether they hold
+        // positions, and their satellite log plainly does.
+        var caveId = await CreateCaveAsync("authenticated", locationProtected: true);
+        await GrantAsync(caveId, "read, write, viewExactLocation");
+        var recording = Recording(gnss: true)
+            .Select(f => f.Name == "imu0001.csv" ? (f.Name, Encoding.ASCII.GetBytes("time a b c\n1 2 3 4\n")) : f)
+            .ToList();
+        var id = await SendAsync(reader, "Broken entrance scan", caveId, recording);
+        await Should.ThrowAsync<InvalidOperationException>(RunPipelineAsync(id));
+
+        var granted = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        var url = granted.GetProperty("files").EnumerateArray()
+            .Single(f => f.GetProperty("name").GetString() == "gnss0000.gnss")
+            .GetProperty("contentUrl").GetString();
+        url.ShouldNotBeNull();
+        var fileId = Guid.Parse(url["/api/v1/files/".Length..url.IndexOf("/content", StringComparison.Ordinal)]);
+        (await reader.GetAsync($"/api/v1/files/{fileId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Without the exact position the file answers as if it were not there.
+        await GrantAsync(caveId, "read, write");
+        (await reader.GetAsync($"/api/v1/files/{fileId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task An_imu_log_without_the_expected_columns_fails_the_run_at_the_inspect_stage()
     {
         var caveId = await CreateCaveAsync("authenticated", locationProtected: false);
