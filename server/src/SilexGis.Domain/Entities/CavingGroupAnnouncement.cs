@@ -75,4 +75,14 @@ public class CavingGroupAnnouncement
     /// stamped row does nothing.
     /// </remarks>
     public DateTimeOffset? ExpandedAt { get; set; }
+
+    /// <summary>
+    /// When the queue gave up handing it out, or null while it has not.
+    /// </summary>
+    /// <remarks>
+    /// A notice that will never be handed out has stopped being money the day has promised. Left
+    /// waiting, it went on counting against the day's ceiling until midnight and refused other
+    /// announcements against messages that were never going to be sent.
+    /// </remarks>
+    public DateTimeOffset? FailedAt { get; set; }
 }

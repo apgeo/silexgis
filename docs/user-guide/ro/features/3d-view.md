@@ -121,6 +121,15 @@ acolo unde topografia conține schițe sau dimensiuni de galerie măsurate din c
 Vezi [Topografii, drumuiri și modele 3D](surveys-and-models.md#pereții-peșterii-stl) pentru
 încărcare și pentru declarația de coordonate de care are nevoie un `.stl`.
 
+**Galerii de mărime estimată.** Acolo unde galeriile fără mărime măsurată ale unei topografii au
+fost [desenate la o mărime estimată](surveys-and-models.md#galerii-fără-mărime-măsurată),
+comutatorul **Galerii de mărime estimată** de sub **Pereții peșterilor** le arată sau le ascunde
+fără să atingă pereții, iar butoanele de lângă el le colorează: **Ca la construire**, **Ca pereții**
+(pentru a vedea peștera întreagă) sau una dintre cinci culori care se deosebesc de pereți.
+Schimbarea oricăreia redesenează ce este deja încărcat; nu se descarcă nimic din nou. Cât timp
+modelul peșterii selectate are astfel de galerii, panoul spune în culoarea de avertisment câte
+vize sunt desenate la ce mărime estimată și că nu au fost măsurate.
+
 ## Fotografii la stațiile lor
 
 Pentru **peștera selectată**, fiecare fotografie legată de o stație a uneia dintre topografiile ei
@@ -162,6 +171,22 @@ limite sunt setări ale instalării; vezi `SILEXGIS__Map__MeshesInView…` în
 schimba pentru propriul browser, până la plafonul instalării, în
 [Setări › Avansat](account-and-settings.md#avansat) — panoul trimite acolo cât timp acest mod
 este ales.
+
+## Norii de puncte ai peșterilor din vedere
+
+Comutatorul **Scanări** din lista de straturi desenează scanările laser ale peșterilor din vedere
+— câte una pe peșteră, scanarea ei curentă sau, altfel, cea mai nouă — după ce fiecare este
+împărțită în dale și [plasată pe hartă](point-clouds.md#plasarea-unei-scanări-pe-hartă).
+Funcționează ca pereții tuturor peșterilor din vedere, cu mai puține peșteri și mai mulți
+megaocteți, pentru că o scanare este mult mai mare decât un model de pereți: pornește de la un
+anumit zoom, ia întâi peșterile cele mai apropiate, până la un număr de peșteri și o mărime
+totală, și eliberează ce iese din vedere. Cele trei numere sunt ale instalării, iar fiecare
+persoană le poate coborî pentru propriul browser în
+[Setări › Avansat](account-and-settings.md#nori-de-puncte), unde se stabilește și detaliul
+punctelor.
+
+O scanare este desenată doar pentru cine poate vedea locația exactă a peșterii; pentru oricine
+altcineva nu este nici desenată, nici numărată. Vezi [Nori de puncte (scanări LiDAR)](point-clouds.md).
 
 ## Urmarea filtrului hărții
 

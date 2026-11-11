@@ -24,6 +24,23 @@ namespace SilexGis.Infrastructure.Filters;
 /// </remarks>
 internal static class FilterLeaves
 {
+    /// <summary>The escape character every text pattern built here names explicitly.</summary>
+    /// <remarks>
+    /// PostgreSQL's LIKE escapes with a backslash unless told otherwise, so a value ending in one
+    /// would be refused as a malformed pattern; naming it, and escaping it in the value, makes the
+    /// backslash a character like any other.
+    /// </remarks>
+    public const string LikeEscape = "\\";
+
+    /// <summary>
+    /// What a person typed, as a LIKE pattern that matches exactly that text: <c>%</c>, <c>_</c> and
+    /// the escape character itself stand for themselves rather than for "anything".
+    /// </summary>
+    public static string Literal(string text) => text
+        .Replace(LikeEscape, LikeEscape + LikeEscape, StringComparison.Ordinal)
+        .Replace("%", LikeEscape + "%", StringComparison.Ordinal)
+        .Replace("_", LikeEscape + "_", StringComparison.Ordinal);
+
     /// <summary>
     /// Text, compared without regard to case or diacritics.
     /// </summary>
@@ -48,7 +65,7 @@ internal static class FilterLeaves
                 condition.Op == FilterOp.IsEmpty ? blank : Expression.Not(blank), parameter);
         }
 
-        var text = ((TextValue)condition.Values[0]).Value;
+        var text = Literal(((TextValue)condition.Values[0]).Value);
         var pattern = condition.Op switch
         {
             FilterOp.Contains => $"%{text}%",
@@ -60,7 +77,7 @@ internal static class FilterLeaves
         // by naming the provider's methods through reflection. The compiler checks it, so a rename
         // upstream is a build error here instead of a request that fails at run time.
         Expression<Func<string, bool>> matches = value =>
-            EF.Functions.ILike(EF.Functions.Unaccent(value), EF.Functions.Unaccent(pattern));
+            EF.Functions.ILike(EF.Functions.Unaccent(value), EF.Functions.Unaccent(pattern), LikeEscape);
 
         var applied = Substitution.Apply(matches.Body, matches.Parameters[0], column);
         return Expression.Lambda<Func<T, bool>>(
@@ -473,6 +490,34 @@ internal static class FilterLeaves
         return Expression.Lambda<Func<T, bool>>(
             Expression.AndAlso(present, contains), selector.Parameters);
     }
+}
+
+/// <summary>
+/// The walk every world's filter takes from its tree to one predicate, so that what a group means is
+/// answered once: all of nothing matches every row, any of nothing matches none (clearing the last
+/// choice out of a group narrows rather than widens), and a negation inverts what it holds.
+/// Validation refuses empty groups today; this is what they would mean if a caller ever skipped it.
+/// </summary>
+internal static class FilterTree
+{
+    /// <summary>
+    /// The tree as one predicate, each condition answered by <paramref name="leaf"/>; no tree at all
+    /// matches every row.
+    /// </summary>
+    public static Expression<Func<T, bool>> Compile<T>(
+        FilterNode? node, Func<ConditionNode, Expression<Func<T, bool>>> leaf) => node switch
+    {
+        null => _ => true,
+        AllOfNode all => all.Of.Count == 0
+            ? _ => true
+            : all.Of.Select(child => Compile(child, leaf)).Aggregate((left, right) => left.And(right)),
+        AnyOfNode any => any.Of.Count == 0
+            ? _ => false
+            : any.Of.Select(child => Compile(child, leaf)).Aggregate((left, right) => left.Or(right)),
+        NotNode not => Compile(not.Of, leaf).Not(),
+        ConditionNode condition => leaf(condition),
+        _ => throw new InvalidOperationException($"No compiler arm for {node.GetType().Name}."),
+    };
 }
 
 /// <summary>

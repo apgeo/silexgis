@@ -28,6 +28,9 @@ public sealed class ThumbnailService(IFileStore fileStore)
     /// </remarks>
     public static readonly int[] AllowedSizes = [160, 480, 1200, 2400];
 
+    /// <summary>Most pixels a picture may declare and still be drawn.</summary>
+    public const long MaxSourcePixels = PictureCeiling.MaxPixels;
+
     /// <summary>
     /// Cache names of thumbnails written before metadata removal became unconditional.
     /// Those files can still hold the source's GPS, so the name they were written under is
@@ -101,6 +104,10 @@ public sealed class ThumbnailService(IFileStore fileStore)
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
 
         var sourcePath = fileStore.GetAbsolutePath(sourceStoragePath);
+
+        // Measured before it is decoded: a small file can declare gigabytes of pixels. Only the
+        // first frame is decoded here, so only the first is counted.
+        PictureCeiling.Require(sourcePath);
         using var image = new MagickImage(sourcePath);
         image.AutoOrient(); // bakes the rotation in and clears the tag it read, so do it first
 

@@ -27,9 +27,9 @@ namespace SilexGis.Api.Tests;
 /// <para>
 /// The clock is fixed at an instant inside the window, so every assertion here is an equality on
 /// a value rather than a range — a window computed an hour wrong is still in the future, and a
-/// range assertion would pass straight over exactly the defect these tests exist to catch. What
-/// the fixed clock cannot do is make a delivery claimable: that is decided by the database's own
-/// now(), which is why nothing here drains.
+/// range assertion would pass straight over exactly the defect these tests exist to catch. A
+/// claim judges a delivery due on the same clock, so the one retry test below drains a pass at a
+/// time and stops at the attempt it is about; nothing else here drains.
 /// </para>
 /// </remarks>
 public sealed class NotificationQuietHoursTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
@@ -184,12 +184,9 @@ public sealed class NotificationQuietHoursTests : IAsyncLifetime, IDisposable, I
     /// happened.
     /// </summary>
     /// <remarks>
-    /// Two things make this less direct than it looks. A drain is claimed in batches and is not
-    /// scoped to a recipient, so this one's row may not be in the first batch — hence a pass at a
-    /// time until the attempt lands, rather than one call and an assertion on how many rows moved.
-    /// And the retry instant this test exists to check is in the fixed clock's future but the
-    /// database's past, so the row is immediately claimable again: the loop has to stop on the
-    /// first attempt or the next pass would spend the second.
+    /// A drain is claimed in batches and is not scoped to a recipient, so this one's row may not be
+    /// in the first batch — hence a pass at a time until the attempt lands, rather than one call
+    /// and an assertion on how many rows moved.
     /// </remarks>
     private async Task FailOurSendAsync()
     {

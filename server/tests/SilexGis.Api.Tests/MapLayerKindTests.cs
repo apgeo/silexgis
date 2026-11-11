@@ -9,6 +9,7 @@ using Shouldly;
 using SilexGis.Api.Common;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Map;
 using SilexGis.Infrastructure.Geodata;
@@ -257,6 +258,91 @@ public sealed class MapLayerKindTests : IAsyncLifetime, IDisposable, IClassFixtu
         var published = await PublishedAsync();
         published["OpenFreeMap Liberty"]["vector"]!["scene3dStandIn"]!.GetValue<string>().ShouldBe("OpenStreetMap");
         published.Keys.ShouldNotContain("Sentinel-2 scene, Apuseni 2024 (COG example)");
+    }
+
+    /// <summary>
+    /// The list is in the order the catalogue puts the layers in, whatever order the rows were
+    /// written in, and a layer switched off is not in it.
+    /// </summary>
+    [Fact]
+    public async Task Layers_are_published_in_their_sort_order_and_a_switched_off_one_is_left_out()
+    {
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.MapLayers.AddRange(
+                new MapLayer { Name = $"Third {suffix}", UrlTemplate = "https://t.example/{z}/{x}/{y}.png", IsBase = true, SortOrder = 9203 },
+                new MapLayer { Name = $"First {suffix}", UrlTemplate = "https://t.example/{z}/{x}/{y}.png", IsBase = true, SortOrder = 9201 },
+                new MapLayer { Name = $"Switched off {suffix}", UrlTemplate = "https://t.example/{z}/{x}/{y}.png", IsBase = true, SortOrder = 9202, Enabled = false },
+                new MapLayer { Name = $"Second {suffix}", UrlTemplate = "https://t.example/{z}/{x}/{y}.png", IsBase = true, SortOrder = 9202 });
+            await db.SaveChangesAsync();
+        }
+
+        var response = await reader.GetAsync("/api/v1/map-layers");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        var layers = JsonNode.Parse(payload)!.AsArray();
+        var mine = layers
+            .Select(l => l!["name"]!.GetValue<string>())
+            .Where(n => n.EndsWith($" {suffix}", StringComparison.Ordinal))
+            .ToList();
+        mine.ShouldBe([$"First {suffix}", $"Second {suffix}", $"Third {suffix}"]);
+        // And the whole answer, not only this test's rows, ascends.
+        var orders = layers.Select(l => l!["sortOrder"]!.GetValue<int>()).ToList();
+        orders.ShouldBe(orders.Order().ToList());
+    }
+
+    /// <summary>
+    /// The catalogue is open to every account through an entry an installation can take away; with
+    /// it taken away, the list is refused rather than handed out.
+    /// </summary>
+    [Fact]
+    public async Task Without_the_entry_that_lets_everyone_read_layers_the_list_is_refused()
+    {
+        (await reader.GetAsync("/api/v1/map-layers")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        List<AccessEntry> removed;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var allUsersId = await db.PermissionGroups
+                .Where(g => g.Slug == SeededPermissionGroups.AllUsersSlug)
+                .Select(g => g.Id)
+                .SingleAsync();
+            removed = await db.AccessEntries
+                .Where(e => e.PermissionGroupId == allUsersId && e.Domain == AccessDomain.MapLayers)
+                .ToListAsync();
+            removed.ShouldNotBeEmpty();
+            db.AccessEntries.RemoveRange(removed);
+            await db.SaveChangesAsync();
+        }
+
+        try
+        {
+            var refused = await reader.GetAsync("/api/v1/map-layers");
+            var problem = await refused.Content.ReadAsStringAsync();
+            refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, problem);
+            JsonNode.Parse(problem)!["code"]!.GetValue<string>().ShouldBe("acl.forbidden");
+        }
+        finally
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.AccessEntries.AddRange(removed.Select(e => new AccessEntry
+            {
+                PermissionGroupId = e.PermissionGroupId,
+                SubjectKind = e.SubjectKind,
+                SubjectId = e.SubjectId,
+                Effect = e.Effect,
+                Domain = e.Domain,
+                Actions = e.Actions,
+                ScopeKind = e.ScopeKind,
+                ScopeFeatureId = e.ScopeFeatureId,
+            }));
+            await db.SaveChangesAsync();
+        }
+
+        (await reader.GetAsync("/api/v1/map-layers")).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private async Task<MapLayerSeedReport> SeedAsync(string catalogue)

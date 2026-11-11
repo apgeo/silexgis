@@ -53,6 +53,17 @@ export function judge(listing, accepted, root = '') {
   };
 }
 
+/**
+ * What the listing says went wrong while it was made — above all a vulnerability source it could
+ * not reach. The command still exits 0 then, and lists every package as having no advisory, so a
+ * listing that reports any problem proves nothing and fails the run.
+ */
+export function problemsOf(listing) {
+  const all = [...(listing.problems ?? [])];
+  for (const project of listing.projects ?? []) all.push(...(project.problems ?? []));
+  return all.map((p) => `  ${p.level ?? 'problem'}: ${p.text ?? JSON.stringify(p)}`);
+}
+
 /** One line per package and advisory, the projects that reach it named once. */
 export function describe(findings) {
   const byKey = new Map();
@@ -78,6 +89,12 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
     process.exit(r.status ?? 1);
   }
   const listing = JSON.parse(r.stdout);
+  const problems = problemsOf(listing);
+  if (problems.length > 0) {
+    console.error('dotnet list package reported problems, so its listing cannot be trusted:');
+    for (const line of problems) console.error(line);
+    process.exit(1);
+  }
   const accepted = acceptedAdvisories(readFileSync(join(server, 'Directory.Build.props'), 'utf8'));
   const { accepted: known, refused } = judge(listing, accepted, server);
   if (known.length > 0) {

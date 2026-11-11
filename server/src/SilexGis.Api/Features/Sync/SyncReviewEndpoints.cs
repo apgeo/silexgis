@@ -169,7 +169,7 @@ public static class SyncReviewEndpoints
                     : null,
             };
         decided = SyncStreamPaging.After(decided, ByDecision, opening.From);
-        var probed = await SyncStreamPaging.Probe(decided, ByDecision, opening.Size).ToListAsync(ct);
+        var probed = await SyncStreamPaging.Probe(decided, ByDecision, opening).ToListAsync(ct);
         var cut = SyncStreamPaging.Cut(opening, probed.Select(ByDecision.Entry));
         var rows = cut.Rows.OfType<SyncReviewRow>().ToList();
         foreach (var row in rows.Where(r => r.LinkProposal is not null))

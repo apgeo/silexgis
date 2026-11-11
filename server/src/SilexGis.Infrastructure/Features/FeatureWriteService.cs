@@ -254,6 +254,7 @@ public sealed class FeatureWriteService(
     /// </summary>
     public async Task SetMainEntranceAsync(Guid caveFeatureId, Guid entranceFeatureId, CancellationToken ct = default)
     {
+        await HoldCaveAsync(caveFeatureId, ct);
         var entrances = await EntrancesOfCaveAsync(caveFeatureId, ct);
         if (entrances.All(e => e.Id != entranceFeatureId))
         {
@@ -266,6 +267,46 @@ public sealed class FeatureWriteService(
         }
 
         await SyncCaveMirrorAsync(caveFeatureId, ct);
+    }
+
+    /// <summary>
+    /// Deletes a feature by the rule of its kind — the one entry point every delete request
+    /// goes through, whichever address it came in at. Does nothing when the id names no live
+    /// feature. Audit rows ride the context: the caller saves.
+    /// </summary>
+    /// <remarks>
+    /// A feature can be deleted at its kind's own address and at the uniform feature address,
+    /// and a kind with side effects must not lose them at either door. A centerline hands the
+    /// cave's shape on before it goes (<see cref="DeleteCenterlineAsync"/>); an entrance leaves
+    /// the cave's entrance count and representative point to be recomputed without it. Every
+    /// other kind, caves included, is one soft delete over its containment subtree: a cave's
+    /// centerlines keep their flags because they go, and come back, with the cave.
+    /// </remarks>
+    public async Task DeleteFeatureAsync(Guid featureId, CancellationToken ct = default)
+    {
+        var target = await db.Features.AsNoTracking()
+            .Where(f => f.Id == featureId)
+            .Select(f => new { f.Kind, CaveId = f.Entrance != null ? f.Entrance.CaveFeatureId : (Guid?)null })
+            .FirstOrDefaultAsync(ct);
+        switch (target?.Kind)
+        {
+            case null:
+                return;
+            case FeatureKind.Centerline:
+                await DeleteCenterlineAsync(featureId, ct);
+                return;
+            case FeatureKind.CaveEntrance:
+                await SoftDeleteAsync(featureId, ct);
+                if (target.CaveId is { } caveId)
+                {
+                    await SyncCaveMirrorAsync(caveId, ct);
+                }
+
+                return;
+            default:
+                await SoftDeleteAsync(featureId, ct);
+                return;
+        }
     }
 
     /// <summary>
@@ -355,6 +396,7 @@ public sealed class FeatureWriteService(
     /// </summary>
     public async Task SyncCaveMirrorAsync(Guid caveFeatureId, CancellationToken ct = default)
     {
+        await HoldCaveAsync(caveFeatureId, ct);
         var caveFeature = await FeatureByIdAsync(caveFeatureId, ct)
             ?? throw new FeatureWriteException("cave.not_found", [$"cave feature {caveFeatureId} does not exist"]);
         var cave = db.Caves.Local.FirstOrDefault(c => c.Id == caveFeatureId)
@@ -362,6 +404,30 @@ public sealed class FeatureWriteService(
 
         var entrances = await EntrancesOfCaveAsync(caveFeatureId, ct);
         cave.EntranceCount = entrances.Count;
+
+        // Two writers that each add a cave's first entrance both make theirs the main one, each
+        // before it can see the other's. The second to arrive here, holding the cave, sees both and
+        // leaves one: the entrance this write is adding keeps the role, because marking a new
+        // entrance main is what its writer asked for — the same answer as a later move of the main
+        // entrance, and callers read the flag back after this to finish the move. Between stored
+        // rows the older keeps it, the rule that makes a cave's first entrance its main one.
+        var mains = entrances.Where(e => e.IsMain).ToList();
+        if (mains.Count > 1)
+        {
+            var ranked = new List<(CaveEntrance Entrance, bool Pending, DateTimeOffset CreatedAt)>();
+            foreach (var candidate in mains)
+            {
+                var pending = db.Entry(candidate).State == EntityState.Added;
+                var created = pending ? DateTimeOffset.MaxValue : (await FeatureByIdAsync(candidate.Id, ct))?.CreatedAt;
+                ranked.Add((candidate, pending, created ?? DateTimeOffset.MaxValue));
+            }
+
+            var keeper = ranked.OrderByDescending(r => r.Pending).ThenBy(r => r.CreatedAt).ThenBy(r => r.Entrance.Id).First().Entrance;
+            foreach (var other in mains.Where(e => e.Id != keeper.Id))
+            {
+                other.IsMain = false;
+            }
+        }
 
         // A cave that has entrances always has exactly one main: it is the cave's anchor
         // on the map and what the detail pages label. Deleting the main entrance, or
@@ -384,6 +450,39 @@ public sealed class FeatureWriteService(
         }
 
         caveFeature.Geom = main is null ? null : (await FeatureByIdAsync(main.Id, ct))?.Geom;
+    }
+
+    /// <summary>
+    /// Holds the cave's row for the rest of the caller's transaction before its entrances are
+    /// read, so that the mirror is worked out from what every earlier writer of the cave
+    /// committed.
+    /// </summary>
+    /// <remarks>
+    /// The mirror is a read of the cave's entrances followed by a write of the cave, and two
+    /// writers adding or removing entrances of one cave at the same moment each read the other's
+    /// change as not yet there: the second to save then wrote the count it had worked out without
+    /// the first's entrance, and a cave of three entrances listed two. Holding the row makes the
+    /// second wait for the first to commit and read again. It can only hold for as long as a
+    /// transaction lasts, so outside one — where the read and the save are separate statements
+    /// anyway — nothing is held. Tracked copies of the cave read before the hold are read again
+    /// under it, so a column worked out to the value the stale copy had is still written.
+    /// </remarks>
+    private async Task HoldCaveAsync(Guid caveFeatureId, CancellationToken ct)
+    {
+        if (db.Database.CurrentTransaction is null)
+        {
+            return;
+        }
+
+        await CaveMirrorSql.LockCaveAsync(db, caveFeatureId, ct);
+        foreach (var entry in db.ChangeTracker.Entries()
+                     .Where(e => e.State == EntityState.Unchanged
+                         && ((e.Entity is Feature f && f.Id == caveFeatureId)
+                             || (e.Entity is Cave c && c.Id == caveFeatureId)))
+                     .ToList())
+        {
+            await entry.ReloadAsync(ct);
+        }
     }
 
     /// <summary>

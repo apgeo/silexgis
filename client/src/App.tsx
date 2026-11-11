@@ -70,6 +70,7 @@ const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
 const MessagingSettingsPage = lazy(() => import('./pages/admin/MessagingSettingsPage.tsx'));
 const MessageTemplatesPage = lazy(() => import('./pages/admin/MessageTemplatesPage.tsx'));
 const NotificationHealthPage = lazy(() => import('./pages/admin/NotificationHealthPage.tsx'));
+const StoragePage = lazy(() => import('./pages/admin/StoragePage.tsx'));
 const PublishedTripsPage = lazy(() => import('./pages/admin/PublishedTripsPage.tsx'));
 const PermissionGroupsPage = lazy(() => import('./pages/admin/permissionGroups/PermissionGroupsPage.tsx'));
 const UsersPage = lazy(() => import('./pages/admin/UsersPage.tsx'));
@@ -116,8 +117,11 @@ const CoordinateConverterPage = lazy(() => import('./pages/tools/CoordinateConve
 const SyncSettingsPage = lazy(() => import('./pages/settings/SyncSettingsPage.tsx'));
 const PublicSurveyResultPage = lazy(() => import('./pages/public/PublicSurveyResultPage.tsx'));
 const SurveyUploadStatusPage = lazy(() => import('./pages/surveyUploads/SurveyUploadStatusPage.tsx'));
+const SurveyUploadViewerPage = lazy(() => import('./pages/surveyUploads/SurveyUploadViewerPage.tsx'));
+const PublicSurveyViewerPage = lazy(() => import('./pages/public/PublicSurveyViewerPage.tsx'));
 const AccessKeysSettingsPage = lazy(() => import('./pages/settings/AccessKeysSettingsPage.tsx'));
 const SurveyUploadSettingsPage = lazy(() => import('./pages/settings/SurveyUploadSettingsPage.tsx'));
+const ScanProfileSettingsPage = lazy(() => import('./pages/settings/ScanProfileSettingsPage.tsx'));
 const AdvancedSettingsPage = lazy(() => import('./pages/settings/AdvancedSettingsPage.tsx'));
 
 function Loadable({ children }: { children: ReactNode }) {
@@ -177,6 +181,10 @@ export const routes: RouteObject[] = guarded([
   // answer behind it is a closed envelope (title, cave name, progress, files), and a wrong,
   // withdrawn or no-longer-permitted token is answered exactly like an invented one.
   { path: '/p/survey/:token', element: <Loadable><PublicSurveyResultPage /></Loadable> },
+  // The same link's results in one place: the model in both viewers and the compiler's figures.
+  // Decided by the same answers as the page above; it carries no map, as that page carries no
+  // position of the cave's own.
+  { path: '/p/survey/:token/view', element: <Loadable><PublicSurveyViewerPage /></Loadable> },
   {
     element: <RequireAuth />,
     children: [
@@ -202,6 +210,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/caves/:id', element: <Loadable><CaveDetailPage /></Loadable> },
           { path: '/caves/:id/edit', element: <Loadable><CaveFormPage /></Loadable> },
           { path: '/caves/:caveId/surveys/:surveyId/uploads/:uploadId', element: <Loadable><SurveyUploadStatusPage /></Loadable> },
+          { path: '/caves/:caveId/surveys/:surveyId/uploads/:uploadId/view', element: <Loadable><SurveyUploadViewerPage /></Loadable> },
           { path: '/features', element: <Loadable><FeatureListPage /></Loadable> },
           { path: '/features/deleted', element: <Loadable><DeletedFeaturesPage /></Loadable> },
           { path: '/features/:id', element: <Loadable><FeatureDetailPage /></Loadable> },
@@ -240,6 +249,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
           { path: '/admin/messaging', element: <Loadable><MessagingSettingsPage /></Loadable> },
           { path: '/admin/notification-health', element: <Loadable><NotificationHealthPage /></Loadable> },
+          { path: '/admin/storage', element: <Loadable><StoragePage /></Loadable> },
           { path: '/admin/published-trips', element: <Loadable><PublishedTripsPage /></Loadable> },
           { path: '/admin/message-templates', element: <Loadable><MessageTemplatesPage /></Loadable> },
           { path: '/admin/permission-groups', element: <Loadable><PermissionGroupsPage /></Loadable> },
@@ -283,6 +293,7 @@ export const routes: RouteObject[] = guarded([
               { path: 'sync', element: <Loadable><SyncSettingsPage /></Loadable> },
               { path: 'access-keys', element: <Loadable><AccessKeysSettingsPage /></Loadable> },
               { path: 'survey-uploads', element: <Loadable><SurveyUploadSettingsPage /></Loadable> },
+              { path: 'scan-profiles', element: <Loadable><ScanProfileSettingsPage /></Loadable> },
               { path: 'advanced', element: <Loadable><AdvancedSettingsPage /></Loadable> },
             ],
           },

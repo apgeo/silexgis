@@ -20,7 +20,14 @@ Three tabs: **Vector files**, **Raster maps**, **Imports**.
 
 Drag files in, or click to choose. Accepted:
 
-**GPX · KML · KMZ · GeoJSON · zipped shapefile · CSV with coordinate columns · WKT**
+**GPX · KML · KMZ · GeoJSON · zipped shapefile · CSV with coordinate columns · WKT** — up to
+**150 MB** per file.
+
+**Every dropped file gets a row of its own** below the drop zone, on this tab and on **Raster
+maps**: a progress bar while it is sent, *the server is checking the file* once it has arrived,
+and then what the server did with it — or **why it was refused**, in words: the server's own
+reason, a lost connection, or a file larger than a proxy in front of the server lets through. The
+row stays until you dismiss it; **Clear finished** clears the finished ones at once.
 
 The import runs in the background. Status: *Queued → Importing… → Imported* (or *Failed*).
 

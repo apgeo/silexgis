@@ -257,6 +257,43 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
     }
 
     /// <summary>
+    /// Over sloping ground the height under each sample is the ground at that sample's own position:
+    /// along a passage running east the reading changes with longitude, along one running north with
+    /// latitude, and each matches the slope where the sample says it is. Flat ground cannot tell a
+    /// reading taken at the wrong station, or with longitude and latitude the wrong way round, from
+    /// the right one; a slope two ways can.
+    /// </summary>
+    [Fact]
+    public async Task Over_sloping_ground_each_sample_reads_the_ground_at_its_own_position()
+    {
+        WriteRaster(buildId, (x, y) => (float)(GroundM + (10 * x) + (3 * y)));
+
+        var eastward = await CaveWithPassageAsync(locationProtected: false);
+        var northward = await CaveWithPassageAsync(locationProtected: false, northward: true);
+
+        foreach (var (cave, varies) in new[] { (eastward, "longitude"), (northward, "latitude") })
+        {
+            var samples = (await ReadAsync(owner, cave)).GetProperty("samples").EnumerateArray().ToArray();
+            samples.Length.ShouldBeGreaterThan(2, varies);
+
+            var grounds = new List<double>();
+            foreach (var sample in samples)
+            {
+                sample.GetProperty("outcome").GetString().ShouldBe("sampled", varies);
+                var longitude = sample.GetProperty("longitude").GetDouble();
+                var latitude = sample.GetProperty("latitude").GetDouble();
+                var ground = sample.GetProperty("groundAltitudeM").GetDouble();
+                ground.ShouldBe(RampAt(longitude, latitude), 1e-3, $"{varies} {longitude},{latitude}");
+                sample.GetProperty("overburdenM").GetDouble().ShouldBe(ground - PassageAltitudeM, 1e-3);
+                grounds.Add(ground);
+            }
+
+            // The slope was actually crossed: the readings are not one repeated number.
+            (grounds.Max() - grounds.Min()).ShouldBeGreaterThan(20, varies);
+        }
+    }
+
+    /// <summary>
     /// Ground the elevation data does not reach leaves a hole in the curve, and the summary is taken
     /// over what was read and over nothing else.
     /// </summary>
@@ -429,7 +466,8 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
         bool locationProtected,
         string visibility = "authenticated",
         double eastLongitude = CoveredEastLongitude,
-        bool withAltitudes = true)
+        bool withAltitudes = true,
+        bool northward = false)
     {
         var caveResponse = await owner.PostAsJsonAsync("/api/v1/caves", new
         {
@@ -455,7 +493,7 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
         entranceResponse.StatusCode.ShouldBe(
             HttpStatusCode.Created, await entranceResponse.Content.ReadAsStringAsync());
 
-        var content = new ByteArrayContent(Passage(eastLongitude, withAltitudes));
+        var content = new ByteArrayContent(northward ? NorthwardPassage() : Passage(eastLongitude, withAltitudes));
         content.Headers.ContentType = new("application/geo+json");
         using var form = new MultipartFormDataContent { { content, "file", "Centerline.geojson" } };
         var upload = await owner.PostAsync($"/api/v1/caves/{caveId}/centerlines", form);
@@ -486,6 +524,35 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
             + string.Join(",", points) + "]}}]}";
         return Encoding.UTF8.GetBytes(body);
     }
+
+    /// <summary>Where the northward passage runs: one meridian, from this latitude to that.</summary>
+    private const double NorthwardLongitude = 25.0053;
+    private const double NorthwardSouthLatitude = 46.0883;
+    private const double NorthwardNorthLatitude = 46.0981;
+
+    /// <summary>A level run of passage heading north along one meridian.</summary>
+    private static byte[] NorthwardPassage()
+    {
+        var points = new List<string>();
+        for (var i = 0; i <= 20; i++)
+        {
+            var latitude = NorthwardSouthLatitude + ((NorthwardNorthLatitude - NorthwardSouthLatitude) * i / 20d);
+            points.Add($"[{F(NorthwardLongitude)},{F(latitude)},{F(PassageAltitudeM)}]");
+        }
+
+        var body = "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\","
+            + "\"properties\":{},\"geometry\":{\"type\":\"LineString\",\"coordinates\":["
+            + string.Join(",", points) + "]}}]}";
+        return Encoding.UTF8.GetBytes(body);
+    }
+
+    /// <summary>
+    /// The ramp's height at a point: ten metres per pixel eastwards and three per pixel southwards,
+    /// counted between pixel centres. Bilinear interpolation reproduces a plane exactly anywhere
+    /// between the outermost centres, so this is what the ground under any station there must be.
+    /// </summary>
+    private static double RampAt(double longitude, double latitude) =>
+        GroundM + (10 * (((longitude - West) / Pixel) - 0.5)) + (3 * (((North - latitude) / Pixel) - 0.5));
 
     private async Task<Guid> SeedActiveBuildAsync()
     {
@@ -526,7 +593,7 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
     /// footprint — so no expected thickness in this file depends on where a station happened to land
     /// between two pixels.
     /// </summary>
-    private void WriteRaster(Guid build)
+    private void WriteRaster(Guid build, Func<int, int, float>? height = null)
     {
         GdalBase.ConfigureAll();
         var directory = Path.Combine(buildRoot, build.ToString("N"), "prepared");
@@ -549,6 +616,16 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
 
         var pixels = new float[16 * 16];
         Array.Fill(pixels, (float)GroundM);
+        if (height is not null)
+        {
+            for (var y = 0; y < 16; y++)
+            {
+                for (var x = 0; x < 16; x++)
+                {
+                    pixels[(y * 16) + x] = height(x, y);
+                }
+            }
+        }
 
         band.WriteRaster(0, 0, 16, 16, pixels, 16, 16, 0, 0);
         dataset.FlushCache();

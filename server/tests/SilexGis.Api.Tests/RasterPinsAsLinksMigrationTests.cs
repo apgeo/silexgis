@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -10,7 +11,6 @@ using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
 using SilexGis.Domain.ResLinks;
-using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.RasterMaps;
 
@@ -69,32 +69,32 @@ public sealed class RasterPinsAsLinksMigrationTests : IAsyncLifetime, IClassFixt
         var removedDocument = Guid.CreateVersion7();
         var removedFile = Guid.CreateVersion7();
         var batch = Guid.CreateVersion7();
-        await using (var db = Context(connectionString))
+        // Written by SQL against the step's own columns, not through today's model: a later step
+        // that adds a column to one of these tables would otherwise break the insert.
+        var sql = new StringBuilder();
+        sql.AppendLine(MigrationFixtureSql.User(owner, "migration-owner"));
+        foreach (var (id, name) in new[] { (cave, "Pestera 1"), (placeA, "punct A"), (placeB, "punct B") })
         {
-            db.Users.Add(new SilexGisUser { Id = owner, UserName = "migration-owner", Email = "migration-owner@example.invalid" });
-            foreach (var (id, name) in new[] { (cave, "Pestera 1"), (placeA, "punct A"), (placeB, "punct B") })
-            {
-                db.Features.Add(new Feature
-                {
-                    Id = id, Kind = FeatureKind.Cave, Name = name, OwnerUserId = owner,
-                    AncestorIds = id == cave ? [] : [cave],
-                });
-            }
-
-            Picture(db, owner, document, (oldFile, 1, false, null), (original, 2, true, 6), (copy, 2, true, null));
-            Picture(db, owner, removedDocument, (removedFile, 1, true, null));
-            db.RasterMaps.Add(new RasterMap
-            {
-                Id = map, CaveFeatureId = cave, Title = "plan", DocumentId = document, OwnerUserId = owner,
-            });
-            db.RasterMaps.Add(new RasterMap
-            {
-                Id = removedMap, CaveFeatureId = cave, Title = "removed", DocumentId = removedDocument, OwnerUserId = owner,
-                DeletedAt = DateTimeOffset.UtcNow,
-            });
-            db.ImportBatches.Add(new ImportBatch { Id = batch, ConfirmedByUserId = owner, Source = ImportSource.DeviceSync });
-            await db.SaveChangesAsync();
+            var ancestors = id == cave ? "'{}'" : $"ARRAY['{cave}']::uuid[]";
+            sql.AppendLine($"""
+                INSERT INTO features (id, kind, category, name, owner_user_id, visibility, location_protected,
+                    is_protected_effective, ancestor_ids, created_at, updated_at)
+                VALUES ('{id}', {(short)FeatureKind.Cave}, 0, '{name}', '{owner}', 0, false, false, {ancestors}, now(), now());
+                """);
         }
+
+        Picture(sql, owner, document, (oldFile, 1, false, null), (original, 2, true, 6), (copy, 2, true, null));
+        Picture(sql, owner, removedDocument, (removedFile, 1, true, null));
+        sql.AppendLine($"""
+            INSERT INTO raster_maps (id, cave_feature_id, title, map_type, sort_order, document_id, owner_user_id,
+                created_at, updated_at, deleted_at)
+            VALUES ('{map}', '{cave}', 'plan', 0, 0, '{document}', '{owner}', now(), now(), NULL),
+                   ('{removedMap}', '{cave}', 'removed', 0, 0, '{removedDocument}', '{owner}', now(), now(), now());
+            INSERT INTO import_batches (id, confirmed_by_user_id, source, mode, created_count, attached_count,
+                skipped_count, created_at, updated_at)
+            VALUES ('{batch}', '{owner}', {(short)ImportSource.DeviceSync}, 0, 0, 0, 0, now(), now());
+            """);
+        await ExecuteAsync(connectionString, sql.ToString());
 
         var live = Guid.CreateVersion7();
         var removed = Guid.CreateVersion7();
@@ -211,26 +211,30 @@ public sealed class RasterPinsAsLinksMigrationTests : IAsyncLifetime, IClassFixt
     /// <summary>
     /// A picture document with its revisions, each a list of files: (id, revision, current, code).
     /// </summary>
-    private static void Picture(SilexGisDbContext db, Guid owner, Guid document, params (Guid File, int Revision, bool Current, int? Code)[] files)
+    private static void Picture(StringBuilder sql, Guid owner, Guid document, params (Guid File, int Revision, bool Current, int? Code)[] files)
     {
-        db.Documents.Add(new Document { Id = document, Title = "plan", OwnerUserId = owner });
+        sql.AppendLine($"""
+            INSERT INTO documents (id, title, owner_user_id, visibility, created_at, updated_at)
+            VALUES ('{document}', 'plan', '{owner}', 0, now(), now());
+            """);
         var stamp = new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero);
         foreach (var revision in files.GroupBy(f => (f.Revision, f.Current)))
         {
-            var version = new DocumentVersion
-            {
-                Id = Guid.CreateVersion7(), DocumentId = document, VersionNumber = revision.Key.Revision, IsCurrent = revision.Key.Current,
-            };
-            db.DocumentVersions.Add(version);
+            var version = Guid.CreateVersion7();
+            sql.AppendLine($"""
+                INSERT INTO document_versions (id, document_id, version_number, is_current, created_at, updated_at)
+                VALUES ('{version}', '{document}', {revision.Key.Revision}, {(revision.Key.Current ? "true" : "false")}, now(), now());
+                """);
             foreach (var file in revision)
             {
                 stamp = stamp.AddMinutes(1);
-                db.StoredFiles.Add(new StoredFile
-                {
-                    Id = file.File, DocumentVersionId = version.Id, StoragePath = $"invented/{file.File:N}.png",
-                    OriginalName = "plan.png", MimeType = "image/png", Sha256 = new string('a', 64), Kind = FileKind.Image,
-                    PixelWidth = 40, PixelHeight = 30, PixelOrientation = file.Code, CreatedAt = stamp,
-                });
+                var code = file.Code is { } c ? c.ToString(CultureInfo.InvariantCulture) : "NULL";
+                sql.AppendLine($"""
+                    INSERT INTO files (id, storage_path, original_name, mime_type, size_bytes, sha256,
+                        document_version_id, kind, pixel_width, pixel_height, pixel_orientation, created_at, updated_at)
+                    VALUES ('{file.File}', 'invented/{file.File:N}.png', 'plan.png', 'image/png', 0, '{new string('a', 64)}',
+                        '{version}', {(short)FileKind.Image}, 40, 30, {code}, {Stamp(stamp)}, {Stamp(stamp)});
+                    """);
             }
         }
     }

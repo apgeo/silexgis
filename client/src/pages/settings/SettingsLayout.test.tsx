@@ -68,6 +68,7 @@ describe('SettingsLayout', () => {
       'Sync',
       'Access keys',
       'Survey uploads',
+      'Scans · Processing profiles',
       'Advanced',
     ]);
 

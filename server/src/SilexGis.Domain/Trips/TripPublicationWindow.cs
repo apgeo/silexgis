@@ -99,7 +99,10 @@ public static class TripPublicationWindow
 
         // Whichever is later, so a link minted after the trip still gets its whole window and one
         // minted before the trip gets a window measured from the end of it.
-        var expiresAt = (afterTheTrip > now ? afterTheTrip : now) + lifetime;
+        // A lifetime reaching past the end of the calendar has no end to compute; it is answered
+        // as the last instant there is, which is what its author meant and which still stores.
+        var from = afterTheTrip > now ? afterTheTrip : now;
+        var expiresAt = lifetime >= DateTimeOffset.MaxValue - from ? DateTimeOffset.MaxValue : from + lifetime;
 
         // Truncated to whole microseconds, because the instant is stored in a timestamptz column
         // whose resolution is the microsecond. Minting and reading back must say the same end, so
@@ -161,7 +164,7 @@ public static class TripPublicationWindow
         return state switch
         {
             TripTrackingState.Armed => true,
-            TripTrackingState.Closed => closedAt is { } closed && now < closed + graceAfterClose,
+            TripTrackingState.Closed => closedAt is { } closed && IsBeforeEndOfPeriod(now, closed, graceAfterClose),
             _ => false,
         };
     }

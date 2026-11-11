@@ -179,6 +179,22 @@ export function modeOf(options, environment = process.env) {
 }
 
 /**
+ * Whether the tests that run the real survey compiler in its sandbox must run: `require` on Linux,
+ * where the compiler and bubblewrap are what this gate's machine is expected to have, unless the
+ * environment already says otherwise (any value — `SILEXGIS_TEST_THERION=skip` lets a machine
+ * without them run the gate and see those tests skipped). Elsewhere the sandbox does not exist and
+ * nothing is required.
+ *
+ * Those are the only tests that start the sandbox at all, and they skip themselves where the
+ * programs are missing; a gate that could pass them by not running them would say nothing about
+ * the one boundary that stands between an uploaded survey and the server's files.
+ */
+export function therionRequirementOf(environment = process.env, platform = process.platform) {
+  if (environment.SILEXGIS_TEST_THERION !== undefined) return environment.SILEXGIS_TEST_THERION;
+  return platform === 'linux' ? 'require' : undefined;
+}
+
+/**
  * What the test processes say they did, added up: applications built, and times a test was
  * handed one already running. Null where a process left no account — an older test project, or
  * one that died.
@@ -283,7 +299,12 @@ function run({ name, classes, project, results, threads, startedAt, mode }) {
     ],
     {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, SILEXGIS_TEST_MODE: mode, SILEXGIS_TEST_HOST_STATS: account },
+      env: {
+        ...process.env,
+        SILEXGIS_TEST_MODE: mode,
+        SILEXGIS_TEST_HOST_STATS: account,
+        ...(therionRequirementOf() === undefined ? {} : { SILEXGIS_TEST_THERION: therionRequirementOf() }),
+      },
     },
   );
   child.stdout.pipe(out, { end: false });

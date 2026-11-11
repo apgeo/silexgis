@@ -38,7 +38,8 @@ public class SavedFilterRulesTests
         // hand that position to every member who opened it.
         var document = About(Region("Bihor")) with { Anchor = new PointAnchor(22.5, 46.5) };
 
-        SavedFilterRules.ProblemsOnSave(document, Everything).ShouldNotBeEmpty();
+        SavedFilterRules.ProblemsOnSave(document, Everything).ShouldHaveSingleItem()
+            .Code.ShouldBe(FilterProblemCodes.AnchorNotStored);
     }
 
     [Fact]

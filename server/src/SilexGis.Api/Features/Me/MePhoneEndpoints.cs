@@ -107,6 +107,7 @@ public static class MePhoneEndpoints
         IAppSettingsService settings,
         ISmsDelivery smsDelivery,
         IMessageDispatcher dispatcher,
+        TimeProvider clock,
         CancellationToken ct)
     {
         var user = await userManager.GetUserAsync(principal);
@@ -135,7 +136,7 @@ public static class MePhoneEndpoints
         // texted to it and so controls it.
 
         var policy = await settings.GetSecurityAsync(ct);
-        if (await SendThrottle.TooSoonAsync(userManager, user, TwoFactorMethod.Sms, policy, SendThrottle.PhoneChange))
+        if (await SendThrottle.TooSoonAsync(userManager, user, TwoFactorMethod.Sms, policy, SendThrottle.PhoneChange, clock))
         {
             return ApiProblems.BadRequest("me.phone_resend_too_soon", "Wait a moment before asking again.");
         }
@@ -143,7 +144,7 @@ public static class MePhoneEndpoints
         user.PendingPhoneNumber = number;
         await db.SaveChangesAsync(ct);
 
-        return await SendCodeAsync(user, number, userManager, dispatcher, policy, ct);
+        return await SendCodeAsync(user, number, userManager, dispatcher, policy, clock, ct);
     }
 
     private static async Task<Results<Ok<PhoneChallengeDto>, UnauthorizedHttpResult, ProblemHttpResult>> ResendAsync(
@@ -152,6 +153,7 @@ public static class MePhoneEndpoints
         SilexGisDbContext db,
         IAppSettingsService settings,
         IMessageDispatcher dispatcher,
+        TimeProvider clock,
         CancellationToken ct)
     {
         var user = await userManager.GetUserAsync(principal);
@@ -166,12 +168,12 @@ public static class MePhoneEndpoints
         }
 
         var policy = await settings.GetSecurityAsync(ct);
-        if (await SendThrottle.TooSoonAsync(userManager, user, TwoFactorMethod.Sms, policy, SendThrottle.PhoneChange))
+        if (await SendThrottle.TooSoonAsync(userManager, user, TwoFactorMethod.Sms, policy, SendThrottle.PhoneChange, clock))
         {
             return ApiProblems.BadRequest("me.phone_resend_too_soon", "Wait a moment before asking again.");
         }
 
-        return await SendCodeAsync(user, pending, userManager, dispatcher, policy, ct);
+        return await SendCodeAsync(user, pending, userManager, dispatcher, policy, clock, ct);
     }
 
     private static async Task<Results<Ok<PhoneStatusDto>, UnauthorizedHttpResult, ProblemHttpResult>> ConfirmAsync(
@@ -283,6 +285,7 @@ public static class MePhoneEndpoints
         UserManager<SilexGisUser> userManager,
         IMessageDispatcher dispatcher,
         SecuritySettings policy,
+        TimeProvider clock,
         CancellationToken ct)
     {
         var code = await userManager.GenerateChangePhoneNumberTokenAsync(user, number);
@@ -295,7 +298,7 @@ public static class MePhoneEndpoints
 
         // Stamped only once a text really went out, so a gateway that is refusing does not lock
         // the account holder out of trying again.
-        await SendThrottle.MarkSentAsync(userManager, user, TwoFactorMethod.Sms, SendThrottle.PhoneChange);
+        await SendThrottle.MarkSentAsync(userManager, user, TwoFactorMethod.Sms, SendThrottle.PhoneChange, clock);
         return TypedResults.Ok(new PhoneChallengeDto(TwoFactorChallengeEndpoints.MaskPhone(number), lifetime));
     }
 }

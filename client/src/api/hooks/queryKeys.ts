@@ -53,6 +53,7 @@ export const queryKeys = {
   // A survey's stations whose names begin with what somebody has typed. Under the survey's own
   // prefix, so anything that makes the survey be asked for again makes its names be asked again.
   surveyModelStationSearch: (id: string, q: string) => ['survey-model', id, 'stations', q] as const,
+  surveyModelCentreline: (id: string) => ['survey-model', id, 'centreline'] as const,
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
   surveyCompilations: (caveId: string) => ['survey-compilations', caveId] as const,
   caveExternalIds: (caveId: string) => ['cave-external-ids', caveId] as const,
@@ -361,6 +362,11 @@ export const queryKeys = {
   eventDefaults: ['events', 'defaults'] as const,
   eventInvitations: (id: string) => ['events', 'invitations', id] as const,
   accessKeys: ['access-keys'] as const,
+  // Every processing-profile key starts with this one, so a change reaches every step's list.
+  processingProfilesAll: ['scan-profiles'] as const,
+  processingProfiles: (stepId: string) => ['scan-profiles', 'list', stepId] as const,
+  processingProfileChoices: (stepId: string) => ['scan-profiles', 'remembered', stepId] as const,
+  scanStepSchema: (stepId: string) => ['scan-step-schemas', stepId] as const,
   // Every survey-upload key starts with this one, so a rerun or a finished run that invalidates it
   // reaches the listings, the per-cave groupings and each upload's own status together.
   surveyUploads: ['survey-uploads'] as const,
@@ -369,4 +375,9 @@ export const queryKeys = {
   surveyUpload: (id: string) => ['survey-uploads', 'detail', id] as const,
   caveSurveys: (caveId: string) => ['survey-uploads', 'cave', caveId] as const,
   publicSurveyUpload: (token: string) => ['public-survey-uploads', token] as const,
+  surveyUploadFigures: (id: string) => ['survey-uploads', 'figures', id] as const,
+  surveyUploadGeodata: (id: string) => ['survey-uploads', 'geodata', id] as const,
+  surveyUploadByPublicLink: (token: string) => ['survey-uploads', 'by-public-link', token] as const,
+  publicSurveyUploadFigures: (token: string) => ['public-survey-uploads', token, 'figures'] as const,
+  publicSurveyUploadGeodata: (token: string) => ['public-survey-uploads', token, 'geodata'] as const,
 };

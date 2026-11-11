@@ -46,6 +46,42 @@ public static class FileFormats
     /// </summary>
     public const int MaxMediaTypeLength = 127;
 
+    /// <summary>
+    /// The longest name a stored file keeps: the file-name limit of the common file systems,
+    /// which is also its column's width.
+    /// </summary>
+    public const int MaxFileNameLength = 255;
+
+    /// <summary>The longest tail still treated as an extension worth keeping when a name is cut.</summary>
+    private const int KeptExtensionLength = 32;
+
+    /// <summary>
+    /// Fits a file's name into <see cref="MaxFileNameLength"/>. Nothing upstream bounds it — a
+    /// multipart request carries whatever name its client wrote, an archive entry's name is the
+    /// archive's to choose, and a transfer may name its file at greater length — and the bytes
+    /// are already stored by the time the name is written, so an over-long one is shortened
+    /// rather than allowed to fail the whole upload. The stem is cut and the extension kept,
+    /// because the extension is what tells a reader (and a download) what the file is; a cut
+    /// never splits a surrogate pair.
+    /// </summary>
+    public static string FitFileName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (name.Length <= MaxFileNameLength)
+        {
+            return name;
+        }
+
+        var dot = name.LastIndexOf('.');
+        var extension = dot > 0 && name.Length - dot <= KeptExtensionLength ? name[dot..] : "";
+        var stem = name[..(name.Length - extension.Length)];
+        var room = MaxFileNameLength - extension.Length;
+
+        // Stepping back one keeps a high surrogate from being left without its partner.
+        var cut = char.IsHighSurrogate(stem[room - 1]) ? room - 1 : room;
+        return stem[..cut] + extension;
+    }
+
     /// <summary>Media type used when the bytes are not recognised at all.</summary>
     public const string UnknownMimeType = "application/octet-stream";
 

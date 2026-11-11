@@ -215,6 +215,57 @@ public sealed class MapOptions
     public long MeshesInViewMaxBytesLimit { get; set; } = 512L * 1024 * 1024;
 
     /// <summary>
+    /// The zoom from which the 3D scene may ask for the placed point clouds of every cave in its
+    /// view.
+    /// </summary>
+    /// <remarks>
+    /// The same floor as the wall meshes', for a different reason. A scan's tiles are fetched by
+    /// level of detail, so a wide view does not cost every point; but every scan opened is a
+    /// tileset held open, with its root and its coarsest tiles resident, and a district's worth of
+    /// them is a district's worth of readers.
+    /// </remarks>
+    public int ScansInViewMinZoom { get; set; } = 14;
+
+    /// <summary>
+    /// The most caves one request for the scans in a view answers with, nearest the middle of the
+    /// view first. The caves beyond it are counted in the answer and not described.
+    /// </summary>
+    /// <remarks>
+    /// Fewer than the wall meshes' default: a scan drawn at any level of detail is far heavier on
+    /// a browser than a wall mesh, and a handful of them is already a scene. A request may name a
+    /// count of its own, up to <see cref="ScansInViewMaxCavesLimit"/>.
+    /// </remarks>
+    public int ScansInViewMaxCaves { get; set; } = 6;
+
+    /// <summary>Hard ceiling on a client-requested <see cref="ScansInViewMaxCaves"/> override.</summary>
+    /// <remarks>
+    /// Every tile is served by this installation, from an archive opened entry by entry, so the
+    /// operator keeps the last word on how many scans one view may hold open. A default
+    /// configured above the ceiling is held to it.
+    /// </remarks>
+    public int ScansInViewMaxCavesLimit { get; set; } = 30;
+
+    /// <summary>
+    /// How many bytes of point-cloud tiles the 3D scene may hold at once for the caves in its view.
+    /// </summary>
+    /// <remarks>
+    /// Spent by the client, nearest cave first, against the archive sizes the answer states —
+    /// the most a scan would cost if every tile of it were fetched. A tiles reader usually takes
+    /// less, so this is a bound on the worst case rather than a forecast; it is larger than the
+    /// meshes' because a single scan's archive is routinely tens of megabytes thinned and
+    /// hundreds whole. A person may set their own, up to <see cref="ScansInViewMaxBytesLimit"/>.
+    /// </remarks>
+    public long ScansInViewMaxBytes { get; set; } = 256L * 1024 * 1024;
+
+    /// <summary>Hard ceiling on a person's own <see cref="ScansInViewMaxBytes"/>.</summary>
+    /// <remarks>
+    /// Published rather than enforced here, because the budget is spent in the browser; it is
+    /// still the operator's number, because the bytes a raised budget buys are served by this
+    /// installation. A default configured above the ceiling is held to it.
+    /// </remarks>
+    public long ScansInViewMaxBytesLimit { get; set; } = 2048L * 1024 * 1024;
+
+    /// <summary>
     /// The size above which the 3D scene asks before it downloads the walls of the cave somebody
     /// selected; 0 asks before every one.
     /// </summary>
@@ -274,4 +325,15 @@ public sealed class MapOptions
 
     /// <summary>The byte budget a scene starts from: the configured default, held to its ceiling.</summary>
     public long MeshesInViewBytes() => Math.Min(MeshesInViewMaxBytes, MeshesInViewMaxBytesLimit);
+
+    /// <summary>
+    /// How many caves one request for the scans in a view is answered with: the count the caller
+    /// named, or the installation's default when they named none — never fewer than one cave and
+    /// never more than the ceiling, which is what holds a default configured above it.
+    /// </summary>
+    public int ScansInViewCaves(int? requested = null) =>
+        Math.Clamp(requested ?? ScansInViewMaxCaves, 1, Math.Max(1, ScansInViewMaxCavesLimit));
+
+    /// <summary>The tile byte budget a scene starts from: the configured default, held to its ceiling.</summary>
+    public long ScansInViewBytes() => Math.Min(ScansInViewMaxBytes, ScansInViewMaxBytesLimit);
 }

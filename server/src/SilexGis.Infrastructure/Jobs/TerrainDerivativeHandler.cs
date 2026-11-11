@@ -56,6 +56,24 @@ public sealed class TerrainDerivativeHandler(
     // while another attempt is due.
     public bool RetriesPassingFailures => true;
 
+    /// <summary>A picture given up by the queue stops reading "computing".</summary>
+    public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
+    {
+        if (AbandonedJob.PayloadOf<TerrainDerivativePayload>(job) is not { } payload)
+        {
+            return;
+        }
+
+        await db.TerrainDerivativeLayers
+            .Where(l => l.Id == payload.TerrainDerivativeLayerId
+                && l.Status == TerrainDerivativeStatus.Computing
+                && l.ProcessingJobId == job.Id)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(l => l.Status, TerrainDerivativeStatus.Failed)
+                .SetProperty(l => l.ErrorCode, TerrainBuildFailures.DerivativeFailed)
+                .SetProperty(l => l.Message, AbandonedJob.Reason), ct);
+    }
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(job);

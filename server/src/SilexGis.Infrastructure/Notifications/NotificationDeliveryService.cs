@@ -51,7 +51,12 @@ public sealed class NotificationDeliveryService(
     TimeProvider clock,
     ILogger<NotificationDeliveryService> logger)
 {
-    /// <summary>Rows leased per drain pass. Small enough that a crash re-sends few, if any.</summary>
+    /// <summary>
+    /// Rows leased per drain pass. Each outcome is saved as it is known, so a crash re-sends at
+    /// most the one message in flight, and an attempt is counted only on a row whose send starts,
+    /// so the rows a dead pass never reached come round again with their attempts untouched; the
+    /// size only bounds how long they stay leased meanwhile.
+    /// </summary>
     private const int BatchSize = 25;
 
     /// <summary>Lines listed in a summary before it says how many more there were.</summary>
@@ -72,41 +77,96 @@ public sealed class NotificationDeliveryService(
     /// Decides the outbound channels for notifications that have none yet. One pass per
     /// notification, ever: the claim stamps the row as routed.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The claim and the rows it produces commit together. Claimed on its own, a batch whose
+    /// routing then threw — a database read refused halfway down it — kept every notification
+    /// stamped as routed with no delivery written, so the overdue-party alarm in the same batch as
+    /// the failing row went out on no channel and left nothing for an operator to see. Rolled back
+    /// whole, the batch is simply routed again on the next pass.
+    /// </para>
+    /// <para>
+    /// A fault that is about one notification rather than the database — anything that is not a
+    /// database error — is recorded as that notification's dead delivery and the rest of the batch
+    /// goes on: rolled back, it would come round first on every pass and hold the queue behind it.
+    /// </para>
+    /// </remarks>
     public async Task<int> RouteAsync(CancellationToken ct)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var ids = await NotificationDeliverySql.ClaimUnroutedAsync(db, BatchSize, ct);
         if (ids.Count == 0)
         {
             return 0;
         }
 
-        var rows = await db.Notifications.Where(n => ids.Contains(n.Id)).ToListAsync(ct);
+        var rows = await db.Notifications.Where(n => ids.Contains(n.Id)).OrderBy(n => n.Id).ToListAsync(ct);
         foreach (var row in rows)
         {
-            await RouteOneAsync(row, ct);
+            try
+            {
+                await RouteOneAsync(row, ct);
+            }
+            catch (Exception e) when (e is not System.Data.Common.DbException && !ct.IsCancellationRequested)
+            {
+                logger.LogWarning(e, "Routing notification {NotificationId} failed", row.Id);
+                foreach (var entry in db.ChangeTracker.Entries<NotificationDelivery>()
+                    .Where(x => x.State == EntityState.Added && x.Entity.NotificationId == row.Id)
+                    .ToList())
+                {
+                    entry.State = EntityState.Detached;
+                }
+
+                AddDead(row, $"Routing failed: {e.Message}");
+            }
         }
 
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return rows.Count;
     }
 
     /// <summary>Sends every immediately-due delivery. Returns how many it settled.</summary>
     public async Task<int> DeliverAsync(CancellationToken ct)
     {
-        var ids = await NotificationDeliverySql.ClaimDueAsync(db, BatchSize, ct);
+        var ids = await NotificationDeliverySql.ClaimDueAsync(db, clock.GetUtcNow(), BatchSize, ct);
         if (ids.Count == 0)
         {
             return 0;
         }
 
-        var deliveries = await db.NotificationDeliveries.Where(d => ids.Contains(d.Id)).ToListAsync(ct);
+        var deliveries = await db.NotificationDeliveries
+            .Where(d => ids.Contains(d.Id)).OrderBy(d => d.Id).ToListAsync(ct);
         var notifications = await NotificationsOfAsync(deliveries, ct);
+
+        // Each outcome is saved the moment it is known, not once for the batch. A send is a side
+        // effect nothing can take back: a batch saved at the end lost the "sent" of every message
+        // already handed over whenever a later row threw or the process died, and the lease then
+        // brought all of them round to be sent again.
         foreach (var delivery in deliveries)
         {
+            if (delivery.Attempts >= NotificationRouting.MaxAttempts)
+            {
+                // Every attempt that records an outcome stops at the ceiling (Fail settles the
+                // last one as dead), so a row claimed at it has had attempts that recorded
+                // nothing — a send that took the process down, over and over. Sending it once
+                // more would only do that again.
+                GiveUp(delivery);
+                await db.SaveChangesAsync(ct);
+                continue;
+            }
+
+            // Counted, and saved, as the send starts — not when the batch was claimed. A pass that
+            // dies on its first row would otherwise charge an attempt to every row behind it that
+            // it never reached, and the rows that happen to share a batch with one that kills the
+            // process would reach the ceiling beside it without once being handed to a transport.
+            delivery.Attempts++;
+            await db.SaveChangesAsync(ct);
+
             await SendAsync(delivery, notifications[delivery.NotificationId], ct);
+            await db.SaveChangesAsync(ct);
         }
 
-        await db.SaveChangesAsync(ct);
         return deliveries.Count;
     }
 
@@ -116,7 +176,7 @@ public sealed class NotificationDeliveryService(
     /// </summary>
     public async Task<int> RunDigestAsync(CancellationToken ct)
     {
-        var ids = await NotificationDeliverySql.ClaimDueDigestAsync(db, ct);
+        var ids = await NotificationDeliverySql.ClaimDueDigestAsync(db, clock.GetUtcNow(), ct);
         if (ids.Count == 0)
         {
             return 0;
@@ -124,6 +184,28 @@ public sealed class NotificationDeliveryService(
 
         var claimed = await db.NotificationDeliveries
             .Where(d => ids.Contains(d.Id)).OrderBy(d => d.Id).ToListAsync(ct);
+
+        // The ceiling the immediate path applies, applied here too. The claim counts an attempt on
+        // every row it takes, and a summary whose pass keeps throwing before it records anything —
+        // a read refused, the process dying — would otherwise be claimed again on every lease and
+        // never stop. One recipient's rows share one outcome, so counting at the claim charges no
+        // row for another's send.
+        var exhausted = claimed.Where(d => d.Attempts > NotificationRouting.MaxAttempts).ToList();
+        if (exhausted.Count > 0)
+        {
+            foreach (var delivery in exhausted)
+            {
+                GiveUp(delivery);
+            }
+
+            claimed = [.. claimed.Except(exhausted)];
+            if (claimed.Count == 0)
+            {
+                await db.SaveChangesAsync(ct);
+                return exhausted.Count;
+            }
+        }
+
         var notifications = await NotificationsOfAsync(claimed, ct);
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == claimed[0].RecipientUserId, ct);
 
@@ -137,7 +219,7 @@ public sealed class NotificationDeliveryService(
         {
             db.NotificationDeliveries.RemoveRange(claimed);
             await db.SaveChangesAsync(ct);
-            return claimed.Count;
+            return claimed.Count + exhausted.Count;
         }
 
         var paidChannelsAllowed = await PaidChannelsAllowedAsync(ct);
@@ -163,7 +245,7 @@ public sealed class NotificationDeliveryService(
         if (wanted.Count == 0)
         {
             await db.SaveChangesAsync(ct);
-            return claimed.Count;
+            return claimed.Count + exhausted.Count;
         }
 
         // Each line is that event's own subject: already a one-line summary, already translated,
@@ -185,8 +267,20 @@ public sealed class NotificationDeliveryService(
         // A summary is one channel's: every line in it was deferred by the same channel, and the
         // claim gathers one recipient's due deferrals — which cannot span channels while only one
         // of them defers at all. A second deferring channel has to make the claim name its own.
-        var result = await channels.Of(claimed[0].Channel)
-            .SendAsync(user, MessageTemplateCatalog.NotifyDigest, values, ct);
+        MessageResult result;
+        try
+        {
+            result = await channels.Of(claimed[0].Channel)
+                .SendAsync(user, MessageTemplateCatalog.NotifyDigest, values, ct);
+        }
+        catch (Exception e) when (!ct.IsCancellationRequested)
+        {
+            // Recorded as a failed summary rather than left to escape: escaping skipped the save,
+            // so the attempt ceiling never reached these rows and the lease brought them back
+            // without end.
+            logger.LogWarning(e, "Sending the daily summary to {UserId} failed", user.Id);
+            result = MessageResult.Failed(e.Message);
+        }
 
         if (result.Sent)
         {
@@ -208,7 +302,7 @@ public sealed class NotificationDeliveryService(
         }
 
         await db.SaveChangesAsync(ct);
-        return claimed.Count;
+        return claimed.Count + exhausted.Count;
     }
 
     /// <summary>
@@ -462,13 +556,27 @@ public sealed class NotificationDeliveryService(
         // is needed: the notification stays in the inbox, which is where somebody who switched a
         // channel off reads it. The daily summary already re-asks the same question on its own way
         // out; the immediate path asks it here.
-        if (await SuppressedNowAsync(user, row, channel, ct))
+        MessageResult result;
+        try
         {
-            db.NotificationDeliveries.Remove(delivery);
+            if (await SuppressedNowAsync(user, row, channel, ct))
+            {
+                db.NotificationDeliveries.Remove(delivery);
+                return;
+            }
+
+            result = await channel.SendAsync(user, row.TemplateKey, ValuesFor(row, user), ct);
+        }
+        catch (Exception e) when (!ct.IsCancellationRequested)
+        {
+            // Whatever throws on the way out — a template renamed while the row was backing off, a
+            // settings read the database refused — is this row's failed attempt, recorded and put
+            // on the ladder like any other. Left to escape, it skipped the only place the attempt
+            // ceiling is applied, so the row came back with every lease and never stopped.
+            logger.LogWarning(e, "Sending delivery {DeliveryId} failed", delivery.Id);
+            Fail(delivery, e.Message, NotificationDeliveryStatus.Pending, row.Category, user);
             return;
         }
-
-        var result = await channel.SendAsync(user, row.TemplateKey, ValuesFor(row, user), ct);
 
         // What the day is charged for this row, from what the transport was actually handed. Zero
         // says nothing billed by the piece changed hands — a channel that is not billed that way,
@@ -773,6 +881,14 @@ public sealed class NotificationDeliveryService(
         delivery.Status = retryStatus;
         delivery.NotBefore = DueOutsideTheirNight(
             clock.GetUtcNow() + NotificationRouting.RetryDelay(delivery.Attempts), category, user);
+    }
+
+    /// <summary>Settles a row whose attempts all ended without recording anything.</summary>
+    private static void GiveUp(NotificationDelivery delivery)
+    {
+        delivery.Status = NotificationDeliveryStatus.Dead;
+        delivery.Error = Truncate(
+            $"Given up after {NotificationRouting.MaxAttempts} attempts that recorded no outcome.");
     }
 
     /// <summary>The column is capped, and this runs inside the path that records a failure.</summary>

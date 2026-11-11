@@ -208,6 +208,53 @@ public sealed class SyncNamelessPhoneUserTests : IAsyncLifetime, IDisposable, IC
         after.UploadedByUserId.ShouldBe(otherId);
     }
 
+    [Fact]
+    public async Task Another_accounts_phone_user_is_not_renamed_by_describing_it_while_the_accounts_own_is()
+    {
+        // The other account's phone describes its user; its identifier is no secret, since the
+        // trips stream names the phone user behind every recording it hands out.
+        var theirs = Guid.CreateVersion7();
+        (await UploadAsync(other, otherSet, new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            people = new[] { new { deviceUserId = theirs, username = "theirs", firstName = "Ana" } },
+        })).GetProperty("people")[0].GetProperty("status").GetString().ShouldBe("created");
+        var described = await PersonAsync(theirs);
+        described.ShouldNotBeNull();
+
+        // This account describes that user under a name of its own, beside one of its own users.
+        var mine = Guid.CreateVersion7();
+        var answer = await UploadAsync(owner, ownerSet, new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            people = new object[]
+            {
+                new { deviceUserId = theirs, username = "taken", firstName = "Mallory" },
+                new { deviceUserId = mine, username = "mine", firstName = "Ion" },
+            },
+        });
+        answer.GetProperty("people").EnumerateArray().Select(p => p.GetProperty("status").GetString())
+            .ShouldBe(["unchanged", "created"]);
+
+        // Its own user it may rename, and does.
+        (await UploadAsync(owner, ownerSet, new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            people = new[] { new { deviceUserId = mine, username = "mine-renamed", firstName = "Ion" } },
+        })).GetProperty("people")[0].GetProperty("status").GetString().ShouldBe("updated");
+        (await PersonAsync(mine))!.Username.ShouldBe("mine-renamed");
+
+        // The other account's user is as its own phone left it, its sender included, so a later
+        // upload of this account cannot claim it for having described it once.
+        var after = await PersonAsync(theirs);
+        after.ShouldNotBeNull();
+        (after.Username, after.FirstName, after.UploadedByUserId, after.UpdatedAt)
+            .ShouldBe((described.Username, described.FirstName, otherId, described.UpdatedAt));
+    }
+
     public ValueTask DisposeAsync()
     {
         Dispose();

@@ -68,6 +68,9 @@ vi.mock('../../api/hooks.ts', () => ({
     caveMeshCounts.push(maxCaves);
     return Promise.resolve(caveMeshesInView);
   },
+  // Named for the same reason: the scans-in-view loader asks through it. No scans in this file,
+  // so the layer, on by default, hears an empty answer rather than a failure it would announce.
+  fetchCaveScansInView: () => Promise.resolve({ items: [], total: 0 }),
   // What a reveal reads to find out where the thing it names is, through the query cache.
   featureQuery: (id: string) => ({
     queryKey: ['features', id],

@@ -2,7 +2,9 @@
 using FluentValidation;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Scans;
 using SilexGis.Domain.Surveys;
+using SilexGis.Infrastructure.Scans;
 
 namespace SilexGis.Api.Features.SurveyUploads;
 
@@ -17,6 +19,7 @@ namespace SilexGis.Api.Features.SurveyUploads;
 /// <param name="Outputs">The output catalogue and what a run produces when an upload asks for nothing.</param>
 /// <param name="PollIntervalSeconds">How often a device should ask how its upload is getting on.</param>
 /// <param name="PublicLinks">What the calling account's uploads get by way of a result link when the upload does not say.</param>
+/// <param name="PointCloud">What an upload of origin <c>pointcloud</c> may send: its own cap and extensions, apart from a survey tool's.</param>
 public sealed record SurveyUploadCapabilitiesDto(
     int ContractVersion,
     IReadOnlyList<string> Sources,
@@ -27,7 +30,31 @@ public sealed record SurveyUploadCapabilitiesDto(
     SurveyCaveCreationCapabilitiesDto CaveCreation,
     SurveyOutputCapabilitiesDto Outputs,
     int PollIntervalSeconds,
-    SurveyPublicLinkCapabilitiesDto PublicLinks);
+    SurveyPublicLinkCapabilitiesDto PublicLinks,
+    SurveyPointCloudCapabilitiesDto PointCloud);
+
+/// <param name="MaxFileBytes">The largest point cloud file an upload may send, in bytes.</param>
+/// <param name="MaxFilesPerUpload">How many files a point-cloud upload declares: one, the cloud itself.</param>
+/// <param name="AcceptedExtensions">The extensions a point cloud may have, lower-case with the dot.</param>
+/// <param name="Recording">What an upload of origin <c>mandeye</c>, a scanner's raw recording folder, may send.</param>
+public sealed record SurveyPointCloudCapabilitiesDto(
+    long MaxFileBytes, int MaxFilesPerUpload, IReadOnlyList<string> AcceptedExtensions, SurveyRecordingCapabilitiesDto Recording);
+
+/// <summary>
+/// The limits of a raw recording upload. Every file of the folder is declared, by its bare name,
+/// as the archive; a name the recording does not hold (a camera folder's pictures, for one) is
+/// refused, so a device leaves those out.
+/// </summary>
+/// <param name="MaxFileBytes">The largest single file of the recording, in bytes.</param>
+/// <param name="MaxTotalBytes">The recording's files together, at most, in bytes.</param>
+/// <param name="MaxFiles">How many files a recording may declare.</param>
+/// <param name="AcceptedExtensions">The extensions a recording's files may have, lower-case with the dot.</param>
+/// <param name="OdometryWorkerFactor">
+/// How many times the recording's size its odometry needs free on the processing worker's disk
+/// while it runs, so a screen can ask about that room before the upload starts.
+/// </param>
+public sealed record SurveyRecordingCapabilitiesDto(
+    long MaxFileBytes, long MaxTotalBytes, int MaxFiles, IReadOnlyList<string> AcceptedExtensions, int OdometryWorkerFactor);
 
 /// <param name="Enabled">
 /// Whether an upload of the calling account gets a link when it does not ask either way: the
@@ -125,6 +152,24 @@ public sealed record SurveyUploadPublicLinkMintRequest(SurveyUploadLinkAudience?
 /// <param name="Pipeline">What the processing run is asked to do.</param>
 /// <param name="DocumentsVisibility">Who the documents this upload makes are open to; the cave's own visibility when empty.</param>
 /// <param name="PublicLink">What this upload asks of its public link; the account's preferences decide when empty.</param>
+/// <param name="Display">
+/// A point cloud's choice of how much to show, decided ahead of the estimate. Empty, the run
+/// tiles a cloud under the installation's thresholds and stops at the estimate for one over
+/// them, waiting for a rerun that chooses. Ignored for a survey tool's upload.
+/// </param>
+/// <param name="Profiles">
+/// A point cloud's processing profiles, at most one per step: each one's values are laid over the
+/// step's defaults and the upload stores the result, never the profile. A step no profile is named
+/// for runs with its defaults. Each one named is remembered as the caller's last choice for its
+/// step. Ignored for a survey tool's upload.
+/// </param>
+/// <param name="ExternalSteps">
+/// A scan's steps, by id, that this upload has done on another computer instead of by the
+/// server's worker — such as <c>hdmapping.odometry</c> for a recording whose odometry is run on
+/// a desktop. The run stops before each with its inputs offered as a download and carries on
+/// when the step's outputs are uploaded. Each must be a step of the upload's recipe that a
+/// worker would otherwise run. Refused for a survey tool's upload.
+/// </param>
 public sealed record SurveyUploadOpenRequest(
     string Source,
     SurveyUploadClientInfo? Client,
@@ -137,10 +182,36 @@ public sealed record SurveyUploadOpenRequest(
     IReadOnlyList<SurveyUploadFileDeclaration> Files,
     SurveyUploadPipelineRequest? Pipeline,
     Visibility? DocumentsVisibility,
-    SurveyUploadPublicLinkRequest? PublicLink = null);
+    SurveyUploadPublicLinkRequest? PublicLink = null,
+    SurveyUploadDisplayRequest? Display = null,
+    IReadOnlyList<Guid>? Profiles = null,
+    IReadOnlyList<string>? ExternalSteps = null);
 
 /// <summary>Runs an upload's processing again, with the options it ran with or with new ones.</summary>
-public sealed record SurveyUploadRerunRequest(SurveyUploadPipelineRequest? Pipeline);
+/// <param name="Pipeline">A survey archive's options; ignored for a point cloud.</param>
+/// <param name="Display">A point cloud's choice of how much to show: the recipe is rebuilt around it. Null keeps the recipe as it is, thinning included.</param>
+/// <param name="FromStep">A point cloud's step to do again even where an earlier run's product would do; the steps after it follow. Applies to this rerun only.</param>
+/// <param name="Profiles">A point cloud's processing profiles for this run, at most one per step, resolved into the recipe as with an upload; the steps no profile is named for keep the values they had.</param>
+public sealed record SurveyUploadRerunRequest(
+    SurveyUploadPipelineRequest? Pipeline,
+    SurveyUploadDisplayRequest? Display = null,
+    string? FromStep = null,
+    IReadOnlyList<Guid>? Profiles = null);
+
+/// <summary>How much of a point cloud to show: <c>full</c>, one point per <c>voxel</c> of <c>voxelCm</c>, or <c>everyNth</c> point.</summary>
+public sealed record SurveyUploadDisplayRequest(string Method, double? VoxelCm = null, int? EveryNth = null);
+
+/// <summary>The rules a display choice meets wherever it is sent — with the upload or with a rerun.</summary>
+public sealed class SurveyUploadDisplayRequestValidator : AbstractValidator<SurveyUploadDisplayRequest>
+{
+    public SurveyUploadDisplayRequestValidator()
+    {
+        RuleFor(x => x.Method).Must(m => PointCloudDisplayChoice.Methods.Contains(m))
+            .WithMessage("The display method must be one of: full, voxel, everyNth.");
+        RuleFor(x => x.VoxelCm).ExclusiveBetween(0, 1000).When(x => x.VoxelCm is not null);
+        RuleFor(x => x.EveryNth).InclusiveBetween(1, 10000).When(x => x.EveryNth is not null);
+    }
+}
 
 /// <summary>The cave an upload belongs to, as the caller may see it.</summary>
 /// <param name="Url">The cave's page, relative to the installation's public address.</param>
@@ -155,6 +226,133 @@ public sealed record SurveyUploadCaveSurveyDto(Guid Id, string Title);
 /// <param name="Date">The survey's date, once read from the archive.</param>
 /// <param name="Team">The survey party, once read from the archive.</param>
 public sealed record SurveyUploadSurveyDto(string Title, string? Name, DateOnly? Date, string? Team);
+
+/// <summary>The coordinate system a point cloud's file named, as it named it.</summary>
+public sealed record SurveyUploadPointCloudCrsDto(int? HorizontalEpsg, int? VerticalEpsg, string? Wkt);
+
+/// <summary>
+/// What is known about an uploaded point cloud: its header's facts once the run has read them,
+/// and what tiling added once a worker has tiled it. Null on an upload of a survey archive, and
+/// on a point cloud whose header has not been read yet.
+/// </summary>
+/// <param name="ModelId">The model that shows the scan.</param>
+/// <param name="PointCount">How many points the file holds.</param>
+/// <param name="PointFormat">The LAS point record format, 0 to 10.</param>
+/// <param name="LasVersion">The LAS version, such as <c>1.4</c>.</param>
+/// <param name="Compressed">Whether the points are LAZ-compressed.</param>
+/// <param name="HasRgb">Whether each point carries a colour.</param>
+/// <param name="HasIntensity">Whether the points carry return intensities; null until a step that reads the points has answered.</param>
+/// <param name="SizeM">The extent's size per axis, in the file's units: a measurement, shown to everybody who sees the scan.</param>
+/// <param name="Georeferenced">Whether the file names a coordinate system — which makes its original a position, downloadable only with the exact-location right.</param>
+/// <param name="Crs">The coordinate system named, with the exact-location right only.</param>
+/// <param name="Min">The extent's lowest corner, with the exact-location right only.</param>
+/// <param name="Max">The extent's highest corner, with the exact-location right only.</param>
+/// <param name="GeneratingSoftware">What wrote the file, as it named itself.</param>
+/// <param name="TileBytes">The tileset's size, once tiled.</param>
+/// <param name="TileCount">How many tiles, once tiled.</param>
+/// <param name="TilerVersion">The tiler's version, once tiled.</param>
+/// <param name="TilesetUrl">A signed address of the tileset's root, good for a session, once tiled; the tiles are in the cloud's own frame and carry no coordinates, so it goes to everybody who may read the upload.</param>
+/// <param name="DisplayVoxelM">The voxel the shown copy was thinned to, or null when the whole cloud was tiled.</param>
+/// <param name="DisplayEveryNth">The stride the shown copy was thinned by, when every n-th point was kept.</param>
+/// <param name="DisplayPointCount">How many points the shown copy holds, when it was thinned.</param>
+/// <param name="OriginShift">What was subtracted from the file's coordinates before tiling; a position for a georeferenced file, so with the exact-location right only.</param>
+/// <param name="Estimate">What a thinned copy would keep at each voxel size, once the worker has estimated it.</param>
+/// <param name="Advice">The installation's advice on thinning, with the thresholds it was judged by.</param>
+/// <param name="Recording">What reading a raw recording found, when the cloud came from one; measurements only, no position.</param>
+/// <param name="SessionUrl">
+/// A signed, short-lived address of the scan's HDMapping session — what the odometry made, or
+/// the session sent back for it — for refining in HDMapping's desktop program and sending back
+/// as the scan's next version. The session holds the scanner's path, so with the exact-location
+/// right only; null without it, and for a scan that has no session.
+/// </param>
+/// <param name="HasCentreline">
+/// Whether a centreline was drawn from the scanner's path, to be read from the survey model's
+/// centreline route. Like the path itself it is a position, so false without the exact-location
+/// right whatever the run made.
+/// </param>
+/// <param name="Pictures">
+/// The plan and profile pictures the run drew, with signed addresses good for a session. They are
+/// drawn in the scan's own frame and carry no coordinate, like the tiles, so they go to everybody
+/// who may read the upload; null until a run has drawn them.
+/// </param>
+public sealed record SurveyUploadPointCloudDto(
+    Guid ModelId,
+    long PointCount,
+    int PointFormat,
+    string LasVersion,
+    bool Compressed,
+    bool HasRgb,
+    bool? HasIntensity,
+    double[] SizeM,
+    bool Georeferenced,
+    SurveyUploadPointCloudCrsDto? Crs,
+    double[]? Min,
+    double[]? Max,
+    string? GeneratingSoftware,
+    long? TileBytes,
+    int? TileCount,
+    string? TilerVersion,
+    string? TilesetUrl,
+    double? DisplayVoxelM,
+    int? DisplayEveryNth,
+    long? DisplayPointCount,
+    double[]? OriginShift,
+    SurveyUploadPointCloudEstimateDto? Estimate,
+    SurveyUploadPointCloudAdviceDto? Advice,
+    SurveyUploadRecordingDto? Recording,
+    string? SessionUrl = null,
+    bool HasCentreline = false,
+    SurveyUploadPointCloudPicturesDto? Pictures = null);
+
+/// <summary>A scan's top view and extended profile, as PNG pictures, and what a legend needs to explain them.</summary>
+/// <param name="PlanUrl">A signed address of the top view: each cell coloured by the lowest point in it (the floor), or by the points' mean intensity.</param>
+/// <param name="ProfileUrl">A signed address of the extended profile, unrolled along the centreline; null when the scan has no centreline.</param>
+/// <param name="ColourBy"><c>height</c> or <c>intensity</c>.</param>
+/// <param name="ValueLow">Where the colour scale starts: metres above the cloud's lowest point, or an intensity.</param>
+/// <param name="ValueHigh">Where the colour scale ends.</param>
+/// <param name="PixelM">The top view's pixel, in metres.</param>
+/// <param name="PlanSize">The top view's width and height, in pixels.</param>
+/// <param name="ProfilePixelM">The profile's pixel, in metres.</param>
+/// <param name="ProfileSize">The profile's width and height, in pixels.</param>
+/// <param name="ProfileLengthM">The length of the centreline the profile is unrolled along, in metres.</param>
+public sealed record SurveyUploadPointCloudPicturesDto(
+    string PlanUrl,
+    string? ProfileUrl,
+    string ColourBy,
+    double ValueLow,
+    double ValueHigh,
+    double PixelM,
+    int[] PlanSize,
+    double? ProfilePixelM,
+    int[]? ProfileSize,
+    double? ProfileLengthM);
+
+/// <summary>What an inspection read of a raw scanner recording.</summary>
+/// <param name="ChunkCount">How many lidar/IMU chunk pairs the recording holds.</param>
+/// <param name="SensorCount">How many lidar sensors wrote it, or null when neither a calibration nor serial numbers said.</param>
+/// <param name="HasCalibration">Whether it carries a calibration of its sensors.</param>
+/// <param name="HasGnss">Whether a GNSS log holds anything; such a recording is treated as georeferenced.</param>
+/// <param name="DurationSeconds">From the first to the last IMU sample, or null when the logs did not say.</param>
+/// <param name="PointCount">The points of every lidar chunk together.</param>
+/// <param name="ImuHasHeader">Whether the IMU logs open with a line naming their columns.</param>
+/// <param name="Bytes">The recording's files together, in bytes.</param>
+public sealed record SurveyUploadRecordingDto(
+    int ChunkCount, int? SensorCount, bool HasCalibration, bool HasGnss, double? DurationSeconds, long PointCount, bool ImuHasHeader, long Bytes);
+
+/// <summary>One row of the estimate: what tiling at this voxel size (null for the full cloud) would come to.</summary>
+public sealed record SurveyUploadPointCloudEstimateRowDto(double? VoxelCm, long? Points, long? EstimatedTileBytes, int? EstimatedSeconds);
+
+/// <summary>The estimate table: the full cloud's row and one row per voxel size counted.</summary>
+public sealed record SurveyUploadPointCloudEstimateDto(
+    SurveyUploadPointCloudEstimateRowDto Full, IReadOnlyList<SurveyUploadPointCloudEstimateRowDto> Voxels);
+
+/// <summary>The installation's advice on thinning a cloud before it is shown.</summary>
+/// <param name="Level"><c>none</c>, <c>warn</c> or <c>advise</c>.</param>
+/// <param name="SuggestedVoxelCm">The voxel size pre-selected for the person, or null when none is needed.</param>
+/// <param name="WarnPoints">The point count above which thinning is suggested.</param>
+/// <param name="AdvisePoints">The point count above which thinning is strongly advised.</param>
+/// <param name="WarnTileBytes">The estimated tile size above which thinning is suggested.</param>
+public sealed record SurveyUploadPointCloudAdviceDto(string Level, double? SuggestedVoxelCm, long WarnPoints, long AdvisePoints, long WarnTileBytes);
 
 /// <summary>Why a run failed, in a form a screen can translate and in words.</summary>
 public sealed record SurveyUploadErrorDto(string Code, string? Message);
@@ -256,10 +454,16 @@ public sealed record SurveyUploadPublicLinkDto(
 /// <c>protected-cave</c> or <c>revoked</c>; null otherwise.
 /// </param>
 /// <param name="OlderVersions">What the survey's older versions hold of their runs' outputs, and whether that warrants a warning.</param>
+/// <param name="PointCloud">The scan's facts, for an upload of a point cloud whose header has been read.</param>
 /// <param name="CreatedAt">When the upload was opened.</param>
 /// <param name="ExpiresAt">When an upload still receiving files is abandoned.</param>
 /// <param name="StartedAt">When the first run started.</param>
 /// <param name="FinishedAt">When the last run finished.</param>
+/// <param name="External">
+/// The step a scan's run stopped before because it is done on another computer, and what to send
+/// back for it; null when the run is not waiting for one, and for a caller who may not write to
+/// the cave (the download and the upload back both need Write).
+/// </param>
 public sealed record SurveyUploadDto(
     Guid Id,
     SurveyUploadStatus Status,
@@ -272,6 +476,7 @@ public sealed record SurveyUploadDto(
     DateTimeOffset Version,
     bool CaveCreated,
     SurveyUploadSurveyDto Survey,
+    SurveyUploadPointCloudDto? PointCloud,
     IReadOnlyList<SurveyUploadFileDto> Files,
     IReadOnlyList<SurveyUploadArtefactDto> Artefacts,
     SurveyUploadCompilerDto? Compiler,
@@ -285,7 +490,24 @@ public sealed record SurveyUploadDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset ExpiresAt,
     DateTimeOffset? StartedAt,
-    DateTimeOffset? FinishedAt);
+    DateTimeOffset? FinishedAt,
+    SurveyUploadExternalWaitDto? External = null);
+
+/// <summary>A scan's step done on another computer, which the run waits for.</summary>
+/// <param name="StepId">The step's registry id, such as <c>hdmapping.odometry</c>.</param>
+/// <param name="StepName">The step's name, in English, as the download's README gives it.</param>
+/// <param name="Tool">The program that does the step, such as <c>hdmapping</c>.</param>
+/// <param name="Outputs">Each product the step makes, the names it may be sent back under, and whether it has arrived.</param>
+public sealed record SurveyUploadExternalWaitDto(
+    string StepId,
+    string StepName,
+    string Tool,
+    IReadOnlyList<SurveyUploadExternalOutputDto> Outputs);
+
+/// <summary>One product of a step done on another computer.</summary>
+/// <param name="Names">The file names it is accepted under; the first is the one to use.</param>
+/// <param name="Received">Whether it has been sent back already.</param>
+public sealed record SurveyUploadExternalOutputDto(IReadOnlyList<string> Names, bool Received);
 
 /// <summary>
 /// What the survey's versions older than its newest one still hold of what their runs produced —
@@ -324,6 +546,7 @@ public sealed record SurveyUploadUploaderDto(Guid Id, string DisplayName);
 /// <param name="CaveName">The cave's name, as the caller sees it.</param>
 /// <param name="Archive">The survey archive, when it was archived and is still there.</param>
 /// <param name="TherionSources">The Therion sources sent with it, importable on their own.</param>
+/// <param name="PointCloud">The scan's facts, for an upload of a point cloud whose header has been read.</param>
 /// <param name="PublicLink">The upload's public link, when it has one that opens now.</param>
 public sealed record SurveyUploadListItemDto(
     Guid Id,
@@ -340,6 +563,7 @@ public sealed record SurveyUploadListItemDto(
     DateTimeOffset CreatedAt,
     SurveyUploadListFileDto? Archive,
     IReadOnlyList<SurveyUploadListFileDto> TherionSources,
+    SurveyUploadPointCloudDto? PointCloud,
     string StatusPageUrl,
     SurveyUploadPublicLinkDto? PublicLink);
 
@@ -371,7 +595,17 @@ public sealed class SurveyUploadOpenRequestValidator : AbstractValidator<SurveyU
         RuleForEach(x => x.Files).NotNull().WithMessage("A file declaration may not be empty.");
         RuleFor(x => x.Pipeline!).SetValidator(new SurveyUploadPipelineRequestValidator()).When(x => x.Pipeline is not null);
         RuleFor(x => x.PublicLink!.Audience).IsInEnum().When(x => x.PublicLink?.Audience is not null);
+        RuleFor(x => x.Display!).SetValidator(new SurveyUploadDisplayRequestValidator()).When(x => x.Display is not null);
+        RuleFor(x => x.Profiles!.Count).LessThanOrEqualTo(ProcessingProfileResolver.MaxProfiles)
+            .OverridePropertyName("profiles").When(x => x.Profiles is not null);
+        // A recipe holds a handful of steps; a longer list is not a choice anybody made.
+        RuleFor(x => x.ExternalSteps!.Count).LessThanOrEqualTo(MaxExternalSteps)
+            .OverridePropertyName("externalSteps").When(x => x.ExternalSteps is not null);
+        RuleForEach(x => x.ExternalSteps).NotEmpty().MaximumLength(100).When(x => x.ExternalSteps is not null);
     }
+
+    /// <summary>The most steps one upload may name as done on another computer.</summary>
+    public const int MaxExternalSteps = 16;
 }
 
 public sealed class SurveyUploadPublicLinkMintRequestValidator : AbstractValidator<SurveyUploadPublicLinkMintRequest>
@@ -382,8 +616,15 @@ public sealed class SurveyUploadPublicLinkMintRequestValidator : AbstractValidat
 
 public sealed class SurveyUploadRerunRequestValidator : AbstractValidator<SurveyUploadRerunRequest>
 {
-    public SurveyUploadRerunRequestValidator() =>
+    public SurveyUploadRerunRequestValidator()
+    {
         RuleFor(x => x.Pipeline!).SetValidator(new SurveyUploadPipelineRequestValidator()).When(x => x.Pipeline is not null);
+        RuleFor(x => x.Display!).SetValidator(new SurveyUploadDisplayRequestValidator()).When(x => x.Display is not null);
+        RuleFor(x => x.FromStep).Must(id => ScanSteps.Find(id!) is not null).When(x => x.FromStep is not null)
+            .WithMessage("The step to run again from is not one this server knows.");
+        RuleFor(x => x.Profiles!.Count).LessThanOrEqualTo(ProcessingProfileResolver.MaxProfiles)
+            .OverridePropertyName("profiles").When(x => x.Profiles is not null);
+    }
 }
 
 public sealed class SurveyUploadPipelineRequestValidator : AbstractValidator<SurveyUploadPipelineRequest>

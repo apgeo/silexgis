@@ -29,6 +29,22 @@ public enum SurveySourceKind : short
 
     /// <summary>An archive exported by a survey app, such as TopoDroid (<c>.zip</c>).</summary>
     TopoDroidArchive = 4,
+
+    /// <summary>
+    /// A LiDAR point cloud as a LAS file, compressed (<c>.laz</c>) or not (<c>.las</c>): the
+    /// uploaded original of a scan, kept so the scan can be tiled again with a later tool.
+    /// </summary>
+    PointCloud = 5,
+
+    /// <summary>
+    /// One file of a raw handheld-scanner recording (MANDEYE): a lidar chunk, its IMU log, the
+    /// sensor serial numbers, a GNSS log or the calibration. Kept as the original the scan is
+    /// processed from, and processed again from when a later tool or other parameters ask.
+    /// </summary>
+    LidarRawSession = 6,
+
+    /// <summary>An HDMapping session: what lidar odometry made of a raw recording, kept so it can be refined or exported again.</summary>
+    HdmSession = 7,
 }
 
 /// <summary>

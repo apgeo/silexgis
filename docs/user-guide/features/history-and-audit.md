@@ -124,6 +124,20 @@ history that answered differently for a document that exists would disclose its 
 
 ---
 
+## Map-format exports
+
+Every export of caves, of surface features, of the listed geodata files or of one geodata file —
+GeoJSON, GPX, KML, CSV or zipped shapefile — is recorded in the audit trail before the file is
+handed over: who exported, which layer, in which format, how many rows, and whether a filter
+narrowed it. **The rows whose positions were moved or withheld for protection are named by their
+ids**; the others are only counted, so a large file does not put its whole list into the record.
+No position is ever recorded. An export that is refused records nothing.
+
+The cave and feature exports carry an **id** column first, so a row in a file can be traced
+back to the record it came from.
+
+---
+
 ## What is recorded about actions taken on behalf of others
 
 Where somebody acts for somebody else — an administrator putting a given-up notification back

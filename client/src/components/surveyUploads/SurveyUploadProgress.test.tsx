@@ -7,6 +7,7 @@ import en from '../../i18n/locales/en.json';
 import ro from '../../i18n/locales/ro.json';
 import { surveyUploadStageStates } from '../../api/hooks.ts';
 import SurveyUploadProgressPanel, { type SurveyUploadProgressView } from './SurveyUploadProgress.tsx';
+import { currentStageIndex } from './currentStage.ts';
 import { SURVEY_UPLOAD_REQUEST_ERROR_KEYS, SURVEY_UPLOAD_RUN_ERROR_KEYS } from './surveyUploadProblems.ts';
 
 /**
@@ -14,7 +15,7 @@ import { SURVEY_UPLOAD_REQUEST_ERROR_KEYS, SURVEY_UPLOAD_RUN_ERROR_KEYS } from '
  * and the results.
  */
 
-function show(view: Partial<SurveyUploadProgressView> & Pick<SurveyUploadProgressView, 'status'>) {
+function show(view: Partial<SurveyUploadProgressView> & Pick<SurveyUploadProgressView, 'status'>, logShown = true) {
   const full: SurveyUploadProgressView = {
     progress: 0,
     message: null,
@@ -25,7 +26,7 @@ function show(view: Partial<SurveyUploadProgressView> & Pick<SurveyUploadProgres
   };
   return render(
     <MemoryRouter>
-      <SurveyUploadProgressPanel view={full} />
+      <SurveyUploadProgressPanel view={full} logShown={logShown} />
     </MemoryRouter>,
   );
 }
@@ -73,6 +74,21 @@ describe('the progress view', () => {
     expect(screen.getByTestId('survey-upload-error-code')).toHaveTextContent('survey_pipeline.archive_invalid');
   });
 
+  it('points a failed compile to the log only when the page draws one', () => {
+    const failed = {
+      status: 'failed' as const,
+      progress: 60,
+      error: { code: 'survey_pipeline.compile_failed', message: null },
+      stages: surveyUploadStageStates({ status: 'failed', stage: 'compile' }),
+    };
+    show(failed);
+    expect(screen.getByTestId('survey-upload-error')).toHaveTextContent('The log below says where.');
+    cleanup();
+    show(failed, false);
+    expect(screen.getByTestId('survey-upload-error')).toHaveTextContent('Therion could not compile the survey.');
+    expect(screen.getByTestId('survey-upload-error')).not.toHaveTextContent('below');
+  });
+
   it('falls back to the server sentence for a code it has no wording for', () => {
     show({
       status: 'failed',
@@ -95,6 +111,10 @@ describe('the progress view', () => {
     expect(screen.getAllByRole('link', { name: 'Download' })).toHaveLength(2);
     expect(screen.getAllByRole('link', { name: 'View' })).toHaveLength(1);
     expect(screen.getByText('Therion 3D model (.lox)')).toBeInTheDocument();
+    // On a fill of their own, so they stand out of the card in the dark theme as in the light one.
+    for (const download of screen.getAllByRole('link', { name: 'Download' })) {
+      expect(download).toHaveClass('ant-btn-variant-filled');
+    }
   });
 
   it('lists an output that was asked for and not produced with its reason and no download', () => {
@@ -116,6 +136,42 @@ describe('the progress view', () => {
 
     expect(screen.getAllByRole('link', { name: 'Download' })).toHaveLength(1);
     expect(screen.getByTestId('survey-upload-artefact-error')).toHaveTextContent(en.surveyUploads.problems.outputMissing);
+  });
+
+  it('draws every finished step of a successful run alike, the first not lit up as the current one', () => {
+    const { container } = show({
+      status: 'succeeded',
+      progress: 100,
+      stages: surveyUploadStageStates({ status: 'succeeded', stage: 'read' }),
+    });
+
+    const steps = Array.from(container.querySelectorAll('.ant-steps-item'));
+    expect(steps.length).toBeGreaterThan(1);
+    expect(steps.every((step) => step.classList.contains('ant-steps-item-finish'))).toBe(true);
+    expect(container.querySelector('.ant-steps-item-active')).toBeNull();
+  });
+
+  it('marks the step a running upload is on as the current one, and no other', () => {
+    const { container } = show({
+      status: 'running',
+      progress: 40,
+      stages: surveyUploadStageStates({ status: 'running', stage: 'scaffold' }),
+    });
+
+    const active = container.querySelectorAll('.ant-steps-item-active');
+    expect(active).toHaveLength(1);
+    expect(active[0]).toHaveTextContent('Preparing the compilation');
+  });
+});
+
+describe('the current step', () => {
+  it('is the first step neither finished nor passed over', () => {
+    expect(currentStageIndex([{ state: 'done' }, { state: 'skipped' }, { state: 'active' }, { state: 'pending' }])).toBe(2);
+    expect(currentStageIndex([{ state: 'done' }, { state: 'failed' }, { state: 'pending' }])).toBe(1);
+  });
+
+  it('is past the last step once every step has finished', () => {
+    expect(currentStageIndex([{ state: 'done' }, { state: 'skipped' }, { state: 'done' }])).toBe(3);
   });
 });
 

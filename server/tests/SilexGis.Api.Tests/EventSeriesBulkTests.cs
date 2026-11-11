@@ -192,6 +192,18 @@ public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable, IClassFi
         accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await accepted.Content.ReadAsStringAsync());
         Title(await BySeriesAsync(owner, seriesId), ids[3])!.ShouldContain("Whole run renamed");
 
+        // The edit answers the versions it produced — the anchor's and its run's, filed under the
+        // event — so a second edit a moment later carries them without a read in between.
+        accepted.Content.Headers.ContentLocation!.OriginalString.ShouldBe($"/api/v1/events/{ids[1]}");
+        var afterEdit = await owner.GetAsync($"/api/v1/events/{ids[1]}");
+        accepted.Headers.ETag!.Tag.ShouldBe(afterEdit.Headers.ETag!.Tag);
+        var answeredRun = accepted.Headers.GetValues("X-Series-Version").Single();
+        answeredRun.ShouldBe(afterEdit.Headers.GetValues("X-Series-Version").Single());
+        (await owner.PutWithIfMatchAsync(
+                $"/api/v1/events/{ids[1]}/series/following", Body("Whole run renamed again", start.AddDays(7)),
+                answeredRun))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
         // An occurrence before the anchor is not in the run the edit writes, so a change to it
         // leaves the anchor's run version where it was.
         var laterRead = await owner.GetAsync($"/api/v1/events/{ids[2]}");
@@ -646,6 +658,81 @@ public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable, IClassFi
         Frequency(after, ids[1]).ShouldBe("fortnightly");
         Frequency(after, ids[2]).ShouldBe("fortnightly");
         Frequency(after, ids[3]).ShouldBe("fortnightly");
+    }
+
+    /// <summary>
+    /// A plain move that keeps the repetition but lengthens every occurrence is held to the same
+    /// rule the generator holds a create and a re-spacing to: occurrences that would run into each
+    /// other are refused whole, with the generator's code, and nothing is written. The same move
+    /// with a length that still clears the next occurrence goes through.
+    /// </summary>
+    [Fact]
+    public async Task A_move_whose_occurrences_would_run_into_each_other_is_refused_whole()
+    {
+        var day = new DateOnly(2057, 6, 1);
+        var (seriesId, ids) = await SeriesAsync("Camp", day, 3);
+
+        var refused = await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[0]}/series/following",
+            Body("Camp", day.AddDays(1), endDate: day.AddDays(10)));
+        var payload = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, payload);
+        payload.ShouldContain("event.recurrence_overlapping");
+
+        var untouched = await BySeriesAsync(owner, seriesId);
+        untouched.Select(x => x.GetProperty("startDate").GetString()).OrderBy(x => x)
+            .ShouldBe(["2057-06-01", "2057-06-08", "2057-06-15"]);
+        untouched.Select(x => x.GetProperty("endDate").ValueKind).ShouldAllBe(kind => kind == JsonValueKind.Null);
+
+        var accepted = await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[0]}/series/following",
+            Body("Camp", day.AddDays(1), endDate: day.AddDays(7)));
+        accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await accepted.Content.ReadAsStringAsync());
+        var after = await BySeriesAsync(owner, seriesId);
+        after.Select(x => x.GetProperty("startDate").GetString()).OrderBy(x => x)
+            .ShouldBe(["2057-06-02", "2057-06-09", "2057-06-16"]);
+    }
+
+    /// <summary>
+    /// The occurrences before the anchor are not moved, and a move that carries the anchor onto
+    /// the one before it — here the second of three-day camps pulled back onto the last day of
+    /// the first — is refused whole, by a plain shift and by a re-spacing alike. A day later it
+    /// fits and goes through.
+    /// </summary>
+    [Fact]
+    public async Task A_move_onto_the_occurrence_before_the_run_is_refused_whole()
+    {
+        var day = new DateOnly(2058, 6, 1);
+        var (seriesId, ids) = await SeriesAsync("Camp", day, 3);
+        (await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[0]}/series/following",
+            Body("Camp", day, endDate: day.AddDays(2)))).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var shifted = await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[1]}/series/following",
+            Body("Camp", day.AddDays(2), endDate: day.AddDays(4)));
+        var shiftedPayload = await shifted.Content.ReadAsStringAsync();
+        shifted.StatusCode.ShouldBe(HttpStatusCode.BadRequest, shiftedPayload);
+        shiftedPayload.ShouldContain("event.recurrence_overlapping");
+
+        var respaced = await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[1]}/series/following",
+            Body("Camp", day.AddDays(2), endDate: day.AddDays(4), seriesFrequency: "weekly"));
+        var respacedPayload = await respaced.Content.ReadAsStringAsync();
+        respaced.StatusCode.ShouldBe(HttpStatusCode.BadRequest, respacedPayload);
+        respacedPayload.ShouldContain("event.recurrence_overlapping");
+
+        var untouched = await BySeriesAsync(owner, seriesId);
+        untouched.Select(x => x.GetProperty("startDate").GetString()).OrderBy(x => x)
+            .ShouldBe(["2058-06-01", "2058-06-08", "2058-06-15"]);
+
+        var accepted = await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[1]}/series/following",
+            Body("Camp", day.AddDays(3), endDate: day.AddDays(5)));
+        accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await accepted.Content.ReadAsStringAsync());
+        var after = await BySeriesAsync(owner, seriesId);
+        after.Select(x => x.GetProperty("startDate").GetString()).OrderBy(x => x)
+            .ShouldBe(["2058-06-01", "2058-06-04", "2058-06-11"]);
     }
 
     /// <summary>

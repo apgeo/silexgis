@@ -9,9 +9,11 @@ import { seedUpload } from './surveyUploads.ts';
  *
  * The first test runs against a stubbed answer: that the address opens without a sign-in, that the
  * visitor is not sent to the login form, and that what the envelope carries is drawn. The stub
- * also carries members a public answer must never hold (a log, input files, a team); the page must
- * not draw them even if a server wrongly sent them. The second test drives the real route: an
- * upload sent the way a device sends one, its public link opened by a visitor without an account.
+ * also carries members a public answer must never hold (input files, a team); the page must not
+ * draw them even if a server wrongly sent them. The second, also stubbed, is a failed compile: its
+ * log is the holder's to read, drawn under the error and saved from the page. The last ones drive
+ * the real route: an upload sent the way a device sends one, its public link opened by a visitor
+ * without an account.
  */
 test('the page behind a public link opens without signing in and draws the envelope it is given', async ({
   browser,
@@ -46,7 +48,8 @@ test('the page behind a public link opens without signing in and draws the envel
           message: 'Archived and read, not compiled.',
           error: null,
           artefacts: [{ kind: 'plan-pdf', name: 'plan.pdf', sizeBytes: 2048, contentUrl: '/files/stub/content' }],
-          logTail: 'invented-log-line-that-must-stay-hidden',
+          logTail: null,
+          log: null,
           team: 'Invented Team Member',
           files: [{ name: 'invented-source-file.th', role: 'source' }],
           createdAt: '2026-10-25T10:15:00Z',
@@ -66,13 +69,67 @@ test('the page behind a public link opens without signing in and draws the envel
     await expect(anonymous.getByTestId('survey-upload-status')).toHaveText('Finished');
     await expect(anonymous.getByText('plan.pdf')).toBeVisible();
     // Members the stubbed answer carries but a public view has no place for.
-    await expect(anonymous.getByText('invented-log-line-that-must-stay-hidden')).toHaveCount(0);
     await expect(anonymous.getByText('Invented Team Member')).toHaveCount(0);
     await expect(anonymous.getByText('invented-source-file.th')).toHaveCount(0);
 
     await anonymous.goto('/p/survey/gone-token');
     await expect(anonymous.getByTestId('public-survey-unavailable')).toBeVisible({ timeout: 30_000 });
     expect(new URL(anonymous.url()).pathname).toBe('/p/survey/gone-token');
+  } finally {
+    await visitor.close();
+  }
+});
+
+test('a failed compile shows its log under the error and the whole log is saved from the page', async ({ browser }) => {
+  const visitor = await ownContext(browser, { acceptDownloads: true });
+  try {
+    const anonymous = await visitor.newPage();
+    // A server with a compiler is not part of this suite, so the answer and the log are stubbed;
+    // the route that serves them is proved by the server's own tests.
+    await anonymous.route('**/api/v1/public/survey-uploads/stub-failed-token', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          survey: { title: 'Invented failed survey' },
+          cave: { name: 'Invented stub cave' },
+          version: '2026-11-04T10:15:00Z',
+          status: 'failed',
+          stage: 'compile',
+          stages: [
+            { stage: 'archive', state: 'done' },
+            { stage: 'unpack', state: 'done' },
+            { stage: 'scaffold', state: 'done' },
+            { stage: 'compile', state: 'failed' },
+            { stage: 'store', state: 'pending' },
+            { stage: 'read', state: 'pending' },
+          ],
+          progress: 60,
+          message: null,
+          error: { code: 'survey_pipeline.compile_failed', message: 'Therion could not compile the survey (1 errors).' },
+          artefacts: [],
+          logTail: 'error: invented failure -- an invented reason',
+          log: { name: 'invented-20261104T101500Z.log', sizeBytes: 64, url: '/api/v1/public/survey-uploads/stub-failed-token/log' },
+          createdAt: '2026-11-04T10:15:00Z',
+          finishedAt: '2026-11-04T10:15:09Z',
+        }),
+      }),
+    );
+    await anonymous.route('**/api/v1/public/survey-uploads/stub-failed-token/log', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/plain; charset=utf-8',
+        headers: { 'Content-Disposition': "attachment; filename*=UTF-8''invented-20261104T101500Z.log" },
+        body: 'therion 6.3.4\nerror: invented failure -- an invented reason\n',
+      }),
+    );
+
+    await anonymous.goto('/p/survey/stub-failed-token');
+    await expect(anonymous.getByTestId('survey-upload-error')).toContainText('The log below says where.', { timeout: 30_000 });
+    await expect(anonymous.getByTestId('public-survey-log-tail')).toHaveText('error: invented failure -- an invented reason');
+    const saved = anonymous.waitForEvent('download');
+    await anonymous.getByTestId('public-survey-log-download').click();
+    expect((await saved).suggestedFilename()).toBe('invented-20261104T101500Z.log');
   } finally {
     await visitor.close();
   }

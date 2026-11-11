@@ -298,7 +298,14 @@ public static class ImportBatchEndpoints
         }
         else
         {
-            await commitService.RevertAsync(batch, ctx.UserId, ct);
+            try
+            {
+                await commitService.RevertAsync(batch, ctx.UserId, ct);
+            }
+            catch (ImportCommitException e) when (e.Code == ImportCommitService.AlreadyRevertedCode)
+            {
+                return ApiProblems.BadRequest(e.Code, e.Message);
+            }
         }
 
         var names = await GeofileNamesAsync(db, [batch], ct);

@@ -10,10 +10,14 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Scans;
+using SilexGis.Domain.Storage;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Scans;
+using SilexGis.Infrastructure.Storage;
 using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Features.SurveyUploads;
@@ -31,6 +35,10 @@ public static partial class SurveyUploadEndpoints
         IFileAccessTokenService tokens,
         SurveyUploadPublicLinkService links,
         IOptions<SurveyUploadOptions> options,
+        IOptions<ScanOptions> scans,
+        ITypedPropertiesValidator schemas,
+        StorageFiguresService storage,
+        ProcessingProfileResolver profiles,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -42,7 +50,7 @@ public static partial class SurveyUploadEndpoints
         }
 
         var settings = options.Value;
-        if (!Sources.Contains(request.Source.Trim().ToLowerInvariant()))
+        if (OriginOf(request.Source) is not { } origin)
         {
             return ApiProblems.BadRequest(
                 SourceUnsupportedCode, $"Accepted survey tools: {string.Join(", ", Sources)}.");
@@ -56,20 +64,99 @@ public static partial class SurveyUploadEndpoints
         }
 
         var claims = request.Files.Select(f => new SurveyUploadFileClaim(f.Name, f.Size, f.Role)).ToList();
-        if (SurveyUploadFiles.Problem(claims, settings.FileCap, settings.FileCountCap) is { } fileProblem)
+        // A scan's files are held to the scans' own caps, orders of magnitude above a survey
+        // tool's; a raw recording is many files, capped together and in number as well.
+        var fileCap = ScanOrigins.IsScan(origin) ? scans.Value.UploadCap : settings.FileCap;
+        var countCap = origin == SurveyOrigin.Mandeye ? scans.Value.RawFileCap : settings.FileCountCap;
+        long? totalCap = origin == SurveyOrigin.Mandeye ? scans.Value.RawUploadCap : null;
+        if (SurveyUploadFiles.Problem(origin, claims, fileCap, countCap, totalCap) is { } fileProblem)
         {
             return ApiProblems.BadRequest(SurveyUploadFiles.InvalidCode, fileProblem.Detail, "file", fileProblem.File);
         }
 
-        var run = await RunOptionsAsync(db, settings, ctx.UserId, request.Pipeline, ct);
-        if (run.Problem is { } runProblem)
+        // What the run is asked to do. A survey archive's run is compiled as the request and the
+        // account's standing choices say; a point cloud's run is a recipe of steps with their
+        // parameters resolved now, so a rerun repeats exactly this.
+        string runOptions;
+        IReadOnlyDictionary<string, Guid> chosenProfiles = new Dictionary<string, Guid>();
+        var refinedSession = origin == SurveyOrigin.Mandeye
+            && MandeyeRecording.IsRefinedSession(request.Files.Select(f => f.Name));
+        if (ScanOrigins.IsScan(origin))
         {
-            return runProblem;
+            // A device may decide how much to show before the estimate; otherwise the run
+            // decides for a small cloud and stops to ask for a large one.
+            var choice = request.Display is { } display
+                ? new PointCloudDisplayChoice(display.Method, display.VoxelCm, display.EveryNth)
+                : null;
+            // A raw recording's recipe runs odometry, export and a check first; its odometry
+            // parameters are resolved by the run against the defaults of the version that runs.
+            // A refined session — the session archive alone — starts at the export, and is only
+            // ever the next version of a scan this server already processed.
+            if (refinedSession && request.CaveSurvey is null)
+            {
+                return ApiProblems.BadRequest(
+                    SessionNeedsScanCode,
+                    "A refined session is uploaded as the next version of the scan it was made from: name that scan's survey.");
+            }
+
+            var recipe = origin != SurveyOrigin.Mandeye
+                ? PointCloudRecipes.For(schemas, choice, rerunFrom: null, out var errors)
+                : refinedSession
+                    ? PointCloudRecipes.ForRefinedSession(schemas, choice, rerunFrom: null, out errors)
+                    : PointCloudRecipes.ForRecording(schemas, choice, rerunFrom: null, odometry: null, out errors);
+            if (recipe is null)
+            {
+                return ApiProblems.BadRequest(DisplayInvalidCode, string.Join("; ", errors));
+            }
+
+            // The profiles named are copied into the recipe now, so the upload holds the values
+            // and never a reference that a later edit of the profile would change.
+            var (resolution, profileProblem) = await profiles.ApplyAsync(ctx, recipe, request.Profiles, ct);
+            if (profileProblem is not null)
+            {
+                return ApiProblems.BadRequest(profileProblem.Code, profileProblem.Detail);
+            }
+
+            chosenProfiles = resolution!.Chosen;
+
+            // The steps the person does on another computer are switched now, after the profiles
+            // are laid over, so the values they carry to the desktop are the resolved ones.
+            var resolved = resolution.Recipe;
+            foreach (var stepId in request.ExternalSteps?.Distinct(StringComparer.Ordinal) ?? [])
+            {
+                var switched = PointCloudRecipes.WithExternal(resolved, stepId);
+                if (switched is null)
+                {
+                    return ApiProblems.BadRequest(
+                        ExternalStepInvalidCode,
+                        $"The step {stepId} is not one this upload's processing runs on a worker, so it cannot be done on another computer instead.",
+                        "externalSteps",
+                        stepId);
+                }
+
+                resolved = switched;
+            }
+
+            runOptions = ScanRecipes.ToOptionsJson(resolved);
+        }
+        else if (request.ExternalSteps is { Count: > 0 })
+        {
+            return ApiProblems.BadRequest(
+                ExternalStepInvalidCode, "Only a scan's processing has steps that can be done on another computer.");
+        }
+        else
+        {
+            var run = await RunOptionsAsync(db, settings, ctx.UserId, request.Pipeline, ct);
+            if (run.Problem is { } runProblem)
+            {
+                return runProblem;
+            }
+
+            runOptions = JsonSerializer.Serialize(run.Options, JsonSerializerOptions.Web);
         }
 
         var title = SurveyCaveNaming.TitleOf(request.SurveyTitle, request.SurveyName)!;
         var surveyKey = CaveSurveyMatching.KeyOf(request.SurveyName);
-        const SurveyOrigin origin = SurveyOrigin.TopoDroid;
 
         Feature cave;
         CaveSurvey? survey = null;
@@ -88,6 +175,20 @@ public static partial class SurveyUploadEndpoints
             if (!await SurveyModelAccess.WritableAsync(access, ctx, surveyCave, ct))
             {
                 return ApiProblems.Forbidden();
+            }
+
+            // A refined session is exported against the recording its scan was made from, so the
+            // survey must be a recording's that a run here turned into a session.
+            if (refinedSession
+                && (survey.Source != SurveyOrigin.Mandeye
+                    || !await db.ScanArtifacts.AnyAsync(
+                        a => a.Kind == ScanArtifactKind.HdmSession
+                            && db.SurveyUploads.Any(u => u.Id == a.SurveyUploadId && u.CaveSurveyId == survey.Id),
+                        ct)))
+            {
+                return ApiProblems.BadRequest(
+                    SessionNeedsScanCode,
+                    "A refined session is the next version of a recording this server processed; this survey holds none.");
             }
 
             cave = surveyCave;
@@ -137,10 +238,21 @@ public static partial class SurveyUploadEndpoints
 
         // The exports with no survey format become documents of the cave; whether the uploader
         // may make them, and on what terms, is known now and is better said before any byte is sent.
-        if (request.Files.Any(f => SurveySourceFormats.ClaimedKind(f.Name) is null)
+        if (request.Files.Any(f => SurveySourceFormats.ClaimedKind(f.Name, origin) is null)
             && DocumentAudience(ctx, cave, request.DocumentsVisibility).RefusalCode is { } documentsRefused)
         {
             return DocumentAudienceProblem(documentsRefused);
+        }
+
+        // Whether the declared files fit, asked now — after the cave has been found and the right
+        // to write to it settled, before anything is saved or a byte is sent. A point cloud is
+        // measured under the scans' own cap as well as the account's and the installation's, and
+        // the room its declaration takes is reserved from here until its files arrive or it expires.
+        var declaredBytes = request.Files.Sum(f => Math.Max(0, f.Size));
+        var room = await storage.ForAsync(ctx.UserId, ct: ct);
+        if (StorageRules.Shortfall(room.Limits(scan: ScanOrigins.IsScan(origin)), declaredBytes) is { } shortfall)
+        {
+            return StorageProblems.Insufficient(shortfall);
         }
 
         var now = clock.GetUtcNow();
@@ -191,7 +303,7 @@ public static partial class SurveyUploadEndpoints
             PublicLinkWanted = request.PublicLink?.Wanted,
             PublicLinkAudience = request.PublicLink?.Audience,
             PublicLinkAllowProtected = request.PublicLink?.AllowProtected ?? false,
-            Options = JsonSerializer.Serialize(run.Options, JsonSerializerOptions.Web),
+            Options = runOptions,
             RequestedBy = ctx.UserId,
             ExpiresAt = now + settings.UploadSession,
         };
@@ -220,6 +332,7 @@ public static partial class SurveyUploadEndpoints
             return ApiProblems.Conflict(BusyCode, "Another upload of this survey arrived at the same moment; send it again.");
         }
 
+        await profiles.RememberAsync(ctx.UserId, chosenProfiles, ct);
         var dto = await ToDtoAsync(db, tokens, links, options.Value, upload, cave, writable: true, ct);
         return TypedResults.Created($"/api/v1/survey-uploads/{upload.Id}", dto);
     }

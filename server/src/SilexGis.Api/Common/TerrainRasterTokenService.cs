@@ -39,14 +39,18 @@ public sealed class TerrainRasterTokenService : ITerrainRasterTokenService
 
     private readonly ITimeLimitedDataProtector protector;
 
-    public TerrainRasterTokenService(IDataProtectionProvider provider)
+    private readonly TimeProvider clock;
+
+    public TerrainRasterTokenService(IDataProtectionProvider provider, TimeProvider clock)
     {
         ArgumentNullException.ThrowIfNull(provider);
+        ArgumentNullException.ThrowIfNull(clock);
         protector = provider.CreateProtector("SilexGis.TerrainRaster").ToTimeLimitedDataProtector();
+        this.clock = clock;
     }
 
     public string CreateToken(Guid layerId, long rasterId) =>
-        protector.Protect(Payload(layerId, rasterId), DateTimeOffset.UtcNow.Add(Lifetime));
+        protector.Protect(Payload(layerId, rasterId), clock.GetUtcNow().Add(Lifetime));
 
     public bool Validate(string? token, Guid layerId, long rasterId)
     {

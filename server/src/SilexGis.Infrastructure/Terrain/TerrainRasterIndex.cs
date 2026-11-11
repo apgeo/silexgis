@@ -62,12 +62,16 @@ public sealed class TerrainRasterIndex(
         return active is null
             ? TerrainCoverage.None
             : new TerrainCoverage(
-                await RastersAsync(active.Id, ct), active.HeightDatum, active.GeoidHeightM);
+                await ChainRastersAsync(active.Id, ct), active.HeightDatum, active.GeoidHeightM);
     }
 
     /// <summary>
     /// The rasters and datum of one build, or a coverage holding nothing if there is no such build.
     /// </summary>
+    /// <remarks>
+    /// For an extension, its own rasters followed by those of the builds it extends — see
+    /// <see cref="ChainRastersAsync"/>.
+    /// </remarks>
     public async Task<TerrainCoverage> CoverageForAsync(Guid buildId, CancellationToken ct)
     {
         var build = await db.TerrainBuilds
@@ -79,7 +83,7 @@ public sealed class TerrainRasterIndex(
         return build is null
             ? TerrainCoverage.None
             : new TerrainCoverage(
-                await RastersAsync(build.Id, ct), build.HeightDatum, build.GeoidHeightM);
+                await ChainRastersAsync(build.Id, ct), build.HeightDatum, build.GeoidHeightM);
     }
 
     /// <summary>
@@ -149,6 +153,71 @@ public sealed class TerrainRasterIndex(
         }
 
         return described;
+    }
+
+    /// <summary>
+    /// The longest chain of extensions read through before the walk gives up and says so.
+    /// </summary>
+    /// <remarks>
+    /// Each link is one more survey added to a region; a chain this long is not something anybody
+    /// builds by hand, so meeting it means the links themselves are wrong, and a request is not
+    /// the place to follow them for ever.
+    /// </remarks>
+    private const int ChainLimit = 64;
+
+    /// <summary>
+    /// A build's own prepared rasters, then those of the build it extends, and so on down to the
+    /// first build of the chain.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An extension prepares only the rasters it adds. The base's ground is neither fetched nor
+    /// prepared again — it reaches the extension's pyramid as copied tiles — so the extension's
+    /// prepared directory covers just the patch while the scene it serves draws the whole region.
+    /// Its elevation therefore has to be read from the base's prepared rasters as well, or a height
+    /// asked for anywhere off the patch answers "outside coverage" over ground the picture plainly
+    /// shows.
+    /// </para>
+    /// <para>
+    /// The extension's own rasters come first and each base after the one it was extended from.
+    /// The reader takes the finest raster holding a point and, among rasters of one resolution,
+    /// the first listed — so where a new survey and an older model of equal detail overlap, the
+    /// survey that was added to replace it is the answer.
+    /// </para>
+    /// <para>
+    /// Each build's description stays its own: a base is described and stored under its own id
+    /// and only borrowed here, so describing the base again — after a retry, say — is seen by
+    /// every extension of it without anything being rewritten under theirs.
+    /// </para>
+    /// </remarks>
+    private async Task<IReadOnlyList<PreparedTerrainRaster>> ChainRastersAsync(
+        Guid buildId, CancellationToken ct)
+    {
+        var rasters = new List<PreparedTerrainRaster>();
+        var visited = new HashSet<Guid>();
+
+        Guid? current = buildId;
+        while (current is { } id)
+        {
+            if (!visited.Add(id) || visited.Count > ChainLimit)
+            {
+                logger.LogWarning(
+                    "The builds terrain build {BuildId} extends lead back to one already read, or "
+                    + "further than {Limit} builds; its elevation is read from the builds before "
+                    + "that point only.", buildId, ChainLimit);
+                break;
+            }
+
+            rasters.AddRange(await RastersAsync(id, ct));
+
+            current = await db.TerrainBuilds
+                .AsNoTracking()
+                .Where(b => b.Id == id)
+                .Select(b => b.BaseBuildId)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        return rasters;
     }
 
     private async Task<IReadOnlyList<PreparedTerrainRaster>> RastersAsync(

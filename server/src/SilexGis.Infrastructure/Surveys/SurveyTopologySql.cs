@@ -72,6 +72,53 @@ public static class SurveyTopologySql
             WITH chosen AS (
                 {SurveySegmentSql.ChosenModel("@top_cave_id")}
             )
+            {TopologyColumns}
+            FROM survey_topology t
+            JOIN chosen ON chosen.model_id = t.survey_model_id
+            JOIN survey_models m ON m.id = t.survey_model_id
+            JOIN features f ON f.id = m.cave_feature_id
+            WHERE m.cave_feature_id = @top_cave_id
+              AND f.deleted_at IS NULL
+              AND {visibleSql}
+              AND {exactSql}
+            LIMIT 1
+            """;
+
+        var connection = db.Database.GetDbConnection();
+        return await connection.QuerySingleOrDefaultAsync<SurveyTopologyRow>(
+            new CommandDefinition(sql, parameters, cancellationToken: ct));
+    }
+
+    /// <summary>
+    /// The stored network figures of one survey model, or null when it has none — never read, still
+    /// being read, or holding nothing that joins up.
+    ///
+    /// <para>
+    /// <b>No access walk, so only for a caller that has already decided.</b> It answers a survey
+    /// upload's own page of results about the model that upload's own files produced; the upload's
+    /// routes open first and the model is one of that upload's outputs, never one a request names.
+    /// </para>
+    /// </summary>
+    public static async Task<SurveyTopologyRow?> ForModelAsync(
+        SilexGisDbContext db, Guid surveyModelId, CancellationToken ct)
+    {
+        var parameters = new DynamicParameters();
+        parameters.Add("top_model_id", surveyModelId);
+        var sql = $"""
+            {TopologyColumns}
+            FROM survey_topology t
+            JOIN survey_models m ON m.id = t.survey_model_id
+            WHERE t.survey_model_id = @top_model_id
+            LIMIT 1
+            """;
+
+        var connection = db.Database.GetDbConnection();
+        return await connection.QuerySingleOrDefaultAsync<SurveyTopologyRow>(
+            new CommandDefinition(sql, parameters, cancellationToken: ct));
+    }
+
+    /// <summary>The columns a <see cref="SurveyTopologyRow"/> is read from, over <c>t</c> and <c>m</c>; one copy for both reads.</summary>
+    private const string TopologyColumns = """
             SELECT t.survey_model_id AS "SurveyModelId",
                    m.dropped_shot_count AS "DroppedShotCount",
                    m.merged_station_count AS "MergedStationCount",
@@ -104,19 +151,5 @@ public static class SurveyTopologySql
                    t.central_point_dominance AS "CentralPointDominance",
                    t.average_clustering_coefficient AS "AverageClusteringCoefficient",
                    t.computed_at AS "ComputedAt"
-            FROM survey_topology t
-            JOIN chosen ON chosen.model_id = t.survey_model_id
-            JOIN survey_models m ON m.id = t.survey_model_id
-            JOIN features f ON f.id = m.cave_feature_id
-            WHERE m.cave_feature_id = @top_cave_id
-              AND f.deleted_at IS NULL
-              AND {visibleSql}
-              AND {exactSql}
-            LIMIT 1
-            """;
-
-        var connection = db.Database.GetDbConnection();
-        return await connection.QuerySingleOrDefaultAsync<SurveyTopologyRow>(
-            new CommandDefinition(sql, parameters, cancellationToken: ct));
-    }
+        """;
 }

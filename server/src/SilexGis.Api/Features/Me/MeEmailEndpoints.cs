@@ -78,16 +78,39 @@ public static class MeEmailEndpoints
             return ApiProblems.BadRequest("me.email_unchanged", "That is already your address.");
         }
 
+        // Each call mails an address the caller chose, so the gap the resend route keeps applies
+        // here too; the per-address rate limit alone lets one session mail a stranger every second.
+        // Checked before the address is looked up, and the time is recorded below for every request
+        // that gets past the checks, taken address or not — otherwise whether the NEXT request is
+        // refused would tell the caller whether this address has an account.
+        if (TooSoon(user.PendingEmailRequestedAt))
+        {
+            return ApiProblems.BadRequest("me.email_resend_too_soon", "Wait a minute before asking again.");
+        }
+
+        // An account whose user name is its address gets the new address as its user name too, and
+        // Identity accepts fewer characters in a user name than in an address. Refused here, before
+        // anything is mailed, so the change can never confirm with the rename failing behind it.
+        if (FollowsAddress(user) && !CanBeUserName(newEmail, userManager))
+        {
+            return ApiProblems.BadRequest(
+                "me.email_not_usable", "That address cannot be used to sign in here.");
+        }
+
         // Always 202, exactly as the password-reset flow does: answering "that address is taken"
         // would tell any signed-in caller whether an address has an account here, which is the
         // probe the profile visibility rules exist to remove. A user who mistypes someone else's
         // address simply never receives the message.
-        if (await userManager.FindByEmailAsync(newEmail) is null)
+        var free = await userManager.FindByEmailAsync(newEmail) is null;
+        user.PendingEmailRequestedAt = DateTimeOffset.UtcNow;
+        if (free)
         {
             user.PendingEmail = newEmail;
-            user.PendingEmailRequestedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
+        }
 
+        await db.SaveChangesAsync(ct);
+        if (free)
+        {
             await SendChangeMessageAsync(user, newEmail, userManager, dispatcher, configuration, ct);
         }
 
@@ -118,6 +141,13 @@ public static class MeEmailEndpoints
         }
 
         var previousEmail = user.Email;
+        var renames = pending is not null && FollowsAddress(user);
+
+        // The address and the user name move together or not at all. A user name left on the old
+        // address no longer equals the address, so it would read as a chosen handle and the old
+        // address would be shown as the account's name wherever it has no display name.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
         // One token type per situation: a pending change carries a token bound to the new
         // address, while a never-confirmed account is confirming the address it already has.
         var result = pending is not null
@@ -136,14 +166,17 @@ public static class MeEmailEndpoints
         // Accounts are created with the address as the user name, so a change would otherwise
         // leave people logging in under an address that no longer exists. Someone who chose a
         // handle of their own keeps it.
-        if (pending is not null && string.Equals(user.UserName, previousEmail, StringComparison.OrdinalIgnoreCase))
+        if (renames && !(await userManager.SetUserNameAsync(user, pending!)).Succeeded)
         {
-            await userManager.SetUserNameAsync(user, pending);
+            // Another account took the address as its handle after the change was asked for.
+            await transaction.RollbackAsync(ct);
+            return ApiProblems.BadRequest("me.email_taken", "That address now belongs to another account.");
         }
 
         user.PendingEmail = null;
         user.PendingEmailRequestedAt = null;
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         // Warns the address the account just left. Sent straight rather than queued, because the
         // queue addresses a recipient by user id and would resolve that to the *new* address —
@@ -248,11 +281,19 @@ public static class MeEmailEndpoints
             return TypedResults.Unauthorized();
         }
 
+        // The request time stays: it is what holds the gap between change messages, and clearing
+        // it here would let a session mail a stranger once per change-and-cancel pair.
         user.PendingEmail = null;
-        user.PendingEmailRequestedAt = null;
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }
+
+    private static bool FollowsAddress(SilexGisUser user) =>
+        string.Equals(user.UserName, user.Email, StringComparison.OrdinalIgnoreCase);
+
+    private static bool CanBeUserName(string address, UserManager<SilexGisUser> userManager) =>
+        userManager.Options.User.AllowedUserNameCharacters is not { Length: > 0 } allowed
+        || address.All(allowed.Contains);
 
     private static bool TooSoon(DateTimeOffset? lastRequestedAt) =>
         lastRequestedAt is { } last && DateTimeOffset.UtcNow - last < ResendInterval;

@@ -274,6 +274,11 @@ const cases = [
     refererLogged: 'https://caves.example.org/shared/features/[redacted]',
   },
   {
+    why: "the compiler's log of a survey upload's public link — a sub-path of the envelope's own address",
+    uri: '/api/v1/public/survey-uploads/CREDENTIAL40/log',
+    uriLogged: '/api/v1/public/survey-uploads/[redacted]/log',
+  },
+  {
     why: 'an album share opened in the browser',
     uri: '/shared/albums/CREDENTIAL35',
     uriLogged: '/shared/albums/[redacted]',

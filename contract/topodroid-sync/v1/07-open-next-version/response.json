@@ -22,6 +22,7 @@
     "date": null,
     "team": null
   },
+  "pointCloud": null,
   "files": [
     {
       "name": "no_manifest.zip",
@@ -59,5 +60,6 @@
   "createdAt": "<timestamp>",
   "expiresAt": "<timestamp>",
   "startedAt": null,
-  "finishedAt": null
+  "finishedAt": null,
+  "external": null
 }

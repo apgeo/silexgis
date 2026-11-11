@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using NetTopologySuite.Geometries;
+using SilexGis.Domain.Scans;
 
 namespace SilexGis.Domain.Entities;
 
@@ -14,6 +15,12 @@ public enum SurveyModelFormat : short
 
     /// <summary>Triangle mesh of the passage walls, as exported by every survey toolchain in use.</summary>
     Stl = 2,
+
+    /// <summary>A LiDAR point cloud, LAZ-compressed (.laz).</summary>
+    Laz = 3,
+
+    /// <summary>A LiDAR point cloud, uncompressed (.las).</summary>
+    Las = 4,
 }
 
 /// <summary>
@@ -127,6 +134,48 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     /// </summary>
     public double? AppliedRotationDeg { get; set; }
 
+    /// <summary>
+    /// For a point cloud: the compass bearing its tiles' own +Y axis points along, degrees
+    /// clockwise from true north, in [0, 360). Published, unlike <see cref="AppliedRotationDeg"/>,
+    /// because nothing was applied: a scan's tiles are made once in the cloud's own frame and the
+    /// scene turns them by this when it draws them, which is what lets a placement be corrected
+    /// without tiling again. Set together with <see cref="Anchor"/> and <see cref="AnchorHeightM"/>;
+    /// null for a scan nobody has placed and for every other kind of model.
+    /// </summary>
+    public double? PlacementHeadingDeg { get; set; }
+
+    /// <summary>
+    /// For a point cloud: how its placement came about — by hand, or from the coordinate system
+    /// its file named. A later tiling keeps a placement made by hand and recomputes one taken
+    /// from the file, whose zero point it may have moved. Null while unplaced.
+    /// </summary>
+    public ScanPlacementSource? PlacementSource { get; set; }
+
+    /// <summary>
+    /// For a point cloud: the small tilt that raises its tiles' +X end, degrees, composed after the
+    /// roll and before the heading. Null or zero for a level scan; set only by a control-point fit
+    /// that was asked to fit a tilt. Published under the same rule as the heading.
+    /// </summary>
+    public double? PlacementPitchDeg { get; set; }
+
+    /// <summary>For a point cloud: the small tilt that raises its tiles' +Y end, degrees. See <see cref="PlacementPitchDeg"/>.</summary>
+    public double? PlacementRollDeg { get; set; }
+
+    /// <summary>
+    /// For a point cloud placed by control points: the root mean square of the pairs' residuals,
+    /// metres — the one figure that says how well the placement agrees with the survey. Null for
+    /// every other placement.
+    /// </summary>
+    public double? PlacementRmsM { get; set; }
+
+    /// <summary>
+    /// For a point cloud placed by control points: the pairs it was fitted to and each one's
+    /// residual, as JSON (<see cref="ScanControlRecord"/>). Kept so the pairs can be shown,
+    /// corrected and fitted again; null for every other placement, and cleared whenever the
+    /// placement is replaced by one the pairs did not make.
+    /// </summary>
+    public string? PlacementControlPoints { get; set; }
+
     /// <summary>Triangles in the converted model, after the ones carrying no surface were dropped.</summary>
     public int? TriangleCount { get; set; }
 
@@ -137,6 +186,61 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     /// origin and get it back.
     /// </summary>
     public bool SourcePrecisionLost { get; set; }
+
+    /// <summary>
+    /// How far from its cave the file landed as declared, when that was far enough to doubt the
+    /// declaration. Null when it landed near its cave, could not be placed, or the cave has no
+    /// position to compare with.
+    /// </summary>
+    public double? PlacementOffByKm { get; set; }
+
+    /// <summary>
+    /// The projected system that would place the file at its cave, found by trying the grids a
+    /// survey there is commonly written in, when the declared one does not. Null otherwise.
+    /// </summary>
+    public int? SuggestedSourceEpsg { get; set; }
+
+    /// <summary>
+    /// The file's numbers are metres about a point although a projected system was declared for
+    /// them, so it should be declared as local instead.
+    /// </summary>
+    public bool SuggestsLocalMetres { get; set; }
+
+    /// <summary>How far from its cave the file would land as suggested, when that is known.</summary>
+    public double? SuggestedOffByKm { get; set; }
+
+    /// <summary>
+    /// For a line plot: draw the passages whose size nothing in the file gives — no drawn wall near
+    /// them, no measured cross-section — as tubes of <see cref="EstimatedPassageDiameterM"/>. Off
+    /// unless somebody asks for it, because those tubes are sizes nobody measured.
+    /// </summary>
+    public bool EstimatePassages { get; set; }
+
+    /// <summary>The diameter of an estimated passage, in metres.</summary>
+    public double EstimatedPassageDiameterM { get; set; } = DefaultEstimatedPassageDiameterM;
+
+    /// <summary>The colour estimated passages are built in, as <c>#rrggbb</c>.</summary>
+    public string EstimatedPassageColor { get; set; } = DefaultEstimatedPassageColor;
+
+    public const double DefaultEstimatedPassageDiameterM = 1.0;
+
+    public const string DefaultEstimatedPassageColor = "#e8833a";
+
+    /// <summary>
+    /// For a line plot once read: how many metres of passage have no size in the file — neither
+    /// a drawn wall nearby nor a measured cross-section. Null before a reading, and for a reading
+    /// whose walls could not be built at all.
+    /// </summary>
+    public double? UnsizedPassageM { get; set; }
+
+    /// <summary>How many legs make up <see cref="UnsizedPassageM"/>.</summary>
+    public int? UnsizedLegCount { get; set; }
+
+    /// <summary>
+    /// How many legs the last reading drew as estimated tubes: zero when it was not asked to, or
+    /// could not within the mesh's size limit. Null before a reading.
+    /// </summary>
+    public int? EstimatedLegCount { get; set; }
 
     /// <summary>
     /// How many legs the extraction could not attach to the station network, or null before a
@@ -204,6 +308,15 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     /// centreline, since nobody has chosen anything for that cave yet.
     /// </summary>
     public Guid? SurveyUploadId { get; set; }
+
+    /// <summary>
+    /// What is known about a point cloud, as a JSON document; null for every other kind of model
+    /// and for a cloud whose header has not been read yet. A document rather than columns because
+    /// the facts grow by stage — the header check writes the first set, tiling adds its own —
+    /// and because no query reads them: they are shown on the scan's card and nowhere else.
+    /// The shape is <see cref="Scans.PointCloudFacts"/>.
+    /// </summary>
+    public string? PointCloud { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

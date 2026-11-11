@@ -36,6 +36,12 @@ env:
   # said rather than assumed, and fails when the variable is simply absent.
   SILEXGIS_TEST_DEM_DIR: none
 
+# The job token reads the repository and nothing else: no job here writes to it, comments on a
+# pull request or publishes a package, and a pull request's jobs run code from that pull request.
+# A job that ever needs more asks for it in its own permissions block.
+permissions:
+  contents: read
+
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -66,13 +72,13 @@ jobs:
     name: shard ${{ matrix.index }} of ${{ needs.plan.outputs.count }}
     steps:
       # The survey-format readers live in a submodule; without it the solution does not build.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
       - name: Build (warnings as errors)
@@ -86,7 +92,15 @@ jobs:
           if [ -n "$FILTER" ]; then
             echo "filter=$FILTER" >> "$GITHUB_OUTPUT"
           else
-            echo "filter=$(node scripts/gate-shard.mjs --index ${{ matrix.index }} --count ${{ needs.plan.outputs.count }})" >> "$GITHUB_OUTPUT"
+            # Assigned first, so a planner that fails stops this step (the shell runs with -e) instead
+            # of hiding its status behind echo's and writing an empty filter -- which dotnet test reads
+            # as "every class", running the whole suite in one job until the timeout.
+            filter=$(node scripts/gate-shard.mjs --index ${{ matrix.index }} --count ${{ needs.plan.outputs.count }})
+            if [ -z "$filter" ]; then
+              echo "::error::the shard planner chose no classes for shard ${{ matrix.index }}"
+              exit 1
+            fi
+            echo "filter=$filter" >> "$GITHUB_OUTPUT"
             node scripts/gate-shard.mjs --index ${{ matrix.index }} --count ${{ needs.plan.outputs.count }} --list
           fi
       # Four threads, not the eight the project file asks for: every test builds an application
@@ -103,7 +117,7 @@ jobs:
         working-directory: server
       - name: Keep the per-test timings
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: integration-trx-${{ matrix.index }}
           path: ${{ runner.temp }}/trx/*.trx

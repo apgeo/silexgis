@@ -119,11 +119,11 @@ public static class FeaturePropertySql
                 string.Format(CultureInfo.InvariantCulture, Dated, $"{Day} BETWEEN {{2}} AND {{3}}", $"{Moment} BETWEEN {{4}} AND {{5}}"),
                 [FilterLeaves.DayNamed(low), FilterLeaves.DayNamed(high), ToUtc(low), ToUtc(high)]),
 
-            // Text is matched the way every other text field is: accent- and case-blind, with the
-            // value used as the pattern it already is on those fields.
-            (FilterOp.Equals, [TextValue s]) => (TextLike, [s.Value]),
-            (FilterOp.Contains, [TextValue s]) => (TextLike, [$"%{s.Value}%"]),
-            (FilterOp.StartsWith, [TextValue s]) => (TextLike, [$"{s.Value}%"]),
+            // Text is matched the way every other text field is: accent- and case-blind, and the
+            // typed value is the text looked for — its %, _ and backslash match themselves.
+            (FilterOp.Equals, [TextValue s]) => (TextLike, [FilterLeaves.Literal(s.Value)]),
+            (FilterOp.Contains, [TextValue s]) => (TextLike, [$"%{FilterLeaves.Literal(s.Value)}%"]),
+            (FilterOp.StartsWith, [TextValue s]) => (TextLike, [$"{FilterLeaves.Literal(s.Value)}%"]),
 
             (FilterOp.Equals, [BooleanValue b]) =>
                 (b.Value ? "f.properties -> {1} = 'true'::jsonb" : "f.properties -> {1} = 'false'::jsonb", []),
@@ -140,7 +140,9 @@ public static class FeaturePropertySql
     private const string Present =
         "(COALESCE(jsonb_typeof(f.properties -> {1}), 'null') <> 'null' AND f.properties -> {1} <> '\"\"'::jsonb)";
 
-    private const string TextLike = $"unaccent({Text}) ILIKE unaccent({{2}})";
+    // The escape character is named, not left to PostgreSQL's default, so the value escaped by
+    // FilterLeaves.Literal means what it says and a trailing backslash is not a malformed pattern.
+    private const string TextLike = $"unaccent({Text}) ILIKE unaccent({{2}}) ESCAPE '{FilterLeaves.LikeEscape}'";
 
     // The magnitude bound validation applies keeps this conversion exact for anything a person typed.
     private static decimal ToNumeric(NumberValue value) => (decimal)value.Value;

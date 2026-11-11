@@ -177,6 +177,7 @@ pornită, ți se cere în continuare codul** după autentificarea prin el.
 | | |
 |---|---|
 | **Temă** | Ca sistemul · Luminoasă · Întunecată |
+| **Contrast mărit** | Text mai închis, contururi vizibile la fiecare câmp și un contur de focus mai puternic, în tema luminoasă și în cea întunecată |
 | **Densitate** | Confortabilă · Compactă |
 | **Reduce animațiile** | Oprește animațiile și deplasarea hărții |
 | **Hartă de ansamblu pe hartă** | Micul cadru care arată unde se află vederea hărții într-o zonă mai largă |
@@ -305,6 +306,24 @@ reglat pentru celălalt.
 
 Acestea două limitează doar harta plană: vizualizarea 3D desenează drumuirile după numerele
 instalării.
+
+### Nori de puncte
+
+**Detaliul punctelor** — *Redus*, *Normal* sau *Ridicat* — decide cât de fin este desenată o
+[scanare laser](point-clouds.md), în vizualizarea 3D și în vizualizatorul propriu al scanării. Un
+detaliu mai fin descarcă mai multe dale și ține mai multe dintre ele în memoria grafică. Nestabilit,
+un telefon sau o tabletă folosesc *Redus*, iar un calculator *Normal*; pagina spune ce folosește
+acest dispozitiv.
+
+**Scanările tuturor peșterilor din vedere (3D)** are trei numere, ca la pereți: zoomul de la care
+se desenează scanările, câte peșteri cu scanări deodată și câți megaocteți de dale se țin deodată.
+Vezi [Norii de puncte ai peșterilor din vedere](3d-view.md#norii-de-puncte-ai-peșterilor-din-vedere).
+
+## Profiluri de procesare
+
+**Setări → Scanări · Profiluri de procesare** păstrează setările cu nume după care rulează
+procesarea scanărilor laser — ale tale, ale unui grup de speologie sau ale instalării. Sunt
+descrise împreună cu scanările: [Profiluri de procesare](point-clouds.md#profiluri-de-procesare).
 
 ---
 

@@ -688,8 +688,8 @@ public sealed class SurveyWallsTests : IAsyncLifetime, IDisposable, IClassFixtur
                 ? throw new IOException("No space left on device")
                 : inner.SaveAsync(content, extension, ct);
 
-        public Task<long> AppendAsync(string storagePath, Stream content, CancellationToken ct = default) =>
-            inner.AppendAsync(storagePath, content, ct);
+        public Task<IExclusiveContentWriter> OpenExclusiveAsync(string storagePath, CancellationToken ct = default) =>
+            inner.OpenExclusiveAsync(storagePath, ct);
 
         public Task<Stream> OpenReadAsync(string storagePath, CancellationToken ct = default) =>
             inner.OpenReadAsync(storagePath, ct);

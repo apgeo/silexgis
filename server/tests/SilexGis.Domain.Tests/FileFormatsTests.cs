@@ -238,5 +238,39 @@ public class FileFormatsTests
         return buffer;
     }
 
+    [Fact]
+    public void A_file_name_that_fits_is_kept_as_it_is()
+    {
+        var name = new string('a', 251) + ".pdf";
+        FileFormats.FitFileName(name).ShouldBe(name);
+    }
+
+    [Fact]
+    public void An_over_long_file_name_is_cut_in_its_stem_and_keeps_its_extension()
+    {
+        var fitted = FileFormats.FitFileName(new string('s', 300) + ".tiff");
+
+        fitted.Length.ShouldBe(FileFormats.MaxFileNameLength);
+        fitted.ShouldEndWith(".tiff");
+    }
+
+    [Fact]
+    public void A_cut_never_leaves_half_a_character()
+    {
+        // A four-byte character is two UTF-16 units; one placed across the cut must go whole.
+        var fitted = FileFormats.FitFileName(new string('s', 250) + "\U0001F987" + new string('t', 50) + ".jpg");
+
+        fitted.Length.ShouldBe(FileFormats.MaxFileNameLength - 1);
+        char.IsHighSurrogate(fitted[^5]).ShouldBeFalse();
+        fitted.ShouldEndWith(".jpg");
+    }
+
+    [Fact]
+    public void A_name_whose_tail_is_no_extension_is_simply_cut()
+    {
+        FileFormats.FitFileName(new string('n', 200) + "." + new string('x', 100)).Length
+            .ShouldBe(FileFormats.MaxFileNameLength);
+    }
+
     private static byte[] Ascii(string value) => Encoding.Latin1.GetBytes(value);
 }

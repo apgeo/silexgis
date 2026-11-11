@@ -169,25 +169,62 @@ public sealed class BasemapCancellation
 {
     private readonly ConcurrentDictionary<long, CancellationTokenSource> running = new();
 
-    /// <summary>The token a running download is called off by, held until <see cref="Forget"/>.</summary>
-    public CancellationToken Register(long jobId) => running.GetOrAdd(jobId, _ => new CancellationTokenSource()).Token;
+    // Runs that have ended in this process. The run ends a moment before the worker records how it
+    // ended, so for that moment the job still reads as running; a cancel arriving then must learn
+    // that there is nothing left to call off, rather than hold a call nobody will ever pick up and
+    // be recorded as having stopped a download that went on to succeed. One entry per download
+    // this process ran — a handful over its life.
+    private readonly ConcurrentDictionary<long, byte> finished = new();
 
-    /// <summary>Calls a running download off; false when no download of that job is running here.</summary>
+    /// <summary>
+    /// The token a running download is called off by, held until <see cref="Finish"/>. Already
+    /// cancelled when the download was called off after the worker took it and before it got here.
+    /// </summary>
+    public CancellationToken Register(long jobId)
+    {
+        // A job the worker runs again is live again.
+        finished.TryRemove(jobId, out _);
+        return running.GetOrAdd(jobId, _ => new CancellationTokenSource()).Token;
+    }
+
+    /// <summary>
+    /// Calls a download the worker has taken off, and says whether the call reached a run: true for
+    /// a run that is live or about to start, false for one that has already ended. The worker marks
+    /// a job taken a moment before its run registers here, so a call in that moment is held rather
+    /// than dropped: the run finds its token already cancelled when it registers. Whoever calls this
+    /// for a download that turns out to have ended already drops the held call with
+    /// <see cref="Forget"/>.
+    /// </summary>
     public bool Cancel(long jobId)
     {
-        if (!running.TryGetValue(jobId, out var source))
+        if (finished.ContainsKey(jobId))
         {
             return false;
         }
 
-        source.Cancel();
+        running.GetOrAdd(jobId, _ => new CancellationTokenSource()).Cancel();
+        if (finished.ContainsKey(jobId))
+        {
+            // The run ended between the check and the call: the source just cancelled may be one
+            // this call added itself, which no run will ever register for.
+            Forget(jobId);
+            return false;
+        }
+
         return true;
     }
 
     /// <summary>Whether a download was called off.</summary>
     public bool IsCancelled(long jobId) => running.TryGetValue(jobId, out var source) && source.IsCancellationRequested;
 
-    /// <summary>Drops a download that has ended.</summary>
+    /// <summary>Records that a download's run has ended, and drops its token.</summary>
+    public void Finish(long jobId)
+    {
+        finished[jobId] = 0;
+        Forget(jobId);
+    }
+
+    /// <summary>Drops a held call to a download that has ended.</summary>
     public void Forget(long jobId)
     {
         if (running.TryRemove(jobId, out var source))

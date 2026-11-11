@@ -52,6 +52,32 @@ public enum SurveyUploadStage : short
 
     /// <summary>Handing the stored models to the readers that index them.</summary>
     Read = 5,
+
+    /// <summary>Reading a point cloud's header and records, without touching a point.</summary>
+    Inspect = 6,
+
+    /// <summary>Thinning a point cloud into the copy that is shown, when the person asked for one.</summary>
+    Downsample = 7,
+
+    /// <summary>Converting a point cloud into the tiles a viewer streams.</summary>
+    Tile = 8,
+
+    /// <summary>Running a raw scanner recording's lidar odometry: the trajectory and the registered chunks.</summary>
+    Odometry = 9,
+
+    /// <summary>Exporting the registered recording as one point cloud and its trajectory.</summary>
+    Export = 10,
+
+    /// <summary>Checking the exported point cloud before it is treated as the scan of record.</summary>
+    Check = 11,
+
+    /// <summary>
+    /// Not work but a pause: the run reached a step that is done on another computer, offered its
+    /// inputs as a download, and waits for the step's outputs to be uploaded. The upload is
+    /// succeeded at this stage — the run ended, nothing failed — and the upload of the outputs
+    /// queues it again.
+    /// </summary>
+    AwaitingExternal = 12,
 }
 
 /// <summary>

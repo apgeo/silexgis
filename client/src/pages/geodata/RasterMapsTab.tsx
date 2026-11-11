@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
-import { AimOutlined, DeleteOutlined, EditOutlined, InboxOutlined } from '@ant-design/icons';
+import {
+  AimOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EnvironmentOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons';
 import {
   App,
   Flex,
@@ -13,9 +19,9 @@ import {
   Table,
   Tag,
   Tooltip,
-  Upload,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import UploadDropzone from '../../components/geodata/UploadDropzone.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -27,6 +33,9 @@ import {
   type RasterMapInfo,
 } from '../../api/hooks.ts';
 import WorldFilterBar from '../../components/filters/WorldFilterBar.tsx';
+import CaveLinkWarning from '../../components/geodata/CaveLinkWarning.tsx';
+import PlacementEditorModal from '../../components/geodata/placement/PlacementEditorModal.tsx';
+import RedrawSheetModal from '../../components/geodata/RedrawSheetModal.tsx';
 import { readWorldFilter, worldToken, writeWorldFilter } from '../../filters/worldList.ts';
 import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
 import type { SelectorScope } from '../../filters/selection.ts';
@@ -38,7 +47,20 @@ const statusColor: Record<string, string> = {
   processing: 'processing',
   ready: 'success',
   failed: 'error',
+  unplaced: 'warning',
 };
+
+/** Why a row's status is what it is: the failure, and whatever the drawing warned about. */
+function statusTooltip(raster: RasterMapInfo): string | undefined {
+  const parts = [raster.processingError, raster.renderWarnings].filter(
+    (part): part is string => typeof part === 'string' && part.trim() !== '',
+  );
+  return parts.length > 0 ? parts.join('\n') : undefined;
+}
+
+/** A sheet drawn from a document, which can be drawn again and placed by hand. */
+const isSheet = (raster: RasterMapInfo) => raster.sourceFileId != null;
+const isBusy = (raster: RasterMapInfo) => raster.status === 'uploaded' || raster.status === 'processing';
 
 /** The filter world this list is about. */
 const RASTER_WORLD = 'georeferencedMap';
@@ -58,7 +80,10 @@ interface EditFormValues {
   visibility: RasterMapInfo['visibility'];
 }
 
-/** Georeferenced raster maps: upload GeoTIFFs, watch COG processing, manage, show on map. */
+/**
+ * Georeferenced raster maps: upload GeoTIFFs, map sheets in PDF or scanned maps, watch them processed,
+ * place a sheet that carries no position of its own, manage, show on map.
+ */
 export default function RasterMapsTab() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -78,7 +103,11 @@ export default function RasterMapsTab() {
   const remove = useDeleteRasterMap();
   const setRasterVisible = useWorkspaceStore((s) => s.setRasterVisible);
   const [editing, setEditing] = useState<RasterMapInfo | null>(null);
+  const [placing, setPlacing] = useState<RasterMapInfo | null>(null);
+  const [redrawing, setRedrawing] = useState<RasterMapInfo | null>(null);
   const [form] = Form.useForm<EditFormValues>();
+  // Watched rather than read on save, so the warning appears the moment a cave is picked.
+  const linkedCave = Form.useWatch('caveFeatureId', form);
 
   const canEdit = useCan('georeferencedMaps', 'write');
   const canUpload = useCan('georeferencedMaps', 'create');
@@ -145,30 +174,13 @@ export default function RasterMapsTab() {
   return (
     <>
       {canUpload && (
-        <Upload.Dragger
-          multiple
-          accept=".tif,.tiff"
-          showUploadList={false}
-          customRequest={({ file, onSuccess, onError }) => {
-            upload
-              .mutateAsync(file as File)
-              .then((created) => {
-                onSuccess?.(created);
-                message.success(t('geodata.uploadQueued', { name: created.name }));
-              })
-              .catch((e: Error) => {
-                onError?.(e);
-                message.error(t('geodata.uploadFailed'));
-              });
-          }}
-          style={{ marginBottom: 16 }}
-        >
-          <p className="ant-upload-drag-icon">
-            <InboxOutlined />
-          </p>
-          <p className="ant-upload-text">{t('geodata.rasterUploadPrompt')}</p>
-          <p className="ant-upload-hint">{t('geodata.rasterUploadHint')}</p>
-        </Upload.Dragger>
+        <UploadDropzone
+          accept=".tif,.tiff,.pdf,.png,.jpg,.jpeg"
+          prompt={t('geodata.rasterUploadPrompt')}
+          hint={t('geodata.rasterUploadHint')}
+          upload={(file, onProgress) => upload.mutateAsync({ file, onProgress })}
+          doneText={(name) => t('geodata.uploadQueued', { name })}
+        />
       )}
 
       <WorldFilterBar
@@ -214,7 +226,7 @@ export default function RasterMapsTab() {
             dataIndex: 'status',
             width: 140,
             render: (status: string, record) => (
-              <Tooltip title={record.processingError}>
+              <Tooltip title={statusTooltip(record)}>
                 <Tag color={statusColor[status]}>{t(`geodata.rasterStatusValues.${status}`)}</Tag>
               </Tooltip>
             ),
@@ -234,7 +246,7 @@ export default function RasterMapsTab() {
           {
             title: '',
             key: 'actions',
-            width: 140,
+            width: 200,
             render: (_, record) => (
               <Flex gap={4}>
                 <Tooltip title={t('geodata.showOnMap')}>
@@ -248,6 +260,32 @@ export default function RasterMapsTab() {
                 </Tooltip>
                 {canEdit && (
                   <>
+                    {isSheet(record) && (
+                      <Tooltip
+                        title={record.status === 'ready' ? t('geodata.placement.adjust') : t('geodata.placement.place')}
+                      >
+                        <Button
+                          size="small"
+                          icon={<EnvironmentOutlined />}
+                          aria-label={
+                            record.status === 'ready' ? t('geodata.placement.adjust') : t('geodata.placement.place')
+                          }
+                          disabled={record.status !== 'unplaced' && record.status !== 'ready'}
+                          onClick={() => setPlacing(record)}
+                        />
+                      </Tooltip>
+                    )}
+                    {isSheet(record) && (
+                      <Tooltip title={t('geodata.redraw.action')}>
+                        <Button
+                          size="small"
+                          icon={<ReloadOutlined />}
+                          aria-label={t('geodata.redraw.action')}
+                          disabled={isBusy(record)}
+                          onClick={() => setRedrawing(record)}
+                        />
+                      </Tooltip>
+                    )}
                     <Tooltip title={t('geodata.editRaster')}>
                       <Button size="small" icon={<EditOutlined />} aria-label={t('geodata.editRaster')} onClick={() => onEditOpen(record)} />
                     </Tooltip>
@@ -266,6 +304,9 @@ export default function RasterMapsTab() {
         ]}
       />
 
+      <PlacementEditorModal raster={placing} onClose={() => setPlacing(null)} />
+      <RedrawSheetModal raster={redrawing} onClose={() => setRedrawing(null)} />
+
       <Modal
         title={t('geodata.editRaster')}
         open={editing !== null}
@@ -274,7 +315,11 @@ export default function RasterMapsTab() {
         confirmLoading={update.isPending}
         destroyOnHidden
       >
-        <Form<EditFormValues> form={form} layout="vertical">
+        {/* Until the form has reported its first value the stored link stands for it. */}
+        {editing !== null && isSheet(editing) && (linkedCave !== undefined ? linkedCave : editing.caveFeatureId) != null && (
+          <CaveLinkWarning />
+        )}
+        <Form<EditFormValues> form={form} layout="vertical" style={{ marginTop: 12 }}>
           <Form.Item name="name" label={t('geodata.name')} rules={[{ required: true }]}>
             <Input maxLength={200} />
           </Form.Item>

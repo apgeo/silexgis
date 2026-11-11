@@ -129,9 +129,8 @@ Ask for what you want in ordinary words. Some patterns that work well:
 1. `client/src/i18n/locales/en.json` and `ro.json` — what the interface actually says
 2. `client/src/App.tsx` and `client/src/components/navItems.tsx` — what pages exist and how
    they are grouped
-3. The repository `README.md` — the feature narrative, in the application's own voice
-4. `.claude/docs/` — the specification, for intent and for anything the interface does not
-   spell out
+3. The repository `README.md` and `docs/FEATURES.md` — the feature narrative, in the application's
+   own voice
 
 ---
 

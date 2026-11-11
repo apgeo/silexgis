@@ -443,6 +443,60 @@ public sealed class TerrainBuildCancelRetryTests : IAsyncLifetime, IDisposable, 
     }
 
     /// <summary>
+    /// A build that failed after its pyramid was already at its served address — the database
+    /// write recording it lost, say — run again ends finished AND drawable: the version every
+    /// address into the pyramid carries survives the retry, because the run only records the
+    /// pyramid as finished and never reaches the check that would stamp it again.
+    /// </summary>
+    [Fact]
+    public async Task A_build_run_again_after_its_pyramid_was_published_ends_finished_and_can_be_drawn()
+    {
+        var id = await SubmitAsync(24.70, 46.70);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TerrainBuilds.Where(b => b.Id == id).ExecuteUpdateAsync(s => s
+                .SetProperty(b => b.Status, TerrainBuildStatus.Failed)
+                .SetProperty(b => b.Phase, TerrainBuildPhase.Publish)
+                .SetProperty(b => b.ErrorCode, TerrainBuildFailures.Unexpected)
+                .SetProperty(b => b.PyramidVersion, "v-published"));
+        }
+
+        Pyramid(Path.Combine(publishRoot, TerrainPyramid.PublishedName(id)));
+
+        var retried = await runner.PostAsync($"/api/v1/terrain/builds/{id}/retry", null);
+        retried.StatusCode.ShouldBe(HttpStatusCode.OK, await retried.Content.ReadAsStringAsync());
+
+        await RunAsync(id, attempts: 1);
+
+        var finished = await ReadAsync(id);
+        finished.Status.ShouldBe(TerrainBuildStatus.Succeeded, finished.ErrorCode ?? finished.Message ?? "");
+        finished.PyramidVersion.ShouldBe("v-published");
+        publish.Runs.ShouldBe(0);
+
+        var activated = await runner.PostAsync($"/api/v1/terrain/builds/{id}/active", null);
+        activated.StatusCode.ShouldBe(HttpStatusCode.OK, await activated.Content.ReadAsStringAsync());
+
+        // The positive control's mirror: with no pyramid at the served address the version is a
+        // claim about tiles that may be discarded, so a retry still clears it.
+        var unpublished = await SubmitAsync(24.80, 46.80);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TerrainBuilds.Where(b => b.Id == unpublished).ExecuteUpdateAsync(s => s
+                .SetProperty(b => b.Status, TerrainBuildStatus.Failed)
+                .SetProperty(b => b.PyramidVersion, "v-unpublished"));
+        }
+
+        (await runner.PostAsync($"/api/v1/terrain/builds/{unpublished}/retry", null)).StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+        (await ReadAsync(unpublished)).PyramidVersion.ShouldBeNull();
+
+        await runner.DeleteAsync($"/api/v1/terrain/builds/{id}/active");
+    }
+
+    /// <summary>
     /// A process that restarts after somebody called its build off finishes calling it off rather
     /// than resuming it — including withdrawing a bake still outstanding from before the restart.
     /// </summary>

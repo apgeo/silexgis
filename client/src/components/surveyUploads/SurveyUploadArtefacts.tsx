@@ -7,6 +7,7 @@ import Button from '../Button.tsx';
 import { formatSize } from '../attachments/fileFormat.ts';
 import type { SurveyUploadArtefactView } from '../../api/hooks.ts';
 import { surveyUploadRunErrorText } from './surveyUploadProblems.ts';
+import { DOWNLOAD_BUTTON } from '../../theme.ts';
 
 /**
  * What a run produced, each with the file to download and — where the application has a page for
@@ -35,13 +36,25 @@ export default function SurveyUploadArtefacts({ artefacts }: { artefacts: readon
     <Flex vertical gap={8} data-testid="survey-upload-artefacts">
       {artefacts.map((artefact) => (
         <Flex key={`${artefact.kind}:${artefact.name}`} align="center" gap={8} wrap>
-          <Tag>{t(`surveyUploads.outputs.${artefact.kind}`, { defaultValue: artefact.kind })}</Tag>
+          <Tag>
+            {artefact.kind === 'log'
+              ? t('surveyUploads.artefacts.log')
+              : t(`surveyUploads.outputs.${artefact.kind}`, { defaultValue: artefact.kind })}
+          </Tag>
           <Typography.Text>{artefact.name}</Typography.Text>
           {artefact.sizeBytes !== null && (
             <Typography.Text type="secondary">{formatSize(artefact.sizeBytes)}</Typography.Text>
           )}
           {artefact.contentUrl && (
-            <Button size="small" icon={<DownloadOutlined />} href={artefact.contentUrl} target="_blank" rel="noreferrer">
+            <Button
+              size="small"
+              {...DOWNLOAD_BUTTON}
+              icon={<DownloadOutlined />}
+              href={artefact.contentUrl}
+              target="_blank"
+              rel="noreferrer"
+              data-testid="survey-upload-artefact-download"
+            >
               {t('surveyUploads.artefacts.download')}
             </Button>
           )}

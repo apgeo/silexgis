@@ -163,13 +163,21 @@ metodele care au fost dezactivate și nimic din ce conțineau.
 |---|---|
 | Contul: persoana nu se mai poate autentifica | Înregistrarea ei din [lista de speologi](../features/people-and-clubs.md#lista-de-speologi), acum fără cont atașat |
 | | Turele la care a participat, care continuă să o numească |
-| | Tot ce a adăugat, care rămâne la club |
 
 Lista de speologi supraviețuiește intenționat conturilor atașate ei: ștergerea persoanei ar lăsa
 fără stăpân evidența a ce a făcut. Scoaterea unei persoane din listă este un act separat — vezi
 [Când cineva cere să fie eliminat](../features/people-and-clubs.md#când-cineva-cere-să-fie-eliminat).
 
 Membrii nu își pot șterge singuri contul din setări; li se spune să ceară unui administrator.
+
+**Un cont care încă deține înregistrări nu poate fi șters.** Dacă persoana mai deține peșteri sau
+alte obiecte de pe hartă, documente, fișiere de geodate, hărți georeferențiate, albume foto,
+evenimente, expediții, liste de verificare, importuri confirmate sau orice alt fel de înregistrare
+— inclusiv pe cele șterse, pentru că încă pot fi restaurate —, **Șterge** este refuzat, iar pagina
+numește fiecare fel, cu numărul lui: *„Acest cont deține încă înregistrări: … Predă-le sau
+șterge-le mai întâi; ștergerea contului le-ar lăsa fără proprietar."* Nimic nu este reatribuit sau
+eliminat în locul tău. Ca să închizi accesul cuiva la un cont care deține înregistrări,
+**blochează-l** în schimb.
 
 ## Ce refuză pagina
 
@@ -181,6 +189,7 @@ poate, refuzul o spune în cuvinte.
 | Blocarea, ștergerea sau resetarea celui de-al doilea factor pentru **propriul** cont | *„Nu îți poți bloca propriul cont."* · *„Nu îți poți șterge propriul cont."* · *„Propriul al doilea factor îl gestionezi din setările de securitate."* — vezi [Securitate](../features/account-and-settings.md#securitate) |
 | Blocarea sau ștergerea **ultimului administrator deplin** care se poate autentifica | *„Acesta este ultimul administrator deplin care se poate autentifica. Fă mai întâi pe altcineva administrator deplin, altfel instalarea nu ar mai avea cine s-o administreze."* |
 | Blocarea, deblocarea, ștergerea sau resetarea celui de-al doilea factor pentru **contul unui administrator deplin**, dacă nu ești și tu unul | *„Doar un administrator deplin poate bloca, debloca, șterge sau reseta al doilea factor al contului unui administrator deplin."* — altfel un drept delegat asupra conturilor ar fi o cale de a da jos cel mai înalt loc |
+| Ștergerea unui cont care **încă deține înregistrări** | *„Acest cont deține încă înregistrări: … Predă-le sau șterge-le mai întâi; ștergerea contului le-ar lăsa fără proprietar."* — cu fiecare fel și numărul lui |
 | Resetarea celui de-al doilea factor pentru un cont care nu are niciunul activ | *„Acest cont nu are activ niciun al doilea factor, deci nu este nimic de resetat."* |
 | Trimiterea din nou a invitației pentru un cont în care se poate deja intra | *„Acest cont se poate deja autentifica. Titularul își resetează singur parola."* |
 

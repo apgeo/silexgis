@@ -544,6 +544,135 @@ public sealed class FeatureRestoreTests : IAsyncLifetime, IDisposable, IClassFix
         (await IntegrityProblemsAsync(cave, entrance)).ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// A container deleted between the restore's check and its write is caught by the look the
+    /// restore takes again once its write is in: the restore is undone, answered as a conflict,
+    /// and the feature stays deleted rather than standing inside something that is not.
+    /// </summary>
+    /// <remarks>
+    /// Another writer deletes the area and holds the cave's row while the restore runs, so the
+    /// restore's first look finds the area live and its write waits; once the other writer
+    /// commits, the write goes in and only the second look can see the area gone.
+    /// </remarks>
+    [Fact]
+    public async Task A_container_deleted_while_a_restore_is_writing_undoes_the_restore()
+    {
+        var area = await CreateAreaAsync("Deleted meanwhile", "authenticated");
+        var cave = await CreateCaveAsync("Restored meanwhile", "authenticated", parentId: area);
+        await DeleteAsync(owner, $"/api/v1/caves/{cave}");
+
+        await using var otherScope = factory.Services.CreateAsyncScope();
+        var other = otherScope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await using var watchingScope = factory.Services.CreateAsyncScope();
+        var watcher = watchingScope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        HttpResponseMessage raced;
+        await using (var transaction = await other.Database.BeginTransactionAsync())
+        {
+            (await other.Database.ExecuteSqlAsync(
+                $"UPDATE features SET deleted_at = now() WHERE id = {area} AND deleted_at IS NULL")).ShouldBe(1);
+            _ = await other.Database.SqlQuery<Guid>(
+                $"SELECT id AS \"Value\" FROM features WHERE id = {cave} FOR UPDATE").ToListAsync();
+
+            var restoring = RestoreAsync(owner, cave);
+            var waiting = 0L;
+            for (var attempt = 0; attempt < 300 && waiting == 0 && !restoring.IsCompleted; attempt++)
+            {
+                waiting = await watcher.Database.SqlQueryRaw<long>(
+                    "SELECT count(*) AS \"Value\" FROM pg_stat_activity WHERE datname = current_database() "
+                    + "AND state = 'active' AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()").SingleAsync();
+                if (waiting == 0)
+                {
+                    await Task.Delay(50);
+                }
+            }
+
+            restoring.IsCompleted.ShouldBeFalse("the restore must be waiting to write while the area is deleted");
+            await transaction.CommitAsync();
+            raced = await restoring;
+        }
+
+        await ProblemAsync(raced, HttpStatusCode.Conflict, FeatureDeletionRules.ContainerDeletedCode);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Features.IgnoreQueryFilters().Where(f => f.Id == cave).Select(f => f.DeletedAt).SingleAsync())
+                .ShouldNotBeNull();
+        }
+
+        (await IntegrityProblemsAsync(area, cave)).ShouldBeEmpty();
+
+        // Put back in order — the area first — the cave comes back as it always could.
+        (await RestoreAsync(owner, area)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await RestoreAsync(owner, cave)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// The list keeps its rules over a deletion history of a few hundred rows: an area deleted
+    /// with three hundred places inside it is one row that counts them, the places are not
+    /// offered one by one, and paging walks the deletions with the same total on every page.
+    /// </summary>
+    [Fact]
+    public async Task The_deleted_list_pages_a_long_history_one_row_per_deletion()
+    {
+        const int inside = 300;
+        const int alone = 30;
+        var area = await CreateAreaAsync("Large deletion", "authenticated");
+        var mine = new List<Guid> { area };
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+            for (var i = 0; i < inside + alone; i++)
+            {
+                var place = new Feature
+                {
+                    Name = $"Place {i} {suffix}",
+                    FeatureTypeId = sinkholeTypeId,
+                    Geom = new Point(25.4 + (i * 0.0001), 45.4) { SRID = 4326 },
+                    OwnerUserId = ownerId,
+                    Visibility = Visibility.Authenticated,
+                };
+                await writer.CreateGenericAsync(place, i < inside ? [new ParentSpec(area, IsPrimary: true)] : []);
+                if (i >= inside)
+                {
+                    mine.Add(place.Id);
+                }
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        foreach (var single in mine.Skip(1))
+        {
+            await DeleteAsync(owner, $"/api/v1/features/{single}");
+        }
+
+        await DeleteAsync(owner, $"/api/v1/features/{area}");
+
+        var all = await DeletedAsync(owner);
+        var ours = all.Where(f => mine.Contains(f.Id)).ToList();
+        ours.Count.ShouldBe(alone + 1);
+        ours[0].Id.ShouldBe(area);
+        ours[0].OtherCount.ShouldBe(inside);
+        ours.Skip(1).ShouldAllBe(f => f.OtherCount == 0);
+
+        var seen = new List<Guid>();
+        for (var pageNumber = 1; ; pageNumber++)
+        {
+            var page = await JsonAsync(owner, $"/api/v1/features/deleted?page={pageNumber}&pageSize=7");
+            page.GetProperty("totalItems").GetInt32().ShouldBe(all.Count);
+            var ids = page.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()).ToList();
+            if (ids.Count == 0)
+            {
+                break;
+            }
+
+            seen.AddRange(ids);
+        }
+
+        seen.ShouldBe(all.Select(f => f.Id).ToList());
+    }
+
     // ---- fixtures
 
     private sealed record Crumb(Guid Id, string? Name);

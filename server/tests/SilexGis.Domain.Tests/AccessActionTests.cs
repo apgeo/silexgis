@@ -71,5 +71,6 @@ public class AccessActionTests
         ((short)AccessDomain.Events).ShouldBe((short)22);
         ((short)AccessDomain.Terrain).ShouldBe((short)23);
         ((short)AccessDomain.UploadReview).ShouldBe((short)24);
+        ((short)AccessDomain.ScanProfiles).ShouldBe((short)25);
     }
 }

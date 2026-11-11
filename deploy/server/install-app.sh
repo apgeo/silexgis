@@ -60,9 +60,13 @@ else
 		WARNING: no SILEXGIS_DOMAIN given, so this installation will be served over plain
 		HTTP at $PUBLIC_URL. Nobody will be able to sign in: browsers expose crypto.subtle
 		only in a secure context, and the sign-in flow needs it for PKCE. Use HTTPS -- with
-		no domain of your own, a wildcard DNS service gives you one:
+		no domain of your own, a wildcard DNS service gives you one. Once this installation
+		is up, switch it over with:
 
-		  SILEXGIS_DOMAIN=<dashed-ip>.sslip.io bash install-app.sh
+		  bash set-domain.sh --primary <dashed-ip>.sslip.io --email you@example.org
+
+		(Re-running this script with SILEXGIS_DOMAIN does not do it: it leaves an existing
+		.env as it is.)
 
 	WARN
 fi
@@ -89,6 +93,12 @@ echo "    at $(git -C "$APP_DIR" rev-parse --short HEAD)"
 ENV_FILE="$APP_DIR/deploy/.env"
 if [ -f "$ENV_FILE" ]; then
 	say ".env exists -- left untouched (delete it by hand to regenerate)"
+	# A domain given now would otherwise be dropped without a word, and the installation would
+	# stay on whatever address the .env already names.
+	if [ -n "$DOMAIN" ] && ! grep -q '^COMPOSE_FILE=.*docker-compose\.tls\.yml' "$ENV_FILE"; then
+		echo "    !! SILEXGIS_DOMAIN=$DOMAIN was NOT applied: this .env serves no TLS proxy. Apply it with" >&2
+		echo "    !!   bash $(dirname "$0")/set-domain.sh --primary $DOMAIN${TLS_EMAIL:+ --email $TLS_EMAIL}" >&2
+	fi
 else
 	say "Writing $ENV_FILE"
 	DB_PASSWORD="$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-32)"

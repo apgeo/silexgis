@@ -123,7 +123,23 @@ for n in ${ALSO+"${ALSO[@]}"}; do ALL="$ALL, $n"; done
 say "Writing configuration"
 set_env SILEXGIS_DOMAIN "$ALL"
 set_env SILEXGIS_PUBLIC_URL "https://$PRIMARY"
-[ -n "$EMAIL" ] && set_env SILEXGIS_TLS_EMAIL "$EMAIL"
+if [ -n "$EMAIL" ]; then
+	set_env SILEXGIS_TLS_EMAIL "$EMAIL"
+elif ! grep -q '^SILEXGIS_TLS_EMAIL=.' "$ENV_FILE"; then
+	# The same default the installer uses when it is given a domain without a contact.
+	set_env SILEXGIS_TLS_EMAIL "admin@$PRIMARY"
+fi
+
+# The proxy that serves these names is the TLS overlay, and Compose reads the list of files it
+# runs from COMPOSE_FILE in this .env. An installation first set up without a domain has no such
+# overlay in the list: writing the domain alone then left it on plain HTTP -- where nobody can sign
+# in -- and the restart below failed on a caddy service that does not exist. The overlay is added
+# once, after whatever else the list holds.
+COMPOSE_LIST="$(grep '^COMPOSE_FILE=' "$ENV_FILE" | tail -n 1 | cut -d= -f2- || true)"
+case ":${COMPOSE_LIST}:" in
+	*:docker-compose.tls.yml:*) ;;
+	*) set_env COMPOSE_FILE "${COMPOSE_LIST:-docker-compose.yml}:docker-compose.tls.yml" ;;
+esac
 
 # The seeder registers {PublicUrl}/auth/callback by itself; the extra names need theirs added
 # explicitly, or signing in through one of them is refused with an invalid-redirect error.
@@ -140,12 +156,14 @@ for n in ${ALSO+"${ALSO[@]}"}; do
 	i=$((i + 1))
 done
 
-grep -E '^(SILEXGIS_DOMAIN|SILEXGIS_PUBLIC_URL|SILEXGIS_TLS_EMAIL|SILEXGIS__Auth__AdditionalRedirectUris)' "$ENV_FILE" | sed 's/^/    /'
+grep -E '^(COMPOSE_FILE|SILEXGIS_DOMAIN|SILEXGIS_PUBLIC_URL|SILEXGIS_TLS_EMAIL|SILEXGIS__Auth__AdditionalRedirectUris)' "$ENV_FILE" | sed 's/^/    /'
 
 if [ "$RESTART" = 1 ]; then
+	# The whole stack, not only the proxy and the API: when the overlay was just added, the web
+	# service has to be recreated too, to give up the plain-HTTP port the proxy now listens on.
 	say "Restarting proxy and application"
 	cd "$APP_DIR/deploy"
-	docker compose up -d caddy api
+	docker compose up -d --remove-orphans
 	echo "    waiting for a certificate for $PRIMARY (Let's Encrypt, up to ~90s)"
 	for _ in $(seq 1 30); do
 		if curl -fsS --max-time 5 "https://$PRIMARY/health/ready" >/dev/null 2>&1; then

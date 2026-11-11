@@ -28,5 +28,14 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["playwright.config.ts", "e2e"]
+  /* The presentation recorder is the same kind of file: Node outside, the DOM inside `evaluate`.
+     The two page-side modules that declare its window globals are named so those declarations are
+     in view. */
+  "include": [
+    "playwright.config.ts",
+    "e2e",
+    "presenter",
+    "src/presenter/entry.ts",
+    "src/scene3d/presenterBridge3d.ts"
+  ]
 }

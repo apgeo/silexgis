@@ -15,20 +15,29 @@ namespace SilexGis.Infrastructure.Catalogue;
 /// <summary>What to ask the catalogue for.</summary>
 /// <param name="Term">Free text, matched as a substring of the cave's name only. Optional.</param>
 /// <param name="County">Two-letter county code, matched exactly. Optional.</param>
-/// <param name="Offset">How many rows to skip, per spelling.</param>
+/// <param name="Offset">How many rows of the merged answer to skip.</param>
 /// <param name="PageSize">How many rows are wanted.</param>
-public sealed record SpeologieSearchQuery(string? Term, string? County, int Offset, int PageSize);
+public sealed record SpeologieSearchQuery(string? Term, string? County, long Offset, int PageSize);
 
 /// <summary>
 /// One page of catalogue results.
 /// </summary>
 /// <param name="Items">The caves found, by ascending catalogue id, with no duplicates.</param>
 /// <param name="Spellings">The spellings actually searched for, so the caller can say what was asked.</param>
-/// <param name="HasMore">Whether at least one spelling had rows beyond this page.</param>
+/// <param name="HasMore">
+/// Whether rows may follow this page. A page that came back exactly as large as the catalogue
+/// serves counts as "perhaps more", because the probe row that would have settled it did not fit.
+/// </param>
+/// <param name="BeyondReach">
+/// The page asked for starts past what this search can serve exactly, so <paramref name="Items"/>
+/// is empty although the answer holds more rows. The caller refuses it rather than presenting the
+/// empty page as the end of the results.
+/// </param>
 public sealed record SpeologieSearchPage(
     IReadOnlyList<SpeologieRecord> Items,
     IReadOnlyList<string> Spellings,
-    bool HasMore);
+    bool HasMore,
+    bool BeyondReach = false);
 
 /// <summary>
 /// This installation's only way of talking to speologie.org.
@@ -117,10 +126,22 @@ public sealed class SpeologieClient(
     /// the answers are merged by catalogue id.
     /// </summary>
     /// <remarks>
-    /// Paging is the one place this merge is approximate, and it is worth being plain about:
-    /// the offset is applied by the catalogue to each spelling separately, so a merged page
-    /// beyond the first can be short or can repeat a row that a different spelling has already
-    /// shown. The first page is exact, which is the page nearly every search stops at.
+    /// <para>
+    /// A term with one spelling, or a search by county alone, is one result set, and the catalogue
+    /// pages it by offset at any depth.
+    /// </para>
+    /// <para>
+    /// A term with several spellings is several result sets, each paged by its own row position,
+    /// merged here and cut by catalogue id. Handing every spelling the same offset would skip rows:
+    /// a row fetched for one page and cut by id falls behind the next page's offset in its own
+    /// spelling and is never asked for again. So each spelling is read from its start, as deep as
+    /// the page wanted, and the merged list is paged here. That is exact — the first N rows of the
+    /// merged answer are each within the first N rows of their own spelling, since every row
+    /// ahead of them in their spelling is also ahead of them in the merge — and it costs the same
+    /// single request per page. Its limit is the catalogue's page ceiling: past one page's depth
+    /// per spelling the merge cannot be completed in one request, and the page is reported as
+    /// beyond reach instead of being served short.
+    /// </para>
     /// </remarks>
     public async Task<SpeologieSearchPage> SearchAsync(SpeologieSearchQuery query, CancellationToken ct = default)
     {
@@ -128,11 +149,7 @@ public sealed class SpeologieClient(
         EnsureConfigured();
 
         var pageSize = Math.Clamp(query.PageSize, 1, MaxPageSize);
-        var offset = Math.Max(0, query.Offset);
-
-        // One more than wanted, so "is there another page" is answered by what came back rather
-        // than by a count the catalogue does not publish.
-        var limit = Math.Min(pageSize + 1, SpeologieOptions.RemotePageCeiling);
+        var offset = Math.Max(0L, query.Offset);
 
         var spellings = RomanianText.SearchSpellings(query.Term);
         var county = Normalise(query.County);
@@ -146,10 +163,23 @@ public sealed class SpeologieClient(
             return new SpeologieSearchPage([], [], HasMore: false);
         }
 
+        // One more than wanted, so "is there another page" is answered by what came back rather
+        // than by a count the catalogue does not publish.
+        var merging = spellings.Count > 1;
+        var wanted = offset + pageSize + 1;
+        var limit = (int)Math.Min(merging ? wanted : pageSize + 1, SpeologieOptions.RemotePageCeiling);
+        var remoteOffset = merging ? 0L : offset;
+
+        if (remoteOffset > int.MaxValue)
+        {
+            // The catalogue's integers stop here, and no register holds this many caves.
+            return new SpeologieSearchPage([], spellings, HasMore: false, BeyondReach: true);
+        }
+
         var variables = new Dictionary<string, object?>
         {
             ["limit"] = limit,
-            ["offset"] = offset,
+            ["offset"] = (int)remoteOffset,
         };
 
         if (county is not null)
@@ -186,22 +216,49 @@ public sealed class SpeologieClient(
         // so this is the order a caller would have seen from any single spelling — the merge does
         // not reshuffle a result set somebody was reading.
         var merged = new SortedDictionary<int, SpeologieRecord>();
+
+        // A spelling that filled its limit may hold more rows than were read. Every row of the
+        // merge up to the smallest last id such a spelling returned is known to be complete;
+        // past it, a row of that spelling could still sort in between.
         var saturated = false;
+        var exactThrough = int.MaxValue;
 
         foreach (var alias in aliases)
         {
-            var rows = ReadList(data, alias);
-            saturated |= rows.Count > pageSize;
+            var (rows, served) = ReadList(data, alias);
 
             foreach (var row in rows)
             {
                 merged.TryAdd(row.Id, row);
             }
+
+            if (served >= limit)
+            {
+                saturated = true;
+                if (rows.Count > 0)
+                {
+                    exactThrough = Math.Min(exactThrough, rows.Max(r => r.Id));
+                }
+            }
         }
 
-        var items = merged.Values.Take(pageSize).ToArray();
+        if (!merging)
+        {
+            // One result set, already positioned by the catalogue at the offset asked for.
+            return new SpeologieSearchPage([.. merged.Values.Take(pageSize)], spellings, saturated);
+        }
 
-        return new SpeologieSearchPage(items, spellings, saturated || merged.Count > pageSize);
+        var exact = merged.Values.Where(r => r.Id <= exactThrough).ToArray();
+
+        if (saturated && offset >= exact.Length)
+        {
+            return new SpeologieSearchPage([], spellings, HasMore: true, BeyondReach: true);
+        }
+
+        var items = exact.Skip((int)Math.Min(offset, exact.Length)).Take(pageSize).ToArray();
+        var hasMore = saturated || exact.Length > offset + pageSize;
+
+        return new SpeologieSearchPage(items, spellings, hasMore);
     }
 
     /// <summary>Reads one cave in full, by the catalogue's id. Null when the catalogue has no such cave.</summary>
@@ -378,7 +435,25 @@ public sealed class SpeologieClient(
                     continue;
                 }
 
-                var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json, ct);
+                JsonElement body;
+                try
+                {
+                    body = await response.Content.ReadFromJsonAsync<JsonElement>(Json, ct);
+                }
+                catch (JsonException)
+                {
+                    // Not JSON at all: a proxy's error page, a maintenance page, an empty body.
+                    // Behind an error status it is that status's refusal like any other; behind a
+                    // success it is not the catalogue answering, which is their side being unwell
+                    // rather than this application asking for something wrong.
+                    throw response.IsSuccessStatusCode
+                        ? new SpeologieException(
+                            SpeologieException.UnavailableCode,
+                            "The cave catalogue answered with something that is not a catalogue answer.")
+                        : new SpeologieException(
+                            SpeologieException.RejectedCode,
+                            $"The cave catalogue answered {(int)response.StatusCode}.");
+                }
 
                 if (body.ValueKind == JsonValueKind.Object
                     && body.TryGetProperty("errors", out var errors)
@@ -395,7 +470,11 @@ public sealed class SpeologieClient(
                         $"The cave catalogue answered {(int)response.StatusCode}.");
                 }
 
-                if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty("data", out var data))
+                // An object or nothing: every reader of the answer looks members up in it by name,
+                // and "data": null with no errors to explain it is not an answer to read.
+                if (body.ValueKind != JsonValueKind.Object
+                    || !body.TryGetProperty("data", out var data)
+                    || data.ValueKind != JsonValueKind.Object)
                 {
                     throw new SpeologieException(
                         SpeologieException.RejectedCode, "The cave catalogue answered without any data.");
@@ -491,11 +570,15 @@ public sealed class SpeologieClient(
         return null;
     }
 
-    private static IReadOnlyList<SpeologieRecord> ReadList(JsonElement data, string alias)
+    /// <summary>
+    /// The rows one aliased listing answered, and how many it served — which is more than the rows
+    /// when an element could not be read, and is what says whether the listing filled its limit.
+    /// </summary>
+    private static (IReadOnlyList<SpeologieRecord> Rows, int Served) ReadList(JsonElement data, string alias)
     {
         if (!data.TryGetProperty(alias, out var array) || array.ValueKind != JsonValueKind.Array)
         {
-            return [];
+            return ([], 0);
         }
 
         var rows = new List<SpeologieRecord>(array.GetArrayLength());
@@ -507,7 +590,7 @@ public sealed class SpeologieClient(
             }
         }
 
-        return rows;
+        return (rows, array.GetArrayLength());
     }
 
     private static SpeologieRecord? ReadOne(JsonElement data, string alias) =>

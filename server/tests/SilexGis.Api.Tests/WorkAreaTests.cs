@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
 using SilexGis.Infrastructure.Persistence;
 
@@ -25,6 +26,7 @@ public sealed class WorkAreaTests : IAsyncLifetime, IDisposable, IClassFixture<P
 
     private HttpClient owner = null!;
     private HttpClient outsider = null!;
+    private Guid ownerId;
     private long workAreaTypeId;
 
     public WorkAreaTests(PostgresFixture postgres) =>
@@ -33,7 +35,7 @@ public sealed class WorkAreaTests : IAsyncLifetime, IDisposable, IClassFixture<P
     public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"wa-own-{suffix}@t.local");
+        ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"wa-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"wa-out-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
@@ -181,6 +183,92 @@ public sealed class WorkAreaTests : IAsyncLifetime, IDisposable, IClassFixture<P
         (await AreasAsync(owner)).Select(x => x.GetProperty("id").GetGuid()).ShouldNotContain(other);
     }
 
+    [Fact]
+    public async Task A_deleted_area_is_no_longer_listed()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var kept = await CreateAreaAsync($"Kept {marker}", "authenticated");
+        var gone = await CreateAreaAsync($"Gone {marker}", "authenticated");
+        (await AreasAsync(owner)).Select(x => x.GetProperty("id").GetGuid()).ShouldContain(gone);
+
+        var deleted = await owner.DeleteAsync($"/api/v1/features/{gone}");
+        deleted.IsSuccessStatusCode.ShouldBeTrue(await deleted.Content.ReadAsStringAsync());
+
+        var seen = (await AreasAsync(owner)).Select(x => x.GetProperty("id").GetGuid()).ToList();
+        seen.ShouldContain(kept);
+        seen.ShouldNotContain(gone);
+        using var scope = factory.Services.CreateScope();
+        // Soft-deleted, not removed: the row is still there, and only the listing's filter keeps it off.
+        (await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().Features.IgnoreQueryFilters()
+            .AsNoTracking().CountAsync(f => f.Id == gone && f.DeletedAt != null)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Past_the_cap_the_answer_says_it_is_cut_and_a_child_whose_parent_was_cut_names_no_parent()
+    {
+        // Named to sort ahead of every other area on the shared database, so the first rows of the
+        // answer are this test's: a child, then the fillers, with the parent sorting last of all.
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var parent = await CreateAreaAsync($"zzzz {marker} parent", "authenticated");
+        var child = await CreateAreaAsync($"0000 {marker} a child", "authenticated", parentId: parent);
+        const int cap = 500;
+        var fillers = new List<Guid>();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            for (var i = 0; i < cap; i++)
+            {
+                var id = Guid.NewGuid();
+                fillers.Add(id);
+                db.Features.Add(new Feature
+                {
+                    Id = id,
+                    Name = $"0000 {marker} b{i:000}",
+                    Kind = FeatureKind.Generic,
+                    FeatureTypeId = workAreaTypeId,
+                    OwnerUserId = ownerId,
+                    Visibility = Visibility.Authenticated,
+                    AncestorIds = [id],
+                });
+                db.FeatureAncestors.Add(new FeatureAncestor { FeatureId = id, AncestorId = id });
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        try
+        {
+            await ShouldBeCutAsync(child, parent, fillers, cap);
+        }
+        finally
+        {
+            // The class's tests share one database, and five hundred areas sorting first would
+            // push every later test's areas past the cap.
+            using var scope = factory.Services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().Features
+                .Where(f => f.Id == child || f.Id == parent || fillers.Contains(f.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(f => f.DeletedAt, DateTimeOffset.UtcNow));
+        }
+    }
+
+    private async Task ShouldBeCutAsync(Guid child, Guid parent, List<Guid> fillers, int cap)
+    {
+        var (items, truncated) = await AnswerAsync(owner);
+
+        truncated.ShouldBeTrue();
+        items.Count.ShouldBe(cap);
+        var ids = items.Select(x => x.GetProperty("id").GetGuid()).ToList();
+        // The first rows by name, and the same rows asked again: a cut that moves between calls
+        // would hand a board a different half each time.
+        ids[0].ShouldBe(child);
+        ids.Skip(1).ShouldBe(fillers.Take(cap - 1));
+        (await AnswerAsync(owner)).Items.Select(x => x.GetProperty("id").GetGuid()).ShouldBe(ids);
+        ids.ShouldNotContain(parent);
+        // Its parent is past the cut, so the child names no parent rather than one the answer
+        // does not hold.
+        items[0].GetProperty("parentId").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
     private async Task<Guid> CreateAreaAsync(
         string name,
         string visibility,
@@ -227,6 +315,15 @@ public sealed class WorkAreaTests : IAsyncLifetime, IDisposable, IClassFixture<P
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
         return [.. JsonDocument.Parse(payload).RootElement.GetProperty("items").EnumerateArray()];
+    }
+
+    private static async Task<(List<JsonElement> Items, bool Truncated)> AnswerAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/api/v1/work-areas/");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        var root = JsonDocument.Parse(payload).RootElement;
+        return ([.. root.GetProperty("items").EnumerateArray()], root.GetProperty("truncated").GetBoolean());
     }
 
     private static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)

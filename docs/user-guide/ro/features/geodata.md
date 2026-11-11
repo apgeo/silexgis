@@ -20,7 +20,15 @@ Trei file: **Fișiere vectoriale**, **Hărți raster**, **Importuri**.
 
 Trage fișiere înăuntru sau fă clic pentru a alege. Acceptate:
 
-**GPX · KML · KMZ · GeoJSON · shapefile arhivat · CSV cu coloane de coordonate · WKT**
+**GPX · KML · KMZ · GeoJSON · shapefile arhivat · CSV cu coloane de coordonate · WKT** — cel mult
+**150 MB** pe fișier.
+
+**Fiecare fișier lăsat aici primește un rând propriu** sub zona de încărcare, pe această filă și
+pe **Hărți raster**: o bară de progres cât timp este trimis, *serverul verifică fișierul* după ce a
+ajuns, apoi ce a făcut serverul cu el — sau **de ce a fost refuzat**, în cuvinte: motivul dat de
+server, o legătură pierdută sau un fișier mai mare decât lasă să treacă un proxy aflat în fața
+serverului. Rândul rămâne până când îl închizi; **Șterge cele terminate** le șterge dintr-odată pe
+cele terminate.
 
 Importul rulează în fundal. Stare: *În așteptare → Se importă… → Importat* (sau *Eșuat*).
 

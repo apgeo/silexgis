@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import type { Altitude3DPlacement } from './altitude3d.ts';
+import type { EstimatedPassagesDisplay } from './estimatedPassages.ts';
 import type { Scene3DContextLossState } from './contextLoss.ts';
 
 // The contract between the application and whatever draws the 3D scene.
@@ -736,6 +737,198 @@ export interface Scene3DModels {
   setModelPlacement(placement: Altitude3DPlacement): void;
   /** What is happening to the model under an id, or undefined when that id holds nothing. */
   modelStatus(id: string): Scene3DModelStatus | undefined;
+  /**
+   * Shows or hides, and colours, the passages a survey's reading drew at an estimated size, in
+   * every model the scene holds and every one it loads after. Models without any are untouched.
+   */
+  setEstimatedPassages(display: EstimatedPassagesDisplay): void;
+}
+
+// ---- point clouds -------------------------------------------------------------
+
+/**
+ * Where a scan's own origin sits and which way its own north points.
+ *
+ * The altitude members mean what they mean on a mesh anchor: a surveyed altitude, resolved by
+ * the altitude placement rule when the scan is drawn, so that a scan placed at an entrance hangs
+ * at the same height as the survey lines of the same cave. The one difference is the heading. A
+ * scan's tiles are in the scanner's own frame — the recording started facing some way, and that
+ * way is the cloud's +y — so unlike a converted mesh nothing has turned it onto true north yet,
+ * and the bearing of its +y, clockwise from true north in degrees, is part of where it is.
+ */
+export interface Scene3DPointCloudAnchor extends Scene3DModelAnchor {
+  /** Compass bearing of the cloud's own +y axis: 0 = true north, increasing clockwise. */
+  headingDeg: number;
+  /**
+   * A small fitted tilt raising the cloud's +x end, degrees; absent or 0 for a level scan. Composed
+   * after the heading the way the server's fit composed it.
+   */
+  pitchDeg?: number;
+  /** A small fitted tilt raising the cloud's +y end, degrees; absent or 0 for a level scan. */
+  rollDeg?: number;
+}
+
+/**
+ * What each point is coloured by.
+ *
+ * `rgb` draws the colour the scanner recorded and is only meaningful when the tiles carry one;
+ * `intensity` shades by the return strength the tiles carry under that name; `height` is a ramp
+ * over the point's height above the cloud's own origin and needs nothing from the file.
+ */
+export type Scene3DPointCloudColoring = 'rgb' | 'intensity' | 'height';
+
+export interface Scene3DPointCloudStyle {
+  colorBy: Scene3DPointCloudColoring;
+  /**
+   * The intensity value that is drawn brightest; values above it clip. The tiler writes the
+   * field as it found it in the file, so a cloud recorded in 16 bits wants a far larger figure
+   * than one recorded in 8. Defaults to 255.
+   */
+  intensityMax?: number;
+  /**
+   * The heights, in metres above the cloud's own origin, drawn at the two ends of the height
+   * ramp. Omitted, the scene spans the ramp over the cloud's own vertical extent once known.
+   */
+  heightRangeM?: [number, number];
+}
+
+/**
+ * How much the scene asks of the machine for each cloud: the screen-space error a tile may show
+ * before its children are fetched, and how many bytes of tiles are kept loaded. These are the
+ * engine's two dials for point clouds — there is no point cap — and they are the facts about a
+ * graphics card that a per-browser setting exists to state.
+ */
+export interface Scene3DPointCloudDetail {
+  maximumScreenSpaceError: number;
+  cacheBytes: number;
+}
+
+export interface Scene3DPointCloudOptions {
+  /** Address of the tileset's root; the scene fetches it and every tile under it. */
+  url: string;
+  anchor: Scene3DPointCloudAnchor;
+  /** How surveyed altitudes become scene heights, as it stands at the moment of loading. */
+  placement: Altitude3DPlacement;
+  detail: Scene3DPointCloudDetail;
+  /** Defaults to colour by height, the one colouring every cloud can carry. */
+  style?: Scene3DPointCloudStyle;
+  /** Whether it is drawn once loaded; defaults to true. */
+  visible?: boolean;
+  /**
+   * The scan's centreline, in the tiles' own metres, drawn as a line under the same transform as
+   * the cloud so it moves with every re-placement. Left out on a re-load, the line drawn stays; an
+   * empty list takes it away.
+   */
+  centreline?: readonly Scene3DScanPoint[];
+}
+
+export type Scene3DPointCloudStatus = Scene3DModelStatus;
+
+/**
+ * Tiled point clouds in the scene — the same life cycle as models, kept as a group of its own
+ * because a point cloud is not a model: it is fetched a tile at a time and never whole, it is
+ * drawn as shaded points whose size and lighting are properties the scene sets on it, and its
+ * placement carries a heading. Every member mirrors its `Scene3DModels` counterpart, and the
+ * same discipline holds: a load lands only if its id still wants it, a remove is a genuine
+ * release of the tiles, and `setModelPlacement` re-places clouds alongside models.
+ */
+export interface Scene3DPointClouds {
+  /**
+   * Loads a tileset under a caller-chosen id, replacing whatever that id held; resolves once its
+   * root has been read, which is well before every tile has. Asking again for the same URL under
+   * the same id re-places and re-styles what is already there without reading it again.
+   */
+  loadPointCloud(id: string, options: Scene3DPointCloudOptions): Promise<void>;
+  /** Releases the cloud's tiles; an id that holds nothing is not an error. */
+  removePointCloud(id: string): void;
+  /** Draws or stops drawing one cloud, keeping its tiles. */
+  setPointCloudVisible(id: string, visible: boolean): void;
+  /** Recolours one loaded cloud, or decides how a cloud still being read is drawn when it lands. */
+  setPointCloudStyle(id: string, style: Scene3DPointCloudStyle): void;
+  /** Applies a detail budget to every cloud, loaded or loading, and to every cloud loaded after. */
+  setPointCloudDetail(detail: Scene3DPointCloudDetail): void;
+  pointCloudStatus(id: string): Scene3DPointCloudStatus | undefined;
+}
+
+// ---- a scan on its own, without the world -------------------------------------
+
+/**
+ * A scene that shows one point cloud by itself: no globe, no sky, no map, the cloud in its own
+ * metres at a fixed synthetic origin, with the camera orbiting the cloud's centre.
+ *
+ * It exists because a scan is worth looking at before anybody has said where on earth it is —
+ * and because showing an unplaced scan on the globe would put it somewhere, which is a statement
+ * about the cave's location nobody has made. The tiles carry no coordinates, so this scene can
+ * be shown to anyone who may read the cave's survey files, placed or not.
+ */
+export interface Scene3DLocalScan {
+  isDestroyed(): boolean;
+  destroy(): void;
+  requestRender(): void;
+  /**
+   * Reads the tileset and puts the camera where the whole cloud is in view. Rejects when it
+   * cannot be read. Loading again replaces the cloud shown.
+   */
+  load(options: Pick<Scene3DPointCloudOptions, 'url' | 'detail' | 'style'>): Promise<void>;
+  status(): Scene3DPointCloudStatus | undefined;
+  setStyle(style: Scene3DPointCloudStyle): void;
+  setDetail(detail: Scene3DPointCloudDetail): void;
+  /** Puts the camera back where the whole cloud is in view, orbiting its centre. */
+  viewAll(): void;
+  /**
+   * Turns the two-point measure on or off. While it is on, a click on the cloud takes a point;
+   * the second click closes the segment and the distance between the two is reported. A third
+   * click starts a new measurement. Turning it off takes the drawn segment away.
+   */
+  setMeasuring(on: boolean): void;
+  /** The measurement as it stands, or undefined when none is under way. */
+  measurement(): Scene3DMeasurement | undefined;
+  /** Reports every change of the measurement: a point taken, a segment closed, a clear. */
+  subscribeMeasurement(listener: (measurement: Scene3DMeasurement | undefined) => void): () => void;
+  /** Reports the engine's own message when rendering dies; the caller supplies the sentence. */
+  subscribeRenderError(listener: (message: string) => void): () => void;
+  /**
+   * Turns point picking on or off. While it is on, a click on the drawn cloud reports the point
+   * under the pointer, in the tiles' own metres; a click on the void reports nothing. Picking and
+   * the measure share the click, so turning one on turns the other off.
+   */
+  setPicking(on: boolean): void;
+  /** Reports each point picking takes. */
+  subscribePick(listener: (point: Scene3DScanPoint) => void): () => void;
+  /**
+   * Marks points on the cloud, in the tiles' own metres, replacing whatever was marked before; an
+   * empty list takes every mark away. A marked point is the one picked earlier, so the person can
+   * see which places they have already paired.
+   */
+  setMarks(points: readonly Scene3DScanPoint[]): void;
+  /**
+   * Draws the scan's centreline — the scanner's path, simplified — through the cloud, in the
+   * tiles' own metres, replacing the line drawn before; an empty list takes it away.
+   */
+  setCentreline(points: readonly Scene3DScanPoint[]): void;
+}
+
+/**
+ * A point of a scan in its own frame: metres from the tiles' zero point along the tiles' X, Y and
+ * Z axes — the frame the tiles were written in, before anything said where on earth it is. This
+ * is the frame a placement is fitted from, which is why a pick is reported in it and not in the
+ * scene's synthetic world coordinates.
+ */
+export interface Scene3DScanPoint {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/**
+ * A distance read off a scan: how many points have been taken, and the metres between them once
+ * there are two. Points are taken on the depth the scene drew, so a click lands on the nearest
+ * drawn point under the pointer — not on a point by identity, which a tiled cloud has no handle
+ * for — and a click on the void takes nothing.
+ */
+export interface Scene3DMeasurement {
+  points: 1 | 2;
+  distanceM?: number;
 }
 
 // ---- a picture of the scene ---------------------------------------------------
@@ -781,6 +974,7 @@ export interface Scene3DEngine
     Scene3DSurface,
     Scene3DTerrain,
     Scene3DModels,
+    Scene3DPointClouds,
     Scene3DCapture {}
 
 /**
@@ -802,4 +996,5 @@ export type Scene3DCore = Scene3DLifecycle &
   Scene3DSurface &
   Scene3DTerrain &
   Scene3DModels &
+  Scene3DPointClouds &
   Scene3DCapture;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login, confirmOk } from './helpers.ts';
+import { login, confirmOk, searchFindsNoFeature } from './helpers.ts';
 
 /**
  * A trip's worth of photographs becomes entrances and features in the registry, and the whole
@@ -75,9 +75,6 @@ test.describe('photo import', () => {
     await expect(page.getByText('The import was undone.')).toBeVisible({ timeout: 20_000 });
 
     await page.goto('/features');
-    await page.getByPlaceholder('Search by name').fill(entranceName);
-    await expect(page.getByRole('row', { name: new RegExp(entranceName) })).toHaveCount(0, {
-      timeout: 20_000,
-    });
+    await searchFindsNoFeature(page, entranceName);
   });
 });

@@ -31,6 +31,21 @@ public sealed class RasterCogHandler(
 {
     public string Kind => ProcessingJobKinds.RasterCog;
 
+    /// <summary>A conversion given up by the queue stops reading "processing".</summary>
+    public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
+    {
+        if (AbandonedJob.PayloadOf<RasterCogPayload>(job) is not { } payload)
+        {
+            return;
+        }
+
+        await db.GeoreferencedMaps
+            .Where(m => m.Id == payload.GeoreferencedMapId && m.Status == RasterStatus.Processing)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(m => m.Status, RasterStatus.Failed)
+                .SetProperty(m => m.ProcessingError, AbandonedJob.Reason), ct);
+    }
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var payload = JsonSerializer.Deserialize<RasterCogPayload>(job.Payload, JsonSerializerOptions.Web)
@@ -43,6 +58,23 @@ public sealed class RasterCogHandler(
 
         map.Status = RasterStatus.Processing;
         await db.SaveChangesAsync(ct);
+
+        // A scan with no place is not a failed map: it becomes a sheet, drawn and then placed by
+        // hand like a portable document with no georeferencing of its own.
+        if (rasterService.IsUnplacedRaster(fileStore.GetAbsolutePath(upload.StoragePath)))
+        {
+            map.SourceFileId = upload.Id;
+            map.SourcePage = 1;
+            map.Status = RasterStatus.Uploaded;
+            db.ProcessingJobs.Add(new ProcessingJob
+            {
+                Kind = ProcessingJobKinds.MapSheetRender,
+                Payload = JsonSerializer.Serialize(new MapSheetPayload(map.Id), JsonSerializerOptions.Web),
+                RequestedBy = job.RequestedBy,
+            });
+            await db.SaveChangesAsync(ct);
+            return;
+        }
 
         var workPath = Path.Combine(Path.GetTempPath(), $"silexgis-cog-{Guid.NewGuid():N}.tif");
         try

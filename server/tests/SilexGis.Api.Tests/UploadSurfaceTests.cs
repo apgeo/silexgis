@@ -483,6 +483,28 @@ public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable, IClassFixt
             .Value.MultipartBodyLengthLimit.ShouldBeGreaterThanOrEqualTo(RasterUploadLimits.MaxRequestBytes);
     }
 
+    /// <summary>
+    /// The vector upload carried no request limit of its own and so stopped at the web server's
+    /// built-in 30 MB with a bare 413. It now has its own ceiling, five times that, with room for
+    /// the form's envelope, and the process-wide multipart ceiling clears it.
+    /// </summary>
+    [Fact]
+    public void A_vector_file_of_the_advertised_size_fits_the_request_that_carries_it()
+    {
+        var upload = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Single(e => e.RoutePattern.RawText?.TrimEnd('/') == "/api/v1/geofiles"
+                && e.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains("POST") == true);
+
+        upload.Metadata.GetMetadata<IRequestSizeLimitMetadata>()
+            .ShouldNotBeNull("The vector upload has no request-size limit of its own.")
+            .MaxRequestBodySize.ShouldBe(VectorUploadLimits.MaxVectorBytes + FilesOptions.MultipartEnvelopeBytes);
+        VectorUploadLimits.MaxVectorBytes.ShouldBe(150L * 1024 * 1024);
+
+        factory.Services.GetRequiredService<IOptions<FormOptions>>()
+            .Value.MultipartBodyLengthLimit.ShouldBeGreaterThanOrEqualTo(VectorUploadLimits.MaxRequestBytes);
+    }
+
     [Fact]
     public async Task The_published_limit_defaults_to_the_shipped_value()
     {

@@ -87,6 +87,22 @@ public sealed class ImportCommitService(
     /// </summary>
     private const string BatchPrimaryKey = "pk_import_batches";
 
+    // The widths of the columns an imported row's own text lands in. A value past them is the
+    // row's refusal, decided before anything of the row is written; reaching the database it
+    // would fail the whole confirmation's single save instead.
+    private const int FeatureNameMaxLength = 255;
+    private const int CaveCodeMaxLength = 50;
+
+    private static void RequireFits(string? value, int maxLength, string what)
+    {
+        if (value is not null && value.Length > maxLength)
+        {
+            throw new ImportCommitException(
+                "import.value_too_long",
+                $"The row's {what} is {value.Length} characters long; the registry keeps at most {maxLength}.");
+        }
+    }
+
     public async Task<ImportCommitResult> CommitAsync(
         Geofile geofile,
         TermRuleSet? ruleSet,
@@ -100,6 +116,9 @@ public sealed class ImportCommitService(
         CancellationToken ct = default,
         HeldCommit? into = null)
     {
+        // A row named twice is one row: walked twice it would be created twice, and on a held
+        // confirmation the second object would land on no line, out of reach of the undo.
+        selection = selection.Distinct().ToList();
         var maxCommitItems = limits.Value.MaxCommitItems;
         if (selection.Count > maxCommitItems)
         {
@@ -364,6 +383,9 @@ public sealed class ImportCommitService(
     /// back with it.
     /// </para>
     /// </summary>
+    /// <summary>The refusal of an undo of a batch that has been undone already.</summary>
+    public const string AlreadyRevertedCode = "import_batch.already_reverted";
+
     public async Task RevertAsync(ImportBatch batch, Guid userId, CancellationToken ct = default)
     {
         // Taking a batch back is a change set of its own, filed under the batch it takes back, so
@@ -408,6 +430,20 @@ public sealed class ImportCommitService(
             .ToListAsync(ct);
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // Claimed first, in one statement under the row lock: two undos of one batch at once both
+        // read it as not yet undone, and without this both would run — recording every removal
+        // twice and answering both as done. The second waits on the lock, then finds the batch
+        // undone and is refused.
+        var claimed = await db.ImportBatches
+            .Where(b => b.Id == batch.Id && b.RevertedAt == null)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(b => b.RevertedAt, DateTimeOffset.UtcNow)
+                .SetProperty(b => b.RevertedByUserId, userId), ct);
+        if (claimed == 0)
+        {
+            throw new ImportCommitException(AlreadyRevertedCode, "This import has already been undone.");
+        }
 
         // Positions first, and they are removed rather than stamped: a report of something that
         // never happened is taken off the log, which is what the tracking surface itself does with
@@ -566,9 +602,22 @@ public sealed class ImportCommitService(
             // Nothing is created: the batch records that this position was seen and recognised
             // as something already in the registry, which is what stops the next import of the
             // same file wondering about it again.
-            item.AttachedToFeatureId = decision.AttachToFeatureId
+            var targetId = decision.AttachToFeatureId
                 ?? throw new ImportCommitException(
                     "import.attach_target_missing", "Recognising a candidate needs the object it is.");
+
+            // Checked here rather than left to the line's foreign key: an object removed since
+            // the review was saved would otherwise fail the whole confirmation at its save, and
+            // every retry of it, instead of this one row. One the caller may not read answers
+            // the same as one that is gone, so the refusal says nothing about what exists.
+            var target = await db.Features.FirstOrDefaultAsync(f => f.Id == targetId, ct);
+            if (target is null || !(await access.DecideAsync(ctx, AccessAction.Read, target, ct)).Allowed)
+            {
+                throw new ImportCommitException(
+                    "import.attach_target_not_found", "The object this row was recognised as is not there.");
+            }
+
+            item.AttachedToFeatureId = targetId;
             return item;
         }
 
@@ -584,6 +633,12 @@ public sealed class ImportCommitService(
                 "import.geometry_missing", "The row no longer carries a readable geometry.");
 
         var name = decision.Name ?? candidate.ProposedName ?? candidate.SourceName;
+        RequireFits(name, FeatureNameMaxLength, "name");
+        if (kind is ImportTargetKind.Cave or ImportTargetKind.CaveEntrance)
+        {
+            RequireFits(candidate.SourceCode, CaveCodeMaxLength, "identification code");
+        }
+
         var altitude = AltitudeOf(keepElevation, candidate, geometry);
 
         item.FeatureId = kind switch
@@ -613,11 +668,17 @@ public sealed class ImportCommitService(
         decimal? altitude,
         AccessContext ctx,
         HashSet<Guid> touchedCaves,
-        CancellationToken ct)
+        CancellationToken ct,
+        long? entranceTypeId = null)
     {
         RequireCreate(ctx, options);
         var point = AsPoint(geometry);
+
+        // Everything that can refuse the row is decided before the writer is asked for anything.
+        // The confirmation saves once, at the end, so whatever a refused row had already added
+        // would be saved with the rest — a cave on no batch line, which the undo cannot reach.
         var caveTypeId = taxonomies.CaveType(decision.CaveTypeCode ?? candidate.ProposedCaveTypeCode);
+        var firstEntranceTypeId = entranceTypeId ?? taxonomies.EntranceType(DefaultEntranceTypeCode);
 
         var feature = new Feature
         {
@@ -645,7 +706,7 @@ public sealed class ImportCommitService(
         var entrance = new CaveEntrance
         {
             CaveFeatureId = feature.Id,
-            EntranceTypeId = taxonomies.EntranceType(DefaultEntranceTypeCode),
+            EntranceTypeId = firstEntranceTypeId,
             IsMain = true,
             Altitude = altitude,
             PositionQuality = PositionQuality.Unknown,
@@ -676,12 +737,20 @@ public sealed class ImportCommitService(
         {
             // A second entrance of a cave already in the registry. Authorised against that
             // cave, not against the import: adding to somebody else's cave is a write on it.
-            var cave = await db.Features.FirstOrDefaultAsync(f => f.Id == caveId && f.Kind == FeatureKind.Cave, ct)
-                ?? throw new ImportCommitException("import.cave_not_found", "The chosen cave no longer exists.");
+            // A cave the caller may not read is answered exactly as one that is not there, and
+            // neither answer names anything: two different refusals, or a refusal quoting the
+            // cave's name, would let anybody with an import learn which ids are caves and what
+            // they are called.
+            var cave = await db.Features.FirstOrDefaultAsync(f => f.Id == caveId && f.Kind == FeatureKind.Cave, ct);
+            if (cave is null || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed)
+            {
+                throw new ImportCommitException("import.cave_not_found", "The chosen cave is not there.");
+            }
+
             if (!(await access.DecideAsync(ctx, AccessAction.Write, cave, ct)).Allowed)
             {
                 throw new ImportCommitException(
-                    "import.cave_forbidden", $"You may not add an entrance to '{cave.Name}'.");
+                    "import.cave_forbidden", "You may not add an entrance to the chosen cave.");
             }
 
             var entranceFeature = new Feature
@@ -705,8 +774,10 @@ public sealed class ImportCommitService(
         // An entrance with no cave named is a cave nobody has entered into the registry yet.
         // Creating the cave around it keeps the structure honest — an entrance without a cave
         // has nowhere to live — and the reviewer can move it under the right cave afterwards.
+        // The entrance keeps the type the rule or the reviewer gave it.
         return await CreateCaveAsync(
-            candidate, decision, options, taxonomies, geometry, name, altitude, ctx, touchedCaves, ct);
+            candidate, decision, options, taxonomies, geometry, name, altitude, ctx, touchedCaves, ct,
+            entranceTypeId);
     }
 
     private async Task<Guid> CreateSurfaceFeatureAsync(
@@ -768,13 +839,7 @@ public sealed class ImportCommitService(
             return null;
         }
 
-        // A single-part multi-geometry is what several writers produce for one waypoint; the
-        // registry's point kinds want a point, and unwrapping is lossless.
-        if (geometry is MultiPoint { NumGeometries: 1 } multi)
-        {
-            geometry = multi.GetGeometryN(0);
-        }
-
+        geometry = ImportCandidateService.SinglePartOf(geometry);
         geometry.SRID = 4326;
         return geometry is Point point ? WithElevation(point, keepElevation, mappedElevation) : geometry;
     }

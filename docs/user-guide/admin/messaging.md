@@ -259,6 +259,11 @@ Below, the ones worth looking at: what each was about, **who it was for — unde
 may be shown under and never their address** — and what the far end said, with anything
 address-shaped taken out of it.
 
+A message the far end refuses **for good** — an address that cannot be read, or a mail server
+answering that the mailbox itself is refused — is given up on at the first attempt, with that
+reason, instead of being tried again. A refusal that may pass — the relay, a policy,
+sign-in to the mail server, a temporary answer — is still tried again.
+
 ### Putting one back by hand
 
 A message that has given up can be retried. Retrying **asks every question again before it

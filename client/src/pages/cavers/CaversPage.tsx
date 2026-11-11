@@ -38,6 +38,7 @@ import {
 } from '../../api/hooks.ts';
 import { ApiError } from '../../api/client.ts';
 import { CaverHeldByTripsModal } from '../../components/cavers/CaverHeldByTripsModal.tsx';
+import { rosterWriteProblem } from '../../components/cavers/rosterProblems.ts';
 import {
   CAVER_HELD_BY_CAMP_CODE,
   caverHeldByTrips,
@@ -73,8 +74,8 @@ function MergeModal({ target, onClose }: { target: CaverInfo; onClose: () => voi
       await merge.mutateAsync(source);
       message.success(t('common.saved'));
       onClose();
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(rosterWriteProblem(error, t));
     }
   };
 
@@ -304,6 +305,12 @@ export default function CaversPage() {
                                 setHeld({ caver, by });
                               } else if (error instanceof ApiError && error.code === CAVER_HELD_BY_CAMP_CODE) {
                                 message.error(t('cavers.deleteRefusedCamp'));
+                              } else if (
+                                error instanceof ApiError &&
+                                (error.code === 'caver.revokes_full_admin' ||
+                                  error.code === 'permission_group.last_full_admin')
+                              ) {
+                                message.error(rosterWriteProblem(error, t));
                               } else {
                                 message.error(t('cavers.deleteRefused'));
                               }

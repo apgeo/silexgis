@@ -168,6 +168,104 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         corrected.GetProperty("out").GetBoolean().ShouldBeFalse();
     }
 
+    /// <summary>
+    /// Two coordinators holding the same version of the watch: the first change lands, the second
+    /// is refused instead of writing over it.
+    /// </summary>
+    /// <remarks>
+    /// The arrangement is stored in a table of its own, and the precondition is the trip's version.
+    /// A write that saved only the arrangement would leave that version where it was, so the
+    /// second coordinator's copy would still match and its filter would silently replace the
+    /// first one's — on the surface that says where a party is.
+    /// </remarks>
+    [Fact]
+    public async Task A_second_coordinator_holding_the_same_version_is_refused()
+    {
+        var (trip, _) = await CreateTripAsync("Two coordinators", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var held = (await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking")).Headers.ETag!.ToString();
+
+        async Task<HttpResponseMessage> FilterAsync(string branch)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/trip-logs/{trip}/tracking")
+            {
+                Content = JsonContent.Create(new { state = "armed", depthFilter = new[] { branch } }),
+            };
+            request.Headers.TryAddWithoutValidation("If-Match", held);
+            return await owner.SendAsync(request);
+        }
+
+        var first = await FilterAsync("cave.parallel");
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        first.Headers.ETag!.ToString().ShouldNotBe(held, "the write moves the version it was checked against");
+        first.Headers.ETag!.ToString()
+            .ShouldBe((await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking")).Headers.ETag!.ToString());
+
+        var second = await FilterAsync("cave.upper");
+        second.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, await second.Content.ReadAsStringAsync());
+        (await second.Content.ReadAsStringAsync()).ShouldContain("concurrency.version_mismatch");
+
+        // The first coordinator's filter is the one standing: a depth report resolves under it.
+        var resolved = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/resolve-depth", new { depthM = 50 });
+        resolved.StatusCode.ShouldBe(HttpStatusCode.OK, await resolved.Content.ReadAsStringAsync());
+        (await BodyAsync(resolved)).EnumerateArray()
+            .ShouldAllBe(c => c.GetProperty("stationName").GetString()!.StartsWith("cave.parallel"));
+    }
+
+    /// <summary>
+    /// Two coordinators configuring a watch for the first time at the same moment: one write
+    /// lands, the other is told the trip moved, and the trip holds exactly one watch.
+    /// </summary>
+    /// <remarks>
+    /// The first configuration is also the one that creates the trip's one watch row, so the race
+    /// worth pinning is two inserts of that row. Both writes take the trip's version hold — a lock
+    /// on the trip row — before the watch is read or created, so the second waits for the first
+    /// and then fails its precondition against the version the first one moved: a 412 naming the
+    /// version, never a duplicate row, a unique-index failure or a 500. Sent together rather than
+    /// one after the other, so the lock is what decides it whenever the two do overlap.
+    /// </remarks>
+    [Fact]
+    public async Task Two_first_configurations_of_one_watch_at_once_leave_one_watch_and_refuse_the_second()
+    {
+        var (trip, _) = await CreateTripAsync("First arm twice", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripTrackings.CountAsync(x => x.TripLogId == trip)).ShouldBe(0);
+        }
+
+        var held = (await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking")).Headers.ETag!.ToString();
+
+        Task<HttpResponseMessage> ArmWithAsync()
+        {
+            var request = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/trip-logs/{trip}/tracking")
+            {
+                Content = JsonContent.Create(new { state = "armed", surveyModelId = model }),
+            };
+            request.Headers.TryAddWithoutValidation("If-Match", held);
+            return owner.SendAsync(request);
+        }
+
+        var answers = await Task.WhenAll(ArmWithAsync(), ArmWithAsync());
+        var statuses = answers.Select(a => a.StatusCode).ToList();
+        statuses.ShouldBe([HttpStatusCode.OK, HttpStatusCode.PreconditionFailed], ignoreOrder: true);
+        var loser = answers.Single(a => a.StatusCode == HttpStatusCode.PreconditionFailed);
+        (await loser.Content.ReadAsStringAsync()).ShouldContain("concurrency.version_mismatch");
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripTrackings.CountAsync(x => x.TripLogId == trip)).ShouldBe(1);
+        }
+
+        (await StateAsync(owner, trip)).GetProperty("state").GetString().ShouldBe("armed");
+    }
+
     [Fact]
     public async Task A_depth_report_respects_the_trips_filter_because_parallel_shafts_share_depths()
     {
@@ -3279,18 +3377,22 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     // ---- a party number is given once -----------------------------------------------------------
 
     /// <summary>
-    /// Two writes that name somebody new on one trip at the same moment reach for the same next
-    /// party number, and the table lets one of them in. The other is answered as a conflict with a
-    /// code, has written nothing, and succeeds when it is repeated.
+    /// A write that names somebody new on a trip while another writer is taking the trip's next
+    /// party number waits for that writer, then takes the number after it: one number is never
+    /// given twice, and neither save is lost.
     /// </summary>
     /// <remarks>
     /// The other writer is played here by a transaction that has taken the next number and not
-    /// yet committed: the save cannot see it, picks the same number, and waits on it. Committing
-    /// is the other writer winning. The wait is observed before the commit, so the test cannot
-    /// pass by the save simply having finished first.
+    /// yet committed. Its row points at the trip, which holds the trip's key while it is open;
+    /// the save holds the trip's row from its precondition to its commit, so it cannot even start
+    /// choosing a number until the other writer has finished, and then sees the number taken.
+    /// (Before the save held its row, it chose the same number unseen and lost on the table's
+    /// unique key, answered as a conflict to repeat; that guard is still in place behind the
+    /// hold.) The wait is observed before the commit, so the test cannot pass by the save simply
+    /// having finished first.
     /// </remarks>
     [Fact]
-    public async Task A_roster_save_that_loses_the_race_for_the_next_party_number_is_a_conflict_and_can_be_repeated()
+    public async Task A_roster_save_meeting_another_writers_party_number_waits_and_takes_the_next()
     {
         var (trip, cavers) = await CreateTripAsync("Numbered at once", guests: 1);
         var (_, registered) = await CreateTripAsync("Numbered at once, the register", guests: 1);
@@ -3328,14 +3430,9 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
             await winner.CommitAsync();
         }
 
-        var lost = await save;
-        var refusal = await lost.Content.ReadAsStringAsync();
-        lost.StatusCode.ShouldBe(HttpStatusCode.Conflict, refusal);
-        refusal.ShouldContain("trip_log.concurrent_roster_write");
-        (await RosterAsync(trip)).ShouldBe([cavers[0]], "the save that lost wrote nothing");
-
-        var repeated = await PutRosterAsync(trip, [cavers[0], newcomer]);
-        repeated.StatusCode.ShouldBe(HttpStatusCode.OK, await repeated.Content.ReadAsStringAsync());
+        var waited = await save;
+        waited.StatusCode.ShouldBe(HttpStatusCode.OK, await waited.Content.ReadAsStringAsync());
+        (await RosterAsync(trip)).ShouldBe([cavers[0], newcomer], ignoreOrder: true);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();

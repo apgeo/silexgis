@@ -161,4 +161,19 @@ public enum AccessDomain : short
     /// </para>
     /// </summary>
     UploadReview = 24,
+
+    /// <summary>
+    /// Processing profiles shared beyond their author: the named sets of parameters a scan
+    /// processing step runs with, kept for the whole installation or for one caving group.
+    /// Create adds such a profile, Write edits one, Delete removes one, and Read sees every
+    /// caving group's profiles rather than only those of the groups the caller belongs to.
+    /// <para>
+    /// An installation-level domain like <see cref="Terrain"/>: a profile carries no cave, no
+    /// position and no audience column, so entries are only valid at the whole-installation
+    /// scope and every check is asked of the domain, never of a row. A personal profile is
+    /// outside this domain altogether — it is its author's alone, needs no entry to write, and
+    /// no entry here reads it.
+    /// </para>
+    /// </summary>
+    ScanProfiles = 25,
 }

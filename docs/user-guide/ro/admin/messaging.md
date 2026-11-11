@@ -267,6 +267,11 @@ Dedesubt, cele care merită privite: despre ce era fiecare, **pentru cine era �
 poate fi arătat și niciodată adresa lui** — și ce a spus capătul celălalt, cu tot ce arată a adresă
 scos din mesaj.
 
+Un mesaj pe care capătul celălalt îl refuză **definitiv** — o adresă care nu poate fi citită sau un
+server de e-mail care răspunde că însăși căsuța poștală este refuzată — este abandonat de la prima
+încercare, cu acel motiv, în loc să fie încercat din nou. Un refuz care poate trece — releul, o
+politică, autentificarea la serverul de e-mail, un răspuns temporar — este încercat în continuare.
+
 ### Repunerea manuală
 
 Un mesaj abandonat poate fi reîncercat. Reîncercarea **pune din nou fiecare întrebare înainte să

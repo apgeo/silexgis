@@ -90,8 +90,8 @@ durează cât citirea fiecărei topografii o dată. Modelele care nu au putut fi
 nou** pe rândul lui din lista peșterii face același lucru — vezi
 [Topografii și modele](../features/surveys-and-models.md).
 
-**Se pornește cu** `POST /api/v1/jobs/survey-reading-backfill`, dintr-un cont care are dreptul de
-rulare a sarcinilor.
+**Se pornește** ca celelalte operațiuni, dintr-un cont care are dreptul de rulare a sarcinilor;
+ghidul de instalare dă cererea de trimis.
 
 **Nimic nu iese din uz cât rulează.** O topografie care a fost citită rămâne **Gata** cât își
 așteaptă rândul și cât este citită: peștera își păstrează cifrele, iar o urmărire a unei echipe pe

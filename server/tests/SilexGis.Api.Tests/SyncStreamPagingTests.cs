@@ -92,14 +92,34 @@ public class SyncStreamPagingTests
         // Resumed at (T1, B): the row it stopped on and the one tied before it are behind it;
         // the one tied after it is not, nor is anything later.
         var after = SyncStreamPaging.After(rows.AsQueryable(), ByChange, new SyncCursor(1, T1, B));
-        SyncStreamPaging.Probe(after, ByChange, 10).AsEnumerable()
+        SyncStreamPaging.Probe(after, ByChange, Opening(SyncStream.Features, size: 10, cursor: null)).AsEnumerable()
             .Select(r => (r.Id, r.DeletedAt ?? r.UpdatedAt)).ToList()
             .ShouldBe([(C, T1), (D, T2), (A, T3)]);
 
         // From the beginning, the probe reads one more than the page so the cut can see past it.
-        SyncStreamPaging.Probe(SyncStreamPaging.After(rows.AsQueryable(), ByChange, null), ByChange, 2)
+        SyncStreamPaging.Probe(
+                SyncStreamPaging.After(rows.AsQueryable(), ByChange, null),
+                ByChange,
+                Opening(SyncStream.Features, size: 2, cursor: null))
             .Select(r => r.Id).ToList()
             .ShouldBe([A, B, C]);
+    }
+
+    [Fact]
+    public void A_probe_holds_back_every_row_at_or_after_the_horizon_so_the_position_cannot_pass_a_late_commit()
+    {
+        Row[] rows = [new(A, null, T1), new(B, null, T2), new(C, null, T3), new(D, T2, T1)];
+
+        // Horizon at T2: a write still in flight may yet commit a row stamped there, so neither the
+        // row written at T2 nor the one gone at T2 is handed over, and the page ends on T1...
+        var held = SyncStreamPaging.Probe(rows.AsQueryable(), ByChange, Opening(SyncStream.Features, 10, null, T2))
+            .Select(r => r.Id).ToList();
+        held.ShouldBe([A]);
+
+        // ...while a horizon past every row hands over all of them, in order.
+        SyncStreamPaging.Probe(rows.AsQueryable(), ByChange, Opening(SyncStream.Features, 10, null))
+            .Select(r => r.Id).ToList()
+            .ShouldBe([A, B, D, C]);
     }
 
     [Fact]
@@ -147,7 +167,8 @@ public class SyncStreamPagingTests
         SyncStreamPaging.Cut(Opening(SyncStream.Features, size: 5, cursor: null), []).NextCursor.ShouldBeNull();
     }
 
-    private static SyncStreamOpening Opening(SyncStream stream, int size, string? cursor) =>
+    private static SyncStreamOpening Opening(
+        SyncStream stream, int size, string? cursor, DateTimeOffset? horizon = null) =>
         new(
             stream,
             new SyncSet { Name = "paging", Revision = 7 },
@@ -155,7 +176,8 @@ public class SyncStreamPagingTests
             [A],
             null,
             size,
-            cursor);
+            cursor,
+            horizon ?? DateTimeOffset.MaxValue);
 
     private sealed record Row(Guid Id, DateTimeOffset? DeletedAt, DateTimeOffset UpdatedAt);
 

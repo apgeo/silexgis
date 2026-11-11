@@ -257,6 +257,15 @@ public static class MessageTemplateCatalog
     /// <summary>The daily summary. Its lines are the other messages' own subjects.</summary>
     public const string NotifyDigest = "notify.digest";
 
+    /// <summary>To administrators: the whole file store passed a threshold of its installation cap.</summary>
+    public const string NotifyStorageStoreCap = "notify.storage-store-cap";
+
+    /// <summary>To administrators: what point clouds keep passed a threshold of their own cap.</summary>
+    public const string NotifyStorageScansCap = "notify.storage-scans-cap";
+
+    /// <summary>To administrators: a disk the files or the processing worker write to is running short of free space.</summary>
+    public const string NotifyStorageDiskLow = "notify.storage-disk-low";
+
     /// <summary>Languages every template ships in. A locale outside this set falls back to English.</summary>
     public static IReadOnlyList<string> Locales { get; } = ["en", "ro"];
 
@@ -1333,6 +1342,123 @@ public static class MessageTemplateCatalog
 
                     {actorName} a lăsat un comentariu la {documentTitle}, care îți aparține. Îl
                     poți citi aici:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyStorageStoreCap,
+            MessageChannel.Email,
+            "To administrators: the file store passed the notice or warning percentage of the installation's cap.",
+            [AppName, DisplayName, "used", "cap", "percent", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{appName} storage is {percent}% full",
+                    """
+                    Hello {displayName},
+
+                    The files kept on {appName} take {used} of the {cap} the installation may hold
+                    ({percent}%). When the cap is reached, uploads and processing runs are refused.
+
+                    The storage report shows what fills the store and what could be deleted:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Spațiul de stocare {appName} este plin în proporție de {percent}%",
+                    """
+                    Bună ziua {displayName},
+
+                    Fișierele păstrate pe {appName} ocupă {used} din cei {cap} pe care îi poate
+                    păstra instalarea ({percent}%). Când limita este atinsă, încărcările și
+                    prelucrările sunt refuzate.
+
+                    Raportul de stocare arată ce ocupă spațiul și ce s-ar putea șterge:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyStorageScansCap,
+            MessageChannel.Email,
+            "To administrators: what point clouds keep passed the notice or warning percentage of their own cap.",
+            [AppName, DisplayName, "used", "cap", "percent", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{appName} point clouds use {percent}% of their storage",
+                    """
+                    Hello {displayName},
+
+                    Point clouds on {appName} — the uploaded originals and everything made from
+                    them — take {used} of the {cap} set aside for them ({percent}%). When that is
+                    reached, point-cloud uploads and processing runs are refused.
+
+                    The storage report shows what fills the store and what could be deleted:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Norii de puncte {appName} ocupă {percent}% din spațiul lor",
+                    """
+                    Bună ziua {displayName},
+
+                    Norii de puncte de pe {appName} — originalele încărcate și tot ce s-a făcut din
+                    ele — ocupă {used} din cei {cap} rezervați pentru ei ({percent}%). Când limita
+                    este atinsă, încărcările și prelucrările de nori de puncte sunt refuzate.
+
+                    Raportul de stocare arată ce ocupă spațiul și ce s-ar putea șterge:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyStorageDiskLow,
+            MessageChannel.Email,
+            "To administrators: a disk the files or the processing worker write to is running short of free space.",
+            [AppName, DisplayName, "directory", "free", "minFree", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{appName} is running short of disk space",
+                    """
+                    Hello {displayName},
+
+                    The disk holding {directory} on {appName} has {free} free. The installation is
+                    set to keep at least {minFree} free, about what the next two large processing
+                    runs need. When the disk is full, uploads and processing runs are refused.
+
+                    The storage report shows what fills the store and what could be deleted:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{appName} rămâne fără spațiu pe disc",
+                    """
+                    Bună ziua {displayName},
+
+                    Discul pe care se află {directory} pe {appName} mai are {free} liberi. Instalarea
+                    este setată să păstreze liberi cel puțin {minFree}, cam cât au nevoie următoarele
+                    două prelucrări mari. Când discul este plin, încărcările și prelucrările sunt
+                    refuzate.
+
+                    Raportul de stocare arată ce ocupă spațiul și ce s-ar putea șterge:
 
                     {url}
 

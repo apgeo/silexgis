@@ -55,7 +55,7 @@ public sealed record SurveyStoredArtefacts(int OutputsStored, bool LinePlotRead,
 /// <summary>
 /// Stores what a compiled survey upload produced, each output as what it is: the Therion model as
 /// a survey model of the cave, read into stations and legs; the Survex model as a survey model for
-/// download and the viewer; drawings, tables and tracks as documents attached to the cave; an
+/// download and the viewer, read as well when the run stored no Therion model; drawings, tables and tracks as documents attached to the cave; an
 /// output asked for and not written as a row saying so; the compiler's log as an archived source
 /// with its compilation record; and the configuration that was compiled as an archived source
 /// beside the upload's own.
@@ -91,6 +91,13 @@ public sealed class SurveyUploadArtefactStore(
     public const string OutputTagName = "survey-output";
 
     private const int ModelNameLength = 200;
+
+    /// <summary>
+    /// The store paths the file being stored has written so far. A file goes into the store before
+    /// the rows that record it, so when those rows cannot be saved its bytes are what is left
+    /// over; the failed store takes back each of these that no stored file names.
+    /// </summary>
+    private readonly List<string> written = [];
 
     private const string UnplacedNote =
         "Not read: the survey is fixed to no position, so its coordinates are local and cannot be placed. "
@@ -177,6 +184,7 @@ public sealed class SurveyUploadArtefactStore(
 
         var stored = 0;
         SurveyModel? linePlot = null;
+        (Guid Id, bool FileChanged)? survex = null;
         foreach (var (produced, kind) in outputs)
         {
             var path = Path.Combine([project.ProjectDirectory, .. produced.RelativePath.Split('/', StringSplitOptions.RemoveEmptyEntries)]);
@@ -187,11 +195,15 @@ public sealed class SurveyUploadArtefactStore(
                 {
                     case SurveyArtefactStorage.LinePlot:
                     case SurveyArtefactStorage.Survex:
-                        var model = await StoreModelAsync(
+                        var (model, fileChanged) = await StoreModelAsync(
                             upload, cave, title, path, name, kind, project.SourceEpsg, project.CoordinateSystemUnknown, ct);
                         if (kind.Storage == SurveyArtefactStorage.LinePlot)
                         {
                             linePlot = model;
+                        }
+                        else
+                        {
+                            survex = (model.Id, fileChanged);
                         }
 
                         break;
@@ -208,6 +220,16 @@ public sealed class SurveyUploadArtefactStore(
                 }
             }, ct);
             stored += done ? 1 : 0;
+        }
+
+        // A run that stored no Therion model has the Survex one as its only line plot, and it is
+        // read like any line plot a cave holds. Left unread it would say it was ready while holding
+        // no station, leg or wall, and everything that measures or draws a survey takes "ready" to
+        // mean it holds them — the cave's current model included, which a cave this upload made
+        // gives the Survex model when it has no Therion one.
+        if (linePlot is null && survex is { } only)
+        {
+            await TryAsync("the Survex model's reading", () => ReadOnlyLinePlotAsync(only.Id, only.FileChanged, project.SourceEpsg, ct), ct);
         }
 
         // Asked for and not written: recorded per output, so a screen can say which, and the run
@@ -376,6 +398,7 @@ public sealed class SurveyUploadArtefactStore(
     /// <summary>Runs one file's store; a failure is logged, undone and counted, never the run's.</summary>
     private async Task<bool> TryAsync(string what, Func<Task> store, CancellationToken ct)
     {
+        written.Clear();
         try
         {
             await store();
@@ -383,6 +406,7 @@ public sealed class SurveyUploadArtefactStore(
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            await TakeBackUnrecordedAsync();
             throw;
         }
         catch (Exception e)
@@ -390,11 +414,75 @@ public sealed class SurveyUploadArtefactStore(
             // The file names here are the server's own, never anything out of the survey.
             logger.LogWarning(e, "A survey upload's output could not be stored: {What}", what);
             db.ChangeTracker.Clear();
+            await TakeBackUnrecordedAsync();
             return false;
+        }
+        finally
+        {
+            written.Clear();
         }
     }
 
-    private async Task<SurveyModel> StoreModelAsync(
+    /// <summary>
+    /// Deletes the bytes a failed store put into the file store and no row records. Asked of the
+    /// stored files rather than assumed, because a store can fail after its rows were saved (in
+    /// the link it makes afterwards), and those bytes belong to rows that stay. Each save commits
+    /// on its own, so what the query finds is what is kept. A delete that fails is logged and left:
+    /// the run's outcome does not hang on tidying up.
+    /// </summary>
+    private async Task TakeBackUnrecordedAsync()
+    {
+        foreach (var path in written)
+        {
+            try
+            {
+                if (!await db.StoredFiles.AsNoTracking().AnyAsync(f => f.StoragePath == path, CancellationToken.None))
+                {
+                    await fileStore.DeleteAsync(path, CancellationToken.None);
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(e, "A survey upload's unrecorded output could not be taken back out of the file store");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Queues the reading of a run's Survex model when it is the run's only line plot: a model
+    /// stored without its file having been read, or one whose file this run replaced. A reading
+    /// already on its way reads the file as it now is, so none is added beside it. A model that
+    /// holds a reading keeps saying it is ready while the new file is read; one that holds none
+    /// waits.
+    /// </summary>
+    /// <remarks>
+    /// The coordinate system the run found is the model's, as it is the Therion model's; where it
+    /// found none, the reading falls back to the one the file names, and a file that names none
+    /// either is recorded by the reading as one it could not place.
+    /// </remarks>
+    private async Task ReadOnlyLinePlotAsync(Guid modelId, bool fileChanged, int? sourceEpsg, CancellationToken ct)
+    {
+        var model = await db.SurveyModels.FirstAsync(m => m.Id == modelId, ct);
+        var holdsAReading = await db.SurveyStations.AnyAsync(s => s.SurveyModelId == modelId, ct);
+        if ((holdsAReading && !fileChanged) || (await SurveyModelReading.OutstandingAsync(db, ct)).Contains(modelId))
+        {
+            return;
+        }
+
+        model.SourceEpsg = sourceEpsg;
+        if (holdsAReading)
+        {
+            SurveyModelReading.QueueForNewFile(db, model, requestedBy: null);
+        }
+        else
+        {
+            SurveyModelReading.QueueFirst(db, model, requestedBy: null);
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    private async Task<(SurveyModel Model, bool FileChanged)> StoreModelAsync(
         SurveyUpload upload,
         Feature cave,
         string title,
@@ -420,7 +508,7 @@ public sealed class SurveyUploadArtefactStore(
             if (string.Equals(row.Sha256, content.Sha256, StringComparison.OrdinalIgnoreCase))
             {
                 await fileStore.DeleteAsync(content.StoragePath, ct);
-                return model;
+                return (model, false);
             }
 
 
@@ -431,7 +519,7 @@ public sealed class SurveyUploadArtefactStore(
             Restamp(row, content, revision.Version.DocumentId);
             row.RefusalCode = note;
             await db.SaveChangesAsync(ct);
-            return model;
+            return (model, true);
         }
 
         var stored = documents.Create(content, name, upload.RequestedBy, upload.RequestedBy);
@@ -467,7 +555,7 @@ public sealed class SurveyUploadArtefactStore(
         Track(row, upload.Id, name, kind.Output, SurveyUploadFileRole.Output, content, stored.Version.DocumentId, null, model.Id)
             .RefusalCode = note;
         await db.SaveChangesAsync(ct);
-        return model;
+        return (model, true);
     }
 
     /// <summary>
@@ -487,7 +575,9 @@ public sealed class SurveyUploadArtefactStore(
     /// <summary>
     /// What happens to a stored model next. The Therion model is read into stations and legs when
     /// it has a position to be placed at; the Survex model is kept for download and the viewer
-    /// only — one reading per upload, and the Therion model is the line plot of record.
+    /// only — one reading per upload, and the Therion model is the line plot of record. A run that
+    /// stored no Therion model reads its Survex one instead, once every output is stored (see
+    /// <see cref="ReadOnlyLinePlotAsync"/>).
     /// </summary>
     private async Task ReadAsync(
         SurveyModel model, SurveyModelFormat format, int? sourceEpsg, bool coordinateSystemUnknown, bool againIfReading, CancellationToken ct)
@@ -507,15 +597,21 @@ public sealed class SurveyUploadArtefactStore(
         }
 
         model.SourceEpsg = sourceEpsg;
-        if (againIfReading && (await SurveyModelReading.OutstandingAsync(db, ct)).Contains(model.Id))
+
+        // No requester: the upload's own status page and its notice say how the run went.
+        if (!againIfReading)
         {
-            // A reading already waiting reads the model's file as it is when it runs: the new one.
-            model.Status = SurveyModelStatus.Pending;
+            SurveyModelReading.QueueFirst(db, model, requestedBy: null);
             return;
         }
 
-        // No requester: the upload's own status page and its notice say how the run went.
-        SurveyModelReading.QueueFirst(db, model, requestedBy: null);
+        // A reading already waiting reads the model's file as it is when it runs: the new one. Its
+        // status is left as it is — a model that holds a reading still holds it, and one waiting
+        // or being read for the first time still is.
+        if (!(await SurveyModelReading.OutstandingAsync(db, ct)).Contains(model.Id))
+        {
+            SurveyModelReading.QueueForNewFile(db, model, requestedBy: null);
+        }
     }
 
     private async Task StoreDocumentAsync(
@@ -731,6 +827,7 @@ public sealed class SurveyUploadArtefactStore(
             storagePath = await fileStore.SaveAsync(read, Path.GetExtension(name), ct);
         }
 
+        written.Add(storagePath);
         return new StoredContent(storagePath, name, mediaType, size, sha256, kind);
     }
 

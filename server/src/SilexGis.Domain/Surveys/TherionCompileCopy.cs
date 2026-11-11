@@ -47,8 +47,20 @@ public sealed record TherionUnsafeReference(string File, int Line, string Comman
 /// </remarks>
 public static class TherionCompileCopy
 {
-    /// <summary>The commands with which a Therion file reads another file.</summary>
-    public static readonly IReadOnlyList<string> ReadingCommands = ["input", "source", "import", "load", "include"];
+    /// <summary>
+    /// The commands with which a Therion file reads another file: the four that read survey data,
+    /// and a surface's <c>bitmap</c>, which opens an image to texture the surface with and carries
+    /// it into the compiled model.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ReadingCommands = ["input", "source", "import", "load", "include", "bitmap"];
+
+    /// <summary>
+    /// The command that opens a block of typesetting code (TeX or MetaPost) in a layout. That code
+    /// runs in the compiler's typesetters, which can open any file by name, and no check of a name
+    /// can follow it there; the server writes the layout a compile uses itself, so an uploaded
+    /// file has no need of one.
+    /// </summary>
+    public const string CodeCommand = "code";
 
     private static readonly Regex CommentedInput = new(
         @"^(?<indent>\s*)#\s*(?<command>input\s+(?:""(?<quoted>[^""]+)""|(?<bare>\S+)))\s*$",
@@ -190,7 +202,7 @@ public static class TherionCompileCopy
     {
         var uploaded = uploadedFiles.ToHashSet(StringComparer.Ordinal);
         var found = new List<TherionUnsafeReference>();
-        foreach (var (line, number) in Live(SplitLines(text)))
+        foreach (var (line, number) in Statements(text))
         {
             var tokens = Tokens(line);
             if (tokens.Count == 0)
@@ -199,6 +211,12 @@ public static class TherionCompileCopy
             }
 
             var command = tokens[0].ToLowerInvariant();
+            if (command == CodeCommand)
+            {
+                found.Add(new TherionUnsafeReference(fileName, number, command));
+                continue;
+            }
+
             if (ReadingCommands.Contains(command) && (tokens.Count < 2 || !Names(tokens[1], uploaded)))
             {
                 found.Add(new TherionUnsafeReference(fileName, number, command));
@@ -215,7 +233,41 @@ public static class TherionCompileCopy
             }
         }
 
-        return found;
+        return found.Distinct().ToList();
+    }
+
+    /// <summary>
+    /// The live statements of a file as the check reads them, each with the number of the line it
+    /// starts on — read the way that finds the most commands rather than the way any one reader
+    /// would, because a statement the check reads differently from the compiler is a way past it.
+    /// A lone carriage return ends a line as a line feed does. A line ending in a backslash goes on
+    /// to the next one, and since it is not certain whether the two are joined with or without a
+    /// space between them, the statement is read both ways and each is checked.
+    /// </summary>
+    private static IEnumerable<(string Line, int Number)> Statements(string text)
+    {
+        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n', '\r');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var number = i + 1;
+            var joined = WithoutComment(lines[i]).Trim();
+            var spaced = joined;
+            while (joined.EndsWith('\\') && i + 1 < lines.Length)
+            {
+                var next = WithoutComment(lines[++i]).Trim();
+                joined = joined[..^1] + next;
+                spaced = spaced[..^1] + " " + next;
+            }
+
+            if (joined.Length > 0)
+            {
+                yield return (joined, number);
+                if (spaced != joined)
+                {
+                    yield return (spaced, number);
+                }
+            }
+        }
     }
 
     private static bool Names(string path, HashSet<string> uploaded)

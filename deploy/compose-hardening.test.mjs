@@ -110,6 +110,7 @@ describe('the compose files resolve together', () => {
     SILEXGIS_TERRAIN_DIR: '/srv/terrain-tiles',
     SILEXGIS__Terrain__BakeEnabled: 'true',
     SILEXGIS__SurveyCompiler__Mode: 'service',
+    SILEXGIS__Scans__ProcessingEnabled: 'true',
     SILEXGIS_PGADMIN_PASSWORD: 'x',
     SILEXGIS_PGADMIN_EMAIL: 'admin@example.org',
     SILEXGIS_IMMICH_VERSION: 'v3.0.0',
@@ -129,6 +130,7 @@ describe('the compose files resolve together', () => {
       'docker-compose.basemap.yml',
       'docker-compose.terrain-worker.yml',
       'docker-compose.therion.yml',
+      'docker-compose.scans.yml',
       'docker-compose.convert.yml',
       'docker-compose.pgadmin.yml',
       'docker-compose.dbport.yml',
@@ -146,12 +148,18 @@ describe('the compose files resolve together', () => {
       try {
         for (const file of composeFiles) fs.copyFileSync(path.join(deployDir, file), path.join(dir, file));
         fs.copyFileSync(path.join(deployDir, '.env.example'), path.join(dir, '.env'));
-        const result = spawnSync('docker', ['compose', ...files.flatMap((f) => ['-f', f]), 'config', '-q'], {
+        const result = spawnSync('docker', ['compose', ...files.flatMap((f) => ['-f', f]), 'config', '--format', 'json'], {
           cwd: dir,
           encoding: 'utf8',
           env: { ...process.env, ...required, COMPOSE_FILE: '' },
+          maxBuffer: 16 * 1024 * 1024,
         });
         assert.equal(result.status, 0, result.stderr);
+        // The API parses uploaded files of many kinds; whichever overlays run, it keeps no Linux
+        // capability and cannot gain privileges, as resolved rather than as written in one file.
+        const api = JSON.parse(result.stdout).services.api;
+        assert.deepEqual(api.cap_drop, ['ALL'], 'the api service drops every capability');
+        assert.ok(api.security_opt?.includes('no-new-privileges:true'), 'the api service may not gain privileges');
       } finally {
         fs.rmSync(dir, { recursive: true, force: true });
       }

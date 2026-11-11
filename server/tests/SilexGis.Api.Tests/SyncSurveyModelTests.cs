@@ -283,6 +283,99 @@ public sealed class SyncSurveyModelTests : IAsyncLifetime, IDisposable, IClassFi
         Ids(await GetPageAsync(uploader, $"/api/v1/sync/sets/{set}/survey-models"), "models").ShouldBe([existing.Id]);
     }
 
+    [Fact]
+    public async Task Walked_a_row_or_two_at_a_time_the_stream_hands_every_model_mapping_and_tombstone_exactly_once()
+    {
+        // The page is cut across four halves — models, removed models, mappings and removed
+        // mappings — each read separately, so the boundary between two halves is where a row
+        // could be handed twice or fall between two pages.
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var placeA = await CreatePlaceAsync(cave);
+        var placeB = await CreatePlaceAsync(cave);
+        var kept = await CreateModelAsync(cave, SurveyModelFormat.Lox, "Pagina-1", current: true);
+        var other = await CreateModelAsync(cave, SurveyModelFormat.Survex3d, "Pagina-2", current: false);
+        var third = await CreateModelAsync(cave, SurveyModelFormat.Lox, "Pagina-3", current: false);
+        var removedModel = await CreateModelAsync(cave, SurveyModelFormat.Lox, "Pagina-4", current: false);
+        var set = await CreateSetAsync(uploader, [cave], clubId);
+
+        var onA = Guid.CreateVersion7();
+        var onB = Guid.CreateVersion7();
+        var removedStation = Guid.CreateVersion7();
+        var mapped = await UploadAsync(uploader, set, new
+        {
+            placeStations = new[]
+            {
+                new { id = onA, placeId = placeA, surveyModelId = kept.Id, station = "1.1" },
+                new { id = onB, placeId = placeB, surveyModelId = kept.Id, station = "1.2" },
+                new { id = removedStation, placeId = placeA, surveyModelId = other.Id, station = "2.1" },
+            },
+        });
+        mapped.GetProperty("placeStations").EnumerateArray().Select(r => r.GetProperty("status").GetString())
+            .ShouldBe(["created", "created", "created"]);
+        var stationRevision = Row(mapped, "placeStations", removedStation).GetProperty("revision").GetDateTimeOffset();
+
+        (await uploader.DeleteAsync($"/api/v1/survey-models/{removedModel.Id}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var unmapped = await UploadAsync(uploader, set, new
+        {
+            placeStations = new[] { new { id = removedStation, baseRevision = stationRevision, deleted = true } },
+        });
+        unmapped.GetProperty("placeStations")[0].GetProperty("status").GetString().ShouldBe("deleted");
+
+        var whole = await GetPageAsync(uploader, $"/api/v1/sync/sets/{set}/survey-models");
+        Ids(whole, "models").ShouldBe([kept.Id, other.Id, third.Id], ignoreOrder: true);
+        Ids(whole, "tombstones").ShouldBe([removedModel.Id]);
+        Ids(whole, "placeStations").ShouldBe([onA, onB], ignoreOrder: true);
+        Ids(whole, "placeStationTombstones").ShouldBe([removedStation]);
+
+        string[] arrays = ["models", "tombstones", "placeStations", "placeStationTombstones"];
+        foreach (var size in new[] { 1, 2 })
+        {
+            var seen = arrays.ToDictionary(a => a, _ => new List<Guid>());
+            string? cursor = null;
+            var pages = 0;
+            while (true)
+            {
+                var url = $"/api/v1/sync/sets/{set}/survey-models?pageSize={size}"
+                    + (cursor is null ? string.Empty : $"&cursor={Uri.EscapeDataString(cursor)}");
+                var page = await GetPageAsync(uploader, url);
+                pages++;
+                pages.ShouldBeLessThan(20, "the walk must end");
+                var count = 0;
+                foreach (var array in arrays)
+                {
+                    var ids = Ids(page, array);
+                    seen[array].AddRange(ids);
+                    count += ids.Count;
+                }
+
+                count.ShouldBeLessThanOrEqualTo(size);
+                cursor = page.GetProperty("nextCursor").GetString() ?? cursor;
+                if (!page.GetProperty("hasMore").GetBoolean())
+                {
+                    break;
+                }
+
+                count.ShouldBe(size, "a page that says more follows is a full one");
+            }
+
+            foreach (var array in arrays)
+            {
+                seen[array].ShouldBe(Ids(whole, array), ignoreOrder: true, $"{array} at page size {size}");
+                seen[array].Distinct().Count().ShouldBe(seen[array].Count, $"{array} at page size {size} handed a row twice");
+            }
+
+            // Level with the server: one more read from the last position hands nothing.
+            var after = await GetPageAsync(
+                uploader, $"/api/v1/sync/sets/{set}/survey-models?pageSize={size}&cursor={Uri.EscapeDataString(cursor!)}");
+            foreach (var array in arrays)
+            {
+                Ids(after, array).ShouldBeEmpty($"{array} after the last page at size {size}");
+            }
+
+            after.GetProperty("hasMore").GetBoolean().ShouldBeFalse();
+        }
+    }
+
     // ---- reading ---------------------------------------------------------------------------------
 
     private static IReadOnlyList<Guid> Ids(JsonElement page, string array) =>

@@ -104,7 +104,10 @@ public sealed class ContentMetadataReader : IContentMetadataReader
     /// </summary>
     private static ContentFacts ReadImage(string absolutePath)
     {
-        using var image = new MagickImage(absolutePath);
+        // Read without decoding: the header and its profiles are all this needs, and a decode
+        // would hold every pixel the header claims, which a small upload can make gigabytes.
+        using var image = new MagickImage();
+        image.Ping(absolutePath);
         var exif = image.GetExifProfile();
         if (exif is null)
         {

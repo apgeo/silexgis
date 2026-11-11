@@ -10,6 +10,7 @@ using Shouldly;
 using SilexGis.Api.Common;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -165,6 +166,173 @@ public sealed class DocumentViewerBytesTests : IAsyncLifetime, IDisposable, ICla
         (await BytesAsync(RenderUrl(fileId, 1, 2400, token)))
             .Length.ShouldBeGreaterThan((await BytesAsync(RenderUrl(fileId, 1, 480, token))).Length);
     }
+
+    /// <summary>
+    /// A page may declare itself any size, and the lowest resolution a page is drawn at is
+    /// still tens of thousands of pixels a side for one declared hundreds of thousands of points
+    /// across. The pixels a page is drawn with stay under a ceiling whatever it declares, and an
+    /// ordinary page is drawn at the resolution that lands it on the box as before.
+    /// </summary>
+    [Theory]
+    [InlineData(200_000, 200_000, 160)]
+    [InlineData(200_000, 200_000, 2400)]
+    [InlineData(1_000_000, 2_000, 480)]
+    [InlineData(14_400, 14_400, 2400)]
+    public void A_page_of_any_declared_size_is_drawn_within_the_pixel_ceiling(
+        int pointsWide, int pointsHigh, int size)
+    {
+        var dpi = PageRenderService.Resolution(pointsWide, pointsHigh, size);
+
+        // Within a part in a billion: the square root that lands a page on the ceiling comes
+        // back a rounding step above it, which is no allocation at all.
+        var pixels = (pointsWide * dpi / 72.0) * (pointsHigh * dpi / 72.0);
+        pixels.ShouldBeLessThanOrEqualTo(PageRenderService.MaxPagePixels * (1 + 1e-9));
+        dpi.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public void An_ordinary_page_lands_on_the_box_it_was_asked_for()
+    {
+        // An A4 page at the largest box: the longer side, 842 points, comes out 2400 pixels.
+        var dpi = PageRenderService.Resolution(595, 842, 2400);
+        (842 * dpi / 72.0).ShouldBe(2400, tolerance: 0.5);
+    }
+
+    [Fact]
+    public async Task A_page_declared_enormous_is_still_drawn_inside_the_box()
+    {
+        var fileId = await UploadAsync(
+            "sheet.pdf", Pdf(1, widthPoints: 60_000, heightPoints: 60_000), "application/pdf");
+        var token = factory.Services.GetRequiredService<IFileAccessTokenService>()
+            .CreateToken(fileId, FileDelivery.DerivativesOnly);
+
+        using var picture = new MagickImage(await BytesAsync(RenderUrl(fileId, 1, 480, token)));
+        picture.Width.ShouldBeLessThanOrEqualTo(480u);
+        picture.Height.ShouldBeLessThanOrEqualTo(480u);
+    }
+
+    /// <summary>
+    /// A picture a few tens of kilobytes long can declare four hundred million pixels, all of
+    /// which a decode holds. Its rendering is refused from what the header claims, before a
+    /// pixel is decoded, while an ordinary picture uploaded beside it is still drawn.
+    /// </summary>
+    [Fact]
+    public async Task A_picture_declaring_more_pixels_than_may_be_drawn_gets_no_rendering()
+    {
+        var bomb = await UploadAsync("plan.png", PictureBombs.BlankPng(20_000, 20_000), "image/png");
+        var ordinary = await UploadAsync("plan-small.png", PictureBombs.BlankPng(400, 300), "image/png");
+        var tokens = factory.Services.GetRequiredService<IFileAccessTokenService>();
+
+        using (var picture = new MagickImage(await BytesAsync(ThumbnailUrl(
+            ordinary, 160, tokens.CreateToken(ordinary, FileDelivery.DerivativesOnly)))))
+        {
+            picture.Width.ShouldBe(160u);
+        }
+
+        var refused = await anonymous.GetAsync(ThumbnailUrl(
+            bomb, 160, tokens.CreateToken(bomb, FileDelivery.DerivativesOnly)));
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("file.thumbnail_failed");
+    }
+
+    /// <summary>
+    /// The location-free copy of a picture is written from a full decode of the stored file, so
+    /// a picture whose header declares more pixels than may be drawn is refused from that claim
+    /// before it is decoded, and answers as a copy that cannot be made does. An ordinary picture
+    /// beside it is still handed over through the same reach.
+    /// </summary>
+    [Fact]
+    public async Task A_picture_declaring_more_pixels_than_may_be_drawn_gets_no_location_free_copy()
+    {
+        var bomb = await UploadAsync("plan.png", PictureBombs.BlankPng(20_000, 20_000), "image/png");
+        var ordinary = await UploadAsync("plan-small.png", PictureBombs.BlankPng(400, 300), "image/png");
+        var tokens = factory.Services.GetRequiredService<IFileAccessTokenService>();
+
+        var handed = await anonymous.GetAsync(
+            $"/api/v1/files/{ordinary}/content?token={Uri.EscapeDataString(tokens.CreateToken(ordinary, FileDelivery.LocationFree))}");
+        handed.StatusCode.ShouldBe(HttpStatusCode.OK, await handed.Content.ReadAsStringAsync());
+        using (var copy = new MagickImage(await handed.Content.ReadAsByteArrayAsync()))
+        {
+            copy.Width.ShouldBe(400u);
+        }
+
+        var refused = await anonymous.GetAsync(
+            $"/api/v1/files/{bomb}/content?token={Uri.EscapeDataString(tokens.CreateToken(bomb, FileDelivery.LocationFree))}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("file.not_found");
+    }
+
+    /// <summary>
+    /// A drawing can name another file for the renderer to draw into it. A file on the server
+    /// named that way must never come back inside the rendering: the drawing is drawn without
+    /// it. The named file here is a picture of solid red the test writes itself, so a single red
+    /// pixel in the rendering means it was read. An ordinary drawing is rendered first, so the
+    /// hostile one is judged by a renderer shown to draw drawings at all, rather than passing
+    /// because none is drawn.
+    /// </summary>
+    [Fact]
+    public async Task A_drawing_naming_a_file_on_the_server_never_draws_that_file()
+    {
+        var tokens = factory.Services.GetRequiredService<IFileAccessTokenService>();
+        var plain = await UploadAsync(
+            "plain.svg",
+            Encoding.UTF8.GetBytes(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"200\" height=\"200\">"
+                + "<rect width=\"200\" height=\"200\" fill=\"#0000ff\"/></svg>"),
+            "image/svg+xml");
+        var drawn = await anonymous.GetAsync(
+            ThumbnailUrl(plain, 160, tokens.CreateToken(plain, FileDelivery.DerivativesOnly)));
+        drawn.StatusCode.ShouldBe(HttpStatusCode.OK, await drawn.Content.ReadAsStringAsync());
+        using (var control = new MagickImage(await drawn.Content.ReadAsByteArrayAsync()))
+        {
+            CountPixels(control, c => c.B > 200 && c.R < 80 && c.G < 80)
+                .ShouldBeGreaterThan(0, "an ordinary drawing is no longer drawn");
+        }
+
+        var secretDir = Path.Combine(filesRoot, "outside-the-store");
+        Directory.CreateDirectory(secretDir);
+        var secret = Path.Combine(secretDir, "red.png");
+        using (var red = new MagickImage(new MagickColor(255, 0, 0), 64, 64))
+        {
+            await red.WriteAsync(secret, MagickFormat.Png);
+        }
+
+        var href = new Uri(secret).AbsoluteUri;
+        var svg = Encoding.UTF8.GetBytes(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\""
+            + " width=\"200\" height=\"200\">"
+            + "<rect width=\"200\" height=\"200\" fill=\"#ffffff\"/>"
+            + $"<image x=\"0\" y=\"0\" width=\"200\" height=\"200\" href=\"{href}\" xlink:href=\"{href}\"/>"
+            + $"<image x=\"0\" y=\"0\" width=\"200\" height=\"200\" xlink:href=\"{secret}\"/>"
+            + "</svg>");
+        var fileId = await UploadAsync("plan.svg", svg, "image/svg+xml");
+        var token = tokens.CreateToken(fileId, FileDelivery.DerivativesOnly);
+
+        var response = await anonymous.GetAsync(ThumbnailUrl(fileId, 160, token));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+
+        using var picture = new MagickImage(await response.Content.ReadAsByteArrayAsync());
+        CountPixels(picture, c => c.R > 200 && c.G < 80 && c.B < 80)
+            .ShouldBe(0, "the rendering drew a file the drawing named on the server");
+    }
+
+    private static int CountPixels(MagickImage picture, Func<IMagickColor<byte>, bool> matches)
+    {
+        using var pixels = picture.GetPixels();
+        var count = 0;
+        foreach (var pixel in pixels)
+        {
+            if (matches(pixel.ToColor()!))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static string ThumbnailUrl(Guid fileId, int size, string token) =>
+        $"/api/v1/files/{fileId}/thumbnail?size={size}&token={Uri.EscapeDataString(token)}";
 
     /// <summary>
     /// A format whose pages nothing here can draw says so as an absence rather than as a broken

@@ -20,6 +20,10 @@ Tot ce urmează trăiește pe **pagina unei peșteri**.
 **Încarcă model.** Acceptate: **Therion `.lox`**, **Survex `.3d`**, sau **pereți de peșteră ca
 `.stl` binar** — până la 100 MB.
 
+O **scanare laser** intră prin același card — **Încarcă nor de puncte** primește un fișier `.laz` /
+`.las` sau o înregistrare brută de la un scaner MANDEYE — și are o pagină proprie:
+[Nori de puncte (scanări LiDAR)](point-clouds.md).
+
 Stare: *Așteaptă la rând → În curs → Gata*, sau *Nu a putut fi procesat*.
 
 Un model este desenat în **vizualizatorul topografic** (CaveView.js) și, pentru pereți, în
@@ -268,6 +272,27 @@ sau UTM. Dă **codul EPSG**.
 De reținut și: înălțimile din aceste fișiere se măsoară de la originea proprie a exportului, nu
 de la nivelul mării.
 
+### Când poziționarea este greșită
+
+Dacă alegi opțiunea greșită, SilexGIS observă acest lucru când citește fișierul, cu condiția ca
+peștera să aibă o poziție înregistrată. Prinde două greșeli:
+
+- **Un fișier proiectat încărcat ca metri față de un punct.** Citirea eșuează și spune că
+  numerele sunt mult prea mari pentru a fi metri față de un punct.
+- **Un cod EPSG greșit**, de exemplu fusul UTM vecin. Topografia este citită, dar rândul
+  modelului spune la câți kilometri de peșteră a ajuns.
+
+În ambele cazuri, SilexGIS încearcă și fusul UTM în care se află peștera, cele două fusuri
+vecine și grilele naționale europene obișnuite, printre ele Stereo70. Dacă una dintre ele pune
+topografia la peșteră, rândul o numește, de exemplu *Citită ca EPSG:32634, ajunge la 0.5 km de
+peșteră*, și oferă un buton pentru a o folosi. Dacă numerele sunt destul de mici pentru a fi
+metri față de un punct, butonul oferă asta. Oricare buton deschide formularul de poziționare
+deja completat. Verifică altitudinea, apoi confirmă, iar fișierul păstrat este citit din nou. Nu
+trebuie să-l încarci din nou.
+
+**Schimbă poziționarea** (pictograma cu acul de pe rândul oricărui model) deschide același
+formular, așa că poți schimba declarația unui model chiar dacă nu s-a găsit nimic greșit la ea.
+
 Odată convertiți, pereții sunt desenați în [scena 3D](3d-view.md#pereții-peșterii-selectate)
 numai pentru peștera selectată. Lista de modele arată mărimea rețelei convertite în megaocteți
 lângă numărul de triunghiuri, iar scena spune mărimea cât timp o descarcă (iar peste o anumită
@@ -282,7 +307,11 @@ Nu trebuie să exporți un `.stl` ca să vezi pereți. Când un model de drumuir
 același model se construiesc pereți din ce conține fișierul însuși, și din nimic altceva:
 
 - **Un `.lox` cu schițe (scraps)** — suprafețele de perete pe care Therion le-a modelat din
-  desenele tale — este desenat exact cu acele suprafețe.
+  desenele tale — este desenat exact cu acele suprafețe. Therion scrie suprafețe numai pentru
+  galeriile pe care le-ai desenat. O galerie topografiată dar nedesenată, ale cărei dimensiuni au
+  fost măsurate, primește un tub, ca la punctul următor. Pereții ei stau atunci lângă cei desenați,
+  în loc să lipsească din model. O viză contează ca desenată când un perete desenat trece, față de
+  mijlocul vizei, la cel mult cea mai mare dimensiune măsurată a ei plus 3 m.
 - **Un `.lox` fără schițe, sau un `.3d`**, primește un tub de-a lungul fiecărei vize ale cărei
   **dimensiuni de galerie** (stânga, dreapta, sus, jos) au fost măsurate la ambele capete. Fiecare
   stație măsurată devine un inel prin cele patru puncte măsurate — stânga și dreapta așezate
@@ -296,6 +325,30 @@ singură distanță care nu a fost luată este desenată ca nicio distanță, nu
 laterale nu primesc tub — ele sunt măsurători *ale* peretelui, nu galerii. O topografie fără
 schițe și fără dimensiuni pur și simplu nu are pereți: nu este o eroare, iar modelul este tot
 **Gata**.
+
+### Galerii fără mărime măsurată
+
+Citirea numără galeriile cărora nu le-a putut da pereți — vize fără niciun perete desenat la mai
+puțin de 5 m de mijlocul lor și fără nicio secțiune cu lățime — iar rândul modelului spune cât
+înseamnă: *„2.9 km de galerie (vize: 694) nu are mărime măsurată … Apare doar ca linii de
+topografie."*
+
+Dacă preferi să vezi aceste galerii la o mărime ghicită decât deloc, apasă **Desenează la o mărime
+estimată…** pe acel rând. Fereastra se deschide cu un avertisment, iar avertismentul este esențial:
+
+> **Aceste mărimi de galerie nu sunt reale.** Fiecare galerie fără mărime măsurată este desenată
+> ca un tub cu diametrul unic stabilit de tine — o strâmtoare la fel ca o sală. În modelul 3D arată
+> ca galerii topografiate. Folosește-le pentru a vedea pe unde merge peștera, niciodată pentru a
+> aprecia cât de mare este o galerie.
+
+Alegi **diametrul** (0,2–30 m, implicit 1 m) și **culoarea** în care sunt construite, iar fișierul
+stocat este citit din nou; nu se încarcă nimic. Tuburile estimate sunt construite **separat de
+pereți**, ca o parte distinctă a modelului, în culoarea lor, așa că nu pot fi confundate cu pereții
+din fișier, iar vederea 3D le poate ascunde sau recolora. Odată desenate, rândul o spune în
+culoarea de avertisment: *„Nemăsurat: 694 vize sunt desenate la o mărime estimată de 1 m. Aceste
+mărimi sunt inventate, nu topografiate."* Butonul devine apoi **Galerii estimate…**, de unde poți
+schimba mărimea sau culoarea ori le poți opri din nou. Nimic nu se estimează dacă nu cere cineva,
+iar vizele laterale și cele marcate ca de suprafață sau duplicate nu sunt estimate niciodată.
 
 Lista de modele arată numărul de triunghiuri și mărimea pe rândul modelului de drumuire, cu nota *„Pereți
 construiți din schițele și dimensiunile de galerie ale acestei topografii"*. Un sistem foarte mare

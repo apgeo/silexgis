@@ -13,6 +13,7 @@ import Button from '../../components/Button.tsx';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import SurveyUploadArtefacts from '../../components/surveyUploads/SurveyUploadArtefacts.tsx';
 import OlderVersionsWarning from '../../components/surveyUploads/OlderVersionsWarning.tsx';
+import PointCloudCard from '../../components/surveyUploads/PointCloudCard.tsx';
 
 /**
  * The surveys a cave holds as they arrived from a device, each with every version that was handed
@@ -142,6 +143,9 @@ function VersionContents({ version }: { version: SurveyUploadListItem }) {
 
   return (
     <Flex vertical gap={12} data-testid={`cave-survey-version-${version.id}`}>
+      {/* A point cloud's facts, as the scan's card: what the header said and what was tiled. The
+          choice of how much to show is made on the status page, where the run is watched. */}
+      {upload?.pointCloud && <PointCloudCard upload={upload} canWrite={false} />}
       <div>
         <Typography.Text strong>{t('surveyUploads.surveys.sent')}</Typography.Text>
         <Flex vertical gap={4} style={{ marginTop: 4 }}>

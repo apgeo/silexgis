@@ -71,6 +71,20 @@ public class UploadSession : ITimestamped
     public Guid? AttachFeatureId { get; set; }
 
     /// <summary>
+    /// What the attachment is for, as the opening request stated it. Absent lets the file's
+    /// own kind decide, exactly as a single-request upload without a role does.
+    /// </summary>
+    public AttachmentRole? AttachRole { get; set; }
+
+    /// <summary>
+    /// The club the finished document is to belong to. Carried because the club is part of
+    /// who may create it: a member allowed to add documents only in their own club is admitted
+    /// by this binding, and a document completed without it would be one they could never have
+    /// made in a single request.
+    /// </summary>
+    public Guid? CavingGroupId { get; set; }
+
+    /// <summary>
     /// The folder path the browser reported for this file, when a folder was dropped. The
     /// finished upload is filed under the mirrored subtree this names.
     /// </summary>

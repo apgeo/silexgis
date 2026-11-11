@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -28,7 +28,11 @@ vi.mock('../../api/hooks.ts', async () => {
     useCaveSurveys: () => ({ data: groups }),
     useRefreshCaveWhenUploadSettles: () => undefined,
     useCaveSummary: () => ({ data: { permissions: { canWrite } } }),
+    useStorageRoom: () => ({ data: undefined }),
     useRerunSurveyUpload: () => ({ mutateAsync: rerunMutate, isPending: false }),
+    // The scan card's "make a surface" asks for the cave's models to know whether the scan is placed.
+    useSurveyModels: () => ({ data: [], isPending: false }),
+    useMakeScanSurface: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useMintSurveyUploadPublicLink: () => ({ mutateAsync: mintMutate, isPending: false }),
     useRevokeSurveyUploadPublicLink: () => ({ mutateAsync: revokeMutate, isPending: false }),
     useSurveyUploadPreferences: () => ({
@@ -52,6 +56,7 @@ function made(over: Partial<SurveyUpload> = {}): SurveyUpload {
     version: '2026-10-25T10:15:00Z',
     caveCreated: false,
     survey: { title: 'Invented survey', name: 'inv1', date: null, team: null },
+    pointCloud: null,
     files: [
       { name: 'inv1.zip', role: 'archive', status: 'stored', declaredSize: 2048, receivedSize: 2048, sha256: null, refusalCode: null, sourceId: null, documentId: null, contentUrl: '/files/zip' },
     ],
@@ -127,6 +132,113 @@ describe('the upload status page', () => {
     expect(screen.queryByTestId('survey-upload-log-tail')).toBeNull();
   });
 
+  it('lists a failed compile’s log among the results, named, with a download that opens its address, to a writer and a reader alike', () => {
+    const failed = {
+      status: 'failed' as const,
+      stage: 'compile' as const,
+      progress: 60,
+      message: null,
+      error: { code: 'survey_pipeline.compile_failed', message: null },
+      compile: true,
+      artefacts: [
+        {
+          kind: 'log',
+          name: 'inv1-20261025T101500Z.log',
+          sizeBytes: 2048,
+          contentUrl: '/api/v1/files/f-log/content?token=invented',
+          surveyModelId: null,
+          documentId: null,
+          sourceId: 'src-log',
+          viewUrl: null,
+          modelStatus: null,
+          error: null,
+        },
+      ],
+    };
+    for (const writer of [true, false]) {
+      canWrite = writer;
+      upload = made({ ...failed, logTail: writer ? 'error: invented failure' : null });
+      show();
+      const row = screen.getByText('inv1-20261025T101500Z.log').parentElement!;
+      expect(row).toHaveTextContent("Compiler's log");
+      const download = within(row).getByRole('link', { name: 'Download' });
+      expect(download).toHaveAttribute('href', '/api/v1/files/f-log/content?token=invented');
+      expect(download).toHaveAttribute('target', '_blank');
+      // The sentence points below, where the log is.
+      expect(screen.getByTestId('survey-upload-error')).toHaveTextContent('The log below says where.');
+      cleanup();
+    }
+  });
+
+  it('shows a point cloud with its own stages and card, no line-survey viewer, and sends the display choice as a rerun', async () => {
+    upload = made({
+      stage: 'downsample',
+      message: 'Estimated: 12,400,000 points. Choose how much to show, then run again.',
+      files: [
+        { name: 'scan.laz', role: 'archive', status: 'stored', declaredSize: 4096, receivedSize: 4096, sha256: null, refusalCode: null, sourceId: null, documentId: null, contentUrl: '/files/laz' },
+      ],
+      pointCloud: {
+        modelId: 'm1',
+        pointCount: 12_400_000,
+        pointFormat: 6,
+        lasVersion: '1.4',
+        compressed: true,
+        hasRgb: false,
+        hasIntensity: true,
+        sizeM: [10, 10, 2],
+        georeferenced: false,
+        crs: null,
+        min: null,
+        max: null,
+        generatingSoftware: null,
+        tileBytes: null,
+        tileCount: null,
+        tilerVersion: null,
+        tilesetUrl: null,
+        displayVoxelM: null,
+        displayEveryNth: null,
+        displayPointCount: null,
+        originShift: null,
+        hasCentreline: false,
+        recording: null,
+        estimate: {
+          full: { voxelCm: null, points: 12_400_000, estimatedTileBytes: 900_000_000, estimatedSeconds: 400 },
+          voxels: [{ voxelCm: 2, points: 4_000_000, estimatedTileBytes: 190_000_000, estimatedSeconds: 120 }],
+        },
+        advice: { level: 'warn', suggestedVoxelCm: 2, warnPoints: 5_000_000, advisePoints: 200_000_000, warnTileBytes: 2_147_483_648 },
+      },
+    });
+    show();
+
+    expect(screen.getByTestId('survey-upload-stage-inspect')).toBeInTheDocument();
+    expect(screen.getByTestId('survey-upload-stage-tile')).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-upload-stage-compile')).toBeNull();
+    expect(screen.queryByTestId('survey-upload-open-viewer')).toBeNull();
+    expect(screen.getByTestId('point-cloud-card')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('point-cloud-choose'));
+    await waitFor(() =>
+      expect(rerunMutate).toHaveBeenCalledWith({ id: 'u1', display: { method: 'voxel', voxelCm: 2 } }),
+    );
+  });
+
+  it('tells a point cloud before its header is read by the one file it was declared with', () => {
+    upload = made({
+      status: 'running',
+      stage: 'archive',
+      progress: 5,
+      message: null,
+      finishedAt: null,
+      files: [
+        { name: 'scan.las', role: 'archive', status: 'stored', declaredSize: 4096, receivedSize: 4096, sha256: null, refusalCode: null, sourceId: null, documentId: null, contentUrl: null },
+      ],
+    });
+    show();
+    expect(screen.getByTestId('survey-upload-stage-downsample')).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-upload-stage-unpack')).toBeNull();
+    expect(screen.queryByTestId('point-cloud-card')).toBeNull();
+  });
+
   it('offers no run-again while the upload is still running, and no delete ever', () => {
     upload = made({ status: 'running', stage: 'scaffold', progress: 30, finishedAt: null, message: null });
     show();
@@ -137,6 +249,23 @@ describe('the upload status page', () => {
   it('runs the upload again', async () => {
     show();
     fireEvent.click(screen.getByTestId('survey-upload-rerun'));
+    await waitFor(() => expect(rerunMutate).toHaveBeenCalledWith({ id: 'u1' }));
+  });
+
+  it('runs a point cloud again only after a confirmation that shows the room it needs', async () => {
+    upload = made({
+      status: 'failed',
+      files: [
+        { name: 'scan.laz', role: 'archive', status: 'stored', declaredSize: 4096, receivedSize: 4096, sha256: null, refusalCode: null, sourceId: null, documentId: null, contentUrl: null },
+      ],
+    });
+    show();
+
+    fireEvent.click(screen.getByTestId('survey-upload-rerun'));
+    expect(rerunMutate).not.toHaveBeenCalled();
+    // The confirmation's own button, beside the one that opened it.
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Run again' })).toHaveLength(2));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run again' })[1]!);
     await waitFor(() => expect(rerunMutate).toHaveBeenCalledWith({ id: 'u1' }));
   });
 

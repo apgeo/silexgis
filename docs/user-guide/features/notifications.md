@@ -32,7 +32,12 @@ Ways of reaching you: **In the app · Email · Text message.**
 | Caving group membership changes | |
 | Someone shares something with me | A permission grant |
 | I am added to a trip | |
-| Trip planning | Invited to a trip, a trip you are on changes, a trip needs access you can grant, or a trip or club event you answered about is coming up |
+| A trip I am on was published as a page anybody with the link can read | See [Live tracking and published trips](live-tracking.md) |
+| A trip recorded on a phone needs somebody to look at it, or could not be made into a trip report | See [Phone recordings](phone-recordings.md) |
+| An account whose uploads are reviewed sent something that waits for a reviewer | For those who hold the review right; see [Reviewing uploads](upload-review.md) |
+| A reviewer decided about something I uploaded | **Accepted**, **Partly accepted** or **Rejected** |
+| Trip planning | Invited to a trip or a club event, a trip you are on changes, a trip needs access you can grant, or a trip or club event you answered about is coming up |
+| An expedition I am on the roster of is changed or called off | Also when you are put on an expedition's roster |
 | Someone replies to a comment I wrote | |
 | Someone comments on something of mine | |
 | Someone writes to a caving group I am in | An announcement |
@@ -72,6 +77,9 @@ what happened, newest first, filterable by kind, marked read as you open them or
 - A line about something you **can no longer open** says exactly that, in place of a name and
   a link. You are still told that it happened — hiding that would be its own kind of leak —
   but nothing about the thing itself survives your losing access to it.
+- A line about a **trip** — you were added, invited, it changed or was called off — decides
+  whether you may open the trip **when you open the line**, not only when it was written; a line
+  about a finished **geodata import** or **map conversion** names the file or map it was about.
 - A line saying that **somebody asked onto a trip cannot open a cave** leads to that cave's
   **Permissions**, opened about that person — see
   [An invitation grants nothing](trips.md#an-invitation-grants-nothing).
@@ -93,6 +101,11 @@ And:
   message is written**. Somebody who has lost access is told nothing.
 - A **draft** tells nobody, since telling you a draft changed would be telling you it exists.
 - A write that **changed nothing** sends nothing.
+
+**Expedition notices** follow the same rules as trip notices: a changed or called-off camp tells
+the people on its roster, never the person who made the change, never while it is a draft, and
+only those who may read it. Being put on a roster tells you. **Inviting somebody to a club event**
+for the first time tells that person only.
 
 ---
 

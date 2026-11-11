@@ -27,6 +27,7 @@ public sealed class FeatureShareTests : IAsyncLifetime, IDisposable, IClassFixtu
 
     private HttpClient owner = null!;    // Editor
     private HttpClient outsider = null!; // Viewer (regular user), unrelated — Editors read everything now
+    private Guid outsiderId;
     private long sinkholeTypeId;
     private long caveTypeId;
     private long entranceTypeId;
@@ -38,7 +39,7 @@ public sealed class FeatureShareTests : IAsyncLifetime, IDisposable, IClassFixtu
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"fsown-{suffix}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"fsout-{suffix}@t.local");
+        outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"fsout-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -273,6 +274,191 @@ public sealed class FeatureShareTests : IAsyncLifetime, IDisposable, IClassFixtu
         (await reader.GetAsync($"/api/v1/shared/features/{publicToken}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await owner.DeleteAsync($"/api/v1/features/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await reader.GetAsync($"/api/v1/shared/features/{publicToken}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// A share link is revoked through its own feature and no other: the right to share one
+    /// feature is not a right over another feature's links. A revoke repeated later keeps the
+    /// moment of the first.
+    /// </summary>
+    [Fact]
+    public async Task A_link_is_revoked_only_through_its_own_feature_and_keeps_the_first_revocation()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var mine = await CreateGenericAsync($"Revoking feature {marker}", "authenticated", 25.83, 45.43);
+        var other = await CreateGenericAsync($"Linked feature {marker}", "authenticated", 25.84, 45.44);
+        var minted = await MintAsync(other, "public");
+        var shareId = minted["id"]!.GetValue<Guid>();
+        var token = minted["token"]!.GetValue<string>();
+
+        (await owner.DeleteAsync($"/api/v1/features/{mine}/shares/{shareId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var reader = factory.CreateClient();
+        (await reader.GetAsync($"/api/v1/shared/features/{token}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await owner.DeleteAsync($"/api/v1/features/{other}/shares/{shareId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await reader.GetAsync($"/api/v1/shared/features/{token}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var firstRevokedAt = await RevokedAtAsync(other, shareId);
+        firstRevokedAt.ShouldNotBeNull();
+
+        await Task.Delay(20);
+        (await owner.DeleteAsync($"/api/v1/features/{other}/shares/{shareId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await RevokedAtAsync(other, shareId)).ShouldBe(firstRevokedAt);
+    }
+
+    [Theory]
+    [InlineData("\"nonsense\"")]
+    [InlineData("99")]
+    public async Task A_mode_that_is_not_one_of_the_two_is_refused(string mode)
+    {
+        var featureId = await CreateGenericAsync($"Moded feature {Guid.NewGuid():N}"[..30], "authenticated", 25.85, 45.45);
+        using var body = new StringContent(
+            $"{{\"mode\":{mode},\"includeSubtree\":false}}", System.Text.Encoding.UTF8, "application/json");
+        var response = await owner.PostAsync($"/api/v1/features/{featureId}/shares", body);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+        (await owner.GetFromJsonAsync<JsonArray>($"/api/v1/features/{featureId}/shares"))!.Count.ShouldBe(0);
+    }
+
+    /// <summary>
+    /// Under a sign-in link with its subtree, the subtree is the signed-in caller's own: a child
+    /// they may not read is left out, and so is everything beneath it, though the owner of the
+    /// link is shown all of it.
+    /// </summary>
+    [Fact]
+    public async Task A_sign_in_links_subtree_leaves_out_what_the_caller_may_not_read_and_what_is_under_it()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var root = await CreateAreaAsync($"Shared area {marker}");
+        var open = await CreateChildAsync($"Open child {marker}", root);
+        var closed = await CreateChildAsync($"Closed child {marker}", root);
+        var under = await CreateChildAsync($"Under closed {marker}", closed);
+        await DenyReadAsync(outsiderId, closed);
+
+        var token = (await MintAsync(root, "requiresLogin"))["token"]!.GetValue<string>();
+
+        var outsiders = (await outsider.GetFromJsonAsync<JsonObject>($"/api/v1/shared/features/{token}"))!;
+        outsiders["children"]!.AsArray().Select(c => c!["id"]!.GetValue<Guid>()).ShouldBe([open]);
+        var owners = (await owner.GetFromJsonAsync<JsonObject>($"/api/v1/shared/features/{token}"))!;
+        owners["children"]!.AsArray().Select(c => c!["id"]!.GetValue<Guid>())
+            .ShouldBe([open, closed, under], ignoreOrder: true);
+    }
+
+    /// <summary>
+    /// A token longer than any the server mints is refused before it is looked up, even when a
+    /// stored link would match it; one at the limit is looked up as usual.
+    /// </summary>
+    [Fact]
+    public async Task A_token_longer_than_the_limit_is_refused_before_it_is_looked_up()
+    {
+        var featureId = await CreateGenericAsync($"Long token feature {Guid.NewGuid():N}"[..40], "authenticated", 25.86, 45.46);
+        var tooLong = new string('a', 101);
+        var atLimit = new string('b', 100);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var creator = await db.Features.Where(f => f.Id == featureId).Select(f => f.OwnerUserId).SingleAsync();
+            foreach (var token in new[] { tooLong, atLimit })
+            {
+                db.FeatureShares.Add(new FeatureShare
+                {
+                    FeatureId = featureId,
+                    TokenHash = HashOf(token),
+                    Mode = FeatureShareMode.Public,
+                    IncludeSubtree = false,
+                    CreatedBy = creator,
+                });
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        using var reader = factory.CreateClient();
+        (await reader.GetAsync($"/api/v1/shared/features/{tooLong}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/v1/shared/features/{atLimit}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// What a restore does to a deleted feature's links, pinned as it stands: the link was never
+    /// revoked, only unanswerable while its feature was deleted, so it answers again once the
+    /// feature is back.
+    /// </summary>
+    [Fact]
+    public async Task A_restored_features_link_answers_again()
+    {
+        var featureId = await CreateGenericAsync($"Restored shared {Guid.NewGuid():N}"[..40], "authenticated", 25.87, 45.47);
+        var token = (await MintAsync(featureId, "public"))["token"]!.GetValue<string>();
+        using var reader = factory.CreateClient();
+
+        (await owner.DeleteAsync($"/api/v1/features/{featureId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await reader.GetAsync($"/api/v1/shared/features/{token}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        (await owner.PostAsync($"/api/v1/features/{featureId}/restore", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await reader.GetAsync($"/api/v1/shared/features/{token}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private static string HashOf(string token) =>
+        System.Buffers.Text.Base64Url.EncodeToString(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
+
+    private async Task<DateTimeOffset?> RevokedAtAsync(Guid featureId, Guid shareId)
+    {
+        var listed = (await owner.GetFromJsonAsync<JsonArray>($"/api/v1/features/{featureId}/shares"))!;
+        var row = listed.Single(s => s!["id"]!.GetValue<Guid>() == shareId)!;
+        return row["revokedAt"]?.GetValue<DateTimeOffset>();
+    }
+
+    private async Task<Guid> CreateAreaAsync(string name)
+    {
+        long areaTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            areaTypeId = await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>()
+                .FeatureTypes.Where(t => t.Code == "karst_area").Select(t => t.Id).SingleAsync();
+        }
+
+        var response = await owner.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name,
+            featureTypeId = areaTypeId,
+            visibility = "authenticated",
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
+    }
+
+    private async Task<Guid> CreateChildAsync(string name, Guid parentId)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name,
+            featureTypeId = sinkholeTypeId,
+            geometry = new { type = "Point", coordinates = new[] { 25.88, 45.48 } },
+            visibility = "authenticated",
+            parents = new[] { new { parentId, isPrimary = true } },
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
+    }
+
+    private async Task DenyReadAsync(Guid subjectId, Guid featureId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = SilexGis.Domain.Access.AccessSubjectKind.User,
+            SubjectId = subjectId,
+            Effect = SilexGis.Domain.Access.AccessEffect.Deny,
+            Domain = SilexGis.Domain.Access.AccessDomain.Features,
+            Actions = SilexGis.Domain.Access.AccessAction.Read,
+            ScopeKind = SilexGis.Domain.Access.AccessScopeKind.Object,
+            ScopeFeatureId = featureId,
+        });
+        await db.SaveChangesAsync();
     }
 
     /// <summary>

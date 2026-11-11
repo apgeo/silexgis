@@ -142,12 +142,36 @@ public class TherionCompileCopyTests
     [InlineData("load /etc/passwd", "load")]
     [InlineData("include /etc/passwd", "include")]
     [InlineData("scrap s1 -projection plan -sketch /etc/shadow 0 0", "-sketch")]
+    [InlineData("  bitmap /srv/server-side.jpg [0 0 360000 5042000 100 100 360100 5042100]", "bitmap")]
+    [InlineData("\tInPuT\t/etc/hostname", "input")]
+    [InlineData("inp\\\nut /etc/hostname", "input")]
+    [InlineData("input \\\n/etc/hostname", "input")]
+    [InlineData("code tex-map", "code")]
     public void A_file_naming_anything_else_is_refused_by_line_and_command(string line, string command)
     {
         var refused = TherionCompileCopy.UnsafeReferences(
             "inventata.th", "encoding utf-8\n" + line + "\n", ["inventata.th", "inventata-1p.th2"]);
 
         refused.ShouldBe([new TherionUnsafeReference("inventata.th", 2, command)]);
+    }
+
+    [Fact]
+    public void A_lone_carriage_return_ends_a_line_for_the_check()
+    {
+        // Read as one line, the second command would hide behind the first one's harmless name.
+        TherionCompileCopy.UnsafeReferences(
+                "inventata.th", "encoding utf-8\rinput inventata-1p.th2\rinput /etc/hostname\r", ["inventata.th", "inventata-1p.th2"])
+            .ShouldBe([new TherionUnsafeReference("inventata.th", 3, "input")]);
+    }
+
+    [Fact]
+    public void A_surface_textured_by_an_image_sent_with_the_upload_passes()
+    {
+        TherionCompileCopy.UnsafeReferences(
+                "inventata.th",
+                "surface\n  bitmap orto.jpg [0 0 360000 5042000 100 100 360100 5042100]\nendsurface\n",
+                ["inventata.th", "orto.jpg"])
+            .ShouldBeEmpty();
     }
 
     [Fact]

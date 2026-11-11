@@ -409,6 +409,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-models/{id}/placement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Says again where the stored file sits — a projected coordinate system, or a position for its zero point — and queues a reading under that answer (Write on the cave). Refused while a reading is queued or running. */
+        put: operations["surveyModelChangePlacement"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-models/{id}/estimated-passages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Says whether a line plot's passages without a measured size are drawn at an estimated size, and which size and colour, and queues a reading that builds them (Write on the cave). Refused while a reading is queued or running. */
+        put: operations["surveyModelChangeEstimatedPassages"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/survey-models/{id}/reading": {
         parameters: {
             query?: never;
@@ -420,6 +454,75 @@ export interface paths {
         put?: never;
         /** Queues another reading of the model's stored file (Write on the cave). Refused while a reading is queued or running. */
         post: operations["surveyModelReadAgain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-models/{id}/scan-placement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Places a point cloud, or places it again: its tiles' zero point at a position and altitude, its frame turned to a bearing (Write on the cave, with its exact location). The tiles are not touched. Refused for a line plot or a wall mesh. */
+        put: operations["surveyModelPlacementPlace"];
+        post?: never;
+        /** Takes a point cloud's placement away, leaving it viewable in its own frame and off the map (Write on the cave, with its exact location). */
+        delete: operations["surveyModelPlacementUnplace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-models/{id}/scan-placement/control-points": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Places a point cloud by pairs of a point picked in the scan and a station of the cave's current line plot: the translation and heading (and, when asked, a small tilt) that bring the points closest to their stations, stored with each pair's residual and their RMS; pairs over the installation's warning distance are flagged (Write on the cave, with its exact location). The tiles are not touched. */
+        put: operations["surveyModelPlacementPlaceByControlPoints"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-models/{id}/centreline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The centreline a point cloud's run drew from the scanner's path: in the tiles' own frame (`frame=tiles`, the default) for the scan viewer, or as longitude, latitude and height through the scan's placement (`frame=world`) for the map. Withheld without the exact-location permission; refused before the scan is tiled, and in the world frame before it is placed. */
+        get: operations["surveyModelCentrelineCentreline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-models/{id}/tiles/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One entry of a scan's tileset archive — tileset.json or a .pnts tile — by the signed address the scan's listing handed out. */
+        get: operations["surveyModelTileTile"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -778,6 +881,23 @@ export interface paths {
         };
         /** The wall mesh each cave is drawn by, for the caves whose mesh is anchored in the given bbox, nearest its middle first and capped at maxCaves (the installation's default when absent, never above its ceiling); caves the caller may not read or may not place exactly are omitted and not counted. A filter (`filter` token or `savedFilterId`) keeps the caves it keeps on the entrance layer, and the total counts only those. */
         get: operations["caveMeshMapCaveMeshes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map/cave-scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The placed point cloud each cave is shown by, for the caves whose scan is anchored in the given bbox, nearest its middle first and capped at maxCaves (the installation's default when absent, never above its ceiling); a scan that has not been placed is never listed, and caves the caller may not read or may not place exactly are omitted and not counted. A filter (`filter` token or `savedFilterId`) keeps the caves it keeps on the entrance layer, and the total counts only those. */
+        get: operations["caveScanMapCaveScans"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1599,8 +1719,59 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The public page of an upload's results: its survey title, the cave's name, the run's progress and the files it produced. 401 survey_upload.public_link_sign_in_required for a link made for the organization, read without signing in. */
+        /** The public page of an upload's results: its survey title, the cave's name, the run's progress, the files it produced and the compiler's log. 401 survey_upload.public_link_sign_in_required for a link made for the organization, read without signing in. */
         get: operations["publicSurveyUpload"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/survey-uploads/{token}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The compiler's whole log of the upload behind a public link, as a text file to save. Opens and refuses exactly as the page does; 404 survey_upload.public_log_not_found when the link opens and the upload has no log. */
+        get: operations["publicSurveyUploadLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/survey-uploads/{token}/figures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the compiler's log of the upload behind a public link says about the survey, whether the run placed it, and the upload's own survey measured. Opens and refuses exactly as the page does. */
+        get: operations["publicSurveyUploadFigures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/survey-uploads/{token}/geodata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The line work of the upload behind a public link, in WGS 84, as GeoJSON, KML or GPX (`format`, default geojson): the line the upload's own model was read into. Opens and refuses exactly as the page does; 404 survey_upload.not_georeferenced when the run placed no line in the world. */
+        get: operations["publicSurveyUploadGeodata"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1669,7 +1840,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Requests a password-reset link by email. Always returns 202. */
+        /** Requests a password-reset link by email. Returns 202 whether or not the address has an account. */
         post: operations["authForgotPassword"];
         delete?: never;
         options?: never;
@@ -1720,7 +1891,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sends the address-confirmation message again. Always returns 202. */
+        /** Sends the address-confirmation message again. Returns 202 whether or not the address has an account. */
         post: operations["authResendConfirmation"];
         delete?: never;
         options?: never;
@@ -5602,7 +5773,7 @@ export interface paths {
         /** Paged catalog; visibility-filtered; protected-cave-linked maps omitted and not counted. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the georeferenced map world's conditions, applied after visibility and counted over the narrowed set. */
         get: operations["georeferencedMapList"];
         put?: never;
-        /** Uploads a georeferenced raster (GeoTIFF) and queues COG normalization. */
+        /** Uploads a georeferenced raster (GeoTIFF) and queues COG normalization, or a map sheet as a portable document (.pdf) and queues drawing it: placed at once when the document carries its own georeferencing, otherwise left `unplaced` for a placement. */
         post: operations["georeferencedMapUpload"];
         delete?: never;
         options?: never;
@@ -5624,6 +5795,110 @@ export interface paths {
         post?: never;
         /** Deletes the catalog entry (stored files are kept). */
         delete: operations["georeferencedMapDelete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/placement-systems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The coordinate systems placement coordinates may be typed in: longitude and latitude, the installation's working system, and the grids it lists in GeoreferencedMaps:PlacementCrsCodes. */
+        get: operations["georeferencedMapSheetPlacementSystems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/{id}/station-points": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The survey stations marked on the sheet's picture (station pins on its document), each with where its survey puts it in longitude and latitude — control points ready to use (Read). Only stations of surveys the caller may see exactly are answered. */
+        get: operations["georeferencedMapSheetStationPoints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/{id}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Draws a map sheet's document again with another page, other layers or another resolution (Write). A hand placement is kept and applied to the new drawing. */
+        post: operations["georeferencedMapSheetRender"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/{id}/placement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets where a drawn map sheet lies — control points as picture fractions matched to ground coordinates, a transformation and an optional outline (Write; If-Match) — and queues publishing it. */
+        put: operations["georeferencedMapSheetPlace"];
+        post?: never;
+        /** Removes a hand placement (Write; If-Match). A document that carries its own place goes back to it; any other sheet becomes `unplaced`. */
+        delete: operations["georeferencedMapSheetUnplace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/{id}/placement/annotation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The sheet's placement as a IIIF Georeference Annotation (Read): control points in the drawn picture's pixels and in longitude and latitude, the outline as an SVG polygon. */
+        get: operations["georeferencedMapSheetExportAnnotation"];
+        /** Places the sheet from a IIIF Georeference Annotation made elsewhere (Write; If-Match), as a placement PUT would: points are read as fractions of the size the annotation states. */
+        put: operations["georeferencedMapSheetImportAnnotation"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/{id}/placement/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Tries a placement on the sheet's small picture without keeping it (Read): the placed picture, where it goes and how well the points fit. */
+        post: operations["georeferencedMapSheetPreview"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -8665,6 +8940,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-uploads/{id}/external/bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The inputs, parameters and instructions of the step this upload waits for, to be done on another computer, as one zip. */
+        get: operations["getSurveyUploadExternalBundle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/{id}/external/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sends one product of the step this upload waits for, under the name the download's README gives it; the last one queues the run again. */
+        put: operations["putSurveyUploadExternalOutput"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/{id}/surface": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Makes a surface of a processed, placed scan with a processing profile, and saves it as a wall mesh of the chosen cave (the scan's own by default). */
+        post: operations["makeSurveyUploadSurface"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/survey-uploads/{id}/public-link": {
         parameters: {
             query?: never;
@@ -8678,6 +9004,243 @@ export interface paths {
         post: operations["mintSurveyUploadPublicLink"];
         /** Withdraws the upload's public link; it then answers as an address that never existed (Write on the cave). */
         delete: operations["revokeSurveyUploadPublicLink"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/{id}/figures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the compiler's log of an upload's run says about the survey, and the upload's own survey measured: shape, network, orientation and depth profile. On the upload's own terms. */
+        get: operations["surveyUploadFigures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/{id}/geodata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The upload's survey line work in WGS 84, as GeoJSON, KML or GPX (`format`, default geojson), on the terms the upload's sent files answer on, and no other. 404 survey_upload.not_georeferenced when the run placed no line in the world. */
+        get: operations["surveyUploadGeodata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-uploads/by-public-link/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** For a signed-in reader of a public link: the same upload's page and its cave's in the application, when the link opens and the reader may see the upload on its own terms. Otherwise the link's ordinary 404. */
+        get: operations["surveyUploadByPublicLink"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The processing profiles the caller may use, optionally for one step: installation ones, their groups' ones and their own. */
+        get: operations["processingProfileList"];
+        put?: never;
+        /** Saves a processing profile. A personal one is anybody's to save; an installation or group one needs the scan-profiles Create right. 400 processing_profile.values_invalid names each key the step's schema refuses. */
+        post: operations["processingProfileCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One processing profile. Answered as absent where the caller may not read it. */
+        get: operations["processingProfileGet"];
+        /** Rewrites a profile's name, description and values. 409 processing_profile.built_in for a built-in one. */
+        put: operations["processingProfileUpdate"];
+        post?: never;
+        /** Deletes a profile. Past runs keep the values they resolved; 409 processing_profile.built_in for a built-in one. */
+        delete: operations["processingProfileDelete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles/schemas/{stepId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a step's parameters may hold and its defaults; for HDMapping's odometry, as the installed program dumped them. */
+        get: operations["processingProfileSchema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Imports a profile from HDMapping's TOML (odometry) or a SilexGIS profile file (any step), with a report of what was taken, dropped, filled and refused. dryRun reports without saving. 400 processing_profile.import_refused names each refused key. */
+        post: operations["processingProfileTransferImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A profile as a file: format=toml writes HDMapping's own parameter file (odometry only), format=json (the default) a SilexGIS profile file for any step. */
+        get: operations["processingProfileTransferExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles/{id}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Saves a copy of a profile the caller may read, with new values if sent — how a built-in is edited. A personal copy is anybody's; an installation or group copy needs the scan-profiles Create right. */
+        post: operations["processingProfileUseCopy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scan-profiles/remembered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The profile the caller ran each step with last, where that profile is still one they may use. */
+        get: operations["processingProfileUseRemembered"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage/room": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The storage totals and caps, and whether an upload or a processing run of a given size fits.
+         * @description addingBytes is what is about to be added (an upload's file sizes, or a run's estimated products). scan=true checks it as a point cloud's: under the scans' own cap as well, and on the processing worker's disk when processing=true. The same check refuses the upload or the run itself, with the code storage.insufficient and the missing amount, so this is advice given early, not a reservation.
+         */
+        get: operations["storageRoom"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The latest storage report: totals by kind, cave and account, the largest files, growth, and what could be deleted.
+         * @description Written once a day by a scheduled job; 404 storage.report_missing before the first. Full administrators only: the report names caves, files and their owners across the whole installation, unfiltered, so a grant over the settings domain alone is not enough. Usable by an operator's monitoring, signed in as a full administrator, as it is.
+         */
+        get: operations["storageReportLatest"];
+        put?: never;
+        /**
+         * Measures storage now and keeps the result as the latest report.
+         * @description Full administrators only, as for reading it. Counts as one of the daily reports for growth.
+         */
+        post: operations["storageReportMeasure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage/reclaim/{group}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deletes one group of what the report offers, as it stands now.
+         * @description Full administrators only, and a body with confirm=true: a group reaches every cave and account. The group is computed again when the request arrives, not taken from the report. Uploaded originals are never deleted: a group that would reach one is refused with storage.reclaim_refused and nothing is deleted. Recorded in the audit trail with what was given back.
+         */
+        post: operations["storageReportReclaim"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -8715,7 +9278,7 @@ export interface components {
             actions: components["schemas"]["AccessAction"][];
         };
         /** @enum {unknown} */
-        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions" | "checklists" | "events" | "terrain" | "uploadReview";
+        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions" | "checklists" | "events" | "terrain" | "uploadReview" | "scanProfiles";
         /** @enum {unknown} */
         AccessEffect: "allow" | "deny";
         AccessEntryDto: {
@@ -9756,6 +10319,39 @@ export interface components {
             notes: null | string;
             shortName?: null | string;
         };
+        CaveScanInViewDto: {
+            /** Format: uuid */
+            caveId: string;
+            caveName: null | string;
+            /** Format: uuid */
+            surveyModelId: string;
+            modelName: string;
+            tilesetUrl: string;
+            /** Format: double */
+            anchorLongitude: number;
+            /** Format: double */
+            anchorLatitude: number;
+            /** Format: double */
+            anchorHeightM: number;
+            /** Format: double */
+            headingDeg: number;
+            /** Format: double */
+            pitchDeg: number;
+            /** Format: double */
+            rollDeg: number;
+            /** Format: int64 */
+            pointCount: null | number;
+            /** Format: int64 */
+            tiledPointCount: null | number;
+            /** Format: int64 */
+            sizeBytes: number;
+            hasCentreline: boolean;
+        };
+        CaveScansInViewDto: {
+            items: components["schemas"]["CaveScanInViewDto"][];
+            /** Format: int32 */
+            total: number;
+        };
         CaveStatisticsDto: {
             /** Format: uuid */
             caveId: string;
@@ -10320,6 +10916,7 @@ export interface components {
         };
         DelimitedSourceOptions: {
             delimiter?: null | string;
+            encoding?: null | components["schemas"]["TripCsvEncoding"];
             latitudeColumn?: null | string;
             longitudeColumn?: null | string;
             elevationColumn?: null | string;
@@ -11660,6 +12257,28 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** Format: uuid */
+            sourceFileId?: null | string;
+            /** Format: int32 */
+            sourcePage?: null | number;
+            /** Format: int32 */
+            sourcePageCount?: null | number;
+            sourceLayers?: null | string[];
+            renderLayers?: null | string[];
+            /** Format: double */
+            renderDpi?: null | number;
+            /** Format: int32 */
+            renderWidth?: null | number;
+            /** Format: int32 */
+            renderHeight?: null | number;
+            renderWarnings?: null | string;
+            placement?: null | components["schemas"]["MapPlacementDto"];
+            placementSource?: null | components["schemas"]["PlacementSource"];
+            /** @default false */
+            hasEmbeddedPlacement: boolean;
+            /** Format: double */
+            placementRmsMetres?: null | number;
+            previewUrl?: null | string;
         };
         GeoreferencedMapUpdateRequest: {
             name: string;
@@ -12161,6 +12780,8 @@ export interface components {
             panelDefaults: string;
         };
         JsonElement: unknown;
+        JsonNode: unknown;
+        JsonObject: Record<string, never>;
         /** @enum {unknown} */
         KarstificationClass: "unknown" | "veryLow" | "low" | "moderate" | "high" | "veryHigh";
         KarstificationComponentDto: {
@@ -12439,8 +13060,35 @@ export interface components {
             /** Format: int64 */
             meshAskAboveBytes: number;
             /** Format: int32 */
+            scansInViewMinZoom: number;
+            /** Format: int32 */
+            scansInViewMaxCaves: number;
+            /** Format: int64 */
+            scansInViewMaxBytes: number;
+            /** Format: int32 */
+            scansInViewMaxCavesLimit: number;
+            /** Format: int64 */
+            scansInViewMaxBytesLimit: number;
+            /** Format: int32 */
             selectionMax: number;
             densityFixedBands: number[];
+        };
+        MapControlPointDto: {
+            /** Format: double */
+            u: number;
+            /** Format: double */
+            v: number;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+            label: null | string;
+        };
+        MapControlPointResidualDto: {
+            /** Format: int32 */
+            index: number;
+            /** Format: double */
+            metres: number;
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";
@@ -12505,6 +13153,35 @@ export interface components {
             style: string;
             crs: string;
             matrixIdPrefix: string;
+        };
+        MapPlacementDto: {
+            /** Format: int32 */
+            version: number;
+            transformation: string;
+            crs: string;
+            gcps: components["schemas"]["MapControlPointDto"][];
+            mask: null | number[][];
+        };
+        MapPlacementPreviewDto: {
+            image: string;
+            extent3857: number[];
+            extent4326: number[];
+            /** Format: int32 */
+            width: number;
+            /** Format: int32 */
+            height: number;
+            /** Format: double */
+            rmsMetres: null | number;
+            residuals: components["schemas"]["MapControlPointResidualDto"][];
+        };
+        MapSheetRenderRequest: {
+            /** Format: int32 */
+            page: null | number;
+            layers: null | string[];
+            /** Format: double */
+            dpi: null | number;
+            /** @default false */
+            allLayers: boolean;
         };
         MapViewDto: {
             /** Format: uuid */
@@ -12678,7 +13355,7 @@ export interface components {
             isProtected: boolean;
         };
         /** @enum {unknown} */
-        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | "tripPublished" | "tripNeedsAttention" | "uploadAwaitingReview" | "uploadReviewed" | "expeditionUpdate";
+        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | "tripPublished" | "tripNeedsAttention" | "uploadAwaitingReview" | "uploadReviewed" | "expeditionUpdate" | "storageAlert";
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
             reachesNobody: boolean;
@@ -13695,6 +14372,14 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        /** @enum {unknown} */
+        PlacementSource: "embedded" | "manual";
+        PlacementSystemDto: {
+            crs: string;
+            name: string;
+            geographic: boolean;
+            working: boolean;
+        };
         PlacePointCreateRequest: {
             /** Format: uuid */
             documentId: string;
@@ -13776,6 +14461,92 @@ export interface components {
         };
         /** @enum {unknown} */
         ProcessingJobStatus: "queued" | "running" | "succeeded" | "failed";
+        ProcessingProfileChoiceDto: {
+            stepId: string;
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            chosenAt: string;
+        };
+        ProcessingProfileCopyRequest: {
+            name?: null | string;
+            description?: null | string;
+            scope?: components["schemas"]["ProcessingProfileScope"];
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            values?: unknown;
+        };
+        ProcessingProfileCreateRequest: {
+            stepId: string;
+            name: string;
+            description: null | string;
+            scope: components["schemas"]["ProcessingProfileScope"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            values: components["schemas"]["JsonElement"];
+        };
+        ProcessingProfileDto: {
+            /** Format: uuid */
+            id: string;
+            stepId: string;
+            toolVersion: null | string;
+            name: string;
+            description: null | string;
+            scope: components["schemas"]["ProcessingProfileScope"];
+            /** Format: uuid */
+            ownerUserId: null | string;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            values: components["schemas"]["JsonElement"];
+            origin: string;
+            builtIn: boolean;
+            mayEdit: boolean;
+            mayDelete: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ProcessingProfileImportReportDto: {
+            stepId: string;
+            format: string;
+            taken: string[];
+            unknown: string[];
+            defaulted: string[];
+            fixed: string[];
+            droppedSections: string[];
+            refused: components["schemas"]["ProfileImportRefusal"][];
+            fileVersion: null | string;
+            installedVersion: null | string;
+            versionDiffers: boolean;
+            accepted: boolean;
+        };
+        ProcessingProfileImportRequest: {
+            fileName: string;
+            content: string;
+            scope: components["schemas"]["ProcessingProfileScope"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            name: null | string;
+            description: null | string;
+            dryRun: boolean;
+        };
+        ProcessingProfileImportResultDto: {
+            profile: null | components["schemas"]["ProcessingProfileDto"];
+            report: components["schemas"]["ProcessingProfileImportReportDto"];
+            values: components["schemas"]["JsonElement"];
+        };
+        /** @enum {unknown} */
+        ProcessingProfileScope: "installation" | "cavingGroup" | "personal";
+        ProcessingProfileUpdateRequest: {
+            name: string;
+            description: null | string;
+            values: components["schemas"]["JsonElement"];
+        };
+        ProfileImportRefusal: {
+            key: string;
+            reason: string;
+        };
         /** @enum {unknown} */
         ProfileVisibility: "private" | "cavingGroup" | "authenticated";
         ProfileVisibilityDto: {
@@ -13934,14 +14705,23 @@ export interface components {
             message: null | string;
             error: null | components["schemas"]["PublicSurveyUploadErrorDto"];
             artefacts: components["schemas"]["PublicSurveyUploadArtefactDto"][];
+            logTail: null | string;
+            log: null | components["schemas"]["PublicSurveyUploadLogDto"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             finishedAt: null | string;
+            language: null | string;
         };
         PublicSurveyUploadErrorDto: {
             code: string;
             message: null | string;
+        };
+        PublicSurveyUploadLogDto: {
+            name: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            url: string;
         };
         PublicSurveyUploadStageDto: {
             stage: components["schemas"]["SurveyUploadStage"];
@@ -14129,7 +14909,7 @@ export interface components {
         /** @enum {unknown} */
         RasterMapType: "planView" | "projectedProfile" | "extendedProfile" | "other";
         /** @enum {unknown} */
-        RasterStatus: "uploaded" | "processing" | "ready" | "failed";
+        RasterStatus: "uploaded" | "processing" | "ready" | "failed" | "unplaced";
         ReanchorReportDto: {
             /** Format: int32 */
             unmoved: number;
@@ -14546,6 +15326,27 @@ export interface components {
             cavingGroupId: null | string;
             visibility?: components["schemas"]["Visibility"];
         };
+        ScanPlacementRequest: {
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            heightM: number;
+            /** Format: double */
+            headingDeg: number;
+        };
+        /** @enum {unknown} */
+        ScanPlacementSource: "manual" | "fileCrs" | "controlPoints" | "gnss";
+        ScanStepParameterSchemaDto: {
+            stepId: string;
+            toolVersion: null | string;
+            schema: components["schemas"]["JsonElement"];
+            defaults: components["schemas"]["JsonElement"];
+            source: components["schemas"]["ScanStepSchemaSource"];
+        };
+        /** @enum {unknown} */
+        ScanStepSchemaSource: "registry" | "worker" | "stored";
         SearchDocumentItemDto: {
             /** Format: uuid */
             id: string;
@@ -14761,6 +15562,19 @@ export interface components {
             north: number;
             /** Format: int32 */
             minZoom: number;
+        };
+        SheetStationPointDto: {
+            label: string;
+            /** Format: double */
+            u: number;
+            /** Format: double */
+            v: number;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+            /** Format: uuid */
+            surveyModelId: string;
         };
         SmsSettingsDto: {
             enabled: boolean;
@@ -15066,6 +15880,127 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
         };
+        StorageGrowthDto: {
+            /** Format: int64 */
+            sevenDayBytes: null | number;
+            /** Format: int64 */
+            thirtyDayBytes: null | number;
+            /** Format: int64 */
+            bytesPerDay: null | number;
+            /** Format: date */
+            fullOn: null | string;
+            /** Format: int64 */
+            scanBytesPerDay: null | number;
+            /** Format: date */
+            scansFullOn: null | string;
+        };
+        StorageHolderDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            /** Format: int64 */
+            bytes: number;
+            /** Format: int32 */
+            files: number;
+        };
+        StorageKindTotalDto: {
+            kind: string;
+            /** Format: int64 */
+            bytes: number;
+            /** Format: int32 */
+            files: number;
+        };
+        StorageLargeItemDto: {
+            /** Format: uuid */
+            fileId: string;
+            name: string;
+            kind: string;
+            /** Format: int64 */
+            bytes: number;
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            ownerUserId: string;
+            ownerName: null | string;
+            /** Format: uuid */
+            caveId: null | string;
+            caveName: null | string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        StorageReclaimableDto: {
+            group: string;
+            /** Format: int32 */
+            items: number;
+            /** Format: int64 */
+            bytes: number;
+        };
+        StorageReclaimRequest: {
+            confirm: boolean;
+        };
+        StorageReclaimResultDto: {
+            group: string;
+            /** Format: int32 */
+            items: number;
+            /** Format: int64 */
+            freedBytes: number;
+        };
+        StorageReportDto: {
+            /** Format: date-time */
+            takenAt: string;
+            /** Format: int64 */
+            storeUsedBytes: number;
+            /** Format: int64 */
+            storeCapBytes: null | number;
+            /** Format: int64 */
+            scanUsedBytes: number;
+            /** Format: int64 */
+            scanCapBytes: null | number;
+            /** Format: int64 */
+            storeFreeBytes: null | number;
+            /** Format: int64 */
+            workerFreeBytes: null | number;
+            /** Format: int64 */
+            minFreeBytes: number;
+            level: string;
+            byFileKind: components["schemas"]["StorageKindTotalDto"][];
+            scanByKind: components["schemas"]["StorageKindTotalDto"][];
+            /** Format: int64 */
+            workDirectoryBytes: number;
+            byCave: components["schemas"]["StorageHolderDto"][];
+            byAccount: components["schemas"]["StorageHolderDto"][];
+            largest: components["schemas"]["StorageLargeItemDto"][];
+            growth: components["schemas"]["StorageGrowthDto"];
+            reclaimable: components["schemas"]["StorageReclaimableDto"][];
+        };
+        StorageRoomDto: {
+            /** Format: int64 */
+            addingBytes: number;
+            fits: boolean;
+            shortfall: null | components["schemas"]["StorageShortfallDto"];
+            /** Format: int64 */
+            storeUsedBytes: number;
+            /** Format: int64 */
+            storeCapBytes: null | number;
+            /** Format: int64 */
+            scanUsedBytes: number;
+            /** Format: int64 */
+            scanCapBytes: null | number;
+            /** Format: int64 */
+            accountUsedBytes: number;
+            /** Format: int64 */
+            accountCapBytes: null | number;
+            level: string;
+        };
+        StorageShortfallDto: {
+            limit: string;
+            /** Format: int64 */
+            neededBytes: number;
+            /** Format: int64 */
+            roomBytes: number;
+            /** Format: int64 */
+            missingBytes: number;
+        };
         /** Format: binary */
         Stream: string;
         SurveyCaveCreationCapabilitiesDto: {
@@ -15123,6 +16058,75 @@ export interface components {
             version: null | string;
             outputs: string[];
         };
+        SurveyLogDeclinationDto: {
+            date: string;
+            /** Format: double */
+            degrees: number;
+        };
+        SurveyLogExtentDto: {
+            /** Format: double */
+            lengthM: number;
+            fromStation: string;
+            /** Format: double */
+            fromValueM: number;
+            toStation: string;
+            /** Format: double */
+            toValueM: number;
+        };
+        SurveyLogFiguresDto: {
+            outcome: components["schemas"]["SurveyCompilationOutcome"];
+            compilerVersion: null | string;
+            /** Format: int32 */
+            compilationSeconds: null | number;
+            /** Format: int32 */
+            errorCount: number;
+            /** Format: int32 */
+            warningCount: number;
+            outputCoordinateSystem: null | string;
+            /** Format: double */
+            meridianConvergenceDeg: null | number;
+            declinations: components["schemas"]["SurveyLogDeclinationDto"][];
+            hasNoControlPoints: boolean;
+            /** Format: int32 */
+            stationCount: null | number;
+            /** Format: int32 */
+            shotCount: null | number;
+            /** Format: int32 */
+            connectedComponents: null | number;
+            /** Format: double */
+            totalLengthM: null | number;
+            /** Format: double */
+            totalLengthAdjustedM: null | number;
+            /** Format: double */
+            planLengthM: null | number;
+            /** Format: double */
+            verticalLengthM: null | number;
+            verticalRange: null | components["schemas"]["SurveyLogExtentDto"];
+            northSouthRange: null | components["schemas"]["SurveyLogExtentDto"];
+            eastWestRange: null | components["schemas"]["SurveyLogExtentDto"];
+            /** Format: int32 */
+            loopCount: null | number;
+            /** Format: double */
+            averageLoopErrorPercent: null | number;
+            loops: components["schemas"]["SurveyLogLoopDto"][];
+        };
+        SurveyLogLoopDto: {
+            /** Format: double */
+            relativeErrorPercent: number;
+            /** Format: double */
+            absoluteErrorM: number;
+            /** Format: double */
+            lengthM: number;
+            /** Format: int32 */
+            stationCount: number;
+            /** Format: double */
+            errorXM: number;
+            /** Format: double */
+            errorYM: number;
+            /** Format: double */
+            errorZM: number;
+            stations: string;
+        };
         SurveyLoopErrorDto: {
             /** Format: int32 */
             ordinal: number;
@@ -15141,6 +16145,58 @@ export interface components {
             /** Format: double */
             errorZM: number;
             stations: string;
+        };
+        SurveyModelCentrelineDto: {
+            /** Format: uuid */
+            surveyModelId: string;
+            frame: string;
+            coordinates: number[][];
+            /** Format: double */
+            lengthM: number;
+        };
+        SurveyModelControlPointDto: {
+            /** Format: double */
+            scanX: number;
+            /** Format: double */
+            scanY: number;
+            /** Format: double */
+            scanZ: number;
+            station: string;
+            /** Format: double */
+            eastM: number;
+            /** Format: double */
+            northM: number;
+            /** Format: double */
+            upM: number;
+            /** Format: double */
+            horizontalM: number;
+            /** Format: double */
+            distanceM: number;
+            flagged: boolean;
+        };
+        SurveyModelControlPointRequest: {
+            /** Format: double */
+            scanX: number;
+            /** Format: double */
+            scanY: number;
+            /** Format: double */
+            scanZ: number;
+            station: string;
+        };
+        SurveyModelControlPointsDto: {
+            /** Format: uuid */
+            linePlotId: string;
+            pairs: components["schemas"]["SurveyModelControlPointDto"][];
+            /** Format: double */
+            rmsM: number;
+            /** Format: double */
+            warnM: number;
+            tiltFitted: boolean;
+        };
+        SurveyModelControlPointsRequest: {
+            pairs: components["schemas"]["SurveyModelControlPointRequest"][];
+            /** @default false */
+            fitTilt: boolean;
         };
         SurveyModelDto: {
             /** Format: uuid */
@@ -15165,11 +16221,39 @@ export interface components {
             anchorLatitude: null | number;
             /** Format: double */
             anchorHeightM: null | number;
+            /** Format: double */
+            placementHeadingDeg: null | number;
+            placementSource: null | components["schemas"]["ScanPlacementSource"];
+            /** Format: double */
+            placementPitchDeg: null | number;
+            /** Format: double */
+            placementRollDeg: null | number;
+            placementControlPoints: null | components["schemas"]["SurveyModelControlPointsDto"];
+            tilesetUrl: null | string;
             /** Format: int32 */
             triangleCount: null | number;
             /** Format: int64 */
             meshSizeBytes: null | number;
             sourcePrecisionLost: boolean;
+            /** Format: int32 */
+            sourceEpsg: null | number;
+            /** Format: double */
+            placementOffByKm: null | number;
+            /** Format: int32 */
+            suggestedSourceEpsg: null | number;
+            suggestsLocalMetres: boolean;
+            /** Format: double */
+            suggestedOffByKm: null | number;
+            estimatePassages: boolean;
+            /** Format: double */
+            estimatedPassageDiameterM: number;
+            estimatedPassageColor: string;
+            /** Format: double */
+            unsizedPassageM: null | number;
+            /** Format: int32 */
+            unsizedLegCount: null | number;
+            /** Format: int32 */
+            estimatedLegCount: null | number;
             /** Format: int32 */
             droppedShotCount: null | number;
             /** Format: int32 */
@@ -15182,8 +16266,24 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        SurveyModelEstimatedPassagesRequest: {
+            enabled: boolean;
+            /** Format: double */
+            diameterM: number;
+            color: string;
+        };
         /** @enum {unknown} */
-        SurveyModelFormat: "lox" | "survex3d" | "stl";
+        SurveyModelFormat: "lox" | "survex3d" | "stl" | "laz" | "las";
+        SurveyModelPlacementRequest: {
+            /** Format: int32 */
+            sourceEpsg: null | number;
+            /** Format: double */
+            originLongitude: null | number;
+            /** Format: double */
+            originLatitude: null | number;
+            /** Format: double */
+            originHeightM: number;
+        };
         /** @enum {unknown} */
         SurveyModelStatus: "ready" | "pending" | "processing" | "failed";
         SurveyModelUpdateRequest: {
@@ -15193,14 +16293,33 @@ export interface components {
             surveyedAt: null | string;
         };
         /** @enum {unknown} */
-        SurveyOrigin: "topodroid" | "therion" | "other";
+        SurveyOrigin: "topodroid" | "therion" | "other" | "pointcloud" | "mandeye";
         SurveyOutputCapabilitiesDto: {
             catalogue: string[];
             defaults: string[];
         };
+        SurveyPointCloudCapabilitiesDto: {
+            /** Format: int64 */
+            maxFileBytes: number;
+            /** Format: int32 */
+            maxFilesPerUpload: number;
+            acceptedExtensions: string[];
+            recording: components["schemas"]["SurveyRecordingCapabilitiesDto"];
+        };
         SurveyPublicLinkCapabilitiesDto: {
             enabled: boolean;
             defaultAudience: components["schemas"]["SurveyUploadLinkAudience"];
+        };
+        SurveyRecordingCapabilitiesDto: {
+            /** Format: int64 */
+            maxFileBytes: number;
+            /** Format: int64 */
+            maxTotalBytes: number;
+            /** Format: int32 */
+            maxFiles: number;
+            acceptedExtensions: string[];
+            /** Format: int32 */
+            odometryWorkerFactor: number;
         };
         /** @enum {unknown} */
         SurveySegmentBasis: "unavailable" | "surveyFlags" | "skeletonHeuristic";
@@ -15250,7 +16369,7 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {unknown} */
-        SurveySourceKind: "therionSource" | "therionConfig" | "therionLog" | "survexSource" | "topoDroidArchive";
+        SurveySourceKind: "therionSource" | "therionConfig" | "therionLog" | "survexSource" | "topoDroidArchive" | "pointCloud" | "lidarRawSession" | "hdmSession";
         SurveyStationDto: {
             name: string;
             viewerName: string;
@@ -15264,6 +16383,15 @@ export interface components {
             flags: string[];
             isEntrance: boolean;
             isFixed: boolean;
+        };
+        SurveyUploadAnalysesDto: {
+            /** Format: uuid */
+            surveyModelId: string;
+            hasAltitudes: boolean;
+            statistics: components["schemas"]["SurveyUploadStatisticsDto"];
+            orientation: components["schemas"]["SurveyUploadOrientationDto"];
+            depthProfile: components["schemas"]["SurveyUploadDepthProfileDto"];
+            topology: null | components["schemas"]["SurveyUploadTopologyDto"];
         };
         SurveyUploadArtefactDto: {
             kind: string;
@@ -15296,6 +16424,7 @@ export interface components {
             /** Format: int32 */
             pollIntervalSeconds: number;
             publicLinks: components["schemas"]["SurveyPublicLinkCapabilitiesDto"];
+            pointCloud: components["schemas"]["SurveyPointCloudCapabilitiesDto"];
         };
         SurveyUploadCaveDto: {
             /** Format: uuid */
@@ -15323,6 +16452,38 @@ export interface components {
         SurveyUploadCompilerDto: {
             version: string;
         };
+        SurveyUploadDepthProfileDto: {
+            basis: components["schemas"]["SurveySegmentBasis"];
+            hasAltitudes: boolean;
+            /** Format: double */
+            passageLengthM: number;
+            /** Format: double */
+            highestM: null | number;
+            /** Format: double */
+            lowestM: null | number;
+            /** Format: double */
+            deepestM: null | number;
+            samples: components["schemas"]["SurveyUploadDepthSampleDto"][];
+        };
+        SurveyUploadDepthSampleDto: {
+            /** Format: double */
+            distanceAlongM: number;
+            /** Format: double */
+            altitudeM: number;
+            /** Format: double */
+            depthM: number;
+            /** Format: int32 */
+            pathIndex: null | number;
+            /** Format: int32 */
+            segmentIndex: number;
+        };
+        SurveyUploadDisplayRequest: {
+            method: string;
+            /** Format: double */
+            voxelCm?: null | number;
+            /** Format: int32 */
+            everyNth?: null | number;
+        };
         SurveyUploadDto: {
             /** Format: uuid */
             id: string;
@@ -15338,6 +16499,7 @@ export interface components {
             version: string;
             caveCreated: boolean;
             survey: components["schemas"]["SurveyUploadSurveyDto"];
+            pointCloud: null | components["schemas"]["SurveyUploadPointCloudDto"];
             files: components["schemas"]["SurveyUploadFileDto"][];
             artefacts: components["schemas"]["SurveyUploadArtefactDto"][];
             compiler: null | components["schemas"]["SurveyUploadCompilerDto"];
@@ -15356,10 +16518,26 @@ export interface components {
             startedAt: null | string;
             /** Format: date-time */
             finishedAt: null | string;
+            external?: null | components["schemas"]["SurveyUploadExternalWaitDto"];
         };
         SurveyUploadErrorDto: {
             code: string;
             message: null | string;
+        };
+        SurveyUploadExternalOutputDto: {
+            names: string[];
+            received: boolean;
+        };
+        SurveyUploadExternalWaitDto: {
+            stepId: string;
+            stepName: string;
+            tool: string;
+            outputs: components["schemas"]["SurveyUploadExternalOutputDto"][];
+        };
+        SurveyUploadFiguresDto: {
+            compiler: null | components["schemas"]["SurveyLogFiguresDto"];
+            placed: boolean;
+            analyses: null | components["schemas"]["SurveyUploadAnalysesDto"];
         };
         SurveyUploadFileDeclaration: {
             name: string;
@@ -15398,6 +16576,10 @@ export interface components {
         SurveyUploadFileRole: "archive" | "therionSource" | "therionSketch" | "other" | "generatedConfig" | "output" | "log";
         /** @enum {unknown} */
         SurveyUploadFileStatus: "declared" | "received" | "stored" | "refused";
+        SurveyUploadInAppDto: {
+            statusPageUrl: string;
+            caveUrl: string;
+        };
         /** @enum {unknown} */
         SurveyUploadLinkAudience: "public" | "organization";
         SurveyUploadListFileDto: {
@@ -15426,6 +16608,7 @@ export interface components {
             createdAt: string;
             archive: null | components["schemas"]["SurveyUploadListFileDto"];
             therionSources: components["schemas"]["SurveyUploadListFileDto"][];
+            pointCloud: null | components["schemas"]["SurveyUploadPointCloudDto"];
             statusPageUrl: string;
             publicLink: null | components["schemas"]["SurveyUploadPublicLinkDto"];
         };
@@ -15463,6 +16646,21 @@ export interface components {
             pipeline: null | components["schemas"]["SurveyUploadPipelineRequest"];
             documentsVisibility: null | components["schemas"]["Visibility"];
             publicLink?: null | components["schemas"]["SurveyUploadPublicLinkRequest"];
+            display?: null | components["schemas"]["SurveyUploadDisplayRequest"];
+            profiles?: null | string[];
+            externalSteps?: null | string[];
+        };
+        SurveyUploadOrientationDto: {
+            basis: components["schemas"]["SurveySegmentBasis"];
+            hasAltitudes: boolean;
+            /** Format: int32 */
+            segmentCount: number;
+            /** Format: double */
+            totalLengthM: number;
+            byCount: components["schemas"]["OrientationMeasure"];
+            byLength: components["schemas"]["OrientationMeasure"];
+            bins: components["schemas"]["OrientationBin"][];
+            dip: null | components["schemas"]["DipSummary"];
         };
         SurveyUploadPageDto: {
             items: components["schemas"]["SurveyUploadListItemDto"][];
@@ -15478,6 +16676,93 @@ export interface components {
             outputs: null | string[];
             /** Format: int32 */
             mapScale: null | number;
+        };
+        SurveyUploadPointCloudAdviceDto: {
+            level: string;
+            /** Format: double */
+            suggestedVoxelCm: null | number;
+            /** Format: int64 */
+            warnPoints: number;
+            /** Format: int64 */
+            advisePoints: number;
+            /** Format: int64 */
+            warnTileBytes: number;
+        };
+        SurveyUploadPointCloudCrsDto: {
+            /** Format: int32 */
+            horizontalEpsg: null | number;
+            /** Format: int32 */
+            verticalEpsg: null | number;
+            wkt: null | string;
+        };
+        SurveyUploadPointCloudDto: {
+            /** Format: uuid */
+            modelId: string;
+            /** Format: int64 */
+            pointCount: number;
+            /** Format: int32 */
+            pointFormat: number;
+            lasVersion: string;
+            compressed: boolean;
+            hasRgb: boolean;
+            hasIntensity: null | boolean;
+            sizeM: number[];
+            georeferenced: boolean;
+            crs: null | components["schemas"]["SurveyUploadPointCloudCrsDto"];
+            min: null | number[];
+            max: null | number[];
+            generatingSoftware: null | string;
+            /** Format: int64 */
+            tileBytes: null | number;
+            /** Format: int32 */
+            tileCount: null | number;
+            tilerVersion: null | string;
+            tilesetUrl: null | string;
+            /** Format: double */
+            displayVoxelM: null | number;
+            /** Format: int32 */
+            displayEveryNth: null | number;
+            /** Format: int64 */
+            displayPointCount: null | number;
+            originShift: null | number[];
+            estimate: null | components["schemas"]["SurveyUploadPointCloudEstimateDto"];
+            advice: null | components["schemas"]["SurveyUploadPointCloudAdviceDto"];
+            recording: null | components["schemas"]["SurveyUploadRecordingDto"];
+            sessionUrl?: null | string;
+            /** @default false */
+            hasCentreline: boolean;
+            pictures?: null | components["schemas"]["SurveyUploadPointCloudPicturesDto"];
+        };
+        SurveyUploadPointCloudEstimateDto: {
+            full: components["schemas"]["SurveyUploadPointCloudEstimateRowDto"];
+            voxels: components["schemas"]["SurveyUploadPointCloudEstimateRowDto"][];
+        };
+        SurveyUploadPointCloudEstimateRowDto: {
+            /** Format: double */
+            voxelCm: null | number;
+            /** Format: int64 */
+            points: null | number;
+            /** Format: int64 */
+            estimatedTileBytes: null | number;
+            /** Format: int32 */
+            estimatedSeconds: null | number;
+        };
+        SurveyUploadPointCloudPicturesDto: {
+            planUrl: string;
+            profileUrl: null | string;
+            colourBy: string;
+            /** Format: double */
+            valueLow: number;
+            /** Format: double */
+            valueHigh: number;
+            /** Format: double */
+            pixelM: number;
+            planSize: number[];
+            /** Format: double */
+            profilePixelM: null | number;
+            profileSize: null | number[];
+            /** Format: double */
+            profileLengthM: null | number;
         };
         SurveyUploadPreferencesDto: {
             alwaysOutputs: string[];
@@ -15505,24 +16790,118 @@ export interface components {
             audience: null | components["schemas"]["SurveyUploadLinkAudience"];
             allowProtected: null | boolean;
         };
+        SurveyUploadRecordingDto: {
+            /** Format: int32 */
+            chunkCount: number;
+            /** Format: int32 */
+            sensorCount: null | number;
+            hasCalibration: boolean;
+            hasGnss: boolean;
+            /** Format: double */
+            durationSeconds: null | number;
+            /** Format: int64 */
+            pointCount: number;
+            imuHasHeader: boolean;
+            /** Format: int64 */
+            bytes: number;
+        };
         SurveyUploadRerunRequest: {
             pipeline: null | components["schemas"]["SurveyUploadPipelineRequest"];
+            display?: null | components["schemas"]["SurveyUploadDisplayRequest"];
+            fromStep?: null | string;
+            profiles?: null | string[];
         };
         SurveyUploadSettingsDto: {
             firstModelOfCreatedCave: boolean;
         };
         /** @enum {unknown} */
-        SurveyUploadStage: "archive" | "unpack" | "scaffold" | "compile" | "store" | "read";
+        SurveyUploadStage: "archive" | "unpack" | "scaffold" | "compile" | "store" | "read" | "inspect" | "downsample" | "tile" | "odometry" | "export" | "check" | "awaitingExternal";
         /** @enum {unknown} */
         SurveyUploadStageState: "pending" | "active" | "done" | "failed" | "skipped";
+        SurveyUploadStatisticsDto: {
+            basis: components["schemas"]["SurveySegmentBasis"];
+            hasAltitudes: boolean;
+            indices: components["schemas"]["CaveIndexSummary"];
+            paths: components["schemas"]["PathSinuosity"][];
+        };
         /** @enum {unknown} */
         SurveyUploadStatus: "receiving" | "queued" | "running" | "succeeded" | "failed" | "abandoned";
+        SurveyUploadSurfaceRequest: {
+            /** Format: uuid */
+            caveId?: null | string;
+            /** Format: uuid */
+            profileId?: null | string;
+        };
         SurveyUploadSurveyDto: {
             title: string;
             name: null | string;
             /** Format: date */
             date: null | string;
             team: null | string;
+        };
+        SurveyUploadTopologyDto: {
+            /** Format: int32 */
+            droppedShotCount: null | number;
+            /** Format: int32 */
+            mergedStationCount: null | number;
+            /** Format: int32 */
+            nodeCount: number;
+            /** Format: int32 */
+            edgeCount: number;
+            /** Format: int32 */
+            componentCount: number;
+            /** Format: int32 */
+            reducedNodeCount: number;
+            /** Format: int32 */
+            reducedEdgeCount: number;
+            /** Format: int32 */
+            reducedComponentCount: number;
+            /** Format: int32 */
+            cyclomaticNumber: number;
+            /** Format: int32 */
+            extremityCount: number;
+            /** Format: int32 */
+            junctionCount: number;
+            /** Format: double */
+            alpha: null | number;
+            /** Format: double */
+            beta: null | number;
+            /** Format: double */
+            gamma: null | number;
+            /** Format: double */
+            meanDegree: null | number;
+            /** Format: double */
+            degreeStandardDeviation: null | number;
+            /** Format: double */
+            degreeCoefficientOfVariation: null | number;
+            /** Format: double */
+            correlationOfVertexDegree: null | number;
+            /** Format: int32 */
+            branchCount: number;
+            /** Format: int32 */
+            loopingBranchCount: number;
+            /** Format: double */
+            meanBranchLengthM: null | number;
+            /** Format: double */
+            branchLengthCoefficientOfVariation: null | number;
+            /** Format: double */
+            minBranchLengthM: null | number;
+            /** Format: double */
+            maxBranchLengthM: null | number;
+            /** Format: double */
+            lengthEntropy: null | number;
+            /** Format: double */
+            orientationEntropy: null | number;
+            /** Format: double */
+            meanTortuosity: null | number;
+            /** Format: double */
+            averageShortestPathLength: null | number;
+            /** Format: double */
+            centralPointDominance: null | number;
+            /** Format: double */
+            averageClusteringCoefficient: null | number;
+            /** Format: date-time */
+            computedAt: string;
         };
         SurveyUploadUploaderDto: {
             /** Format: uuid */
@@ -18957,6 +20336,94 @@ export interface operations {
             };
         };
     };
+    surveyModelChangePlacement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurveyModelPlacementRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyModelChangeEstimatedPassages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurveyModelEstimatedPassagesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     surveyModelReadAgain: {
         parameters: {
             query?: never;
@@ -18979,6 +20446,278 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyModelPlacementPlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanPlacementRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyModelPlacementUnplace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyModelPlacementPlaceByControlPoints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurveyModelControlPointsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyModelDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyModelCentrelineCentreline: {
+        parameters: {
+            query?: {
+                frame?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyModelCentrelineDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyModelTileTile: {
+        parameters: {
+            query?: {
+                token?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Modified */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19900,6 +21639,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaveMeshesInViewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    caveScanMapCaveScans: {
+        parameters: {
+            query: {
+                bbox: string;
+                maxCaves?: number;
+                filter?: string;
+                savedFilterId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaveScansInViewDto"];
                 };
             };
             /** @description Bad Request */
@@ -21751,6 +23542,160 @@ export interface operations {
             };
         };
     };
+    publicSurveyUploadLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    publicSurveyUploadFigures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadFiguresDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    publicSurveyUploadGeodata: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     authLogin: {
         parameters: {
             query?: never;
@@ -21764,6 +23709,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Too Many Requests */
             429: {
                 headers: {
@@ -21808,6 +23762,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Too Many Requests */
             429: {
                 headers: {
@@ -21832,6 +23795,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Too Many Requests */
             429: {
                 headers: {
@@ -21856,6 +23828,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Too Many Requests */
             429: {
                 headers: {
@@ -21880,6 +23861,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Too Many Requests */
             429: {
                 headers: {
@@ -21904,6 +23894,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Too Many Requests */
             429: {
                 headers: {
@@ -24046,6 +26045,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MfaStatusDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
                 };
             };
             /** @description Unauthorized */
@@ -27107,6 +29115,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GeofileStatusDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
                 };
             };
             /** @description Unauthorized */
@@ -32866,6 +34883,304 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetPlacementSystems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlacementSystemDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetStationPoints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SheetStationPointDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetRender: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapSheetRenderRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoreferencedMapDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetPlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapPlacementDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoreferencedMapDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetUnplace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoreferencedMapDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetExportAnnotation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonObject"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetImportAnnotation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["JsonNode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoreferencedMapDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    georeferencedMapSheetPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapPlacementDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapPlacementPreviewDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
             };
             /** @description Unauthorized */
             401: {
@@ -42337,6 +44652,214 @@ export interface operations {
             };
         };
     };
+    getSurveyUploadExternalBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    putSurveyUploadExternalOutput: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": components["schemas"]["Stream"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadDto"];
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    makeSurveyUploadSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["SurveyUploadSurfaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     mintSurveyUploadPublicLink: {
         parameters: {
             query?: never;
@@ -42446,6 +44969,664 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyUploadFigures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadFiguresDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyUploadGeodata: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    surveyUploadByPublicLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyUploadInAppDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileList: {
+        parameters: {
+            query?: {
+                stepId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessingProfileCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessingProfileUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileSchema: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stepId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanStepParameterSchemaDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileTransferImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessingProfileImportRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileImportResultDto"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileImportResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileTransferExport: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileUseCopy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessingProfileCopyRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    processingProfileUseRemembered: {
+        parameters: {
+            query?: {
+                stepId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingProfileChoiceDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    storageRoom: {
+        parameters: {
+            query?: {
+                addingBytes?: number;
+                scan?: boolean;
+                processing?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageRoomDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    storageReportLatest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageReportDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    storageReportMeasure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageReportDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    storageReportReclaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["StorageReclaimRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageReclaimResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

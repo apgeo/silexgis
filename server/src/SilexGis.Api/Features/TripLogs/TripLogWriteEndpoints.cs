@@ -157,7 +157,8 @@ public static partial class TripLogEndpoints
                 : ApiProblems.NotFound("trip_log.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, required: true) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, required: true);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -194,10 +195,7 @@ public static partial class TripLogEndpoints
         {
             if (outcome.RosterChanged)
             {
-                if (await SaveAndMoveTheVersionAsync(http, db, trip, ct) is { } raced)
-                {
-                    return raced;
-                }
+                await SaveAndMoveTheVersionAsync(db, trip, ct);
             }
             else
             {
@@ -206,17 +204,18 @@ public static partial class TripLogEndpoints
         }
         catch (DbUpdateException e) when (TripPartyNumbers.LostTheRace(e))
         {
-            // Two saves of this trip each named somebody new at the same moment. Both passed the
-            // precondition, which is read and compared with nothing held, and both reached for the
-            // same next party number; the table let one of them in. Nothing of this save was
-            // written, so it is refused as the conflict it is and the caller reloads and repeats.
+            // Two saves of this trip each named somebody new at the same moment and reached for
+            // the same next party number; the table let one of them in. The trip's hold serialises
+            // saves of the same trip, so this is the guard behind it rather than the ordinary way
+            // a race ends. Nothing of this save was written, so it is refused as the conflict it
+            // is and the caller reloads and repeats.
             return ApiProblems.Conflict(TripPartyNumbers.LostRaceCode, TripPartyNumbers.LostRaceMessage);
         }
 
-        var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
         // The version this write produced: what the next write must carry, handed over here so
         // that a second save a moment later is not refused against a version only a read knew.
-        await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
+        await hold.AnswerAsync(ct);
+        var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
         return TypedResults.Ok(items[0]);
     }
 
@@ -236,33 +235,21 @@ public static partial class TripLogEndpoints
     /// <para>
     /// Stamped past the change tracker rather than by marking the trip modified, because a
     /// modified trip is a line on the trip's history, and "the trip was updated" beside the
-    /// roster rows' own lines would say nothing those do not. One transaction for both: roster
-    /// rows written under a version that did not move are exactly what the stamp is there to
-    /// prevent. A save that changed no roster row does not come here and moves nothing.
+    /// roster rows' own lines would say nothing those do not. Both run in the transaction the
+    /// trip's hold opened, which commits them together: roster rows written under a version that
+    /// did not move are exactly what the stamp is there to prevent. A save that changed no roster
+    /// row does not come here and moves nothing.
     /// </para>
     /// </remarks>
-    private static async Task<ProblemHttpResult?> SaveAndMoveTheVersionAsync(
-        HttpContext http, SilexGisDbContext db, TripLog trip, CancellationToken ct)
+    private static async Task SaveAndMoveTheVersionAsync(
+        SilexGisDbContext db, TripLog trip, CancellationToken ct)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-
-        // The precondition was compared earlier with nothing held, and the roster this write
-        // diffed against was read then too. Taking the trip's row lock and comparing again closes
-        // that gap: a roster write that committed since is a changed version and this one is
-        // refused, and one still in flight makes this wait for it and then see what it left.
-        var held = await ConcurrencySql.LockLiveTripLogVersionAsync(db, trip.Id, ct);
-        if (Concurrency.CheckIfMatchVersion(http, held?.ToString(), required: true) is { } stale)
-        {
-            return stale;
-        }
-
         await db.SaveChangesAsync(ct);
 
         var stamped = DateTimeOffset.UtcNow;
         await db.TripLogs
             .Where(x => x.Id == trip.Id)
             .ExecuteUpdateAsync(u => u.SetProperty(x => x.UpdatedAt, stamped), ct);
-        await transaction.CommitAsync(ct);
 
         // The answer is mapped from the trip in hand, which the statement above went round. It is
         // given what was written and told that this is what the database holds, so that it is
@@ -270,7 +257,6 @@ public static partial class TripLogEndpoints
         var updatedAt = db.Entry(trip).Property(x => x.UpdatedAt);
         updatedAt.CurrentValue = stamped;
         updatedAt.IsModified = false;
-        return null;
     }
 
     /// <summary>
@@ -306,7 +292,8 @@ public static partial class TripLogEndpoints
                 : ApiProblems.NotFound("trip_log.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -315,6 +302,7 @@ public static partial class TripLogEndpoints
         // imported spreadsheet back has to delete a trip the same way this route does.
         writes.SoftDelete(trip, ctx.UserId);
         await db.SaveChangesAsync(ct);
+        await hold.CommitAsync(ct);
         return TypedResults.NoContent();
     }
 }

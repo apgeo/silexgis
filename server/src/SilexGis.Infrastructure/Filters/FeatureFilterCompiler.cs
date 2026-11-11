@@ -57,20 +57,9 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
             return _ => true;
         }
 
-        return Build(node, spatial ?? new Dictionary<ConditionNode, ResolvedSpatial>());
+        var resolved = spatial ?? new Dictionary<ConditionNode, ResolvedSpatial>();
+        return FilterTree.Compile<Feature>(node, condition => Leaf(condition, resolved));
     }
-
-    private Expression<Func<Feature, bool>> Build(
-        FilterNode node, IReadOnlyDictionary<ConditionNode, ResolvedSpatial> spatial) => node switch
-    {
-        AllOfNode all => all.Of.Select(child => Build(child, spatial))
-            .Aggregate((left, right) => left.And(right)),
-        AnyOfNode any => any.Of.Select(child => Build(child, spatial))
-            .Aggregate((left, right) => left.Or(right)),
-        NotNode not => Build(not.Of, spatial).Not(),
-        ConditionNode condition => Leaf(condition, spatial),
-        _ => throw new InvalidOperationException($"Unknown filter node {node.GetType().Name}."),
-    };
 
     private Expression<Func<Feature, bool>> Leaf(
         ConditionNode condition, IReadOnlyDictionary<ConditionNode, ResolvedSpatial> spatial)

@@ -170,6 +170,47 @@ the cave the moment they arrive, and removing them is done where they are listed
 
 ---
 
+## The page of results
+
+Once a run has ended, **View results** on the status page — and on the public link's page — opens
+one page with everything the survey produced, at the same address with `/view` added. It works at
+phone width too.
+
+- **At the top**, the survey's title and cave, **Copy link**, and a way into SilexGIS. *Copy link*
+  copies the upload's public link when it has one — anybody holding it can open the results — and
+  otherwise this page's own address, which opens only for accounts allowed to see the upload. On the
+  signed-in page the button opens the cave; on a public link's page a signed-in reader who may see
+  the upload gets **Open in SilexGIS**, and anybody else is offered to sign in.
+- **The 3D model**, in two tabs: the embedded viewer, and the same file in LochViewer (on trial).
+- **Map and geodata**: when the survey was placed in the world (it has a fixed point or a coordinate
+  system), the centreline to download as **KML**, **GeoJSON** or **GPX**, and a map with the
+  centreline — on the signed-in page over the installation's default background (OpenTopoMap when
+  there is none), on a public link's page over OpenTopoMap. A survey that could not be placed says so
+  instead.
+- **Figures from the compiler**: surveyed length, length after loop adjustment, plan and vertical
+  length, depth, north–south and east–west extent with the station at each end and its height,
+  northing or easting, stations, shots, loops and the average loop error, the coordinate system and
+  the magnetic declinations used, a chart of each loop's closure error and a table of the loops with
+  the stations they run through. When the survey has no fixed point the page says its heights and
+  coordinates are relative.
+- **This upload's survey analysed**: statistics, network, orientation and depth profile, measured over
+  this upload's own survey — not over the survey the cave is currently drawn from, which can be
+  another upload. A survey that could not be placed, or whose reading has not finished, has nothing to
+  analyse, and the page says so.
+
+**What a public link shows.** A public link's page shows everything above: the map, the downloads
+and the figures with their station names, heights and grid coordinates. Whoever holds the link can
+already download the compiled model and the compiler's log, which contain all of it. It shows only
+what comes from this upload's own files — never the cave's recorded entrance position or anything
+else from the cave's record, which stay protected as everywhere else in SilexGIS. Withdrawing the
+link, or protecting the cave when the link was made without acknowledging protection, closes all of
+it at once. Inside SilexGIS the same holds: anybody allowed to open and download this upload's sent
+files sees the map, the downloads and the figures. The analyses are never compared with the length
+and depth recorded for the cave: an upload may cover only part of the cave, or be an older or newer
+partial survey.
+
+---
+
 ## The public link
 
 When the switch under **Settings → Survey uploads** is on and the installation allows it, a
@@ -184,13 +225,21 @@ Whoever opens it sees:
 
 - the survey's title, the **name** of the cave, and when the upload was sent;
 - the same progress bar and stages;
-- the results that can be opened or downloaded.
+- the results that can be opened or downloaded;
+- **the compiler's log**: its last lines on the page, and the whole log to download — after a
+  compile that failed, where it says what went wrong, as after one that worked.
+
+**The page opens in the language of whoever sent the survey** — the interface language of their
+account — unless the visitor has already chosen a language in that browser. The language switch
+on the page works as everywhere else.
 
 ### What the public link never shows
 
 - **The TopoDroid archive or the Therion source files.**
-- **The log**, the team, the station names.
-- **Where the cave is.** The page names the cave and nothing about its position.
+- The team.
+- **Where the cave is.** The page names the cave and gives no position of its own. The results
+  themselves — the model and the drawings — and the compiler's log, which can name stations and
+  repeat the survey's fixed point, are for whoever holds the link: that is what the link is for.
 
 ### What the link is, and is not
 

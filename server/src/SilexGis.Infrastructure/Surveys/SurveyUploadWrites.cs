@@ -136,6 +136,28 @@ public static class SurveyUploadWrites
     }
 
     /// <summary>
+    /// The run stopped at a step done on another computer. It ended — succeeded, at the stage
+    /// that says it waits — and keeps its progress where it got to, since the work after the step
+    /// is still to do. The upload of the step's outputs queues it again.
+    /// </summary>
+    public static Task AwaitExternalAsync(SilexGisDbContext db, Guid uploadId, string? message, CancellationToken ct)
+    {
+        var words = Head(message, SurveyUploadConfiguration.MessageLength);
+        var now = DateTimeOffset.UtcNow;
+
+        return db.SurveyUploads
+            .Where(u => u.Id == uploadId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.Status, SurveyUploadStatus.Succeeded)
+                .SetProperty(u => u.Stage, SurveyUploadStage.AwaitingExternal)
+                .SetProperty(u => u.Message, words)
+                .SetProperty(u => u.ErrorCode, (string?)null)
+                .SetProperty(u => u.ErrorMessage, (string?)null)
+                .SetProperty(u => u.FinishedAt, now)
+                .SetProperty(u => u.UpdatedAt, now), ct);
+    }
+
+    /// <summary>
     /// The run stopped. The reason is a stable code and a sentence for the person who sent the
     /// survey; the progress stays where the run had got to, so the bar shows how far it came.
     /// </summary>
@@ -156,6 +178,36 @@ public static class SurveyUploadWrites
                 .SetProperty(u => u.ErrorMessage, words)
                 .SetProperty(u => u.FinishedAt, now)
                 .SetProperty(u => u.UpdatedAt, now), ct);
+    }
+
+    /// <summary>
+    /// The queue gave the run up without it saying how it ended. Fails the upload only while it is
+    /// still queued or running, and answers whether it did: a run that had already written its
+    /// verdict before its job was taken back keeps it.
+    /// </summary>
+    /// <remarks>
+    /// The stage and progress are left where the lost run last wrote them, because that is the
+    /// most anyone knows about how far it came; an upload whose run never started is placed at the
+    /// first stage, since a failed run always names one.
+    /// </remarks>
+    public static async Task<bool> GiveUpAsync(
+        SilexGisDbContext db, Guid uploadId, string code, string message, CancellationToken ct)
+    {
+        var bounded = Head(code, SurveyUploadConfiguration.ErrorCodeLength);
+        var words = Head(message, SurveyUploadConfiguration.ErrorMessageLength);
+        var now = DateTimeOffset.UtcNow;
+
+        return await db.SurveyUploads
+            .Where(u => u.Id == uploadId
+                && (u.Status == SurveyUploadStatus.Queued || u.Status == SurveyUploadStatus.Running))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.Status, SurveyUploadStatus.Failed)
+                .SetProperty(u => u.Stage, u => u.Stage ?? SurveyUploadStage.Archive)
+                .SetProperty(u => u.Message, (string?)null)
+                .SetProperty(u => u.ErrorCode, bounded)
+                .SetProperty(u => u.ErrorMessage, words)
+                .SetProperty(u => u.FinishedAt, now)
+                .SetProperty(u => u.UpdatedAt, now), ct) > 0;
     }
 
     /// <summary>
@@ -184,6 +236,25 @@ public static class SurveyUploadWrites
                 .SetProperty(u => u.FinishedAt, (DateTimeOffset?)null)
                 .SetProperty(u => u.UpdatedAt, now), ct) > 0;
     }
+
+    /// <summary>
+    /// Holds an upload that is still receiving against every other writer until the caller's
+    /// transaction ends, and answers false — holding nothing — when it is no longer receiving.
+    /// </summary>
+    /// <remarks>
+    /// The completion that queues a run reads the upload's status first, and two completions sent
+    /// together (a device retrying one whose answer it did not wait for) both read it as receiving.
+    /// A statement on the row decides between them: it writes the status the row already has,
+    /// which changes nothing and takes the row's lock, and the database checks the status again
+    /// once a writer ahead of it has committed. The second completion therefore waits for the
+    /// first one and then finds the upload queued. It holds only against writers that take the
+    /// same hold before they move a receiving upload on, which is why every one of them does: the
+    /// completion, the uploader's abandoning it, and the sweep that closes it when it expires.
+    /// </remarks>
+    public static async Task<bool> HoldReceivingAsync(SilexGisDbContext db, Guid uploadId, CancellationToken ct) =>
+        await db.SurveyUploads
+            .Where(u => u.Id == uploadId && u.Status == SurveyUploadStatus.Receiving)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.Status, SurveyUploadStatus.Receiving), ct) > 0;
 
     private static string? Head(string? text, int length) =>
         text is null || text.Length <= length ? text : text[..length];

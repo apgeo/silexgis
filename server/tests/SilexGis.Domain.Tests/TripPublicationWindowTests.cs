@@ -217,4 +217,47 @@ public class TripPublicationWindowTests
         var longest = DateTimeOffset.MaxValue - endOfTrip - TimeSpan.FromTicks(1);
         TripPublicationWindow.WithinSiblingWindow(endOfTrip + longest, trip, null, longest).ShouldBeFalse();
     }
+
+    [Fact]
+    public void A_grace_after_close_reaching_past_the_last_date_there_is_keeps_a_closed_watch_open_without_throwing()
+    {
+        // The same "for ever" typed as a grace: added to the closing instant it passes year 9999,
+        // and the plain sum threw on every read of a closed watch's link.
+        var closed = Now.AddDays(-1);
+        var farAway = DateTimeOffset.MaxValue.AddTicks(-10);
+
+        TripPublicationWindow.IsOpen(
+            Now, revokedAt: null, expiresAt: farAway,
+            TripTrackingState.Closed, closedAt: closed, TimeSpan.MaxValue).ShouldBeTrue();
+        TripPublicationWindow.IsOpen(
+            Now, revokedAt: null, expiresAt: farAway,
+            TripTrackingState.Closed, closedAt: closed, TimeSpan.FromDays(9_999_999)).ShouldBeTrue();
+
+        // The same link with the grace it would otherwise have had runs out as before, and an
+        // expiry or a revocation still closes it whatever the grace says.
+        TripPublicationWindow.IsOpen(
+            Now, revokedAt: null, expiresAt: farAway,
+            TripTrackingState.Closed, closedAt: closed, TimeSpan.FromHours(1)).ShouldBeFalse();
+        TripPublicationWindow.IsOpen(
+            Now, revokedAt: null, expiresAt: Now,
+            TripTrackingState.Closed, closedAt: closed, TimeSpan.MaxValue).ShouldBeFalse();
+        TripPublicationWindow.IsOpen(
+            Now, revokedAt: closed, expiresAt: farAway,
+            TripTrackingState.Closed, closedAt: closed, TimeSpan.MaxValue).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_lifetime_reaching_past_the_last_date_there_is_ends_at_the_last_storable_instant()
+    {
+        // A link minted with "for ever" typed as a number of days gets the last whole microsecond
+        // there is, rather than an exception at the mint.
+        var trip = new DateOnly(2026, 9, 18);
+        var last = DateTimeOffset.MaxValue.AddTicks(-(DateTimeOffset.MaxValue.Ticks % 10));
+
+        TripPublicationWindow.ExpiresAtFor(Now, trip, null, TimeSpan.MaxValue).ShouldBe(last);
+        TripPublicationWindow.ExpiresAtFor(Now, trip, null, TimeSpan.FromDays(9_999_999)).ShouldBe(last);
+
+        // An ordinary lifetime is untouched: the trip is over, so it runs from now.
+        TripPublicationWindow.ExpiresAtFor(Now, trip, null, Lifetime).ShouldBe(Now + Lifetime);
+    }
 }

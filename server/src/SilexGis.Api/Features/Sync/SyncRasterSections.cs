@@ -337,6 +337,13 @@ internal sealed class SyncRasterMapsSection(
 
         if (item.BaseRevision is null)
         {
+            // A removal with no revision is not a resent create: answered "unchanged" the phone
+            // would drop a row that stays here. It is told the revision to remove against instead.
+            if (item.Deleted)
+            {
+                return Answer(SyncRasterAnswers.Conflict(item.Id, existing.UpdatedAt));
+            }
+
             // Sent as new and already here: the phone did not hear the first answer.
             return Answer(SyncRasterAnswers.Ok(item.Id, SyncRowStatus.Unchanged, existing.UpdatedAt));
         }
@@ -395,12 +402,19 @@ internal sealed class SyncRasterMapsSection(
 
         // Read again by id and written only while still at the revision it was arbitrated
         // against, so a proposal applied later cannot overwrite a change made in between.
-        var existing = await db.RasterMaps.IgnoreQueryFilters().FirstOrDefaultAsync(m => m.Id == item.Id, ct);
-        if (existing is null
-            || existing.DeletedAt is not null
-            || !SyncRevisions.Same(existing.UpdatedAt, proposal.BaseRevision!.Value))
+        // Locked before it is compared, and compared on what the locking statement read: another
+        // upload that has written this row and not yet committed is waited for here, and its
+        // committed revision is what this one is arbitrated against.
+        var standing = await SyncRevisionSql.HoldAsync(db, SyncRevisionTable.RasterMaps, item.Id, proposal.BaseRevision!.Value, ct);
+        if (!standing.Holds)
         {
-            return new SyncApplied(SyncRasterAnswers.Conflict(item.Id, existing?.UpdatedAt), null);
+            return new SyncApplied(SyncRasterAnswers.Conflict(item.Id, standing.Revision), null);
+        }
+
+        var existing = await db.RasterMaps.IgnoreQueryFilters().FirstOrDefaultAsync(m => m.Id == item.Id, ct);
+        if (existing is null)
+        {
+            return new SyncApplied(SyncRasterAnswers.Conflict(item.Id, null), null);
         }
 
         if (proposal.Act == SyncRasterAct.Delete)
@@ -462,7 +476,7 @@ internal sealed class SyncRasterMapsSection(
 
         existing.MapType = item.MapType!.Value;
         existing.SortOrder = item.SortOrder ?? existing.SortOrder;
-        existing.ClientUpdatedAt = item.ClientUpdatedAt;
+        existing.ClientUpdatedAt = SyncTimes.Utc(item.ClientUpdatedAt);
 
         // A change to the map moves its own revision even when only the picture changed.
         db.Entry(existing).Property(m => m.UpdatedAt).IsModified = true;
@@ -519,7 +533,7 @@ internal sealed class SyncRasterMapsSection(
             SortOrder = item.SortOrder ?? 0,
             DocumentId = documentId,
             OwnerUserId = run.Access.UserId,
-            ClientUpdatedAt = item.ClientUpdatedAt,
+            ClientUpdatedAt = SyncTimes.Utc(item.ClientUpdatedAt),
         });
 
         // The browser lists a cave's maps by the files hung on it with the map role.
@@ -750,6 +764,13 @@ internal sealed class SyncRasterPinsSection(IAccessService access)
 
         if (item.BaseRevision is null)
         {
+            // A removal with no revision is not a resent create: answered "unchanged" the phone
+            // would drop a row that stays here. It is told the revision to remove against instead.
+            if (item.Deleted)
+            {
+                return Answer(SyncRasterAnswers.Conflict(item.Id, existing.UpdatedAt));
+            }
+
             return Answer(SyncRasterAnswers.Ok(item.Id, SyncRowStatus.Unchanged, existing.UpdatedAt));
         }
 
@@ -818,11 +839,21 @@ internal sealed class SyncRasterPinsSection(IAccessService access)
         }
 
         var existing = await placePoints.FindAsync(item.Id, ct);
-        if (existing is null
-            || existing.Link.DeletedAt is not null
-            || !SyncRevisions.Same(existing.Link.UpdatedAt, proposal.BaseRevision!.Value))
+        if (existing is null)
         {
-            return new SyncApplied(SyncRasterAnswers.Conflict(item.Id, existing?.Link.UpdatedAt), null);
+            return new SyncApplied(SyncRasterAnswers.Conflict(item.Id, null), null);
+        }
+
+        // The map is locked first, the order a new pin on it takes, then the pin's own link; the
+        // revision is compared on what the locking statement read, never on the copy read above.
+        // Another upload that has written this pin and not yet committed is waited for here, and
+        // its committed revision is what this one is arbitrated against. If the revision still
+        // matches, nothing committed since the read above, so that copy is current.
+        await placePoints.LockAsync(existing.Map.Id, ct);
+        var standing = await SyncRevisionSql.HoldAsync(db, SyncRevisionTable.ResLinks, item.Id, proposal.BaseRevision!.Value, ct);
+        if (!standing.Holds)
+        {
+            return new SyncApplied(SyncRasterAnswers.Conflict(item.Id, standing.Revision), null);
         }
 
         if (proposal.Act == SyncRasterAct.Delete)

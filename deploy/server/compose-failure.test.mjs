@@ -63,6 +63,9 @@ function run(script, args, box) {
       SILEXGIS_APP_DIR: box.app,
       SILEXGIS_BACKUP_DIR: join(box.root, 'backups'),
       SILEXGIS_BASELINE_DIR: join(box.root, 'baseline'),
+      // The lock the two scripts share, kept inside the sandbox so a parallel suite (or an
+      // updater on the same machine) cannot make these runs wait or refuse.
+      SILEXGIS_UPDATE_LOCK: join(box.root, 'update.lock'),
     },
   });
 }

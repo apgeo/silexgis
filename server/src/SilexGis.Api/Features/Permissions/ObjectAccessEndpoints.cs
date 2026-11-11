@@ -212,8 +212,7 @@ public static class ObjectAccessEndpoints
             .Select(e => (e.SubjectKind, e.SubjectId))
             .ToList();
 
-        db.AccessEntries.RemoveRange(current);
-        db.AccessEntries.AddRange(staged);
+        AccessEntryMapping.StageReplace(db, current, staged);
 
         var newlyGranted = request.Entries
             .Where(e => e.Effect == AccessEffect.Allow

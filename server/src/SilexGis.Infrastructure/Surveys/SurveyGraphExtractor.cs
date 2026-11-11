@@ -213,10 +213,15 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
                     SRID = 4326,
                 },
 
-                // The length the file states, kept as it was surveyed. Measuring it back off the
-                // stored longitude and latitude would answer a slightly different question and
-                // would answer it approximately.
-                LengthM = (shot.ToPosition - shot.FromPosition).Length,
+                // The length the file states, in ground metres: a file on a projected grid writes
+                // its plan in grid metres, which differ from ground metres by the grid's scale (a
+                // few hundred parts per million on a transverse Mercator grid), and the stored
+                // geometry is corrected by that scale, so the length is too. Measuring it back off
+                // the stored longitude and latitude would answer approximately.
+                LengthM = placement.GroundLength(
+                    shot.ToPosition.X - shot.FromPosition.X,
+                    shot.ToPosition.Y - shot.FromPosition.Y,
+                    shot.ToPosition.Z - shot.FromPosition.Z),
                 Flags = flags,
                 RawFlags = shot.RawFlags,
             };

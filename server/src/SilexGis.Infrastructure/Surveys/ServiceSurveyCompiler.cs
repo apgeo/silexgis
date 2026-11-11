@@ -151,10 +151,13 @@ public sealed class ServiceSurveyCompiler : ISurveyCompiler
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(request.Timeout + Allowance);
 
+        // The folders go with the files, empty ones included: the outputs are written into folders
+        // the project was built with, and Therion does not make them.
         var files = SurveyProjectTar.FilesUnder(project, SandboxedTherionRunner.ScratchDirectoryName);
+        var directories = SurveyProjectTar.DirectoriesUnder(project, SandboxedTherionRunner.ScratchDirectoryName);
         using var message = new HttpRequestMessage(HttpMethod.Post, new Uri(baseAddress, query))
         {
-            Content = new ProjectContent(project, files),
+            Content = new ProjectContent(project, files, directories),
         };
 
         progress.Report(new SurveyCompileProgress("handed to the compiler service", 5));
@@ -249,16 +252,18 @@ public sealed class ServiceSurveyCompiler : ISurveyCompiler
         }
     }
 
-    /// <summary>A project's files, written as a tar straight onto the request as it is sent.</summary>
+    /// <summary>A project's folders and files, written as a tar straight onto the request as it is sent.</summary>
     private sealed class ProjectContent : HttpContent
     {
         private readonly string root;
         private readonly IReadOnlyList<string> files;
+        private readonly IReadOnlyList<string> directories;
 
-        public ProjectContent(string root, IReadOnlyList<string> files)
+        public ProjectContent(string root, IReadOnlyList<string> files, IReadOnlyList<string> directories)
         {
             this.root = root;
             this.files = files;
+            this.directories = directories;
             Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(SurveyProjectTar.MediaType);
         }
 
@@ -266,7 +271,7 @@ public sealed class ServiceSurveyCompiler : ISurveyCompiler
             SerializeToStreamAsync(stream, context, CancellationToken.None);
 
         protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken) =>
-            SurveyProjectTar.WriteAsync(stream, root, files, cancellationToken);
+            SurveyProjectTar.WriteAsync(stream, root, files, cancellationToken, directories: directories);
 
         protected override bool TryComputeLength(out long length)
         {

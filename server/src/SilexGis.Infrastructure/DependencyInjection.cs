@@ -121,6 +121,13 @@ public static class DependencyInjection
             configuration.GetSection(Surveys.SurveyUploadOptions.SectionName));
         services.Configure<Surveys.SurveyCompilerOptions>(
             configuration.GetSection(Surveys.SurveyCompilerOptions.SectionName));
+        services.Configure<Scans.ScanOptions>(
+            configuration.GetSection(Scans.ScanOptions.SectionName));
+        services.Configure<Storage.StorageOptions>(
+            configuration.GetSection(Storage.StorageOptions.SectionName));
+        services.AddScoped<Storage.StorageFiguresService>();
+        services.AddScoped<Storage.StorageAlerts>();
+        services.AddScoped<Storage.StorageReportService>();
         services.AddScoped<Import.ImportCandidateService>();
         services.AddScoped<Import.ImportCommitService>();
         services.AddScoped<Import.DeviceSyncUndoService>();
@@ -190,16 +197,24 @@ public static class DependencyInjection
             configuration.GetSection(PhotoLibraries.ImmichOptions.SectionName));
         services.Configure<PhotoLibraries.PhotoPrismOptions>(
             configuration.GetSection(PhotoLibraries.PhotoPrismOptions.SectionName));
+
+        // Neither library's transport writes its outbound requests to the log. PhotoPrism takes its
+        // picture credential as a segment of the picture's own address — the library offers no
+        // header for it — so the standard "sending request to <address>" line would put a live credential, good for every
+        // picture in the library, into every request log. The other library is treated the same
+        // so that a credential added to its addresses later is not logged by default either.
         services.AddHttpClient(PhotoLibraries.ImmichClient.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
             {
                 AutomaticDecompression = System.Net.DecompressionMethods.All,
-            });
+            })
+            .RemoveAllLoggers();
         services.AddHttpClient(PhotoLibraries.PhotoPrismClient.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
             {
                 AutomaticDecompression = System.Net.DecompressionMethods.All,
-            });
+            })
+            .RemoveAllLoggers();
 
         // Each registered twice: once as itself, so a surface can name the product, and once behind
         // the shared contract, so everything above iterates over "the libraries this installation
@@ -360,6 +375,14 @@ public static class DependencyInjection
         services.AddScoped<ContentIntake>();
         services.AddSingleton<IVectorIO, GdalVectorIO>();
         services.AddSingleton<RasterCogService>();
+        services.AddOptions<GeoreferencedMapOptions>()
+            .Bind(configuration.GetSection(GeoreferencedMapOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<GeoreferencedMapOptions>,
+            GeoreferencedMapOptionsValidator>();
+        services.AddSingleton<PdfSheetRenderService>();
+        services.AddSingleton<MapWarpService>();
+        services.AddScoped<MapSheetPublisher>();
         services.AddSingleton<Documents.ISpreadsheetWriter, Documents.XlsxSpreadsheetWriter>();
         services.AddSingleton<Documents.IDocumentWriter, Documents.DocxDocumentWriter>();
         services.Configure<Documents.ReportOptions>(
@@ -390,6 +413,8 @@ public static class DependencyInjection
 
         services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();
         services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
+        services.AddScoped<IProcessingJobHandler, MapSheetRenderHandler>();
+        services.AddScoped<IProcessingJobHandler, MapPlacementWarpHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyMeshHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyGraphHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyReadingBackfillHandler>();
@@ -397,6 +422,8 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, PhotoGeoBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, AccountDataExportHandler>();
         services.AddScoped<IProcessingJobHandler, FeatureIntegrityVerifyHandler>();
+        services.AddScoped<IProcessingJobHandler, Storage.StorageCheckHandler>();
+        services.AddScoped<IProcessingJobHandler, Storage.StorageReportHandler>();
         services.AddScoped<IProcessingJobHandler, TextExtractionHandler>();
         services.AddScoped<IProcessingJobHandler, TextExtractionBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, AccessHistoryPruneHandler>();
@@ -408,6 +435,12 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, UploadSessionSweepHandler>();
         services.AddScoped<Surveys.SurveyUploadArtefactStore>();
         services.AddScoped<IProcessingJobHandler, SurveyUploadPipelineHandler>();
+        services.AddScoped<IProcessingJobHandler, PointCloudPipelineHandler>();
+        services.AddSingleton<Scans.ScanWorkerHandoff>();
+        services.AddScoped<Scans.PointCloudProcessing>();
+        services.AddScoped<Scans.ScanSurfaceSaving>();
+        services.AddScoped<Scans.ScanStepParameterSchemas>();
+        services.AddScoped<Scans.ProcessingProfileResolver>();
         services.AddScoped<IProcessingJobHandler, SurveyUploadSweepHandler>();
         // Which compiler is the installation's choice, made once at start-up: none unless it asked.
         var compilerChoice = configuration.GetSection(Surveys.SurveyCompilerOptions.SectionName).Get<Surveys.SurveyCompilerOptions>();
@@ -536,6 +569,8 @@ public static class DependencyInjection
         services.Configure<FeatureIntegrityOptions>(
             configuration.GetSection(FeatureIntegrityOptions.SectionName));
         services.AddHostedService<FeatureIntegrityScheduler>();
+        services.AddHostedService<Storage.StorageCheckScheduler>();
+        services.AddHostedService<Storage.StorageReportScheduler>();
 
         services.Configure<AccessHistoryOptions>(
             configuration.GetSection(AccessHistoryOptions.SectionName));

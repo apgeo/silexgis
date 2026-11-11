@@ -7,6 +7,13 @@ import { unwrap } from './shared.ts';
 import { queryKeys } from './queryKeys.ts';
 
 export type SurveyUpload = components['schemas']['SurveyUploadDto'];
+
+// The figures an upload's reading produced, as the cave's statistics panels draw them. Named
+// here so those panels read the generated schema through this module, like every other caller.
+export type SurveyUploadStatistics = components['schemas']['SurveyUploadStatisticsDto'];
+export type SurveyUploadTopology = components['schemas']['SurveyUploadTopologyDto'];
+export type SurveyUploadOrientation = components['schemas']['SurveyUploadOrientationDto'];
+export type SurveyUploadDepthProfile = components['schemas']['SurveyUploadDepthProfileDto'];
 export type SurveyUploadListItem = components['schemas']['SurveyUploadListItemDto'];
 export type SurveyUploadPage = components['schemas']['SurveyUploadPageDto'];
 export type SurveyUploadArtefact = components['schemas']['SurveyUploadArtefactDto'];
@@ -17,13 +24,19 @@ export type SurveyUploadPreferences = components['schemas']['SurveyUploadPrefere
 export type SurveyUploadStatus = components['schemas']['SurveyUploadStatus'];
 export type SurveyUploadStage = components['schemas']['SurveyUploadStage'];
 export type SurveyOrigin = components['schemas']['SurveyOrigin'];
+export type SurveyUploadPointCloud = components['schemas']['SurveyUploadPointCloudDto'];
+/** A scan's top view and extended profile, and what their legend needs. */
+export type SurveyUploadPointCloudPictures = components['schemas']['SurveyUploadPointCloudPicturesDto'];
+export type SurveyUploadPointCloudEstimateRow = components['schemas']['SurveyUploadPointCloudEstimateRowDto'];
+export type SurveyUploadDisplayRequest = components['schemas']['SurveyUploadDisplayRequest'];
+export type SurveyUploadExternalWait = components['schemas']['SurveyUploadExternalWaitDto'];
 
 /** How often an unfinished upload is asked about, in milliseconds. */
 export const SURVEY_UPLOAD_POLL_MS = 2000;
 
 /**
- * The stages a run goes through, in the order it goes through them. The server reports only the
- * stage it is in; every other stage's state is worked out from this order by
+ * The stages a survey archive's run goes through, in the order it goes through them. The server
+ * reports only the stage it is in; every other stage's state is worked out from this order by
  * {@link surveyUploadStageStates}.
  */
 export const SURVEY_UPLOAD_STAGE_ORDER: readonly SurveyUploadStage[] = [
@@ -34,6 +47,130 @@ export const SURVEY_UPLOAD_STAGE_ORDER: readonly SurveyUploadStage[] = [
   'store',
   'read',
 ];
+
+/**
+ * The stages a point cloud's run goes through. Nothing is unpacked or compiled: the file's header
+ * is read (inspect), the cloud is estimated and, when chosen, thinned (downsample), tiled for the
+ * 3D scene (tile) and the tiles stored. A run that stops to ask how much to show ends at
+ * downsample; a server without a tiling worker ends at tile.
+ */
+export const POINT_CLOUD_STAGE_ORDER: readonly SurveyUploadStage[] = [
+  'archive',
+  'inspect',
+  'downsample',
+  'tile',
+  'store',
+];
+
+/**
+ * The stages a scanner's raw recording goes through: the folder is archived and read (inspect),
+ * HDMapping's odometry turns it into a session, the session is exported as one cloud and the
+ * cloud checked, and from there it is a point cloud's run like any other. A server without an
+ * HDMapping worker ends at odometry.
+ */
+export const RECORDING_STAGE_ORDER: readonly SurveyUploadStage[] = [
+  'archive',
+  'inspect',
+  'odometry',
+  'export',
+  'check',
+  'downsample',
+  'tile',
+  'store',
+];
+
+/** The file extensions a point-cloud upload is made of; the server accepts exactly one such file. */
+export const POINT_CLOUD_EXTENSIONS = ['.laz', '.las'] as const;
+
+/** How the advice level is spelled on the wire. */
+export type PointCloudAdviceLevel = 'none' | 'warn' | 'advise';
+
+/** How much of a cloud to show: the whole of it, or one point per cell of the given size. */
+export type PointCloudDisplayChoice = { method: 'full' } | { method: 'voxel'; voxelCm: number };
+
+/**
+ * Whether the file is a point cloud by its name. Decided here, once, so the upload entry, the
+ * status page and the cave page agree on which uploads are clouds.
+ */
+export function isPointCloudFileName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return POINT_CLOUD_EXTENSIONS.some((extension) => lower.endsWith(extension));
+}
+
+/**
+ * Whether an upload is a point cloud's. The single upload's answer does not name its source, so
+ * it is told by its facts once the header has been read, and before that by the one archive file
+ * it was declared with — a cloud is always exactly one `.laz` or `.las` file declared as the
+ * archive, and no survey archive is ever named so. A raw recording's lidar chunks are `.laz`
+ * files declared as the archive too, so a recording is a point cloud by the same test.
+ */
+export function surveyUploadIsPointCloud(
+  upload: Pick<SurveyUpload, 'pointCloud'> & { files: readonly Pick<SurveyUploadFile, 'name' | 'role'>[] },
+): boolean {
+  return (
+    !!upload.pointCloud ||
+    upload.files.some((file) => file.role === 'archive' && isPointCloudFileName(file.name))
+  );
+}
+
+/**
+ * Whether the run stopped to ask how much of the cloud to show: it ended at the downsample stage
+ * with the estimate on the facts and no tiles made. The person's choice goes back as a rerun with
+ * a display request, and the run carries on from the estimate.
+ */
+export function pointCloudChoiceNeeded(
+  upload: Pick<SurveyUpload, 'status' | 'stage' | 'pointCloud'>,
+): boolean {
+  return (
+    upload.status === 'succeeded' &&
+    upload.stage === 'downsample' &&
+    !!upload.pointCloud &&
+    upload.pointCloud.estimate !== null &&
+    upload.pointCloud.tilesetUrl === null
+  );
+}
+
+/**
+ * Whether a scan's run stopped before a step done on another computer: it ended at the stage that
+ * says so, and waits for the step's products to be sent back. Only a caller who may write the cave
+ * is told which step and what to send (`external`); anybody who may read the upload sees that it
+ * waits.
+ */
+export function surveyUploadAwaitingExternal(upload: Pick<SurveyUpload, 'status' | 'stage'>): boolean {
+  return upload.status === 'succeeded' && upload.stage === 'awaitingExternal';
+}
+
+/**
+ * The display choice the estimate table pre-selects: the server's suggested voxel when it advised
+ * thinning, the full cloud otherwise. A suggestion names a row of the table, so the choice is the
+ * row rather than a free number.
+ */
+export function suggestedDisplayChoice(cloud: Pick<SurveyUploadPointCloud, 'advice'>): PointCloudDisplayChoice {
+  const suggested = cloud.advice?.suggestedVoxelCm;
+  return suggested !== null && suggested !== undefined && cloud.advice?.level !== 'none'
+    ? { method: 'voxel', voxelCm: suggested }
+    : { method: 'full' };
+}
+
+/** The request body for a display choice, as the server reads it. */
+export function displayRequestOf(choice: PointCloudDisplayChoice): SurveyUploadDisplayRequest {
+  return choice.method === 'full' ? { method: 'full' } : { method: 'voxel', voxelCm: choice.voxelCm };
+}
+
+/**
+ * The choice the run was made with, read back from the facts: the voxel used, in centimetres, or
+ * the full cloud. Null while nothing has been tiled yet.
+ */
+export function displayChoiceUsed(
+  cloud: Pick<SurveyUploadPointCloud, 'tilesetUrl' | 'displayVoxelM'>,
+): PointCloudDisplayChoice | null {
+  if (cloud.tilesetUrl === null) {
+    return null;
+  }
+  return cloud.displayVoxelM === null
+    ? { method: 'full' }
+    : { method: 'voxel', voxelCm: Math.round(cloud.displayVoxelM * 100 * 100) / 100 };
+}
 
 /**
  * Whether the upload is still going somewhere. A session still receiving files counts: its files
@@ -74,6 +211,10 @@ export interface StageInputs {
   stage: SurveyUploadStage | null;
   /** Whether the run was asked to compile. Unknown (undefined) is treated as asked: nothing is hidden for a guess. */
   compile?: boolean;
+  /** Whether the upload is a point cloud, whose run has stages of its own. Unknown is a survey archive. */
+  pointCloud?: boolean;
+  /** Whether the point cloud is a raw recording, whose run makes the cloud first. */
+  recording?: boolean;
 }
 
 /**
@@ -86,12 +227,19 @@ export interface StageInputs {
  *   showing compile, store and read as done would claim work that never happened.
  * - Queued, receiving and abandoned: nothing has started, so everything waits.
  * - A run that was not asked to compile has no scaffold or compile stage, whatever else is true.
+ * - A point cloud's run walks its own list of stages, and nothing in it is a compile; a raw
+ *   recording's walks a longer one, which makes the cloud before it is a point cloud's run.
  */
 export function surveyUploadStageStates(input: StageInputs): StageProgress[] {
-  const index = input.stage === null ? -1 : SURVEY_UPLOAD_STAGE_ORDER.indexOf(input.stage);
-  const notCompiling = input.compile === false;
+  const order = input.recording
+    ? RECORDING_STAGE_ORDER
+    : input.pointCloud
+      ? POINT_CLOUD_STAGE_ORDER
+      : SURVEY_UPLOAD_STAGE_ORDER;
+  const index = input.stage === null ? -1 : order.indexOf(input.stage);
+  const notCompiling = !input.pointCloud && !input.recording && input.compile === false;
 
-  return SURVEY_UPLOAD_STAGE_ORDER.map((stage, i) => {
+  return order.map((stage, i) => {
     if (notCompiling && (stage === 'scaffold' || stage === 'compile')) {
       return { stage, state: 'skipped' };
     }
@@ -108,6 +256,13 @@ export function surveyUploadStageStates(input: StageInputs): StageProgress[] {
         }
         return { stage, state: i < index ? 'done' : i === index ? 'failed' : 'pending' };
       case 'succeeded':
+        // Stopped before a step done on another computer: the upload was read and nothing of the
+        // processing has been done here yet, so the stages up to the inspection are done and every
+        // later one is still to come — none of them skipped, as a finished run's would be.
+        if (input.stage === 'awaitingExternal') {
+          const inspected = order.indexOf('inspect');
+          return { stage, state: i <= inspected ? 'done' : 'pending' };
+        }
         if (index < 0) {
           return { stage, state: 'done' };
         }
@@ -278,11 +433,80 @@ export function useSurveyUpload(id: string | undefined) {
 export function useRerunSurveyUpload() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, pipeline }: { id: string; pipeline?: SurveyUploadPipelineRequest | null }) =>
+    mutationFn: ({
+      id,
+      pipeline,
+      display,
+      fromStep,
+    }: {
+      id: string;
+      pipeline?: SurveyUploadPipelineRequest | null;
+      /** A point cloud's choice of how much to show; it makes the run's recipe anew. */
+      display?: SurveyUploadDisplayRequest | null;
+      /** A point cloud's step to do again with the recipe it has, by the step's id. */
+      fromStep?: string | null;
+    }) =>
       unwrap(
         api.POST('/api/v1/survey-uploads/{id}/rerun', {
           params: { path: { id } },
-          body: { pipeline: pipeline ?? null },
+          body: { pipeline: pipeline ?? null, display: display ?? null, fromStep: fromStep ?? null },
+        }),
+      ),
+    onSuccess: (upload) => {
+      queryClient.setQueryData(queryKeys.surveyUpload(upload.id), upload);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveys(upload.cave.id) });
+    },
+  });
+}
+
+/** The step id of the worker step that makes a scan's surface; its profiles are listed under it. */
+export const SURFACE_STEP_ID = 'mesh.surface';
+
+/**
+ * Asks for a surface to be made of a processed, placed scan and saved as a wall mesh of a cave —
+ * the scan's own when no cave is named — with a profile of the surface step, or the step's own
+ * values when none is named. The answer is the upload queued again, so the page polls the run as
+ * it goes. The profile used becomes the remembered one, so the profile lists are asked again.
+ */
+export function useMakeScanSurface() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, caveId, profileId }: { id: string; caveId?: string | null; profileId?: string | null }) =>
+      unwrap(
+        api.POST('/api/v1/survey-uploads/{id}/surface', {
+          params: { path: { id } },
+          body: { caveId: caveId ?? null, profileId: profileId ?? null },
+        }),
+      ),
+    onSuccess: (upload) => {
+      queryClient.setQueryData(queryKeys.surveyUpload(upload.id), upload);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveys(upload.cave.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.processingProfilesAll });
+    },
+  });
+}
+
+/** The address of the download of what a waiting step reads: its inputs, parameters and instructions, as one zip. */
+export function surveyUploadExternalBundleUrl(id: string): string {
+  return `/api/v1/survey-uploads/${encodeURIComponent(id)}/external/bundle`;
+}
+
+/**
+ * Sends one product of the step a scan's run waits for, under the name the step takes it back
+ * under — whatever the file was called on the computer that made it. The answer is the upload as
+ * it now stands: still waiting when the step makes more than this one, queued again once the last
+ * is in, and the page then polls the run as it carries on.
+ */
+export function useSendExternalOutput() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name, file }: { id: string; name: string; file: Blob }) =>
+      unwrap(
+        api.PUT('/api/v1/survey-uploads/{id}/external/{name}', {
+          params: { path: { id, name } },
+          body: file as never,
+          bodySerializer: (b: unknown) => b as Blob,
+          headers: { 'Content-Type': 'application/octet-stream' },
         }),
       ),
     onSuccess: (upload) => {
@@ -314,4 +538,72 @@ export function useRefreshCaveWhenUploadSettles(upload: Pick<SurveyUpload, 'stat
     }
     wasUnsettled.current = unsettled;
   }, [unsettled, caveId, queryClient]);
+}
+
+/** Where a point-cloud upload has got to, for the dialog sending it. */
+export type PointCloudUploadPhase = 'opening' | 'sending' | 'completing';
+
+export interface PointCloudUploadRequest {
+  caveId: string;
+  file: File;
+  /** What the survey is called on the cave; the file's name without its extension when nothing better is known. */
+  surveyTitle: string;
+  /** How much to show, decided before the estimate; left out, the run decides or stops to ask. */
+  display?: PointCloudDisplayChoice;
+  onPhase?: (phase: PointCloudUploadPhase) => void;
+}
+
+/**
+ * Sends a point cloud the way a device sends a survey: the upload is opened with the one file
+ * declared as its archive, the bytes go in one request, and the completion queues the run. The
+ * answer is the upload as queued, whose status page the dialog then opens.
+ *
+ * One request for the bytes rather than a resumable session, because the survey-upload protocol
+ * has no pieces: a declared file arrives whole or is declared again. The browser's own upload
+ * progress is not readable through the fetch API, so the dialog is told which of the three steps
+ * is under way and nothing finer.
+ */
+export function useUploadPointCloud() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ caveId, file, surveyTitle, display, onPhase }: PointCloudUploadRequest) => {
+      onPhase?.('opening');
+      const opened = await unwrap(
+        api.POST('/api/v1/survey-uploads', {
+          body: {
+            source: 'pointcloud',
+            client: { name: 'SilexGIS web', version: null },
+            cave: { id: caveId },
+            caveSurvey: null,
+            newCave: null,
+            surveyTitle,
+            surveyName: null,
+            description: null,
+            files: [{ name: file.name, size: file.size, role: 'archive' }],
+            pipeline: null,
+            documentsVisibility: null,
+            display: display ? displayRequestOf(display) : null,
+          },
+        }),
+      );
+      onPhase?.('sending');
+      await unwrap(
+        api.PUT('/api/v1/survey-uploads/{id}/files/{name}', {
+          params: { path: { id: opened.id, name: file.name } },
+          body: file as never,
+          bodySerializer: (b: unknown) => b as Blob,
+          headers: { 'Content-Type': 'application/octet-stream' },
+        }),
+      );
+      onPhase?.('completing');
+      return unwrap(
+        api.POST('/api/v1/survey-uploads/{id}/complete', { params: { path: { id: opened.id } } }),
+      );
+    },
+    onSuccess: (upload) => {
+      queryClient.setQueryData(queryKeys.surveyUpload(upload.id), upload);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveys(upload.cave.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModels(upload.cave.id) });
+    },
+  });
 }

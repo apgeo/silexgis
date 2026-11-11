@@ -113,6 +113,20 @@ public sealed class ExpeditionListFilterTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
+    /// What somebody types is searched for as typed: a "%" in the search is a percent sign in the
+    /// name, not a wildcard that also finds the camp whose name has a digit in its place.
+    /// </summary>
+    [Fact]
+    public async Task A_percent_sign_in_the_search_matches_only_a_name_that_has_one()
+    {
+        var marker = Marker();
+        var percent = await CreateAsync($"50% {marker}", "2031-07-02");
+        _ = await CreateAsync($"500 {marker}", "2031-07-02");
+
+        (await ListAsync($"search={Escape($"50% {marker}")}")).ShouldBe([percent]);
+    }
+
+    /// <summary>
     /// The state filter, and the refusal beside it. A word the application does not have is told
     /// so under a code rather than folded into "no filter" — a caller handed the whole list after
     /// asking for one state has no way to tell that from a state nothing is in.

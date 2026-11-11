@@ -497,6 +497,38 @@ public class SurveyGraphExtractorTests
     }
 
     [Fact]
+    public void A_gridded_files_leg_lengths_are_the_ground_lengths_of_the_legs_as_stored()
+    {
+        var parsed = CaveModelReader.Read(
+            File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "P8_Master.3d")));
+
+        var extraction = Extractor.Extract(
+            parsed, ModelId, new SurveySourceDeclaration(SourceEpsg: 27700, null, null, OriginHeightM: 0));
+
+        // Each stored leg measured back off its own longitude and latitude, on the WGS 84
+        // ellipsoid's radii at the leg's latitude — exact to well under a part per million over a
+        // survey leg. The British grid's scale is about 0.9996 here, so a length left in grid
+        // metres is short of this by some 400 parts per million.
+        const double a = 6_378_137.0;
+        const double e2 = 0.00669437999014;
+        double Ground(LineString leg)
+        {
+            var (p, q) = (leg.GetCoordinateN(0), leg.GetCoordinateN(1));
+            var latitude = (p.Y + q.Y) / 2 * Math.PI / 180;
+            var w = 1 - (e2 * Math.Sin(latitude) * Math.Sin(latitude));
+            var north = (q.Y - p.Y) * Math.PI / 180 * (a * (1 - e2) / (w * Math.Sqrt(w)));
+            var east = (q.X - p.X) * Math.PI / 180 * (a / Math.Sqrt(w)) * Math.Cos(latitude);
+            var up = q.Z - p.Z;
+            return Math.Sqrt((north * north) + (east * east) + (up * up));
+        }
+
+        var stated = extraction.Shots.Sum(s => s.LengthM);
+        var measured = extraction.Shots.Sum(s => Ground(s.Geom));
+        stated.ShouldBeGreaterThan(0);
+        (Math.Abs(stated - measured) / measured).ShouldBeLessThan(2e-5);
+    }
+
+    [Fact]
     public void The_points_a_survey_declined_to_name_are_not_stations_and_are_counted_as_such()
     {
         var extraction = Extractor.Extract(WrittenAndReadBack(WallShotCave()), ModelId, Local);

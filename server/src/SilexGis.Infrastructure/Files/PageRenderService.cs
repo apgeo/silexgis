@@ -190,14 +190,8 @@ public sealed class PageRenderService(IFileStore fileStore)
         // in would flatten every ordinary page to that resolution, and the largest sizes — the
         // ones that exist so the words can be read — would come back the same picture as the
         // smaller ones.
-        //
-        // The bounds are guards rather than policy. The lower one keeps a very large page — a
-        // survey sheet metres across — from collapsing to a resolution that produces almost no
-        // pixels at all; what it draws is then brought down to the box below. The upper one
-        // keeps a page a few centimetres across from being blown up to fill a box far larger
-        // than anything it could usefully show.
-        var scale = (double)size / Math.Max(pointsWide, pointsHigh);
-        var dpi = Math.Clamp(pdfPointsPerInch * scale, 18.0, 600.0);
+        // How the bounds and the pixel ceiling shape it is told where it is computed.
+        var dpi = Resolution(pointsWide, pointsHigh, size);
 
         using var dataset = Open(sourcePath, page, dpi)
             ?? throw new InvalidOperationException("The page could not be opened.");
@@ -207,6 +201,13 @@ public sealed class PageRenderService(IFileStore fileStore)
         if (width <= 0 || height <= 0 || bands <= 0)
         {
             throw new InvalidOperationException("The page produced no pixels.");
+        }
+
+        // The resolution was chosen to keep within the ceiling; this holds the allocation below
+        // to it should the renderer round a page's size differently from the arithmetic.
+        if ((long)width * height > MaxPagePixels * 2)
+        {
+            throw new InvalidOperationException("The page is too large to be drawn.");
         }
 
         var format = bands switch
@@ -260,6 +261,47 @@ public sealed class PageRenderService(IFileStore fileStore)
             image.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Most pixels one page is ever drawn with: four times the largest box offered, so the
+    /// largest picture still has room to be drawn larger and brought down, while a single
+    /// request can never allocate more than about a hundred megabytes for its pixels.
+    /// </summary>
+    public static readonly long MaxPagePixels = 4L * AllowedSizes.Max() * AllowedSizes.Max();
+
+    /// <summary>
+    /// The resolution a page measuring <paramref name="pointsWide"/> by
+    /// <paramref name="pointsHigh"/> points is drawn at for a box of <paramref name="size"/>.
+    /// </summary>
+    /// <remarks>
+    /// The longer side lands on the box. The bounds are guards rather than policy. The lower one
+    /// keeps a very large page — a survey sheet metres across — from collapsing to a resolution
+    /// that produces almost no pixels at all; what it draws is then brought down to the box. The
+    /// upper one keeps a page a few centimetres across from being blown up to fill a box far
+    /// larger than anything it could usefully show. Neither bounds the pixel count, which is what
+    /// the allocation costs: a page can declare itself any size at all, and one declared
+    /// hundreds of thousands of points across would at the lower bound be a raster of tens of
+    /// thousands of pixels a side, gigabytes drawn on every request until the picture is cached.
+    /// So the pixel count has a ceiling of its own, and where the lower bound would pass it the
+    /// resolution goes below that bound instead — such a page is still drawn, only more coarsely
+    /// before it is brought down to the box.
+    /// </remarks>
+    public static double Resolution(int pointsWide, int pointsHigh, int size)
+    {
+        const double pdfPointsPerInch = 72.0;
+
+        var scale = (double)size / Math.Max(pointsWide, pointsHigh);
+        var dpi = Math.Clamp(pdfPointsPerInch * scale, 18.0, 600.0);
+
+        var inchesSquared = (double)pointsWide * pointsHigh
+            / (pdfPointsPerInch * pdfPointsPerInch);
+        if (inchesSquared * dpi * dpi > MaxPagePixels)
+        {
+            dpi = Math.Sqrt(MaxPagePixels / inchesSquared);
+        }
+
+        return dpi;
     }
 
     /// <summary>

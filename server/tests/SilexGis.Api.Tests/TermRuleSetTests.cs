@@ -132,25 +132,59 @@ public sealed class TermRuleSetTests : IAsyncLifetime, IDisposable, IClassFixtur
         refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await ProblemCodeAsync(refused)).ShouldBe("term_rules.promotion_forbidden");
 
-        var promoted = await admin.PostAsJsonAsync($"/api/v1/term-rule-sets/{mineId}/scope", new
+        // The default every account inherits today, so it can be put back whatever happens below:
+        // a failure that left this set as the installation's default would fail other tests for
+        // a reason that has nothing to do with them, and hide this one's.
+        var incumbent = (await GetJsonAsync(other, "/api/v1/term-rule-sets/effective"))
+            .GetProperty("set").GetProperty("set").GetProperty("id").GetGuid();
+        bool incumbentWasDefault;
+        await using (var scope = factory.Services.CreateAsyncScope())
         {
-            scope = "installation",
-            cavingGroupId = (Guid?)null,
-            isDefault = true,
-        });
-        promoted.StatusCode.ShouldBe(HttpStatusCode.OK, await promoted.Content.ReadAsStringAsync());
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            incumbentWasDefault = await db.TermRuleSets.AsNoTracking()
+                .Where(s => s.Id == incumbent).Select(s => s.IsDefault).SingleAsync();
+        }
 
-        // The incumbent stands down: one default per scope, so the next account reads this one.
+        try
+        {
+            var promoted = await admin.PostAsJsonAsync($"/api/v1/term-rule-sets/{mineId}/scope", new
+            {
+                scope = "installation",
+                cavingGroupId = (Guid?)null,
+                isDefault = true,
+            });
+            promoted.StatusCode.ShouldBe(HttpStatusCode.OK, await promoted.Content.ReadAsStringAsync());
+
+            // The incumbent stands down: one default per scope, so the next account reads this one.
+            (await GetJsonAsync(other, "/api/v1/term-rule-sets/effective"))
+                .GetProperty("set").GetProperty("set").GetProperty("id").GetGuid().ShouldBe(mineId);
+        }
+        finally
+        {
+            // This set returned to its owner and the incumbent made the default again if it was
+            // one, each checked, so the rest of the suite is not standing on this test.
+            if (incumbentWasDefault)
+            {
+                var restored = await admin.PostAsJsonAsync($"/api/v1/term-rule-sets/{incumbent}/scope", new
+                {
+                    scope = "installation",
+                    cavingGroupId = (Guid?)null,
+                    isDefault = true,
+                });
+                restored.StatusCode.ShouldBe(HttpStatusCode.OK, await restored.Content.ReadAsStringAsync());
+            }
+
+            var returned = await admin.PostAsJsonAsync($"/api/v1/term-rule-sets/{mineId}/scope", new
+            {
+                scope = "user",
+                cavingGroupId = (Guid?)null,
+                isDefault = false,
+            });
+            returned.StatusCode.ShouldBe(HttpStatusCode.OK, await returned.Content.ReadAsStringAsync());
+        }
+
         (await GetJsonAsync(other, "/api/v1/term-rule-sets/effective"))
-            .GetProperty("set").GetProperty("set").GetProperty("id").GetGuid().ShouldBe(mineId);
-
-        // Put the installation back so the rest of the suite is not standing on this test.
-        await admin.PostAsJsonAsync($"/api/v1/term-rule-sets/{mineId}/scope", new
-        {
-            scope = "user",
-            cavingGroupId = (Guid?)null,
-            isDefault = false,
-        });
+            .GetProperty("set").GetProperty("set").GetProperty("id").GetGuid().ShouldBe(incumbent);
     }
 
     [Fact]

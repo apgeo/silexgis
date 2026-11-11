@@ -15,6 +15,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Import;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
@@ -1507,6 +1508,205 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
     }
 
     /// <summary>
+    /// A moment no calendar holds, or a flag past any integer the reader expected, is a refusal
+    /// about the archive rather than a fault with no code on it.
+    ///
+    /// <para>
+    /// SQLite stores whatever integer it is given under a column declared for milliseconds, and a
+    /// corrupt or hostile export can hold one beyond the year 9999. The conversion used to throw,
+    /// and nothing between it and the route knew what the throw meant.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_value_no_device_writes_is_refused_as_an_unreadable_archive_rather_than_faulting()
+    {
+        var cave = await CreateCaveAsync(editor, locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        await SeedPlacesAsync(cave);
+
+        // A recording that begins after the year 9999: the listing itself refuses.
+        var lateStart = await UploadAsync(
+            "late.zip", BuildArchive(tamper: "update cave_trips set trip_started_at = 9999999999999999"));
+        var listed = await editor.GetAsync($"/api/v1/speleoloc-imports/{lateStart}/recordings");
+        var listedBody = await listed.Content.ReadAsStringAsync();
+        listed.StatusCode.ShouldBe(HttpStatusCode.BadRequest, listedBody);
+        CodeOf(listedBody).ShouldBe("speleoloc_import.archive_unreadable");
+
+        // A scan from before the year 1: the recording's review refuses.
+        var earlyScan = await UploadAsync(
+            "early.zip", BuildArchive(tamper: "update cave_trip_points set scanned_at = -99999999999999999"));
+        var previewed = await editor.PostAsJsonAsync(
+            $"/api/v1/speleoloc-imports/{earlyScan}/preview",
+            new { options = Options(model), page = 1, pageSize = 100 });
+        var previewedBody = await previewed.Content.ReadAsStringAsync();
+        previewed.StatusCode.ShouldBe(HttpStatusCode.BadRequest, previewedBody);
+        CodeOf(previewedBody).ShouldBe("speleoloc_import.archive_unreadable");
+
+        // An entrance flag past the 32-bit range is still a flag that is set, and reads.
+        var wideFlag = await UploadAsync(
+            "wide.zip", BuildArchive(tamper: "update cave_places set is_entrance = 5000000000"));
+        var wide = await PreviewAsync(editor, wideFlag, Options(model));
+        wide.GetProperty("totalItems").GetInt32().ShouldBe(4);
+
+        // Positive half: the same builder untampered reads, so each refusal above is about its
+        // value and not about the fixture.
+        var intact = await PreviewAsync(editor, await UploadArchiveAsync(), Options(model));
+        intact.GetProperty("totalItems").GetInt32().ShouldBe(4);
+    }
+
+    /// <summary>
+    /// Reading an archive leaves no handle open on the scratch copy it unpacked.
+    ///
+    /// <para>
+    /// The database is copied out of the upload to a fresh path on every read and deleted when the
+    /// read is done. A pooled connection is not closed by being disposed — it goes back to a pool
+    /// keyed by its path, still holding the file — so the delete either fails (and the copy stays
+    /// for good) or, where the platform allows unlinking an open file, frees the name while the
+    /// space stays taken until the pool gets round to it. Every preview of a large archive then
+    /// costs its whole size again.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Reading_an_archive_leaves_no_handle_on_its_scratch_copy()
+    {
+        var fileId = await UploadArchiveAsync();
+        // The reader names its own scratch directory; this test only looks there and writes
+        // nothing of its own, so it counts in the place the reader writes to on every platform.
+        var scratch = SpeleolocArchiveReader.ScratchDirectory;
+        var before = ScratchCopiesLeft(scratch);
+
+        var listed = await BodyAsync(await editor.GetAsync($"/api/v1/speleoloc-imports/{fileId}/recordings"));
+        listed.GetProperty("recordings").GetArrayLength().ShouldBe(1);
+
+        // Where the process can see its own open files, none of them may be a scratch copy that
+        // has already been deleted. Elsewhere the delete of a held file fails, which leaves the
+        // directory behind — so no read may leave one more of them than there were.
+        if (Directory.Exists("/proc/self/fd"))
+        {
+            var held = Directory.EnumerateFileSystemEntries("/proc/self/fd")
+                .Select(fd =>
+                {
+                    try { return new FileInfo(fd).LinkTarget; }
+                    catch (IOException) { return null; }
+                })
+                .Count(target => target is not null
+                    && target.Contains(SpeleolocArchiveReader.ScratchPrefix, StringComparison.Ordinal)
+                    && target.EndsWith("(deleted)", StringComparison.Ordinal));
+            held.ShouldBe(0, "a deleted scratch copy is still held open");
+        }
+        else
+        {
+            ScratchCopiesLeft(scratch).ShouldBeLessThanOrEqualTo(before);
+        }
+
+        static int ScratchCopiesLeft(string root) =>
+            Directory.EnumerateDirectories(root, SpeleolocArchiveReader.ScratchPrefix + "*").Count();
+    }
+
+    /// <summary>
+    /// A device title longer than a trip title holds still makes a trip, with the title cut to
+    /// fit, instead of failing the confirmation at its save.
+    /// </summary>
+    [Fact]
+    public async Task A_recording_title_past_the_trip_titles_width_makes_a_trip_with_the_title_cut()
+    {
+        var cave = await CreateCaveAsync(editor, locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        await SeedPlacesAsync(cave);
+        var (_, cavers) = await CreateTripAsync(editor, "Width", guests: 1);
+        var longTitle = new string('t', 300);
+        var fileId = await UploadAsync(
+            "long-title.zip", BuildArchive(tamper: $"update cave_trips set title = '{longTitle}'"));
+
+        var creating = Options(model, trip: null, caver: cavers[0], createTrip: true);
+        var preview = await PreviewAsync(editor, fileId, creating);
+        var response = await CommitAsync(editor, fileId, creating, ProposedPointsOf(preview));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var trip = (await BodyAsync(response)).GetProperty("tripLogId").GetGuid();
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TripLogs.AsNoTracking().Where(t => t.Id == trip).Select(t => t.Title).SingleAsync())
+            .ShouldBe(longTitle[..255]);
+    }
+
+    /// <summary>
+    /// A recording folded into a trip that already existed brings its photographs onto that trip,
+    /// and undoing the import takes them off again: the trip is not the import's to delete, so
+    /// the batch has to name the copies it hung there.
+    /// </summary>
+    [Fact]
+    public async Task Undoing_a_recording_folded_into_an_existing_trip_takes_its_photographs_off_that_trip()
+    {
+        var cave = await CreateCaveAsync(editor, locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        await SeedPlacesAsync(cave);
+        var fileId = await UploadArchiveAsync();
+        var (existing, cavers) = await CreateTripAsync(editor, "Photos", guests: 1);
+        var onto = Options(model, existing, cavers[0]);
+
+        // The first import brings the recording into being; a photograph is then hung on it, and
+        // the import is taken back, which leaves the recording deleted with its photograph on it.
+        var first = await CommitAsync(editor, fileId, onto, ProposedPointsOf(await PreviewAsync(editor, fileId, onto)));
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        var firstBatch = (await BodyAsync(first)).GetProperty("batchId").GetGuid();
+        var picture = await HangPictureOnRecordingAsync();
+        (await editor.PostAsync($"/api/v1/import-batches/{firstBatch}/revert", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The same recording again, onto the same trip: brought back, with its photograph.
+        var second = await CommitAsync(editor, fileId, onto, ProposedPointsOf(await PreviewAsync(editor, fileId, onto)));
+        second.StatusCode.ShouldBe(HttpStatusCode.OK, await second.Content.ReadAsStringAsync());
+        var secondBatch = (await BodyAsync(second)).GetProperty("batchId").GetGuid();
+        (await TripPicturesAsync(existing)).ShouldBe([picture]);
+
+        var reverted = await editor.PostAsync($"/api/v1/import-batches/{secondBatch}/revert", null);
+        reverted.StatusCode.ShouldBe(HttpStatusCode.OK, await reverted.Content.ReadAsStringAsync());
+
+        (await TripPicturesAsync(existing)).ShouldBeEmpty();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TripLogs.CountAsync(t => t.Id == existing)).ShouldBe(1);
+        // Only the hanging came down: the photograph itself was uploaded, not imported.
+        (await db.StoredFiles.CountAsync(f => f.Id == picture)).ShouldBe(1);
+    }
+
+    private async Task<List<Guid>> TripPicturesAsync(Guid trip)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Attachments.AsNoTracking()
+            .Where(a => a.EntityType == AttachedEntityType.TripLog && a.EntityId == trip)
+            .Select(a => a.FileId).ToListAsync();
+    }
+
+    /// <summary>A generated picture hung on this file's recording; returns its file.</summary>
+    private async Task<Guid> HangPictureOnRecordingAsync()
+    {
+        var owner = await EditorIdAsync();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var document = new Document { Title = $"Picture {tag}", OwnerUserId = owner, Visibility = Visibility.Authenticated };
+        db.Documents.Add(document);
+        var version = new DocumentVersion { DocumentId = document.Id, VersionNumber = 1, IsCurrent = true, UploadedBy = owner };
+        db.DocumentVersions.Add(version);
+        var file = new StoredFile
+        {
+            DocumentVersionId = version.Id,
+            StoragePath = Guid.NewGuid().ToString("N"),
+            OriginalName = "picture.jpg",
+            MimeType = "image/jpeg",
+            SizeBytes = 1,
+            Sha256 = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
+            Kind = FileKind.Image,
+        };
+        db.StoredFiles.Add(file);
+        db.Attachments.Add(new Attachment { FileId = file.Id, EntityType = AttachedEntityType.TripRecording, EntityId = recordingId });
+        await db.SaveChangesAsync();
+        return file.Id;
+    }
+
+    /// <summary>
     /// A collection the body says is null is a refusal, not a fault.
     ///
     /// <para>
@@ -1586,7 +1786,8 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         Guid? crowdedRecording = null,
         int crowdedScans = 0,
         bool withLogColumn = true,
-        DateTimeOffset? recordingEndedAt = null)
+        DateTimeOffset? recordingEndedAt = null,
+        string? tamper = null)
     {
         var directory = Path.Combine(TestScratch.Root, $"silexgis-speleoloc-fixture-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -1690,6 +1891,13 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
                         "insert into documentation_files_to_cave_trips (uuid, documentation_file_uuid, "
                         + "cave_trip_uuid) values (@u, @d, @t)",
                         ("@u", Bytes(Guid.CreateVersion7())), ("@d", Bytes(documentId)), ("@t", Bytes(recordingId)));
+                }
+
+                // Statements run over the finished archive, for a test that needs a value no
+                // well-behaved device writes — a corrupt or hostile export.
+                if (tamper is not null)
+                {
+                    Execute(connection, tamper);
                 }
             }
 

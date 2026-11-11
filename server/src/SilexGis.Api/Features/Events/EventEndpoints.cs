@@ -159,9 +159,10 @@ public static class EventEndpoints
         // passing mention as the event somebody is looking for.
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search.Trim()}%";
-            query = query.Where(x =>
-                EF.Functions.ILike(EF.Functions.Unaccent(x.Title), EF.Functions.Unaccent(pattern)));
+            // Read literally: a "%" or "_" somebody typed is part of the title they are after.
+            var pattern = LikePatterns.Containing(search.Trim());
+            query = query.Where(x => EF.Functions.ILike(
+                EF.Functions.Unaccent(x.Title), EF.Functions.Unaccent(pattern), LikePatterns.Escape));
         }
 
         var (p, size) = Paging.Normalize(page, pageSize);
@@ -307,7 +308,8 @@ public static class EventEndpoints
         // top of a version the author never saw silently discards whatever changed in between,
         // and two committee members correcting the same evening is the ordinary case rather than
         // the exotic one.
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Events, row.Id, ct, required: true) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Events, row.Id, ct, required: true);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -331,6 +333,7 @@ public static class EventEndpoints
 
         Apply(row, request);
         await db.SaveChangesAsync(ct);
+        await hold.AnswerAsync(ct);
         return TypedResults.Ok(Map(row));
     }
 
@@ -359,7 +362,8 @@ public static class EventEndpoints
         // The precondition is offered but not required, the way it is on every delete here: a
         // list deletes a row it never loaded a version of, so demanding one would make the
         // ordinary delete impossible from the surface that does it most.
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Events, row.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Events, row.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -374,6 +378,7 @@ public static class EventEndpoints
 
         db.Events.Remove(row);
         await db.SaveChangesAsync(ct);
+        await hold.CommitAsync(ct);
         return TypedResults.NoContent();
     }
 
@@ -542,8 +547,9 @@ public static class EventEndpoints
             return refusal;
         }
 
-        if (await Concurrency.CheckIfMatchAsync(
-                http, db, VersionedTable.Events, row.Id, ct, required: true) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Events, row.Id, ct, required: true);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -572,6 +578,9 @@ public static class EventEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        // Posted beside the event: the answer says whose version it carries, so it is filed where
+        // the event's next write looks for it.
+        await hold.AnswerAsync(ct, $"/api/v1/events/{row.Id}");
         return TypedResults.Ok(Map(row));
     }
 

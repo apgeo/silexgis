@@ -17,6 +17,8 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import fs from 'node:fs';
 import { createServer } from 'node:http';
+import { spawnSync } from 'node:child_process';
+import { gzipSync } from 'node:zlib';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -24,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 
 import { answers, judgeApiProxy, judgeDiscovery, judgeHealth, judgeScriptType, judgeWebApp, moduleScripts } from './check.mjs';
 import { resolveDatabase } from './install.mjs';
+import { runRestore } from './restore.mjs';
 import {
   Failure,
   acquireLock,
@@ -270,6 +273,122 @@ describe('restoring a backup', () => {
   });
 });
 
+// The restore drops the schema and empties the uploads directory before it unpacks anything, so a
+// backup that does not read back whole has to be refused before either happens. These runs use a
+// stand-in psql that records every call, and a real tar on archives built for the test.
+describe('restoring a backup that is not whole', { skip: process.platform === 'win32' && 'the stand-in psql is a shell script' }, () => {
+  const COMPLETE = '-- PostgreSQL database dump complete';
+  const dumpText = (lines, last) => `${Array.from({ length: lines }, (_, i) => `-- line ${i} of an invented dump`).join('\n')}\n${last}\n\n`;
+
+  function sandbox() {
+    const root = scratch();
+    const bin = path.join(root, 'bin');
+    const backup = path.join(root, 'backup');
+    const filesDir = path.join(root, 'data', 'files');
+    const terrainDir = path.join(root, 'data', 'terrain');
+    for (const dir of [bin, backup, filesDir, terrainDir]) fs.mkdirSync(dir, { recursive: true });
+    const log = path.join(root, 'psql.log');
+    fs.writeFileSync(path.join(bin, 'psql'), `#!/bin/sh\necho "psql $*" >> '${log}'\ncat >> '${log}'\nexit 0\n`, { mode: 0o755 });
+    fs.writeFileSync(path.join(filesDir, 'upload-already-there.txt'), 'kept\n');
+    const content = path.join(root, 'content');
+    fs.mkdirSync(content);
+    for (let i = 0; i < 50; i++) fs.writeFileSync(path.join(content, `invented-${i}.bin`), generateSecret(4000));
+    const tarball = (name) => {
+      const out = path.join(backup, name);
+      const r = spawnSync('tar', ['-czf', out, '-C', content, '.']);
+      assert.equal(r.status, 0, String(r.stderr));
+      return out;
+    };
+    const installation = {
+      layout: { pgBin: bin, service: 'none', filesDir, terrainDir, serviceUser: 'silexgis' },
+      db: { host: 'db.example.invalid', port: 5432, database: 'silexgis', username: 'silexgis', password: 'invented' },
+    };
+    return { root, backup, filesDir, log, tarball, installation };
+  }
+
+  const cutShort = (file) => {
+    const bytes = fs.readFileSync(file);
+    fs.writeFileSync(file, bytes.subarray(0, Math.floor(bytes.length / 2)));
+  };
+  const psqlCalls = (box) => (fs.existsSync(box.log) ? fs.readFileSync(box.log, 'utf8') : '');
+  const untouched = (box) => {
+    assert.equal(psqlCalls(box), '', 'psql was never started, so no schema was dropped');
+    assert.deepEqual(fs.readdirSync(box.filesDir), ['upload-already-there.txt'], 'the uploads directory was not emptied');
+  };
+  const refuses = (box, pattern) =>
+    assert.rejects(runRestore(box.installation, box.backup, { start: false }), (error) => {
+      assert.ok(error instanceof Failure, error.stack);
+      assert.match(error.message, pattern);
+      assert.match(error.message, /nothing was changed/);
+      return true;
+    });
+
+  it('restores a whole backup (the stand-ins do what the refusals below rely on)', async () => {
+    const box = sandbox();
+    try {
+      fs.writeFileSync(path.join(box.backup, 'db.sql.gz'), gzipSync(dumpText(20, COMPLETE)));
+      box.tarball('files.tar.gz');
+      await runRestore(box.installation, box.backup, { start: false });
+      assert.match(psqlCalls(box), /DROP SCHEMA public CASCADE/);
+      assert.match(psqlCalls(box), /-- PostgreSQL database dump complete/);
+      assert.equal(fs.readdirSync(box.filesDir).length, 50, 'the archive replaced the uploads');
+    } finally {
+      fs.rmSync(box.root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a db.sql.gz cut short in transfer', async () => {
+    const box = sandbox();
+    try {
+      const db = path.join(box.backup, 'db.sql.gz');
+      fs.writeFileSync(db, gzipSync(dumpText(20_000, COMPLETE)));
+      cutShort(db);
+      box.tarball('files.tar.gz');
+      await refuses(box, /db\.sql\.gz/);
+      untouched(box);
+    } finally {
+      fs.rmSync(box.root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a dump that decompresses but stopped before pg_dump finished', async () => {
+    const box = sandbox();
+    try {
+      fs.writeFileSync(path.join(box.backup, 'db.sql.gz'), gzipSync(dumpText(20, '-- a dump that ended early')));
+      box.tarball('files.tar.gz');
+      await refuses(box, /completion line/);
+      untouched(box);
+    } finally {
+      fs.rmSync(box.root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a files.tar.gz that does not read back', async () => {
+    const box = sandbox();
+    try {
+      fs.writeFileSync(path.join(box.backup, 'db.sql.gz'), gzipSync(dumpText(20, COMPLETE)));
+      cutShort(box.tarball('files.tar.gz'));
+      await refuses(box, /files\.tar\.gz/);
+      untouched(box);
+    } finally {
+      fs.rmSync(box.root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a terrain-uploads.tar.gz that does not read back', async () => {
+    const box = sandbox();
+    try {
+      fs.writeFileSync(path.join(box.backup, 'db.sql.gz'), gzipSync(dumpText(20, COMPLETE)));
+      box.tarball('files.tar.gz');
+      cutShort(box.tarball('terrain-uploads.tar.gz'));
+      await refuses(box, /terrain-uploads\.tar\.gz/);
+      untouched(box);
+    } finally {
+      fs.rmSync(box.root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('versions', () => {
   it('reads and compares versions', () => {
     assert.deepEqual(parseVersion('psql (PostgreSQL) 17.6 (Ubuntu 17.6-1)'), [17, 6, 0]);
@@ -420,6 +539,56 @@ describe('installing a configuration file', () => {
     fs.writeFileSync(lock, '2147483646\n');
     acquireLock(lock)();
     assert.equal(fs.existsSync(lock), false);
+  });
+
+  it('counts a lock that holds no pid yet as held, until it is a minute old', () => {
+    // What a second process sees while the first is between creating its lock and writing into
+    // it: an empty file. Taking that for a dead holder's lock let two updaters run at once.
+    const lock = path.join(dir, 'starting.lock');
+    fs.writeFileSync(lock, '');
+    assert.throws(() => acquireLock(lock), /another install or update is starting/);
+    assert.equal(fs.readFileSync(lock, 'utf8'), '', 'the other process\'s lock is left alone');
+    const later = () => fs.statSync(lock).mtimeMs + 61_000;
+    acquireLock(lock, { now: later })();
+    assert.equal(fs.existsSync(lock), false);
+    assert.deepEqual(fs.readdirSync(dir).filter((f) => f.startsWith('starting.lock')), [], 'no pid file is left behind');
+  });
+
+  it('writes the pid into the lock as it creates it', () => {
+    const lock = path.join(dir, 'whole.lock');
+    const release = acquireLock(lock, { startTime: () => '4242' });
+    assert.equal(fs.readFileSync(lock, 'utf8'), `${process.pid} 4242\n`);
+    release();
+  });
+
+  it('takes over a lock whose pid now belongs to an unrelated process', () => {
+    // A run that crashed leaves its pid behind, and the system may give that number to something
+    // long-lived. The holder's start time is recorded beside the pid, so the newcomer is not it.
+    const lock = path.join(dir, 'reused.lock');
+    fs.writeFileSync(lock, `${process.pid} 1\n`);
+    acquireLock(lock, { startTime: () => '987654' })();
+    assert.equal(fs.existsSync(lock), false);
+    fs.writeFileSync(lock, `${process.pid} 987654\n`);
+    assert.throws(() => acquireLock(lock, { startTime: () => '987654' }), /another install or update is running/, 'the same process is still the holder');
+    fs.writeFileSync(lock, `${process.pid}\n`);
+    assert.throws(() => acquireLock(lock, { startTime: () => '987654' }), /another install or update is running/, 'a lock with no start time is judged by its pid');
+    fs.rmSync(lock);
+  });
+
+  it('lets only one of two processes take over the same stale lock', () => {
+    // Both see the dead pid. The first replaces the stale lock with its own and runs; the second,
+    // acting on what it read before that, must not remove the first one's live lock.
+    const lock = path.join(dir, 'contested.lock');
+    fs.writeFileSync(lock, '2147483646\n');
+    const first = `${process.pid} 111\n`;
+    const beforeTakeover = () => {
+      fs.rmSync(lock);
+      fs.writeFileSync(lock, first);
+    };
+    assert.throws(() => acquireLock(lock, { startTime: () => '111', beforeTakeover }), /another install or update is (starting|running)/);
+    assert.equal(fs.readFileSync(lock, 'utf8'), first, "the first process's lock is still in place");
+    assert.deepEqual(fs.readdirSync(dir).filter((f) => f.startsWith('contested.lock.')), [], 'nothing is left beside it');
+    fs.rmSync(lock);
   });
 });
 

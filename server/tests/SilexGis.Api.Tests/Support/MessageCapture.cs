@@ -62,6 +62,30 @@ public sealed class MessageCapture
     /// </summary>
     public string? RefuseSendsTo { get; set; }
 
+    /// <summary>
+    /// An address every send to which times out, until it is cleared — standing in for a gateway
+    /// or mail server that never answers. Thrown exactly as an <c>HttpClient</c> timeout surfaces:
+    /// a <see cref="TaskCanceledException"/> wrapping a <see cref="TimeoutException"/>, although
+    /// nobody cancelled the caller's token. That shape is the point: it is an
+    /// <see cref="OperationCanceledException"/>, which a catch meant to let a real shutdown through
+    /// also lets through. Aimed by address for the same reason as <see cref="FailSendsTo"/>.
+    /// </summary>
+    public string? TimeOutSendsTo { get; set; }
+
+    /// <summary>
+    /// An address every send to which throws the exception this makes, until it is cleared — for
+    /// asserting what the dispatcher does with each kind of transport failure. Aimed by address for
+    /// the same reason as <see cref="FailSendsTo"/>.
+    /// </summary>
+    public (string Address, Func<Exception> Error)? ThrowSendsTo { get; set; }
+
+    /// <summary>
+    /// An address whose send cancels the token source given here and then leaves as that
+    /// cancellation — what a host stopping in the middle of a pass looks like from inside it. Aimed
+    /// by address for the same reason as <see cref="FailSendsTo"/>.
+    /// </summary>
+    public (string Address, CancellationTokenSource Pass)? CancelPassAt { get; set; }
+
     public IReadOnlyList<SentMessage> Messages
     {
         get
@@ -109,6 +133,24 @@ public sealed class MessageCapture
         if (RefuseSendsTo is { } refused && string.Equals(recipient, refused, StringComparison.OrdinalIgnoreCase))
         {
             throw new PermanentDeliveryException("Simulated permanent refusal.");
+        }
+
+        if (TimeOutSendsTo is { } slow && string.Equals(recipient, slow, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new TaskCanceledException(
+                "The request was canceled due to the configured timeout elapsing.",
+                new TimeoutException("The operation has timed out."));
+        }
+
+        if (CancelPassAt is { } cancel && string.Equals(recipient, cancel.Address, StringComparison.OrdinalIgnoreCase))
+        {
+            cancel.Pass.Cancel();
+            cancel.Pass.Token.ThrowIfCancellationRequested();
+        }
+
+        if (ThrowSendsTo is { } thrown && string.Equals(recipient, thrown.Address, StringComparison.OrdinalIgnoreCase))
+        {
+            throw thrown.Error();
         }
 
         if (FailSendsTo is { } address && string.Equals(recipient, address, StringComparison.OrdinalIgnoreCase))

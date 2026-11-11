@@ -36,6 +36,14 @@ public class ProcessingJob
 
     public DateTimeOffset? StartedAt { get; set; }
 
+    /// <summary>
+    /// Until when the worker running this job holds it; null for a job nobody is running. Renewed
+    /// while the job runs, and compared with the database's own clock. A Running job whose lease
+    /// has run out — or that has none — was lost by whatever was running it (the process died, or
+    /// could not save the outcome), and the queue takes it back.
+    /// </summary>
+    public DateTimeOffset? LeaseExpiresAt { get; set; }
+
     public DateTimeOffset? CompletedAt { get; set; }
 
     /// <summary>
@@ -74,6 +82,15 @@ public static class ProcessingJobKinds
     /// </remarks>
     public const string ImportCommit = "import-commit";
     public const string RasterCog = "raster-cog";
+
+    /// <summary>
+    /// Draw one page of an uploaded portable document into a map sheet, and publish it at once
+    /// when the document carries its own place.
+    /// </summary>
+    public const string MapSheetRender = "map-sheet-render";
+
+    /// <summary>Publish a drawn map sheet where its placement now says.</summary>
+    public const string MapPlacementWarp = "map-placement-warp";
 
     /// <summary>Turn an uploaded cave wall mesh into the form the 3D scene draws.</summary>
     public const string SurveyMesh = "survey-mesh";
@@ -224,10 +241,32 @@ public static class ProcessingJobKinds
     public const string SurveyUploadPipeline = "survey-upload-pipeline";
 
     /// <summary>
+    /// The same run for an upload that is a point cloud, under a kind of its own because of where
+    /// it waits: tiling a cloud is minutes to hours in the worker, and a wait that long on the
+    /// general lane would stand in front of every conversion and import behind it. Payload and
+    /// handler are the survey upload's; only the lane differs.
+    /// </summary>
+    public const string PointCloudPipeline = "point-cloud-pipeline";
+
+    /// <summary>
     /// Closes survey uploads whose device stopped sending before every file arrived. The files
     /// that did arrive stay archived — they are the caver's. Payload: <c>{}</c>.
     /// </summary>
     public const string SurveyUploadSweep = "survey-upload-sweep";
+
+    /// <summary>
+    /// Measures how full storage is — the installation's cap, the point clouds' cap and the free
+    /// space of the file store's and the processing worker's disks — and tells administrators
+    /// about every level crossed upwards since the last pass. Payload: <c>{}</c>.
+    /// </summary>
+    public const string StorageCheck = "storage-check";
+
+    /// <summary>
+    /// Writes the day's storage report: what fills the file store by kind, cave and account, the
+    /// largest files, the growth since a week and a month ago, and what could be deleted.
+    /// Payload: <c>{}</c>.
+    /// </summary>
+    public const string StorageReport = "storage-report";
 
     /// <summary>
     /// The kinds that run on a worker of their own rather than on the general one.
@@ -257,8 +296,12 @@ public static class ProcessingJobKinds
     /// A basemap download is here for the first reason only: a country is minutes of downloading,
     /// and on the general lane every import and conversion behind it would wait for all of them.
     /// </para>
+    /// <para>
+    /// A point cloud's run is here for the first reason as well: it waits on a worker that takes
+    /// minutes to hours over one cloud.
+    /// </para>
     /// </remarks>
-    public static readonly IReadOnlyList<string> TerrainLane = [TerrainBuild, TerrainDerivative, BasemapExtract];
+    public static readonly IReadOnlyList<string> TerrainLane = [TerrainBuild, TerrainDerivative, BasemapExtract, PointCloudPipeline];
 
     /// <summary>
     /// The kinds nobody is waiting on, which a worker takes only when no other job of its lane is
@@ -278,5 +321,6 @@ public static class ProcessingJobKinds
         PhotoGeoBackfill, SurveyReadingBackfill, TextExtraction, TextExtractionBackfill,
         DocumentConversion, DocumentConversionBackfill, AccessHistoryPrune, FeatureIntegrityVerify,
         UploadSessionSweep, DocumentPurge, TripPurge, TerrainUploadSweep, SurveyUploadSweep,
+        StorageCheck, StorageReport,
     ];
 }

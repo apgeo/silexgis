@@ -213,6 +213,14 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<SurveySource> SurveySources => Set<SurveySource>();
 
+    public DbSet<ScanArtifact> ScanArtifacts => Set<ScanArtifact>();
+
+    public DbSet<ProcessingProfile> ProcessingProfiles => Set<ProcessingProfile>();
+
+    public DbSet<ScanStepDefaults> ScanStepDefaults => Set<ScanStepDefaults>();
+
+    public DbSet<ScanProfileChoice> ScanProfileChoices => Set<ScanProfileChoice>();
+
     /// <summary>What one archived compilation log said about the survey it was written for.</summary>
     public DbSet<SurveyCompilation> SurveyCompilations => Set<SurveyCompilation>();
 
@@ -234,6 +242,9 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
     public DbSet<AccountDataExport> AccountDataExports => Set<AccountDataExport>();
 
     public DbSet<Notification> Notifications => Set<Notification>();
+
+    public DbSet<StorageAlertState> StorageAlertStates => Set<StorageAlertState>();
+    public DbSet<StorageReportSnapshot> StorageReportSnapshots => Set<StorageReportSnapshot>();
 
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
 

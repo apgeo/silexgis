@@ -45,10 +45,12 @@ public sealed class TerrainBuildConfiguration : IEntityTypeConfiguration<Terrain
         builder.HasIndex(x => x.Status).HasFilter("status in (0, 1)");
 
         // The build this one extends. Set to null when that build goes, rather than holding it: an
-        // extension copies what it needs from its base when it bakes and carries the base's credit
-        // in its own sources, so once it has baked nothing it serves depends on the base. The one
-        // case that does — an extension that has not baked yet — is refused at the delete, where
-        // it can be explained, rather than by a constraint that would refuse for ever.
+        // extension copies its base's tiles when it bakes and carries the base's credit in its own
+        // sources. Its heights are another matter — it prepares only the rasters it adds and reads
+        // the base's prepared rasters for everything else — so while an extension is unfinished or
+        // finished, the delete refuses to remove its base, where the refusal can be explained. A
+        // failed or called-off extension reads nothing from its base, and a constraint here would
+        // refuse for ever on its account.
         builder.HasOne<TerrainBuild>().WithMany().HasForeignKey(x => x.BaseBuildId)
             .OnDelete(DeleteBehavior.SetNull);
         builder.HasIndex(x => x.BaseBuildId);

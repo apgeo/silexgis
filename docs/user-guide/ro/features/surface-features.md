@@ -93,7 +93,7 @@ Deasupra listei:
 |---|---|
 | **Arată-le pe hartă** | Deschide harta desenând ce găsește acest filtru |
 | **Selectează pe hartă tot ce s-a găsit (n)** | Face din rezultat, până la 200, selecția hărții — vezi [Între o listă și hartă](search-and-filters.md#între-o-listă-și-hartă) |
-| **Exportă** | GeoJSON, GPX, KML, CSV sau shapefile arhivat cu tot ce găsește filtrul, nu doar pagina aceasta |
+| **Exportă** | GeoJSON, GPX, KML, CSV sau shapefile arhivat cu tot ce găsește filtrul, nu doar pagina aceasta; fiecare rând începe cu id-ul obiectului, iar exportul este [înregistrat](history-and-audit.md#exporturile-în-formate-de-hartă) |
 | **Peșteri și obiecte șterse** | [Readuce](caves-and-entrances.md#peșteri-și-obiecte-șterse) ce ai voie să restaurezi |
 
 Cu harta deschisă lângă listă, indicarea unui rând încercuiește acel obiect pe hartă, iar

@@ -67,6 +67,8 @@ protecție.
 | **Intrări și doline față de relief** | Numărate peste intrările și dolinele pe care le poți localiza și peste niciuna alta, deci nicio numărătoare, pondere sau raport nu se schimbă când se adaugă una protejată. Nu se întoarce nicio poziție. Cere dreptul de a citi datele de elevație |
 | **Verificarea duplicatelor la import** | Se compară doar cu obiectele a căror poziție exactă o poți vedea |
 | **Originea unui `.stl`** | Originea precompletată spune că este deliberat aproximativă și cere punctul adevărat |
+| **Nori de puncte (scanări laser)** | Scanarea, cifrele ei și vizualizatorul ei propriu: regulile obișnuite ale fișierelor topografice, pentru că dalele ei sunt desenate în metrii proprii ai scanării și nu poartă nicio poziție. **Plasarea** ei, scanarea **în scena 3D**, **traiectoria** ei și descărcarea unui **original care poartă coordonate reale** (un nor al cărui antet numește un sistem de coordonate, o înregistrare cu jurnal de satelit): nu sunt date deloc. Vezi [Nori de puncte](../features/point-clouds.md#cine-ce-vede) |
+| **Planșe legate de o peșteră** | Editorul de poziționare avertizează că partajarea documentului original al planșei partajează locația peșterii |
 | **Paginile QR** | Nicio peșteră, niciun loc, nicio poziție — pentru nimeni, cu sau fără cont |
 | **Sincronizarea cu telefonul** | O poziție pe care nu ai voie s-o ai este **pur și simplu absentă** |
 | **Legături** | O legătură arată fiecărui cititor doar capetele pe care le poate vedea |

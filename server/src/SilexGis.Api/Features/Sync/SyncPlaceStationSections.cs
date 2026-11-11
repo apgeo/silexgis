@@ -144,6 +144,13 @@ internal sealed class SyncPlaceStationsSection(IAccessService access, FeaturePro
 
         if (item.BaseRevision is null)
         {
+            // A removal with no revision is not a resent create: answered "unchanged" the phone
+            // would drop a row that stays here. It is told the revision to remove against instead.
+            if (item.Deleted)
+            {
+                return Answer(SyncRasterAnswers.Conflict(item.Id, existing.UpdatedAt));
+            }
+
             return Answer(SyncRasterAnswers.Ok(item.Id, SyncRowStatus.Unchanged, existing.UpdatedAt));
         }
 
@@ -185,14 +192,23 @@ internal sealed class SyncPlaceStationsSection(IAccessService access, FeaturePro
         }
 
         var existing = await store.FindAsync(item.Id, ct);
-        if (existing is null
-            || existing.Link.DeletedAt is not null
-            || !SyncRevisions.Same(existing.Link.UpdatedAt, proposal.BaseRevision!.Value))
+        if (existing is null)
         {
-            return new SyncApplied(SyncRasterAnswers.Conflict(item.Id, existing?.Link.UpdatedAt), null);
+            return new SyncApplied(SyncRasterAnswers.Conflict(item.Id, null), null);
         }
 
+        // The place is locked first, the order every edit of a place's links takes, then the link
+        // itself; the revision is compared on what the locking statement read, never on the copy
+        // read above. Another upload that has written this link and not yet committed is waited for
+        // here, and its committed revision is what this one is arbitrated against. If the revision
+        // still matches, nothing committed since the read above, so that copy is current.
         await store.LockAsync(existing.PlaceId, ct);
+        var standing = await SyncRevisionSql.HoldAsync(db, SyncRevisionTable.ResLinks, item.Id, proposal.BaseRevision!.Value, ct);
+        if (!standing.Holds)
+        {
+            return new SyncApplied(SyncRasterAnswers.Conflict(item.Id, standing.Revision), null);
+        }
+
         if (proposal.Act == SyncRasterAct.Delete)
         {
             store.Remove(existing, DateTimeOffset.UtcNow);

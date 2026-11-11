@@ -6,6 +6,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Infrastructure.Import;
 
@@ -35,6 +36,12 @@ public sealed class SpeleolocTripImportResolver(SilexGisDbContext db)
 
     /// <summary>The property a device place carries its measured depth under.</summary>
     private const string DepthPropertyKey = "speleolocDepthInCave";
+
+    /// <summary>
+    /// Beyond any cave there is, and well inside what a decimal holds: a place's depth is JSON a
+    /// phone wrote, and a figure past this is not one a declaration could have been made for.
+    /// </summary>
+    private const double MaxDeclarableDepthM = 100_000;
 
     /// <summary>
     /// What each scan would mean. <paramref name="model"/> is null when no model was chosen or the
@@ -88,6 +95,15 @@ public sealed class SpeleolocTripImportResolver(SilexGisDbContext db)
         var filter = configured?.DepthFilter ?? [];
         var take = Math.Clamp(options.CandidateCount, 1, 25);
 
+        // What the model's cave has declared its depths to be. A declaration is what the club
+        // means by a depth — which of two stations a metre apart is "the ninety-six metre ledge" —
+        // and a live report at that depth lands on it, so a scan at the same depth is placed by
+        // the same rule rather than by geometry alone. The model is null for a caller who may not
+        // place its cave, so nothing about the cave's stations is read for one.
+        var declarations = model is null
+            ? []
+            : await CaveDepthPlaceReads.DeclaredOfAsync(db, model.CaveFeatureId, ct);
+
         // The places the scans name, as this installation holds them and as this caller may see
         // them. The device's own identifier is the feature's identifier — both systems mint the
         // same kind of value and the device's is what the sync writes — so there is no mapping
@@ -128,6 +144,28 @@ public sealed class SpeleolocTripImportResolver(SilexGisDbContext db)
             if (depth is null)
             {
                 resolutions.Add(Row(point, deviceUser, caverId, place, SpeleolocPointState.DepthUnknown, []));
+                continue;
+            }
+
+            // Asked through the one function that orders a declaration before a measurement, and
+            // taken only when the declaration answers: it names one station, which is then the
+            // sole proposal, with nothing behind it to make it ambiguous. Needs no datum, as a
+            // declared live report does not. A figure too large to be a depth is no declared one.
+            if (declarations.Count > 0
+                && double.IsFinite(depth.Value)
+                && Math.Abs(depth.Value) < MaxDeclarableDepthM
+                && TrackingDepthPlacements.For(
+                    declarations, stations, configured?.ReferenceStationName, filter, (decimal)depth.Value)
+                    is { Outcome: TrackingDepthPlacementOutcome.Declared, ViewerStationName: { } declared })
+            {
+                var station = stations.First(s => !s.NoViewerLabel && s.ViewerName == declared);
+                resolutions.Add(Row(
+                    point,
+                    deviceUser,
+                    caverId,
+                    place,
+                    SpeleolocPointState.Proposed,
+                    [new SpeleolocStationCandidate(declared, station.SurveyName, Math.Round(depth.Value, 1), 0)]));
                 continue;
             }
 

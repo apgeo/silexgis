@@ -332,6 +332,12 @@ public sealed class SpeologieImportService(
         var values = SpeologieMapping.ToCaveValues(record, retrievedAt, options.Value.MaxDescriptionChars);
         var caveTypeCode = decision.CaveTypeCode ?? CaveTypeFromName(record.Title, rules);
 
+        // Everything that can refuse this cave is settled before anything is added to the
+        // context: a refusal after the first write would leave a tracked cave that the
+        // confirmation's final save writes on no batch line, where undo cannot reach it.
+        var caveTypeId = taxonomies.CaveType(caveTypeCode);
+        var placement = Placement(decision, values.Altitude, taxonomies);
+
         var feature = new Feature
         {
             Name = values.Name,
@@ -345,7 +351,7 @@ public sealed class SpeologieImportService(
 
         var cave = new Cave
         {
-            CaveTypeId = taxonomies.CaveType(caveTypeCode),
+            CaveTypeId = caveTypeId,
             Region = values.Region,
             ClosestAddress = values.ClosestAddress,
             HydrographicBasin = values.HydrographicBasin,
@@ -360,7 +366,7 @@ public sealed class SpeologieImportService(
         feature.Cave = cave;
         await writer.CreateCaveAsync(feature, cave, parents, ct);
 
-        await PlaceAsync(feature.Id, decision, values.Altitude, taxonomies, placed, ct);
+        await PlaceAsync(feature.Id, placement, placed, ct);
 
         return NewItem(record, feature.Id, ImportDecisionAction.Create);
     }
@@ -403,6 +409,12 @@ public sealed class SpeologieImportService(
         var values = SpeologieMapping.ToCaveValues(record, retrievedAt, options.Value.MaxDescriptionChars);
         var maySeeExact = (await access.DecideAsync(ctx, AccessAction.ViewExactLocation, feature, ct)).Allowed;
 
+        // The cave is tracked, so whatever is changed on it below is saved with the rest of the
+        // confirmation even when this row is then refused. Every refusal is therefore decided
+        // first, and the cave is only touched once nothing is left that can say no.
+        var caveTypeId = decision.CaveTypeCode is { } code ? taxonomies.CaveType(code) : (long?)null;
+        var placement = Placement(decision, values.Altitude, taxonomies);
+
         feature.Name = values.Name;
         feature.Description = values.Description;
         feature.Properties = SpeologieMapping.MergeProperties(feature.Properties, values.Properties);
@@ -421,17 +433,45 @@ public sealed class SpeologieImportService(
             cave.ClosestAddress = values.ClosestAddress;
         }
 
-        if (decision.CaveTypeCode is { } code)
+        if (caveTypeId is { } typeId)
         {
-            cave.CaveTypeId = taxonomies.CaveType(code);
+            cave.CaveTypeId = typeId;
         }
 
-        await PlaceAsync(feature.Id, decision, values.Altitude, taxonomies, placed, ct);
+        await PlaceAsync(feature.Id, placement, placed, ct);
 
         // An update points at the cave it changed rather than at one it created, which is what
         // makes undo leave it alone: reverting soft-deletes what a batch created, and this batch
         // did not create this cave.
         return NewItem(record, featureId: null, ImportDecisionAction.Attach, attachedTo: feature.Id);
+    }
+
+    /// <summary>
+    /// The entrance a decision asks for, worked out and checked without touching anything —
+    /// <c>null</c> when the decision gives no position.
+    /// </summary>
+    private static EntrancePlacement? Placement(
+        SpeologieDecision decision, decimal? altitude, CaveTaxonomies taxonomies)
+    {
+        if (decision.Longitude is not { } lon || decision.Latitude is not { } lat)
+        {
+            return null;
+        }
+
+        if (double.IsNaN(lon) || double.IsNaN(lat)
+            || lon is < -180 or > 180 || lat is < -90 or > 90)
+        {
+            throw new SpeologieImportException(
+                "speologie.position_invalid", "The position given for this cave is not on the earth.");
+        }
+
+        // The altitude the catalogue records is the entrance's, so it belongs on the point as
+        // well as on the cave — the same place the other importers put it.
+        var point = altitude is { } z
+            ? new Point(new CoordinateZ(lon, lat, (double)z)) { SRID = 4326 }
+            : new Point(new Coordinate(lon, lat)) { SRID = 4326 };
+
+        return new EntrancePlacement(point, taxonomies.EntranceType(DefaultEntranceTypeCode), altitude);
     }
 
     /// <summary>
@@ -445,22 +485,13 @@ public sealed class SpeologieImportService(
     /// </remarks>
     private async Task PlaceAsync(
         Guid caveId,
-        SpeologieDecision decision,
-        decimal? altitude,
-        CaveTaxonomies taxonomies,
+        EntrancePlacement? placement,
         HashSet<Guid> placed,
         CancellationToken ct)
     {
-        if (decision.Longitude is not { } lon || decision.Latitude is not { } lat)
+        if (placement is null)
         {
             return;
-        }
-
-        if (double.IsNaN(lon) || double.IsNaN(lat)
-            || lon is < -180 or > 180 || lat is < -90 or > 90)
-        {
-            throw new SpeologieImportException(
-                "speologie.position_invalid", "The position given for this cave is not on the earth.");
         }
 
         var hasEntrance = await db.Features
@@ -471,19 +502,13 @@ public sealed class SpeologieImportService(
             return;
         }
 
-        // The altitude the catalogue records is the entrance's, so it belongs on the point as
-        // well as on the cave — the same place the other importers put it.
-        var point = altitude is { } z
-            ? new Point(new CoordinateZ(lon, lat, (double)z)) { SRID = 4326 }
-            : new Point(new Coordinate(lon, lat)) { SRID = 4326 };
-
-        var entranceFeature = new Feature { Geom = point };
+        var entranceFeature = new Feature { Geom = placement.Point };
         var entrance = new CaveEntrance
         {
             CaveFeatureId = caveId,
-            EntranceTypeId = taxonomies.EntranceType(DefaultEntranceTypeCode),
+            EntranceTypeId = placement.EntranceTypeId,
             IsMain = true,
-            Altitude = altitude,
+            Altitude = placement.Altitude,
             // Somebody read a map and pointed at it. That is exactly what this value means, and
             // it is neither a reading from an instrument nor a guess from a description.
             PositionQuality = PositionQuality.Map,
@@ -492,6 +517,8 @@ public sealed class SpeologieImportService(
         await writer.CreateEntranceAsync(entranceFeature, entrance, ct);
         placed.Add(caveId);
     }
+
+    private sealed record EntrancePlacement(Point Point, long EntranceTypeId, decimal? Altitude);
 
     /// <summary>
     /// Works out what kind of cave this is from its name, using the same Romanian naming rules a

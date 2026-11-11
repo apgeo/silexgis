@@ -38,10 +38,10 @@ public sealed record TerrainBuildPayload(Guid TerrainBuildId);
 /// of the active flag, and nothing here answers it.
 /// </para>
 /// <para>
-/// Being handed the same build twice is ordinary. Every row a crashed process left running is put
-/// back on the queue when the process starts again and nothing counts those restarts down, so a
-/// step whose output is already there and checks out is skipped rather than redone, and a build
-/// that has already ended badly is stopped rather than started again.
+/// Being handed the same build twice is ordinary. A row whose process died under it is put back on
+/// the queue once its lease runs out, up to the queue's attempt ceiling, so a step whose output is
+/// already there and checks out is skipped rather than redone, and a build that has already ended
+/// badly is stopped rather than started again.
 /// </para>
 /// <para>
 /// A run can be called off. The request to stop is a column on the build row, written by the route
@@ -74,11 +74,11 @@ public sealed class TerrainBuildHandler(
     /// How many times one build may be handed to a worker before it is stopped for good.
     /// </summary>
     /// <remarks>
-    /// The queue counts attempts up and never reads them, and it re-queues everything a dead
-    /// process left running — so a build that brings its host down brings it down again on every
-    /// restart, for ever, and nothing in the queue would look wrong. Three is enough for a genuine
-    /// one-off (a machine restarted under it, a disk briefly full) and few enough that a loop stops
-    /// the same day it starts.
+    /// The queue keeps its own ceiling too: a job whose runner is lost on its last allowed attempt
+    /// is failed by the queue's sweep rather than handed over again, and the build is then stopped
+    /// in <see cref="AbandonedAsync"/>. This one stays for the job that reaches a worker past it
+    /// some other way. Three is enough for a genuine one-off (a machine restarted under it, a disk
+    /// briefly full) and few enough that a loop stops the same day it starts.
     /// </remarks>
     private const int MaxAttempts = 3;
 
@@ -381,6 +381,34 @@ public sealed class TerrainBuildHandler(
 
         await TerrainBuildWrites.FailAsync(
             db, buildId, phase, TerrainBuildFailures.Cancelled, said, said, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// The queue gave this build's job up: its runner was lost on the last attempt allowed. The
+    /// build is stopped the way a build that keeps failing is, so the area can be built again,
+    /// retried or removed — left Running, every one of those is refused for good.
+    /// </summary>
+    public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
+    {
+        var payload = JsonSerializer.Deserialize<TerrainBuildPayload>(job.Payload, JsonSerializerOptions.Web);
+        if (payload is null)
+        {
+            return;
+        }
+
+        var build = await db.TerrainBuilds.AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == payload.TerrainBuildId, ct);
+        if (build is null || build.Status is TerrainBuildStatus.Succeeded or TerrainBuildStatus.Failed)
+        {
+            return;
+        }
+
+        logger.LogWarning(
+            "Terrain build {BuildId} stopped: its job was interrupted on each of {Attempts} attempts",
+            build.Id, job.Attempts);
+        await TerrainBuildWrites.FailAsync(
+            db, build.Id, build.Phase, TerrainBuildFailures.RepeatedFailure,
+            $"Stopped after {MaxAttempts} attempts.", null, ct);
     }
 
     /// <summary>

@@ -49,7 +49,11 @@ public sealed class MagickPhotoGeotagReader : IPhotoGeotagReader
     {
         try
         {
-            using var image = new MagickImage(absolutePath);
+            // Read without decoding: the header, its size and its profiles are all this needs,
+            // and a decode would hold every pixel the header claims, which a small upload can
+            // make gigabytes — inside the upload request itself.
+            using var image = new MagickImage();
+            image.Ping(absolutePath);
 
             // The picture's own size, as stored, whether or not it carries a profile: a scanned
             // plan states nothing about a camera, and is still the frame things are placed on.

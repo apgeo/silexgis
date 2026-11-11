@@ -15,6 +15,7 @@ Parcurgeri ale unor sarcini întregi, de la cap la coadă. Fiecare trimite la
 | [Importul unui sezon de puncte GPS](import-a-gps-file.md) | Se golește un GPS la sfârșit de sezon |
 | [Transformarea fotografiilor în locuri](photographs-to-places.md) | Te-ai întors cu un card de memorie și fără puncte |
 | [Planificarea, desfășurarea și redactarea unei ture](plan-and-log-a-trip.md) | Viața întreagă a unei ture |
+| [Aducerea unei scanări laser a unei peșteri](bring-in-a-laser-scan.md) | O echipă s-a întors cu înregistrarea unui scaner purtat în mână |
 | [Clasarea arhivei clubului](file-the-archive.md) | O cutie de hârtii, un disc de scanări, decenii de buletine |
 | [Partajarea muncii tale](share-your-work.md) | Un proprietar de teren, o revistă, alt club, publicul |
 

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Shouldly;
+using SilexGis.Api.Features.SurveyUploads;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
@@ -410,6 +411,190 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
     }
 
     [Fact]
+    public async Task Two_completions_of_one_upload_at_once_queue_one_run_and_both_are_answered_with_it()
+    {
+        (string, byte[])[] files = [("pestera_inventata.zip", InventedArchive())];
+        var id = await OpenAsync(owner, $"Twice {suffix}", "pestera_inventata", files);
+        (await PutAsync(owner, id, "pestera_inventata.zip", files[0].Item2)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A device that timed out on its first completion and sent it again while the first was
+        // still being saved: both read the upload as still receiving.
+        HttpResponseMessage[] answers;
+        await using (var stall = await RowStall.HoldAsync(factory, "survey_uploads", id))
+        {
+            var first = owner.PostAsync($"/api/v1/survey-uploads/{id}/complete", null);
+            var second = owner.PostAsync($"/api/v1/survey-uploads/{id}/complete", null);
+            var both = Task.WhenAll(first, second);
+            await stall.WaitForWaitersAsync(2, both);
+            await stall.ReleaseAsync();
+            answers = await both;
+        }
+
+        foreach (var answer in answers)
+        {
+            answer.StatusCode.ShouldBe(HttpStatusCode.Accepted, await answer.Content.ReadAsStringAsync());
+            (await answer.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString().ShouldBe("queued");
+        }
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.ProcessingJobs.AsNoTracking().Where(j => j.Kind == ProcessingJobKinds.SurveyUploadPipeline).ToListAsync())
+            .Count(j => JsonSerializer.Deserialize<SurveyUploadPipelinePayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyUploadId == id)
+            .ShouldBe(1);
+        (await db.SurveyUploadPublicLinks.AsNoTracking().CountAsync(l => l.SurveyUploadId == id && l.RevokedAt == null))
+            .ShouldBeLessThanOrEqualTo(1);
+    }
+
+    [Fact]
+    public async Task An_abandon_that_arrives_while_a_completion_is_saving_leaves_the_upload_queued()
+    {
+        (string, byte[])[] files = [("pestera_inventata.zip", InventedArchive())];
+        var id = await OpenAsync(owner, $"Abandon race {suffix}", "pestera_inventata", files);
+        (await PutAsync(owner, id, "pestera_inventata.zip", files[0].Item2)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The completion holds the row first; the abandon read the upload as receiving too, and
+        // reaches the row while the completion is still inside its transaction.
+        HttpResponseMessage completed;
+        HttpResponseMessage abandoned;
+        await using (var stall = await RowStall.HoldAsync(factory, "survey_uploads", id))
+        {
+            var completing = owner.PostAsync($"/api/v1/survey-uploads/{id}/complete", null);
+            await stall.WaitForWaitersAsync(1, completing);
+            var abandoning = owner.DeleteAsync($"/api/v1/survey-uploads/{id}");
+            var both = Task.WhenAll(completing, abandoning);
+            await stall.WaitForWaitersAsync(2, both);
+            await stall.ReleaseAsync();
+            (completed, abandoned) = (await completing, await abandoning);
+        }
+
+        completed.StatusCode.ShouldBe(HttpStatusCode.Accepted, await completed.Content.ReadAsStringAsync());
+        abandoned.StatusCode.ShouldBe(HttpStatusCode.Conflict, await abandoned.Content.ReadAsStringAsync());
+        (await abandoned.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString()
+            .ShouldBe(SurveyUploadEndpoints.NotReceivingCode);
+        await ShouldBeQueuedOnceAsync(id);
+    }
+
+    [Fact]
+    public async Task The_expiry_sweep_leaves_alone_an_upload_a_completion_queued_while_it_ran()
+    {
+        (string, byte[])[] files = [("pestera_inventata.zip", InventedArchive())];
+        var id = await OpenAsync(owner, $"Expiry race {suffix}", "pestera_inventata", files);
+        (await PutAsync(owner, id, "pestera_inventata.zip", files[0].Item2)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var expiresAt = DateTimeOffset.UtcNow.AddSeconds(5);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.SurveyUploads.Where(u => u.Id == id).ExecuteUpdateAsync(s => s.SetProperty(u => u.ExpiresAt, expiresAt));
+        }
+
+        // The device completes just before the session runs out; the sweep that passes just after
+        // it ran out still reads the upload as receiving.
+        HttpResponseMessage completed;
+        await using (var stall = await RowStall.HoldAsync(factory, "survey_uploads", id))
+        {
+            var completing = owner.PostAsync($"/api/v1/survey-uploads/{id}/complete", null);
+            await stall.WaitForWaitersAsync(1, completing);
+            var left = expiresAt - DateTimeOffset.UtcNow;
+            if (left > TimeSpan.Zero)
+            {
+                await Task.Delay(left + TimeSpan.FromMilliseconds(200));
+            }
+
+            var sweeping = SweepAsync(factory);
+            var both = Task.WhenAll(completing, sweeping);
+            await stall.WaitForWaitersAsync(2, both);
+            await stall.ReleaseAsync();
+            await both;
+            completed = await completing;
+        }
+
+        completed.StatusCode.ShouldBe(HttpStatusCode.Accepted, await completed.Content.ReadAsStringAsync());
+        await ShouldBeQueuedOnceAsync(id);
+    }
+
+    /// <summary>The upload is queued, as the completion left it, with the one run it queued.</summary>
+    private async Task ShouldBeQueuedOnceAsync(Guid id)
+    {
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}"))
+            .GetProperty("status").GetString().ShouldBe("queued");
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.ProcessingJobs.AsNoTracking().Where(j => j.Kind == ProcessingJobKinds.SurveyUploadPipeline).ToListAsync())
+            .Count(j => JsonSerializer.Deserialize<SurveyUploadPipelinePayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyUploadId == id)
+            .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task An_output_whose_rows_cannot_be_saved_leaves_no_file_behind_in_the_store()
+    {
+        var refusing = new RefuseSavingAPdf();
+        using var host = new SilexGisApiFactory(
+            postgres.ConnectionString,
+            Settings(filesRoot),
+            services =>
+            {
+                JobWorkers.RemoveFrom(services);
+                services.Replace(ServiceDescriptor.Singleton<ISurveyCompiler>(new FakeSurveyCompiler()));
+                services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(refusing));
+            });
+        await AuthHelper.CreateUserAsync(host, GlobalRoles.Editor, $"supipe-orphan-{suffix}@t.local");
+        using var client = await AuthHelper.BearerClientAsync(host, $"supipe-orphan-{suffix}@t.local");
+
+        var id = await SendAsync(client, $"Orphan {suffix}", "pestera_inventata",
+            ("pestera_inventata.zip", InventedArchive()), ("pestera_inventata.th", Fixture("pestera_inventata.th")),
+            ("pestera_inventata-1p.th2", Fixture("pestera_inventata-1p.th2")));
+        await RunPipelineAsync(host, id);
+
+        // The run carries on past the one output it could not record, as it is meant to; the bytes
+        // that output had already put into the store go with its rows.
+        var status = await client.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        status.GetProperty("status").GetString().ShouldBe("succeeded", status.ToString());
+        refusing.Refused.ShouldNotBeEmpty();
+        foreach (var path in refusing.Refused)
+        {
+            System.IO.File.Exists(Path.Combine(filesRoot, path)).ShouldBeFalse(path);
+        }
+
+        // The outputs that were recorded keep their bytes.
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var kept = await (
+            from f in db.SurveyUploadFiles.AsNoTracking()
+            join v in db.DocumentVersions.AsNoTracking() on f.DocumentId equals v.DocumentId
+            join stored in db.StoredFiles.AsNoTracking() on v.Id equals stored.DocumentVersionId
+            where f.SurveyUploadId == id && f.Role == SurveyUploadFileRole.Output
+            select stored.StoragePath).ToListAsync();
+        kept.ShouldNotBeEmpty();
+        kept.ShouldAllBe(p => System.IO.File.Exists(Path.Combine(filesRoot, p)));
+    }
+
+    /// <summary>Fails every save that would record a stored PDF, and remembers where its bytes were put.</summary>
+    private sealed class RefuseSavingAPdf : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        public List<string> Refused { get; } = [];
+
+        public override ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
+            Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            var pdf = eventData.Context?.ChangeTracker.Entries<StoredFile>()
+                .FirstOrDefault(e => e.State == EntityState.Added && e.Entity.OriginalName.EndsWith(".pdf", StringComparison.Ordinal));
+            if (pdf is not null)
+            {
+                lock (Refused)
+                {
+                    Refused.Add(pdf.Entity.StoragePath);
+                }
+
+                throw new DbUpdateException("Refused by the test, as a failing constraint would.");
+            }
+
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task A_rerun_revises_its_own_outputs_and_a_second_version_is_kept_beside_the_first_until_the_sweep_is_told_to_prune()
     {
         using var host = WithCompiler(new FakeSurveyCompiler());
@@ -435,6 +620,16 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
         var lox = await db.SurveyModels.AsNoTracking().SingleAsync(m => m.SurveyUploadId == first && m.Format == SurveyModelFormat.Lox);
         var rows = await db.SurveyUploadFiles.AsNoTracking().CountAsync(f => f.SurveyUploadId == first);
 
+        // The model's first reading has finished: it holds stations, so it says it is ready. The
+        // invented compiler's file is not a real line plot, so the reading is stood in for by its
+        // outcome rather than run.
+        var firstReading = (await db.ProcessingJobs.AsNoTracking().Where(j => j.Kind == ProcessingJobKinds.SurveyGraph).ToListAsync())
+            .Single(j => JsonSerializer.Deserialize<SurveyGraphPayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyModelId == lox.Id).Id;
+        await db.ProcessingJobs.Where(j => j.Id == firstReading)
+            .ExecuteUpdateAsync(u => u.SetProperty(j => j.Status, ProcessingJobStatus.Succeeded));
+        await db.SurveyModels.Where(m => m.Id == lox.Id)
+            .ExecuteUpdateAsync(u => u.SetProperty(m => m.Status, SurveyModelStatus.Ready));
+
         // Run again with a compiler that writes something else: the same files under the same
         // names get a new revision each, and the model reads its new file — nothing is stored twice.
         using var corrected = WithCompiler(new FakeSurveyCompiler { Word = "corrected" });
@@ -448,7 +643,10 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
         revised.Count.ShouldBe(2);
         var revisedLox = revised.Single(m => m.Id == lox.Id);
         revisedLox.FileId.ShouldNotBe(lox.FileId);
-        revisedLox.Status.ShouldBe(SurveyModelStatus.Pending);
+        // A model that holds a reading keeps saying so while its new file is read: its rows stay
+        // true until the next reading replaces them. The new reading is told by the job queued.
+        revisedLox.Status.ShouldBe(SurveyModelStatus.Ready);
+        (await SurveyModelReading.OutstandingAsync(db, CancellationToken.None)).ShouldContain(lox.Id);
         var plan = rerun.GetProperty("artefacts").EnumerateArray().Single(a => a.GetProperty("kind").GetString() == "plan-pdf");
         (await client.GetStringAsync(plan.GetProperty("contentUrl").GetString())).ShouldStartWith("corrected ");
         (await db.DocumentVersions.AsNoTracking().CountAsync(v => v.DocumentId == plan.GetProperty("documentId").GetGuid())).ShouldBe(2);
@@ -634,6 +832,109 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
     private static List<string> Names(JsonElement status) =>
         [.. status.GetProperty("artefacts").EnumerateArray().Select(a => a.GetProperty("name").GetString()!)];
 
+    [Fact]
+    public async Task A_run_the_queue_gives_up_on_fails_the_upload_where_it_had_got_to_and_tells_the_uploader()
+    {
+        var id = await SendAsync(owner, $"Lost run {suffix}", "pestera_inventata", ("pestera_inventata.zip", InventedArchive()));
+        var jobId = await PipelineJobOfAsync(factory, id);
+
+        // The run got as far as reading the archive, and the process running it died there, on the
+        // last attempt the queue allows.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await SurveyUploadWrites.StartAsync(db, id, CancellationToken.None)).ShouldBeTrue();
+            await SurveyUploadWrites.ProgressAsync(db, id, SurveyUploadStage.Unpack, 7, "Reading the survey archive.", CancellationToken.None);
+        }
+
+        await StaleJobSweep.LoseOnLastAttemptAsync(factory.Services, jobId);
+        await StaleJobSweep.SweepAsync(factory.Services, ProcessingJobKinds.SurveyUploadPipeline);
+
+        var status = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        status.GetProperty("status").GetString().ShouldBe("failed");
+        status.GetProperty("stage").GetString().ShouldBe("unpack");
+        status.GetProperty("progress").GetInt32().ShouldBe(7);
+        status.GetProperty("message").ValueKind.ShouldBe(JsonValueKind.Null);
+        status.GetProperty("error").GetProperty("code").GetString().ShouldBe(SurveyPipelineFailures.Unexpected);
+        status.GetProperty("error").GetProperty("message").GetString().ShouldBe(SurveyUploadPipelineHandler.GivenUpMessage);
+        status.GetProperty("finishedAt").ValueKind.ShouldBe(JsonValueKind.String);
+        (await FailureNoticesOfAsync(factory, id)).ShouldBe(1);
+
+        // Closed, so it can be run again.
+        (await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{id}/rerun", new { pipeline = new { compile = false } }))
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
+    }
+
+    [Fact]
+    public async Task A_given_up_run_writes_nothing_over_an_upload_that_has_already_finished()
+    {
+        var id = await SendAsync(owner, $"Finished run {suffix}", "pestera_inventata", ("pestera_inventata.zip", InventedArchive()));
+        var jobId = await PipelineJobOfAsync(factory, id);
+        await RunPipelineAsync(factory, id);
+        var before = await FailureNoticesOfAsync(factory, id);
+
+        // The job row is taken back after the run had already written its verdict on the upload.
+        await StaleJobSweep.LoseOnLastAttemptAsync(factory.Services, jobId);
+        await StaleJobSweep.SweepAsync(factory.Services, ProcessingJobKinds.SurveyUploadPipeline);
+
+        var status = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        status.GetProperty("status").GetString().ShouldBe("succeeded");
+        status.GetProperty("error").ValueKind.ShouldBe(JsonValueKind.Null);
+        (await FailureNoticesOfAsync(factory, id)).ShouldBe(before);
+    }
+
+    [Fact]
+    public async Task A_given_up_run_leaves_alone_the_run_asked_for_after_it()
+    {
+        var id = await SendAsync(owner, $"Rerun after loss {suffix}", "pestera_inventata", ("pestera_inventata.zip", InventedArchive()));
+        var lost = await PipelineJobOfAsync(factory, id);
+        await RunPipelineAsync(factory, id);
+
+        // The run wrote its verdict and its process died before the job row was closed; the
+        // uploader, seeing a finished upload, asked for it to be run again.
+        await StaleJobSweep.LoseOnLastAttemptAsync(factory.Services, lost);
+        (await owner.PostAsJsonAsync($"/api/v1/survey-uploads/{id}/rerun", new { pipeline = new { compile = false } }))
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var before = await FailureNoticesOfAsync(factory, id);
+
+        await StaleJobSweep.SweepAsync(factory.Services, ProcessingJobKinds.SurveyUploadPipeline);
+
+        // The upload is still waiting for the run that was asked for, nobody is told it failed,
+        // and that run then runs.
+        var waiting = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        waiting.GetProperty("status").GetString().ShouldBe("queued", waiting.ToString());
+        waiting.GetProperty("error").ValueKind.ShouldBe(JsonValueKind.Null);
+        (await FailureNoticesOfAsync(factory, id)).ShouldBe(before);
+
+        await RunPipelineAsync(factory, id);
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}"))
+            .GetProperty("status").GetString().ShouldBe("succeeded");
+    }
+
+    /// <summary>The one pipeline job the upload's completion queued, whatever state it is in now.</summary>
+    private static async Task<long> PipelineJobOfAsync(SilexGisApiFactory host, Guid uploadId)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var jobs = await db.ProcessingJobs.AsNoTracking()
+            .Where(j => j.Kind == ProcessingJobKinds.SurveyUploadPipeline)
+            .ToListAsync();
+        return jobs.Single(j =>
+            JsonSerializer.Deserialize<SurveyUploadPipelinePayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyUploadId == uploadId).Id;
+    }
+
+    /// <summary>How many "your survey upload failed" notices name this upload's status page.</summary>
+    private static async Task<int> FailureNoticesOfAsync(SilexGisApiFactory host, Guid uploadId)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var failed = await db.Notifications.AsNoTracking()
+            .Where(n => n.TemplateKey == SilexGis.Domain.Messaging.MessageTemplateCatalog.NotifySurveyUploadFailed)
+            .Select(n => n.Placeholders)
+            .ToListAsync();
+        return failed.Count(p => p.Contains(uploadId.ToString(), StringComparison.Ordinal));
+    }
+
     private static async Task SweepAsync(SilexGisApiFactory host)
     {
         await using var scope = host.Services.CreateAsyncScope();
@@ -685,6 +986,50 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
         failed.GetProperty("stage").GetString().ShouldBe("compile");
         failed.GetProperty("error").GetProperty("code").GetString().ShouldBe(SurveyPipelineFailures.OutputMissing);
     }
+
+    [Fact]
+    public async Task A_run_whose_only_line_plot_is_the_Survex_model_reads_it_rather_than_calling_it_ready()
+    {
+        using var host = WithCompiler(new FakeSurveyCompiler(false, "rez/upload.lox"));
+        await AuthHelper.CreateUserAsync(host, GlobalRoles.Editor, $"supipe-3d-{suffix}@t.local");
+        using var client = await AuthHelper.BearerClientAsync(host, $"supipe-3d-{suffix}@t.local");
+
+        var id = await SendAsync(client, $"Survex only {suffix}", "pestera_inventata",
+            ("pestera_inventata.zip", InventedArchive()), ("pestera_inventata.th", Fixture("pestera_inventata.th")));
+        await RunPipelineAsync(host, id);
+        var status = await client.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        status.GetProperty("status").GetString().ShouldBe("succeeded", status.ToString());
+
+        // The cave the upload made has no Therion model, so the Survex one is its current model,
+        // and a current model has to hold a reading: it waits for one, queued, placed in the
+        // coordinate system the compiler wrote it in.
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var survex = (await db.SurveyModels.AsNoTracking().Where(m => m.SurveyUploadId == id).ToListAsync())
+                .ShouldHaveSingleItem();
+            survex.Format.ShouldBe(SurveyModelFormat.Survex3d);
+            survex.IsCurrent.ShouldBeTrue();
+            survex.Status.ShouldBe(SurveyModelStatus.Pending);
+            survex.SourceEpsg.ShouldBe(32635);
+            (await ReadingsOfAsync(db, survex.Id)).ShouldBe(1);
+        }
+
+        // Run again: the reading already waiting reads the file as it now is, and none is added.
+        (await client.PostAsync($"/api/v1/survey-uploads/{id}/rerun", null)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        await RunPipelineAsync(host, id);
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var survex = await db.SurveyModels.AsNoTracking().SingleAsync(m => m.SurveyUploadId == id);
+            (await ReadingsOfAsync(db, survex.Id)).ShouldBe(1);
+        }
+    }
+
+    /// <summary>How many line-plot readings of a model are queued, whatever their state.</summary>
+    private static async Task<int> ReadingsOfAsync(SilexGisDbContext db, Guid modelId) =>
+        (await db.ProcessingJobs.AsNoTracking().Where(j => j.Kind == ProcessingJobKinds.SurveyGraph).ToListAsync())
+            .Count(j => JsonSerializer.Deserialize<SurveyGraphPayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyModelId == modelId);
 
     [Fact]
     public async Task A_compile_the_log_says_failed_fails_the_run_without_quoting_the_compiler()

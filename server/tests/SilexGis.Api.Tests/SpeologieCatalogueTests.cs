@@ -313,14 +313,201 @@ public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable, IClas
             ["s0"] = Array.Empty<Dictionary<string, object?>>(),
         }));
 
+        // A search by county alone is one result set, which the catalogue pages itself.
+        (await editor.GetAsync($"{SearchUrl}?county=AB&page=3&pageSize=100000")).StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+
+        var single = catalogue.Only;
+        single.Number("limit").ShouldBe(SpeologieOptions.RemotePageCeiling);
+
+        // The offset follows the page the caller was actually served, not the one they typed.
+        single.Number("offset").ShouldBe(2 * SpeologieOptions.RemotePageCeiling);
+
+        // A term with several spellings is several result sets merged here, so it is read from
+        // its start every time, and still never wider than the ceiling.
+        catalogue.Reset();
         (await editor.GetAsync($"{SearchUrl}?q=avenul&page=3&pageSize=100000")).StatusCode
             .ShouldBe(HttpStatusCode.OK);
 
-        var call = catalogue.Only;
-        call.Number("limit").ShouldBe(SpeologieOptions.RemotePageCeiling);
+        var merged = catalogue.Only;
+        merged.Terms.Count.ShouldBeGreaterThan(1);
+        merged.Number("limit").ShouldBe(SpeologieOptions.RemotePageCeiling);
+        merged.Number("offset").ShouldBe(0);
+    }
 
-        // The offset follows the page the caller was actually served, not the one they typed.
-        call.Number("offset").ShouldBe(2 * SpeologieOptions.RemotePageCeiling);
+    // ---------- paging a search that several spellings answer ----------
+
+    /// <summary>
+    /// Walking a multi-spelling search page by page shows every cave of the merged answer exactly
+    /// once, in catalogue-id order.
+    /// </summary>
+    /// <remarks>
+    /// Each spelling is its own result set, paged by its own row position, while the merged page is
+    /// cut by id. Paging the spellings with one shared offset therefore loses whatever one page
+    /// fetched and then cut (the rows of the spelling whose ids sort later), and no later page
+    /// asks for them again. Here the two spellings interleave by id and share one cave, which is
+    /// the ordinary shape of a broad term.
+    /// </remarks>
+    [Fact]
+    public async Task Paging_a_search_that_several_spellings_answer_shows_every_cave_exactly_once()
+    {
+        int[] commaBelow = [.. Enumerable.Range(0, 40).Select(i => 75000 + (2 * i))];
+        int[] ascii = [.. Enumerable.Range(0, 40).Select(i => 74951 + (2 * i)), 75000];
+
+        CatalogueSearches(term => term switch
+        {
+            "urșilor" => commaBelow,
+            "ursilor" => ascii,
+            _ => [],
+        });
+
+        var (served, refusal) = await WalkAsync($"{SearchUrl}?q={Uri.EscapeDataString("urșilor")}", pageSize: 25);
+
+        refusal.ShouldBeNull();
+        served.ShouldBe([.. commaBelow.Union(ascii).Order()]);
+
+        // One request per page, each within the ceiling.
+        catalogue.Calls.ShouldAllBe(c => c.Number("limit") <= SpeologieOptions.RemotePageCeiling);
+    }
+
+    /// <summary>
+    /// A merged search deeper than one catalogue page can reach serves what it can serve exactly,
+    /// says there is more, and then refuses the page it cannot serve with its own code, rather than
+    /// answering a short or an empty page that would read as the end of the results.
+    /// </summary>
+    [Fact]
+    public async Task A_merged_search_past_its_reach_is_refused_rather_than_cut_short()
+    {
+        int[] commaBelow = [.. Enumerable.Range(0, 150).Select(i => 76000 + (2 * i))];
+        int[] ascii = [.. Enumerable.Range(0, 150).Select(i => 76001 + (2 * i))];
+
+        CatalogueSearches(term => term switch
+        {
+            "urșilor" => commaBelow,
+            "ursilor" => ascii,
+            _ => [],
+        });
+
+        var (served, refusal) = await WalkAsync($"{SearchUrl}?q={Uri.EscapeDataString("urșilor")}", pageSize: 25);
+
+        // Every cave served is the true start of the merged answer, each once and in order...
+        served.Count.ShouldBeGreaterThanOrEqualTo(SpeologieOptions.RemotePageCeiling - 1);
+        served.ShouldBe([.. commaBelow.Union(ascii).Order().Take(served.Count)]);
+
+        // ...and the walk ends on a refusal that sends the reader to narrow the search, because the
+        // merged answer holds more than was reachable.
+        refusal.ShouldBe(CatalogueEndpoints.SearchTooDeepCode);
+        catalogue.Calls.ShouldAllBe(c => c.Number("limit") <= SpeologieOptions.RemotePageCeiling);
+    }
+
+    /// <summary>
+    /// A full page at the catalogue's ceiling still says there is another one.
+    /// </summary>
+    /// <remarks>
+    /// "Is there another page" is answered by asking one row more than the page, which does not
+    /// fit when the page is already as large as the catalogue serves. A page that came back full at
+    /// the ceiling has to be read as "perhaps more", or the screen offers no next page over a
+    /// catalogue that holds three hundred matches.
+    /// </remarks>
+    [Fact]
+    public async Task A_full_page_at_the_ceiling_still_reports_that_more_follow()
+    {
+        int[] county = [.. Enumerable.Range(0, 300).Select(i => 77000 + i)];
+        CatalogueSearches(_ => county);
+
+        var first = await JsonAsync(editor, $"{SearchUrl}?county=AB&pageSize=100");
+        first.GetProperty("items").GetArrayLength().ShouldBe(100);
+        first.GetProperty("hasMore").GetBoolean().ShouldBeTrue();
+
+        var (served, refusal) = await WalkAsync($"{SearchUrl}?county=AB", pageSize: 100);
+        refusal.ShouldBeNull();
+        served.ShouldBe(county);
+    }
+
+    /// <summary>
+    /// A page number whose offset does not fit the catalogue's integers is refused, rather than
+    /// wrapping round to the first page and serving it under the number that was asked for.
+    /// </summary>
+    [Fact]
+    public async Task A_page_past_any_offset_the_catalogue_can_take_is_refused_before_anything_is_asked()
+    {
+        catalogue.Answers(_ => throw new InvalidOperationException("the catalogue must not be called"));
+
+        var refused = await editor.GetAsync($"{SearchUrl}?county=AB&page=90000000&pageSize=25");
+        var body = await BodyAsync(refused);
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        CodeOf(body).ShouldBe(CatalogueEndpoints.SearchTooDeepCode);
+        catalogue.Calls.ShouldBeEmpty();
+
+        // The pass that makes the refusal mean something.
+        catalogue.Reset();
+        (await editor.GetAsync($"{SearchUrl}?county=AB&page=2&pageSize=25")).StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// Makes the stub page a search the way the catalogue does: every spelling the request carried
+    /// is its own result set, ordered by catalogue id, sliced by that request's offset and limit.
+    /// A search by county alone carries no spelling and reads the set for a null term.
+    /// </summary>
+    private void CatalogueSearches(Func<string?, IReadOnlyList<int>> rowsOf)
+    {
+        catalogue.Answers(call =>
+        {
+            var offset = call.Number("offset");
+            var limit = call.Number("limit");
+
+            var spellings = call.Variables.EnumerateObject()
+                .Where(p => p.Name.StartsWith('q') && p.Value.ValueKind == JsonValueKind.String)
+                .Select(p => (Alias: "s" + p.Name[1..], Term: p.Value.GetString()))
+                .ToList();
+
+            if (spellings.Count == 0)
+            {
+                spellings.Add(("s0", null));
+            }
+
+            var data = spellings.ToDictionary(
+                s => s.Alias,
+                s => (object?)rowsOf(s.Term).Order().Skip(offset).Take(limit)
+                    .Select(id => Record(id, $"Peștera {id} {tag}"))
+                    .ToArray());
+
+            return Answer(Data(data));
+        });
+    }
+
+    /// <summary>
+    /// Follows a search from its first page for as long as it says more follow, the way the screen's
+    /// next button does. Returns every id served, in the order served, and the code of the refusal
+    /// that ended the walk if one did.
+    /// </summary>
+    private async Task<(List<int> Served, string? Refusal)> WalkAsync(string url, int pageSize)
+    {
+        var served = new List<int>();
+
+        for (var page = 1; page <= 50; page++)
+        {
+            var response = await editor.GetAsync($"{url}&page={page}&pageSize={pageSize}");
+            var body = await BodyAsync(response);
+
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                return (served, CodeOf(body));
+            }
+
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+            var found = JsonDocument.Parse(body).RootElement;
+            served.AddRange(found.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetInt32()));
+
+            if (!found.GetProperty("hasMore").GetBoolean())
+            {
+                return (served, null);
+            }
+        }
+
+        throw new ShouldAssertException("the search never stopped saying more follow");
     }
 
     /// <summary>
@@ -380,6 +567,47 @@ public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable, IClas
         catalogue.Reset();
         catalogue.AnswersWith("""{"errors":[{"message":"Provide exactly one of id or slug"}],"data":null}""");
         await ShouldBeUnavailableAsync($"{SearchUrl}?q=ursilor", SpeologieException.RejectedCode);
+    }
+
+    /// <summary>
+    /// An answer that is not a catalogue answer at all — a web page, an empty body, an object with
+    /// no data in it — is reported with a catalogue code, never as an unhandled fault.
+    /// </summary>
+    /// <remarks>
+    /// These are what a reverse proxy, a maintenance page or a half-deployed service in front of
+    /// the catalogue actually send. Each one used to fail inside the reader with no code on it, so
+    /// the person searching saw a server error and whoever was on call had nothing to go on.
+    /// </remarks>
+    [Fact]
+    public async Task An_answer_that_is_not_a_catalogue_answer_is_reported_with_a_code()
+    {
+        // A maintenance page behind a 200: their service is unwell, not our query wrong.
+        catalogue.Answers(_ => Page("<html><body>Down for maintenance</body></html>", HttpStatusCode.OK));
+        await ShouldBeUnavailableAsync($"{SearchUrl}?q=ursilor", SpeologieException.UnavailableCode);
+
+        // An empty body behind a 200.
+        catalogue.Reset();
+        catalogue.Answers(_ => Page(string.Empty, HttpStatusCode.OK));
+        await ShouldBeUnavailableAsync($"{SearchUrl}?q=ursilor", SpeologieException.UnavailableCode);
+
+        // A proxy's HTML error page behind a 404: the status decides it, as it would for JSON.
+        catalogue.Reset();
+        catalogue.Answers(_ => Page("<html><body>Not Found</body></html>", HttpStatusCode.NotFound));
+        await ShouldBeUnavailableAsync($"{SearchUrl}?q=ursilor", SpeologieException.RejectedCode);
+
+        // Valid JSON whose data is null or not an object, with no errors to explain it — on the
+        // search and on the one-cave lookup, which read the data member in two different ways.
+        catalogue.Reset();
+        catalogue.AnswersWith("""{"data":null}""");
+        await ShouldBeUnavailableAsync($"{SearchUrl}?q=ursilor", SpeologieException.RejectedCode);
+        await ShouldBeUnavailableAsync($"{SearchUrl}/70301", SpeologieException.RejectedCode);
+
+        catalogue.Reset();
+        catalogue.AnswersWith("""{"data":[1,2,3]}""");
+        await ShouldBeUnavailableAsync($"{SearchUrl}/70301", SpeologieException.RejectedCode);
+
+        static HttpResponseMessage Page(string html, HttpStatusCode status) =>
+            new(status) { Content = new StringContent(html, Encoding.UTF8, "text/html") };
     }
 
     /// <summary>
@@ -707,6 +935,185 @@ public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable, IClas
         Names(await JsonAsync(editor, $"/api/v1/caves?search={tag}&pageSize=100")).ShouldContain(title);
     }
 
+    /// <summary>
+    /// A re-import that refuses one cave must leave that cave exactly as it was, while the other
+    /// cave of the same confirmation is refreshed. The refused cave is a tracked row, so a change
+    /// made to it before the refusal would be saved with the rest — on no batch line, where undo
+    /// cannot reach it, while the person is told it failed.
+    /// </summary>
+    [Fact]
+    public async Task A_refresh_refused_for_an_unknown_cave_type_leaves_that_cave_as_it_was()
+    {
+        var keptName = $"Peștera Neschimbată {tag}";
+        var refreshedName = $"Peștera Reîmprospătată {tag}";
+
+        CatalogueHolds(Record(70511, keptName, lungime: 100), Record(70512, $"Peștera Veche B {tag}", lungime: 200));
+        (await ImportedAsync(ImportBody([70511, 70512]))).GetProperty("createdCount").GetInt32().ShouldBe(2);
+
+        CatalogueHolds(
+            Record(70511, $"Peștera Rescrisă {tag}", lungime: 111),
+            Record(70512, refreshedName, lungime: 222));
+
+        var again = await ImportedAsync(ImportBody(
+            [70511, 70512],
+            new Dictionary<string, object?> { ["70511"] = new { caveTypeCode = $"no-such-type-{tag}" } }));
+
+        again.GetProperty("updatedCount").GetInt32().ShouldBe(1);
+        var failure = again.GetProperty("failures").EnumerateArray().ShouldHaveSingleItem();
+        failure.GetProperty("speologieId").GetInt32().ShouldBe(70511);
+        failure.GetProperty("code").GetString().ShouldBe("speologie.type_unknown");
+        var batchId = again.GetProperty("batchId").GetGuid();
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        var kept = await db.Features.AsNoTracking().Include(f => f.Cave)
+            .SingleAsync(f => f.Kind == FeatureKind.Cave && f.Name == keptName);
+        kept.Cave!.SurveyedLength.ShouldBe(100m);
+        (await db.Features.CountAsync(f => f.Name == $"Peștera Rescrisă {tag}")).ShouldBe(0);
+
+        var refreshed = await db.Features.AsNoTracking().Include(f => f.Cave)
+            .SingleAsync(f => f.Kind == FeatureKind.Cave && f.Name == refreshedName);
+        refreshed.Cave!.SurveyedLength.ShouldBe(222m);
+
+        var lines = await db.ImportBatchItems.AsNoTracking().Where(i => i.ImportBatchId == batchId).ToListAsync();
+        lines.ShouldHaveSingleItem().AttachedToFeatureId.ShouldBe(refreshed.Id);
+    }
+
+    /// <summary>
+    /// A confirmation that mixes a cave the caller may create with a refresh of a cave they may
+    /// read but not change: the new one lands, the refresh is that cave's listed failure, and the
+    /// cave somebody else owns is not touched.
+    /// </summary>
+    [Fact]
+    public async Task A_refresh_of_a_cave_the_caller_may_not_change_is_that_caves_failure_alone()
+    {
+        var ownersName = $"Peștera Altcuiva {tag}";
+        var newName = $"Peștera Nouă {tag}";
+
+        // The editor's cave is open to every signed-in account, so the other account reads it —
+        // what it lacks is the right to change it.
+        CatalogueHolds(Record(70531, ownersName, lungime: 50));
+        (await ImportedAsync(ImportBody([70531], visibility: "authenticated")))
+            .GetProperty("createdCount").GetInt32().ShouldBe(1);
+
+        var otherId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"spl-ct-{tag}@t.local");
+        var other = await AuthHelper.BearerClientAsync(factory, $"spl-ct-{tag}@t.local");
+        await GrantFeaturesAsync(otherId, AccessAction.Create, AccessScopeKind.All);
+        await GrantFeaturesAsync(otherId, AccessAction.Read | AccessAction.Write, AccessScopeKind.Own);
+
+        CatalogueHolds(Record(70531, $"Peștera Suprascrisă {tag}", lungime: 999), Record(70532, newName));
+        var response = await ImportAsync(ImportBody([70531, 70532]), other);
+        var text = await BodyAsync(response);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, text);
+        var result = JsonDocument.Parse(text).RootElement;
+
+        result.GetProperty("createdCount").GetInt32().ShouldBe(1);
+        result.GetProperty("updatedCount").GetInt32().ShouldBe(0);
+        var failure = result.GetProperty("failures").EnumerateArray().ShouldHaveSingleItem();
+        failure.GetProperty("speologieId").GetInt32().ShouldBe(70531);
+        failure.GetProperty("code").GetString().ShouldBe("speologie.update_forbidden");
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var untouched = await db.Features.AsNoTracking().Include(f => f.Cave)
+            .SingleAsync(f => f.Kind == FeatureKind.Cave && f.Name == ownersName);
+        untouched.Cave!.SurveyedLength.ShouldBe(50m);
+        (await db.Features.CountAsync(f => f.Kind == FeatureKind.Cave && f.Name == newName)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// "1" and "01" name one catalogue cave. Two decisions for it are refused with a code, rather
+    /// than reaching a dictionary that throws on the second one.
+    /// </summary>
+    [Fact]
+    public async Task Two_decisions_for_one_cave_are_refused_with_a_code()
+    {
+        catalogue.Answers(_ => throw new InvalidOperationException("the catalogue must not be called"));
+
+        var response = await ImportAsync(ImportBody(
+            [70541],
+            new Dictionary<string, object?>
+            {
+                ["70541"] = new { action = "create" },
+                ["070541"] = new { action = "skip" },
+            }));
+        var text = await BodyAsync(response);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, text);
+        CodeOf(text).ShouldBe("validation.failed");
+        catalogue.Calls.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// A catalogue page address longer than the column that holds it: the cave still imports,
+    /// with the address cut to fit, instead of one record failing the whole confirmation.
+    /// </summary>
+    [Fact]
+    public async Task A_page_address_longer_than_its_column_does_not_fail_the_confirmation()
+    {
+        var title = $"Peștera cu Adresă Lungă {tag}";
+        CatalogueHolds(Record(70551, title, slug: new string('a', 300)), Record(70552, $"Peștera Vecină {tag}"));
+
+        var result = await ImportedAsync(ImportBody([70551, 70552]));
+        result.GetProperty("createdCount").GetInt32().ShouldBe(2);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var cave = await db.Features.AsNoTracking().Include(f => f.Cave)
+            .SingleAsync(f => f.Kind == FeatureKind.Cave && f.Name == title);
+        cave.Cave!.Website!.Length.ShouldBeLessThanOrEqualTo(255);
+        cave.Cave.Website.ShouldStartWith("https://www.speologie.org/aaa");
+    }
+
+    /// <summary>
+    /// Every text the catalogue mapping produces fits the column it is stored in, read from the
+    /// model the database is built from rather than from a second copy of the lengths.
+    /// </summary>
+    [Fact]
+    public async Task Every_mapped_text_fits_the_column_it_is_stored_in()
+    {
+        var huge = new string('x', 5000);
+        var longestBasin = SpeologieBasins.All.MaxBy(b => b.Name.Length)!;
+        var values = SpeologieMapping.ToCaveValues(
+            new SpeologieRecord(
+                1, huge, Slug: huge, Localitate: huge, Munte: huge, Clasificare: "clasa" + huge,
+                BazinHidroId: longestBasin.Id),
+            DateTimeOffset.UtcNow,
+            maxDescriptionChars: 100);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        int MaxOf<T>(string property) =>
+            db.Model.FindEntityType(typeof(T))!.FindProperty(property)!.GetMaxLength()
+            ?? throw new InvalidOperationException($"{typeof(T).Name}.{property} has no length limit");
+
+        values.Name.Length.ShouldBeLessThanOrEqualTo(MaxOf<Feature>(nameof(Feature.Name)));
+        values.Website!.Length.ShouldBeLessThanOrEqualTo(MaxOf<Cave>(nameof(Cave.Website)));
+        values.Region!.Length.ShouldBeLessThanOrEqualTo(MaxOf<Cave>(nameof(Cave.Region)));
+        values.ClosestAddress!.Length.ShouldBeLessThanOrEqualTo(MaxOf<Cave>(nameof(Cave.ClosestAddress)));
+        (values.ProtectionClass?.Length ?? 0).ShouldBeLessThanOrEqualTo(MaxOf<Cave>(nameof(Cave.ProtectionClass)));
+        values.HydrographicBasin!.Length.ShouldBeLessThanOrEqualTo(MaxOf<Cave>(nameof(Cave.HydrographicBasin)));
+    }
+
+    private async Task GrantFeaturesAsync(
+        Guid userId, AccessAction actions, AccessScopeKind scopeKind, Guid? scopeId = null)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = userId,
+            Domain = AccessDomain.Features,
+            Actions = actions,
+            Effect = AccessEffect.Allow,
+            ScopeKind = scopeKind,
+            ScopeId = scopeId,
+        });
+        await db.SaveChangesAsync();
+    }
+
     // ---------- helpers ----------
 
     private static List<string?> Names(JsonElement page) =>
@@ -723,11 +1130,12 @@ public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable, IClas
         return JsonDocument.Parse(text).RootElement.Clone();
     }
 
-    private static object ImportBody(int[] selection, IDictionary<string, object?>? decisions = null) => new
+    private static object ImportBody(
+        int[] selection, IDictionary<string, object?>? decisions = null, string visibility = "private") => new
     {
         selection,
         decisions,
-        visibility = "private",
+        visibility,
         cavingGroupId = (Guid?)null,
         locationProtected = false,
         parentId = (Guid?)null,

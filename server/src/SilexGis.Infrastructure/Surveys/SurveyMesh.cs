@@ -9,8 +9,18 @@ namespace SilexGis.Infrastructure.Surveys;
 /// worth showing the person who uploaded it — the wrong format, an export written as text, a
 /// coordinate system nobody here can resolve. Deliberately distinct from the failures that are
 /// ours, which are recorded but not described to them.
+/// <para>
+/// Where the reason is that the file was declared in the wrong coordinates and another declaration
+/// would place it at its cave, that declaration travels with the exception so the person can be
+/// offered it rather than left to guess.
+/// </para>
 /// </summary>
-public sealed class SurveySourceException(string message) : Exception(message);
+public sealed class SurveySourceException(string message, SurveyPlacementAdvice? advice = null)
+    : Exception(message)
+{
+    /// <summary>A declaration that would place the file at its cave, when one was found.</summary>
+    public SurveyPlacementAdvice? Advice { get; } = advice;
+}
 
 /// <summary>
 /// A triangle mesh with shared vertices, in the coordinates its file used.
@@ -116,6 +126,16 @@ public static class StlReader
             // some write zeros, and a normal per triangle cannot be shared between the triangles
             // meeting at a vertex — so it is recomputed later from the geometry, which is the one
             // description of the surface that is certainly true.
+            // A corner that is not a finite number has no place to be drawn at, and would carry
+            // its NaN into the placement and the bounds every viewer reads. Some broken exporters
+            // write one; the uploader is told which triangle it is.
+            if (!AllFinite(buffer.AsSpan(12, 36)))
+            {
+                throw new SurveySourceException(
+                    $"Triangle {t + 1} of this file has a corner whose coordinates are not finite "
+                    + "numbers, so the file cannot be drawn.");
+            }
+
             var a = welder.Add(buffer.AsSpan(12));
             var b = welder.Add(buffer.AsSpan(24));
             var c = welder.Add(buffer.AsSpan(36));
@@ -143,6 +163,19 @@ public static class StlReader
 
         var mesh = welder.Build(indices);
         return new MeshReadResult(mesh, triangleCount, degenerate, CoarsestStep(mesh.Positions));
+    }
+
+    private static bool AllFinite(ReadOnlySpan<byte> floats)
+    {
+        for (var i = 0; i < floats.Length; i += sizeof(float))
+        {
+            if (!float.IsFinite(BinaryPrimitives.ReadSingleLittleEndian(floats[i..])))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

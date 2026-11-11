@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.Extensions.Configuration;
 using SilexGis.Domain.Entities;
 
 namespace SilexGis.Infrastructure.Jobs;
@@ -25,4 +26,26 @@ public sealed record JobLane(IReadOnlyList<string> Kinds, bool Excluded)
 
     /// <summary>Terrain builds, and nothing else.</summary>
     public static JobLane Terrain { get; } = new(ProcessingJobKinds.TerrainLane, Excluded: false);
+
+    /// <summary>
+    /// The general lane as this installation configures it: map-sheet drawing moves to the heavy
+    /// lane when <c>GeoreferencedMaps:SheetJobsOnHeavyLane</c> is set.
+    /// </summary>
+    public static JobLane GeneralFor(IConfiguration configuration) => new(HeavyKinds(configuration), Excluded: true);
+
+    /// <summary>The heavy lane as this installation configures it; the complement of <see cref="GeneralFor"/>.</summary>
+    public static JobLane TerrainFor(IConfiguration configuration) => new(HeavyKinds(configuration), Excluded: false);
+
+    /// <summary>
+    /// The kinds the heavy lane takes. Sheets draw in seconds to about a minute, so by default they
+    /// stay on the general lane rather than queue behind hour-long terrain builds; an installation
+    /// whose sheets are large enough to hold up imports moves them across.
+    /// </summary>
+    public static IReadOnlyList<string> HeavyKinds(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        return configuration.GetValue<bool>("GeoreferencedMaps:SheetJobsOnHeavyLane")
+            ? [.. ProcessingJobKinds.TerrainLane, ProcessingJobKinds.MapSheetRender, ProcessingJobKinds.MapPlacementWarp]
+            : ProcessingJobKinds.TerrainLane;
+    }
 }

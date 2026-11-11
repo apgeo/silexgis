@@ -31,6 +31,7 @@ import {
   GlobalOutlined,
   GoldOutlined,
   GroupOutlined,
+  HddOutlined,
   HistoryOutlined,
   IdcardOutlined,
   ImportOutlined,
@@ -165,6 +166,12 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
           icon: <MonitorOutlined />,
           label: t('nav.notificationHealth'),
         }]
+      : []),
+    // What fills the file store and what could be deleted. By rank, like the published trips:
+    // the report names caves, files and owners across the whole installation without asking
+    // what the reader may see, so the server answers it to full administrators only.
+    ...(gates.isFullAdmin
+      ? [{ key: 'admin/storage', icon: <HddOutlined />, label: t('nav.storage') }]
       : []),
     // The elevation surface is one installation-wide asset, not content anybody
     // owns, so the right to see the builds is held over the domain and read is

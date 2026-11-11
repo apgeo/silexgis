@@ -202,6 +202,12 @@ public static class CavingGroupAnnouncementEndpoints
             return ApiProblems.Forbidden("access.forbidden");
         }
 
+        // The cooldown, the day's ceiling and the write they guard are one act: asked and written
+        // apart, two sends a moment apart both pass them. Everything from here to the commit runs
+        // in one transaction behind the installation's announcement lock, the marker included.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await CavingGroupAnnouncementSql.TakeSendLockAsync(db, ct);
+
         // Asked before the roster is even read, so how often somebody may do this never depends on
         // how their club happens to look. It is a durable marker rather than the endpoint's request
         // budget: that budget is keyed on the caller's address, refills every minute, and a second
@@ -238,8 +244,8 @@ public static class CavingGroupAnnouncementEndpoints
             return refusal;
         }
 
-        // Stamped before the work rather than after. A save that reports a failure may still have
-        // committed, and somebody retrying a "failure" in a loop is exactly what this bounds.
+        // Stamped in the same transaction as the work, so the two commit together or not at all:
+        // a refused send never spends somebody's turn, and an accepted one always does.
         await throttle.MarkSentAsync(user.UserId);
 
         var fanOutLimit = configuration.GetValue("Notifications:AnnouncementFanOutLimit", DefaultFanOutLimit);
@@ -306,6 +312,7 @@ public static class CavingGroupAnnouncementEndpoints
         // One save, so the whole announcement either happened or did not: a partial broadcast is
         // worse than none, because nobody can tell which half they are in.
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return TypedResults.Ok(new CavingGroupAnnouncementResultDto(recipients.Count, queued));
     }

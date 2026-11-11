@@ -20,6 +20,10 @@ Everything here lives on a **cave's page**.
 **Upload model.** Accepted: **Therion `.lox`**, **Survex `.3d`**, or **cave walls as a binary
 `.stl`** — up to 100 MB.
 
+A **laser scan** goes in through the same card — **Upload point cloud** takes a `.laz` / `.las`
+file or a raw MANDEYE scanner recording — and has a page of its own:
+[Point clouds (LiDAR scans)](point-clouds.md).
+
 State: *Waiting its turn → In progress → Ready*, or *Could not be processed*.
 
 A model is drawn in the **survey viewer** (CaveView.js) and, for walls, in the
@@ -251,6 +255,26 @@ UTM grid. Give the **EPSG code**.
 Also note: the heights in these files are measured from the export's own origin, not from sea
 level.
 
+### When the placement is wrong
+
+If you choose the wrong option, SilexGIS notices when it reads the file, as long as the cave
+has a position on record. It catches two mistakes:
+
+- **A projected file uploaded as metres from a point.** The reading fails and says the numbers
+  are far too large to be metres from a point.
+- **The wrong EPSG code**, for example the neighbouring UTM zone. The survey is read, but the
+  model's row says how many kilometres from the cave it landed.
+
+In both cases SilexGIS also tries the UTM zone the cave is in, the two zones beside it, and the
+common European national grids, Stereo70 among them. If one of them places the survey at the
+cave, the row names it, for example *Read as EPSG:32634, it lands 0.5 km from the cave*, and
+offers a button to use it. If the numbers are small enough to be metres from a point, the button
+offers that instead. Either button opens the placement form already filled in. Check the
+altitude, then confirm, and the stored file is read again. You don't need to upload it again.
+
+**Change placement** (the pin icon on any model's row) opens the same form, so you can change a
+model's declaration even when nothing was found wrong with it.
+
 Once converted, the walls are drawn in the [3D scene](3d-view.md#walls-of-the-selected-cave)
 for the selected cave only. The model list shows the converted mesh's size in megabytes beside
 its triangle count, and the scene names the size while it fetches — and, above a set size,
@@ -265,7 +289,11 @@ You do not have to export an `.stl` to see walls. When a line plot is read, wall
 that same model out of what the file itself holds, and out of nothing else:
 
 - **A `.lox` with scraps** — the wall surfaces Therion modelled from your drawings — is drawn with
-  exactly those surfaces.
+  exactly those surfaces. Therion writes surfaces only for the passages you drew. A passage that
+  was surveyed but never drawn, and whose dimensions were measured, gets a tube as described in
+  the next point. Its walls then sit beside the drawn ones instead of being left out of the model.
+  A leg counts as drawn when a drawn wall passes within its widest measured dimension, plus 3 m,
+  of the leg's middle.
 - **A `.lox` without scraps, or a `.3d`**, gets a tube along every leg whose **passage dimensions**
   (left, right, up, down) were measured at both of its ends. Each measured station becomes a ring
   through its four measured points — left and right laid level across the passage, up and down
@@ -277,6 +305,28 @@ dimensions, or with dimensions at one end only, stays a bare line; a single dist
 taken is drawn as no distance at all rather than guessed. Splays get no tube either — they are
 measurements *of* the wall, not passages. A survey with neither scraps nor dimensions simply has
 no walls: that is not an error, and the model is still **Ready**.
+
+### Passages without a measured size
+
+The reading counts the passage it could give no walls to — legs with no drawn wall within 5 m of
+their middle and no cross-section with any width — and the model's row says how much there is:
+*"2.9 km of passage (legs: 694) has no measured size … It is shown only as survey lines."*
+
+If you would rather see those passages at a guessed size than not at all, press **Draw at an
+estimated size…** on that row. The dialog opens with a warning, and the warning is the point:
+
+> **These passage sizes are not real.** Every passage without a measured size is drawn as a tube
+> of the one diameter you set — a squeeze and a chamber alike. In the 3D model they look like
+> surveyed passages. Use them to see where the cave goes, never to judge how big a passage is.
+
+You choose the **diameter** (0.2–30 m, 1 m by default) and the **colour** they are built in, and
+the stored file is read again; nothing is uploaded. The estimated tubes are built **apart from the
+walls**, as a separate part of the model in their own colour, so they can never be mistaken for
+walls in the file and the 3D view can hide or recolour them. Once drawn, the row says so in warning
+colour: *"Not measured: 694 legs are drawn at an estimated size of 1 m. These sizes are invented,
+not surveyed."* The button then reads **Estimated passages…**, where you can change the size or
+colour, or switch them off again. Nothing is estimated unless somebody asks, and splays and legs
+flagged as surface or duplicate are never estimated.
 
 The model list shows the triangle count and the size on the plot's own row, with the note *"Walls
 built from this survey's own scraps and passage dimensions"*. A very large system is drawn with

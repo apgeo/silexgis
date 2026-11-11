@@ -44,6 +44,7 @@ The folder after each code is its recording under `contract/topodroid-sync/v1/`.
 | `survey_upload.files_invalid` | 400 | not exactly one `archive`; a name that is empty, repeated (ignoring case), has a path or a character no file system takes; an extension outside `acceptedExtensions` or wrong for the role; a size over `maxFileBytes`; more than `maxFilesPerUpload` files. Member `file` names the file when one is to blame. `11-errors/files-invalid` |
 | `survey_upload.output_unknown` | 400 | `pipeline.outputs` names something outside the capabilities' `outputs.catalogue`; member `outputs` lists them. `11-errors/output-unknown` |
 | `survey_upload.busy` | 409 | two uploads of one new survey were opened at the same instant; send it again |
+| `storage.insufficient` | 409 | the declared files do not fit in the storage left: under the account's quota, the installation's cap, for a `pointcloud` upload the scans' own cap, or on the disk of the file store. Members `limit` (`account`, `installation`, `scans`, `storeDisk`), `neededBytes`, `roomBytes` and `missingBytes`. Room declared by uploads still receiving files counts as taken until their files arrive, they are abandoned or they expire. Nothing is kept |
 
 A body that does not parse, or a member of the wrong type, is answered `400` with a validation
 problem (`errors` keyed by member) before any of the above.
@@ -56,6 +57,7 @@ problem (`errors` keyed by member) before any of the above.
 | `survey_upload.file_unknown` | 404 | `{name}` was not declared when the upload was opened. `11-errors/file-unknown` |
 | `survey_upload.size_mismatch` | 400 | the body's length is not the declared size; member `declaredSize`. `11-errors/size-mismatch` |
 | `survey_upload.content_mismatch` | 400 | the bytes are not what the role says — an `archive` that is not a ZIP, a Therion file that is not text; member `file`. Nothing is kept. `11-errors/content-mismatch` |
+| `storage.insufficient` | 409 | the file no longer fits in the storage left — the room was judged when the upload opened, and is judged again as the bytes arrive (the upload's own declared room counts as its own). Same members as on opening. Nothing of the file is kept |
 | `survey_upload.not_receiving` | 409 | the upload is complete or abandoned and the file had not arrived. (A repeat of a file that **did** arrive answers `200` with the first answer, whatever the upload's state.) |
 | `survey_upload.expired` | 410 | the upload passed its `expiresAt` before every file arrived and was closed; open a new one. `11-errors/expired` |
 | `acl.forbidden` | 403 | the account no longer may write to the cave |
@@ -101,8 +103,11 @@ result screen, which opens them with its access key:
 | `survey_upload.public_link_forbidden` | 403 | `POST …/public-link` | the account may not share the cave |
 | `survey_upload.public_link_refused_protected` | 409 | `POST …/public-link` | the cave's position is protected and the request did not send `allowProtected: true` |
 | `validation.failed` | 400 | `POST …/public-link`, `POST /api/v1/survey-uploads` | `audience` is neither `public` nor `organization` (an unknown name is refused as a body that does not read, also 400) |
-| `survey_upload.public_link_sign_in_required` | 401 | `GET /api/v1/public/survey-uploads/{token}` | the link opens for the installation's signed-in accounts only (`audience: organization`) and the reader is not signed in — an access key does not count. Asked only of a link that would otherwise open; ask the reader to sign in on the web. `11-errors/public-link-sign-in-required` |
-| `survey_upload.public_link_not_found` | 404 | `GET /api/v1/public/survey-uploads/{token}` | **one answer for everything**: an invented, malformed, withdrawn or replaced token, a cave protected now, an installation that turned links off, an upload or cave that is gone. `11-errors/public-link-not-found` |
+| `survey_upload.public_link_sign_in_required` | 401 | `GET /api/v1/public/survey-uploads/{token}`, `…/{token}/log`, `…/{token}/figures` and `…/{token}/geodata` | the link opens for the installation's signed-in accounts only (`audience: organization`) and the reader is not signed in — an access key does not count. Asked only of a link that would otherwise open; ask the reader to sign in on the web. `11-errors/public-link-sign-in-required` |
+| `survey_upload.public_link_not_found` | 404 | `GET /api/v1/public/survey-uploads/{token}`, `…/{token}/log`, `…/{token}/figures` and `…/{token}/geodata` | **one answer for everything**: an invented, malformed, withdrawn or replaced token, a cave protected now, an installation that turned links off, an upload or cave that is gone. `11-errors/public-link-not-found` |
+| `survey_upload.public_log_not_found` | 404 | `GET /api/v1/public/survey-uploads/{token}/log` | the link opens, but the upload has no compiler's log: it was not compiled, or its compile wrote none. Asked only of a link that opens, so it says nothing about a token that would not. |
+| `survey_upload.not_georeferenced` | 404 | `GET /api/v1/survey-uploads/{id}/geodata` and `GET /api/v1/public/survey-uploads/{token}/geodata` (web only) | the run placed no line in the world — the survey has no fixed point and no coordinate system. Asked only of a reader the upload's sent files open for, or of a link that opens |
+| `survey_upload.geodata_format_unsupported` | 400 | `GET /api/v1/survey-uploads/{id}/geodata` and `GET /api/v1/public/survey-uploads/{token}/geodata` (web only) | `format` is not `kml`, `geojson` or `gpx`; through a link, judged only after the link opens |
 
 ## How a processing run ended *(row)*
 
@@ -111,7 +116,9 @@ result screen, which opens them with its access key:
 | `survey_pipeline.files_missing` | `archive` | an archived file is no longer in the server's store — an operator matter; the upload can be run again once it is restored |
 | `survey_pipeline.archive_invalid` | `unpack` | the archive is not a TopoDroid survey archive: no `manifest`, `manifest` not the first entry, no SQL dump at its root, a database version older than 21, an entry name that leaves the archive, an encrypted entry, or not a ZIP at all. `08-status-failed` |
 | `survey_pipeline.archive_too_large` | `unpack` | over 10,000 entries, more unpacked bytes than the installation allows, or an entry that inflates suspiciously (over 200:1) |
-| `survey_pipeline.unexpected` | any | a defect on the server; its log holds the detail |
+| `survey_pipeline.point_cloud_invalid` | `inspect` | the file of a `pointcloud` upload is not a LAS or LAZ file the server can read: not the `LASF` signature, a version outside 1.0–1.4, a header shorter than its version requires, a file that ends before its point data, or counts, scales or extents that contradict each other; `errorMessage` says which |
+| `survey_pipeline.storage_insufficient` | `downsample`, `tile` | a point-cloud run (or one step of it) was not started because what it is estimated to write does not fit — under the uploader's quota, the installation's cap, the scans' cap, or on the disk of the file store or of the worker. The whole run's need — the thinned copy and the tiles together — is checked before its first step that writes anything, so a run that will not fit stores nothing; each step is checked again before it starts. `errorMessage` says how many bytes are missing. *Rerun* once room has been made |
+| `survey_pipeline.unexpected` | any | a defect on the server; its log holds the detail. Also what a run is failed with when the server lost it on every attempt it allows (the process running it died each time): `stage` and `progress` stay where it had got to, and it can be run again |
 
 Sent by a server that compiles: `survey_pipeline.source_missing` (compiling asked for, no `.th`
 sent), `survey_pipeline.source_invalid` (more than one `.th`, or a survey that reads a file not sent

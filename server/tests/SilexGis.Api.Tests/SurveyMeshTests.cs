@@ -144,6 +144,83 @@ public class SurveyMeshTests
     }
 
     [Fact]
+    public void Estimated_passages_are_a_node_of_their_own_marked_vertex_by_vertex()
+    {
+        var walls = StlReader.Read(Stl(Cube(size: 10))).Mesh;
+        var estimated = StlReader.Read(Stl([((0, 0, 0), (10, 0, 0), (0, 10, 0))])).Mesh;
+        using var output = new MemoryStream();
+
+        GlbWriter.Write(walls, estimated, (1, 0, 0), (0, 0, 0), output);
+
+        var bytes = output.ToArray();
+        BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(8)).ShouldBe((uint)bytes.Length);
+        using var json = ReadJsonChunk(bytes);
+        var root = json.RootElement;
+
+        // Two nodes, found by name: the scene turns the second off without touching the first.
+        root.GetProperty("nodes")[0].GetProperty("name").GetString().ShouldBe(GlbWriter.WallsNodeName);
+        root.GetProperty("nodes")[1].GetProperty("name").GetString().ShouldBe(GlbWriter.EstimatedNodeName);
+        root.GetProperty("scenes")[0].GetProperty("nodes").GetArrayLength().ShouldBe(2);
+
+        // Each in its own colour: the walls their usual grey, the estimates the colour they were built in.
+        var materials = root.GetProperty("materials");
+        materials.GetArrayLength().ShouldBe(2);
+        materials[1].GetProperty("pbrMetallicRoughness").GetProperty("baseColorFactor")[0].GetDouble().ShouldBe(1);
+
+        // Both primitives carry the flag, so a shader reading it runs on both; one on the estimates only.
+        var accessors = root.GetProperty("accessors");
+        var wallFlag = root.GetProperty("meshes")[0].GetProperty("primitives")[0].GetProperty("attributes").GetProperty("_ESTIMATED").GetInt32();
+        var estimateFlag = root.GetProperty("meshes")[1].GetProperty("primitives")[0].GetProperty("attributes").GetProperty("_ESTIMATED").GetInt32();
+        accessors[wallFlag].GetProperty("count").GetInt32().ShouldBe(8);
+        accessors[estimateFlag].GetProperty("count").GetInt32().ShouldBe(3);
+        FloatAt(bytes, root, wallFlag, 0).ShouldBe(0f);
+        FloatAt(bytes, root, estimateFlag, 2).ShouldBe(1f);
+    }
+
+    [Fact]
+    public void Estimated_passages_can_be_written_without_any_walls()
+    {
+        var estimated = StlReader.Read(Stl([((0, 0, 0), (10, 0, 0), (0, 10, 0))])).Mesh;
+        using var output = new MemoryStream();
+
+        GlbWriter.Write(walls: null, estimated, (1, 0, 0), (0, 0, 0), output);
+
+        using var json = ReadJsonChunk(output.ToArray());
+        json.RootElement.GetProperty("nodes").GetArrayLength().ShouldBe(1);
+        json.RootElement.GetProperty("nodes")[0].GetProperty("name").GetString().ShouldBe(GlbWriter.EstimatedNodeName);
+    }
+
+    [Theory]
+    [InlineData("#ffffff", 1.0)]
+    [InlineData("#000000", 0.0)]
+    [InlineData("#808080", 0.2158605)]
+    public void A_chosen_colour_is_written_in_the_linear_values_a_material_states(string hex, double linear)
+    {
+        var (r, g, b) = GlbWriter.LinearFromHex(hex).ShouldNotBeNull();
+        r.ShouldBe(linear, 1e-6);
+        g.ShouldBe(linear, 1e-6);
+        b.ShouldBe(linear, 1e-6);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("red")]
+    [InlineData("#12345")]
+    [InlineData("#gggggg")]
+    public void Anything_but_a_six_digit_colour_is_no_colour(string? hex) =>
+        GlbWriter.LinearFromHex(hex).ShouldBeNull();
+
+    /// <summary>One float of an accessor, read out of the binary chunk.</summary>
+    private static float FloatAt(byte[] glb, JsonElement root, int accessor, int index)
+    {
+        var view = root.GetProperty("bufferViews")[root.GetProperty("accessors")[accessor].GetProperty("bufferView").GetInt32()];
+        var jsonLength = (int)BinaryPrimitives.ReadUInt32LittleEndian(glb.AsSpan(12));
+        var binaryStart = 12 + 8 + jsonLength + 8;
+        return BinaryPrimitives.ReadSingleLittleEndian(
+            glb.AsSpan(binaryStart + view.GetProperty("byteOffset").GetInt32() + (index * sizeof(float))));
+    }
+
+    [Fact]
     public void The_declared_buffer_length_matches_the_bytes_that_follow_it()
     {
         var mesh = StlReader.Read(Stl(Cube(size: 10))).Mesh;
@@ -245,6 +322,41 @@ public class SurveyMeshTests
     }
 
     [Fact]
+    public void A_projected_mesh_is_written_in_ground_metres_like_the_stations_it_belongs_with()
+    {
+        var converter = new SurveyMeshConverter(new ProjCoordinateProjector());
+        using var output = new MemoryStream();
+
+        // One face whose first edge runs a kilometre along the grid's east axis, in UTM zone 35N.
+        var result = converter.Convert(
+            Stl([((359500, 5042100, 0), (360500, 5042100, 0), (359500, 5042110, 0))]),
+            new SurveySourceDeclaration(SourceEpsg: 32635, null, null, OriginHeightM: 1100),
+            output);
+
+        // A transverse Mercator grid metre is 1 / k ground metres, with k = k0 (1 + (Δλ cos φ)² / 2)
+        // to far better than a millimetre per kilometre this close to the central meridian (27° E).
+        var deltaLambda = (27.0 - result.AnchorLongitude) * Math.PI / 180;
+        var cosPhi = Math.Cos(result.AnchorLatitude * Math.PI / 180);
+        var k = 0.9996 * (1 + (Math.Pow(deltaLambda * cosPhi, 2) / 2));
+        var (a, b) = FirstTwoVertices(output.ToArray());
+        var edge = Math.Sqrt(Math.Pow(b.X - a.X, 2) + Math.Pow(b.Z - a.Z, 2));
+
+        // About 16 cm longer than the grid says: the gap a line plot's stations are corrected by.
+        edge.ShouldBe(1000 / k, tolerance: 0.01);
+    }
+
+    [Fact]
+    public void A_corner_that_is_not_a_finite_number_is_refused_as_a_fault_of_the_file()
+    {
+        Should.Throw<SurveySourceException>(() => StlReader.Read(Stl([
+                ((0, 0, 0), (10, 0, 0), (0, 10, 0)),
+                ((0, 0, 0), (float.NaN, 0, 0), (0, 10, 0)),
+            ])))
+            .Message.ShouldContain("Triangle 2");
+        Should.Throw<SurveySourceException>(() => StlReader.Read(Stl([((0, 0, 0), (float.PositiveInfinity, 0, 0), (0, 10, 0))])));
+    }
+
+    [Fact]
     public void A_coordinate_system_this_installation_cannot_resolve_is_refused()
     {
         var converter = new SurveyMeshConverter(new ProjCoordinateProjector());
@@ -318,6 +430,21 @@ public class SurveyMeshTests
         BinaryPrimitives.WriteSingleLittleEndian(target, corner.X);
         BinaryPrimitives.WriteSingleLittleEndian(target[4..], corner.Y);
         BinaryPrimitives.WriteSingleLittleEndian(target[8..], corner.Z);
+    }
+
+    /// <summary>The first two vertices of a written mesh, in glTF axes (X east, Y up, Z south).</summary>
+    private static ((float X, float Y, float Z) A, (float X, float Y, float Z) B) FirstTwoVertices(byte[] glb)
+    {
+        var jsonLength = (int)BinaryPrimitives.ReadUInt32LittleEndian(glb.AsSpan(12));
+        using var json = ReadJsonChunk(glb);
+        var view = json.RootElement.GetProperty("accessors")[1].GetProperty("bufferView").GetInt32();
+        var offset = json.RootElement.GetProperty("bufferViews")[view].GetProperty("byteOffset").GetInt32();
+        var at = 20 + jsonLength + 8 + offset;
+        (float X, float Y, float Z) Vertex(int i) => (
+            BinaryPrimitives.ReadSingleLittleEndian(glb.AsSpan(at + (i * 12))),
+            BinaryPrimitives.ReadSingleLittleEndian(glb.AsSpan(at + (i * 12) + 4)),
+            BinaryPrimitives.ReadSingleLittleEndian(glb.AsSpan(at + (i * 12) + 8)));
+        return (Vertex(0), Vertex(1));
     }
 
     private static JsonDocument ReadJsonChunk(byte[] glb)

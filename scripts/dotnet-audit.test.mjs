@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
-import { acceptedAdvisories, describe, judge } from './dotnet-audit.mjs';
+import { acceptedAdvisories, describe, judge, problemsOf } from './dotnet-audit.mjs';
 
 const listing = (packages) => ({
   projects: [
@@ -52,4 +52,17 @@ test('the list is read from the props file the build itself uses', () => {
   const props = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'server', 'Directory.Build.props'), 'utf8');
   const declared = [...props.matchAll(/NuGetAuditSuppress/g)].length;
   assert.equal(acceptedAdvisories(props).size, declared);
+});
+
+test('a listing that could not reach a vulnerability source is reported as a problem, a clean one is not', () => {
+  // The shape `dotnet list package --format json` writes when a source is unreachable: it still
+  // exits 0 and lists the projects with no advisories.
+  const offline = {
+    version: 1,
+    problems: [{ level: 'error', text: 'Unable to load the service index for source https://api.nuget.org/v3/index.json.' }],
+    projects: [{ path: '/x/A.csproj', frameworks: [] }],
+  };
+  assert.deepEqual(problemsOf(offline), ['  error: Unable to load the service index for source https://api.nuget.org/v3/index.json.']);
+  assert.deepEqual(problemsOf({ version: 1, projects: [{ path: '/x/A.csproj', problems: [{ level: 'warning', text: 'w' }] }] }), ['  warning: w']);
+  assert.deepEqual(problemsOf({ version: 1, sources: [], projects: [{ path: '/x/A.csproj', frameworks: [] }] }), []);
 });

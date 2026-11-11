@@ -15,8 +15,10 @@ RUN dotnet publish src/SilexGis.TherionService -c Release -o /app/publish
 # application's log reader and its tests are written against; Debian's current release carries
 # 6.2. The .NET runtime comes from the same archive. Therion draws maps by writing MetaPost and TeX
 # and running them, so both come along; recommended packages do not, which keeps the editors and the
-# desktop viewer out. prlimit (util-linux) and timeout (coreutils) bound each compile's memory,
-# file sizes and time.
+# desktop viewer out. Survex is the exception, though Therion only recommends it: Therion hands the
+# centreline to Survex's cavern, and without it the log has no station, shot, length, range or loop
+# count, so every figure read from those lines comes out blank. prlimit (util-linux) and timeout
+# (coreutils) bound each compile's memory, file sizes and time.
 #
 # bubblewrap is deliberately absent. Inside a container started with the default security profile
 # it cannot make the namespaces its sandbox is built from, and the profile changes that would let it
@@ -30,9 +32,10 @@ RUN dotnet publish src/SilexGis.TherionService -c Release -o /app/publish
 FROM ubuntu:26.04 AS compiler
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        aspnetcore-runtime-10.0 therion texlive-base texlive-metapost util-linux coreutils \
+        aspnetcore-runtime-10.0 therion survex texlive-base texlive-metapost util-linux coreutils \
     && rm -rf /var/lib/apt/lists/* \
     && therion --version \
+    && command -v cavern \
     && useradd --system --no-create-home --shell /usr/sbin/nologin therion
 
 FROM compiler AS runtime

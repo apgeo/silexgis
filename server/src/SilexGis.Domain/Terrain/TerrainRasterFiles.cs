@@ -44,4 +44,27 @@ public static class TerrainRasterFiles
 
     /// <summary>The extensions accepted, for a message that has to name them.</summary>
     public static IReadOnlyCollection<string> Accepted { get; } = [.. Extensions.Order()];
+
+    /// <summary>
+    /// The formats that state their own position, and so can travel as one file through a browser.
+    /// </summary>
+    /// <remarks>
+    /// An ASCII grid names its coordinate system only in a ".prj" file beside it. A single upload
+    /// cannot bring that file, and the store renames what it keeps, so a sidecar sent later could
+    /// not be matched to it either: the grid would fail every build made from it as a raster that
+    /// says nowhere where it is. Read from a server directory, the pair stays together.
+    /// </remarks>
+    private static readonly HashSet<string> NeedSidecar = new(StringComparer.OrdinalIgnoreCase) { ".asc" };
+
+    /// <summary>Whether this name is a raster that may be sent as one file through the browser.</summary>
+    public static bool IsUploadable(string fileName) =>
+        IsRaster(fileName) && !NeedsSidecar(fileName);
+
+    /// <summary>Whether this name is a raster format that cannot say where it is without a sidecar.</summary>
+    public static bool NeedsSidecar(string fileName) =>
+        !string.IsNullOrWhiteSpace(fileName) && NeedSidecar.Contains(Path.GetExtension(fileName));
+
+    /// <summary>The extensions a browser upload takes, for a message that has to name them.</summary>
+    public static IReadOnlyCollection<string> AcceptedForUpload { get; } =
+        [.. Extensions.Where(e => !NeedSidecar.Contains(e)).Order()];
 }

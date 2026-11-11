@@ -171,7 +171,7 @@ public sealed class ImportCandidateService(
         var geometries = await db.GeofileFeatures.AsNoTracking()
             .Where(f => f.GeofileId == geofileId && ids.Contains(f.Id))
             .Select(f => new { f.Id, f.Geom })
-            .ToDictionaryAsync(f => f.Id, f => f.Geom, ct);
+            .ToDictionaryAsync(f => f.Id, f => SinglePartOf(f.Geom), ct);
 
         var points = page
             .Select(c => (c.SourceId, Point: geometries.GetValueOrDefault(c.SourceId) as Point))
@@ -187,6 +187,15 @@ public sealed class ImportCandidateService(
                 duplicates.GetValueOrDefault(c.SourceId)))
         ];
     }
+
+    /// <summary>
+    /// A single-part multi-point read as the point it holds. Several writers store one waypoint
+    /// that way; the registry's point kinds want a point, and unwrapping is lossless. The preview
+    /// and the confirmation both read a row's geometry through here, so a waypoint that is
+    /// measured against the registry for duplicates is the same point the confirmation creates.
+    /// </summary>
+    public static Geometry SinglePartOf(Geometry geometry) =>
+        geometry is MultiPoint { NumGeometries: 1 } multi ? multi.GetGeometryN(0) : geometry;
 
     // ---------- classification ----------
 

@@ -65,7 +65,10 @@ internal static class QueuedJob
                 s => s
                     .SetProperty(j => j.Status, ProcessingJobStatus.Running)
                     .SetProperty(j => j.StartedAt, DateTimeOffset.UtcNow)
-                    .SetProperty(j => j.Attempts, j => j.Attempts + 1),
+                    .SetProperty(j => j.Attempts, j => j.Attempts + 1)
+                    // Held for longer than any test runs: a host that keeps its worker sweeps the
+                    // queue, and a Running row with no live lease is one it would take back.
+                    .SetProperty(j => j.LeaseExpiresAt, DateTimeOffset.UtcNow.AddHours(1)),
                 ct);
 
         if (claimed == 0)
@@ -96,13 +99,15 @@ internal static class QueuedJob
         catch (Exception e)
         {
             job.Status = ProcessingJobStatus.Failed;
-            job.Error = e.Message;
+            job.Error = e.Message.Length <= 4000 ? e.Message : e.Message[..4000];
             job.CompletedAt = DateTimeOffset.UtcNow;
+            job.LeaseExpiresAt = null;
             await db.SaveChangesAsync(ct);
             throw;
         }
 
         job.CompletedAt = DateTimeOffset.UtcNow;
+        job.LeaseExpiresAt = null;
         await db.SaveChangesAsync(ct);
         return job;
     }

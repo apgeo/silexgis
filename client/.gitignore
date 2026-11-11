@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Movies and frames made by the presentation recorder
+presenter-output

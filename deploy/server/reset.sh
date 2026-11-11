@@ -19,6 +19,7 @@
 #   SILEXGIS_BASELINE_DIR   default /var/backups/silexgis-baseline
 #   SILEXGIS_BACKUP_DIR     default /var/backups/silexgis   (pre-reset safety copy)
 #   SILEXGIS_HEALTH_TIMEOUT default 300 seconds to wait for /health/ready after a reset
+#   SILEXGIS_UPDATE_LOCK    default /tmp/silexgis-update.lock   shared with update.sh
 set -euo pipefail
 
 APP_DIR="${SILEXGIS_APP_DIR:-/opt/silexgis}"
@@ -53,7 +54,7 @@ fi
 
 # Share the updater's lock: a reset in the middle of an update (or the other way round)
 # would interleave two different writers of the same database.
-exec 9>"/tmp/silexgis-update.lock"
+exec 9>"${SILEXGIS_UPDATE_LOCK:-/tmp/silexgis-update.lock}"
 flock -w 600 9 || fail "could not take the update lock -- is an update or reset running?"
 
 # Compose's own error is left on screen: a compose that cannot run at all must not be reported

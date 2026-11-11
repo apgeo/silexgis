@@ -30,7 +30,7 @@ From here:
 | **New cave** | Opens an empty cave form |
 | **Show these on the map** | Opens the map drawing the caves this filter finds |
 | **Select all found (n) on the map** | Makes the result, up to 200 (or the number your installation set), the map's selection |
-| **Export** | GeoJSON, GPX, KML, CSV or zipped shapefile — and [KarstLink](#sharing-caves-in-the-interchange-format) — of everything the filter finds, not only this page |
+| **Export** | GeoJSON, GPX, KML, CSV or zipped shapefile — and [KarstLink](#sharing-caves-in-the-interchange-format) — of everything the filter finds, not only this page; each row starts with the cave's id, and the export is [recorded](history-and-audit.md#map-format-exports) |
 | **Deleted caves and features** | [Puts back](#deleted-caves-and-features) what you may restore |
 
 Opened from the map's **List the caves in view**, the registry is cut to what the map showed,

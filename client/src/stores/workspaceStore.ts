@@ -5,6 +5,10 @@ import type { FilterDocument } from '../filters/types.ts';
 import type { FilterLayerSpec } from '../map/filterLayerList.ts';
 import type { Scene3DSurfaceMode } from '../scene3d/scene3dEngine.ts';
 import type { SurveyWalls3DMode } from '../scene3d/surveyMeshesInView3d.ts';
+import {
+  DEFAULT_ESTIMATED_PASSAGES_DISPLAY,
+  type EstimatedPassagesDisplay,
+} from '../scene3d/estimatedPassages.ts';
 
 // Workspace UI state: serializable, carries references (ids),
 // never entity payloads — panels fetch their own data through TanStack Query.
@@ -194,6 +198,13 @@ interface WorkspaceState {
   scene3dWallsMode: SurveyWalls3DMode;
   setScene3dWallsMode: (mode: SurveyWalls3DMode) => void;
   /**
+   * Whether the 3D scene draws the passages a survey's reading built at an estimated size, and in
+   * which colour: as built, the same as the walls, or a chosen one. Shown, in their built colour,
+   * until the viewer says otherwise. Session state for the same reason as the walls' mode.
+   */
+  scene3dEstimatedPassages: EstimatedPassagesDisplay;
+  setScene3dEstimatedPassages: (display: EstimatedPassagesDisplay) => void;
+  /**
    * Whether the 3D scene's camera and the flat map's view move together. On by default: two views
    * showing different places is the surprising state, not the useful one.
    *
@@ -376,6 +387,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setScene3dSurfaceMode: (scene3dSurfaceMode) => set({ scene3dSurfaceMode }),
   scene3dWallsMode: 'selected',
   setScene3dWallsMode: (scene3dWallsMode) => set({ scene3dWallsMode }),
+  scene3dEstimatedPassages: DEFAULT_ESTIMATED_PASSAGES_DISPLAY,
+  setScene3dEstimatedPassages: (scene3dEstimatedPassages) => set({ scene3dEstimatedPassages }),
   scene3dCoupledToMap: true,
   setScene3dCoupledToMap: (scene3dCoupledToMap) => set({ scene3dCoupledToMap }),
   baseOpacity: {},

@@ -158,6 +158,22 @@ public sealed class TripListFacetTests : IAsyncLifetime, IDisposable, IClassFixt
     }
 
     /// <summary>
+    /// What somebody types is searched for as typed: a "%" in the search is a percent sign in the
+    /// title, not a wildcard that also finds the trip whose title has a digit in its place.
+    /// </summary>
+    [Fact]
+    public async Task A_percent_sign_in_the_search_matches_only_a_title_that_has_one()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var percent = await CreateTripAsync($"50% {marker}", surveyTypeId, "authenticated");
+        _ = await CreateTripAsync($"500 {marker}", surveyTypeId, "authenticated");
+
+        var page = await ListAsync(owner, $"search={Uri.EscapeDataString($"50% {marker}")}");
+        page.GetProperty("items").EnumerateArray().Select(x => x.GetProperty("id").GetGuid())
+            .ShouldBe([percent]);
+    }
+
+    /// <summary>
     /// A roster row is one person doing one job, so a leader who also surveyed is two rows and
     /// one person who went once.
     /// </summary>

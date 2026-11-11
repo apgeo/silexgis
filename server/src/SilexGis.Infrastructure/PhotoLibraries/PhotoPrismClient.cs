@@ -1169,6 +1169,12 @@ public sealed class PhotoPrismClient(
 
             case PictureVerdict.Unauthorized:
                 response.Dispose();
+
+                // The picture credential is the likelier one to have gone stale — the library mints
+                // a new one when it restarts — so it is dropped and the next picture request asks
+                // for a fresh one, rather than every later picture reusing the refused one until
+                // some unrelated call happens to replace it. Still one attempt per request.
+                previewToken = null;
                 throw new PhotoLibraryException(
                     PhotoLibraryException.UnauthorizedCode,
                     "The photo library did not accept this installation's credential for a picture.");
@@ -1178,6 +1184,13 @@ public sealed class PhotoPrismClient(
                 throw new PhotoLibraryException(
                     PhotoLibraryException.RejectedCode,
                     "The photo library does not serve the rendering this installation asked for.");
+
+            case PictureVerdict.Failed:
+                var failedStatus = (int)response.StatusCode;
+                response.Dispose();
+                throw new PhotoLibraryException(
+                    PhotoLibraryException.UnavailableCode,
+                    $"The photo library could not serve this picture (it answered {failedStatus}).");
 
             default:
                 var status = (int)response.StatusCode;
@@ -1251,8 +1264,12 @@ public sealed class PhotoPrismClient(
             return false;
         }
 
-        var uid = properties.TryGetProperty("UID", out var u) ? u.GetString() : null;
-        var hash = properties.TryGetProperty("Hash", out var h) ? h.GetString() : null;
+        // Read only as strings: a number or an object here would throw from GetString and fail the
+        // whole viewport, where the rule for an unreadable row is that the row is dropped.
+        var uid = properties.TryGetProperty("UID", out var u) && u.ValueKind == JsonValueKind.String
+            ? u.GetString() : null;
+        var hash = properties.TryGetProperty("Hash", out var h) && h.ValueKind == JsonValueKind.String
+            ? h.GetString() : null;
 
         // Both end up in a request path, so both are checked against what this application is
         // willing to send rather than passed on as written.
@@ -1263,7 +1280,7 @@ public sealed class PhotoPrismClient(
 
         // A type is present only when the picture is not a plain image, so its absence is not a
         // statement that it is one — which is why the kind stays nullable all the way to the balloon.
-        LibraryPhotoKind? kind = properties.TryGetProperty("Type", out var t)
+        LibraryPhotoKind? kind = properties.TryGetProperty("Type", out var t) && t.ValueKind == JsonValueKind.String
             ? string.Equals(t.GetString(), "video", StringComparison.OrdinalIgnoreCase)
                 ? LibraryPhotoKind.Video
                 : null

@@ -21,7 +21,7 @@ namespace SilexGis.Api.Auth;
 /// that uses it asks for a cooldown rather than reaching into the account store itself.
 /// </para>
 /// </remarks>
-public sealed class AdminTestSendThrottle(UserManager<SilexGisUser> userManager)
+public sealed class AdminTestSendThrottle(UserManager<SilexGisUser> userManager, TimeProvider clock)
 {
     /// <summary>Whether this operator sent a test text too recently to send another.</summary>
     public async Task<bool> TooSoonAsync(Guid operatorId)
@@ -29,7 +29,7 @@ public sealed class AdminTestSendThrottle(UserManager<SilexGisUser> userManager)
         var account = await userManager.FindByIdAsync(operatorId.ToString());
         return account is not null
             && await SendThrottle.TooSoonAsync(
-                userManager, account, TwoFactorMethod.Sms, SendThrottle.AdminTestInterval, SendThrottle.AdminTest);
+                userManager, account, TwoFactorMethod.Sms, SendThrottle.AdminTestInterval, SendThrottle.AdminTest, clock);
     }
 
     /// <summary>
@@ -42,7 +42,7 @@ public sealed class AdminTestSendThrottle(UserManager<SilexGisUser> userManager)
         var account = await userManager.FindByIdAsync(operatorId.ToString());
         if (account is not null)
         {
-            await SendThrottle.MarkSentAsync(userManager, account, TwoFactorMethod.Sms, SendThrottle.AdminTest);
+            await SendThrottle.MarkSentAsync(userManager, account, TwoFactorMethod.Sms, SendThrottle.AdminTest, clock);
         }
     }
 }

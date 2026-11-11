@@ -10,6 +10,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Scans;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
@@ -60,6 +61,39 @@ public sealed record SurveyModelDto(
     double? AnchorLongitude,
     double? AnchorLatitude,
     double? AnchorHeightM,
+    /// <summary>
+    /// For a point cloud: the compass bearing its tiles' +Y axis points along, degrees clockwise
+    /// from true north, which a scene turns the tiles by about the anchor. Null while the scan is
+    /// unplaced, and always null for a line plot or a wall mesh, whose turn was written into the
+    /// model itself. Published under the same rule as the anchor: the whole record is withheld
+    /// from callers without the cave's exact location.
+    /// </summary>
+    double? PlacementHeadingDeg,
+    /// <summary>
+    /// For a point cloud: how the placement came about — by hand, from the coordinate system the
+    /// file named, fitted to control points, or from the recording's satellite fixes. Null while
+    /// unplaced.
+    /// </summary>
+    ScanPlacementSource? PlacementSource,
+    /// <summary>
+    /// For a point cloud: the small tilts a control-point fit found, degrees — the first raises
+    /// the tiles' +X end, the second their +Y end; composed roll, then pitch, then heading. Null
+    /// for a level placement.
+    /// </summary>
+    double? PlacementPitchDeg,
+    double? PlacementRollDeg,
+    /// <summary>
+    /// For a point cloud placed by control points: the pairs, each one's residual, and their
+    /// root mean square. Null for every other placement.
+    /// </summary>
+    SurveyModelControlPointsDto? PlacementControlPoints,
+    /// <summary>
+    /// For a point cloud once tiled: a signed address of its tileset's root, good for a session,
+    /// so the scan can be opened in its own frame — to look at it, or to pick the points it is
+    /// placed by. The tiles carry no coordinates, so this follows the model's own reading rule,
+    /// not the exact-location one. Null for every other model and for a scan not yet tiled.
+    /// </summary>
+    string? TilesetUrl,
     int? TriangleCount,
     /// <summary>
     /// How many bytes the drawable mesh is, so a viewer can see how big it is before it arrives;
@@ -73,6 +107,48 @@ public sealed record SurveyModelDto(
     /// survey lost detail before it arrived. Re-exporting about a local origin recovers it.
     /// </summary>
     bool SourcePrecisionLost,
+    /// <summary>
+    /// The projected coordinate system the file was declared in; null for a file declared as
+    /// metres about a point, or one left to name its own system.
+    /// </summary>
+    int? SourceEpsg,
+    /// <summary>
+    /// How far from its cave the file landed as declared, when that was far enough to doubt the
+    /// declaration; null when it landed near its cave or could not be placed at all.
+    /// </summary>
+    double? PlacementOffByKm,
+    /// <summary>
+    /// A projected system that places the file at its cave where the declared one does not, found
+    /// by trying the grids a survey there is commonly written in. Offered, never applied: the
+    /// person who knows the survey decides, through the placement route.
+    /// </summary>
+    int? SuggestedSourceEpsg,
+    /// <summary>
+    /// The file's numbers are metres about a point although a projected system was declared, so
+    /// declaring it as local is what would place it.
+    /// </summary>
+    bool SuggestsLocalMetres,
+    /// <summary>How far from its cave the file would land as suggested, when that is known.</summary>
+    double? SuggestedOffByKm,
+    /// <summary>
+    /// For a line plot: whether the passages the file gives no size for are drawn as tubes of an
+    /// estimated size, and that size and colour. The tubes are sizes nobody measured; they are
+    /// built apart from the walls so a viewer can tell them apart and turn them off.
+    /// </summary>
+    bool EstimatePassages,
+    double EstimatedPassageDiameterM,
+    string EstimatedPassageColor,
+    /// <summary>
+    /// For a line plot once read: how many metres, and how many legs, of passage have no size in
+    /// the file — no drawn wall near them and no measured cross-section. Null before a reading.
+    /// </summary>
+    double? UnsizedPassageM,
+    int? UnsizedLegCount,
+    /// <summary>
+    /// How many legs the last reading drew at the estimated size; zero when it was not asked to or
+    /// could not within the mesh's size limit, null before a reading.
+    /// </summary>
+    int? EstimatedLegCount,
     /// <summary>
     /// How many legs of the traverse could not be attached to a station, and how many stations
     /// stood where another already did and became one node. Null until a line plot has been read.
@@ -174,6 +250,49 @@ public sealed record SurveyModelUpdateRequest(
     string? Description,
     DateOnly? SurveyedAt);
 
+/// <summary>
+/// Where a stored survey file sits, said again: a projected coordinate system, or a position for
+/// the file's own zero point; and in either case the altitude its zero level is at.
+/// </summary>
+public sealed record SurveyModelPlacementRequest(
+    int? SourceEpsg,
+    double? OriginLongitude,
+    double? OriginLatitude,
+    double OriginHeightM);
+
+public sealed class SurveyModelPlacementRequestValidator : AbstractValidator<SurveyModelPlacementRequest>
+{
+    public SurveyModelPlacementRequestValidator()
+    {
+        RuleFor(x => x.SourceEpsg).GreaterThan(0).When(x => x.SourceEpsg is not null);
+        RuleFor(x => x.OriginLongitude).InclusiveBetween(-180, 180).When(x => x.SourceEpsg is null);
+        RuleFor(x => x.OriginLatitude).InclusiveBetween(-90, 90).When(x => x.SourceEpsg is null);
+        RuleFor(x => x.OriginLongitude).NotNull().When(x => x.SourceEpsg is null);
+        RuleFor(x => x.OriginLatitude).NotNull().When(x => x.SourceEpsg is null);
+        RuleFor(x => x.OriginHeightM).InclusiveBetween(-500, 9000);
+    }
+}
+
+/// <summary>
+/// Whether a line plot's passages without a measured size are drawn at an estimated one, and at
+/// which diameter and in which colour.
+/// </summary>
+public sealed record SurveyModelEstimatedPassagesRequest(bool Enabled, double DiameterM, string Color);
+
+public sealed class SurveyModelEstimatedPassagesRequestValidator : AbstractValidator<SurveyModelEstimatedPassagesRequest>
+{
+    /// <summary>The narrowest and widest estimated passage, in metres: a squeeze to a large gallery.</summary>
+    public const double SmallestDiameterM = 0.2;
+
+    public const double LargestDiameterM = 30;
+
+    public SurveyModelEstimatedPassagesRequestValidator()
+    {
+        RuleFor(x => x.DiameterM).InclusiveBetween(SmallestDiameterM, LargestDiameterM);
+        RuleFor(x => x.Color).NotNull().Matches("^#[0-9a-fA-F]{6}$");
+    }
+}
+
 public sealed class SurveyModelUpdateRequestValidator : AbstractValidator<SurveyModelUpdateRequest>
 {
     public SurveyModelUpdateRequestValidator()
@@ -202,8 +321,10 @@ public sealed class SurveyModelUpdateRequestValidator : AbstractValidator<Survey
 internal sealed record UploadDeclaration(int? SourceEpsg, Point? Origin, double? OriginHeightM)
 {
     /// <summary>Deepest and highest a cave entrance can plausibly sit, in metres.</summary>
-    private const double LowestHeightM = -500;
-    private const double HighestHeightM = 9000;
+    // The same bounds a point cloud's placement is held to: one rule for the altitude a model's
+    // zero plane may be declared at, whichever kind of model is being placed.
+    private const double LowestHeightM = SilexGis.Domain.Scans.ScanPlacement.LowestHeightM;
+    private const double HighestHeightM = SilexGis.Domain.Scans.ScanPlacement.HighestHeightM;
 
     /// <summary>
     /// The declaration a wall mesh must carry. Every field is demanded, because eighty bytes of
@@ -323,12 +444,22 @@ public static class SurveyModelEndpoints
         api.MapPut("/survey-models/{id:guid}/current", MakeCurrentAsync)
             .WithTags("SurveyModels")
             .WithSummary("Makes this the model its cave is represented by, among the cave's models of the same kind (Write on the cave).");
+        api.MapPut("/survey-models/{id:guid}/placement", ChangePlacementAsync)
+            .WithValidation<SurveyModelPlacementRequest>()
+            .WithTags("SurveyModels")
+            .WithSummary("Says again where the stored file sits — a projected coordinate system, or a position for its zero point — and queues a reading under that answer (Write on the cave). Refused while a reading is queued or running.");
+        api.MapPut("/survey-models/{id:guid}/estimated-passages", ChangeEstimatedPassagesAsync)
+            .WithValidation<SurveyModelEstimatedPassagesRequest>()
+            .WithTags("SurveyModels")
+            .WithSummary("Says whether a line plot's passages without a measured size are drawn at an estimated size, and which size and colour, and queues a reading that builds them (Write on the cave). Refused while a reading is queued or running.");
         api.MapPost("/survey-models/{id:guid}/reading", ReadAgainAsync)
             .WithTags("SurveyModels")
             .WithSummary("Queues another reading of the model's stored file (Write on the cave). Refused while a reading is queued or running.");
         api.MapDelete("/survey-models/{id:guid}", DeleteAsync)
             .WithTags("SurveyModels")
             .WithSummary("Deletes the survey model (Write on the cave); the stored file is kept. Refused while a trip's live tracking is armed on it.");
+        api.MapSurveyModelPlacementEndpoints();
+        api.MapSurveyModelCentrelineEndpoints();
 
         return api;
     }
@@ -743,7 +874,8 @@ public static class SurveyModelEndpoints
             return ApiProblems.Forbidden();
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.SurveyModels, model.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.SurveyModels, model.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -752,6 +884,7 @@ public static class SurveyModelEndpoints
         model.Description = request.Description;
         model.SurveyedAt = request.SurveyedAt;
         await db.SaveChangesAsync(ct);
+        await hold.AnswerAsync(ct);
         return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
     }
 
@@ -893,6 +1026,144 @@ public static class SurveyModelEndpoints
 
         // Asked of the database and not of the row loaded above: two requests arriving together
         // both loaded a finished model, and only one of them may queue the reading.
+        switch (await SurveyModelReading.QueueAgainAsync(db, model, ctx.UserId, ct))
+        {
+            case SurveyReadingRequest.AlreadyInProgress:
+                return ApiProblems.Conflict(
+                    "survey_model.reading_in_progress",
+                    "This model is already being read. Wait for that reading to finish before asking for another.");
+            case SurveyReadingRequest.NoReading:
+                return ApiProblems.Conflict(
+                    "survey_model.no_reading",
+                    "A point cloud is not read; it is tiled by its upload's run. Run the upload again instead.");
+        }
+
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
+    }
+
+    /// <summary>
+    /// Replaces the declaration a model was uploaded with and reads its stored file again under
+    /// the new one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is how a survey declared in the wrong coordinates is put right without being uploaded
+    /// again: the file is already stored, and only the answer about what its numbers mean was
+    /// wrong. The gates are those of reading it again, for the same reasons.
+    /// </para>
+    /// <para>
+    /// The new declaration is written in the same commit as the queued reading, so a reading can
+    /// only ever run under the answer that asked for it. What an earlier reading suggested is
+    /// cleared with it: it was advice about the declaration being replaced, and the reading this
+    /// queues checks the new one afresh.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> ChangePlacementAsync(
+        Guid id,
+        SurveyModelPlacementRequest request,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IAccessService access,
+        FeatureProtection protection,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
+        var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
+        if (model is null || cave is null
+            || !await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct))
+        {
+            return ApiProblems.NotFound("survey_model.not_found");
+        }
+
+        if (!await SurveyModelAccess.WritableAsync(access, ctx, cave, ct))
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        var (declaration, problem) = UploadDeclaration.ReadRequired(
+            request.SourceEpsg, request.OriginLongitude, request.OriginLatitude, request.OriginHeightM);
+        if (problem is not null)
+        {
+            return problem;
+        }
+
+        model.SourceEpsg = declaration!.SourceEpsg;
+        // A projected file's anchor is derived from its own coordinates by the reading, so the
+        // anchor the old declaration produced is cleared rather than left to say where the file
+        // is under an answer that no longer stands.
+        model.Anchor = declaration.Origin;
+        model.AnchorHeightM = declaration.OriginHeightM;
+        SurveyModelPlacement.Record(model, advice: null);
+
+        // Saved by the queueing, in its transaction: a refusal leaves the row as it was.
+        if (await SurveyModelReading.QueueAgainAsync(db, model, ctx.UserId, ct)
+            == SurveyReadingRequest.AlreadyInProgress)
+        {
+            return ApiProblems.Conflict(
+                "survey_model.reading_in_progress",
+                "This model is already being read. Wait for that reading to finish before asking for another.");
+        }
+
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct), await SurveyModelReading.OutstandingAsync(db, ct)));
+    }
+
+    /// <summary>
+    /// Turns the estimated passages of a line plot on or off, or changes their size or colour, and
+    /// reads the stored file again so its mesh is built that way.
+    /// </summary>
+    /// <remarks>
+    /// Built into the mesh rather than drawn by the viewer, because which legs have no size is a
+    /// question about the whole survey — its drawn walls and its measured cross-sections — that
+    /// only the reading answers.
+    /// </remarks>
+    private static async Task<Results<Ok<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> ChangeEstimatedPassagesAsync(
+        Guid id,
+        SurveyModelEstimatedPassagesRequest request,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IAccessService access,
+        FeatureProtection protection,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
+        var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
+        if (model is null || cave is null
+            || !await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct))
+        {
+            return ApiProblems.NotFound("survey_model.not_found");
+        }
+
+        if (!await SurveyModelAccess.WritableAsync(access, ctx, cave, ct))
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        if (!SurveyModelKinds.FormatsOf(SurveyModelKind.LinePlot).Contains(model.Format))
+        {
+            return ApiProblems.BadRequest(
+                "survey_model.not_a_line_plot",
+                "Only a survey line plot has passages whose size can be estimated.");
+        }
+
+        model.EstimatePassages = request.Enabled;
+        model.EstimatedPassageDiameterM = request.DiameterM;
+        model.EstimatedPassageColor = request.Color.ToLowerInvariant();
+
+        // Saved by the queueing, in its transaction: a refusal leaves the row as it was.
         if (await SurveyModelReading.QueueAgainAsync(db, model, ctx.UserId, ct)
             == SurveyReadingRequest.AlreadyInProgress)
         {
@@ -928,7 +1199,8 @@ public static class SurveyModelEndpoints
             return ApiProblems.Forbidden();
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.SurveyModels, model.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.SurveyModels, model.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -1016,14 +1288,12 @@ public static class SurveyModelEndpoints
         // The mark moves on to the newest model of the kind that is left, so the cave stays
         // represented by something named rather than by a fallback rule. Promotion is a separate
         // statement after the removal is saved, for the per-statement index check, and the two
-        // share a transaction so a failure between them leaves the cave with its old model.
-        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
-        {
-            db.SurveyModels.Remove(model);
-            await db.SaveChangesAsync(ct);
-            await SurveyModelCurrency.PromoteSuccessorAsync(db, model.CaveFeatureId, model.Format, ct);
-            await transaction.CommitAsync(ct);
-        }
+        // share the transaction the model's hold opened, so a failure between them — or anywhere
+        // in the removal above — leaves the cave with its old model.
+        db.SurveyModels.Remove(model);
+        await db.SaveChangesAsync(ct);
+        await SurveyModelCurrency.PromoteSuccessorAsync(db, model.CaveFeatureId, model.Format, ct);
+        await hold.CommitAsync(ct);
 
         return TypedResults.NoContent();
     }
@@ -1045,7 +1315,7 @@ public static class SurveyModelEndpoints
         return model is null ? (null, null) : (model, await CaveFeatureAsync(db, model.CaveFeatureId, ct));
     }
 
-    private static Task<Feature?> CaveFeatureAsync(SilexGisDbContext db, Guid caveFeatureId, CancellationToken ct) =>
+    internal static Task<Feature?> CaveFeatureAsync(SilexGisDbContext db, Guid caveFeatureId, CancellationToken ct) =>
         db.Features.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == caveFeatureId && f.Kind == FeatureKind.Cave, ct);
 
@@ -1061,7 +1331,7 @@ public static class SurveyModelEndpoints
     /// The byte length of each model's converted mesh, keyed by the converted file's id, for the
     /// models that have one. One query for a whole list rather than one per row.
     /// </summary>
-    private static async Task<IReadOnlyDictionary<Guid, long>> MeshSizesAsync(
+    internal static async Task<IReadOnlyDictionary<Guid, long>> MeshSizesAsync(
         SilexGisDbContext db, IReadOnlyList<SurveyModel> models, CancellationToken ct)
     {
         var converted = models.Where(m => m.ConvertedFileId is not null).Select(m => m.ConvertedFileId!.Value).ToList();
@@ -1075,7 +1345,7 @@ public static class SurveyModelEndpoints
             .ToDictionaryAsync(f => f.Id, f => f.SizeBytes, ct);
     }
 
-    private static SurveyModelDto ToDto(
+    internal static SurveyModelDto ToDto(
         this SurveyModel m,
         IFileAccessTokenService tokens,
         IReadOnlyDictionary<Guid, long>? meshSizes,
@@ -1095,9 +1365,28 @@ public static class SurveyModelEndpoints
         m.Anchor?.X,
         m.Anchor?.Y,
         m.AnchorHeightM,
+        m.PlacementHeadingDeg,
+        m.PlacementSource,
+        m.PlacementPitchDeg,
+        m.PlacementRollDeg,
+        SurveyModelControlPointsDto.Of(ScanControlRecord.FromJson(m.PlacementControlPoints)),
+        m.ConvertedFileId is { } tiles && SurveyModelKinds.FormatsOf(SurveyModelKind.PointCloud).Contains(m.Format)
+            ? SurveyTileAddresses.Root(tokens, m.Id, tiles)
+            : null,
         m.TriangleCount,
         m.ConvertedFileId is { } sized && meshSizes is not null && meshSizes.TryGetValue(sized, out var bytes) ? bytes : null,
         m.SourcePrecisionLost,
+        m.SourceEpsg,
+        m.PlacementOffByKm,
+        m.SuggestedSourceEpsg,
+        m.SuggestsLocalMetres,
+        m.SuggestedOffByKm,
+        m.EstimatePassages,
+        m.EstimatedPassageDiameterM,
+        m.EstimatedPassageColor,
+        m.UnsizedPassageM,
+        m.UnsizedLegCount,
+        m.EstimatedLegCount,
         m.DroppedShotCount,
         m.MergedStationCount,
         m.AnonymousStationCount,

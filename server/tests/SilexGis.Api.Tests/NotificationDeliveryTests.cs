@@ -42,8 +42,8 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
 
     /// <summary>
     /// A clock the test sets, so what the application stamps can be asserted as a value rather
-    /// than as a range. It cannot make a delivery due: that is decided by the database's own
-    /// now(), which is why rows are still backdated below.
+    /// than as a range. It is also the clock a claim judges a delivery due by — the same one that
+    /// stamped it — so a row is made due by backdating it against this clock, not the wall's.
     /// </summary>
     private readonly TestTimeProvider clock = new(DateTimeOffset.UtcNow);
 
@@ -294,8 +294,8 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
         deferred.ShouldAllBe(d => d.Status == NotificationDeliveryStatus.Deferred);
         MineSent().ShouldBeEmpty();
 
-        // Whether a delivery is due is the database's own now(), which no clock here can move,
-        // so the window is brought to us.
+        // The summary hour is tomorrow morning on this class's clock; the window is brought to
+        // the clock rather than the clock moved to it.
         await MakeDigestDueAsync();
         await RunDigestAsync();
 
@@ -390,6 +390,231 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
         itsDelivery.Error.ShouldNotBeNull();
         // The good row in the same batch still went out.
         MineSent().Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_send_that_times_out_backs_off_and_its_batch_mate_is_recorded_sent_once()
+    {
+        // The batch-mate is queued first, so it is handed over before the send that times out —
+        // the order in which a single save after the whole batch used to lose its outcome.
+        await QueueForTheManagerAsync();
+        await AddToCavingGroupAsync();
+        factory.Messages.Clear();
+
+        try
+        {
+            factory.Messages.TimeOutSendsTo = RecipientEmail;
+            await DrainAsync();
+        }
+        finally
+        {
+            factory.Messages.TimeOutSendsTo = null;
+        }
+
+        // A timeout nobody asked for is a failed send like any other: it backs off one step.
+        var timedOut = (await DeliveriesAsync()).ShouldHaveSingleItem();
+        timedOut.Status.ShouldBe(NotificationDeliveryStatus.Pending);
+        timedOut.Attempts.ShouldBe(1);
+        timedOut.Error.ShouldNotBeNullOrWhiteSpace();
+        timedOut.NotBefore.ShouldBe(clock.Now + NotificationRouting.RetryDelay(1), TimeSpan.FromMilliseconds(1));
+
+        (await DeliveriesAsync(managerId)).ShouldContain(d => d.Status == NotificationDeliveryStatus.Sent);
+        await MakeDueAsync(managerId);
+        await DrainAsync();
+        BatchMateSent().Count.ShouldBe(1, "the batch-mate's outcome was recorded, so it is not sent again");
+    }
+
+    [Fact]
+    public async Task A_send_that_throws_outside_the_transport_backs_off_without_taking_its_batch_mate_with_it()
+    {
+        await QueueForTheManagerAsync();
+        await AddToCavingGroupAsync();
+        await DrainRoutingAsync();
+        factory.Messages.Clear();
+
+        // A template renamed by an upgrade while a delivery was backing off: composing the message
+        // throws before any transport is asked, which is outside what the dispatcher catches.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.Notifications
+                .Where(n => n.RecipientUserId == recipientId)
+                .ExecuteUpdateAsync(s => s.SetProperty(n => n.TemplateKey, "notify.renamed-since"));
+        }
+
+        await DrainAsync();
+
+        var thrown = (await DeliveriesAsync()).ShouldHaveSingleItem();
+        thrown.Status.ShouldBe(NotificationDeliveryStatus.Pending);
+        thrown.Attempts.ShouldBe(1);
+        thrown.Error.ShouldNotBeNullOrWhiteSpace();
+        BatchMateSent().Count.ShouldBe(1);
+        (await DeliveriesAsync(managerId)).ShouldContain(d => d.Status == NotificationDeliveryStatus.Sent);
+    }
+
+    [Fact]
+    public async Task A_delivery_whose_attempts_never_recorded_an_outcome_is_given_up_on_at_the_ceiling()
+    {
+        // A send that takes the pass down with it records nothing, and the lease brings the row
+        // back. Each of those sends still counted its attempt as it started, so the ceiling
+        // reaches a row that never once got as far as being failed.
+        await AddToCavingGroupAsync();
+        await DrainRoutingAsync();
+        factory.Messages.Clear();
+
+        for (var attempt = 0; attempt < NotificationRouting.MaxAttempts; attempt++)
+        {
+            await PassCancelledAtTheirSendAsync();
+            (await DeliveriesAsync()).ShouldHaveSingleItem().Attempts.ShouldBe(attempt + 1);
+            await MakeDueAsync();
+        }
+
+        await DrainAsync();
+
+        var given = (await DeliveriesAsync()).ShouldHaveSingleItem();
+        given.Status.ShouldBe(NotificationDeliveryStatus.Dead);
+        given.Error.ShouldNotBeNullOrWhiteSpace();
+        given.Attempts.ShouldBe(NotificationRouting.MaxAttempts, "the row given up on was not sent once more");
+        MineSent().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_pass_that_stops_on_one_send_charges_no_attempt_to_the_rows_it_never_reached()
+    {
+        // Queued in this order, so the recipient's row is the first of the batch and the manager's
+        // waits behind it — the row a pass that dies on its first send never gets to.
+        await AddToCavingGroupAsync();
+        await DrainRoutingAsync();
+        await QueueForTheManagerAsync();
+        await DrainRoutingAsync();
+        factory.Messages.Clear();
+
+        await PassCancelledAtTheirSendAsync();
+
+        (await DeliveriesAsync()).ShouldHaveSingleItem().Attempts.ShouldBe(1);
+        var waiting = (await DeliveriesAsync(managerId)).ShouldHaveSingleItem();
+        waiting.Status.ShouldBe(NotificationDeliveryStatus.Pending);
+        waiting.Attempts.ShouldBe(0, "its send never started, so it has used no attempt");
+
+        // And it is sent once its lease is over, with its whole budget still in hand.
+        await MakeDueAsync(managerId);
+        await DrainAsync();
+        var sent = (await DeliveriesAsync(managerId)).ShouldHaveSingleItem();
+        sent.Status.ShouldBe(NotificationDeliveryStatus.Sent);
+        sent.Attempts.ShouldBe(1);
+        BatchMateSent().Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_summary_whose_passes_never_record_an_outcome_is_given_up_on_at_the_ceiling()
+    {
+        await SetMailAsync("daily");
+        await AddToCavingGroupAsync();
+        await DrainAsync();
+        factory.Messages.Clear();
+
+        // Each claim of a summary counts an attempt on its rows; a pass that claims and then dies
+        // records nothing, which is what a bare claim leaves behind.
+        for (var attempt = 0; attempt < NotificationRouting.MaxAttempts; attempt++)
+        {
+            await MakeDigestDueAsync();
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await NotificationDeliverySql.ClaimDueDigestAsync(db, clock.GetUtcNow(), CancellationToken.None))
+                .ShouldNotBeEmpty();
+        }
+
+        await MakeDigestDueAsync();
+        await RunDigestAsync();
+
+        var given = (await DeliveriesAsync()).ShouldHaveSingleItem();
+        given.Status.ShouldBe(NotificationDeliveryStatus.Dead);
+        given.Error.ShouldNotBeNullOrWhiteSpace();
+        MineSent().ShouldBeEmpty("a summary given up on is not sent");
+    }
+
+    [Fact]
+    public async Task Two_summary_passes_running_at_once_send_one_recipient_one_summary()
+    {
+        await SetMailAsync("daily");
+        for (var i = 0; i < 4; i++)
+        {
+            await QueueLinkedNotificationAsync($"/features/{Guid.NewGuid()}");
+        }
+
+        await DrainAsync();
+        factory.Messages.Clear();
+        await MakeDigestDueAsync();
+        (await DeliveriesAsync()).Count.ShouldBe(4);
+
+        // Both passes are released together, each on its own scope and connection, as two workers
+        // polling the same table would be.
+        using var start = new SemaphoreSlim(0, 2);
+        var passes = Enumerable.Range(0, 2).Select(_ => Task.Run(async () =>
+        {
+            await start.WaitAsync();
+            await RunDigestAsync();
+        })).ToList();
+        start.Release(2);
+        await Task.WhenAll(passes);
+
+        MineSent().Count.ShouldBe(1, "one recipient's due summary is one message, whichever pass took it");
+        (await DeliveriesAsync()).ShouldAllBe(d => d.Status == NotificationDeliveryStatus.Sent);
+    }
+
+    [Fact]
+    public async Task A_notification_that_cannot_be_routed_is_recorded_dead_and_its_batch_mate_is_still_routed()
+    {
+        // A second host whose mail channel throws while deciding for this test's recipient, which
+        // stands in for anything about one notification that throws while routing it.
+        await using var throwing = new SilexGisApiFactory(
+            connectionString,
+            new Dictionary<string, string?> { ["Auth:RateLimitPerMinute"] = "500" },
+            services =>
+            {
+                services.AddSingleton<TimeProvider>(clock);
+                var email = services.Single(d =>
+                    d.ServiceType == typeof(INotificationChannel)
+                    && d.ImplementationType == typeof(EmailNotificationChannel));
+                services.Remove(email);
+                services.AddScoped<EmailNotificationChannel>();
+                services.AddScoped<INotificationChannel>(sp => new ThrowsDecidingFor(
+                    sp.GetRequiredService<EmailNotificationChannel>(), RecipientEmail));
+            });
+
+        await AddToCavingGroupAsync();
+        await QueueForTheManagerAsync();
+
+        await using (var scope = throwing.Services.CreateAsyncScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<NotificationDeliveryService>();
+            while (await service.RouteAsync(CancellationToken.None) > 0)
+            {
+            }
+        }
+
+        var dead = (await DeliveriesAsync()).ShouldHaveSingleItem();
+        dead.Status.ShouldBe(NotificationDeliveryStatus.Dead);
+        dead.Error.ShouldNotBeNullOrWhiteSpace();
+        (await DeliveriesAsync(managerId)).ShouldHaveSingleItem().Status
+            .ShouldBe(NotificationDeliveryStatus.Pending, "the batch-mate was routed as usual");
+    }
+
+    [Fact]
+    public async Task A_backoff_is_measured_on_the_clock_that_stamped_it()
+    {
+        // The application's clock ten minutes behind the database's. The first step of the ladder
+        // is one minute, so measured against the database the retry would already be due and the
+        // drain would climb the ladder at once.
+        clock.Now = DateTimeOffset.UtcNow.AddMinutes(-10);
+
+        await AddToCavingGroupAsync();
+        factory.Messages.Clear();
+        await DrainWithTheirSendFailingAsync();
+
+        var afterFailure = (await DeliveriesAsync()).ShouldHaveSingleItem();
+        afterFailure.Attempts.ShouldBe(1);
+        afterFailure.NotBefore.ShouldBe(clock.Now + NotificationRouting.RetryDelay(1), TimeSpan.FromMilliseconds(1));
     }
 
     [Fact]
@@ -583,8 +808,8 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
 
         var leased = (await DeliveriesAsync()).ShouldHaveSingleItem();
         leased.Status.ShouldBe(NotificationDeliveryStatus.Pending, "a lease is not a status change");
-        leased.Attempts.ShouldBe(1);
-        leased.NotBefore.ShouldBeGreaterThan(DateTimeOffset.UtcNow, "the lease hides it while a send is in flight");
+        leased.Attempts.ShouldBe(0, "no send started, so no attempt was used");
+        leased.NotBefore.ShouldBeGreaterThan(clock.Now, "the lease hides it while a send is in flight");
 
         // While the lease holds, a second worker passing by must not pick it up and send it twice.
         await DrainAsync();
@@ -1045,6 +1270,36 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
     /// whichever other test class is running — counting everything captured would be counting
     /// their mail too.
     /// </summary>
+    /// <summary>
+    /// One notification for the manager, marked so its message can be told from anything else
+    /// the manager is sent — a batch-mate for the recipient's own delivery.
+    /// </summary>
+    private async Task QueueForTheManagerAsync()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        NotificationQueue.Enqueue(
+            db,
+            managerId,
+            NotificationCategory.CavingGroupMembership,
+            MessageTemplateCatalog.NotifyPermissionGranted,
+            new Dictionary<string, string>
+            {
+                ["actorName"] = "Someone",
+                ["objectName"] = BatchMateMarker,
+                ["url"] = "http://localhost/records/1",
+            });
+        await db.SaveChangesAsync();
+    }
+
+    private string BatchMateMarker => $"Batch-mate {suffix}";
+
+    private List<SentMessage> BatchMateSent() =>
+        [.. factory.Messages.Messages.Where(m =>
+            string.Equals(m.Recipient, ManagerEmail, StringComparison.OrdinalIgnoreCase)
+            && (m.Body.Contains(BatchMateMarker, StringComparison.Ordinal)
+                || (m.Subject ?? string.Empty).Contains(BatchMateMarker, StringComparison.Ordinal)))];
+
     private List<SentMessage> MineSent() =>
         [.. factory.Messages.Messages.Where(m =>
             string.Equals(m.Recipient, RecipientEmail, StringComparison.OrdinalIgnoreCase))];
@@ -1105,7 +1360,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        return await NotificationDeliverySql.ClaimDueAsync(db, 25, CancellationToken.None);
+        return await NotificationDeliverySql.ClaimDueAsync(db, clock.GetUtcNow(), 25, CancellationToken.None);
     }
 
     /// <summary>
@@ -1119,19 +1374,15 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
     /// and leave this one delivered on the first pass.
     /// </para>
     /// <para>
-    /// The clock is brought up to date first, and that line is load-bearing. The application stamps
-    /// the retry as <em>this clock</em> plus the first step of the ladder, one minute; whether the
-    /// row is due again is decided by the database's own <c>now()</c>. The clock was set when the
-    /// class was constructed, and under a full suite on a loaded machine the users, tokens and
-    /// group of this class's setup can take longer than that minute — after which the "one minute
-    /// from now" the first failure stamps is already in the past, the drain's next pass retries at
-    /// once, and so on up the ladder until a step outruns the drift. That is how a test asserting
-    /// one attempt came to see three, in full runs only, on five occasions.
+    /// The drain loops until nothing moves, and still stops at one attempt whatever this class's
+    /// clock says, because the retry is stamped and then judged due on the same clock. It used to
+    /// be stamped on this clock and judged on the database's: once this class's setup outran the
+    /// first step of the ladder on a loaded machine, the retry was already in the database's past,
+    /// the next pass spent the second attempt, and a test asserting one attempt saw three.
     /// </para>
     /// </remarks>
     private async Task DrainWithTheirSendFailingAsync()
     {
-        clock.Now = DateTimeOffset.UtcNow;
         try
         {
             factory.Messages.FailSendsTo = RecipientEmail;
@@ -1141,6 +1392,50 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
         {
             factory.Messages.FailSendsTo = null;
         }
+    }
+
+    /// <summary>
+    /// One drain that stops when it reaches this test's recipient's send — the host shutting down
+    /// in the middle of a pass. The cancellation leaves the drain, as it does the worker's loop.
+    /// </summary>
+    private async Task PassCancelledAtTheirSendAsync()
+    {
+        using var pass = new CancellationTokenSource();
+        try
+        {
+            factory.Messages.CancelPassAt = (RecipientEmail, pass);
+            await using var scope = factory.Services.CreateAsyncScope();
+            await Should.ThrowAsync<OperationCanceledException>(() => scope.ServiceProvider
+                .GetRequiredService<NotificationDeliveryService>()
+                .RunOnceAsync(pass.Token));
+        }
+        finally
+        {
+            factory.Messages.CancelPassAt = null;
+        }
+    }
+
+    /// <summary>The mail channel, except that it throws while deciding for one address.</summary>
+    private sealed class ThrowsDecidingFor(INotificationChannel inner, string address) : INotificationChannel
+    {
+        public NotificationChannel Channel => inner.Channel;
+
+        public NotificationChannelKind Kind => inner.Kind;
+
+        public bool Carries(MessageTemplateDefinition template) => inner.Carries(template);
+
+        public ValueTask<bool> IsUsableAsync(CancellationToken ct) => inner.IsUsableAsync(ct);
+
+        public bool CanReach(SilexGisUser recipient) => inner.CanReach(recipient);
+
+        public NotificationRoute Decide(SilexGisUser recipient, NotificationChannelChoice choice) =>
+            string.Equals(recipient.Email, address, StringComparison.OrdinalIgnoreCase)
+                ? throw new InvalidOperationException("Simulated routing fault.")
+                : inner.Decide(recipient, choice);
+
+        public Task<MessageResult> SendAsync(
+            SilexGisUser recipient, string templateKey, IReadOnlyDictionary<string, string> values, CancellationToken ct) =>
+            inner.SendAsync(recipient, templateKey, values, ct);
     }
 
     private async Task<int> DrainAsync()
@@ -1169,20 +1464,21 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
-    /// The only way to make a delivery due. Whether one is claimable is decided by the database's
-    /// own now(), so the clock this class injects cannot reach it — backdating the row can.
+    /// Brings a delivery's due time to just before this class's clock, which is what a claim
+    /// judges it by — rather than moving the clock, which would also move every stamp after it.
     /// </summary>
     private Task MakeDigestDueAsync() => BackdateAsync(NotificationDeliveryStatus.Deferred);
 
-    private Task MakeDueAsync() => BackdateAsync(NotificationDeliveryStatus.Pending);
+    private Task MakeDueAsync(Guid? userId = null) => BackdateAsync(NotificationDeliveryStatus.Pending, userId);
 
-    private async Task BackdateAsync(NotificationDeliveryStatus status)
+    private async Task BackdateAsync(NotificationDeliveryStatus status, Guid? userId = null)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var whose = userId ?? recipientId;
         await db.NotificationDeliveries
-            .Where(d => d.RecipientUserId == recipientId && d.Status == status)
-            .ExecuteUpdateAsync(s => s.SetProperty(d => d.NotBefore, DateTimeOffset.UtcNow.AddMinutes(-1)));
+            .Where(d => d.RecipientUserId == whose && d.Status == status)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.NotBefore, clock.Now.AddMinutes(-1)));
     }
 
     /// <summary>This test's recipient's own inbox — what happened to them, whatever was sent.</summary>
@@ -1197,12 +1493,13 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>What is actually leaving, or has left, the system for them.</summary>
-    private async Task<List<NotificationDelivery>> DeliveriesAsync()
+    private async Task<List<NotificationDelivery>> DeliveriesAsync(Guid? userId = null)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var whose = userId ?? recipientId;
         return await db.NotificationDeliveries.AsNoTracking()
-            .Where(d => d.RecipientUserId == recipientId)
+            .Where(d => d.RecipientUserId == whose)
             .OrderBy(d => d.Id)
             .ToListAsync();
     }

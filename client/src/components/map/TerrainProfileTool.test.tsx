@@ -68,6 +68,30 @@ describe('TerrainProfileTool', () => {
     expect(screen.getByTestId('terrain-profile-tool').textContent).toContain('120.0 m');
   });
 
+  it('says the request failed, and draws nothing, when the route answers with an error', () => {
+    state.isError = true;
+    render(<TerrainProfileTool />);
+    const panel = screen.getByTestId('terrain-profile-tool');
+    expect(panel.textContent).toContain("The profile could not be read.");
+    expect(screen.queryByTestId('chart-terrain-profile')).toBeNull();
+  });
+
+  it('shows it is working, and draws nothing yet, while the profile is on its way', () => {
+    state.isPending = true;
+    render(<TerrainProfileTool />);
+    expect(screen.getByTestId('terrain-profile-tool').querySelector('.ant-spin')).not.toBeNull();
+    expect(screen.queryByTestId('chart-terrain-profile')).toBeNull();
+  });
+
+  it('says no terrain has been built rather than that the line is outside it', () => {
+    state.data = { hasTerrain: false, lengthM: 10, readCount: 0, lowestM: null, highestM: null, ascentM: 0, descentM: 0, samples: [] };
+    render(<TerrainProfileTool />);
+    const text = screen.getByTestId('terrain-profile-tool').textContent;
+    expect(text).toContain("No elevation model has been built on thi");
+    expect(text).not.toMatch(/does not reach/);
+    expect(screen.queryByTestId('chart-terrain-profile')).toBeNull();
+  });
+
   it('says the elevation data does not reach a line rather than drawing a flat one', () => {
     state.data = { hasTerrain: true, lengthM: 10, readCount: 0, lowestM: null, highestM: null, ascentM: 0, descentM: 0, samples: [] };
     render(<TerrainProfileTool />);

@@ -65,6 +65,15 @@ public static class NotificationTargetPolicy
                 + "read rule (the uploader, or the right to read the review queue) has no home among "
                 + "the protected rows a target is decided against. The message names nothing the "
                 + "batch holds, and the page it links to asks the reader's rights itself.",
+            [MessageTemplateCatalog.NotifyStorageStoreCap] =
+                "About the installation as a whole, sent to administrators: there is no protected row "
+                + "it is about. It names sizes only, and links to an administrators' page.",
+            [MessageTemplateCatalog.NotifyStorageScansCap] =
+                "About the installation as a whole, sent to administrators: there is no protected row "
+                + "it is about. It names sizes only, and links to an administrators' page.",
+            [MessageTemplateCatalog.NotifyStorageDiskLow] =
+                "About the installation's own disks, sent to administrators: there is no protected row "
+                + "it is about. It names a server directory and sizes, and links to an administrators' page.",
             [MessageTemplateCatalog.NotifyUploadReviewed] =
                 "Temporary. About the recipient's own held import batch, which has no target kind yet; "
                 + "the message names nothing the batch holds.",

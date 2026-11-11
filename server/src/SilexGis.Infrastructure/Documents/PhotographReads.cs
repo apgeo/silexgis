@@ -52,6 +52,30 @@ public static class PhotographReads
     }
 
     /// <summary>
+    /// Which of these ids are photographs this caller may read — the gallery's own rule, asked over
+    /// the named documents only, in one statement rather than one access walk per id.
+    /// </summary>
+    /// <remarks>
+    /// It narrows and cannot widen, for the reason the trip narrowing below cannot: the reach
+    /// question is decided per document, and restricting the candidates only removes documents
+    /// the whole-installation query would have dropped as well.
+    /// </remarks>
+    public static async Task<IReadOnlyCollection<Guid>> ReadableAmongAsync(
+        SilexGisDbContext db, AccessContext ctx, IReadOnlyCollection<Guid> documentIds, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(documentIds);
+        if (documentIds.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = documentIds.Distinct().ToList();
+        var visible = await VisibleAsync(db, ctx, photographs => photographs.Where(d => ids.Contains(d.Id)), ct);
+        return await visible.Select(d => d.Id).ToListAsync(ct);
+    }
+
+    /// <summary>
     /// The same rule, asked only about the pictures hanging on a set of trips.
     /// </summary>
     /// <remarks>

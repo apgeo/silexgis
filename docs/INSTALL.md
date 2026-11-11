@@ -1432,6 +1432,125 @@ Two things worth knowing:
   never serves, so a rule aimed too high hands those files to anyone who can reach the site, with no
   sign-in and nothing in the application's log.
 
+## Point-cloud worker (optional)
+
+A LiDAR point cloud (`.laz` or `.las`) uploaded against a cave is archived, its header read and
+the scan listed with its facts whatever else is running. Showing it in the 3D view needs it turned
+into 3D Tiles, and the tools that do that are Python, so they run as a service of their own:
+
+```bash
+cd deploy
+# in .env:
+#   SILEXGIS__Scans__ProcessingEnabled=true
+docker compose -f docker-compose.yml -f docker-compose.scans.yml up -d
+```
+
+It is a separate service for the same reasons the terrain worker is, and it is isolated the way
+the survey compiler is: it runs tools over files somebody uploaded, so it has **no network at all**
+(not even to the application), no database credentials, a read-only filesystem, no Linux
+capabilities, and limits on memory (`SILEXGIS_SCANS_WORKER_MEMORY`, 16 GB by default), processors
+(`SILEXGIS_SCANS_WORKER_CPUS`, 4) and processes. It publishes no port. The application and the
+worker meet on one directory of the `silexgis-scans` volume: the application copies the cloud into
+a job directory there with a `request.json`, the worker runs the step, writes `progress.json` as it
+goes and `result.json` with its products at the end, and the application stores the products and
+removes the directory. At start the worker writes `capabilities.json` at the root of that
+directory, naming the steps it can run and the tool versions, which is how the application knows
+what this installation can do; a missing file means no worker.
+
+What it runs, per upload:
+
+- **Estimate** — one pass over the cloud counting how many points would remain at voxel sizes of
+  1, 2, 3, 5 and 10 cm, with the tile size and tiling time each would take. A cloud under the
+  installation's thresholds (`SILEXGIS__Scans__DisplayWarnPoints` and the two beside it) is tiled
+  whole straight away. Over them the run stops here, succeeded, with the table and a suggested
+  size on the scan and the note "Estimated: … Choose how much to show, then run again": tiling
+  the whole of a cloud that size is hours of worker time and gigabytes of tiles, which are not
+  spent unasked. The upload page shows the table and the suggestion; running the upload again
+  with a choice carries on from the estimate, which is not repeated. A choice can also be sent
+  with the upload itself, and the whole cloud is a choice like any other.
+- **Downsample** — a display copy of the cloud at the chosen voxel size (one point per cell, the
+  one nearest the cell's centre) or every n-th point. The original is never altered.
+- **Tile** — 3D Tiles 1.0 from the cloud, packed into one archive. The cloud is first shifted to
+  its own centre, so **the tiles carry no coordinates**, whatever the file's frame; the shift is
+  kept by the application as the scan's placement, and the scan appears on the map only through
+  that placement and the exact-location rules.
+
+**Give it memory.** Tiling was measured at 3.4 GB peak for a cloud of 34 million points and 5.9 GB
+for 73 million (12 processors); the estimate and the downsample hold a few bytes per point. The
+16 GB default leaves room for a couple of hundred million points, which is where the application
+starts advising a downsampled display copy anyway. The tiler takes its own cache size from
+`SILEXGIS_SCANS_WORKER_CACHE_MB` (2048) rather than from the machine, because inside a container
+the free memory it would otherwise read is the host's. A changed limit takes effect when the
+container is recreated:
+
+```bash
+# in .env:
+#   SILEXGIS_SCANS_WORKER_MEMORY=24g
+docker compose -f docker-compose.yml -f docker-compose.scans.yml up -d scans-worker
+```
+
+**A job has a time limit.** The application names one with each request; a job that reaches it is
+stopped and answered as failed, and the upload says so. `SILEXGIS_SCANS_WORKER_TIMEOUT_SECONDS`
+(14400) applies only to a request that names none.
+
+**It is entirely optional, and not running it is the default.** Without it a point cloud is still
+archived, its facts shown on the cave, and the run ends saying the cloud was not tiled; *Rerun*
+tiles it once a worker is there. The same two notes as for the terrain worker apply: every later
+`docker compose` command must repeat the same `-f` list (or set `COMPOSE_FILE` in `.env`), and
+turning it off again means stopping the `scans-worker` service **and** removing
+`SILEXGIS__Scans__ProcessingEnabled` from `.env`. Stopping it while a job is running abandons that
+job; the upload is told so when the worker comes back, and can be run again.
+
+**Proving a built image.** `node scripts/scans-worker-check.mjs <cloud.las|cloud.laz>` starts the
+worker image the way the overlay does (no network, read-only, no capabilities, bounded), hands it
+the three steps on that cloud one after another and prints a verdict: points in and out, tiles and
+bytes, timings, and whether every answer agreed with what was written to disk and the tiles sit at
+their own centre. Run it after changing the image or the worker; it needs the image built
+(`--build` builds it) and a cloud of your own, and it is not part of the hosted build.
+
+**Raw scanner recordings.** A raw MANDEYE recording — the scanner's folder of `lidarNNNN.laz`
+chunks with their `imuNNNN.csv` logs, and the optional `lidarNNNN.sn`, `gnssNNNN.gnss`, `.nmea`
+files and `calibration.json` — is uploaded with origin `mandeye`. The application archives every
+file, pairs the chunks, reads each chunk's header and records the recording's facts (chunks,
+duration, points, sensors, whether it holds GNSS) whatever else is running; a recording that holds
+GNSS positions is treated as georeferenced, so its files need the exact-location right. Turning it
+into a scan needs a second worker, `scans-hdmapping`, built from the same Dockerfile's `hdmapping`
+target with HDMapping compiled in from a pinned commit. It runs the odometry
+(`lidar_odometry_step_1`), the export (`multi_view_tls_registration_step_2`) and a check of the
+exported cloud; from there the tiler finishes the scan exactly as it does an uploaded cloud. The
+HDMapping session (without its cache), the exported cloud and its trajectory are kept as the scan's
+products, and the parameters the odometry ran with are recorded on the upload.
+
+```bash
+# in deploy/.env, beside SILEXGIS__Scans__ProcessingEnabled=true:
+#   COMPOSE_PROFILES=hdmapping
+docker compose -f docker-compose.yml -f docker-compose.scans.yml up -d --build
+```
+
+It is behind the `hdmapping` profile because building it compiles HDMapping, which takes most of an
+hour. It is isolated exactly as the tiler is (no network, read-only, no capabilities, bounded
+processes) and shares the `silexgis-scans` volume with it; each worker announces its own steps in the
+volume's `capabilities.json` and keeps the other's, so **rebuild both images together** after an
+update — an older tiler image rewrites that file without the HDMapping steps. Its limits are
+`SILEXGIS_SCANS_HDM_MEMORY` (16 GB; odometry peaked at 11.9 GB on a 15-minute two-sensor recording
+and 5.7 GB on a 6-minute one) and `SILEXGIS_SCANS_HDM_CPUS` (8; odometry runs about 1.4 times as
+long as the recording on 12 processors). **Disk:** while odometry runs its cache grows to about
+twenty times the recording inside the job's directory on the scans volume, and the worker refuses a
+recording the volume has no room for (it wants 22 times the recording free) rather than fill it.
+The cache is removed when the step ends. Without this worker a recording is archived and inspected,
+and its run ends saying it was not processed; *Rerun* processes it once the worker is there.
+
+**Proving the HDMapping image.** `node scripts/scans-hdmapping-check.mjs <recording folder> --work
+<dir>` starts the `hdmapping` image twice, as the HDMapping worker and as the tiler, isolated as the
+overlay isolates them and sharing one hand-off directory under `<dir>`, and hands the recording
+through every step in the application's order: preflight, odometry, export, the export check, the
+estimate and tiling (`--voxel-cm <n>` adds a downsample). It prints a verdict — what the two workers
+announced, each step's time, the points, the session and tile sizes and each step's memory peak —
+and never a point or a position. `--work` must be on a disk with room for the odometry cache (about
+twenty times the recording), not a memory-backed temporary directory. It needs the image built
+(`--build` builds it) and a recording of your own, takes about 1.5 times the recording's length,
+and is not part of the hosted build.
+
 ## Photo libraries (optional): who keeps them up to date
 
 SilexGIS can read photographs from an **Immich** or a **PhotoPrism** library running beside it
@@ -1510,6 +1629,15 @@ through the terrain page:
 cd deploy
 sh scripts/backup.sh                 # → ./backups/<timestamp>/{db.sql.gz,files.tar.gz[,terrain-uploads.tar.gz]}
 ```
+
+A backup is all of those files or none of them. Each archive is written into a hidden `.incomplete`
+folder inside the target and read back before it counts: the dump must report success, decompress
+cleanly and end with pg_dump's own completion line, and the other archives must decompress
+cleanly. Only then is everything moved into place. If any step fails, for example a database that
+cannot be reached, a dump cut off part-way or a full disk, the script removes what it wrote,
+prints `FAILED: …` with the cause, and exits non-zero. The updater, the reset and baseline
+commands and the nightly unit stop on that exit status, so a failed backup is never taken for a
+good one.
 
 Restore into a stopped stack:
 
@@ -2386,8 +2514,10 @@ out for the reasons given under [Backups](#backups). The installer's nightly tim
 sudo node deploy/native/restore.mjs /var/backups/silexgis/<timestamp> --yes
 ```
 
-It stops the API, drops and recreates the database's `public` schema, loads the dump, unpacks the
-files, hands them to the service account and starts the API again. **It fails on any error in the
+It first reads every archive of the backup back in full, and refuses with nothing changed a backup
+that does not: a `db.sql.gz` cut short or without `pg_dump`'s closing line, or a `files.tar.gz` or
+`terrain-uploads.tar.gz` that `tar` cannot list. Then it stops the API, drops and recreates the
+database's `public` schema, loads the dump, unpacks the files, hands them to the service account and starts the API again. **It fails on any error in the
 load** except the three the Docker restore also lets through (the PostGIS image's `tiger`,
 `tiger_data` and `topology` schemas already existing) — and then leaves the files untouched and the
 API stopped, so a half-restored database is not mistaken for a working one. The load recreates
@@ -2496,6 +2626,7 @@ the reasoning beside each one.
 | `SILEXGIS__Sync__AllowAdministratorRead` | `false` | lets a full administrator read a sync set belonging to another account — the named selection of caves a caver's phone carries, the club its uploads are created for, its code-generation settings and when it was last edited. Off unless you turn it on: a sync set is the one thing in the installation that says where a particular person goes, so an installation opts into that support ability deliberately rather than inheriting it. It widens **reading one set whose identifier the administrator already knows**, and nothing else — the listing still answers with the caller's own sets so it cannot be used to count anybody's, replacing and deleting a set stay the owner's alone, and no device can download or upload through a set it does not own however privileged the account it is signed in as. The identifier has to come from the caver, their phone or the database — nothing in the web interface shows another account's set identifier, and this setting deliberately adds no way to find one: it answers "what does this set carry?" for somebody already handed the identifier, never "which sets does that caver have?" |
 | `SILEXGIS__Sync__UploadRowsMax` | `500` | the most rows one upload batch from a phone may carry. A batch is applied as a unit, so this bounds what a single failed or repeated request costs. Values outside 1 to 5000 are brought back inside that range |
 | `SILEXGIS__Sync__DuplicateRadiusMeters` | `50` | how close something already in the registry has to be to a row a phone just created before the answer mentions it. Reporting only — it never refuses a row. `0` turns the report off; values above 5000 are brought back to 5000. The same figure a file import uses, because how close two entrances can be before they are probably one is a property of the karst rather than of the channel |
+| `SILEXGIS__Sync__DownloadSettleMilliseconds` | `0` | how long a change waits before a phone's download may hand it over, on top of the wait the server already makes for writes still in flight. A download never hands a phone a position past a change that some unfinished write may still commit behind it: while an upload batch or an import holds its transaction open, changes made after that transaction began wait for it to finish and arrive on the phone's next download. This setting adds a fixed delay for the moment the server cannot see — between a write stamping its change and that write reaching the database — which is normally a few milliseconds but can stretch when the database's connections are all busy. Where the application and the database run on different hosts, it must also cover any difference between their clocks, since changes are stamped by the application's clock and the wait is measured on the database's. `0` keeps today's behaviour, where a phone that downloads straight after an edit receives it. Values outside 0 to 60000 are brought back inside that range |
 | `SILEXGIS__Sync__PeopleDirectoryEnabled` | `true` | whether phones are given the people directory — the names a phone offers when one of its own users is matched to a caver — and may send which caver each of their users is. **A default only:** the administrator settings page (section *Sync*) can change it while the application runs, and a saved value wins over this one. Off, the directory answers that the part is switched off, phones are no longer told it is served, and a phone's link of one of its users to a caver is refused; the phone's users themselves are still recorded, so later uploads can still say who on the phone did something. The directory carries names only — never an e-mail address, a telephone number or a roster remark — and needs the right to read people, as the roster does |
 | `SILEXGIS__Sync__PeopleDirectoryScope` | `MyGroups` | whom the people directory lists. `MyGroups`: the cavers in any caving group the caller belongs to, and the caller themselves. `Everyone`: the whole roster. A phone can only link its users to somebody it was listed, so this also bounds whom a phone may say its users are. Changeable on the settings page like the switch above |
 | `SILEXGIS__Sync__ConvertTripsWithProblems` | `true` | whether a trip recorded on a phone is still made a trip when its places or its people cannot be matched unambiguously — marked as needing attention — rather than left as a recording for somebody to convert by hand. Either way the accounts that may decide about uploads (Write on the upload-review right: on a fresh installation the Administrators group and the full administrators) and the uploader are notified, each only when they may read the trip or cave; changeable on the settings page |
@@ -2503,6 +2634,18 @@ the reasoning beside each one.
 | `SILEXGIS__Sync__RejectedHeldBytesRetentionDays` | `30` | how many days the file bytes of a held change are kept once it is decided without them being used — turned down by a reviewer, replaced by a later upload, or accepted but not written — before the hourly upload sweep deletes them. 1 to 365. While a change waits for a reviewer its bytes are kept however long that takes (they count against the sending account's storage quota throughout), so a queue nobody looks at grows; the review queue shows each batch's age. Read when the change is decided: a change of the setting applies to changes decided after it. Changeable on the settings page. A held file import keeps no bytes of its own: the file it was confirmed from stays where it is, under the account that uploaded it, until somebody deletes it |
 | `SILEXGIS__SurveyUploads__MaxFileBytes` | `262144000` | the largest single file a field device (TopoDroid) may send in a survey upload, in bytes — 250 MB. A phone's survey archive carries its sketches and photos, so this is well above any survey source. The reverse proxy must let a body this size through: both packaged nginx configurations accept 1 GB, so raising this past that means raising `client_max_body_size` too |
 | `SILEXGIS__SurveyUploads__MaxFilesPerUpload` | `64` | the most files one survey upload may declare (the archive, its Therion sources and sketches, and other exports) |
+| `SILEXGIS__Scans__MaxUploadBytes` | `4294967296` | the largest point cloud file (`.laz`/`.las`) a survey upload of origin `pointcloud` may send, in bytes — 4 GiB. The reverse proxy must let a body this size through: both packaged nginx configurations accept 1 GB, so using the default in full means raising `client_max_body_size` |
+| `SILEXGIS__Scans__MaxRawUploadBytes` | `21474836480` (20 GiB) | the most a raw MANDEYE recording's files may take together; each file is also held to `SILEXGIS__Scans__MaxUploadBytes`. The folder is declared file by file — `lidarNNNN.laz` paired with `imuNNNN.csv`, optionally `lidarNNNN.sn`, `gnssNNNN.gnss`, `.nmea` files and `calibration.json` — and a recording that holds GNSS positions is treated as georeferenced: its files need the exact-location right |
+| `SILEXGIS__Scans__MaxRawFiles` | `5000` | the most files a raw MANDEYE recording upload (origin `mandeye`) may declare; a recording writes four or five files per chunk of a few seconds |
+| `SILEXGIS__Scans__MaxTotalBytes` | `0` (no separate cap) | the most everything kept for point clouds may take together — uploaded originals (always kept) and every product made from them. Checked beside the installation and account caps when a point-cloud upload opens, as each file arrives, and before each processing step, which is refused before it starts with the missing amount (code `storage.insufficient` for an upload, `survey_pipeline.storage_insufficient` for a run) |
+| `SILEXGIS__Scans__ProcessingEnabled` | `false` | whether this installation has a worker that can tile a point cloud. Set by the same deployment that starts the scans worker (see *Point-cloud worker (optional)*); switched on with no worker running, every point-cloud upload fails at the first worker step, saying so, once `PickupSeconds` have passed — the same wait whether the worker never announced itself or announced itself and takes nothing |
+| `SILEXGIS__Scans__HandoffRoot` | `data/scans` (the compose stack sets `/data/scans`) | the directory the application and the scans worker leave jobs and answers for each other in. Both sides must name the same directory, on a volume they share, and both compose files already do |
+| `SILEXGIS__Scans__PickupSeconds` | `300` | how long a job may wait in the hand-off directory before something takes it. Past this the run fails saying no worker is running, rather than waiting for an answer nothing will write |
+| `SILEXGIS__Scans__JobTimeoutSeconds` | `14400` | the most one worker step (estimate, thin, tile) may run before it is called off and the run fails. Four hours: tiling was measured at about a minute per 40 million points |
+| `SILEXGIS__Scans__DisplayWarnPoints` | `50000000` | above this many points, the upload is shown the estimate table and a thinned display copy is suggested |
+| `SILEXGIS__Scans__DisplayAdvisePoints` | `200000000` | above this many points, a thinned display copy is strongly advised |
+| `SILEXGIS__Scans__WarnTileBytes` | `2147483648` | above this many estimated bytes of tiles (2 GiB), a thinned display copy is suggested whatever the point count |
+| `SILEXGIS__Scans__ControlPointWarnMetres` | `0.5` | when a scan is placed by control points, a pair whose scan point lands further than this many metres from its station is flagged as probably paired with the wrong station. Held between 0.01 and 100 |
 | `SILEXGIS__SurveyUploads__CaveCreation` | `true` | whether a survey upload that names no cave may make one, named after the survey's title (numbered `(2)`, `(3)`… when a cave the uploader can see already has the name), on the uploader's ordinary right to create caves. `false` refuses such an upload, and the device has to name a cave the account can write to |
 | `SILEXGIS__SurveyUploads__DefaultCaveTypeId` | *(unset)* | the cave type a cave made from a survey upload gets when the upload names none. Unset, the installation's ordinary cave type |
 | `SILEXGIS__SurveyUploads__DefaultOutputs` | `lox,3d,plan-pdf,extended-pdf` | the outputs a survey upload's processing produces when the upload asks for none, as catalogue names separated by commas. The account's own *always produce* list and the setting below are added to it, never taken away |
@@ -2585,8 +2728,12 @@ the reasoning beside each one.
 | `SILEXGIS__Notifications__RetentionDays` | `365` | how long a notification stays readable in the recipient's list before it is deleted — read or unread alike, and whether or not an email ever went out for it. Values of zero or less are ignored in favour of the default, so a mistyped setting cannot empty the list. This one is also editable in **Admin → Messaging → Notifications**; a window saved there replaces this value, and an installation that never opens that page keeps whatever is set here |
 | `SILEXGIS__Notifications__QuietHoursFrom` | *(empty)* | the wall-clock time, `HH:mm`, at which nothing more may be sent to a member until the window closes. Read in each member's own time zone, so it means the same hour of their night whatever the season. Quiet hours are off unless **both** ends are given; a value that cannot be read as `HH:mm` counts as not given, so a typo leaves sending exactly as it was rather than holding messages back at an hour nobody chose |
 | `SILEXGIS__Notifications__QuietHoursTo` | *(empty)* | the wall-clock time the window closes. Earlier than the opening time for the ordinary window that runs across midnight, such as `22:00` to `07:00`. A window whose two ends are equal is ignored rather than read as "every hour", which would silence an account permanently. Messages held by the window become due the moment it closes; the notification itself is in the member's list the whole time, because a list interrupts nobody. Warnings a member may not switch off — about their own account, or a party overdue underground — ignore the window entirely |
-| `SILEXGIS__Notifications__TimeZone` | `UTC` | the IANA zone whose night is used for a member who has never told the installation theirs; a member's own zone is stored the first time their browser reports it |
+| `SILEXGIS__Notifications__TimeZone` | `UTC` | the installation's own IANA zone: whose night is used for a member who has never told the installation theirs (a member's own zone is stored the first time their browser reports it), and whose calendar day decides which occurrences of a repeating event have already happened when the rest of the run is called off |
 | `SILEXGIS__Notifications__AnnouncementFanOutLimit` | `50` | how many people an announcement to a caving group may be written to inside the request that sends it. A roster larger than this is recorded once and handed out by a background pass moments later, so a large club does not turn one click into a slow request holding a write transaction open. The number is budgeted from what a caving club is rather than measured — a local club runs to a few dozen, a national federation to several hundred — so raise it if your largest roster is bigger and sending still feels instant |
+| `SILEXGIS__Jobs__PollSeconds` | `2` | how often the background workers look for queued work — imports, conversions, readings, sweeps. **0 switches background work off entirely, and queued jobs keep accumulating** |
+| `SILEXGIS__Jobs__LeaseSeconds` | `120` | how long a running job stays its worker's without the worker renewing its claim. A job whose claim runs out was lost — the process died under it, or its outcome could not be saved — and is taken back: queued again, or failed once it has had three attempts, so a job that keeps bringing the application down stops doing so on its third start. After a restart, a job the old process was running is picked up again within this plus the sweep interval. Shorter means a lost job resumes sooner; too short, and a busy machine that is late renewing hands a live job to a second runner |
+| `SILEXGIS__Jobs__HeartbeatSeconds` | `30` | how often a running job's claim is renewed. A value of zero or less, or more than half the lease, is replaced by a third of the lease, so a renewal can be missed once without the job being taken away |
+| `SILEXGIS__Jobs__SweepSeconds` | `60` | how often each worker looks for jobs whose claim has run out, besides once at start. Zero or less means at start only |
 | `SILEXGIS__Announcements__PaidChannelsEnabled` | `false` | whether an announcement to a caving group may go out by a channel that charges for every message. Off, so an installation opts into spending money rather than inheriting it — and while it is off such a channel is not merely hidden: no member can choose it, no preference for it resolves to anything, and no outbound copy on it is created. Also editable in **Admin → Messaging → Notifications**; what is saved there replaces this value. The charging channel is the **text message**, so switching this on can put real messages on a real bill: it additionally needs the `SILEXGIS__Sms__*` settings (or **Admin → Messaging → SMS**) pointing at a working gateway, and only an announcement to a caving group may use it. A member is texted only if they have confirmed a telephone number on their own security page |
 | `SILEXGIS__Announcements__DailyPaidMessageCap` | `100` | how much this installation will send in a day on a charging channel before it refuses, counted in the **segments** a gateway bills for rather than in messages — one Romanian diacritic makes a message cost two of them, so this buys a Romanian installation about half as many messages as an English one. Counted over what is already committed today, including copies still waiting to go out, because money committed is money spent. An announcement that has been accepted and not yet handed out is charged what its wording was weighed at when it was accepted — the club's own name in it, in whichever language costs most — so a long club name is projected as the expensive thing it is; anything else queued without being weighed is charged a floor of two segments apiece until it is sent. Values of zero or less are ignored in favour of the default — the switch above is how an installation sends none. Also editable in **Admin → Messaging → Notifications** |
 | `SILEXGIS__About__InstanceName` | `SilexGIS` | name used in the messages this installation sends |
@@ -2643,6 +2790,11 @@ the reasoning beside each one.
 | `SILEXGIS__Map__MeshesInViewMaxCavesLimit` | `60` | the most caves a member may raise that number to for their own browser; a request for more is answered as this many. Every mesh is fetched from this installation, so this is where you keep the last word on how much one view may pull. Set it equal to the default to let nobody raise it; a default set above it is held to it |
 | `SILEXGIS__Map__MeshesInViewMaxBytes` | `67108864` (64 MB) | how much wall mesh the 3D view may hold at once in that mode, counted in the bytes the meshes are to download. A browser needs roughly twice that in graphics memory, so raise it with the machines your members use in mind; caves that do not fit are left out and counted on screen, nearest first |
 | `SILEXGIS__Map__MeshesInViewMaxBytesLimit` | `536870912` (512 MB) | the most a member may raise that budget to for their own browser — a workstation with a real graphics card can hold far more walls than the default assumes, and a phone far fewer. The budget is spent by the browser, which is told this ceiling and keeps to it. Set it equal to the default to let nobody raise it; a default set above it is held to it |
+| `SILEXGIS__Map__ScansInViewMinZoom` | `14` | the zoom from which the 3D view may show the placed **point clouds** (scans) of every cave in view. A scan's tiles are fetched by level of detail, so a wide view does not cost every point, but every scan shown is a tileset held open, and a district's worth of them is a district's worth of readers. This and the next two are what a member starts from; each can set their own for their browser, the other two up to the ceilings below |
+| `SILEXGIS__Map__ScansInViewMaxCaves` | `6` | the most caves whose scan one such view is answered with, nearest the middle of the view first. Fewer than the walls' default because a scan drawn at any detail is far heavier on a browser than a wall mesh. The view says how many caves there were in all |
+| `SILEXGIS__Map__ScansInViewMaxCavesLimit` | `30` | the most caves a member may raise that number to for their own browser; a request for more is answered as this many. Every tile is served by this installation, so this is where you keep the last word on how many scans one view may hold open. Set it equal to the default to let nobody raise it; a default set above it is held to it |
+| `SILEXGIS__Map__ScansInViewMaxBytes` | `268435456` (256 MB) | how much point-cloud tile data the 3D view may hold at once in that mode, counted in the size of each scan's tileset archive — the most a scan would cost if every tile of it were fetched; a tiles reader usually takes less. Scans that do not fit are left out and counted on screen, nearest first |
+| `SILEXGIS__Map__ScansInViewMaxBytesLimit` | `2147483648` (2 GB) | the most a member may raise that budget to for their own browser. The budget is spent by the browser, which is told this ceiling and keeps to it. Set it equal to the default to let nobody raise it; a default set above it is held to it |
 | `SILEXGIS__Map__MeshAskAboveBytes` | `52428800` (50 MB) | selecting a cave in the 3D view downloads its walls straight away unless they are larger than this, in which case the view says how large they are and asks first. `0` asks before every download. A member can set their own for the browser they are using, under **Settings › Advanced** |
 | `SILEXGIS__Import__MaxCommitItems` | `150000` | the most objects one confirmation of a reviewed import creates, deliberately equal to the review limit below so that what you can see you can confirm in one act. Confirmation runs as a background job, so a large one is a job that takes a while rather than a request that cannot finish; lower it if you would rather your undo units stayed small, since one confirmation reverts as a single thing |
 | `SILEXGIS__Import__MaxScanRows` | `150000` | the most rows one upload's review list reads. A bigger file is still imported whole and still drawn as a layer — only the review is bounded, and it says so. The list is paged to the browser, so this buys reviewable rows rather than rows drawn at once; what it costs is the single scan that ranks and de-duplicates them |
@@ -2654,11 +2806,33 @@ the reasoning beside each one.
 | `SILEXGIS__Import__DuplicateNameSimilarity` | `0.8` | how alike two names must be, from 0 to 1, before a nearby object is called the same thing rather than merely close |
 | `SILEXGIS__Import__PhotoProximityRadiusMeters` | `80` | how far a photograph looks for objects already in the registry — wider than for a vector file, because a picture is taken from where the photographer stood |
 | `SILEXGIS__Import__PhotoClusterRadiusMeters` | `25` | how far apart two photographs can be and still be proposed as one place. These five are also editable under **Administration → Messaging → Vector import**, which replaces them once saved |
+| `SILEXGIS__GeoreferencedMaps__CogCompression` | `webp` | how a map sheet's published GeoTIFF is compressed: `webp` (small; lossy below quality 100) or `deflate` (lossless, several times larger) |
+| `SILEXGIS__GeoreferencedMaps__CogWebpQuality` | `85` | WebP quality, 1–100; read only with `webp` |
+| `SILEXGIS__GeoreferencedMaps__CogDeflateLevel` | `6` | deflate level, 1–9; read only with `deflate` |
+| `SILEXGIS__GeoreferencedMaps__DefaultDpiUnplaced` | `300` | the resolution a sheet with no georeferencing of its own is drawn at, unless the person drawing it asks for another |
+| `SILEXGIS__GeoreferencedMaps__TargetGroundResolutionMetres` | `0.05` | the ground size of one pixel a georeferenced sheet is drawn for; the resolution follows from the sheet's own scale |
+| `SILEXGIS__GeoreferencedMaps__MinDpi` | `72` | lowest drawing resolution anyone may ask for or the rules may choose |
+| `SILEXGIS__GeoreferencedMaps__MaxDpi` | `600` | highest drawing resolution |
+| `SILEXGIS__GeoreferencedMaps__PixelBudgetMegapixels` | `600` | the largest drawing made of one page, in millions of pixels; past it the resolution is lowered and the map says so |
+| `SILEXGIS__GeoreferencedMaps__RenderBudgetMegabytes` | `1024` | the most memory one read of a page may take; a larger drawing is made in strips, each of which reads the document again |
+| `SILEXGIS__GeoreferencedMaps__RenderTimeLimitMinutes` | `30` | how long drawing one page may take before the job gives up |
+| `SILEXGIS__GeoreferencedMaps__PreviewMaxPixels` | `1024` | the longer side of the picture the placement editor shows while a sheet is being placed |
+| `SILEXGIS__GeoreferencedMaps__PreviewConcurrency` | `4` | how many placement previews are worked out at once; more are answered "busy, try again" |
+| `SILEXGIS__GeoreferencedMaps__MaxControlPoints` | `200` | the most control points one placement may hold |
+| `SILEXGIS__GeoreferencedMaps__MaxAutoDpi` | `300` | the highest resolution the server chooses by itself for a georeferenced document; a small-scale map would otherwise be drawn at `MaxDpi`. A resolution somebody asks for may still go up to `MaxDpi` |
+| `SILEXGIS__GeoreferencedMaps__SheetJobsOnHeavyLane` | `false` | run drawing and placing sheets on the heavy job queue beside terrain builds instead of the general one; read when the API starts |
+| `SILEXGIS__GeoreferencedMaps__PlacementCrsCodes__0`, `__1`, … | `3844` | national grids, besides WGS 84 and the working system, in which placement coordinates may be typed (EPSG codes the installation can define) |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB unless `SILEXGIS_MAX_BODY_SIZE` raises it) |
 | `SILEXGIS_MAX_BODY_SIZE` | `1024m` | the largest request body the bundled web service's proxy passes to the API, as an nginx size (`1024m`, `2g`). It answers before the application, so it must stay above `SILEXGIS__Files__MaxUploadBytes`, the raster limit and `SILEXGIS__SurveyUploads__MaxFileBytes`. Read when the web container starts: `docker compose up -d web`. The container receives it as `SILEXGIS__Web__MaxBodySize`. Not read by a hand-installed nginx, where it is `client_max_body_size` in the nginx file |
 | `SILEXGIS__Files__DefaultUserQuotaBytes` | `0` (no limit) | how much stored content one account may own, unless the account is given a figure of its own. Not an allocation: nothing is reserved, and the sum of everybody's quotas may exceed the disk. The packaged stack sets it from `SILEXGIS_USER_QUOTA_BYTES` in `.env` |
 | `SILEXGIS__Files__MaxTotalStoreBytes` | `0` (no limit) | how much the whole installation may hold — the limit that actually protects the disk. The packaged stack sets it from `SILEXGIS_MAX_TOTAL_STORE_BYTES` |
+| `SILEXGIS__Storage__NoticePercent` | `75` | the percentage of a cap (the installation's, or the point clouds' own) at which administrators get a notice that storage is filling up |
+| `SILEXGIS__Storage__WarningPercent` | `90` | the percentage at which they get a warning. Set below the notice percentage, it is raised to it |
+| `SILEXGIS__Storage__MinFreeBytes` | `21474836480` (20 GiB) | the free space wanted on the file store's disk and on the point-cloud worker's: under it administrators are warned, under twice it they get a notice. About twice the largest scan run expected (one scan can take 5–10 GB across its original, its intermediate products and its tiles). `0` switches the free-space warnings off; a request that cannot be written at all is refused whatever this says |
+| `SILEXGIS__Storage__CheckInterval` | `01:00:00` | how often storage is measured against the caps and the free-space minimum above. The schedule goes by the age of the last check, not by how long the server has been up, so a restart does not delay it. Each threshold crossed upwards since the last pass is told once to every full administrator (category *Storage filling up* in their notification settings); falling back below a threshold is remembered silently, so filling up again is told again. `00:00:00` turns the checks off |
+| `SILEXGIS__Storage__ReportInterval` | `1.00:00:00` (daily) | how often the storage report is written: totals by kind of file, by cave and by account, the 50 largest files, growth over the last week and month with the day the cap (or, without one, the disk) is reached at that pace — and, when the point clouds have a cap of their own, their own pace and the day that cap is reached — and what could be deleted — point-cloud products superseded by a newer version of the same scan (never the cave's current scan, the one it is shown by, or one running again), leftover processing work directories, older survey versions' outputs, expired transfers. Uploaded originals are never offered. A report is written when the newest one is older than this, checked hourly, so an installation restarted every day still gets its daily report. Nothing is deleted by the report: a full administrator deletes one group at a time from *Administration › Storage* (the page and its routes are for full administrators only, since the report names caves, files and owners across the whole installation), and each deletion is recorded in the audit trail. `00:00:00` turns the schedule off; the page can still measure on demand |
+| `SILEXGIS__Storage__ReportRetentionDays` | `365` | how many days of storage reports are kept; at least 31 are kept whatever this says, since the month's growth is measured against one |
 | `SILEXGIS__Files__AcceptedExtensions__0`, `__1`, … | *(none: everything is accepted)* | the only file extensions an upload may have, one per index, with or without the leading dot |
 | `SILEXGIS__Files__RefusedExtensions__0`, `__1`, … | *(none)* | extensions refused whatever the list above says; a refusal wins where both name the same one |
 | `SILEXGIS__Files__ImportRoots__0`, `__1`, … | *(none: switched off)* | directories **on the server** an administrator may import documents from, and a Full Administrator may name as terrain sources. Under Docker a path is resolved inside the api container, so it must also be mounted into it. A security boundary rather than a convenience: what these name is chosen by whoever deploys the installation, never by whoever is signed in. Mount them read-only where you can |

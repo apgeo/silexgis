@@ -40,7 +40,9 @@ public static class FeatureLinkEndpoints
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var feature = await db.Features.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (feature is null || !(await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed)
+        if (feature is null
+            || !(await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
+            || await FeatureEndpoints.IsWithheldAsync(protection, ctx, feature, ct))
         {
             return ApiProblems.NotFound("feature.not_found");
         }
@@ -60,7 +62,7 @@ public static class FeatureLinkEndpoints
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var feature = await db.Features.FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (feature is null)
+        if (feature is null || await FeatureEndpoints.IsWithheldAsync(protection, ctx, feature, ct))
         {
             return ApiProblems.NotFound("feature.not_found");
         }
@@ -72,9 +74,18 @@ public static class FeatureLinkEndpoints
                 : ApiProblems.NotFound("feature.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
+        }
+
+        // The hold read the row again; who may change it is decided on what it holds now.
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, feature, ct)).Allowed)
+        {
+            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
+                ? ApiProblems.Forbidden()
+                : ApiProblems.NotFound("feature.not_found");
         }
 
         if (request.Links.Any(l => l.ToId == id))
@@ -113,14 +124,22 @@ public static class FeatureLinkEndpoints
         var stored = await db.FeatureLinks.Where(l => l.FromId == id).ToListAsync(ct);
         var kindsById = await LinkKindsOfAsync(db, stored.Select(l => l.LinkKindId), ct);
 
-        // A caller without exact view was shown a link set with the locating links to
-        // protected endpoints omitted; a full replace from that view must not silently
-        // sever them. Such stored rows are preserved verbatim and out of reach.
-        var endpointIds = stored.Select(l => l.ToId).Concat(targetIds).Append(id).Distinct().ToList();
+        // The replace answers for the list the caller was shown, and nothing outside it. The
+        // view leaves out every link whose other end they cannot read or that is deleted, and a
+        // caller without exact view also misses the locating links to protected endpoints; a
+        // full replace from that view must not silently sever any of them, and the caller could
+        // not keep one by naming it either (an unreadable target is refused as missing). Such
+        // stored rows are preserved verbatim and out of reach.
+        var storedTargets = stored.Select(l => l.ToId).Distinct().ToList();
+        var readableTargets = (await db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+                .Where(f => storedTargets.Contains(f.Id)).Select(f => f.Id).ToListAsync(ct))
+            .ToHashSet();
+        var endpointIds = storedTargets.Concat(targetIds).Append(id).Distinct().ToList();
         var redacted = await protection.RedactedLinkTargetIdsAsync(ctx, endpointIds, ct);
         bool HiddenFromCaller(FeatureLink link) =>
-            kindsById[link.LinkKindId].Locating
-            && (redacted.Contains(link.ToId) || redacted.Contains(id));
+            !readableTargets.Contains(link.ToId)
+            || (kindsById[link.LinkKindId].Locating
+                && (redacted.Contains(link.ToId) || redacted.Contains(id)));
         var preservedKeys = stored.Where(HiddenFromCaller)
             .Select(l => (l.ToId, l.LinkKindId))
             .ToHashSet();
@@ -148,6 +167,11 @@ public static class FeatureLinkEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        // The version is the feature row's, which the feature's own read hands out; filed there, it is
+        // the one the next write on the feature carries. Filed under this route's path instead, no
+        // read would ever replace it, and the first change made anywhere else would leave every later
+        // save here refused as stale.
+        await hold.AnswerAsync(ct, $"/api/v1/features/{feature.Id}");
         return TypedResults.Ok(await LinksViewAsync(db, protection, ctx, id, ct));
     }
 

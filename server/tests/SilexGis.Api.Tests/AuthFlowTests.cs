@@ -229,6 +229,8 @@ public sealed class AuthFlowTests : IDisposable, IClassFixture<PostgresFixture>
             new { email = $"x-{Guid.NewGuid():N}@test.local", password = "a-long-password-1" });
 
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await response.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("auth.registration_disabled");
     }
 
     [Fact]

@@ -56,16 +56,7 @@ public sealed class SurveyCompilationLogReader
         }
 
         var summary = TherionLogParser.Parse(text);
-
-        // Mapped member by member rather than cast: a stored outcome means whatever this
-        // application's enum meant on the day it was written, and a library that renumbers its own
-        // vocabulary must not be able to change the meaning of rows already in the database.
-        var outcome = summary.Outcome switch
-        {
-            TherionLogOutcome.Success => SurveyCompilationOutcome.Succeeded,
-            TherionLogOutcome.SuccessWithWarnings => SurveyCompilationOutcome.SucceededWithWarnings,
-            _ => SurveyCompilationOutcome.Failed,
-        };
+        var outcome = OutcomeOf(summary);
 
         return new SurveyCompilationReport
         {
@@ -94,4 +85,61 @@ public sealed class SurveyCompilationLogReader
             })],
         };
     }
+
+    /// <summary>
+    /// The figures one compilation log reports — lengths, ranges with the stations and absolute
+    /// values at their ends, counts, loop closures with the stations they run through, the
+    /// coordinate system and declinations the compiler worked with — or null for text that is not a
+    /// compilation log at all. Who may be shown them is the caller's decision, not this reader's.
+    /// </summary>
+    public SurveyLogFigures? ReadFigures(string? fileName, string? text)
+    {
+        if (!LooksLikeCompilationLog(fileName, text))
+        {
+            return null;
+        }
+
+        var summary = TherionLogParser.Parse(text);
+        return new SurveyLogFigures
+        {
+            Outcome = OutcomeOf(summary),
+            CompilerVersion = summary.TherionVersion,
+            CompilationSeconds = summary.CompilationTimeSeconds,
+            ErrorCount = summary.Errors.Count(),
+            WarningCount = summary.Warnings.Count(),
+            OutputCoordinateSystem = summary.OutputCoordinateSystem,
+            MeridianConvergenceDeg = summary.MeridianConvergence,
+            Declinations = [.. summary.Declinations.Select(d => new SurveyLogDeclination(d.Date, d.Degrees))],
+            HasNoControlPoints = summary.HasNoControlPoints,
+            StationCount = summary.StationCount,
+            ShotCount = summary.ShotCount,
+            ConnectedComponents = summary.ConnectedComponents,
+            TotalLengthM = summary.TotalLength,
+            TotalLengthAdjustedM = summary.TotalLengthAdjusted,
+            PlanLengthM = summary.PlanLength,
+            VerticalLengthM = summary.VerticalLength,
+            VerticalRange = ExtentOf(summary.VerticalRange),
+            NorthSouthRange = ExtentOf(summary.NorthSouthRange),
+            EastWestRange = ExtentOf(summary.EastWestRange),
+            LoopCount = summary.LoopCount,
+            AverageLoopErrorPercent = summary.AverageLoopErrorPercent,
+            Loops = [.. summary.LoopErrors.Select(row =>
+                new SurveyLogLoop(
+                    row.RelativeErrorPercent, row.AbsoluteError, row.TotalLength, row.StationCount,
+                    row.ErrorX, row.ErrorY, row.ErrorZ, row.Stations.Trim()))],
+        };
+    }
+
+    private static SurveyLogExtent? ExtentOf(TherionLogRange? range) =>
+        range is null ? null : new SurveyLogExtent(range.Length, range.FromStation, range.FromValue, range.ToStation, range.ToValue);
+
+    // Mapped member by member rather than cast: a stored outcome means whatever this application's
+    // enum meant on the day it was written, and a library that renumbers its own vocabulary must not
+    // be able to change the meaning of rows already in the database.
+    private static SurveyCompilationOutcome OutcomeOf(TherionLogSummary summary) => summary.Outcome switch
+    {
+        TherionLogOutcome.Success => SurveyCompilationOutcome.Succeeded,
+        TherionLogOutcome.SuccessWithWarnings => SurveyCompilationOutcome.SucceededWithWarnings,
+        _ => SurveyCompilationOutcome.Failed,
+    };
 }

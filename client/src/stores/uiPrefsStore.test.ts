@@ -95,7 +95,7 @@ describe('uiPrefsStore pinned types', () => {
     const raw = localStorage.getItem('silexgis.uiPrefs');
     expect(raw).not.toBeNull();
     const stored = JSON.parse(raw!) as { state: { pinnedTypeIds: number[]; mapChromeHidden: boolean }; version: number };
-    expect(stored.version).toBe(8);
+    expect(stored.version).toBe(10);
     expect(stored.state.pinnedTypeIds).toEqual([7]);
     expect(stored.state.mapChromeHidden).toBe(true);
   });
@@ -244,7 +244,7 @@ describe('uiPrefsStore appearance', () => {
       version: number;
       state: { movieGifCalibration?: unknown };
     };
-    expect(stored.version).toBe(8);
+    expect(stored.version).toBe(10);
     expect(stored.state.movieGifCalibration).toEqual({ turning: 0.03 });
 
     useUiPrefsStore.setState({ movieGifCalibration: undefined });

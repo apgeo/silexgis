@@ -107,15 +107,15 @@ public static class SyncTripEndpoints
                     .Max(p => (DateTimeOffset?)p.UpdatedAt) ?? carried.Recording.UpdatedAt,
             };
         live = SyncStreamPaging.After(live, ByChange, opening.From);
-        var liveRows = await SyncStreamPaging.Probe(live, ByChange, opening.Size).ToListAsync(ct);
+        var liveRows = await SyncStreamPaging.Probe(live, ByChange, opening).ToListAsync(ct);
 
         var goneRows = SyncStreamPaging.Probe(
             SyncStreamPaging.After((await GoneAsync(db, ctx, handed, opening.From, ct)).AsQueryable(), ByGone, opening.From),
             ByGone,
-            opening.Size).ToList();
+            opening).ToList();
 
         var pointsGone = SyncStreamPaging.After(PointsGone(db, ctx, handed), ByPointGone, opening.From);
-        var pointsGoneRows = await SyncStreamPaging.Probe(pointsGone, ByPointGone, opening.Size).ToListAsync(ct);
+        var pointsGoneRows = await SyncStreamPaging.Probe(pointsGone, ByPointGone, opening).ToListAsync(ct);
 
         var cut = SyncStreamPaging.Cut(
             opening,

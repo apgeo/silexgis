@@ -121,6 +121,21 @@ public sealed class EventAuthoringTests : IAsyncLifetime, IDisposable, IClassFix
         (await ListIdsAsync(outsider)).ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// What somebody types is searched for as typed: a "%" in the search is a percent sign in the
+    /// title, not a wildcard that also finds the event whose title has a digit in its place.
+    /// </summary>
+    [Fact]
+    public async Task A_percent_sign_in_the_search_matches_only_a_title_that_has_one()
+    {
+        var percent = Id(await CreateAsync(owner, Body($"50% {suffix}", new DateOnly(2054, 3, 5))));
+        _ = Id(await CreateAsync(owner, Body($"500 {suffix}", new DateOnly(2054, 3, 5))));
+
+        var page = await ReadJsonAsync(
+            owner, $"/api/v1/events?pageSize=100&search={Uri.EscapeDataString($"50% {suffix}")}");
+        page.GetProperty("items").EnumerateArray().Select(Id).ShouldBe([percent]);
+    }
+
     [Fact]
     public async Task A_list_refuses_a_kind_or_a_state_this_application_does_not_have()
     {

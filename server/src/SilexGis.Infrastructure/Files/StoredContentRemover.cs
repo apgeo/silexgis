@@ -28,17 +28,33 @@ public sealed class StoredContentRemover(
     {
         foreach (var file in files)
         {
+            // Each step on its own: bytes that will not delete must not keep the renderings drawn
+            // from them, or a location-free copy or a page picture would outlive the file as a
+            // copy of deleted content that nothing knows how to find.
             try
             {
                 await fileStore.DeleteAsync(file.StoragePath, CancellationToken.None);
-                thumbnails.Purge(file.Id);
-                locationFreeCopies.Purge(file.Id);
-                pages.Purge(file.Id);
             }
             catch (IOException e)
             {
                 logger.LogWarning(e, "Could not delete the content of removed file {FileId}", file.Id);
             }
+
+            Attempt(file.Id, thumbnails.Purge);
+            Attempt(file.Id, locationFreeCopies.Purge);
+            Attempt(file.Id, pages.Purge);
+        }
+    }
+
+    private void Attempt(Guid fileId, Action<Guid> purge)
+    {
+        try
+        {
+            purge(fileId);
+        }
+        catch (IOException e)
+        {
+            logger.LogWarning(e, "Could not delete a rendering of removed file {FileId}", fileId);
         }
     }
 }

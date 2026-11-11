@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { TFunction } from 'i18next';
 import type { SurveyMesh3DState } from '../../scene3d/surveyMesh3d.ts';
+import type { ScansInView3DState } from '../../scene3d/scansInView3d.ts';
 import type { SurveyMeshesInView3DState } from '../../scene3d/surveyMeshesInView3d.ts';
 import { formatSize } from '../attachments/fileFormat.ts';
 
@@ -100,6 +101,58 @@ export function meshesInViewMessage(state: SurveyMeshesInView3DState, t: TFuncti
  * still says how many and how big.
  */
 export function meshesInViewNeedsNotice(state: SurveyMeshesInView3DState): boolean {
+  switch (state.status) {
+    case 'off':
+      return false;
+    case 'zoomIn':
+    case 'looking':
+    case 'failed':
+      return true;
+    case 'ready':
+      return state.leftOut > 0 || state.loading > 0 || state.failed > 0;
+  }
+}
+
+/**
+ * The sentence that says whose scans are drawn in the view, in the same shape as the one for the
+ * walls of the caves in view and for the same reason: a view drawing two caves' scans out of five
+ * looks, with nothing said, like two caves that were scanned and three that were not.
+ */
+export function scansInViewMessage(state: ScansInView3DState, t: TFunction): string {
+  switch (state.status) {
+    case 'off':
+      return t('scene3d.scansOff');
+    case 'zoomIn':
+      return t('scene3d.scansInViewZoomIn');
+    case 'looking':
+      return t('scene3d.scansInViewLooking');
+    case 'failed':
+      return t('scene3d.scansInViewFailed');
+    case 'ready':
+      break;
+  }
+  if (state.inView === 0) {
+    return t('scene3d.scansInViewNone');
+  }
+  const counts = { shown: state.shown, total: state.inView };
+  const sentences = [
+    state.limitedBy === 'bytes' && state.limits
+      ? t('scene3d.scansInViewOverBytes', { ...counts, limit: formatSize(state.limits.maxBytes) })
+      : state.limitedBy === 'count' && state.limits
+        ? t('scene3d.scansInViewOverCount', { ...counts, limit: state.limits.maxCaves })
+        : t('scene3d.scansInViewShown', { ...counts, size: formatSize(state.heldBytes) }),
+  ];
+  if (state.loading > 0) {
+    sentences.push(t('scene3d.meshesInViewLoading', { count: state.loading }));
+  }
+  if (state.failed > 0) {
+    sentences.push(t('scene3d.meshesInViewUnreadable', { count: state.failed }));
+  }
+  return sentences.join(' ');
+}
+
+/** Whether the scans sentence is worth saying over the scene: whenever less than every scan in view is drawn. */
+export function scansInViewNeedsNotice(state: ScansInView3DState): boolean {
   switch (state.status) {
     case 'off':
       return false;

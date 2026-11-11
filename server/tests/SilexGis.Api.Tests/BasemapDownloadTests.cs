@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -36,6 +37,7 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
     private readonly string connectionString;
     private readonly string directory;
     private readonly FakeExtractor extractor = new();
+    private readonly FakeBuilds builds = new();
     private SilexGisApiFactory factory;
     private HttpClient admin = null!;
     private HttpClient reader = null!;
@@ -123,6 +125,81 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     [Fact]
+    public async Task Only_an_administrator_lists_builds_or_calls_off_a_download()
+    {
+        var job = await StartAsync(Apuseni());
+        var id = job["id"]!.GetValue<long>();
+
+        (await anonymous.GetAsync("/api/v1/admin/basemap/builds")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.PostAsync($"/api/v1/admin/basemap/downloads/{id}/cancel", null)).StatusCode
+            .ShouldBe(HttpStatusCode.Unauthorized);
+        await ProblemAsync(await reader.GetAsync("/api/v1/admin/basemap/builds"), HttpStatusCode.Forbidden, "access.forbidden");
+        await ProblemAsync(
+            await reader.PostAsync($"/api/v1/admin/basemap/downloads/{id}/cancel", null), HttpStatusCode.Forbidden, "access.forbidden");
+
+        // The refused calls left the download as it was; the administrator's own calls are answered.
+        (await Downloads()).ShouldHaveSingleItem().Status.ShouldBe(ProcessingJobStatus.Queued);
+        (await admin.GetAsync("/api/v1/admin/basemap/builds")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await admin.PostAsync($"/api/v1/admin/basemap/downloads/{id}/cancel", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_source_that_cannot_answer_an_estimate_is_a_coded_503()
+    {
+        extractor.EstimateFailure = new BasemapException(SelfHostedBasemap.Codes.SourceUnreachable, "stand-in: no answer");
+
+        await ProblemAsync(
+            await admin.PostAsJsonAsync("/api/v1/admin/basemap/estimate", Apuseni()),
+            HttpStatusCode.ServiceUnavailable,
+            SelfHostedBasemap.Codes.SourceUnreachable);
+    }
+
+    [Fact]
+    public async Task A_source_that_cannot_list_its_builds_is_a_coded_503()
+    {
+        (await admin.GetAsync("/api/v1/admin/basemap/builds")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        builds.Failure = new BasemapException(SelfHostedBasemap.Codes.SourceUnreachable, "stand-in: no answer");
+
+        await ProblemAsync(
+            await admin.GetAsync("/api/v1/admin/basemap/builds"),
+            HttpStatusCode.ServiceUnavailable,
+            SelfHostedBasemap.Codes.SourceUnreachable);
+    }
+
+    [Fact]
+    public async Task An_extract_that_fails_part_way_fails_with_its_code_and_leaves_no_partial_file()
+    {
+        extractor.Failure = new BasemapException(SelfHostedBasemap.Codes.ExtractFailed, "stand-in: the extractor stopped");
+        var job = await StartAsync(Apuseni());
+
+        await RunAsync(job["id"]!.GetValue<long>());
+
+        var download = (await StatusAsync())["download"]!;
+        download["state"]!.GetValue<string>().ShouldBe("failed");
+        download["errorCode"]!.GetValue<string>().ShouldBe(SelfHostedBasemap.Codes.ExtractFailed);
+        // The extractor did write part of a file before it failed, and none of it is left.
+        extractor.Calls.ShouldContain(c => !c.DryRun);
+        Directory.GetFiles(directory).ShouldBeEmpty();
+        (await StatusAsync())["current"].ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Downloads_asked_for_at_the_same_moment_still_run_one_at_a_time()
+    {
+        var answers = await Task.WhenAll(Enumerable.Range(0, 6).Select(async _ =>
+        {
+            using var response = await admin.PostAsJsonAsync("/api/v1/admin/basemap/downloads", Apuseni());
+            return (response.StatusCode, Body: await response.Content.ReadAsStringAsync());
+        }));
+
+        answers.Count(a => a.StatusCode == HttpStatusCode.Accepted).ShouldBe(1, string.Join("\n", answers.Select(a => $"{a.StatusCode} {a.Body}")));
+        answers.Where(a => a.StatusCode != HttpStatusCode.Accepted)
+            .ShouldAllBe(a => a.StatusCode == HttpStatusCode.Conflict && a.Body.Contains(SelfHostedBasemap.Codes.DownloadRunning));
+        (await Downloads()).Count.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task One_download_at_a_time()
     {
         (await admin.PostAsJsonAsync("/api/v1/admin/basemap/downloads", Apuseni())).StatusCode.ShouldBe(HttpStatusCode.Accepted);
@@ -165,8 +242,8 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
         var published = await PublishedAsync();
         published[OwnEntry]["urlTemplate"]!.GetValue<string>().ShouldBe($"/basemap/tiles/{sourceId}/{{z}}/{{x}}/{{y}}");
 
-        // A second download a second later, of an older build chosen by date.
-        await Task.Delay(1100);
+        // A second download straight after, of an older build chosen by date: the build alone
+        // gives it a name of its own.
         var second = await StartAsync(Apuseni() with { Build = "20261022" });
         await RunAsync(second["id"]!.GetValue<long>());
 
@@ -198,6 +275,38 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
         var download = (await StatusAsync())["download"]!;
         download["state"]!.GetValue<string>().ShouldBe("failed");
         download["errorCode"]!.GetValue<string>().ShouldBe(code);
+        extractor.Calls.ShouldAllBe(c => c.DryRun);
+        (await StatusAsync())["current"].ShouldBeNull();
+    }
+
+    /// <summary>
+    /// A region the size cap would take but the disk has no room for is refused for the disk: the
+    /// estimate names the disk, and a download fails with that code having fetched nothing. The
+    /// region asked for is far larger than any disk, so the real free space decides it.
+    /// </summary>
+    [Fact]
+    public async Task A_region_the_disk_has_no_room_for_is_refused_for_the_disk()
+    {
+        await RestartAsync(selfHosted: true, maxBytes: long.MaxValue);
+        const long exabytes = 4_000_000_000_000_000_000;
+
+        // The positive case first: a region that fits is weighed with no refusal.
+        extractor.Estimate = 36_000_000;
+        var fits = await (await admin.PostAsJsonAsync("/api/v1/admin/basemap/estimate", Apuseni())).Content.ReadFromJsonAsync<JsonNode>();
+        fits!["refusalCode"].ShouldBeNull();
+        fits["freeBytes"]!.GetValue<long>().ShouldBeGreaterThan(0);
+
+        extractor.Estimate = exabytes;
+        var weighed = await (await admin.PostAsJsonAsync("/api/v1/admin/basemap/estimate", Apuseni())).Content.ReadFromJsonAsync<JsonNode>();
+        weighed!["bytes"]!.GetValue<long>().ShouldBe(exabytes);
+        weighed["refusalCode"]!.GetValue<string>().ShouldBe(SelfHostedBasemap.Codes.DiskFull);
+
+        var job = await StartAsync(Apuseni());
+        await RunAsync(job["id"]!.GetValue<long>());
+
+        var download = (await StatusAsync())["download"]!;
+        download["state"]!.GetValue<string>().ShouldBe("failed");
+        download["errorCode"]!.GetValue<string>().ShouldBe(SelfHostedBasemap.Codes.DiskFull);
         extractor.Calls.ShouldAllBe(c => c.DryRun);
         (await StatusAsync())["current"].ShouldBeNull();
     }
@@ -252,6 +361,121 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
         status["download"]!["errorCode"]!.GetValue<string>().ShouldBe(SelfHostedBasemap.Codes.Cancelled);
         status["current"]!["sourceId"]!.GetValue<string>().ShouldBe(served);
         Directory.GetFiles(directory, "*.partial").ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The worker takes a download a moment before its run is ready to be called off. A cancel in
+    /// that moment is held for the run rather than dropped: the run stops before it fetches
+    /// anything, and the extract being served stays served.
+    /// </summary>
+    [Fact]
+    public async Task A_download_called_off_between_its_claim_and_its_start_does_not_run()
+    {
+        var first = await StartAsync(Apuseni());
+        await RunAsync(first["id"]!.GetValue<long>());
+        var served = (await StatusAsync())["current"]!["sourceId"]!.GetValue<string>();
+
+        var second = await StartAsync(Apuseni());
+        var id = second["id"]!.GetValue<long>();
+        using (var scope = factory.Services.CreateScope())
+        {
+            // Claimed, as the worker's claim leaves it, and not yet started.
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var job = await db.ProcessingJobs.SingleAsync(j => j.Id == id);
+            job.Status = ProcessingJobStatus.Running;
+            job.StartedAt = DateTimeOffset.UtcNow;
+            job.LeaseExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
+            await db.SaveChangesAsync();
+        }
+
+        (await admin.PostAsync($"/api/v1/admin/basemap/downloads/{id}/cancel", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        int extractsBefore;
+        lock (extractor.Calls)
+        {
+            extractsBefore = extractor.Calls.Count(c => !c.DryRun);
+        }
+
+        await RunAsync(id);
+
+        var status = await StatusAsync();
+        status["download"]!["state"]!.GetValue<string>().ShouldBe("cancelled");
+        status["download"]!["errorCode"]!.GetValue<string>().ShouldBe(SelfHostedBasemap.Codes.Cancelled);
+        status["current"]!["sourceId"]!.GetValue<string>().ShouldBe(served);
+        lock (extractor.Calls)
+        {
+            extractor.Calls.Count(c => !c.DryRun).ShouldBe(extractsBefore);
+        }
+
+        Directory.GetFiles(directory, "*.partial").ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// A cancel that reaches a download only after it ended changes nothing and is not recorded as a
+    /// cancellation: the audit says what happened, not what was asked for.
+    /// </summary>
+    [Fact]
+    public async Task Calling_off_a_finished_download_changes_nothing_and_records_nothing()
+    {
+        var started = await StartAsync(Apuseni());
+        var id = started["id"]!.GetValue<long>();
+        await RunAsync(id);
+
+        var response = await admin.PostAsync($"/api/v1/admin/basemap/downloads/{id}/cancel", null);
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        JsonNode.Parse(payload)!["state"]!.GetValue<string>().ShouldBe("succeeded");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.Set<AuditEntry>().CountAsync(a =>
+                a.EntityType == "Basemap" && a.Action == AuditActions.Updated && a.EntityId == id.ToString()))
+            .ShouldBe(0);
+        scope.ServiceProvider.GetRequiredService<BasemapCancellation>().IsCancelled(id).ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A download's run ends a moment before the worker records how it ended, so for that moment
+    /// the job still reads as running. A cancel arriving then reached nothing: it is not recorded as
+    /// a cancellation, and it leaves no call held for a run that will never come.
+    /// </summary>
+    [Fact]
+    public async Task Calling_off_a_download_whose_run_has_ended_but_is_not_yet_recorded_records_nothing()
+    {
+        // The positive case first: a download the call does reach is recorded as called off.
+        var reached = (await StartAsync(Apuseni()))["id"]!.GetValue<long>();
+        (await admin.PostAsync($"/api/v1/admin/basemap/downloads/{reached}/cancel", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await CancelAuditsAsync(reached)).ShouldBe(1);
+
+        var id = (await StartAsync(Apuseni()))["id"]!.GetValue<long>();
+        using (var scope = factory.Services.CreateScope())
+        {
+            // Taken by the worker, as its claim leaves it; the run then ends, and the worker has not
+            // yet written the outcome.
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var job = await db.ProcessingJobs.SingleAsync(j => j.Id == id);
+            job.Status = ProcessingJobStatus.Running;
+            job.StartedAt = DateTimeOffset.UtcNow;
+            job.LeaseExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
+            await db.SaveChangesAsync();
+            var cancellation = scope.ServiceProvider.GetRequiredService<BasemapCancellation>();
+            cancellation.Register(id);
+            cancellation.Finish(id);
+        }
+
+        var response = await admin.PostAsync($"/api/v1/admin/basemap/downloads/{id}/cancel", null);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+
+        (await CancelAuditsAsync(id)).ShouldBe(0);
+        using var check = factory.Services.CreateScope();
+        check.ServiceProvider.GetRequiredService<BasemapCancellation>().IsCancelled(id).ShouldBeFalse();
+    }
+
+    private async Task<int> CancelAuditsAsync(long jobId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Set<AuditEntry>().CountAsync(a =>
+            a.EntityType == "Basemap" && a.Action == AuditActions.Updated && a.EntityId == jobId.ToString());
     }
 
     [Fact]
@@ -348,20 +572,20 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
         return new DownloadBody(new RegionBody(r.West, r.South, r.East, r.North), 15, null);
     }
 
-    private SilexGisApiFactory Build(bool selfHosted, string? initialRegion = null) => new(
+    private SilexGisApiFactory Build(bool selfHosted, string? initialRegion = null, long maxBytes = 1_000_000_000) => new(
         connectionString,
         new Dictionary<string, string?>
         {
             ["Jobs:PollSeconds"] = "0",
             ["Basemap:SelfHosted"] = selfHosted ? "true" : "false",
             ["Basemap:Directory"] = directory,
-            ["Basemap:MaxBytes"] = "1000000000",
+            ["Basemap:MaxBytes"] = maxBytes.ToString(CultureInfo.InvariantCulture),
             ["Basemap:InitialRegion"] = initialRegion,
         },
         services =>
         {
             services.AddSingleton<IBasemapExtractor>(extractor);
-            services.AddSingleton<IBasemapBuilds, FakeBuilds>();
+            services.AddSingleton<IBasemapBuilds>(builds);
         });
 
     private async Task SignInAsync()
@@ -371,11 +595,11 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
         anonymous = factory.CreateClient();
     }
 
-    private async Task RestartAsync(bool selfHosted, string? initialRegion = null)
+    private async Task RestartAsync(bool selfHosted, string? initialRegion = null, long maxBytes = 1_000_000_000)
     {
         DisposeClients();
         await factory.DisposeAsync();
-        factory = Build(selfHosted, initialRegion);
+        factory = Build(selfHosted, initialRegion, maxBytes);
         await SignInAsync();
     }
 
@@ -395,6 +619,8 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
         var job = await db.ProcessingJobs.SingleAsync(j => j.Id == jobId);
         job.Status = ProcessingJobStatus.Running;
         job.StartedAt = DateTimeOffset.UtcNow;
+        // A running job always carries a lease, as the worker's own claim gives it.
+        job.LeaseExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
         await db.SaveChangesAsync();
         var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>().Single(h => h.Kind == ProcessingJobKinds.BasemapExtract);
         try
@@ -480,6 +706,12 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
 
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        /// <summary>When set, the size cannot be worked out and this is thrown instead.</summary>
+        public BasemapException? EstimateFailure { get; set; }
+
+        /// <summary>When set, a download writes part of its file and then fails with this.</summary>
+        public BasemapException? Failure { get; set; }
+
         public List<(string Source, bool DryRun)> Calls { get; } = [];
 
         public Task<long> EstimateAsync(string source, BasemapRegion region, int maxZoom, CancellationToken ct)
@@ -489,7 +721,7 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
                 Calls.Add((source, true));
             }
 
-            return Task.FromResult(Estimate);
+            return EstimateFailure is { } failure ? Task.FromException<long>(failure) : Task.FromResult(Estimate);
         }
 
         public async Task ExtractAsync(
@@ -502,6 +734,11 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
 
             await File.WriteAllBytesAsync(outputPath, new byte[Bytes], ct);
             await progress(50);
+            if (Failure is { } failure)
+            {
+                throw failure;
+            }
+
             if (Hold)
             {
                 Started.TrySetResult();
@@ -514,8 +751,12 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
     {
         public const string Newest = "20261024";
 
-        public Task<IReadOnlyList<BasemapBuild>> ListAsync(CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<BasemapBuild>>(
+        /// <summary>When set, the source cannot be asked for its builds and this is thrown instead.</summary>
+        public BasemapException? Failure { get; set; }
+
+        public Task<IReadOnlyList<BasemapBuild>> ListAsync(CancellationToken ct) => Failure is { } failure
+            ? Task.FromException<IReadOnlyList<BasemapBuild>>(failure)
+            : Task.FromResult<IReadOnlyList<BasemapBuild>>(
             [
                 new(Newest, 139_134_051_681, DateTimeOffset.Parse("2026-10-24T09:06:14Z"), "4.15.2"),
                 new("20261023", 139_104_211_087, DateTimeOffset.Parse("2026-10-23T09:04:57Z"), "4.15.2"),

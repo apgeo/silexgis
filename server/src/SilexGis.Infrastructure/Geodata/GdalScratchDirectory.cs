@@ -8,14 +8,13 @@ namespace SilexGis.Infrastructure.Geodata;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Several of the library's writers work in a scratch file and move it into place at the end, and
-/// the setting that says where is one value for the whole process — the library has no notion of
-/// one caller's temporary directory. That is tolerable here because of what the value is used for:
-/// every writer that reads it invents its own file name inside whatever directory it names, so two
-/// pieces of work pointed at different directories do not collide, and one that ran while another
-/// had this held would write somewhere writable rather than somewhere wrong. What must not happen —
-/// and what this exists to prevent — is the directory being left pointing at a build's workspace
-/// after the build is finished and the workspace has been deleted.
+/// Several of the library's writers work in a scratch file and move it into place at the end. The
+/// setting that says where is set for the calling thread only, which the library reads ahead of the
+/// process-wide value: set for the whole process, every other piece of GDAL work running at the
+/// same moment — a map's conversion, a derivative in another job lane — would put its scratch files
+/// in this build's workspace, and lose them if the build's workspace is removed first. So it is
+/// held across synchronous work only: a hold that spans an await can be released on another thread
+/// and leave the first one pointing at a directory that may be deleted.
 /// </para>
 /// <para>
 /// Restoring the previous value rather than clearing it, so that the default settled at startup
@@ -41,11 +40,11 @@ public readonly struct GdalScratchDirectory : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
 
         GdalRuntime.Configure();
-        var previous = Gdal.GetConfigOption(Option, null);
-        Gdal.SetConfigOption(Option, Path.GetFullPath(directory));
+        var previous = Gdal.GetThreadLocalConfigOption(Option, null);
+        Gdal.SetThreadLocalConfigOption(Option, Path.GetFullPath(directory));
         return new GdalScratchDirectory(previous);
     }
 
     /// <inheritdoc />
-    public void Dispose() => Gdal.SetConfigOption(Option, previous);
+    public void Dispose() => Gdal.SetThreadLocalConfigOption(Option, previous);
 }

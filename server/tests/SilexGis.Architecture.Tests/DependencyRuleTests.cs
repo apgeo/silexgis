@@ -256,10 +256,12 @@ public class DependencyRuleTests
         "Therion.Blender.Parsing.LoxWriter",
 
         // Reading what a compilation printed. Text in, records out — this starts no compiler.
+        "Therion.Build.TherionLogDeclination",
         "Therion.Build.TherionLogDiagnostic",
         "Therion.Build.TherionLogLoopError",
         "Therion.Build.TherionLogOutcome",
         "Therion.Build.TherionLogParser",
+        "Therion.Build.TherionLogRange",
         "Therion.Build.TherionLogSummary",
 
         // The one type here that starts a process — the Therion compiler, run over a project

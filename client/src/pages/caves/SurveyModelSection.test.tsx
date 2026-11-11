@@ -19,6 +19,8 @@ const uploadMutate = vi.fn();
 const deleteMutate = vi.fn();
 const makeCurrentMutate = vi.fn();
 const readAgainMutate = vi.fn();
+const placementMutate = vi.fn();
+const estimatedMutate = vi.fn();
 
 function model(overrides: Partial<SurveyModelInfo> = {}): SurveyModelInfo {
   return {
@@ -40,6 +42,17 @@ function model(overrides: Partial<SurveyModelInfo> = {}): SurveyModelInfo {
     meshSizeBytes: null,
     isCurrent: false,
     sourcePrecisionLost: false,
+    sourceEpsg: null,
+    placementOffByKm: null,
+    suggestedSourceEpsg: null,
+    suggestsLocalMetres: false,
+    suggestedOffByKm: null,
+    estimatePassages: false,
+    estimatedPassageDiameterM: 1,
+    estimatedPassageColor: '#e8833a',
+    unsizedPassageM: null,
+    unsizedLegCount: null,
+    estimatedLegCount: null,
     createdAt: '2026-08-18T06:00:00Z',
     updatedAt: '2026-08-18T06:00:00Z',
     ...overrides,
@@ -88,6 +101,25 @@ vi.mock('../../api/hooks.ts', async () => {
     useDeleteSurveyModel: () => ({ mutateAsync: deleteMutate, isPending: false }),
     useMakeSurveyModelCurrent: () => ({ mutateAsync: makeCurrentMutate, isPending: false }),
     useReadSurveyModelAgain: () => ({ mutateAsync: readAgainMutate, isPending: false }),
+    // The point-cloud dialog beside the model upload reads the installation's caps and sends
+    // through the survey-upload protocol; nothing here opens it, but it mounts with the section.
+    isPointCloudFileName: actual.isPointCloudFileName,
+    POINT_CLOUD_EXTENSIONS: actual.POINT_CLOUD_EXTENSIONS,
+    DEFAULT_RECORDING_CAPABILITIES: actual.DEFAULT_RECORDING_CAPABILITIES,
+    recordingSelection: actual.recordingSelection,
+    titleFromRecordingFolder: actual.titleFromRecordingFolder,
+    useSurveyUploadCapabilities: () => ({ data: undefined }),
+    useUploadPointCloud: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useUploadRecording: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    // The dialog shows the room left in storage before an upload starts; no figures here.
+    useStorageRoom: () => ({ data: undefined }),
+    // The placement row on a point-cloud model; none of the models here is one.
+    isPointCloudModel: actual.isPointCloudModel,
+    usePlaceSurveyModel: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    usePlaceSurveyModelByControlPoints: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useUnplaceSurveyModel: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useChangeSurveyModelPlacement: () => ({ mutateAsync: placementMutate, isPending: false }),
+    useChangeSurveyModelEstimatedPassages: () => ({ mutateAsync: estimatedMutate, isPending: false }),
     // The viewer opened from this section reads the model's links, to show over the model the
     // photographs somebody has hung on its stations. Nothing here is about those, so there are
     // none — but the mock lists what it answers, so a hook left out of it is a crash.
@@ -152,6 +184,7 @@ beforeEach(() => {
   deleteMutate.mockReset().mockResolvedValue(undefined);
   makeCurrentMutate.mockReset().mockResolvedValue(model());
   readAgainMutate.mockReset().mockResolvedValue(model({ status: 'ready', readingAgain: true }));
+  placementMutate.mockReset().mockResolvedValue(model({ status: 'pending' }));
   models = [];
   summary = summaryWith(true);
   navigate.mockClear();
@@ -298,6 +331,22 @@ describe('the survey model list', () => {
     expect(screen.queryByTestId('survey-model-read-again-again')).toBeNull();
     expect(screen.queryByTestId('survey-model-read-again-walls')).toBeNull();
     expect(screen.getByTestId('survey-model-read-again-done')).toBeInTheDocument();
+  });
+
+  it('offers a scan neither another reading nor the current mark, and says it is tiled, not read', async () => {
+    // A point cloud is tiled by its upload's run, and the server refuses a reading of it; and a
+    // cave's current model is where its centreline comes from, which a scan cannot supply.
+    models = [
+      model({ id: 'scan', format: 'laz', name: 'Hall scan', status: 'processing' }),
+      model({ id: 'scan-done', format: 'las', name: 'Hall scan done' }),
+    ];
+    show();
+    await screen.findByText('Hall scan done');
+
+    expect(screen.getByText(/The scan is being tiled for the 3D view/)).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-model-read-again-scan')).toBeNull();
+    expect(screen.queryByTestId('survey-model-read-again-scan-done')).toBeNull();
+    expect(screen.queryByText('Make current')).toBeNull();
   });
 
   it('offers another conversion of a wall mesh, converted or not', async () => {
@@ -448,6 +497,147 @@ describe('the survey model list', () => {
 
     fireEvent.click(screen.getByTestId('fake-movie-dialog-close'));
     expect(shownDialog()?.surveyModelId).toBeNull();
+  });
+
+  it('offers the grid a reading found for a survey declared as local, and reads it again with it', async () => {
+    models = [
+      model({
+        format: 'lox',
+        status: 'failed',
+        processingError: 'far too large to be metres from one point',
+        suggestedSourceEpsg: 32635,
+        suggestedOffByKm: 0.21,
+        anchorHeightM: 1922,
+      }),
+    ];
+    show();
+
+    expect(await screen.findByText('Read as EPSG:32635, it lands 0.2 km from the cave.')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('survey-model-use-suggestion-m1'));
+
+    // Filled in with the suggestion and the altitude already given, and sent only when confirmed.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Filled in with the suggested placement/)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('EPSG code')).toHaveValue('32635');
+    expect(within(dialog).getByLabelText(/Altitude of the file's zero level/)).toHaveValue('1922');
+    expect(placementMutate).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Read again with this placement' }));
+    await waitFor(() =>
+      expect(placementMutate).toHaveBeenCalledWith({
+        id: 'm1',
+        caveId: 'c1',
+        placement: {
+          sourceEpsg: 32635,
+          originLongitude: null,
+          originLatitude: null,
+          originHeightM: 1922,
+        },
+      }),
+    );
+  });
+
+  it('says how far a survey read in the wrong grid landed, though it was read', async () => {
+    models = [
+      model({ format: 'lox', sourceEpsg: 32635, placementOffByKm: 469.3, suggestedSourceEpsg: 32634, suggestedOffByKm: 0.48 }),
+    ];
+    show();
+
+    expect(await screen.findByText('Ready')).toBeInTheDocument();
+    expect(screen.getByText('Placed as declared, this survey lands 469 km from its cave.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Use EPSG:32634/ })).toBeInTheDocument();
+  });
+
+  it('offers local metres about the true entrance for small numbers declared on a grid', async () => {
+    models = [model({ format: 'lox', sourceEpsg: 32635, placementOffByKm: 4000, suggestsLocalMetres: true })];
+    show();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Use metres from a point/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Longitude of the origin')).toHaveValue('25.20912');
+    expect(within(dialog).getByLabelText('Latitude of the origin')).toHaveValue('45.51944');
+  });
+
+  it("lets a writer change any model's placement, starting from what it was declared with", async () => {
+    models = [model({ format: 'lox', sourceEpsg: 31700, anchorHeightM: 640 })];
+    show();
+
+    fireEvent.click(await screen.findByTestId('survey-model-change-placement-m1'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('EPSG code')).toHaveValue('31700');
+    expect(within(dialog).queryByText(/Filled in with the suggested placement/)).not.toBeInTheDocument();
+
+    cleanup();
+    show(false);
+    expect(await screen.findByText('Ready')).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-model-change-placement-m1')).not.toBeInTheDocument();
+  });
+
+  it('offers a suggestion to nobody who may not write the cave, but still says what was found', async () => {
+    models = [model({ format: 'lox', status: 'failed', suggestedSourceEpsg: 32635, suggestedOffByKm: 0.2 })];
+    show(false);
+
+    expect(await screen.findByText(/Read as EPSG:32635/)).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-model-use-suggestion-m1')).not.toBeInTheDocument();
+  });
+
+  it('says how much passage has no measured size, and offers to draw it at an estimated one', async () => {
+    models = [model({ format: 'lox', unsizedPassageM: 2853, unsizedLegCount: 412, estimatedLegCount: 0 })];
+    show();
+
+    expect(
+      await screen.findByText(/^2\.9 km of passage \(legs: 412\) has no measured size/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Draw at an estimated size/ }));
+
+    // The warning comes first and is not optional reading.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByTestId('survey-model-estimated-warning').textContent).toMatch(
+      /These passage sizes are not real/,
+    );
+    expect(within(dialog).getByRole('switch')).toBeChecked();
+    expect(within(dialog).getByLabelText('Diameter')).toHaveValue('1.0');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Read again with these settings' }));
+    await waitFor(() =>
+      expect(estimatedMutate).toHaveBeenCalledWith({
+        id: 'm1',
+        caveId: 'c1',
+        estimated: { enabled: true, diameterM: 1, color: '#e8833a' },
+      }),
+    );
+  });
+
+  it('warns on the row that passages drawn at an estimated size were not measured', async () => {
+    models = [
+      model({
+        format: 'lox',
+        estimatePassages: true,
+        estimatedPassageDiameterM: 1.5,
+        unsizedPassageM: 2853,
+        unsizedLegCount: 412,
+        estimatedLegCount: 412,
+      }),
+    ];
+    show();
+
+    expect(
+      await screen.findByText(/^Not measured: 412 legs are drawn at an estimated size of 1\.5 m/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Estimated passages/ })).toBeInTheDocument();
+  });
+
+  it('says nothing about estimates for a survey whose every passage has a size, or to a reader', async () => {
+    models = [model({ format: 'lox', unsizedPassageM: 0, unsizedLegCount: 0, estimatedLegCount: 0 })];
+    show();
+    expect(await screen.findByText('Ready')).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-model-estimated-note-m1')).not.toBeInTheDocument();
+
+    cleanup();
+    models = [model({ format: 'lox', unsizedPassageM: 90, unsizedLegCount: 1, estimatedLegCount: 0 })];
+    show(false);
+    expect(await screen.findByText(/^90 m of passage/)).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-model-estimate-m1')).not.toBeInTheDocument();
   });
 
   it('stops asking once nothing is left to wait for', () => {

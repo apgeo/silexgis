@@ -65,3 +65,23 @@ export function useLanguageChoice() {
     },
   };
 }
+
+/**
+ * A public page about something an account sent shows it in that account's language, unless
+ * whoever opens it has picked a language in this browser. The page is opened without signing in,
+ * so there is no reader's account to adopt from, and without this it fell back to the app's
+ * default language whatever the sender works in. Nothing is remembered: the sender's language is
+ * the page's starting point, not the reader's choice.
+ */
+export function useSendersLanguage(language: string | null | undefined) {
+  const { i18n } = useTranslation();
+  useEffect(() => {
+    if (!language || chosenHere() || language === i18n.resolvedLanguage) {
+      return;
+    }
+    if (!Object.keys(i18n.options.resources ?? {}).includes(language)) {
+      return;
+    }
+    void i18n.changeLanguage(language);
+  }, [language, i18n]);
+}

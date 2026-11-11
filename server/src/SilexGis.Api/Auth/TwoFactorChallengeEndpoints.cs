@@ -80,6 +80,7 @@ public static class TwoFactorChallengeEndpoints
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
         IMessageDispatcher dispatcher,
+        TimeProvider clock,
         CancellationToken ct)
     {
         // Identity's half-finished sign-in is the only thing that says who this is.
@@ -112,7 +113,7 @@ public static class TwoFactorChallengeEndpoints
 
         // Per account, not per address: the endpoint rate limit is per IP, which would still let
         // one account's address be flooded from a handful of them.
-        if (await SendThrottle.TooSoonAsync(userManager, user, method, policy, SendThrottle.SignIn))
+        if (await SendThrottle.TooSoonAsync(userManager, user, method, policy, SendThrottle.SignIn, clock))
         {
             return ApiProblems.BadRequest(
                 "auth.mfa_resend_too_soon", "A code was just sent. Wait a moment before asking for another.");
@@ -128,7 +129,7 @@ public static class TwoFactorChallengeEndpoints
                 "auth.mfa_send_failed", "The code could not be sent. Try another method or ask an administrator.");
         }
 
-        await SendThrottle.MarkSentAsync(userManager, user, method, SendThrottle.SignIn);
+        await SendThrottle.MarkSentAsync(userManager, user, method, SendThrottle.SignIn, clock);
         return TypedResults.Ok(new TwoFactorSentDto(method, Mask(user, method), lifetime));
     }
 

@@ -300,6 +300,14 @@ public static class DocumentAccessRules
             return false;
         }
 
+        // A point cloud whose file names a coordinate system is the cave's position itself, and
+        // so is any copy made of it. The document's own rules say who may read the scan; the
+        // cave's exact-location rule says who may take its bytes.
+        if (await Scans.PointCloudFileAccess.WithheldWithoutExactLocationAsync(db, access, ctx, subject, ct))
+        {
+            return false;
+        }
+
         return subject.Version.IsCurrent
             || await CanWriteAsync(db, access, ctx, subject.Document, subject.CurrentFile, ct);
     }

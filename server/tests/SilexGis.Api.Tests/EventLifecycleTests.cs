@@ -313,6 +313,11 @@ public sealed class EventLifecycleTests : IAsyncLifetime, IDisposable, IClassFix
         var response = await owner.PostWithIfMatchAsync($"/api/v1/events/{id}/state", new { state });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+
+        // A move is posted beside the event, so it says whose version it answers, and the version
+        // is the one the event's read now hands out.
+        response.Content.Headers.ContentLocation!.OriginalString.ShouldBe($"/api/v1/events/{id}");
+        response.Headers.ETag!.Tag.ShouldBe((await owner.GetAsync($"/api/v1/events/{id}")).Headers.ETag!.Tag);
         return JsonDocument.Parse(payload).RootElement.Clone();
     }
 

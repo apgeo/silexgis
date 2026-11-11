@@ -56,9 +56,11 @@ using SilexGis.Api.Features.Filters;
 using SilexGis.Api.Features.ResLinks;
 using SilexGis.Api.Features.FeatureShares;
 using SilexGis.Api.Features.QrLanding;
+using SilexGis.Api.Features.ScanProfiles;
 using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.Statistics;
 using SilexGis.Api.Features.Sync;
+using SilexGis.Api.Features.Storage;
 using SilexGis.Api.Features.SurveyUploads;
 using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
@@ -325,6 +327,9 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // and for the same reason — and gated where tracking gates a survey: a cave's whole station
     // vocabulary leaves in one piece or not at all.
     builder.Services.AddScoped<ITripSurveyStations, SilexGis.Api.Features.TripTracking.TripSurveyStationReads>();
+    // The roster and caving-group writes ask whether filling a trustee caving group hands an
+    // account more than the caller holds; the permission area answers with its own rule judgement.
+    builder.Services.AddScoped<ITrusteeRightsBound, SilexGis.Api.Features.Permissions.TrusteeRightsBound>();
     // Why a published page was refused and how much the published surface is read, for the
     // operator: a log event and counters, and nothing in any response. One for the application's
     // lifetime because it owns the counters.
@@ -610,6 +615,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapCaveDepthPlaceEndpoints();
     api.MapEntranceEndpoints();
     api.MapSurveyModelEndpoints();
+    api.MapSurveyModelTileEndpoints();
     api.MapSurveySourceEndpoints();
     api.MapSurveyCompilationEndpoints();
     api.MapCenterlineEndpoints();
@@ -639,6 +645,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapMapKarstIndexEndpoints();
     api.MapMapPointPatternEndpoints();
     api.MapMapCaveMeshEndpoints();
+    api.MapMapCaveScanEndpoints();
     api.MapSearchEndpoints();
     api.MapDashboardEndpoints();
     api.MapCalendarEndpoints();
@@ -729,6 +736,9 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapTerrainDerivativeEndpoints();
     api.MapSyncEndpoints();
     api.MapSurveyUploadEndpoints();
+    api.MapProcessingProfileEndpoints();
+    api.MapStorageEndpoints();
+    api.MapStorageReportEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {
@@ -743,6 +753,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
 
         await db.Database.MigrateAsync();
         await TaxonomySeeder.SeedAsync(db);
+        await ProcessingProfileSeeder.SeedAsync(db);
         // Pins carried across from the table phones' pins were kept in arrive with their pixels
         // only; the fraction the browser draws them at is worked out here, by the one conversion
         // there is, rather than by a copy of it in the migration. Nothing to do on every later start.

@@ -27,7 +27,13 @@ retype correctly.
 - 4 vCPU, 8 GB RAM and 40 GB of disk is enough for a small installation including the terrain
   bake worker. Images and build cache alone take about 15 GB.
 - Nothing else on the machine. These scripts assume the host is theirs — in particular they
-  reset the firewall and enable a swap file.
+  set the firewall's defaults to deny incoming connections and enable a swap file. Re-running
+  them keeps firewall rules and Docker daemon settings (`/etc/docker/daemon.json`) you added by
+  hand: rules are only added, and the daemon settings are merged into the existing file (log options
+of a log driver other than `json-file` are replaced, since `json-file` would refuse them; a file
+that is not valid JSON, or that the daemon rejects, stops the script before Docker is restarted). A port
+  the scripts once opened and no longer need stays open until you remove it
+  (`ufw delete allow <port>/tcp`).
 
 ## Install, from a fresh machine
 
@@ -172,9 +178,20 @@ silexgis-update            # do it
 ```
 
 The update fetches the tracked branch, **takes a backup**, fast-forwards the checkout,
-rebuilds the images, recreates the containers, and waits for `/health/ready`. If the build
-fails, or the new version does not become healthy within five minutes, it resets the checkout
-to the previous commit, rebuilds, and brings that back up.
+rebuilds the images, recreates the containers, and waits for `/health/ready`. If the database
+container is stopped, it is started on its own first and backed up like any other — a stopped
+container is not an empty database. If the build fails, the new containers do not start (a
+failing database migration shows up here), or the new version does not become healthy within
+five minutes, it resets the checkout to the previous commit, rebuilds that from the local cache,
+brings it back up and waits for it to answer healthy.
+
+It ends with `Updated <old> -> <new>` and exit status 0 only when the new version really is the
+one running. Every other outcome exits 1 with a `FAILED:` line that says what failed and which of
+three things is now true: the previous version is running again and the database is as it was
+(the build failed, so nothing new started); the previous version is running again but the new one
+may already have migrated the database (the line names the backup to restore); or the previous
+version could not be put back or did not come back up (the line names the backup). An unattended
+timer should treat a non-zero exit as an alert.
 
 Data survives because it is in volumes, and rebuilding an image or recreating a container does
 not touch a volume. Database migrations run automatically when the API container starts.
@@ -332,6 +349,10 @@ Pass it to the installer and the TLS overlay is configured for you:
 SILEXGIS_DOMAIN=158-220-114-220.sslip.io bash install-app.sh
 ```
 
+This works on a first install only: a re-run leaves an existing `.env` as it is, and says so. An
+installation already set up on plain HTTP moves onto a name with `set-domain.sh` (below), which
+also adds the TLS overlay to `COMPOSE_FILE`.
+
 ### Moving to your own domain
 
 One command covers the four places a hostname is written — the reverse proxy, the public URL,
@@ -348,8 +369,9 @@ the OIDC redirect registrations and the TLS contact address:
 the redirect URI sign-in returns to. `--also` is repeatable and keeps the previous address
 working across the move — the SPA takes its OIDC authority from whatever is in the browser's
 address bar, so each additional name needs its own `/auth/callback` registered or signing in
-through it is refused as an invalid redirect. The script registers them, restarts the proxy and
-the API, and waits until the primary name really is serving a trusted certificate before it
+through it is refused as an invalid redirect. The script registers them, adds the TLS overlay to
+`COMPOSE_FILE` if the installation was running without it (and `admin@<primary>` as the TLS
+contact when none is set or given), recreates the stack, and waits until the primary name really is serving a trusted certificate before it
 reports success. `sudo ufw allow 443/tcp` first if the host was provisioned without TLS.
 
 #### Get the DNS right first, because the failure does not look like DNS

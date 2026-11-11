@@ -112,7 +112,9 @@ export async function rasterizeCog(cogUrl: string, bounds: Scene3DBounds): Promi
   container.style.top = '0';
   document.body.appendChild(container);
 
-  const source = new GeoTIFF({ sources: [{ url: cogUrl }], convertToRGB: true, interpolate: false });
+  // 'auto', not a forced conversion: a map sheet's file carries a fourth, transparency band that a
+  // forced conversion drops while the layer still expects it — see the 2D overlay's note.
+  const source = new GeoTIFF({ sources: [{ url: cogUrl }], convertToRGB: 'auto', interpolate: false });
   const map = new Map({
     target: container,
     controls: [],

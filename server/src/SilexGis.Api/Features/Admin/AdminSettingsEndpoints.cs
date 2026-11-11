@@ -132,13 +132,13 @@ public static class AdminSettingsEndpoints
             new MailSettings
             {
                 Enabled = request.Enabled,
-                Host = request.Host.Trim(),
+                Host = Text(request.Host),
                 Port = request.Port,
                 Security = request.Security,
                 Username = Blank(request.Username),
                 Password = KeepOrReplaceSecret(current.Password, request.Password),
-                FromAddress = request.FromAddress.Trim(),
-                FromName = request.FromName.Trim(),
+                FromAddress = Text(request.FromAddress),
+                FromName = Text(request.FromName),
                 ReplyTo = Blank(request.ReplyTo),
                 TimeoutSeconds = request.TimeoutSeconds,
                 AcceptInvalidCertificate = request.AcceptInvalidCertificate,
@@ -173,10 +173,10 @@ public static class AdminSettingsEndpoints
             new SmsSettings
             {
                 Enabled = request.Enabled,
-                Url = request.Url.Trim(),
-                Method = request.Method.ToUpperInvariant(),
-                ContentType = request.ContentType.Trim(),
-                BodyTemplate = request.BodyTemplate,
+                Url = Text(request.Url),
+                Method = Text(request.Method).ToUpperInvariant(),
+                ContentType = Text(request.ContentType),
+                BodyTemplate = request.BodyTemplate ?? string.Empty,
                 Headers = request.Headers is null
                     ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                     : new Dictionary<string, string>(request.Headers, StringComparer.OrdinalIgnoreCase),
@@ -676,4 +676,11 @@ public static class AdminSettingsEndpoints
         supplied is null ? stored : Blank(supplied);
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>
+    /// A text field the stored section always has. A switched-off channel may be saved half
+    /// filled, and the validator only asks for these once it is switched on, so a field the form
+    /// sent as null is stored blank rather than failing the save.
+    /// </summary>
+    private static string Text(string? value) => value?.Trim() ?? string.Empty;
 }

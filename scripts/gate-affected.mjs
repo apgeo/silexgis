@@ -53,6 +53,9 @@ export function classify(changedPaths, map) {
     const p = raw.replaceAll('\\', '/');
 
     if (map.crossCutting.triggers.some((t) => p.startsWith(t))) crossCut = true;
+    if ((map.routeTableWalks?.triggers ?? []).some((t) => p.startsWith(t))) {
+      for (const c of map.routeTableWalks.classes) classes.add(c);
+    }
 
     if ((map.outside ?? []).some((t) => p.startsWith(t))) continue;
 

@@ -22,6 +22,23 @@ public enum SurveyOrigin : short
 
     /// <summary>Anything else.</summary>
     Other = 2,
+
+    /// <summary>
+    /// A finished LiDAR point cloud: one LAS or LAZ file of any scanner, uploaded as it is. The
+    /// server reads its header and tiles it for display; it runs no scanner-specific processing.
+    /// </summary>
+    /// <remarks>Written as one lower-case word, like the tool names, so a client compares it the same way.</remarks>
+    [JsonStringEnumMemberName("pointcloud")]
+    PointCloud = 3,
+
+    /// <summary>
+    /// A raw recording of a MANDEYE handheld scanner: the folder of lidar chunks, IMU logs and
+    /// the optional serial numbers, GNSS logs and calibration it writes. The server inspects it
+    /// and, with a worker that runs HDMapping, turns it into a point cloud that is then shown
+    /// like any other.
+    /// </summary>
+    [JsonStringEnumMemberName("mandeye")]
+    Mandeye = 4,
 }
 
 /// <summary>

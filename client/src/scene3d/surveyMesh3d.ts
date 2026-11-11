@@ -70,6 +70,13 @@ export interface SurveyMesh3DState {
    */
   precisionLost: boolean;
   /**
+   * How many legs of the drawn model are tubes of an estimated size, and that size: passages the
+   * file gives no size for, drawn because somebody asked. Absent when there are none — said beside
+   * the walls, because on screen they look like passages somebody measured.
+   */
+  estimatedLegs?: number;
+  estimatedDiameterM?: number;
+  /**
    * Why the mesh is not drawn, in the server's own words, when the server gave a reason. It is
    * the conversion's message, which is not translatable here and is shown as it was written.
    */
@@ -294,6 +301,12 @@ export function attachSurveyMesh3d(engine: SurveyMesh3DEngine): SurveyMesh3DHand
       triangleCount: chosen.triangleCount ?? undefined,
       meshSizeBytes: chosen.meshSizeBytes ?? undefined,
       precisionLost: chosen.sourcePrecisionLost,
+      ...(typeof chosen.estimatedLegCount === 'number' && chosen.estimatedLegCount > 0
+        ? {
+            estimatedLegs: chosen.estimatedLegCount,
+            estimatedDiameterM: chosen.estimatedPassageDiameterM,
+          }
+        : {}),
     };
 
     // Selecting a cave is the deliberate act, and an ordinary mesh is a few hundred kilobytes, so

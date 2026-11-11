@@ -166,4 +166,101 @@ public class SurveyCompilationLogTests
         report.TotalLengthM.ShouldBeNull();
         report.TotalLengthAdjustedM.ShouldBeNull();
     }
+
+    /// <summary>Survey statistics and loop errors as Therion prints them, with invented figures, stations and positions.</summary>
+    public const string InventedStatistics = """
+        ##### cavern log file #####
+          1> Survey contains 42 survey stations, joined by 57 shots.
+          2> There are 2 loops.
+          3> Survey has 1 connected component.
+          4> Total length of survey shots = 312.40m ( 311.95m adjusted)
+          5> Total plan length of survey shots = 280.10m
+          6> Total vertical length of survey shots = 95.30m
+          7> Vertical range = 61.20m (from 1.17@inventata at 1234.50m to 1.23@inventata at 1173.30m)
+          8> North-South range = 120.00m (from 1.4@inventata at 5040123.00m to 1.9@inventata at 5040003.00m)
+          9> East-West range = 80.50m (from 1.11@inventata at 412345.00m to 1.2@inventata at 412264.50m)
+        ##### end of cavern log file #####
+        ##### loop errors #####
+          1.20%    0.3m   25.0m   6   0.1m   0.2m   0.1m [1.1@inventata - 1.2@inventata - 1.1@inventata]
+          0.80%    0.2m   25.0m   5   0.1m   0.1m   0.1m [1.3@inventata - 1.4@inventata - 1.3@inventata]
+        ##### end of loop errors #####
+        average loop error: 1.00%
+        """;
+
+    [Fact]
+    public void A_log_from_survex_1_4_which_says_legs_rather_than_shots_still_has_its_figures()
+    {
+        // The compiler image's Survex (1.4) words its statistics "legs"; earlier releases said
+        // "shots". Reading only the older wording left every count and length on the page blank.
+        var text = "therion 6.3.4 (2025-04-08)\nreading source files ... done\n"
+            + InventedStatistics
+                .Replace("joined by 57 shots", "joined by 57 legs", StringComparison.Ordinal)
+                .Replace("of survey shots", "of survey legs", StringComparison.Ordinal)
+            + "\ncompilation time: 1 sec\n";
+        text.ShouldNotContain("shots");
+
+        var figures = Reader.ReadFigures("therion.log", text).ShouldNotBeNull();
+
+        figures.StationCount.ShouldBe(42);
+        figures.ShotCount.ShouldBe(57);
+        figures.TotalLengthM.ShouldBe(312.40);
+        figures.TotalLengthAdjustedM.ShouldBe(311.95);
+        figures.PlanLengthM.ShouldBe(280.10);
+        figures.VerticalLengthM.ShouldBe(95.30);
+    }
+
+    [Fact]
+    public void A_logs_figures_are_everything_it_states_stations_and_positions_included()
+    {
+        var text = "therion 6.3.4 (2025-04-08)\nreading source files ... done\n"
+            + "output coordinate system: EPSG:31700\nmeridian convergence (deg): -1.2345\n"
+            + InventedStatistics + "\ncompilation time: 1 sec\n";
+
+        var figures = Reader.ReadFigures("therion.log", text).ShouldNotBeNull();
+
+        figures.Outcome.ShouldBe(SurveyCompilationOutcome.Succeeded);
+        figures.CompilerVersion.ShouldBe("6.3.4");
+        figures.CompilationSeconds.ShouldBe(1);
+        figures.OutputCoordinateSystem.ShouldBe("EPSG:31700");
+        figures.MeridianConvergenceDeg.ShouldBe(-1.2345);
+        figures.HasNoControlPoints.ShouldBeFalse();
+        figures.StationCount.ShouldBe(42);
+        figures.ShotCount.ShouldBe(57);
+        figures.ConnectedComponents.ShouldBe(1);
+        figures.TotalLengthM.ShouldBe(312.40);
+        figures.TotalLengthAdjustedM.ShouldBe(311.95);
+        figures.PlanLengthM.ShouldBe(280.10);
+        figures.VerticalLengthM.ShouldBe(95.30);
+        figures.LoopCount.ShouldBe(2);
+        figures.AverageLoopErrorPercent.ShouldBe(1.00);
+
+        // Each range with the stations at its ends and their absolute values, as the log prints them.
+        figures.VerticalRange.ShouldBe(new SurveyLogExtent(61.20, "1.17@inventata", 1234.50, "1.23@inventata", 1173.30));
+        figures.NorthSouthRange.ShouldBe(new SurveyLogExtent(120.00, "1.4@inventata", 5040123.00, "1.9@inventata", 5040003.00));
+        figures.EastWestRange.ShouldBe(new SurveyLogExtent(80.50, "1.11@inventata", 412345.00, "1.2@inventata", 412264.50));
+        figures.Loops.ShouldBe([
+            new SurveyLogLoop(1.20, 0.3, 25.0, 6, 0.1, 0.2, 0.1, "1.1@inventata - 1.2@inventata - 1.1@inventata"),
+            new SurveyLogLoop(0.80, 0.2, 25.0, 5, 0.1, 0.1, 0.1, "1.3@inventata - 1.4@inventata - 1.3@inventata"),
+        ]);
+    }
+
+    [Fact]
+    public void A_real_logs_figures_agree_with_its_stored_reading_and_prose_has_none()
+    {
+        var log = LogText();
+        var report = Reader.Read(FixtureName, log);
+
+        var figures = Reader.ReadFigures(FixtureName, log).ShouldNotBeNull();
+
+        figures.Outcome.ShouldBe(report.Outcome);
+        figures.TotalLengthM.ShouldBe(report.TotalLengthM);
+        figures.TotalLengthAdjustedM.ShouldBe(report.TotalLengthAdjustedM);
+        figures.LoopCount.ShouldBe(report.LoopCount);
+        figures.AverageLoopErrorPercent.ShouldBe(report.AverageLoopErrorPercent);
+        figures.Loops.Select(l => l.RelativeErrorPercent).ShouldBe(report.LoopErrors.Select(l => l.RelativeErrorPercent));
+        figures.ErrorCount.ShouldBe(report.ErrorCount);
+
+        Reader.ReadFigures("notes.txt", "not a log at all").ShouldBeNull();
+        Reader.ReadFigures(FixtureName, null).ShouldBeNull();
+    }
 }

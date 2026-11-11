@@ -583,6 +583,70 @@ export function useReadSurveyModelAgain() {
   });
 }
 
+export type SurveyModelPlacement = components['schemas']['SurveyModelPlacementRequest'];
+
+/**
+ * Says again where a model's stored file sits — a projected grid, or a position for its zero
+ * point — and has it read again under that answer, without uploading it again. Refreshed the way
+ * another reading is, for the same reasons.
+ */
+export function useChangeSurveyModelPlacement() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: ({
+      id,
+      placement,
+    }: {
+      id: string;
+      caveId: string;
+      placement: SurveyModelPlacement;
+    }): Promise<SurveyModelInfo> =>
+      unwrap(
+        api.PUT('/api/v1/survey-models/{id}/placement', {
+          params: { path: { id } },
+          body: placement,
+        }),
+      ),
+    onSettled: (_data, _error, { id, caveId }) => {
+      invalidate(caveId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModel(id) });
+    },
+  });
+}
+
+export type SurveyModelEstimatedPassages =
+  components['schemas']['SurveyModelEstimatedPassagesRequest'];
+
+/**
+ * Turns a line plot's estimated passages on or off, or changes their size or colour, and has its
+ * stored file read again so its mesh is built that way.
+ */
+export function useChangeSurveyModelEstimatedPassages() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: ({
+      id,
+      estimated,
+    }: {
+      id: string;
+      caveId: string;
+      estimated: SurveyModelEstimatedPassages;
+    }): Promise<SurveyModelInfo> =>
+      unwrap(
+        api.PUT('/api/v1/survey-models/{id}/estimated-passages', {
+          params: { path: { id } },
+          body: estimated,
+        }),
+      ),
+    onSettled: (_data, _error, { id, caveId }) => {
+      invalidate(caveId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModel(id) });
+    },
+  });
+}
+
 export type SurveySourceInfo = components['schemas']['SurveySourceDto'];
 export type SurveySourceKind = SurveySourceInfo['kind'];
 
@@ -804,4 +868,122 @@ export async function fetchCaveMeshesInView(
   filter: MapFilterParams = {},
 ): Promise<CaveMeshesInView> {
   return unwrap(api.GET('/api/v1/map/cave-meshes', { params: { query: { bbox, maxCaves, ...filter } } }));
+}
+
+/** The placed point clouds of the caves in a view, and how many caves there were in all. */
+export type CaveScansInView = components['schemas']['CaveScansInViewDto'];
+/** The one scan a cave is drawn by, with its placement and what a scene needs to budget it. */
+export type CaveScanInView = components['schemas']['CaveScanInViewDto'];
+
+/**
+ * Imperative fetch used by the 3D scene's scans-in-view loader (not a hook).
+ *
+ * The same contract as the wall meshes: one scan per cave, chosen by the server, nearest the
+ * middle of the box first, and only placed scans of caves this caller may both read and place
+ * exactly — a cave left out for either reason is in neither the items nor the total. The
+ * placement is the only thing about a scan that says where its cave is, which is why the listing
+ * sits behind the exact-location rule while the scan's own card and local viewer do not.
+ */
+export async function fetchCaveScansInView(
+  bbox: string,
+  maxCaves?: number,
+  filter: MapFilterParams = {},
+): Promise<CaveScansInView> {
+  return unwrap(api.GET('/api/v1/map/cave-scans', { params: { query: { bbox, maxCaves, ...filter } } }));
+}
+
+/** A scan's centreline: the scanner's path, simplified, as the server hands it out. */
+export type SurveyModelCentreline = components['schemas']['SurveyModelCentrelineDto'];
+
+/**
+ * The centreline a scan's run drew from the scanner's path, in the frame its tiles were written
+ * in — so a viewer draws it under exactly the transform it draws the tiles with, placed or not.
+ * Imperative, for the 3D scene's scans-in-view loader; the scan viewer uses the hook below.
+ * The server withholds it without the exact-location right, as it does the path it came from.
+ */
+export async function fetchSurveyModelCentreline(surveyModelId: string): Promise<SurveyModelCentreline> {
+  return unwrap(
+    api.GET('/api/v1/survey-models/{id}/centreline', { params: { path: { id: surveyModelId }, query: { frame: 'tiles' } } }),
+  );
+}
+
+/** The scan viewer's read of a centreline; asked only when the scan says it has one. */
+export function useSurveyModelCentreline(surveyModelId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.surveyModelCentreline(surveyModelId ?? ''),
+    queryFn: () => fetchSurveyModelCentreline(surveyModelId!),
+    enabled: enabled && surveyModelId !== undefined,
+    // No staleTime: a rerun keeps the same model id, so the line is read afresh each time the viewer opens.
+  });
+}
+
+/** Whether a model is a point cloud: the one kind that is tiled, viewed locally and placed by a bearing. */
+export function isPointCloudModel(model: { format: SurveyModelInfo['format'] }): boolean {
+  return model.format === 'laz' || model.format === 'las';
+}
+
+export type ScanPlacementRequest = components['schemas']['ScanPlacementRequest'];
+
+/**
+ * Places a point cloud — its tiles' zero point at a position and altitude, its frame turned to a
+ * bearing — or places it again. The tiles are never rewritten, so a correction costs nothing but
+ * this request. Needs Write on the cave with its exact location; the server refuses it for a
+ * line plot or a wall mesh.
+ */
+export function usePlaceSurveyModel() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: ({ id, placement }: { id: string; caveId: string; placement: ScanPlacementRequest }) =>
+      unwrap(api.PUT('/api/v1/survey-models/{id}/scan-placement', { params: { path: { id } }, body: placement })),
+    onSuccess: (model, { id, caveId }) => {
+      queryClient.setQueryData<SurveyModelInfo>(queryKeys.surveyModel(id), model);
+      invalidate(caveId);
+    },
+  });
+}
+
+export type SurveyModelControlPointsRequest = components['schemas']['SurveyModelControlPointsRequest'];
+export type SurveyModelControlPoint = components['schemas']['SurveyModelControlPointDto'];
+
+/**
+ * Places a point cloud by control points: pairs of a point picked in the scan, in its own metres,
+ * and a station of the cave's current line plot. The server fits the translation and heading (a
+ * small tilt too when asked) and answers the model with each pair's residual and their RMS; a pair
+ * over the installation's warning distance comes back flagged. Like every placement it never
+ * touches the tiles, so trying again with a pair dropped or changed costs only this request.
+ */
+export function usePlaceSurveyModelByControlPoints() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: ({ id, request }: { id: string; caveId: string; request: SurveyModelControlPointsRequest }) =>
+      unwrap(
+        api.PUT('/api/v1/survey-models/{id}/scan-placement/control-points', { params: { path: { id } }, body: request }),
+      ),
+    onSuccess: (model, { id, caveId }) => {
+      queryClient.setQueryData<SurveyModelInfo>(queryKeys.surveyModel(id), model);
+      invalidate(caveId);
+    },
+  });
+}
+
+/** Takes a point cloud's placement away: still viewable in its own frame, no longer on the map. */
+export function useUnplaceSurveyModel() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; caveId: string }) => {
+      const { error, response } = await api.DELETE('/api/v1/survey-models/{id}/scan-placement', {
+        params: { path: { id } },
+      });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: (_, { id, caveId }) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModel(id) });
+      invalidate(caveId);
+    },
+  });
 }

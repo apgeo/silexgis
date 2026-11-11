@@ -60,12 +60,14 @@ public static class CaveMeshMapSql
     {
         var (visibilitySql, parameters) = AccessSql.FeatureVisibleToFragment(ctx, "f");
         AddBox(parameters, box);
+        AddMeshFormats(parameters);
 
         var sql = $"""
             SELECT DISTINCT f.id
             FROM survey_models m
             JOIN features f ON f.id = m.cave_feature_id
-            WHERE m.converted_file_id IS NOT NULL
+            WHERE m.format = ANY(@mesh_formats)
+              AND m.converted_file_id IS NOT NULL
               AND m.anchor IS NOT NULL
               AND m.anchor_height_m IS NOT NULL
               AND m.anchor && ST_MakeEnvelope(@west, @south, @east, @north, 4326)
@@ -111,6 +113,7 @@ public static class CaveMeshMapSql
         parameters.Add("exact_ids", AccessSql.UuidArray([.. exactViewCaveIds]));
         parameters.Add("wall_formats", AccessSql.SmallintArray(Formats(SurveyModelKind.WallMesh)));
         parameters.Add("line_formats", AccessSql.SmallintArray(Formats(SurveyModelKind.LinePlot)));
+        AddMeshFormats(parameters);
         // The middle of the box, held inside the globe: a box is parsed, not believed, and the
         // distance below is undefined for a point that is not on the sphere.
         parameters.Add("centre_lon", Math.Clamp((box.West + box.East) / 2d, -180d, 180d));
@@ -136,6 +139,7 @@ public static class CaveMeshMapSql
                        m.anchor, m.anchor_height_m, m.triangle_count
                 FROM survey_models m
                 WHERE m.cave_feature_id = ANY(@exact_ids)
+                  AND m.format = ANY(@mesh_formats)
                   AND m.converted_file_id IS NOT NULL
                   AND m.anchor IS NOT NULL
                   AND m.anchor_height_m IS NOT NULL
@@ -182,6 +186,15 @@ public static class CaveMeshMapSql
         parameters.Add("east", box.East);
         parameters.Add("north", box.North);
     }
+
+    /// <summary>
+    /// The formats whose converted file is a mesh the scene can draw: wall meshes and line plots.
+    /// Named in both statements because a point cloud's converted file is a tileset archive,
+    /// anchored the same way, and without the list it would be served as a mesh.
+    /// </summary>
+    private static void AddMeshFormats(DynamicParameters parameters) =>
+        parameters.Add("mesh_formats", AccessSql.SmallintArray(
+            [.. Formats(SurveyModelKind.WallMesh), .. Formats(SurveyModelKind.LinePlot)]));
 
     /// <summary>The stored format values of one kind of model, from the one place that defines the kinds.</summary>
     private static short[] Formats(SurveyModelKind kind) =>

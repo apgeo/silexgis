@@ -33,6 +33,8 @@ describe('classification', () => {
     assert.deepEqual(r.classes, [
       'CabinetApiTests', 'CabinetTreeTests', 'FilterWorldConformanceTests', 'FilterWorldListParityTests',
       'GraphRelationParityTests',
+      // Every feature slice also answers to the walks over the whole endpoint table.
+      'RequestValidationCoverageTests',
     ]);
   });
 
@@ -40,7 +42,9 @@ describe('classification', () => {
     const feature = classify(['server/src/SilexGis.Api/Features/TripLogs/TripEndpoints.cs'], map);
     const domain = classify(['server/src/SilexGis.Domain/Trips/TripPlan.cs'], map);
     assert.equal(domain.mode, 'targeted');
-    assert.deepEqual(domain.classes, feature.classes);
+    // The endpoint-table walks come with the Api slice only: a Domain file maps no route.
+    const walks = new Set(map.routeTableWalks.classes);
+    assert.deepEqual(domain.classes, feature.classes.filter((c) => !walks.has(c)));
   });
 
   it('an unclaimed server path fails closed to the full suite', () => {
@@ -74,6 +78,12 @@ describe('classification', () => {
     assert.equal(trig.mode, 'targeted');
     for (const c of map.crossCutting.permissionClasses) assert.ok(trig.classes.includes(c), c);
     for (const c of map.crossCutting.locationClasses) assert.ok(trig.classes.includes(c), c);
+  });
+
+  it('any feature slice selects the guards that walk the whole endpoint table', () => {
+    const r = classify(['server/src/SilexGis.Api/Features/Geofiles/GeofileEndpoints.cs'], map);
+    assert.equal(r.mode, 'targeted');
+    for (const c of map.routeTableWalks.classes) assert.ok(r.classes.includes(c), c);
   });
 
   it('client-only and deployment-only changes select nothing', () => {
@@ -129,6 +139,7 @@ describe('the map cannot rot', () => {
   it('every class the map names exists as a test source file', () => {
     const everywhere = [
       ...Object.values(map.groups).flat(),
+      ...map.routeTableWalks.classes,
       ...map.crossCutting.permissionClasses,
       ...map.crossCutting.locationClasses,
     ];

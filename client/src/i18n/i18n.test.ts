@@ -144,6 +144,7 @@ const accessDomains: Record<AccessDomainName, true> = {
   jobs: true,
   terrain: true,
   uploadReview: true,
+  scanProfiles: true,
 };
 
 /**
@@ -175,6 +176,7 @@ const notificationCategories: Record<NotificationCategoryName, true> = {
   commentOnMine: true,
   groupAnnouncement: true,
   expeditionUpdate: true,
+  storageAlert: true,
 };
 
 /**
@@ -305,6 +307,8 @@ const surveyModelFormats: Record<SurveyModelInfo['format'], true> = {
   lox: true,
   survex3d: true,
   stl: true,
+  laz: true,
+  las: true,
 };
 
 /**

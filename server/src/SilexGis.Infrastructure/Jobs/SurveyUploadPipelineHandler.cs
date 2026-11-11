@@ -7,11 +7,13 @@ using Microsoft.Extensions.Options;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
+using SilexGis.Domain.Scans;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Scans;
 using SilexGis.Infrastructure.Surveys;
 using Therion.Build;
 
@@ -58,7 +60,7 @@ namespace SilexGis.Infrastructure.Jobs;
 /// its status page, when the run succeeds or fails.
 /// </para>
 /// </remarks>
-public sealed class SurveyUploadPipelineHandler(
+public class SurveyUploadPipelineHandler(
     SilexGisDbContext db,
     IFileStore fileStore,
     ISurveyCompiler compiler,
@@ -67,12 +69,66 @@ public sealed class SurveyUploadPipelineHandler(
     IOptions<FilesOptions> filesOptions,
     SurveyUploadArtefactStore artefacts,
     FeatureWriteService features,
+    PointCloudProcessing pointClouds,
     ILogger<SurveyUploadPipelineHandler> logger) : IProcessingJobHandler
 {
     /// <summary>How often a running compile's progress is written to the status row.</summary>
     private static readonly TimeSpan ProgressInterval = TimeSpan.FromSeconds(2);
 
-    public string Kind => ProcessingJobKinds.SurveyUploadPipeline;
+    /// <summary>
+    /// What the uploader is told when the queue gave the run up: its runner was lost on every
+    /// attempt it was allowed, so nothing about the survey was decided.
+    /// </summary>
+    public const string GivenUpMessage =
+        "The run was interrupted on every attempt it was allowed, and was stopped. The files are archived; it can be run again.";
+
+    /// <summary>
+    /// The survey archive's kind here; a point cloud's run is queued under a kind of its own so
+    /// that it waits on the long-work lane, and is handled by the same code through
+    /// <see cref="PointCloudPipelineHandler"/>.
+    /// </summary>
+    public virtual string Kind => ProcessingJobKinds.SurveyUploadPipeline;
+
+    /// <summary>
+    /// A run given up by the queue fails its upload, where it had got to, and tells the uploader —
+    /// the notice a failed run sends, because the job names no requester and the queue's own notice
+    /// therefore reaches nobody.
+    /// </summary>
+    /// <remarks>
+    /// Coded as a defect on the server rather than as anything about the survey: the runner died,
+    /// and the sweep's log line is where the detail is. The notice is queued on the sweep's own
+    /// context, without a save of its own, so it commits with the stop and the job — or, if this
+    /// hook fails, goes with them. The lost run's working directory is not reachable from here; it
+    /// was under the compiler's work directory of a process that is gone.
+    /// </remarks>
+    public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
+    {
+        if (AbandonedJob.PayloadOf<SurveyUploadPipelinePayload>(job) is not { } payload)
+        {
+            return;
+        }
+
+        // A run asked for again after this one wrote its verdict and then lost its runner — the
+        // upload was finished, so a rerun was allowed — is queued beside it, and the upload's
+        // queued state is that run's. Failing it here would drop the run somebody asked for and
+        // show them a failure of the one before.
+        var others = await db.ProcessingJobs.AsNoTracking()
+            .Where(j => j.Kind == Kind && j.Id != job.Id
+                && (j.Status == ProcessingJobStatus.Queued || j.Status == ProcessingJobStatus.Running))
+            .ToListAsync(ct);
+        if (others.Any(j => AbandonedJob.PayloadOf<SurveyUploadPipelinePayload>(j)?.SurveyUploadId == payload.SurveyUploadId))
+        {
+            return;
+        }
+
+        if (!await SurveyUploadWrites.GiveUpAsync(db, payload.SurveyUploadId, SurveyPipelineFailures.Unexpected, GivenUpMessage, ct))
+        {
+            return;
+        }
+
+        var upload = await db.SurveyUploads.AsNoTracking().FirstAsync(u => u.Id == payload.SurveyUploadId, ct);
+        await QueueNoticeAsync(upload, succeeded: false, ct);
+    }
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
@@ -93,7 +149,25 @@ public sealed class SurveyUploadPipelineHandler(
         try
         {
             var archived = await ArchivedFilesAsync(upload.Id, ct);
-            var archivePath = archived.Single(f => f.Role == SurveyUploadFileRole.Archive).StoragePath;
+            if (upload.Source == SurveyOrigin.Mandeye)
+            {
+                // A raw recording is every file of the folder, all of them its archive.
+                await RunRecordingAsync(upload, archived, reached => stage = reached, ct);
+                await NotifyAsync(upload, succeeded: true);
+                return;
+            }
+
+            var archiveFile = archived.Single(f => f.Role == SurveyUploadFileRole.Archive);
+            var archivePath = archiveFile.StoragePath;
+
+            if (upload.Source == SurveyOrigin.PointCloud)
+            {
+                // The point-cloud run reports each stage it enters, so a failure is recorded at
+                // the stage it happened in rather than at the one this method last set.
+                await RunPointCloudAsync(upload, archiveFile, reached => stage = reached, ct);
+                await NotifyAsync(upload, succeeded: true);
+                return;
+            }
 
             stage = SurveyUploadStage.Unpack;
             await SurveyUploadWrites.ProgressAsync(
@@ -210,34 +284,40 @@ public sealed class SurveyUploadPipelineHandler(
         {
             // Whatever a failed stage left half-added must not ride along with the notice's save.
             db.ChangeTracker.Clear();
-            var caveName = await db.Features.AsNoTracking()
-                .Where(f => f.Id == upload.CaveFeatureId)
-                .Select(f => f.Name)
-                .FirstOrDefaultAsync(CancellationToken.None);
-            var title = await db.CaveSurveys.AsNoTracking()
-                .Where(s => s.Id == upload.CaveSurveyId)
-                .Select(s => s.Title)
-                .FirstOrDefaultAsync(CancellationToken.None) ?? upload.SurveyTitle;
-
-            NotificationQueue.Enqueue(
-                db,
-                upload.RequestedBy,
-                NotificationCategory.JobCompleted,
-                succeeded ? MessageTemplateCatalog.NotifySurveyUploadSucceeded : MessageTemplateCatalog.NotifySurveyUploadFailed,
-                new Dictionary<string, string>
-                {
-                    ["surveyTitle"] = title,
-                    ["caveName"] = caveName ?? string.Empty,
-                    ["url"] = SurveyUploadLinks.StatusPage(upload.CaveFeatureId, upload.CaveSurveyId, upload.Id),
-                },
-                NotificationTargetKind.Feature,
-                upload.CaveFeatureId);
+            await QueueNoticeAsync(upload, succeeded, CancellationToken.None);
             await db.SaveChangesAsync(CancellationToken.None);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
             logger.LogWarning(e, "Could not queue the notice for survey upload {UploadId}", upload.Id);
         }
+    }
+
+    /// <summary>The uploader's notice, added to the context for the caller's save to write.</summary>
+    private async Task QueueNoticeAsync(SurveyUpload upload, bool succeeded, CancellationToken ct)
+    {
+        var caveName = await db.Features.AsNoTracking()
+            .Where(f => f.Id == upload.CaveFeatureId)
+            .Select(f => f.Name)
+            .FirstOrDefaultAsync(ct);
+        var title = await db.CaveSurveys.AsNoTracking()
+            .Where(s => s.Id == upload.CaveSurveyId)
+            .Select(s => s.Title)
+            .FirstOrDefaultAsync(ct) ?? upload.SurveyTitle;
+
+        NotificationQueue.Enqueue(
+            db,
+            upload.RequestedBy,
+            NotificationCategory.JobCompleted,
+            succeeded ? MessageTemplateCatalog.NotifySurveyUploadSucceeded : MessageTemplateCatalog.NotifySurveyUploadFailed,
+            new Dictionary<string, string>
+            {
+                ["surveyTitle"] = title,
+                ["caveName"] = caveName ?? string.Empty,
+                ["url"] = SurveyUploadLinks.StatusPage(upload.CaveFeatureId, upload.CaveSurveyId, upload.Id),
+            },
+            NotificationTargetKind.Feature,
+            upload.CaveFeatureId);
     }
 
     /// <summary>
@@ -433,7 +513,186 @@ public sealed class SurveyUploadPipelineHandler(
     }
 
     /// <summary>An archived file of the upload and where its bytes are in the store.</summary>
-    private sealed record ArchivedFile(string Name, SurveyUploadFileRole Role, string StoragePath);
+    /// <summary>
+    /// A point cloud's run: the header is read and recorded, and then the recipe's worker steps
+    /// run — the thinning estimated, the cloud thinned when chosen, the result tiled — when this
+    /// server has a worker to run them. Without one, the run ends at the tiling stage with the
+    /// same kind of note a survey gets when there is no compiler: the file is archived and
+    /// described, and a rerun once a worker is installed carries on from here. Says through
+    /// <paramref name="entering"/> which stage it is in before any work of that stage, so that
+    /// whoever catches a failure knows where it happened.
+    /// </summary>
+    private async Task RunPointCloudAsync(
+        SurveyUpload upload, ArchivedFile archive, Action<SurveyUploadStage> entering, CancellationToken ct)
+    {
+        var stage = SurveyUploadStage.Inspect;
+        entering(stage);
+        await SurveyUploadWrites.ProgressAsync(
+            db, upload.Id, stage, SurveyPipelineProgress.Band(stage).Start, "Reading the point cloud's header.", ct);
+
+        PointCloudFacts facts;
+        await using (var cloud = await OpenAsync(archive.StoragePath, ct))
+        {
+            facts = PointCloudUploadRun.Inspect(cloud);
+        }
+
+        // What an earlier run's processing wrote is read before the header's facts are written
+        // over it, so a rerun that reuses that processing can carry its facts across.
+        var earlier = PointCloudFacts.FromJson(await db.SurveyModels.AsNoTracking()
+            .Where(m => m.SurveyUploadId == upload.Id && m.PointCloud != null)
+            .Select(m => m.PointCloud)
+            .FirstOrDefaultAsync(ct));
+        var model = await PointCloudUploadRun.RecordAsync(
+            db, upload, new ArchivedPointCloud(archive.RowId, archive.Name, archive.FileId, archive.SizeBytes, archive.Sha256), facts, ct);
+
+        if (!pointClouds.Enabled)
+        {
+            stage = SurveyUploadStage.Tile;
+            entering(stage);
+            await SurveyUploadWrites.ProgressAsync(
+                db, upload.Id, stage, SurveyPipelineProgress.Band(stage).Start, "Tiling the point cloud.", ct);
+            await SurveyUploadWrites.SucceedAsync(db, upload.Id, stage, SurveyPipelineNotes.NoTiler, ct);
+            return;
+        }
+
+        var recipe = ScanRecipes.FromOptionsJson(upload.Options)
+            ?? throw new SurveyPipelineException(SurveyPipelineFailures.Unexpected, "The upload carries no recipe to run.");
+        if (recipe.RerunFrom is not null || recipe.Waiting is not null)
+        {
+            // A step asked to be done again is done again by this run and no other: the request
+            // is taken off the stored recipe now, so a later plain rerun reuses as it always did.
+            // A wait for a step done elsewhere is over once a run starts; it waits again, with
+            // what it then waits for, if it reaches that step without its products.
+            var once = ScanRecipes.ToOptionsJson(recipe with { RerunFrom = null, Waiting = null });
+            await db.SurveyUploads.Where(u => u.Id == upload.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.Options, once), ct);
+            recipe = recipe with { Waiting = null };
+        }
+
+        var outcome = await pointClouds.RunAsync(upload, model, facts, earlier, recipe, entering, ct);
+        if (outcome.AwaitingExternal is { } waitingFor)
+        {
+            await SurveyUploadWrites.AwaitExternalAsync(db, upload.Id, SurveyPipelineNotes.AwaitingExternal(waitingFor), ct);
+            return;
+        }
+
+        if (outcome.ChoiceNeeded)
+        {
+            // Stopped after the estimate, at its own stage: the table and the advice are on the
+            // scan, and the rerun that brings the choice picks up from here.
+            await SurveyUploadWrites.SucceedAsync(
+                db, upload.Id, SurveyUploadStage.Downsample, SurveyPipelineNotes.ChoiceNeeded(outcome.Facts.PointCount), ct);
+            return;
+        }
+
+        stage = SurveyUploadStage.Store;
+        entering(stage);
+        var note = outcome.Tiled
+            ? SurveyPipelineNotes.Tiled(
+                outcome.Facts.DisplayPointCount ?? outcome.Facts.PointCount, outcome.Facts.PointCount, outcome.Facts.TileBytes ?? 0, outcome.TilesReused)
+            : SurveyPipelineNotes.NoTiler;
+        await SurveyUploadWrites.SucceedAsync(db, upload.Id, stage, note, ct);
+    }
+
+    /// <summary>
+    /// A raw recording's run: the recording is inspected and its facts recorded on the scan's
+    /// model, and then the recipe's worker steps run — odometry, export, the export's check, and
+    /// from there a point cloud's steps. Without processing switched on the run ends at the
+    /// odometry stage with a note saying so, the recording kept and described, and a rerun once a
+    /// worker is installed carries on from here.
+    /// </summary>
+    private async Task RunRecordingAsync(
+        SurveyUpload upload, IReadOnlyList<ArchivedFile> archived, Action<SurveyUploadStage> entering, CancellationToken ct)
+    {
+        var stage = SurveyUploadStage.Inspect;
+        entering(stage);
+        await SurveyUploadWrites.ProgressAsync(
+            db, upload.Id, stage, SurveyPipelineProgress.Band(stage, upload.Source).Start, "Inspecting the recording.", ct);
+
+        var files = archived
+            .Select(f => new ArchivedRecordingFile(f.Name, f.StoragePath, f.FileId, f.SizeBytes, f.Sha256))
+            .ToList();
+
+        // A refined session — the session archive alone, sent as the next version of a scan —
+        // has no recording to inspect: the archive is checked to be a session the export can
+        // read, and the scan it refines lends its facts until the export replaces them.
+        var refined = MandeyeRecording.IsRefinedSession(files.Select(f => f.Name));
+        PointCloudFacts facts;
+        if (refined)
+        {
+            if (await PointCloudProcessing.ExternalOutputProblemAsync(
+                    ScanArtifactKind.HdmSession, fileStore.GetAbsolutePath(files[0].StoragePath), ct) is { } problem)
+            {
+                throw new SurveyPipelineException(SurveyPipelineFailures.RecordingInvalid, "The refined session cannot be processed: " + problem);
+            }
+
+            facts = await MandeyeUploadRun.RefinedFactsAsync(db, upload, ct);
+        }
+        else
+        {
+            facts = await MandeyeUploadRun.InspectAsync(files, OpenAsync, ct);
+        }
+
+        // What an earlier run wrote — the export's header, the estimate, the tiling — is read
+        // before the recording's facts are written over it, so a rerun that reuses that
+        // processing carries it across.
+        var earlier = PointCloudFacts.FromJson(await db.SurveyModels.AsNoTracking()
+            .Where(m => m.SurveyUploadId == upload.Id && m.PointCloud != null)
+            .Select(m => m.PointCloud)
+            .FirstOrDefaultAsync(ct));
+        var model = refined
+            ? await MandeyeUploadRun.RecordSessionAsync(db, upload, files[0], facts, ct)
+            : await MandeyeUploadRun.RecordAsync(db, upload, files, facts, ct);
+
+        if (!pointClouds.Enabled)
+        {
+            stage = refined ? SurveyUploadStage.Export : SurveyUploadStage.Odometry;
+            entering(stage);
+            await SurveyUploadWrites.SucceedAsync(db, upload.Id, stage, SurveyPipelineNotes.NoOdometry, ct);
+            return;
+        }
+
+        var recipe = ScanRecipes.FromOptionsJson(upload.Options)
+            ?? throw new SurveyPipelineException(SurveyPipelineFailures.Unexpected, "The upload carries no recipe to run.");
+        if (recipe.RerunFrom is not null || recipe.Waiting is not null)
+        {
+            // As for a point cloud: a step asked to be done again is done again by this run only,
+            // and a wait for a step done elsewhere ends when a run starts.
+            var once = ScanRecipes.ToOptionsJson(recipe with { RerunFrom = null, Waiting = null });
+            await db.SurveyUploads.Where(u => u.Id == upload.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.Options, once), ct);
+            recipe = recipe with { Waiting = null };
+        }
+
+        var outcome = await pointClouds.RunAsync(upload, model, facts, earlier, recipe, entering, ct);
+        if (outcome.AwaitingExternal is { } waitingFor)
+        {
+            // Stopped before a step done on another computer: its inputs are offered for download,
+            // and uploading its outputs queues the run again, which reuses them and carries on.
+            await SurveyUploadWrites.AwaitExternalAsync(db, upload.Id, SurveyPipelineNotes.AwaitingExternal(waitingFor), ct);
+            return;
+        }
+
+        if (outcome.ChoiceNeeded)
+        {
+            await SurveyUploadWrites.SucceedAsync(
+                db, upload.Id, SurveyUploadStage.Downsample, SurveyPipelineNotes.ChoiceNeeded(outcome.Facts.PointCount), ct);
+            return;
+        }
+
+        stage = SurveyUploadStage.Store;
+        entering(stage);
+        await SurveyUploadWrites.SucceedAsync(
+            db,
+            upload.Id,
+            stage,
+            SurveyPipelineNotes.Tiled(
+                outcome.Facts.DisplayPointCount ?? outcome.Facts.PointCount, outcome.Facts.PointCount, outcome.Facts.TileBytes ?? 0, outcome.TilesReused),
+            ct);
+    }
+
+    private sealed record ArchivedFile(
+        Guid RowId, string Name, SurveyUploadFileRole Role, string StoragePath, Guid FileId, long SizeBytes, string Sha256);
 
     /// <summary>
     /// The archive stage: every declared file archived, its archived bytes still in the store.
@@ -457,7 +716,7 @@ public sealed class SurveyUploadPipelineHandler(
             from version in db.DocumentVersions.AsNoTracking()
             join blob in db.StoredFiles.AsNoTracking() on version.Id equals blob.DocumentVersionId
             where documentIds.Contains(version.DocumentId) && blob.ConvertedFromFileId == null
-            select new { version.DocumentId, blob.Sha256, blob.StoragePath })
+            select new { version.DocumentId, blob.Sha256, blob.StoragePath, blob.Id, blob.SizeBytes })
             .ToListAsync(ct);
 
         var archived = new List<ArchivedFile>();
@@ -465,15 +724,15 @@ public sealed class SurveyUploadPipelineHandler(
         {
             // The bytes this upload received, by their digest, rather than whatever is the
             // document's current revision now: somebody may have added a revision on the web since.
-            var path = stored
+            var blob = stored
                 .FirstOrDefault(s => s.DocumentId == file.DocumentId && string.Equals(s.Sha256, file.Sha256, StringComparison.OrdinalIgnoreCase))
-                ?.StoragePath ?? throw Missing();
+                ?? throw Missing();
 
-            await using (await OpenAsync(path, ct))
+            await using (await OpenAsync(blob.StoragePath, ct))
             {
             }
 
-            archived.Add(new ArchivedFile(file.Name, file.Role, path));
+            archived.Add(new ArchivedFile(file.Id, file.Name, file.Role, blob.StoragePath, blob.Id, blob.SizeBytes, file.Sha256!));
         }
 
         return archived.Any(f => f.Role == SurveyUploadFileRole.Archive) ? archived : throw Missing();

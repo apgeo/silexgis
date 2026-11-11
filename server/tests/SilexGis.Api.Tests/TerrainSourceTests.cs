@@ -208,11 +208,10 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            Directory.Exists(link).ShouldBeFalse();
-            Console.WriteLine(
+            // Reported as skipped, not passed: nothing about links was checked on this host.
+            Assert.Skip(
                 "Link resolution was NOT exercised: this host refuses to create a symbolic link. "
                 + $"({e.GetType().Name})");
-            return;
         }
 
         var refused = await SubmitAsync(Request(22.40, 46.40, link), administrator);
@@ -451,10 +450,10 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            Console.WriteLine(
+            // Reported as skipped, not passed: nothing about links was checked on this host.
+            Assert.Skip(
                 "Link resolution at run time was NOT exercised: this host refuses to create a "
                 + $"symbolic link. ({e.GetType().Name})");
-            return;
         }
 
         await RunAsync(buildId, administratorId);
@@ -510,6 +509,30 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
         var build = await ReadAsync(buildId);
         build.Status.ShouldBe(TerrainBuildStatus.Failed);
         build.ErrorCode.ShouldBe(TerrainBuildFailures.NoRasters);
+    }
+
+    /// <summary>
+    /// An ASCII grid carries its coordinate system only in a sibling file one upload cannot bring,
+    /// so it is refused while somebody is still looking at it rather than failing a build later.
+    /// A GeoTIFF sent by the same caller in the same test is accepted.
+    /// </summary>
+    [Fact]
+    public async Task An_ascii_grid_sent_through_the_browser_is_refused_while_a_geotiff_is_taken()
+    {
+        var grid = await UploadAsync(starter, "dem.asc");
+        grid.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await BodyAsync(grid)).ShouldContain(TerrainBuildEndpoints.RasterNeedsSidecarCode);
+
+        // A file that is no raster at all keeps its own code, and the formats it names are the
+        // ones an upload takes — not the grid it has just been told it cannot send.
+        var notRaster = await UploadAsync(starter, "notes.txt");
+        notRaster.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var notRasterBody = await BodyAsync(notRaster);
+        notRasterBody.ShouldContain(TerrainBuildEndpoints.RasterUnsupportedCode);
+        notRasterBody.ShouldContain(".tif");
+        notRasterBody.ShouldNotContain(".asc");
+
+        (await UploadAsync(starter, "dem.tif")).StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     /// <summary>

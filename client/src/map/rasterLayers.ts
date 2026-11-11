@@ -68,9 +68,14 @@ export function syncRasterLayers(
       continue;
     }
 
+    // Converted to red, green and blue only where the file stores something else (YCbCr from
+    // JPEG tiles, CMYK). A file that already holds red, green and blue is read as stored — and a
+    // map sheet's published file holds a fourth band saying where the sheet is, which a forced
+    // conversion would drop while the layer still expects it, so every tile would fail and
+    // nothing would be drawn.
     const source = new GeoTIFF({
       sources: [{ url: raster.cogUrl! }],
-      convertToRGB: true,
+      convertToRGB: 'auto',
     });
     // Hidden until the map knows where the file goes.
     const layer = new WebGLTileLayer({ source, opacity, visible: false });

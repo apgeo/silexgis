@@ -167,6 +167,34 @@ public class HtmlToTextTests
         stopwatch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
     }
 
+    /// <summary>
+    /// Openers whose closer never comes. A pattern that looks for "the opener, then anything, then
+    /// the closer" scans from every opener to the end of the input when the closer is absent, so
+    /// its cost is the number of openers times the length of the input — and the input is a third
+    /// party's text, cut only to eight times the budget.
+    /// </summary>
+    [Theory]
+    [InlineData("<a href=\"x\">")]
+    [InlineData("<script>")]
+    [InlineData("<style>")]
+    [InlineData("<xml>")]
+    [InlineData("<!--")]
+    [InlineData("<a ")]
+    [InlineData("<")]
+    public void Openers_that_are_never_closed_cost_time_bounded_by_the_input(string opener)
+    {
+        var html = string.Concat(Enumerable.Repeat(opener + "Galerie ", 160_000 / (opener.Length + 8)));
+
+        var stopwatch = Stopwatch.StartNew();
+        var text = HtmlToText.Convert(html, Budget);
+        stopwatch.Stop();
+
+        // What the text says is not the point here, only that the answer is reached; the
+        // ceiling is generous because this box builds and renders under load.
+        stopwatch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(2));
+        (text ?? string.Empty).ShouldNotContain("<a href");
+    }
+
     [Fact]
     public void Hostile_markup_leaves_no_markup_behind()
     {

@@ -165,6 +165,62 @@ public static class SurveySegmentSql
                   AND {exactSql}
                   AND (s.flags & {(int)NotPassage}) = 0
             ),
+            {MeasuredLegs}
+            """;
+
+        return (sql, parameters);
+    }
+
+    /// <summary>
+    /// Every measured leg of one survey model, or an empty list when the model has none — it was
+    /// never read, its reading has not finished, or it could not be placed and so wrote no legs.
+    ///
+    /// <para>
+    /// <b>No access walk, on purpose, and so only for a caller that has already decided.</b> This
+    /// answers for a survey upload's own page of results, which describes the survey its own files
+    /// hold rather than whichever survey the cave is currently drawn from. The upload's routes open
+    /// first — the upload's survey terms for a signed-in reader, the link's own decision for the
+    /// holder of its public link, who has been handed the compiled model these legs were read out
+    /// of — and the model is one of that upload's outputs, never one a request names.
+    /// </para>
+    /// </summary>
+    public static async Task<IReadOnlyList<SurveySegmentRow>> ForModelAsync(
+        SilexGisDbContext db, Guid surveyModelId, CancellationToken ct)
+    {
+        var parameters = new DynamicParameters();
+        parameters.Add("seg_model_id", surveyModelId);
+        var sql = $"""
+            WITH leg AS (
+                SELECT s.id,
+                       s.survey_model_id,
+                       s.from_station_name,
+                       s.to_station_name,
+                       s.length_m,
+                       (s.flags & {(int)SurveyShotFlags.Duplicate}) <> 0 AS is_duplicate,
+                       {SpatialSql.HasAltitudes("s.geom")} AS has_z,
+                       ST_StartPoint(s.geom) AS a,
+                       ST_EndPoint(s.geom) AS b
+                FROM survey_shots s
+                JOIN survey_models m ON m.id = s.survey_model_id
+                WHERE s.survey_model_id = @seg_model_id
+                  AND m.status = {(short)SurveyModelStatus.Ready}
+                  AND (s.flags & {(int)NotPassage}) = 0
+            ),
+            {MeasuredLegs}
+            """;
+
+        var connection = db.Database.GetDbConnection();
+        var rows = await connection.QueryAsync<SurveySegmentRow>(
+            new CommandDefinition(sql, parameters, cancellationToken: ct));
+        return [.. rows];
+    }
+
+    /// <summary>
+    /// The measuring both reads share, over a CTE named <c>leg</c>: the true plan distance, bearing
+    /// and rise of each leg on the geography type, and the columns a <see cref="SurveySegmentRow"/>
+    /// is read from. One copy, because two would be two definitions of a leg's length.
+    /// </summary>
+    private static readonly string MeasuredLegs = $"""
             measured AS (
                 SELECT leg.*,
                        ST_Distance(leg.a::geography, leg.b::geography) AS plan_m,
@@ -196,8 +252,5 @@ public static class SurveySegmentSql
                 CASE WHEN has_z THEN (ST_Z(a) + ST_Z(b)) / 2 END AS "MidZM"
             FROM measured
             ORDER BY id
-            """;
-
-        return (sql, parameters);
-    }
+        """;
 }

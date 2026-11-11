@@ -234,5 +234,9 @@ public sealed class TaggingConfiguration : IEntityTypeConfiguration<Tagging>
         builder.HasIndex(x => new { x.TagId, x.EntityType, x.EntityId }).IsUnique().HasFilter("entity_type IS NOT NULL");
         builder.HasIndex(x => x.FeatureId);
         builder.HasIndex(x => new { x.EntityType, x.EntityId });
+        // The two unique indexes above lead with the tag but each covers only one kind of target,
+        // so neither can answer "every use of this tag" — the tag filter's question, and the
+        // cascade's when a tag is deleted. This one can.
+        builder.HasIndex(x => x.TagId, "ix_taggings_tag_id").HasDatabaseName("ix_taggings_tag_id");
     }
 }

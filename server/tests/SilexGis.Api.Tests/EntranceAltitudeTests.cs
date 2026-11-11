@@ -284,6 +284,11 @@ public sealed class EntranceAltitudeTests : IAsyncLifetime, IDisposable, IClassF
         filled.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
         JsonDocument.Parse(payload).RootElement.GetProperty("altitude").GetDecimal().ShouldBe(1000m);
 
+        // The fill moved the entrance's version, and says so: the version is the feature row's,
+        // filed under the feature whose read hands it out, not under this action's own path.
+        filled.Content.Headers.ContentLocation!.OriginalString.ShouldBe($"/api/v1/features/{blankEntrance}");
+        filled.Headers.ETag!.Tag.ShouldBe((await owner.GetAsync($"/api/v1/features/{blankEntrance}")).Headers.ETag!.Tag);
+
         // The value reached the cave's record, and the report now compares it.
         var report = await ReadJsonAsync(owner, $"/api/v1/caves/{blank}/altitude-disagreement");
         report.GetProperty("entrances")[0].GetProperty("recordedAltitudeM").GetDecimal().ShouldBe(1000m);

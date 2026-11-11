@@ -120,7 +120,17 @@ public sealed class PmtilesCliExtractor(IOptions<BasemapOptions> options, ILogge
                 if (reportsProgress && SelfHostedBasemap.ProgressPercent(chunk) is { } percent && percent != lastPercent)
                 {
                     lastPercent = percent;
-                    await progress(percent);
+                    try
+                    {
+                        await progress(percent);
+                    }
+                    catch (Exception e)
+                    {
+                        // Reporting is a database write and may fail; the extract does not depend
+                        // on it. Reading must go on whatever happens here: a stream nobody drains
+                        // fills its pipe, the tool blocks writing to it and never exits.
+                        logger.LogWarning(e, "Reporting basemap extract progress ({Percent}%) failed", percent);
+                    }
                 }
             }
         }

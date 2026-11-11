@@ -99,14 +99,15 @@ public sealed class ClientErrorReportTests : IAsyncLifetime, IDisposable, IClass
         {
             fingerprint,
             kind = "uncaught",
-            name = "TypeError",
+            name = "TypeError /api/v1/public/trips/PATH-SECRET",
             message = "failed to fetch /api/v1/public/trips/PATH-SECRET/embed",
             frame = "src/pages/MapPage.tsx:120:7",
-            stack = (string?)null,
+            // A stack's first line repeats the message, address and all.
+            stack = "TypeError: failed to fetch /api/v1/public/trips/PATH-SECRET/embed\n    at load (src/x.ts:1:1)",
             pageUrl = "https://club.example/shared/trips/PATH-SECRET",
             at = "2026-10-17T10:00:00.000Z",
             breadcrumbs = new[] { "route opened /reset-password?email=a%40b.test&token=QUERY-SECRET" },
-            componentStack = (string?)null,
+            componentStack = "at TripPage (/shared/trips/PATH-SECRET?token=QUERY-SECRET)",
             userAgent = "Mozilla/5.0",
             viewport = "1280x800",
         };
@@ -121,6 +122,32 @@ public sealed class ClientErrorReportTests : IAsyncLifetime, IDisposable, IClass
         var everything = logged.RenderMessage() + " " + string.Join(" ", logged.Properties.Values.Select(v => v.ToString()));
         everything.ShouldNotContain("PATH-SECRET");
         everything.ShouldNotContain("QUERY-SECRET");
+        // The stacks still arrive, only without the credential.
+        logged.Properties["ClientStack"]!.ToString()!.ShouldContain("failed to fetch");
+    }
+
+    [Fact]
+    public async Task A_report_cannot_write_lines_of_its_own_into_the_log()
+    {
+        var fingerprint = Guid.NewGuid().ToString("N")[..12];
+        var error = new
+        {
+            fingerprint,
+            kind = "console",
+            name = "Error\nforged-name",
+            message = "real message\r\nforged-message warn: SilexGis.Api something else",
+            frame = "src/a.ts:1:1\nforged-frame",
+        };
+
+        (await person.PostAsJsonAsync("/api/v1/diagnostics/client-errors", new { errors = new[] { error } }))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var line = logs.Events.Single(e => e.RenderMessage().Contains(fingerprint, StringComparison.Ordinal))
+            .RenderMessage();
+        line.ShouldContain("real message");
+        line.ShouldContain("forged-message");
+        line.ShouldNotContain("\n");
+        line.ShouldNotContain("\r");
     }
 
     [Fact]
@@ -146,6 +173,9 @@ public sealed class ClientErrorReportTests : IAsyncLifetime, IDisposable, IClass
             new { errors = tooMany },
             new { errors = new[] { Error("long", message: new string('m', 2_001)) } },
             new { errors = new[] { new { fingerprint = "k", kind = "invented", message = "m" } } },
+            // A null item skipped the item rules and was dereferenced by the handler.
+            new { errors = new object?[] { null } },
+            new { errors = new object?[] { Error("beside-null"), null } },
         };
 
         foreach (var body in refused)

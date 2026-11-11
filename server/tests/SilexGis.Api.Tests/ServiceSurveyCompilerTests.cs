@@ -173,6 +173,93 @@ public sealed class ServiceSurveyCompilerTests : IDisposable
         service.Leftovers().ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task The_projects_folders_reach_the_service_empty_ones_included()
+    {
+        // The upload's scaffold makes the folder its outputs go to before anything is written in it.
+        Directory.CreateDirectory(Path.Combine(project, "rez"));
+        Directory.CreateDirectory(Path.Combine(project, "th", "sketches"));
+        Directory.CreateDirectory(Path.Combine(project, SandboxedTherionRunner.ScratchDirectoryName, "inner"));
+        var seeing = new FolderSeeingCompiler();
+        await using var service = await TherionServiceHarness.StartAsync(seeing);
+
+        (await CompileAsync(Compiler(service))).Succeeded.ShouldBeTrue();
+
+        seeing.Folders.ShouldBe(["rez", "th", "th/sketches"], ignoreOrder: true);
+        service.Leftovers().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task The_project_tar_carries_empty_folders_and_refuses_a_folder_outside_the_project_or_over_a_file()
+    {
+        Directory.CreateDirectory(Path.Combine(project, "rez", "deeper"));
+        var directories = SurveyProjectTar.DirectoriesUnder(project);
+        directories.ShouldBe(["rez", "rez/deeper"]);
+
+        using var tar = new MemoryStream();
+        await SurveyProjectTar.WriteAsync(tar, project, SurveyProjectTar.FilesUnder(project), CancellationToken.None, directories: directories);
+        tar.Position = 0;
+        var destination = Path.Combine(Path.GetDirectoryName(project)!, "unpacked");
+        var reading = await SurveyProjectTar.ExtractAsync(tar, destination, 1024 * 1024, 100, CancellationToken.None);
+        reading.Files.ShouldBe([Config, "proba.th"], ignoreOrder: true);
+        Directory.Exists(Path.Combine(destination, "rez", "deeper")).ShouldBeTrue();
+
+        foreach (var (name, over) in new[] { ("../outside-the-project/", false), ("/rooted/", false), ("proba.th/", true) })
+        {
+            using var hostile = new MemoryStream();
+            await using (var writer = new System.Formats.Tar.TarWriter(hostile, System.Formats.Tar.TarEntryFormat.Pax, leaveOpen: true))
+            {
+                if (over)
+                {
+                    using var body = new MemoryStream("survey proba\nendsurvey\n"u8.ToArray());
+                    await writer.WriteEntryAsync(new System.Formats.Tar.PaxTarEntry(System.Formats.Tar.TarEntryType.RegularFile, "proba.th") { DataStream = body });
+                }
+
+                await writer.WriteEntryAsync(new System.Formats.Tar.PaxTarEntry(System.Formats.Tar.TarEntryType.Directory, name));
+            }
+
+            hostile.Position = 0;
+            var target = Path.Combine(Path.GetDirectoryName(project)!, $"hostile-{Guid.NewGuid():N}");
+            await Should.ThrowAsync<SurveyProjectTarException>(
+                SurveyProjectTar.ExtractAsync(hostile, target, 1024 * 1024, 100, CancellationToken.None));
+            Directory.Exists(Path.Combine(Path.GetDirectoryName(project)!, "outside-the-project")).ShouldBeFalse(name);
+        }
+    }
+
+    [TherionFact]
+    public async Task The_real_compiler_in_the_service_writes_a_model_into_an_empty_output_folder_the_project_was_built_with()
+    {
+        // The upload scaffold's shape: the model goes into rez/, which exists and is empty.
+        File.WriteAllText(Path.Combine(project, Config), "source proba.th\nexport model -fmt loch -o rez/proba.lox\n");
+        File.WriteAllText(
+            Path.Combine(project, "proba.th"),
+            """
+            survey proba -title "Proba"
+              centreline
+                units length meters
+                units compass clino degrees
+                data normal from to length compass clino
+                1 2 5.0 10 -5
+                2 3 4.0 90 0
+              endcentreline
+            endsurvey
+
+            """);
+        Directory.CreateDirectory(Path.Combine(project, "rez"));
+        var local = new LocalSurveyCompiler(
+            Options.Create(new SurveyCompilerOptions { Mode = SurveyCompilerOptions.ModeLocal, TimeoutSeconds = 120 }),
+            NullLogger<LocalSurveyCompiler>.Instance);
+        await using var service = await TherionServiceHarness.StartAsync(local);
+
+        var result = await Compiler(service).CompileAsync(Request(), new Progress<SurveyCompileProgress>(), CancellationToken.None);
+
+        result.Succeeded.ShouldBeTrue(result.LogText + "\n" + result.OutputTail);
+        result.LogText.ShouldNotContain("cannot copy");
+        result.OutputFiles.ShouldBe(["rez/proba.lox"]);
+        new FileInfo(Path.Combine(project, "rez", "proba.lox")).Length.ShouldBeGreaterThan(0);
+        service.Leftovers().ShouldBeEmpty();
+    }
+
     private SurveyCompileRequest Request() => new(project, Config, TimeSpan.FromSeconds(60));
 
     private Task<SurveyCompileResult> CompileAsync(ServiceSurveyCompiler compiler) =>
@@ -188,6 +275,24 @@ public sealed class ServiceSurveyCompilerTests : IDisposable
                 MaxOutputBytes = maxOutputBytes,
             }),
             NullLogger<ServiceSurveyCompiler>.Instance);
+
+    /// <summary>A compiler that writes nothing and notes which folders the project it was given holds.</summary>
+    private sealed class FolderSeeingCompiler : ISurveyCompiler
+    {
+        public IReadOnlyList<string> Folders { get; private set; } = [];
+
+        public bool IsAvailable => true;
+
+        public string? Version => "invented 1.0";
+
+        public Task<SurveyCompileResult> CompileAsync(
+            SurveyCompileRequest request, IProgress<SurveyCompileProgress> progress, CancellationToken ct)
+        {
+            Folders = [.. Directory.EnumerateDirectories(request.ProjectDirectory, "*", SearchOption.AllDirectories)
+                .Select(d => Path.GetRelativePath(request.ProjectDirectory, d).Replace('\\', '/'))];
+            return Task.FromResult(new SurveyCompileResult(true, 0, "invented log\n", [], "invented tail"));
+        }
+    }
 
     private static string Manifest(params string[] outputs) =>
         JsonSerializer.Serialize(new SurveyCompilerServiceResult(true, 0, outputs, "invented tail", "invented 1.0"), JsonSerializerOptions.Web);

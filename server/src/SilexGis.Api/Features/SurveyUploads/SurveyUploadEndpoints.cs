@@ -11,10 +11,12 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Auth;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Scans;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Scans;
 using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Features.SurveyUploads;
@@ -55,7 +57,16 @@ public static partial class SurveyUploadEndpoints
     public const int PollIntervalSeconds = 3;
 
     /// <summary>The survey tools accepted, by the names an upload's <c>source</c> uses.</summary>
-    public static readonly IReadOnlyList<string> Sources = ["topodroid"];
+    public static readonly IReadOnlyList<string> Sources = ["topodroid", "pointcloud", "mandeye"];
+
+    /// <summary>The origin an upload's <c>source</c> names, or null for a name not accepted.</summary>
+    public static SurveyOrigin? OriginOf(string? source) => source?.Trim().ToLowerInvariant() switch
+    {
+        "topodroid" => SurveyOrigin.TopoDroid,
+        "pointcloud" => SurveyOrigin.PointCloud,
+        "mandeye" => SurveyOrigin.Mandeye,
+        _ => null,
+    };
 
     public const string ContractUnsupportedCode = "survey_upload.contract_unsupported";
     public const string SourceUnsupportedCode = "survey_upload.source_unsupported";
@@ -74,6 +85,15 @@ public static partial class SurveyUploadEndpoints
     public const string NotCompletedCode = "survey_upload.not_completed";
     public const string RunInProgressCode = "survey_upload.run_in_progress";
 
+    /// <summary>The choice of how much of a point cloud to show does not satisfy the thinning step's parameters.</summary>
+    public const string DisplayInvalidCode = "survey_upload.display_invalid";
+
+    /// <summary>A step named as done on another computer is not one the upload's recipe runs on a worker.</summary>
+    public const string ExternalStepInvalidCode = "survey_upload.external_step_invalid";
+
+    /// <summary>A refined session was sent without naming, or for a survey that is not, a recording processed here.</summary>
+    public const string SessionNeedsScanCode = "survey_upload.session_needs_scan";
+
     /// <summary>The page size a listing uses when it names none, and the most it may ask for.</summary>
     public const int DefaultPageSize = 50;
 
@@ -82,9 +102,13 @@ public static partial class SurveyUploadEndpoints
     public static RouteGroupBuilder MapSurveyUploadEndpoints(this RouteGroupBuilder api)
     {
         // Metadata is fixed when the route is mapped, so the per-file cap that keeps the web server
-        // from cutting a large survey archive off before the handler runs is read here.
-        var fileCap = ((IEndpointRouteBuilder)api).ServiceProvider
-            .GetRequiredService<IOptions<SurveyUploadOptions>>().Value.FileCap;
+        // from cutting a large survey archive off before the handler runs is read here. The route
+        // takes survey archives and point clouds alike, so its cap is the larger of the two; each
+        // upload's own cap is checked when it is opened and again as its bytes arrive.
+        var services = ((IEndpointRouteBuilder)api).ServiceProvider;
+        var fileCap = Math.Max(
+            services.GetRequiredService<IOptions<SurveyUploadOptions>>().Value.FileCap,
+            services.GetRequiredService<IOptions<ScanOptions>>().Value.UploadCap);
 
         var uploads = api.MapGroup("/survey-uploads")
             .WithTags("SurveyUploads")
@@ -152,13 +176,17 @@ public static partial class SurveyUploadEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithSummary("Abandons an upload still receiving files. The files already sent stay archived.");
 
+        MapExternalStepEndpoints(uploads, fileCap);
+        MapSurfaceEndpoints(uploads);
         MapPublicLinkEndpoints(api);
+        MapViewerEndpoints(api);
         return api;
     }
 
     private static async Task<Results<Ok<SurveyUploadCapabilitiesDto>, UnauthorizedHttpResult>> CapabilitiesAsync(
         SilexGisDbContext db,
         IOptions<SurveyUploadOptions> options,
+        IOptions<ScanOptions> scans,
         ISurveyCompiler compiler,
         IAccessContextAccessor accessAccessor,
         SurveyUploadPublicLinkService links,
@@ -191,7 +219,20 @@ public static partial class SurveyUploadEndpoints
                 [Visibility.Private, Visibility.CavingGroup, Visibility.Authenticated, Visibility.Public]),
             new SurveyOutputCapabilitiesDto(SurveyOutputs.Catalogue, settings.DefaultOutputList()),
             PollIntervalSeconds,
-            new SurveyPublicLinkCapabilitiesDto(linksEnabled, defaultAudience)));
+            new SurveyPublicLinkCapabilitiesDto(linksEnabled, defaultAudience),
+            // A point cloud is one file under a cap of its own, orders of magnitude above a
+            // survey tool's; a device reads the scans' rules here rather than the survey's. A raw
+            // recording is many files, each under the same per-file cap, with a total of its own.
+            new SurveyPointCloudCapabilitiesDto(
+                scans.Value.UploadCap,
+                1,
+                SurveyUploadFiles.AcceptedExtensionsFor(SurveyOrigin.PointCloud),
+                new SurveyRecordingCapabilitiesDto(
+                    scans.Value.UploadCap,
+                    scans.Value.RawUploadCap,
+                    scans.Value.RawFileCap,
+                    SurveyUploadFiles.AcceptedExtensionsFor(SurveyOrigin.Mandeye),
+                    ScanStorageNeeds.OdometryWorkerFactor))));
     }
 
     private static async Task<Results<Ok<SurveyUploadDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
@@ -307,17 +348,33 @@ public static partial class SurveyUploadEndpoints
                 missing);
         }
 
-        upload.Status = SurveyUploadStatus.Queued;
-        upload.Stage = null;
-        upload.Progress = 0;
-        upload.Message = null;
-        Queue(db, upload);
-        await CloseBatchAsync(db, upload.UploadBatchId, now, ct);
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            // Another completion of the same upload may have got here first, between the status
+            // read above and now. The row decides; the one that finds the upload no longer
+            // receiving is a repeat, and is answered as one with where the upload now stands.
+            if (!await SurveyUploadWrites.HoldReceivingAsync(db, upload.Id, ct))
+            {
+                await transaction.RollbackAsync(ct);
+                await db.Entry(upload).ReloadAsync(ct);
+                return upload.Status == SurveyUploadStatus.Abandoned
+                    ? ApiProblems.Conflict(NotReceivingCode, "This upload was abandoned; open a new one.")
+                    : Accepted(await ToDtoAsync(db, tokens, links, options.Value, upload, found.Cave, writable: true, ct));
+            }
 
-        // The public link is made with the completion, in the same save, by whoever completes it:
-        // the cave's protection is known by now, a cave the upload made included.
-        await links.MintAtCompletionAsync(access, ctx, upload, found.Cave, ct);
-        await db.SaveChangesAsync(ct);
+            upload.Status = SurveyUploadStatus.Queued;
+            upload.Stage = null;
+            upload.Progress = 0;
+            upload.Message = null;
+            Queue(db, upload);
+            await CloseBatchAsync(db, upload.UploadBatchId, now, ct);
+
+            // The public link is made with the completion, in the same save, by whoever completes
+            // it: the cave's protection is known by now, a cave the upload made included.
+            await links.MintAtCompletionAsync(access, ctx, upload, found.Cave, ct);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
 
         return Accepted(await ToDtoAsync(db, tokens, links, options.Value, upload, found.Cave, writable: true, ct));
     }
@@ -332,6 +389,8 @@ public static partial class SurveyUploadEndpoints
         IFileAccessTokenService tokens,
         SurveyUploadPublicLinkService links,
         IOptions<SurveyUploadOptions> options,
+        ITypedPropertiesValidator schemas,
+        ProcessingProfileResolver profiles,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -362,7 +421,76 @@ public static partial class SurveyUploadEndpoints
                 break;
         }
 
-        if (request?.Pipeline is { } pipeline)
+        // A point cloud's options are its recipe, which a survey's pipeline request says nothing
+        // about. A choice of how much to show makes a new recipe; a step to do again without one
+        // keeps the recipe the upload has, thinning included, and only marks the step. Profiles
+        // named are then copied into whichever recipe that is.
+        IReadOnlyDictionary<string, Guid> chosenProfiles = new Dictionary<string, Guid>();
+        if (ScanOrigins.IsScan(upload.Source))
+        {
+            var current = ScanRecipes.FromOptionsJson(upload.Options);
+            // A surface asked for once belongs to the run that was asked for it. One that failed or
+            // was refused left its request in the stored recipe; a later run, perhaps by somebody
+            // who may not write to the cave it names, must not make that wall mesh unasked.
+            if (current is not null && (current.Surface is not null || current.Steps.Any(s => s.StepId == MeshSurfaceStep.StepId)))
+            {
+                current = PointCloudRecipes.WithoutSurface(current);
+                upload.Options = ScanRecipes.ToOptionsJson(current);
+            }
+
+            ScanRecipe? rebuilt = null;
+            if (request?.Display is { } display)
+            {
+                // A recording keeps the odometry parameters it was processed with: a new choice
+                // of how much to show changes what follows the export, not the odometry.
+                var choice = new PointCloudDisplayChoice(display.Method, display.VoxelCm, display.EveryNth);
+                // A refined session's recipe has no odometry to keep: it starts at the export.
+                var recipe = upload.Source != SurveyOrigin.Mandeye
+                    ? PointCloudRecipes.For(schemas, choice, request.FromStep, out var errors)
+                    : PointCloudRecipes.StartsFromSession(current)
+                        ? PointCloudRecipes.ForRefinedSession(schemas, choice, request.FromStep, out errors)
+                        : PointCloudRecipes.ForRecording(
+                            schemas, choice, request.FromStep, current?.Steps.FirstOrDefault(s => s.StepId == HdmappingOdometryStep.StepId), out errors);
+                if (recipe is null)
+                {
+                    return ApiProblems.BadRequest(DisplayInvalidCode, string.Join("; ", errors));
+                }
+
+                // Every other step keeps the values the upload had, a profile's included; only
+                // the thinning is the new choice. Profiles named in the request are laid over after.
+                // The steps the upload has done on another computer stay so.
+                rebuilt = current is null
+                    ? recipe
+                    : recipe with
+                    {
+                        Steps = [.. recipe.Steps.Select(s => s.StepId == PointCloudDownsampleStep.StepId
+                            ? s
+                            : current.Steps.FirstOrDefault(c => c.StepId == s.StepId) ?? s)],
+                        External = current.External,
+                    };
+            }
+            else if (request?.FromStep is not null || request?.Profiles is { Count: > 0 })
+            {
+                var kept = current
+                    ?? (upload.Source == SurveyOrigin.Mandeye
+                        ? PointCloudRecipes.ForRecording(schemas, null, null, null, out _)!
+                        : PointCloudRecipes.Default(schemas));
+                rebuilt = kept with { RerunFrom = request?.FromStep };
+            }
+
+            if (rebuilt is not null)
+            {
+                var (resolution, profileProblem) = await profiles.ApplyAsync(ctx, rebuilt, request?.Profiles, ct);
+                if (profileProblem is not null)
+                {
+                    return ApiProblems.BadRequest(profileProblem.Code, profileProblem.Detail);
+                }
+
+                chosenProfiles = resolution!.Chosen;
+                upload.Options = ScanRecipes.ToOptionsJson(resolution.Recipe);
+            }
+        }
+        else if (request?.Pipeline is { } pipeline)
         {
             // The outputs the uploader always asks for stay asked for, whoever runs it again.
             var asked = await RunOptionsAsync(db, options.Value, upload.RequestedBy, pipeline, ct);
@@ -389,6 +517,7 @@ public static partial class SurveyUploadEndpoints
             await transaction.CommitAsync(ct);
         }
 
+        await profiles.RememberAsync(ctx.UserId, chosenProfiles, ct);
         await db.Entry(upload).ReloadAsync(ct);
 
         return Accepted(await ToDtoAsync(db, tokens, links, options.Value, upload, found.Cave, writable: true, ct));
@@ -435,10 +564,28 @@ public static partial class SurveyUploadEndpoints
         // Only the session ends. What arrived stays archived: it is the caver's survey, and
         // taking it away is an act of its own on the cave page.
         var now = clock.GetUtcNow();
-        upload.Status = SurveyUploadStatus.Abandoned;
-        upload.FinishedAt = now;
-        await CloseBatchAsync(db, upload.UploadBatchId, now, ct);
-        await db.SaveChangesAsync(ct);
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            // A completion may have queued the run between the status read above and now; the
+            // row decides, as it does between two completions, and the later writer finds the
+            // upload no longer receiving instead of writing over what the other committed.
+            if (!await SurveyUploadWrites.HoldReceivingAsync(db, upload.Id, ct))
+            {
+                await transaction.RollbackAsync(ct);
+                await db.Entry(upload).ReloadAsync(ct);
+                return upload.Status == SurveyUploadStatus.Abandoned
+                    ? TypedResults.NoContent()
+                    : ApiProblems.Conflict(
+                        NotReceivingCode, "Every file of this upload arrived; a completed upload is not abandoned, and it cannot be deleted yet.");
+            }
+
+            upload.Status = SurveyUploadStatus.Abandoned;
+            upload.FinishedAt = now;
+            await CloseBatchAsync(db, upload.UploadBatchId, now, ct);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+
         return TypedResults.NoContent();
     }
 
@@ -529,6 +676,7 @@ public static partial class SurveyUploadEndpoints
         var revisions = await CurrentRevisionsAsync(db, [.. files.Select(f => f.DocumentId!.Value)], ct);
         var labels = await ProfileDirectory.ResolveLabelsAsync(db, user, rows.Select(r => r.RequestedBy), ct);
         var openLinks = await links.OpenLinksAsync([.. rows.Select(r => (r.Id, r.CaveFeatureId))], ct);
+        var clouds = await PointCloudsOfAsync(db, [.. rows.Where(r => ScanOrigins.IsScan(r.Source)).Select(r => r.Id)], ct);
 
         SurveyUploadListFileDto? Listed(SurveyUploadFile f) =>
             revisions.TryGetValue(f.DocumentId!.Value, out var r)
@@ -553,6 +701,8 @@ public static partial class SurveyUploadEndpoints
                 u.CreatedAt,
                 own.Where(f => f.Role == SurveyUploadFileRole.Archive).Select(Listed).FirstOrDefault(x => x is not null),
                 [.. own.Where(f => f.Role == SurveyUploadFileRole.TherionSource).Select(Listed).OfType<SurveyUploadListFileDto>()],
+                // Everybody listed here holds the exact position (see above), so the facts are whole.
+                clouds.TryGetValue(u.Id, out var cloud) ? PointCloudDto(tokens, cloud.ModelId, cloud.ConvertedFileId, cloud.Facts, exact: true) : null,
                 SurveyUploadLinks.StatusPage(u.CaveFeatureId, u.CaveSurveyId, u.Id),
                 openLinks.GetValueOrDefault(u.Id));
         }).ToList();
@@ -596,7 +746,9 @@ public static partial class SurveyUploadEndpoints
     private static void Queue(SilexGisDbContext db, SurveyUpload upload) =>
         db.ProcessingJobs.Add(new ProcessingJob
         {
-            Kind = ProcessingJobKinds.SurveyUploadPipeline,
+            // A point cloud waits on a worker for minutes to hours, so its run goes on the
+            // long-work lane under a kind of its own; the run itself is the same.
+            Kind = ScanOrigins.IsScan(upload.Source) ? ProcessingJobKinds.PointCloudPipeline : ProcessingJobKinds.SurveyUploadPipeline,
             Payload = JsonSerializer.Serialize(new SurveyUploadPipelinePayload(upload.Id), JsonSerializerOptions.Web),
         });
 
@@ -714,7 +866,37 @@ public static partial class SurveyUploadEndpoints
             .ToListAsync(ct);
         var revisions = await CurrentRevisionsAsync(
             db, [.. files.Where(f => f.DocumentId is not null).Select(f => f.DocumentId!.Value)], ct);
-        var options = ReadOptions(upload);
+        // A point cloud's options are its recipe, which says nothing a survey run's options say.
+        var options = ScanOrigins.IsScan(upload.Source)
+            ? new SurveyUploadRunOptions(false, [], SurveyUploadRunOptions.DefaultMapScale)
+            : ReadOptions(upload);
+        var cloud = ScanOrigins.IsScan(upload.Source)
+            ? (await PointCloudsOfAsync(db, [upload.Id], ct)).GetValueOrDefault(upload.Id)
+            : null;
+
+        // The uploaded original of a point cloud is the one file a reader may take without the
+        // exact position: it carries none unless its header names a coordinate system, and then
+        // it is the position itself. Until the header has been read, it is treated as if it did.
+        // The facts describe the bytes the run read; a later revision of the same document may
+        // be another file altogether, so without the exact position the link is offered only
+        // while the document's current revision is still the file the run inspected.
+        // A raw recording's files follow the cloud's georeferencing: they are location-free
+        // unless the recording holds GNSS positions. The facts of a recording describe the
+        // recording as a whole, so no revision-currency test applies to its files.
+        bool MayLink(SurveyUploadFile f) =>
+            exact
+            || (upload.Source == SurveyOrigin.PointCloud
+                && f.Role == SurveyUploadFileRole.Archive
+                && cloud is { Facts.IsGeoreferenced: false }
+                && f.DocumentId is { } inspected
+                && revisions.TryGetValue(inspected, out var current)
+                && current.FileId == cloud.FileId)
+            || (upload.Source == SurveyOrigin.Mandeye
+                && f.Role == SurveyUploadFileRole.Archive
+                // A refined session holds the scanner's path, which is a position whatever the
+                // cloud's header says: like the session a run makes, it needs the exact location.
+                && !MandeyeRecording.IsSessionName(f.Name)
+                && cloud is { Facts.IsGeoreferenced: false });
 
         // What the run produced is listed apart from what the device sent and what the run was
         // compiled from, in the order the run stored it.
@@ -763,6 +945,25 @@ public static partial class SurveyUploadEndpoints
         // longer download.
         var (publicLink, publicLinkRefusal) = await links.StateAsync(upload, showAddress: exact, ct);
 
+        // The scan's latest session, whichever way it came — made by the odometry, sent back for
+        // a step done elsewhere, or sent as a refined version — offered only with the exact location.
+        Guid? sessionFileId = cloud is not null && exact
+            ? await db.ScanArtifacts.AsNoTracking()
+                .Where(a => a.SurveyUploadId == upload.Id && a.Kind == ScanArtifactKind.HdmSession)
+                .OrderByDescending(a => a.CreatedAt)
+                .Select(a => (Guid?)a.FileId)
+                .FirstOrDefaultAsync(ct)
+            : null;
+        var hasCentreline = cloud is not null && exact
+            && await db.ScanArtifacts.AsNoTracking()
+                .AnyAsync(a => a.SurveyUploadId == upload.Id && a.Kind == ScanArtifactKind.Centreline, ct);
+
+        // The pictures carry no coordinate — they are drawn in the scan's own frame, heights above
+        // its lowest point — so, like the tiles, they go to everybody who may read the upload.
+        var pictures = cloud?.Facts.Pictures is { } drawn
+            ? await PicturesDtoAsync(db, tokens, upload.Id, drawn, ct)
+            : null;
+
         return new SurveyUploadDto(
             upload.Id,
             upload.Status,
@@ -775,6 +976,12 @@ public static partial class SurveyUploadEndpoints
             upload.VersionAt,
             upload.CreatedCave,
             new SurveyUploadSurveyDto(upload.SurveyTitle, upload.SurveyName, upload.SurveyDate, upload.Team),
+            cloud is null ? null : PointCloudDto(tokens, cloud.ModelId, cloud.ConvertedFileId, cloud.Facts, exact) with
+            {
+                SessionUrl = sessionFileId is { } session ? ContentUrl(tokens, session) : null,
+                HasCentreline = hasCentreline,
+                Pictures = pictures,
+            },
             [.. files.Where(f => f.Role is not (SurveyUploadFileRole.Output or SurveyUploadFileRole.Log)).Select(f => new SurveyUploadFileDto(
                 f.Name,
                 f.Role,
@@ -785,7 +992,7 @@ public static partial class SurveyUploadEndpoints
                 f.RefusalCode,
                 f.SurveySourceId,
                 f.DocumentId,
-                exact && f.DocumentId is { } doc && revisions.TryGetValue(doc, out var r) ? ContentUrl(tokens, r.FileId) : null))],
+                MayLink(f) && f.DocumentId is { } doc && revisions.TryGetValue(doc, out var r) ? ContentUrl(tokens, r.FileId) : null))],
             artefacts,
             upload.CompilerVersion is { } compiler ? new SurveyUploadCompilerDto(compiler) : null,
             options.Outputs,
@@ -800,10 +1007,148 @@ public static partial class SurveyUploadEndpoints
             upload.CreatedAt,
             upload.ExpiresAt,
             upload.StartedAt,
-            upload.FinishedAt);
+            upload.FinishedAt,
+            writable ? await ExternalWaitDtoAsync(db, upload, ct) : null);
+    }
+
+    /// <summary>
+    /// The step a scan's run waits for, with each product's names and whether it has arrived; null
+    /// when the run is not stopped before a step done elsewhere. A product counts as arrived when
+    /// an artefact of its kind is recorded for the step, its parameters and exactly the inputs the
+    /// wait names — what the run that carries on will reuse.
+    /// </summary>
+    private static async Task<SurveyUploadExternalWaitDto?> ExternalWaitDtoAsync(SilexGisDbContext db, SurveyUpload upload, CancellationToken ct)
+    {
+        if (WaitOf(upload) is not { } waiting)
+        {
+            return null;
+        }
+
+        var made = await db.ScanArtifacts.AsNoTracking()
+            .Where(a => a.SurveyUploadId == upload.Id && a.StepId == waiting.Step.StepId && a.ParamsHash == waiting.Step.ParamsHash)
+            .Select(a => new { a.Kind, a.InputArtifactIds })
+            .ToListAsync(ct);
+        var inputs = waiting.Wait.InputArtifactIds.ToHashSet();
+        var arrived = made
+            .Where(a => a.InputArtifactIds.Length == inputs.Count && a.InputArtifactIds.All(inputs.Contains))
+            .Select(a => a.Kind)
+            .ToHashSet();
+        return new SurveyUploadExternalWaitDto(
+            waiting.Step.StepId,
+            waiting.Definition.DisplayName,
+            waiting.Definition.Tool,
+            [.. waiting.Definition.Outputs.Select(kind => new SurveyUploadExternalOutputDto(ScanExternalOutputs.NamesFor(kind), arrived.Contains(kind)))]);
     }
 
     private sealed record Revision(Guid FileId, long SizeBytes);
+
+    /// <param name="FileId">The stored file whose header the facts were read from.</param>
+    private sealed record PointCloudOfUpload(Guid ModelId, Guid FileId, Guid? ConvertedFileId, PointCloudFacts Facts);
+
+    /// <summary>The point-cloud model of each of these uploads whose header has been read, by upload.</summary>
+    private static async Task<Dictionary<Guid, PointCloudOfUpload>> PointCloudsOfAsync(
+        SilexGisDbContext db, IReadOnlyList<Guid> uploadIds, CancellationToken ct)
+    {
+        if (uploadIds.Count == 0)
+        {
+            return [];
+        }
+
+        var formats = SurveyModelKinds.FormatsOf(SurveyModelKind.PointCloud);
+        var models = await db.SurveyModels.AsNoTracking()
+            .Where(m => m.SurveyUploadId != null && uploadIds.Contains(m.SurveyUploadId.Value) && formats.Contains(m.Format))
+            .Select(m => new { m.Id, UploadId = m.SurveyUploadId!.Value, m.FileId, m.ConvertedFileId, m.PointCloud })
+            .ToListAsync(ct);
+        var found = new Dictionary<Guid, PointCloudOfUpload>();
+        foreach (var m in models)
+        {
+            if (PointCloudFacts.FromJson(m.PointCloud) is { } facts)
+            {
+                found[m.UploadId] = new PointCloudOfUpload(m.Id, m.FileId, m.ConvertedFileId, facts);
+            }
+        }
+
+        return found;
+    }
+
+    private static async Task<SurveyUploadPointCloudPicturesDto?> PicturesDtoAsync(
+        SilexGisDbContext db, IFileAccessTokenService tokens, Guid uploadId, PointCloudPictures drawn, CancellationToken ct)
+    {
+        var files = await db.ScanArtifacts.AsNoTracking()
+            .Where(a => a.SurveyUploadId == uploadId && (a.Kind == ScanArtifactKind.PlanImage || a.Kind == ScanArtifactKind.ProfileImage))
+            .OrderByDescending(a => a.CreatedAt)
+            .Select(a => new { a.Kind, a.FileId })
+            .ToListAsync(ct);
+        var plan = files.FirstOrDefault(f => f.Kind == ScanArtifactKind.PlanImage);
+        if (plan is null)
+        {
+            return null;
+        }
+
+        var profile = files.FirstOrDefault(f => f.Kind == ScanArtifactKind.ProfileImage);
+        return new SurveyUploadPointCloudPicturesDto(
+            ContentUrl(tokens, plan.FileId),
+            profile is null ? null : ContentUrl(tokens, profile.FileId),
+            drawn.ColourBy,
+            drawn.ValueLow,
+            drawn.ValueHigh,
+            drawn.PixelM,
+            drawn.PlanSize,
+            profile is null ? null : drawn.ProfilePixelM,
+            profile is null ? null : drawn.ProfileSize,
+            profile is null ? null : drawn.ProfileLengthM);
+    }
+
+    /// <summary>
+    /// The facts as the caller may see them. The extent's size is a measurement and goes to
+    /// everybody; where the extent lies, and the coordinate system that makes it a place, are the
+    /// position, shown only with the exact-location right.
+    /// </summary>
+    private static SurveyUploadPointCloudDto PointCloudDto(
+        IFileAccessTokenService tokens, Guid modelId, Guid? convertedFileId, PointCloudFacts facts, bool exact) => new(
+        modelId,
+        facts.PointCount,
+        facts.PointFormat,
+        facts.LasVersion,
+        facts.Compressed,
+        facts.HasRgb,
+        facts.HasIntensity,
+        [facts.Max[0] - facts.Min[0], facts.Max[1] - facts.Min[1], facts.Max[2] - facts.Min[2]],
+        facts.IsGeoreferenced,
+        exact && facts.Crs is { } crs ? new SurveyUploadPointCloudCrsDto(crs.HorizontalEpsg, crs.VerticalEpsg, crs.Wkt) : null,
+        exact ? facts.Min : null,
+        exact ? facts.Max : null,
+        facts.GeneratingSoftware,
+        facts.TileBytes,
+        facts.TileCount,
+        facts.TilerVersion,
+        convertedFileId is { } tiles ? SurveyTileAddresses.Root(tokens, modelId, tiles) : null,
+        facts.DisplayVoxelM,
+        facts.DisplayEveryNth,
+        facts.DisplayPointCount,
+        exact ? facts.OriginShift : null,
+        facts.Estimate is { } estimate
+            ? new SurveyUploadPointCloudEstimateDto(
+                EstimateRow(estimate.Full), [.. estimate.Voxels.Select(EstimateRow)])
+            : null,
+        facts.Advice is { } advice
+            ? new SurveyUploadPointCloudAdviceDto(
+                advice.Level.ToString().ToLowerInvariant(), advice.SuggestedVoxelCm, advice.WarnPoints, advice.AdvisePoints, advice.WarnTileBytes)
+            : null,
+        facts.Recording is { } recording
+            ? new SurveyUploadRecordingDto(
+                recording.ChunkCount,
+                recording.SensorCount,
+                recording.HasCalibration,
+                recording.HasGnss,
+                recording.DurationSeconds,
+                recording.PointCount,
+                recording.ImuHasHeader,
+                recording.Bytes)
+            : null);
+
+    private static SurveyUploadPointCloudEstimateRowDto EstimateRow(PointCloudEstimateRow row) =>
+        new(row.VoxelCm, row.Points, row.EstimatedTileBytes, row.EstimatedSeconds);
 
     /// <summary>
     /// What the versions of a survey older than its newest one hold of their runs' outputs. Counted

@@ -94,6 +94,35 @@ public sealed class UserAdministrationLastAdministratorTests
     }
 
     [Fact]
+    public async Task An_account_manager_cannot_lift_their_own_review_mark_but_sets_anybody_elses()
+    {
+        var otherId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ula-rev-{tag}@t.local");
+        Guid managerId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            managerId = await db.Users.Where(u => u.Email == $"ula-mgr-{tag}@t.local").Select(u => u.Id).SingleAsync();
+            await db.Users.Where(u => u.Id == managerId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.UploadsNeedReview, true));
+        }
+
+        var own = await manager.PutAsJsonAsync($"/api/v1/users/{managerId}/upload-review", new { uploadsNeedReview = false });
+        own.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await own.Content.ReadAsStringAsync());
+        JsonDocument.Parse(await own.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("code").GetString().ShouldBe("user.cannot_change_own_review_mark");
+
+        var other = await manager.PutAsJsonAsync($"/api/v1/users/{otherId}/upload-review", new { uploadsNeedReview = true });
+        other.StatusCode.ShouldBe(HttpStatusCode.OK, await other.Content.ReadAsStringAsync());
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Users.AsNoTracking().SingleAsync(u => u.Id == managerId)).UploadsNeedReview.ShouldBeTrue();
+            (await db.Users.AsNoTracking().SingleAsync(u => u.Id == otherId)).UploadsNeedReview.ShouldBeTrue();
+        }
+    }
+
+    [Fact]
     public async Task A_delegated_account_manager_cannot_reach_a_full_administrator_at_all()
     {
         var soleId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ula-sole0-{tag}@t.local");
@@ -167,6 +196,63 @@ public sealed class UserAdministrationLastAdministratorTests
         var deleteLast = await lockedAdmin.DeleteAsync($"/api/v1/users/{secondId}");
         deleteLast.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await CodeOf(deleteLast)).ShouldBe(FullAdminGuard.LastFullAdminCode);
+    }
+
+    /// <summary>
+    /// Two administrators, each locking the other at the same moment. The check runs after each
+    /// transaction has staged its own lock, and neither can see the other's until it commits, so
+    /// unserialised both would pass and the installation would be left with nobody. Driven
+    /// deterministically: another transaction locks the first administrator and stands exactly
+    /// where a concurrent request stands once its own check has passed — holding the check's lock,
+    /// not yet committed — while the request to lock the second is sent.
+    /// </summary>
+    [Fact]
+    public async Task Two_administrators_locking_each_other_at_once_leave_one_of_them()
+    {
+        var firstId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ula-race1-{tag}@t.local");
+        var secondId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ula-race2-{tag}@t.local");
+        await MakeTheAdministratorsExactlyAsync([firstId, secondId], alsoLocked: lockedAdminId);
+
+        HttpResponseMessage lockSecond;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var other = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await using var transaction = await other.Database.BeginTransactionAsync();
+            (await other.Users.Where(u => u.Id == firstId).ExecuteUpdateAsync(u => u
+                .SetProperty(x => x.LockoutEnabled, true)
+                .SetProperty(x => x.LockoutEnd, DateTimeOffset.UtcNow.AddYears(100)))).ShouldBe(1);
+            (await scope.ServiceProvider.GetRequiredService<FullAdminGuard>().AnyLiveFullAdminAsync())
+                .ShouldBeTrue("the other transaction's own check passes: the second is still live");
+
+            var pending = lockedAdmin.PutAsJsonAsync($"/api/v1/users/{secondId}", new { locked = true });
+
+            // Until the request either answers or is seen waiting on a lock — the request is
+            // given its moment to reach its check while the other transaction is still open.
+            for (var attempt = 0; attempt < 200 && !pending.IsCompleted; attempt++)
+            {
+                var waiting = await other.Database.SqlQueryRaw<long>(
+                    "SELECT count(*) AS \"Value\" FROM pg_stat_activity "
+                    + "WHERE datname = current_database() AND wait_event_type = 'Lock' "
+                    + "AND pid <> pg_backend_pid()").SingleAsync();
+                if (waiting > 0)
+                {
+                    break;
+                }
+
+                await Task.Delay(50);
+            }
+
+            await transaction.CommitAsync();
+            lockSecond = await pending;
+        }
+
+        lockSecond.StatusCode.ShouldBe(HttpStatusCode.Conflict, await lockSecond.Content.ReadAsStringAsync());
+        (await CodeOf(lockSecond)).ShouldBe(FullAdminGuard.LastFullAdminCode);
+
+        await using var after = factory.Services.CreateAsyncScope();
+        var db = after.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await FullAdministrators.LiveMemberIdsAsync(db)).ShouldBe(
+            [secondId], "the lock that committed first stands, and the one that would have left nobody does not");
     }
 
     /// <summary>

@@ -185,6 +185,48 @@ public sealed class FeatureLinkTests : IAsyncLifetime, IDisposable, IClassFixtur
             ["linkKindCode"]!.GetValue<string>().ShouldBe("associated_cave");
     }
 
+    [Fact]
+    public async Task A_replace_keeps_the_links_the_caller_was_never_shown()
+    {
+        // The editor reads A's links, changes them and sends the whole list back. A link to a
+        // feature they cannot read, and a link to a deleted feature, were never in what they read,
+        // so they cannot have meant to remove them — and could not name them to keep them either.
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var source = await CreateFeatureAsync(owner, $"Keep A {marker}", "authenticated", 25.71, 45.61);
+        var shown = await CreateFeatureAsync(owner, $"Keep shown {marker}", "authenticated", 25.72, 45.62);
+        var dropped = await CreateFeatureAsync(owner, $"Keep dropped {marker}", "authenticated", 25.73, 45.63);
+        var unseen = await CreateFeatureAsync(owner, $"Keep unseen {marker}", "authenticated", 25.74, 45.64);
+        var retired = await CreateFeatureAsync(owner, $"Keep retired {marker}", "authenticated", 25.75, 45.65);
+        var added = await CreateFeatureAsync(owner, $"Keep added {marker}", "authenticated", 25.76, 45.66);
+
+        var initial = await owner.PutAsJsonAsync($"/api/v1/features/{source}/links", Links(
+            new { toId = shown, linkKindCode = "related", note = (string?)null },
+            new { toId = dropped, linkKindCode = "related", note = (string?)null },
+            new { toId = unseen, linkKindCode = "related", note = (string?)null },
+            new { toId = retired, linkKindCode = "related", note = (string?)null }));
+        initial.StatusCode.ShouldBe(HttpStatusCode.OK, await initial.Content.ReadAsStringAsync());
+
+        (await owner.DeleteAsync($"/api/v1/features/{retired}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        await DenyReadAsync(ownerId, unseen);
+
+        // What the editor is shown: the two readable links, not the unseen or the retired one.
+        var view = (await owner.GetFromJsonAsync<JsonArray>($"/api/v1/features/{source}/links"))!
+            .Select(l => l!["toId"]!.GetValue<Guid>()).ToList();
+        view.ShouldBe([shown, dropped], ignoreOrder: true);
+
+        // A round trip that drops one readable link and adds another.
+        var replaced = await owner.PutAsJsonAsync($"/api/v1/features/{source}/links", Links(
+            new { toId = shown, linkKindCode = "related", note = "still here" },
+            new { toId = added, linkKindCode = "related", note = (string?)null }));
+        replaced.StatusCode.ShouldBe(HttpStatusCode.OK, await replaced.Content.ReadAsStringAsync());
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var stored = await db.FeatureLinks.AsNoTracking()
+            .Where(l => l.FromId == source).Select(l => l.ToId).ToListAsync();
+        stored.ShouldBe([shown, added, unseen, retired], ignoreOrder: true);
+    }
+
     private static object Links(params object[] links) => new { links };
 
     private async Task<Guid> CreateFeatureAsync(

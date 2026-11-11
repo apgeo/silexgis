@@ -1,18 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'cesium/Source/Widgets/CesiumWidget/CesiumWidget.css';
 import {
+  Axis,
+  BoundingSphere,
   type Billboard,
   BillboardCollection,
   Cartesian2,
   Cartesian3,
+  Cartesian4,
   Cartographic,
   CesiumTerrainProvider,
+  Cesium3DTileset,
+  Cesium3DTileStyle,
   CesiumWidget,
   ClippingPolygon,
   ClippingPolygonCollection,
   Color,
   ColorGeometryInstanceAttribute,
   Credit,
+  CustomShader,
   Ellipsoid,
   EllipsoidTerrainProvider,
   Event as EngineEvent,
@@ -20,13 +26,15 @@ import {
   GeometryInstance,
   GroundPolylineGeometry,
   GroundPolylinePrimitive,
+  HeadingPitchRange,
+  HeadingPitchRoll,
   HeightReference,
   ImageryLayer,
   type ImageryProvider,
   Ion,
   Material,
   Math as CesiumMath,
-  type Matrix4,
+  Matrix4,
   Model,
   NearFarScalar,
   OrthographicFrustum,
@@ -44,6 +52,7 @@ import {
   ScreenSpaceEventType,
   Transforms,
   SingleTileImageryProvider,
+  UniformType,
   UrlTemplateImageryProvider,
   VerticalOrigin,
   WallGeometry,
@@ -53,6 +62,12 @@ import {
 } from 'cesium';
 import { coarsePointer } from '../map/pointer.ts';
 import { drawnAltitude, samePlacement } from './altitude3d.ts';
+import {
+  DEFAULT_ESTIMATED_PASSAGES_DISPLAY,
+  ESTIMATED_NODE_NAME,
+  estimatedRecolour,
+  type EstimatedPassagesDisplay,
+} from './estimatedPassages.ts';
 import type { Altitude3DPlacement } from './altitude3d.ts';
 import { eyeLookingAt, wrapRoll } from './camera3d.ts';
 import {
@@ -71,6 +86,7 @@ import {
   zoomForGroundSampleDistance,
 } from './pseudoZoom.ts';
 import { viewportBounds } from './viewBounds3d.ts';
+import { exposeScene3dToPresenter, presenterWanted } from './presenterBridge3d.ts';
 import type {
   Scene3DBounds,
   Scene3DCameraOptions,
@@ -79,11 +95,19 @@ import type {
   Scene3DCutawayFootprint,
   Scene3DImageOverlayOptions,
   Scene3DImageryOptions,
+  Scene3DLocalScan,
+  Scene3DMeasurement,
+  Scene3DScanPoint,
   Scene3DMarker,
   Scene3DModelAnchor,
   Scene3DModelOptions,
   Scene3DModelStatus,
   Scene3DPick,
+  Scene3DPointCloudAnchor,
+  Scene3DPointCloudDetail,
+  Scene3DPointCloudOptions,
+  Scene3DPointCloudStatus,
+  Scene3DPointCloudStyle,
   Scene3DPolyline,
   Scene3DPosition,
   Scene3DProjection,
@@ -271,6 +295,118 @@ interface LoadedModel {
   status: Scene3DModelStatus;
   /** Absent while the file is still being read, and after the model has been taken out again. */
   model?: Model;
+}
+
+/**
+ * One point cloud the scene holds: the same shape as a model's entry, plus how it is coloured,
+ * for the same reason — the tiles on the graphics card are the expensive thing, and everything
+ * that places or colours them is arithmetic and a property set that must never cost a re-read.
+ */
+interface LoadedPointCloud {
+  url: string;
+  anchor: Scene3DPointCloudAnchor;
+  placement: Altitude3DPlacement;
+  style: Scene3DPointCloudStyle;
+  visible: boolean;
+  status: Scene3DPointCloudStatus;
+  /** Absent while the root is still being read, and after the cloud has been taken out again. */
+  tileset?: Cesium3DTileset;
+  /** The scan's centreline in the tiles' own metres, kept so it can be drawn when the tiles land. */
+  centrelinePoints?: readonly Scene3DScanPoint[];
+  /** The centreline as drawn, under the cloud's own transform; absent when there is none. */
+  centreline?: PolylineCollection;
+}
+
+/** How a scan's centreline is drawn, in the scan viewer and on the map alike. */
+const CENTRELINE_COLOR = '#ffd60a';
+const CENTRELINE_WIDTH = 3;
+
+/**
+ * A scan's centreline as a line collection under the given transform, its vertices in the tiles'
+ * own metres. The transform is the collection's own rather than baked into the vertices, so a
+ * re-placed cloud moves its line by one matrix set and nothing is rebuilt. Undefined for fewer
+ * than two points, which draw no line.
+ */
+function centrelineCollection(points: readonly Scene3DScanPoint[], modelMatrix: Matrix4): PolylineCollection | undefined {
+  if (points.length < 2) {
+    return undefined;
+  }
+  const collection = new PolylineCollection({ modelMatrix });
+  collection.add({
+    positions: points.map((point) => new Cartesian3(point.x, point.y, point.z)),
+    width: CENTRELINE_WIDTH,
+    material: Material.fromType(Material.ColorType, { color: Color.fromCssColorString(CENTRELINE_COLOR) }),
+    id: 'scan-centreline',
+  });
+  return collection;
+}
+
+/**
+ * The engine's two point-cloud dials as shipped: 16 pixels of screen-space error and 512 MiB of
+ * tiles. The scene starts here when nothing has said otherwise, and the per-browser setting
+ * replaces both.
+ */
+const DEFAULT_POINT_CLOUD_DETAIL: Scene3DPointCloudDetail = {
+  maximumScreenSpaceError: 16,
+  cacheBytes: 512 * 1024 * 1024,
+};
+
+/** The batch-table field the tiler writes a point's return strength under. */
+const INTENSITY_FIELD = 'intensity';
+
+/**
+ * What the tileset's own styling language is told to colour each point by.
+ *
+ * Every colour here has an alpha of one, and that is a rule rather than a taste: a style with any
+ * translucency moves the cloud into the engine's translucent pass, and in that pass eye-dome
+ * lighting — the thing that makes a wall read as a surface instead of a fog of dots — is silently
+ * not applied. The height ramp reads the point's position in the world and projects it onto the
+ * cloud's own up axis, because the position the language offers in the tile's frame is relative
+ * to each tile's own centre and would restart the ramp at every tile boundary.
+ */
+function pointCloudTileStyle(
+  style: Scene3DPointCloudStyle,
+  frame: { up: Cartesian3; originAlongUp: number },
+  heightRangeM: [number, number],
+): Cesium3DTileStyle {
+  switch (style.colorBy) {
+    case 'rgb':
+      return new Cesium3DTileStyle({ color: '${COLOR}' });
+    case 'intensity': {
+      const max = Math.max(1, style.intensityMax ?? 255);
+      // Grey ramp from a dark floor rather than black, so a weak return is still a point.
+      return new Cesium3DTileStyle({
+        color: `color() * clamp(0.15 + 0.85 * \${${INTENSITY_FIELD}} / ${max}, 0.0, 1.0)`,
+      });
+    }
+    case 'height': {
+      const [low, high] = heightRangeM;
+      const span = Math.max(0.01, high - low);
+      const { up, originAlongUp } = frame;
+      // Height above the cloud's origin, as a fraction of the range, then a blue-to-red ramp.
+      const t = `clamp((dot(\${POSITION_ABSOLUTE}, vec3(${up.x}, ${up.y}, ${up.z})) - ${originAlongUp + low}) / ${span}, 0.0, 1.0)`;
+      return new Cesium3DTileStyle({
+        color: `mix(mix(vec4(0.13, 0.33, 0.85, 1.0), vec4(0.2, 0.8, 0.45, 1.0), clamp(${t} * 2.0, 0.0, 1.0)), vec4(0.95, 0.3, 0.15, 1.0), clamp(${t} * 2.0 - 1.0, 0.0, 1.0))`,
+      });
+    }
+  }
+}
+
+/** The cloud's up axis in the world and where its origin sits along it, read off its frame. */
+function frameOf(matrix: Matrix4): { up: Cartesian3; originAlongUp: number } {
+  const up = Matrix4.getColumn(matrix, 2, new Cartesian4());
+  const origin = Matrix4.getColumn(matrix, 3, new Cartesian4());
+  const unit = Cartesian3.normalize(new Cartesian3(up.x, up.y, up.z), new Cartesian3());
+  return {
+    up: unit,
+    originAlongUp: Cartesian3.dot(new Cartesian3(origin.x, origin.y, origin.z), unit),
+  };
+}
+
+/** The tileset's vertical extent about its origin, used for a height ramp nobody bounded. */
+function heightRangeOf(tileset: Cesium3DTileset): [number, number] {
+  const radius = tileset.boundingSphere.radius;
+  return [-radius, radius];
 }
 
 
@@ -514,6 +650,12 @@ class CesiumScene3D implements Scene3DCore {
    * down — has arrived for nobody, and throws its own bytes away rather than adding them.
    */
   private readonly models = new Map<string, LoadedModel>();
+  /** Whether, and in what colour, the passages a reading drew at an estimated size are shown. */
+  private estimatedPassages: EstimatedPassagesDisplay = DEFAULT_ESTIMATED_PASSAGES_DISPLAY;
+  /** Every point cloud in the scene, under its caller's id; the entry is the load's token as above. */
+  private readonly pointClouds = new Map<string, LoadedPointCloud>();
+  /** The detail budget every cloud is loaded with; set from the per-browser preference. */
+  private pointCloudDetail: Scene3DPointCloudDetail = DEFAULT_POINT_CLOUD_DETAIL;
 
   constructor(container: HTMLElement) {
     this.widget = new CesiumWidget(container, {
@@ -765,6 +907,7 @@ class CesiumScene3D implements Scene3DCore {
     // answer into a destroyed scene. Emptying the registry is what makes that answer nobody's, and
     // the widget below takes the models already in the scene down with it.
     this.models.clear();
+    this.pointClouds.clear();
     this.widget.destroy();
   }
 
@@ -798,6 +941,57 @@ class CesiumScene3D implements Scene3DCore {
 
   reportContextRecovered(): void {
     contextLossPolicyFor(this.widget.container).recordRecovered();
+  }
+
+  // ---- what a scripted recording asks of the scene ----
+
+  /**
+   * True when nothing in the scene is still on its way: every ground tile in view and its imagery,
+   * every model and every point cloud's tiles. A model or cloud that failed counts as settled —
+   * it will not arrive, and a recording waiting for it would wait for ever.
+   */
+  isSettled(): boolean {
+    if (this.widget.isDestroyed()) {
+      return true;
+    }
+    if (!this.widget.scene.globe.tilesLoaded) {
+      return false;
+    }
+    for (const entry of this.models.values()) {
+      if (entry.status === 'loading' || (entry.model && !entry.model.ready)) {
+        return false;
+      }
+    }
+    for (const entry of this.pointClouds.values()) {
+      if (entry.status === 'loading' || (entry.visible && entry.tileset && !entry.tileset.tilesLoaded)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** One sphere around every visible model that has finished loading; undefined when there is none. */
+  modelSphere(): { longitude: number; latitude: number; height: number; radius: number } | undefined {
+    const spheres: BoundingSphere[] = [];
+    for (const entry of this.models.values()) {
+      if (entry.visible && entry.model?.ready) {
+        spheres.push(entry.model.boundingSphere);
+      }
+    }
+    if (spheres.length === 0) {
+      return undefined;
+    }
+    const sphere = BoundingSphere.fromBoundingSpheres(spheres);
+    const centre = Cartographic.fromCartesian(sphere.center);
+    if (!centre) {
+      return undefined;
+    }
+    return {
+      longitude: CesiumMath.toDegrees(centre.longitude),
+      latitude: CesiumMath.toDegrees(centre.latitude),
+      height: centre.height,
+      radius: sphere.radius,
+    };
   }
 
   // ---- a picture of the scene ----
@@ -1349,6 +1543,12 @@ class CesiumScene3D implements Scene3DCore {
       model = await Model.fromGltfAsync({
         url: options.url,
         modelMatrix: this.modelMatrix(entry),
+        // The meshes this draws are written Y-up with east along +X and north along -Z, so the
+        // model matrix's east-north-up frame receives them as they are once Y is turned up. The
+        // library's default assumes the glTF convention of a +Z-facing model and turns it to face
+        // +X as well, which is a quarter turn about the vertical: every cave's walls would stand
+        // at right angles to its own survey lines.
+        forwardAxis: Axis.X,
         // A converted survey mesh identifies nothing: it carries geometry and no attributes worth
         // naming, so a click on it should reach the survey lines drawn through it, which do say
         // which cave this is. Not taking part in hit testing also keeps the cost of a click
@@ -1377,6 +1577,68 @@ class CesiumScene3D implements Scene3DCore {
     // Placed again on arrival rather than trusting the matrix the read started with: an elevation
     // model attaching during a long read changes where this belongs, and the read does not notice.
     this.placeModel(entry);
+    // A model's nodes are known only once its first frames are drawn, which is after it lands.
+    model.readyEvent.addEventListener(() => {
+      if (this.models.get(id) === entry) {
+        this.styleEstimatedPassages(entry);
+      }
+    });
+    this.styleEstimatedPassages(entry);
+  }
+
+  setEstimatedPassages(display: EstimatedPassagesDisplay): void {
+    if (
+      display.visible === this.estimatedPassages.visible &&
+      display.color === this.estimatedPassages.color
+    ) {
+      return;
+    }
+    this.estimatedPassages = { ...display };
+    for (const entry of this.models.values()) {
+      this.styleEstimatedPassages(entry);
+    }
+  }
+
+  /**
+   * Shows or hides one model's estimated passages, and colours them.
+   *
+   * Hidden by their node, so hiding them draws nothing for them rather than drawing them
+   * transparent. Coloured by a shader that recolours only the vertices the file marks as
+   * estimated, because the library colours a model whole or not at all. A model with no estimated
+   * passages is left exactly as it was: the shader reads a mark only such a file carries.
+   */
+  private styleEstimatedPassages(entry: LoadedModel): void {
+    const model = entry.model;
+    if (this.widget.isDestroyed() || !model || !model.ready) {
+      return;
+    }
+    const node = model.getNode(ESTIMATED_NODE_NAME);
+    if (!node) {
+      return;
+    }
+    node.show = this.estimatedPassages.visible;
+    const recolour = estimatedRecolour(this.estimatedPassages.color);
+    // The library's types say a model always has a shader; it takes none as "draw as the file
+    // says", which is what leaving the estimates in their built colour means.
+    (model as { customShader: CustomShader | undefined }).customShader = recolour
+      ? new CustomShader({
+          uniforms: {
+            u_estimatedColor: {
+              type: UniformType.VEC3,
+              value: new Cartesian3(recolour[0], recolour[1], recolour[2]),
+            },
+          },
+          // The material's colour is linear here, as the file states it, so the chosen colour is
+          // handed over linear too and comes out on screen as the colour that was picked.
+          fragmentShaderText: `
+void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+  if (fsInput.attributes.estimated > 0.5) {
+    material.diffuse = u_estimatedColor;
+  }
+}`,
+        })
+      : undefined;
+    this.requestRender();
   }
 
   removeModel(id: string): void {
@@ -1423,6 +1685,20 @@ class CesiumScene3D implements Scene3DCore {
         entry.model.modelMatrix = this.modelMatrix(entry);
       }
     }
+    // A placed scan hangs from the same rule as the mesh of its cave, so it moves with it.
+    for (const entry of this.pointClouds.values()) {
+      if (samePlacement(entry.placement, placement)) {
+        continue;
+      }
+      entry.placement = placement;
+      moved = true;
+      if (!this.widget.isDestroyed() && entry.tileset) {
+        entry.tileset.modelMatrix = this.pointCloudMatrix(entry);
+        if (entry.centreline) {
+          entry.centreline.modelMatrix = entry.tileset.modelMatrix;
+        }
+      }
+    }
     if (moved) {
       this.requestRender();
     }
@@ -1461,6 +1737,203 @@ class CesiumScene3D implements Scene3DCore {
       entry.model.show = entry.visible;
     }
     this.requestRender();
+  }
+
+  // ---- point clouds ----
+
+  async loadPointCloud(id: string, options: Scene3DPointCloudOptions): Promise<void> {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    const held = this.pointClouds.get(id);
+    if (held && held.url === options.url && held.status !== 'failed') {
+      // The same tileset under the same id: re-placed and re-styled, never re-read.
+      held.anchor = options.anchor;
+      held.placement = options.placement;
+      held.visible = options.visible ?? held.visible;
+      held.style = options.style ?? held.style;
+      if (options.centreline !== undefined) {
+        this.drawPointCloudCentreline(held, options.centreline);
+      }
+      this.placePointCloud(held);
+      return;
+    }
+    this.removePointCloud(id);
+    this.pointCloudDetail = options.detail;
+
+    const entry: LoadedPointCloud = {
+      url: options.url,
+      anchor: options.anchor,
+      placement: options.placement,
+      style: options.style ?? { colorBy: 'height' },
+      visible: options.visible ?? true,
+      status: 'loading',
+      ...(options.centreline !== undefined ? { centrelinePoints: options.centreline } : {}),
+    };
+    this.pointClouds.set(id, entry);
+
+    let tileset: Cesium3DTileset;
+    try {
+      tileset = await Cesium3DTileset.fromUrl(
+        options.url,
+        pointCloudTilesetOptions(this.pointCloudMatrix(entry), options.detail, entry.visible),
+      );
+    } catch (error) {
+      if (this.pointClouds.get(id) === entry) {
+        entry.status = 'failed';
+      }
+      throw error;
+    }
+
+    // Same orphan rule as a model: torn down, replaced or removed while in the air means the
+    // tiles that arrived belong to nobody.
+    if (this.widget.isDestroyed() || this.pointClouds.get(id) !== entry) {
+      tileset.destroy();
+      return;
+    }
+    entry.tileset = tileset;
+    entry.status = 'loaded';
+    this.widget.scene.primitives.add(tileset);
+    applyPointCloudDetail(tileset, this.pointCloudDetail);
+    if (entry.centrelinePoints !== undefined) {
+      this.drawPointCloudCentreline(entry, entry.centrelinePoints);
+    }
+    this.placePointCloud(entry);
+  }
+
+  removePointCloud(id: string): void {
+    const entry = this.pointClouds.get(id);
+    if (!entry) {
+      return;
+    }
+    this.pointClouds.delete(id);
+    if (entry.centreline && !this.widget.isDestroyed()) {
+      this.widget.scene.primitives.remove(entry.centreline);
+    }
+    entry.centreline = undefined;
+    if (this.widget.isDestroyed() || !entry.tileset) {
+      return;
+    }
+    // Removing from the collection destroys the tileset and frees every tile it held.
+    this.widget.scene.primitives.remove(entry.tileset);
+    entry.tileset = undefined;
+    this.requestRender();
+  }
+
+  setPointCloudVisible(id: string, visible: boolean): void {
+    const entry = this.pointClouds.get(id);
+    if (!entry || entry.visible === visible) {
+      return;
+    }
+    entry.visible = visible;
+    if (this.widget.isDestroyed() || !entry.tileset) {
+      return;
+    }
+    entry.tileset.show = visible;
+    if (entry.centreline) {
+      entry.centreline.show = visible;
+    }
+    this.requestRender();
+  }
+
+  setPointCloudStyle(id: string, style: Scene3DPointCloudStyle): void {
+    const entry = this.pointClouds.get(id);
+    if (!entry) {
+      return;
+    }
+    entry.style = style;
+    if (this.widget.isDestroyed() || !entry.tileset) {
+      return; // A cloud still being read takes the style when it lands.
+    }
+    this.stylePointCloud(entry);
+    this.requestRender();
+  }
+
+  setPointCloudDetail(detail: Scene3DPointCloudDetail): void {
+    this.pointCloudDetail = detail;
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    for (const entry of this.pointClouds.values()) {
+      if (entry.tileset) {
+        applyPointCloudDetail(entry.tileset, detail);
+      }
+    }
+    this.requestRender();
+  }
+
+  pointCloudStatus(id: string): Scene3DPointCloudStatus | undefined {
+    return this.pointClouds.get(id)?.status;
+  }
+
+  /**
+   * Where a cloud sits and which way it faces: the local east-north-up frame at its anchor, at
+   * the height the shared altitude rule gives, turned about the local up by the bearing of the
+   * cloud's own +y — the one rotation a mesh anchor forbids and a scan anchor carries.
+   */
+  private pointCloudMatrix(entry: LoadedPointCloud): Matrix4 {
+    const { anchor, placement } = entry;
+    const height = drawnAltitude(
+      anchor.altitudeM,
+      anchor.surveyTopAltitudeM ?? anchor.altitudeM,
+      placement,
+    );
+    return Transforms.headingPitchRollToFixedFrame(
+      Cartesian3.fromDegrees(anchor.longitude, anchor.latitude, height),
+      new HeadingPitchRoll(
+        CesiumMath.toRadians(anchor.headingDeg),
+        CesiumMath.toRadians(anchor.pitchDeg ?? 0),
+        CesiumMath.toRadians(anchor.rollDeg ?? 0),
+      ),
+    );
+  }
+
+  private placePointCloud(entry: LoadedPointCloud): void {
+    if (!this.widget.isDestroyed() && entry.tileset) {
+      entry.tileset.modelMatrix = this.pointCloudMatrix(entry);
+      entry.tileset.show = entry.visible;
+      if (entry.centreline) {
+        entry.centreline.modelMatrix = entry.tileset.modelMatrix;
+        entry.centreline.show = entry.visible;
+      }
+      this.stylePointCloud(entry);
+    }
+    this.requestRender();
+  }
+
+  /**
+   * Replaces a cloud's centreline. Drawn only once the cloud's tiles are in the scene — a line
+   * standing alone where a scan has not appeared yet would say where the cave is with nothing to
+   * show for it — so before then the points are only kept, and the load draws them.
+   */
+  private drawPointCloudCentreline(entry: LoadedPointCloud, points: readonly Scene3DScanPoint[]): void {
+    entry.centrelinePoints = points;
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    if (entry.centreline) {
+      this.widget.scene.primitives.remove(entry.centreline);
+      entry.centreline = undefined;
+    }
+    if (!entry.tileset) {
+      return;
+    }
+    const drawn = centrelineCollection(points, this.pointCloudMatrix(entry));
+    if (drawn) {
+      drawn.show = entry.visible;
+      entry.centreline = this.widget.scene.primitives.add(drawn);
+    }
+  }
+
+  private stylePointCloud(entry: LoadedPointCloud): void {
+    if (!entry.tileset) {
+      return;
+    }
+    entry.tileset.style = pointCloudTileStyle(
+      entry.style,
+      frameOf(entry.tileset.modelMatrix),
+      entry.style.heightRangeM ?? heightRangeOf(entry.tileset),
+    );
   }
 
   /**
@@ -2433,6 +2906,411 @@ function wrapDegrees(degrees: number): number {
 }
 
 /** A hold on the shared scene. Release it exactly once, from the same place that acquired it. */
+/**
+ * What every point cloud is read with. Attenuation makes a point's drawn size follow the tile's
+ * geometric error, so a coarse tile far away is a wash of larger points rather than a sieve; eye
+ * dome lighting shades each point by the depth of its neighbours, which is what turns a cloud
+ * into a surface the eye can read. The second does nothing without the first, so they are set
+ * together and never separately.
+ */
+function pointCloudTilesetOptions(
+  modelMatrix: Matrix4,
+  detail: Scene3DPointCloudDetail,
+  show: boolean,
+): Cesium3DTileset.ConstructorOptions {
+  return {
+    modelMatrix,
+    show,
+    maximumScreenSpaceError: detail.maximumScreenSpaceError,
+    cacheBytes: detail.cacheBytes,
+    pointCloudShading: { attenuation: true, eyeDomeLighting: true },
+  };
+}
+
+function applyPointCloudDetail(tileset: Cesium3DTileset, detail: Scene3DPointCloudDetail): void {
+  tileset.maximumScreenSpaceError = detail.maximumScreenSpaceError;
+  tileset.cacheBytes = detail.cacheBytes;
+}
+
+/**
+ * The scene that shows one scan on its own.
+ *
+ * Built without a globe, a sky or a basemap: the cloud is the only thing in it, at a synthetic
+ * origin on the ellipsoid — the Greenwich meridian on the equator, chosen so that the cloud's own
+ * x, y and z read as east, north and up in the frame the camera orbits in. The camera is locked
+ * to orbit the cloud's centre, because the engine's default navigation orbits the planet, and a
+ * planet is exactly what this scene does not have.
+ */
+class CesiumLocalScan3D implements Scene3DLocalScan {
+  private readonly widget: CesiumWidget;
+  private readonly frame: Matrix4;
+  private entry: LoadedPointCloud | undefined;
+  private detail: Scene3DPointCloudDetail = DEFAULT_POINT_CLOUD_DETAIL;
+  private readonly renderErrorListeners = new Set<(message: string) => void>();
+  private removeRenderErrorHandler: (() => void) | undefined;
+  // The measure: its pointer handler lives only while measuring, the segment is drawn in a
+  // collection of its own so the cloud is untouched, and the points taken so far are kept in
+  // the scene's own coordinates, where the distance between them is the one the scanner recorded.
+  private measureHandler: ScreenSpaceEventHandler | undefined;
+  private measureLines: PolylineCollection | undefined;
+  private measurePoints: Cartesian3[] = [];
+  private measurementState: Scene3DMeasurement | undefined;
+  private readonly measurementListeners = new Set<(measurement: Scene3DMeasurement | undefined) => void>();
+  // Picking: a handler of its own while on, and the marks drawn in a collection of their own, so
+  // neither the cloud nor the measure is touched by what a placement session draws.
+  private pickHandler: ScreenSpaceEventHandler | undefined;
+  private readonly pickListeners = new Set<(point: Scene3DScanPoint) => void>();
+  private markLines: PolylineCollection | undefined;
+  private centreline: PolylineCollection | undefined;
+
+  constructor(container: HTMLElement) {
+    this.widget = new CesiumWidget(container, {
+      globe: false,
+      skyBox: false,
+      skyAtmosphere: false,
+      baseLayer: false,
+      showRenderLoopErrors: false,
+      requestRenderMode: true,
+      maximumRenderTimeChange: 0,
+      shouldAnimate: false,
+      msaaSamples: 1,
+    });
+    const { scene } = this.widget;
+    scene.backgroundColor = Color.fromCssColorString('#101014');
+    scene.postProcessStages.fxaa.enabled = true;
+    // Nothing to collide with, and a scan is read from inside as much as from outside.
+    scene.screenSpaceCameraController.enableCollisionDetection = false;
+    scene.screenSpaceCameraController.minimumZoomDistance = 0.2;
+    this.frame = Transforms.eastNorthUpToFixedFrame(Cartesian3.fromDegrees(0, 0, 0));
+    const onRenderError = (_scene: unknown, error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      for (const listener of this.renderErrorListeners) {
+        listener(message);
+      }
+    };
+    scene.renderError.addEventListener(onRenderError);
+    this.removeRenderErrorHandler = () => scene.renderError.removeEventListener(onRenderError);
+  }
+
+  isDestroyed(): boolean {
+    return this.widget.isDestroyed();
+  }
+
+  destroy(): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    this.removeRenderErrorHandler?.();
+    this.removeRenderErrorHandler = undefined;
+    this.renderErrorListeners.clear();
+    this.setMeasuring(false);
+    this.setPicking(false);
+    this.measurementListeners.clear();
+    this.pickListeners.clear();
+    this.entry = undefined;
+    this.widget.destroy();
+  }
+
+  requestRender(): void {
+    if (!this.widget.isDestroyed()) {
+      this.widget.scene.requestRender();
+    }
+  }
+
+  setMeasuring(on: boolean): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    if (on) {
+      if (this.measureHandler) {
+        return;
+      }
+      this.setPicking(false);
+      const handler = new ScreenSpaceEventHandler(this.widget.canvas);
+      handler.setInputAction((event: { position: Cartesian2 }) => this.takeMeasurePoint(event.position), ScreenSpaceEventType.LEFT_CLICK);
+      this.measureHandler = handler;
+      return;
+    }
+    this.measureHandler?.destroy();
+    this.measureHandler = undefined;
+    this.clearMeasure();
+  }
+
+  measurement(): Scene3DMeasurement | undefined {
+    return this.measurementState;
+  }
+
+  setPicking(on: boolean): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    if (on) {
+      if (this.pickHandler) {
+        return;
+      }
+      this.setMeasuring(false);
+      const handler = new ScreenSpaceEventHandler(this.widget.canvas);
+      handler.setInputAction((event: { position: Cartesian2 }) => this.takePick(event.position), ScreenSpaceEventType.LEFT_CLICK);
+      this.pickHandler = handler;
+      return;
+    }
+    this.pickHandler?.destroy();
+    this.pickHandler = undefined;
+  }
+
+  subscribePick(listener: (point: Scene3DScanPoint) => void): () => void {
+    this.pickListeners.add(listener);
+    return () => {
+      this.pickListeners.delete(listener);
+    };
+  }
+
+  /**
+   * One click of picking: the depth under the pointer, as for the measure, turned back from the
+   * scene's world into the tiles' own frame. The tiles are drawn untransformed under this
+   * scene's fixed frame, so undoing that one frame gives exactly the offsets from the tiles' zero
+   * point the tiles were written with — the frame a placement is fitted in.
+   */
+  private takePick(windowPosition: Cartesian2): void {
+    if (this.widget.isDestroyed() || !this.entry?.tileset) {
+      return;
+    }
+    const world = this.widget.scene.pickPosition(windowPosition);
+    if (!world) {
+      return;
+    }
+    const local = Matrix4.multiplyByPoint(Matrix4.inverse(this.frame, new Matrix4()), world, new Cartesian3());
+    const point: Scene3DScanPoint = { x: local.x, y: local.y, z: local.z };
+    for (const listener of [...this.pickListeners]) {
+      listener(point);
+    }
+  }
+
+  setMarks(points: readonly Scene3DScanPoint[]): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    this.markLines ??= new PolylineCollection();
+    if (!this.widget.scene.primitives.contains(this.markLines)) {
+      this.widget.scene.primitives.add(this.markLines);
+    }
+    this.markLines.removeAll();
+    // A small cross along the three axes, half a metre across: a cloud has no surface to pin a
+    // flat marker to, and a cross reads the same from every side the scan is orbited from.
+    const half = 0.25;
+    const material = Material.fromType(Material.ColorType, { color: Color.fromCssColorString('#ff4d6d') });
+    points.forEach((point, index) => {
+      for (const [dx, dy, dz] of [
+        [half, 0, 0],
+        [0, half, 0],
+        [0, 0, half],
+      ] as const) {
+        const from = Matrix4.multiplyByPoint(this.frame, new Cartesian3(point.x - dx, point.y - dy, point.z - dz), new Cartesian3());
+        const to = Matrix4.multiplyByPoint(this.frame, new Cartesian3(point.x + dx, point.y + dy, point.z + dz), new Cartesian3());
+        this.markLines!.add({ positions: [from, to], width: 2, material, id: `mark-${index}` });
+      }
+    });
+    this.requestRender();
+  }
+
+  setCentreline(points: readonly Scene3DScanPoint[]): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    if (this.centreline) {
+      this.widget.scene.primitives.remove(this.centreline);
+      this.centreline = undefined;
+    }
+    // The tiles are drawn untransformed under this scene's fixed frame, so the line, in the same
+    // tiles' metres, goes under that same frame and lies exactly through the cloud.
+    const drawn = centrelineCollection(points, this.frame);
+    if (drawn) {
+      this.centreline = this.widget.scene.primitives.add(drawn);
+    }
+    this.requestRender();
+  }
+
+  subscribeMeasurement(listener: (measurement: Scene3DMeasurement | undefined) => void): () => void {
+    this.measurementListeners.add(listener);
+    return () => {
+      this.measurementListeners.delete(listener);
+    };
+  }
+
+  /**
+   * One click of the measure. The depth buffer says where on the drawn cloud the click landed,
+   * which is the only way a tiled cloud can be pointed at: its points have no identity to pick
+   * by, but the scene drew them, and the depth under the pointer is the nearest one. The void
+   * between points, and the background, have no depth and take nothing.
+   */
+  private takeMeasurePoint(windowPosition: Cartesian2): void {
+    if (this.widget.isDestroyed() || !this.entry?.tileset) {
+      return;
+    }
+    const world = this.widget.scene.pickPosition(windowPosition);
+    if (!world) {
+      return;
+    }
+    if (this.measurePoints.length === 2) {
+      // A third click begins again rather than extending: a measure is a width, not a path.
+      this.clearMeasure();
+    }
+    this.measurePoints.push(Cartesian3.clone(world));
+    if (this.measurePoints.length === 2) {
+      const [a, b] = this.measurePoints;
+      this.measureLines ??= new PolylineCollection();
+      if (!this.widget.scene.primitives.contains(this.measureLines)) {
+        this.widget.scene.primitives.add(this.measureLines);
+      }
+      this.measureLines.add({
+        positions: [a, b],
+        width: 3,
+        material: Material.fromType(Material.ColorType, { color: Color.fromCssColorString('#ffd166') }),
+        id: 'measure',
+      });
+      this.measurementState = { points: 2, distanceM: Cartesian3.distance(a, b) };
+    } else {
+      this.measurementState = { points: 1 };
+    }
+    this.requestRender();
+    this.reportMeasurement();
+  }
+
+  private clearMeasure(): void {
+    this.measurePoints = [];
+    if (this.measureLines && !this.widget.isDestroyed()) {
+      this.measureLines.removeAll();
+      this.requestRender();
+    }
+    if (this.measurementState !== undefined) {
+      this.measurementState = undefined;
+      this.reportMeasurement();
+    }
+  }
+
+  private reportMeasurement(): void {
+    for (const listener of [...this.measurementListeners]) {
+      listener(this.measurementState);
+    }
+  }
+
+  async load(options: Pick<Scene3DPointCloudOptions, 'url' | 'detail' | 'style'>): Promise<void> {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    this.unload();
+    this.clearMeasure();
+    this.detail = options.detail;
+    const entry: LoadedPointCloud = {
+      url: options.url,
+      anchor: { longitude: 0, latitude: 0, altitudeM: 0, headingDeg: 0 },
+      placement: { absolute: true, offsetM: 0 },
+      style: options.style ?? { colorBy: 'height' },
+      visible: true,
+      status: 'loading',
+    };
+    this.entry = entry;
+    let tileset: Cesium3DTileset;
+    try {
+      tileset = await Cesium3DTileset.fromUrl(
+        options.url,
+        pointCloudTilesetOptions(this.frame, options.detail, true),
+      );
+    } catch (error) {
+      if (this.entry === entry) {
+        entry.status = 'failed';
+      }
+      throw error;
+    }
+    if (this.widget.isDestroyed() || this.entry !== entry) {
+      tileset.destroy();
+      return;
+    }
+    entry.tileset = tileset;
+    entry.status = 'loaded';
+    this.widget.scene.primitives.add(tileset);
+    applyPointCloudDetail(tileset, this.detail);
+    this.applyStyle();
+    this.viewAll();
+  }
+
+  status(): Scene3DPointCloudStatus | undefined {
+    return this.entry?.status;
+  }
+
+  setStyle(style: Scene3DPointCloudStyle): void {
+    if (!this.entry) {
+      return;
+    }
+    this.entry.style = style;
+    this.applyStyle();
+    this.requestRender();
+  }
+
+  setDetail(detail: Scene3DPointCloudDetail): void {
+    this.detail = detail;
+    if (!this.widget.isDestroyed() && this.entry?.tileset) {
+      applyPointCloudDetail(this.entry.tileset, detail);
+      this.requestRender();
+    }
+  }
+
+  viewAll(): void {
+    const tileset = this.entry?.tileset;
+    if (this.widget.isDestroyed() || !tileset) {
+      return;
+    }
+    const { center, radius } = tileset.boundingSphere;
+    // Orbit the cloud's centre: with a transform set, the engine's default drag rotates about
+    // that transform's origin instead of the planet's. Looking down at about thirty degrees from
+    // two and a half radii away puts the whole cloud in a landscape frame.
+    const about = Transforms.eastNorthUpToFixedFrame(center);
+    this.widget.scene.camera.lookAtTransform(
+      about,
+      new HeadingPitchRange(0, CesiumMath.toRadians(-30), Math.max(2, radius * 2.5)),
+    );
+    this.requestRender();
+  }
+
+  subscribeRenderError(listener: (message: string) => void): () => void {
+    this.renderErrorListeners.add(listener);
+    return () => {
+      this.renderErrorListeners.delete(listener);
+    };
+  }
+
+  private unload(): void {
+    const entry = this.entry;
+    this.entry = undefined;
+    if (!entry?.tileset || this.widget.isDestroyed()) {
+      return;
+    }
+    this.widget.scene.primitives.remove(entry.tileset);
+    entry.tileset = undefined;
+  }
+
+  private applyStyle(): void {
+    const entry = this.entry;
+    if (!entry?.tileset || this.widget.isDestroyed()) {
+      return;
+    }
+    entry.tileset.style = pointCloudTileStyle(
+      entry.style,
+      frameOf(this.frame),
+      entry.style.heightRangeM ?? heightRangeOf(entry.tileset),
+    );
+  }
+}
+
+/**
+ * Creates a scene showing one scan on its own inside `container`. Not shared and not counted:
+ * each caller owns its scene and destroys it, and the caller is expected to keep at most one
+ * alive, since every one of these is a drawing context from the browser's small budget.
+ */
+export function createLocalScan3D(container: HTMLElement): Scene3DLocalScan {
+  return new CesiumLocalScan3D(container);
+}
+
 export interface Scene3DSession {
   engine: Scene3DCore;
   release(): void;
@@ -2443,6 +3321,8 @@ export interface Scene3DSession {
 // showing the same scene share this one rather than each building their own.
 let scene: CesiumScene3D | null = null;
 let holders = 0;
+/** Takes the scripted-recording handle off the window again; set only under automation. */
+let hidePresenter: (() => void) | undefined;
 
 /**
  * Creates the scene inside `container`, or joins the one already there, and returns a hold on it.
@@ -2459,7 +3339,10 @@ export function acquireScene3D(container: HTMLElement): Scene3DSession {
   if (scene && scene.container !== container) {
     throw new Error('a 3D scene is already attached to a different container');
   }
-  scene ??= new CesiumScene3D(container);
+  if (!scene) {
+    scene = new CesiumScene3D(container);
+    hidePresenter = presenterWanted() ? exposeScene3dToPresenter(scene) : undefined;
+  }
   holders += 1;
 
   const held = scene;
@@ -2476,6 +3359,8 @@ export function acquireScene3D(container: HTMLElement): Scene3DSession {
       // destroying now would take out a scene somebody else is holding.
       if (holders === 0 && scene === held) {
         scene = null;
+        hidePresenter?.();
+        hidePresenter = undefined;
         held.destroy();
       }
     },

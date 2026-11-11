@@ -116,6 +116,15 @@ holds scraps or measured passage dimensions to build them from.
 See [Surveys, centerlines and 3D models](surveys-and-models.md#cave-walls-stl) for uploading
 and for the coordinate declaration a `.stl` needs.
 
+**Passages of estimated size.** Where a survey's passages without a measured size were
+[drawn at an estimated size](surveys-and-models.md#passages-without-a-measured-size), the
+**Passages of estimated size** switch under **Cave walls** shows or hides them without touching
+the walls, and the buttons beside it colour them: **As built**, **Like the walls** (to see the
+cave whole), or one of five colours that stand out from the walls. Changing either redraws what is
+already loaded; nothing is downloaded again. While the selected cave's model has any, the panel
+says in warning colour how many legs are drawn at which estimated size, and that they were not
+measured.
+
 ## Photographs at their stations
 
 For the **selected cave**, every photograph linked to a station of one of its surveys is marked at
@@ -153,6 +162,20 @@ limits are settings of the installation; see `SILEXGIS__Map__MeshesInView…` in
 their own browser, up to the installation's ceiling, under
 [Settings › Advanced](account-and-settings.md#advanced) — the panel links there while this mode
 is chosen.
+
+## Point clouds of the caves in view
+
+The **Scans** switch in the layer list draws the laser scans of the caves in view — one per cave,
+its current scan or else the newest — once each is tiled and
+[placed on the map](point-clouds.md#placing-a-scan-on-the-map). It works like the walls of every
+cave in view, with fewer caves and more megabytes, because a scan is far larger than a wall model:
+it starts from a zoom, takes the nearest caves first up to a number of caves and a total size, and
+lets go of what leaves the view. Those three numbers are the installation's, and each person can
+lower them for their own browser under
+[Settings › Advanced](account-and-settings.md#point-clouds), where the point detail is set too.
+
+A scan is drawn only for a reader who may see the cave's exact location; for anybody else it is
+neither drawn nor counted. See [Point clouds (LiDAR scans)](point-clouds.md).
 
 ## Following the map's filter
 

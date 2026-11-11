@@ -91,7 +91,11 @@ public sealed class FeatureConfiguration : IEntityTypeConfiguration<Feature>
         builder.HasIndex(x => x.Name);
         builder.HasIndex(x => x.OwnerUserId);
         builder.HasIndex(x => x.CavingGroupId);
-        builder.HasIndex(x => x.DeletedAt).HasFilter("deleted_at IS NULL");
+        // The bin and the sync's list of what has gone ask for deleted rows, a few among many; an
+        // index over the live rows instead would hold only nulls and answer neither.
+        builder.HasIndex(x => x.DeletedAt, "ix_features_deleted_at_not_null")
+            .HasFilter("deleted_at IS NOT NULL")
+            .HasDatabaseName("ix_features_deleted_at_not_null");
         // The default order of the feature list and of the filter's feature world (most recently
         // changed first, the id breaking ties), read backwards. With it a page is the first rows
         // along the index that the caller may read, instead of every readable row visited — and its
@@ -238,9 +242,12 @@ public sealed class CenterlineConfiguration : IEntityTypeConfiguration<Centerlin
         builder.Property(x => x.LengthM).HasPrecision(12, 2);
         builder.Property(x => x.Source).HasConversion<short>();
 
-        builder.HasIndex(x => x.CaveFeatureId);
+        // Both indexes are named, so the partial one below is an index of its own rather than an
+        // edit of this plain lookup of a cave's centerlines.
+        builder.HasIndex(x => x.CaveFeatureId, "ix_centerlines_cave_feature_id")
+            .HasDatabaseName("ix_centerlines_cave_feature_id");
         // The cave's current shape: at most one default centerline per cave.
-        builder.HasIndex(x => x.CaveFeatureId).HasFilter("is_default").IsUnique()
+        builder.HasIndex(x => x.CaveFeatureId, "ix_centerlines_default_per_cave").HasFilter("is_default").IsUnique()
             .HasDatabaseName("ix_centerlines_default_per_cave");
 
         builder.HasQueryFilter(x => x.Feature.DeletedAt == null);
@@ -258,9 +265,12 @@ public sealed class FeatureHierarchyEdgeConfiguration : IEntityTypeConfiguration
         builder.HasOne<Feature>().WithMany().HasForeignKey(x => x.ChildId).OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(x => new { x.ParentId, x.ChildId }).IsUnique();
-        builder.HasIndex(x => x.ChildId);
+        // Named, so the primary-parent index below stays an index of its own rather than turning
+        // this lookup of a feature's parents into it.
+        builder.HasIndex(x => x.ChildId, "ix_feature_hierarchy_edges_child_id")
+            .HasDatabaseName("ix_feature_hierarchy_edges_child_id");
         // Exactly one primary parent per feature (roots have no edges at all).
-        builder.HasIndex(x => x.ChildId).HasFilter("is_primary").IsUnique()
+        builder.HasIndex(x => x.ChildId, "ix_feature_hierarchy_edges_primary").HasFilter("is_primary").IsUnique()
             .HasDatabaseName("ix_feature_hierarchy_edges_primary");
     }
 }

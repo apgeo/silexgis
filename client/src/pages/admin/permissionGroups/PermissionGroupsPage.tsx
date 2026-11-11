@@ -15,6 +15,7 @@ import {
   type PermissionGroup,
 } from '../../../api/hooks.ts';
 import { ApiError } from '../../../api/client.ts';
+import { permissionGroupNameProblem } from './permissionGroupProblems.ts';
 import PermissionGroupEditor from './PermissionGroupEditor.tsx';
 
 /**
@@ -60,11 +61,7 @@ export default function PermissionGroupsPage() {
       // Straight into the new group's editor — a fresh ruleset is empty and useless.
       setEditingId(created.id);
     } catch (error) {
-      message.error(
-        error instanceof ApiError && error.code === 'permission_group.name_taken'
-          ? t('permissionGroups.nameTaken')
-          : t('common.saveFailed'),
-      );
+      message.error(permissionGroupNameProblem(error, t));
     }
   };
 

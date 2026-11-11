@@ -25,6 +25,7 @@ import {
 import Button from '../../components/Button.tsx';
 import List from '../../components/List.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
+import { rosterWriteProblem } from '../../components/cavers/rosterProblems.ts';
 import { useTranslation } from 'react-i18next';
 import {
   useAnnounceToCavingGroup,
@@ -66,8 +67,8 @@ function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () 
       await upsert.mutateAsync({ caverId: selectedCaver, role: 'member' });
       setSelectedCaver(undefined);
       setCaverQuery('');
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(rosterWriteProblem(error, t));
     }
   };
 
@@ -104,8 +105,8 @@ function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () 
                 value={member.role}
                 style={{ width: 110 }}
                 onChange={(role) =>
-                  upsert.mutateAsync({ caverId: member.caverId, role }).catch(() =>
-                    message.error(t('common.saveFailed')),
+                  upsert.mutateAsync({ caverId: member.caverId, role }).catch((error: unknown) =>
+                    message.error(rosterWriteProblem(error, t)),
                   )
                 }
                 options={(['member', 'admin', 'owner'] as const).map((role) => ({
@@ -117,7 +118,9 @@ function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () 
                 key="remove"
                 title={t('cavingGroups.removeConfirm')}
                 onConfirm={() =>
-                  remove.mutateAsync(member.caverId).catch(() => message.error(t('common.saveFailed')))
+                  remove
+                    .mutateAsync(member.caverId)
+                    .catch((error: unknown) => message.error(rosterWriteProblem(error, t)))
                 }
               >
                 <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />

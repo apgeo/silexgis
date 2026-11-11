@@ -18,6 +18,9 @@ namespace SilexGis.Api.Features.Features;
 /// </summary>
 public static class HierarchyEndpoints
 {
+    /// <summary>A parents replace refused because the feature's primary parent is one the caller cannot read.</summary>
+    public const string HiddenPrimaryParentCode = "feature.parent_primary_hidden";
+
     public static RouteGroupBuilder MapFeatureHierarchyEndpoints(this RouteGroupBuilder api)
     {
         var features = api.MapGroup("/features").WithTags("Features");
@@ -76,9 +79,18 @@ public static class HierarchyEndpoints
                 : ApiProblems.NotFound("feature.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
+        }
+
+        // The hold read the row again; who may change it is decided on what it holds now.
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, feature, ct)).Allowed)
+        {
+            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
+                ? ApiProblems.Forbidden()
+                : ApiProblems.NotFound("feature.not_found");
         }
 
         var parentIds = request.Parents.Select(p => p.ParentId).Distinct().ToArray();
@@ -104,10 +116,36 @@ public static class HierarchyEndpoints
             return ApiProblems.Forbidden();
         }
 
+        // The replace answers for the parents the caller was shown, and nothing outside them. The
+        // read lists readable parents only, so an edge to one the caller cannot read was never in
+        // what they edited and cannot be named to keep it either (it is refused as missing); it
+        // is carried over unchanged. Containment carries inherited audience and subtree rules, so
+        // dropping such an edge would move access the caller cannot see. A hidden PRIMARY edge
+        // cannot be carried over beside the primary the request names — a feature has exactly
+        // one — and is not the caller's to demote, so the replace is refused while it stands.
+        var storedEdges = await db.FeatureHierarchyEdges.AsNoTracking()
+            .Where(e => e.ChildId == feature.Id)
+            .Select(e => new { e.ParentId, e.IsPrimary })
+            .ToListAsync(ct);
+        var storedParentIds = storedEdges.Select(e => e.ParentId).ToArray();
+        var readableStored = (await db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+                .Where(f => storedParentIds.Contains(f.Id)).Select(f => f.Id).ToListAsync(ct))
+            .ToHashSet();
+        var hiddenEdges = storedEdges.Where(e => !readableStored.Contains(e.ParentId)).ToList();
+        if (hiddenEdges.Any(e => e.IsPrimary))
+        {
+            return ApiProblems.Conflict(
+                HiddenPrimaryParentCode,
+                "This feature's primary parent is one you cannot see, so its parents cannot be replaced by you.");
+        }
+
+        var replacement = request.Parents.Select(p => new ParentSpec(p.ParentId, p.IsPrimary))
+            .Concat(hiddenEdges.Select(e => new ParentSpec(e.ParentId, IsPrimary: false)))
+            .ToList();
+
         try
         {
-            await writeService.SetParentsAsync(
-                feature.Id, request.Parents.Select(p => new ParentSpec(p.ParentId, p.IsPrimary)).ToList(), ct);
+            await writeService.SetParentsAsync(feature.Id, replacement, ct);
         }
         catch (FeatureWriteException ex)
         {
@@ -115,6 +153,11 @@ public static class HierarchyEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        // The version is the feature row's, which the feature's own read hands out; filed there, it is
+        // the one the next write on the feature carries. Filed under this route's path instead, no
+        // read would ever replace it, and the first change made anywhere else would leave every later
+        // save here refused as stale.
+        await hold.AnswerAsync(ct, $"/api/v1/features/{feature.Id}");
         return TypedResults.Ok(await ParentsViewAsync(db, ctx, id, ct));
     }
 

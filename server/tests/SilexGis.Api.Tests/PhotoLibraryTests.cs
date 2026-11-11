@@ -182,6 +182,27 @@ public sealed class PhotoLibraryTests
         PhotoLibraryHttp.ClassifyPicture(answer).ShouldBe(PictureVerdict.NotAPicture);
     }
 
+    /// <summary>
+    /// A plain error status — the picture is not there, the library is busy, or something between
+    /// here and it is failing — fails that one request and closes nothing. None of these is the
+    /// drawing-with-success the dangerous case produces, and closing on them would let one deleted
+    /// asset or one restart behind a proxy stop pictures for everybody.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest, "application/json")]
+    [InlineData(HttpStatusCode.NotFound, "application/json")]
+    [InlineData(HttpStatusCode.Gone, "application/json")]
+    [InlineData(HttpStatusCode.TooManyRequests, "text/plain")]
+    [InlineData(HttpStatusCode.InternalServerError, "application/json")]
+    [InlineData(HttpStatusCode.BadGateway, "text/html")]
+    [InlineData(HttpStatusCode.ServiceUnavailable, "text/html")]
+    public void A_plain_error_status_fails_one_picture_and_closes_nothing(HttpStatusCode status, string mediaType)
+    {
+        using var answer = Answered(status, mediaType);
+
+        PhotoLibraryHttp.ClassifyPicture(answer).ShouldBe(PictureVerdict.Failed);
+    }
+
     private static HttpResponseMessage Answered(HttpStatusCode status, string mediaType) =>
         new(status)
         {

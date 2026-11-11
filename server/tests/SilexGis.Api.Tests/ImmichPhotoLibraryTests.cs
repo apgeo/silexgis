@@ -334,6 +334,58 @@ public sealed class ImmichPhotoLibraryTests
         stub.Calls.Count.ShouldBe(1);
     }
 
+    /// <summary>
+    /// A first reading its caller abandoned — a closed tab, a pan away — says nothing about the
+    /// library, so it does not start the pause a library that did not answer earns: the next
+    /// viewport asks again rather than being refused for every viewer.
+    /// </summary>
+    [Fact]
+    public async Task An_abandoned_first_reading_does_not_leave_the_library_refused()
+    {
+        var stub = new LibraryStub();
+        stub.AnswersMarkers(OnePhotograph);
+        var library = Client(stub, options => options.MaxRetries = 0);
+
+        stub.HoldsTheNextAnswer();
+        using var abandon = new CancellationTokenSource();
+        var abandoned = library.PhotosInAsync(Rectangle, 100, abandon.Token);
+        await WaitUntil(() => stub.Calls.Count == 1);
+        await abandon.CancelAsync();
+        await Should.ThrowAsync<Exception>(abandoned);
+
+        var next = await library.PhotosInAsync(Rectangle, 100, default);
+        next.Photos.Count.ShouldBe(1);
+        stub.Calls.Count.ShouldBe(2);
+    }
+
+    /// <summary>
+    /// A reading still streaming when the library is told to forget what it holds — the brake going
+    /// on — is handed to whoever asked for it, but is not kept: the positions of a stopped library
+    /// must not become resident again behind the brake.
+    /// </summary>
+    [Fact]
+    public async Task A_reading_in_flight_when_the_library_forgets_is_not_kept()
+    {
+        var stub = new LibraryStub();
+        stub.AnswersMarkers(OnePhotograph);
+        var library = Client(stub);
+
+        var release = stub.HoldsTheNextAnswer();
+        var reading = library.PhotosInAsync(Rectangle, 100, default);
+        await WaitUntil(() => stub.Calls.Count == 1);
+        library.Forget();
+        release.SetResult();
+        (await reading).Photos.Count.ShouldBe(1);
+
+        // Kept, the next viewport would be answered from it with no call.
+        (await library.PhotosInAsync(Rectangle, 100, default)).Photos.Count.ShouldBe(1);
+        stub.Calls.Count.ShouldBe(2);
+
+        // And the reading taken after the forget is kept as usual.
+        (await library.PhotosInAsync(Rectangle, 100, default)).Photos.Count.ShouldBe(1);
+        stub.Calls.Count.ShouldBe(2);
+    }
+
     /// <summary>A refused credential is told apart from a library in trouble, and is never tried again.</summary>
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized)]
@@ -491,6 +543,55 @@ public sealed class ImmichPhotoLibraryTests
             .ShouldBe(PhotoLibraryException.RejectedCode);
 
         stub.Calls.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// This library answers a picture request for a deleted asset, or for an id it does not know,
+    /// with 400 and a JSON error. That is a refusal made before any file was looked for, so it fails
+    /// the one picture and leaves every later one asked for.
+    /// </summary>
+    [Fact]
+    public async Task A_picture_refused_as_a_bad_request_fails_alone_and_the_next_is_still_asked_for()
+    {
+        var stub = new LibraryStub();
+        var library = Client(stub);
+
+        stub.Answers(_ => new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent(
+                """{"message":"Not found or no asset.view access","statusCode":400}""",
+                Encoding.UTF8,
+                "application/json"),
+        });
+
+        (await Refused(() => library.ThumbnailAsync(First, LibraryThumbnailSize.Large, null, default)))
+            .ShouldBe(PhotoLibraryException.UnavailableCode);
+        library.PicturesAvailable.ShouldBeTrue();
+
+        stub.AnswersPicture(InventedJpeg);
+        await using var next = await library.ThumbnailAsync(Second, LibraryThumbnailSize.Large, null, default);
+        next.ContentType.ShouldBe("image/jpeg");
+        stub.Calls.Count.ShouldBe(2);
+    }
+
+    /// <summary>
+    /// Every asset of this library is named by a UUID, so a reference of any other shape is made up
+    /// and is refused without a request.
+    /// </summary>
+    [Theory]
+    [InlineData("aa11bb22cc33")]
+    [InlineData("11111111111141118111111111111111x")]
+    public async Task A_reference_that_is_not_one_of_this_librarys_names_is_refused_before_any_call(string reference)
+    {
+        var stub = new LibraryStub();
+        stub.AnswersPicture(InventedJpeg);
+        var library = Client(stub);
+
+        (await Refused(() => library.ThumbnailAsync(reference, LibraryThumbnailSize.Large, null, default)))
+            .ShouldBe(PhotoLibraryException.RejectedCode);
+
+        stub.Calls.ShouldBeEmpty();
+        library.PicturesAvailable.ShouldBeTrue();
     }
 
     // ------------------------------------------------------------------------------------ support
@@ -665,7 +766,8 @@ public sealed class ImmichPhotoLibraryTests
             var pause = Interlocked.Exchange(ref held, null);
             if (pause is not null)
             {
-                await pause.Task;
+                // A held answer still ends when its caller gives up on it, as a real socket does.
+                await pause.Task.WaitAsync(cancellationToken);
             }
 
             return answer(call);

@@ -77,6 +77,9 @@ public readonly record struct SyncStreamEntry(DateTimeOffset ChangedAt, Guid Id,
 /// </summary>
 /// <param name="Cursor">The position exactly as the device sent it, echoed back on a page that
 /// emits nothing so that a caught-up device keeps the position it already holds.</param>
+/// <param name="Horizon">The change time this page stays strictly below, read before any of its
+/// rows: nothing at or after it is handed over yet, because a write still in flight may commit a
+/// row stamped there and a position past it would leave that row behind for good.</param>
 public sealed record SyncStreamOpening(
     SyncStream Stream,
     SyncSet Set,
@@ -84,7 +87,8 @@ public sealed record SyncStreamOpening(
     IReadOnlyList<Guid> Roots,
     SyncCursor? From,
     int Size,
-    string? Cursor);
+    string? Cursor,
+    DateTimeOffset Horizon);
 
 /// <summary>One cut page: its rows in stream order, where to resume, and whether more is waiting.</summary>
 public sealed record SyncStreamCut(IReadOnlyList<object> Rows, string? NextCursor, bool HasMore);
@@ -175,7 +179,11 @@ public static class SyncStreamPaging
             .Select(m => m.RootFeatureId)
             .ToListAsync(ct);
 
-        return (new SyncStreamOpening(stream, set, settings, roots, from, size, cursor), null);
+        // Read before any row of the page, so a write that commits between here and the rows is
+        // either seen whole or held back — never seen as a later neighbour of a row it hides.
+        var horizon = await SyncHorizonSql.ReadAsync(db, options.ResolvedDownloadSettle, ct);
+
+        return (new SyncStreamOpening(stream, set, settings, roots, from, size, cursor, horizon), null);
     }
 
     /// <summary>
@@ -208,12 +216,25 @@ public static class SyncStreamPaging
 
     /// <summary>
     /// The first rows of a half in the order the cursor is defined against, one more than the page
-    /// holds. Ties are broken by identifier — without it the database is free to return equal rows
-    /// in any order and does, so a row could arrive on two consecutive pages and another on
-    /// neither.
+    /// holds, and none at or after the page's horizon. Ties are broken by identifier — without it
+    /// the database is free to return equal rows in any order and does, so a row could arrive on
+    /// two consecutive pages and another on neither.
     /// </summary>
-    public static IQueryable<T> Probe<T>(IQueryable<T> rows, SyncStreamOrder<T> order, int size) =>
-        rows.OrderBy(order.ChangedAt).ThenBy(order.Id).Take(size + 1);
+    /// <remarks>
+    /// The horizon is applied here, to every half a page reads, because a page's position is the
+    /// last row it emits from any half: one half allowed past the horizon would move the position
+    /// past a row another half could not yet see. A row held back is simply not on this page, so
+    /// the page can end with nothing waiting and the row arrives on the device's next download.
+    /// </remarks>
+    public static IQueryable<T> Probe<T>(IQueryable<T> rows, SyncStreamOrder<T> order, SyncStreamOpening opening)
+    {
+        var horizon = opening.Horizon;
+        Expression<Func<DateTimeOffset>> before = () => horizon;
+        var row = order.ChangedAt.Parameters[0];
+        var settled = Expression.Lambda<Func<T, bool>>(
+            Expression.LessThan(order.ChangedAt.Body, before.Body), row);
+        return rows.Where(settled).OrderBy(order.ChangedAt).ThenBy(order.Id).Take(opening.Size + 1);
+    }
 
     /// <summary>
     /// Merges the halves a stream read into one page and cuts it. The halves are read separately

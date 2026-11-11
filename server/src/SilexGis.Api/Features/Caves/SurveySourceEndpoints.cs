@@ -166,11 +166,13 @@ public static class SurveySourceEndpoints
             return ApiProblems.Forbidden();
         }
 
-        if (SurveySourceFormats.ClaimedKind(file.FileName) is not { } kind)
+        // A point cloud is not archived on its own here: it arrives as a survey upload, whose run
+        // reads its header and makes the model that shows it.
+        if (SurveySourceFormats.ClaimedKind(file.FileName) is not { } kind || !SurveySourceFormats.ArchivableOnTheWeb(kind))
         {
             return ApiProblems.BadRequest(
                 SurveySourceFormats.UnsupportedCode,
-                $"Archive a survey source: {string.Join(", ", SurveySourceFormats.AcceptedExtensions)}.");
+                $"Archive a survey source: {string.Join(", ", SurveySourceFormats.WebAcceptedExtensions)}.");
         }
 
         if (file.Length == 0 || file.Length > MaxUploadBytes)

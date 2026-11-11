@@ -5,6 +5,7 @@ import {
   EyeOutlined,
   FilterOutlined,
   CloudUploadOutlined,
+  ControlOutlined,
   IdcardOutlined,
   KeyOutlined,
   MailOutlined,
@@ -32,6 +33,7 @@ const SECTION_ICONS: Record<SettingsSection, ReactNode> = {
   sync: <MobileOutlined />,
   'access-keys': <KeyOutlined />,
   'survey-uploads': <CloudUploadOutlined />,
+  'scan-profiles': <ControlOutlined />,
   advanced: <SlidersOutlined />,
 };
 

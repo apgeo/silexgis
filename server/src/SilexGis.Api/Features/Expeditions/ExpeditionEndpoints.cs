@@ -130,9 +130,10 @@ public static class ExpeditionEndpoints
         // mention as the camp somebody is looking for.
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search.Trim()}%";
-            query = query.Where(x =>
-                EF.Functions.ILike(EF.Functions.Unaccent(x.Name), EF.Functions.Unaccent(pattern)));
+            // Read literally: a "%" or "_" somebody typed is part of the name they are after.
+            var pattern = LikePatterns.Containing(search.Trim());
+            query = query.Where(x => EF.Functions.ILike(
+                EF.Functions.Unaccent(x.Name), EF.Functions.Unaccent(pattern), LikePatterns.Escape));
         }
 
         var (p, size) = Paging.Normalize(page, pageSize);
@@ -224,8 +225,9 @@ public static class ExpeditionEndpoints
             return refusal;
         }
 
-        if (await Concurrency.CheckIfMatchAsync(
-                http, db, VersionedTable.Expeditions, expedition.Id, ct, required: true) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Expeditions, expedition.Id, ct, required: true);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -248,6 +250,7 @@ public static class ExpeditionEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        await hold.AnswerAsync(ct);
         return TypedResults.Ok(Map(expedition));
     }
 
@@ -278,7 +281,8 @@ public static class ExpeditionEndpoints
         // The precondition is offered but not required, the way it is on every delete here: a
         // list or a map deletes a row it never loaded a version of, so demanding one would make
         // the ordinary delete impossible from the surfaces that do it most.
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Expeditions, expedition.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Expeditions, expedition.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -316,6 +320,7 @@ public static class ExpeditionEndpoints
         // cascade from somewhere else — releases its trips rather than taking them.
         db.Expeditions.Remove(expedition);
         await db.SaveChangesAsync(ct);
+        await hold.CommitAsync(ct);
 
         // The write-up's bytes, after the rows that pointed at them are gone.
         await content.DropAsync(removed);
@@ -354,8 +359,9 @@ public static class ExpeditionEndpoints
             return refusal;
         }
 
-        if (await Concurrency.CheckIfMatchAsync(
-                http, db, VersionedTable.Expeditions, expedition.Id, ct, required: true) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Expeditions, expedition.Id, ct, required: true);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -401,6 +407,9 @@ public static class ExpeditionEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        // Posted beside the expedition: the answer says whose version it carries, so it is filed
+        // where the expedition's next write looks for it.
+        await hold.AnswerAsync(ct, $"/api/v1/expeditions/{expedition.Id}");
         return TypedResults.Ok(Map(expedition));
     }
 

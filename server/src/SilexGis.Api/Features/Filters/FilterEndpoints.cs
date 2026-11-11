@@ -120,6 +120,12 @@ public static class FilterEndpoints
         // the ceiling would have back the arithmetic the ceiling exists to prevent.
         var counted = request.Count && document.Scope.Count <= CountingWorldLimit;
 
+        // Taken in long and held below the int ceiling with room for one page more: a world adds
+        // the page size to the offset (to know how many rows a proximity page needs), and an
+        // offset that wrapped negative would reach the database as an OFFSET it refuses. A page
+        // that far past the end is simply empty.
+        var skip = (int)Math.Min((long)(page - 1) * pageSize, int.MaxValue - pageSize);
+
         var results = new List<FilterWorldResultDto>(document.Scope.Count);
         try
         {
@@ -138,7 +144,7 @@ public static class FilterEndpoints
                         document.Sort,
                         document.Descending,
                         ranks ? document.Anchor : null,
-                        (page - 1) * pageSize,
+                        skip,
                         pageSize,
                         counted),
                     ct);

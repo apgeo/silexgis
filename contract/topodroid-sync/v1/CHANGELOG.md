@@ -31,6 +31,139 @@ turns every future addition into an outage of its own making.
 
 ---
 
+## 2026-11-09 — the limits of a raw recording, in the capabilities answer
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one member is added
+to `capabilities.pointCloud`; nothing a device sends or reads changes meaning. One recording was
+rewritten for it: `01-capabilities`.
+
+- `capabilities.pointCloud.recording` states what an upload of origin `mandeye` may send:
+  `maxFileBytes`, `maxTotalBytes`, `maxFiles`, `acceptedExtensions` and `odometryWorkerFactor` (how
+  many times the recording's size the processing worker needs free while it runs). A tool that does
+  not know the member ignores it.
+
+## 2026-11-08 — a raw scanner recording as a survey upload
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one value is added to
+`capabilities.sources`; nothing a device sends or reads changes meaning. Two recordings were
+rewritten for it: `01-capabilities` and `11-errors/source-unsupported`.
+
+- `capabilities.sources` now lists `mandeye` after `pointcloud`: the raw folder of a MANDEYE
+  handheld-scanner recording, sent as an upload of origin `mandeye`. A tool that does not know the
+  value ignores it. The `source_unsupported` detail now names all three.
+
+## 2026-11-08 — refused for lack of room, before anything is stored
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one code is added on
+opening and on sending a file, one on the run; nothing a device sends or reads changes meaning. No
+recording was written or rewritten.
+
+- `POST /survey-uploads` and `PUT /survey-uploads/{id}/files/{name}` may answer `409`
+  `storage.insufficient` when the declared files (or this file) do not fit in the storage left:
+  under the account's quota, the installation's cap, for a `pointcloud` upload the scans' own cap
+  (`SILEXGIS__Scans__MaxTotalBytes`), or on the disk of the file store. Members `limit`,
+  `neededBytes`, `roomBytes`, `missingBytes`. An open upload's declared sizes count as taken from
+  the moment it opens until its files arrive, it is abandoned or it expires.
+- New code on the run: `survey_pipeline.storage_insufficient` at `downsample` or `tile` — the step
+  was not started because what it is estimated to write does not fit; `errorMessage` says how much
+  is missing.
+- `GET /api/v1/storage/room` (outside this contract, for the web; it does not take a device key)
+  answers the totals, the caps and whether a given `addingBytes` fits.
+
+## 2026-11-07 — a point cloud as a survey upload
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one value is added to
+a list, one member is added to the status and list answers, and three values are added to `stage`;
+nothing a device sends or reads changes meaning. Every recording but `03-put-file` was rewritten
+for the two additions below.
+
+- `capabilities.sources` now lists `pointcloud` beside `topodroid`: an upload of origin
+  `pointcloud` declares exactly one `.laz` or `.las` file, as role `archive`, under the
+  installation's own cap for scans (`SILEXGIS__Scans__MaxUploadBytes`, 4 GiB by default).
+  `maxFileBytes`, `maxFilesPerUpload` and `acceptedExtensions` still describe a survey tool's
+  upload; the scans' own figures are the new `capabilities.pointCloud` block (`maxFileBytes`,
+  `maxFilesPerUpload`, always 1, and `acceptedExtensions`, `.laz` and `.las`), which a device
+  reads before offering a point cloud. The `source_unsupported` detail now names both.
+- Added `pointCloud` to the status answer and to each listed upload: `null` for a survey tool's
+  upload and for a point cloud whose header has not been read yet; otherwise the scan's facts
+  (`modelId`, `pointCount`, `pointFormat`, `lasVersion`, `compressed`, `hasRgb`, `hasIntensity`,
+  `sizeM`, `georeferenced`, `generatingSoftware`, and after tiling `tileBytes`, `tileCount`,
+  `tilerVersion`, `displayVoxelM`). `crs`, `min` and `max` are sent only to a reader holding the
+  cave's exact location, as is the `contentUrl` of an original whose header names a coordinate
+  system; an original with none is offered to everybody who may read the upload.
+- Added to `pointCloud` once a worker has run: `estimate` (`{ full, voxels[] }`, each row
+  `{ voxelCm, points, estimatedTileBytes, estimatedSeconds }`, `voxelCm` null on the full cloud's
+  row), `advice` (`{ level: none | warn | advise, suggestedVoxelCm, warnPoints, advisePoints,
+  warnTileBytes }`), and after tiling `displayEveryNth`, `displayPointCount` and `originShift`
+  (what was subtracted from the file's coordinates before tiling — a position for a georeferenced
+  file, so sent only with the cave's exact location, like `min` and `max`).
+- `POST /survey-uploads` takes an optional `display` for a point cloud — `{ method: full | voxel |
+  everyNth, voxelCm?, everyNth? }` — deciding how much of the cloud to show before it is
+  estimated. Without one, a run whose estimate puts the cloud over the installation's thresholds
+  (`advice.level` is `warn` or `advise`) ends `succeeded` at `downsample` with the message
+  "Estimated: … points. Choose how much to show, then run again." and tiles nothing; a cloud under
+  them is tiled whole. A device that shows the estimate table offers the choice then.
+- `POST /survey-uploads/{id}/rerun` takes `display` (the same shape; the run thins to it and tiles,
+  reusing the estimate) and `fromStep` (a step id to do again even where the earlier run's product
+  would do: `pointcloud.estimate`, `pointcloud.downsample`, `py3dtiles.tile`; applies to that
+  rerun only). `fromStep` alone keeps the thinning the upload was running with. A `display` the
+  thinning step refuses answers `400` `survey_upload.display_invalid`.
+- The file route serves the original of a point cloud whose header names a coordinate system,
+  and the thinned copy made from it, only to a reader holding the cave's exact location, as the
+  upload's own `contentUrl` already did.
+- New `stage` values for a point cloud's run: `inspect`, `downsample`, `tile`. A server with no
+  point-cloud worker ends such a run `succeeded` at `tile` with the message "Archived and
+  inspected. Not tiled: this server has no point-cloud worker."; a rerun once a worker is
+  installed carries on.
+- New code on the run: `survey_pipeline.point_cloud_invalid` at `inspect` (the file is not a LAS
+  or LAZ file the server can read). `survey_upload.content_mismatch` now also answers a `.laz` or
+  `.las` whose bytes do not begin with `LASF`.
+
+## 2026-11-05 — the public page of results shows the map, the geodata and the whole figures
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — nothing a device sends
+or reads changes; no recording was written or rewritten.
+
+- A public link's page of results now shows everything the upload's own files contain: the map of
+  the survey's centreline with its KML, GeoJSON and GPX downloads, and the compiler's figures whole
+  (the stations at each extent with their absolute heights and grid positions, the stations of each
+  loop, the coordinate system and declinations). The cave record's own position is not on it.
+- Added a web-only route that is not part of this contract: `GET /api/v1/public/survey-uploads/{token}/geodata?format=kml|geojson|gpx`,
+  decided exactly as the public page. `survey_upload.not_georeferenced` (404) and
+  `survey_upload.geodata_format_unsupported` (400) now also answer there.
+- The figures routes (public and signed in) answer `placed` as `true`/`false` on both, the whole
+  figures, and `analyses`: the upload's own survey measured (statistics, network, orientation, depth
+  profile) rather than the survey the cave is currently drawn from.
+
+## 2026-11-05 — a page of results on the web, beside the contract
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — nothing a device sends
+or reads changes; no recording was written or rewritten.
+
+- The web pages a tool opens (`statusPageUrl`, `publicLink.url`) link to a page of results at the same
+  address with `/view` added; a tool may open it directly.
+- Added web-only routes that are not part of this contract: `GET /api/v1/public/survey-uploads/{token}/figures`
+  (decided exactly as the public page), and, signed in, `GET /api/v1/survey-uploads/{id}/figures`,
+  `…/{id}/geodata` and `…/by-public-link/{token}`. An access key is refused on the signed-in ones with
+  the existing `403 auth.access_key_not_accepted`.
+- New codes, on those web routes only: `survey_upload.not_georeferenced` (404) and
+  `survey_upload.geodata_format_unsupported` (400).
+
+## 2026-11-04 — the compiler's log on the public page
+
+**Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — two members are added
+to the public page's answer and one route is added beside it; nothing a device sends or reads
+changes meaning.
+
+- Added public page members `logTail` (the last lines the compiler wrote, as the status answer's
+  `logTail`; `null` before a compile) and `log { name, sizeBytes, url }` (the whole log, after a
+  failed compile as after one that worked; `null` when there is none).
+- Added route `GET /api/v1/public/survey-uploads/{token}/log` (`log.url`): the whole log as a
+  `text/plain` attachment, opened and refused exactly as the page is.
+- Rewritten: `12-public-link`, `12b-public-link-compiled` (the added members).
+- Codes: added `survey_upload.public_log_not_found` (404, the log route only, for a link that opens
+  on an upload with no log).
+
 ## 2026-10-27 — the account's link defaults in the capabilities
 
 **Contract version: 1, unchanged. A tool pinned to version 1 keeps working** — one member is added

@@ -10,6 +10,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Auth;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
@@ -29,6 +30,12 @@ public static class MeEndpoints
     private const long MaxAvatarBytes = 5 * 1024 * 1024;
 
     private static readonly string[] AllowedAvatarExtensions = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
+
+    /// <summary>The formats an avatar may really be, read from its bytes.</summary>
+    private static readonly string[] AllowedAvatarMimeTypes = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
+    private const string AvatarInvalidCode = "me.avatar_invalid";
+    private const string AvatarInvalidDetail = "Pick a PNG, JPEG, WebP or GIF image.";
 
     public static RouteGroupBuilder MapMeEndpoints(this RouteGroupBuilder api)
     {
@@ -77,7 +84,9 @@ public static class MeEndpoints
             user, await AddressesAsync(db, user.Id, ct), tokens, await CaverIdAsync(db, user.Id, ct)));
     }
 
-    private static async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> UpdateAsync(
+    public const string CavingClubUnknownCode = "me.caving_club_unknown";
+
+    private static async Task<Results<Ok<MeDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
         MeUpdateRequest request,
         ClaimsPrincipal principal,
         UserManager<SilexGisUser> userManager,
@@ -89,6 +98,17 @@ public static class MeEndpoints
         if (user is null)
         {
             return TypedResults.Unauthorized();
+        }
+
+        // The club is a reference to a caving group, and the group may have been deleted while
+        // the form was open: refused by name rather than left to fail the save with a
+        // foreign-key error, which would lose every other field of the form too. The club the
+        // account already has needs no look-up: deleting a group clears it from every profile.
+        if (request.CavingClubId is { } clubId
+            && clubId != user.CavingClubId
+            && !await db.CavingGroups.AsNoTracking().AnyAsync(g => g.Id == clubId, ct))
+        {
+            return ApiProblems.BadRequest(CavingClubUnknownCode, "That caving club no longer exists.");
         }
 
         // A full-DTO save: an omitted field clears it.
@@ -141,11 +161,28 @@ public static class MeEndpoints
         if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
             || !AllowedAvatarExtensions.Contains(extension))
         {
-            return ApiProblems.BadRequest("me.avatar_invalid", "Pick a PNG, JPEG, WebP or GIF image.");
+            return ApiProblems.BadRequest(AvatarInvalidCode, AvatarInvalidDetail);
+        }
+
+        // The name and the declared type are the upload's own claims. What is stored, and what
+        // every member list later asks the thumbnailer to draw, is decided by the bytes: text, an
+        // SVG drawing or binary of no picture format under a .png name is refused here, before
+        // anything is written. The sniffer is given neither claim, because for bytes it does not
+        // recognise it falls back to the declared type, and that would let any payload through.
+        string mimeType;
+        await using (var head = file.OpenReadStream())
+        {
+            var detected = await ContentSniffer.DetectAsync(head, declaredMimeType: null, fileName: null, ct);
+            if (!AllowedAvatarMimeTypes.Contains(detected.MimeType))
+            {
+                return ApiProblems.BadRequest(AvatarInvalidCode, AvatarInvalidDetail);
+            }
+
+            mimeType = detected.MimeType;
         }
 
         var previousId = user.AvatarFileId;
-        var (storagePath, sha256, mimeType) = await SaveAvatarAsync(file, fileStore, ct);
+        var (storagePath, sha256) = await SaveAvatarAsync(file, fileStore, ct);
         var stored = documents.Create(
             new StoredContent(
                 storagePath,
@@ -290,11 +327,11 @@ public static class MeEndpoints
     }
 
     /// <summary>
-    /// Writes the upload and reports its digest and type. Deliberately a private copy of the
+    /// Writes the upload and reports its digest. Deliberately a private copy of the
     /// file slice's own helper rather than a shared one: byte-shovelling is trivial code, and
     /// slices do not reach into each other's internals.
     /// </summary>
-    private static async Task<(string StoragePath, string Sha256, string MimeType)> SaveAvatarAsync(
+    private static async Task<(string StoragePath, string Sha256)> SaveAvatarAsync(
         IFormFile file, IFileStore fileStore, CancellationToken ct)
     {
         await using var source = file.OpenReadStream();
@@ -302,9 +339,7 @@ public static class MeEndpoints
 
         await using var written = await fileStore.OpenReadAsync(storagePath, ct);
         var hash = await SHA256.HashDataAsync(written, ct);
-
-        var mimeType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
-        return (storagePath, Convert.ToHexStringLower(hash), mimeType);
+        return (storagePath, Convert.ToHexStringLower(hash));
     }
 
     private static string? Trimmed(string? value) =>

@@ -379,6 +379,13 @@ public sealed class PhotoCommitService(
         CancellationToken ct)
     {
         RequireCreate(ctx, options);
+
+        // Both types are resolved before the cave is added: a code this installation lacks,
+        // refused after the first write, would leave a tracked cave that the confirmation's final
+        // save writes on no batch line, where undo cannot reach it.
+        var caveTypeId = taxonomies.CaveType(decision.CaveTypeCode ?? options.DefaultCaveTypeCode);
+        var entranceTypeId = taxonomies.EntranceType(decision.EntranceTypeCode ?? options.DefaultEntranceTypeCode);
+
         var feature = new Feature
         {
             Name = name,
@@ -390,7 +397,7 @@ public sealed class PhotoCommitService(
         };
         var cave = new Cave
         {
-            CaveTypeId = taxonomies.CaveType(decision.CaveTypeCode ?? options.DefaultCaveTypeCode),
+            CaveTypeId = caveTypeId,
             Altitude = altitude,
         };
         feature.Cave = cave;
@@ -403,8 +410,7 @@ public sealed class PhotoCommitService(
         var entrance = new CaveEntrance
         {
             CaveFeatureId = feature.Id,
-            EntranceTypeId = taxonomies.EntranceType(
-                decision.EntranceTypeCode ?? options.DefaultEntranceTypeCode),
+            EntranceTypeId = entranceTypeId,
             IsMain = true,
             Altitude = altitude,
             PositionQuality = quality,
@@ -434,20 +440,28 @@ public sealed class PhotoCommitService(
                 decision, options, taxonomies, point, name, altitude, quality, ctx, touchedCaves, ct);
         }
 
-        var cave = await db.Features.FirstOrDefaultAsync(f => f.Id == caveId && f.Kind == FeatureKind.Cave, ct)
-            ?? throw new ImportCommitException("photo_import.cave_not_found", "The chosen cave no longer exists.");
+        // A cave the caller may not read is answered exactly as one that is not there, and
+        // neither answer names anything: two different refusals, or a refusal quoting the cave's
+        // name, would let anybody with an import learn which ids are caves and what they are
+        // called.
+        var cave = await db.Features.FirstOrDefaultAsync(f => f.Id == caveId && f.Kind == FeatureKind.Cave, ct);
+        if (cave is null || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed)
+        {
+            throw new ImportCommitException("photo_import.cave_not_found", "The chosen cave is not there.");
+        }
+
         if (!(await access.DecideAsync(ctx, AccessAction.Write, cave, ct)).Allowed)
         {
             throw new ImportCommitException(
-                "photo_import.cave_forbidden", $"You may not add an entrance to '{cave.Name}'.");
+                "photo_import.cave_forbidden", "You may not add an entrance to the chosen cave.");
         }
 
+        var entranceTypeId = taxonomies.EntranceType(decision.EntranceTypeCode ?? options.DefaultEntranceTypeCode);
         var entranceFeature = new Feature { Name = name, Geom = point };
         var entrance = new CaveEntrance
         {
             CaveFeatureId = caveId,
-            EntranceTypeId = taxonomies.EntranceType(
-                decision.EntranceTypeCode ?? options.DefaultEntranceTypeCode),
+            EntranceTypeId = entranceTypeId,
             Altitude = altitude,
             PositionQuality = quality,
         };

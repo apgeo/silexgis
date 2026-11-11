@@ -3,7 +3,7 @@ import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { ImportCandidate, ImportPreview, ImportSession } from '../../api/hooks.ts';
 
 const commitMutate = vi.fn();
@@ -78,7 +78,7 @@ const conflicted: ImportCandidate = {
   },
 };
 
-const preview: ImportPreview = {
+const fullPreview: ImportPreview = {
   items: [cave, unclaimed, conflicted],
   page: 1,
   pageSize: 25,
@@ -101,6 +101,8 @@ const preview: ImportPreview = {
   ],
   ruleSet: null,
 };
+
+let preview: ImportPreview = fullPreview;
 
 vi.mock('../../api/hooks.ts', () => ({
   useImportSession: () => ({ data: session, isError: false }),
@@ -157,6 +159,37 @@ describe('ImportWorkspacePage', () => {
     });
     saveSessionMutate.mockReset();
     session = { ...session, allowCreateWithoutReview: false, decisions: {} };
+    preview = fullPreview;
+  });
+
+  it('says when the file holds more rows than one review reads, and how many it read', async () => {
+    preview = { ...fullPreview, truncated: true, fileRowCount: 9000, scannedRowCount: 5000 };
+    show();
+    await screen.findByText('Ursilor');
+
+    expect(screen.getByText(i18n.t('vectorImport.truncatedTitle'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('vectorImport.truncated', { scanned: 5000, total: 9000 })))
+      .toBeInTheDocument();
+  });
+
+  it('says nothing about a ceiling when the whole file was read', async () => {
+    show();
+    await screen.findByText('Ursilor');
+
+    expect(screen.queryByText(i18n.t('vectorImport.truncatedTitle'))).toBeNull();
+  });
+
+  it('creates without review by asking for exactly that, with no selection of its own', async () => {
+    session = { ...session, allowCreateWithoutReview: true };
+    show();
+    await screen.findByText('Ursilor');
+
+    fireEvent.click(screen.getByTestId('import-commit-all'));
+
+    await waitFor(() => expect(commitMutate).toHaveBeenCalledTimes(1));
+    const body = commitMutate.mock.calls[0][0].body;
+    expect(body.withoutReview).toBe(true);
+    expect(body.selection).toEqual([]);
   });
 
   it('shows what the rules made of the file before anything is created', async () => {

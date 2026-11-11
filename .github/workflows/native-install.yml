@@ -37,6 +37,12 @@ concurrency:
   group: native-install-${{ github.ref }}
   cancel-in-progress: true
 
+# The job token reads the repository and nothing else: no job here writes to it, comments on a
+# pull request or publishes a package, and a pull request's jobs run code from that pull request.
+# A job that ever needs more asks for it in its own permissions block.
+permissions:
+  contents: read
+
 jobs:
   install:
     runs-on: ubuntu-latest
@@ -52,13 +58,13 @@ jobs:
       # nothing to do with the restore.
       JOBS_PENDING: select count(*) from processing_jobs where status in (0, 1)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
 
@@ -134,13 +140,13 @@ jobs:
     env:
       PUBLIC_URL: http://localhost:8080
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
 
@@ -209,13 +215,13 @@ jobs:
       PUBLIC_URL: http://localhost:8080
       ADMIN_URL: postgres://postgres:ci@127.0.0.1:5432/postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
 

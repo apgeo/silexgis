@@ -26,7 +26,8 @@ internal static class TripRecordingPhotos
     /// A link whose document has been deleted is left behind. A photograph added to the recording after its trip was made
     /// is not carried: the trip is not rewritten.
     /// </remarks>
-    internal static async Task CopyToTripAsync(
+    /// <returns>The links it added, so an import that hung them can name them for its undo.</returns>
+    internal static async Task<IReadOnlyList<Guid>> CopyToTripAsync(
         SilexGisDbContext db, TripRecording recording, IReadOnlyList<TripRecordingPoint> points, TripLog trip, Feature cave, CancellationToken ct)
     {
         var pointIds = points.Select(p => p.Id).ToList();
@@ -73,9 +74,10 @@ internal static class TripRecordingPhotos
                 .ToListAsync(ct));
         var hung = already.Select(a => a.FileId).ToHashSet();
         var order = already.Count == 0 ? 0 : already.Max(a => a.SortOrder) + 1;
+        var added = new List<Guid>();
         foreach (var link in ordered.Where(l => !hung.Contains(l.FileId)))
         {
-            db.Attachments.Add(new Attachment
+            var copy = new Attachment
             {
                 FileId = link.FileId,
                 EntityType = AttachedEntityType.TripLog,
@@ -84,8 +86,12 @@ internal static class TripRecordingPhotos
                 Caption = link.Caption,
                 SortOrder = order++,
                 AddedBy = link.AddedBy ?? recording.OwnerUserId,
-            });
+            };
+            db.Attachments.Add(copy);
+            added.Add(copy.Id);
         }
+
+        return added;
     }
 
     /// <summary>

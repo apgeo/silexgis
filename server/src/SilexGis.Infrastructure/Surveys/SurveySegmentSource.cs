@@ -50,4 +50,20 @@ public static class SurveySegmentSource
             ? new SurveySegmentSet(SurveySegmentBasis.SkeletonHeuristic, pieces)
             : SurveySegmentSet.Empty;
     }
+
+    /// <summary>
+    /// The measured passage of one survey model — a survey upload's own — or the empty set when it
+    /// holds no legs. Never the shape-based reduction: a model that wrote no legs was not placed,
+    /// and a reduction of some other line would describe a different survey.
+    /// </summary>
+    /// <remarks>
+    /// No access walk: for a caller that has already decided the reader may be shown this model, as
+    /// <see cref="SurveySegmentSql.ForModelAsync"/> says.
+    /// </remarks>
+    public static async Task<SurveySegmentSet> ForModelAsync(
+        SilexGisDbContext db, Guid surveyModelId, CancellationToken ct)
+    {
+        var legs = await SurveySegmentSql.ForModelAsync(db, surveyModelId, ct);
+        return legs.Count > 0 ? new SurveySegmentSet(SurveySegmentBasis.SurveyFlags, legs) : SurveySegmentSet.Empty;
+    }
 }

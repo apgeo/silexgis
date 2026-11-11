@@ -33,6 +33,9 @@ const KIND_LABEL_KEYS: Record<SurveySourceInfo['kind'], string> = {
   therionLog: 'surveySources.kinds.therionLog',
   survexSource: 'surveySources.kinds.survexSource',
   topoDroidArchive: 'surveySources.kinds.topoDroidArchive',
+  pointCloud: 'surveySources.kinds.pointCloud',
+  lidarRawSession: 'surveySources.kinds.lidarRawSession',
+  hdmSession: 'surveySources.kinds.hdmSession',
 };
 
 /**

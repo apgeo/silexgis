@@ -53,6 +53,21 @@ public sealed class SurveyMeshHandler(
     // attempt is due.
     public bool RetriesPassingFailures => true;
 
+    /// <summary>A reading given up by the queue stops reading "processing".</summary>
+    public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
+    {
+        if (AbandonedJob.PayloadOf<SurveyMeshPayload>(job) is not { } payload)
+        {
+            return;
+        }
+
+        await db.SurveyModels
+            .Where(m => m.Id == payload.SurveyModelId && m.Status == SurveyModelStatus.Processing)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(m => m.Status, SurveyModelStatus.Failed)
+                .SetProperty(m => m.ProcessingError, AbandonedJob.Reason), ct);
+    }
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var payload = JsonSerializer.Deserialize<SurveyMeshPayload>(job.Payload, JsonSerializerOptions.Web)
@@ -81,7 +96,8 @@ public sealed class SurveyMeshHandler(
             model.SourceEpsg,
             model.Anchor?.X,
             model.Anchor?.Y,
-            model.AnchorHeightM ?? 0);
+            model.AnchorHeightM ?? 0,
+            await SurveyModelPlacement.CavePositionAsync(db, model.CaveFeatureId, ct));
 
         var workPath = Path.Combine(Path.GetTempPath(), $"silexgis-mesh-{Guid.NewGuid():N}.glb");
 
@@ -150,6 +166,7 @@ public sealed class SurveyMeshHandler(
             model.AppliedRotationDeg = conversion.AppliedRotationDeg;
             model.TriangleCount = conversion.TrianglesRead - conversion.DegenerateDropped;
             model.SourcePrecisionLost = conversion.SourcePrecisionLost;
+            SurveyModelPlacement.Record(model, conversion.Advice);
             model.Status = SurveyModelStatus.Ready;
             model.ProcessingError = null;
             await db.SaveChangesAsync(ct);
@@ -205,6 +222,7 @@ public sealed class SurveyMeshHandler(
                 failed.ProcessingError = e is SurveySourceException
                     ? e.Message
                     : "The model could not be converted.";
+                SurveyModelPlacement.Record(failed, (e as SurveySourceException)?.Advice);
                 await db.SaveChangesAsync(CancellationToken.None);
             }
 

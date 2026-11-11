@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using NpgsqlTypes;
 using SilexGis.Domain.Entities;
@@ -24,10 +25,12 @@ public static class JobsSql
     /// <summary>
     /// Atomically claims the next ready job of the lane; returns its id or null. Ready means
     /// queued and not waiting out a retry delay; next means the oldest, with the kinds nobody is
-    /// waiting on (<see cref="ProcessingJobKinds.Background"/>) behind every other kind.
+    /// waiting on (<see cref="ProcessingJobKinds.Background"/>) behind every other kind. The
+    /// claimed job is leased to the caller for <paramref name="lease"/>, which it renews with
+    /// <see cref="RenewLeaseAsync"/> for as long as it runs.
     /// </summary>
     public static async Task<long?> ClaimNextAsync(
-        SilexGisDbContext db, JobLane lane, CancellationToken ct)
+        SilexGisDbContext db, JobLane lane, TimeSpan lease, CancellationToken ct)
     {
         await using var command = await CommandAsync(db, ct);
 
@@ -40,7 +43,7 @@ public static class JobsSql
         command.CommandText = $"""
             UPDATE processing_jobs
             SET status = 1, started_at = now(), attempts = attempts + 1, not_before = NULL,
-                progress_done = NULL, progress_total = NULL
+                progress_done = NULL, progress_total = NULL, lease_expires_at = now() + @lease
             WHERE id = (
                 SELECT id FROM processing_jobs
                 WHERE status = 0 AND {LanePredicate(lane)}
@@ -55,57 +58,142 @@ public static class JobsSql
         {
             Value = ProcessingJobKinds.Background.ToArray(),
         });
+        command.Parameters.Add(new NpgsqlParameter("lease", NpgsqlDbType.Interval) { Value = lease });
 
         var result = await command.ExecuteScalarAsync(ct);
         return result is long id ? id : null;
     }
 
     /// <summary>
-    /// Returns jobs of this lane left Running by a previous process (crash/restart) to the
-    /// queue. Called once at worker startup, before polling begins.
+    /// Extends the lease of a job the caller is still running. Matches only while the row is still
+    /// the caller's: still Running, and still on the attempt the caller claimed — a job the sweep
+    /// took back and another worker claimed again has a higher count, and is left alone.
     /// </summary>
-    /// <remarks>
-    /// Filtered by the same lane as the claim, and for the same reason. Unfiltered, a worker
-    /// starting up would put back whatever the other lane's worker was in the middle of, and that
-    /// job would then run a second time alongside the first one — which is the one thing the
-    /// queue exists to prevent.
-    /// </remarks>
-    public static async Task RequeueInterruptedAsync(
-        SilexGisDbContext db, JobLane lane, CancellationToken ct)
+    public static async Task RenewLeaseAsync(
+        SilexGisDbContext db, long jobId, int attempt, TimeSpan lease, CancellationToken ct)
     {
         await using var command = await CommandAsync(db, ct);
-        command.CommandText = $"""
-            UPDATE processing_jobs SET status = 0, started_at = NULL
-            WHERE status = 1 AND {LanePredicate(lane)}
+        command.CommandText = """
+            UPDATE processing_jobs SET lease_expires_at = now() + @lease
+            WHERE id = @id AND status = 1 AND attempts = @attempt
             """;
-        command.Parameters.Add(KindsParameter(lane));
+        command.Parameters.Add(new NpgsqlParameter("id", jobId));
+        command.Parameters.Add(new NpgsqlParameter("attempt", attempt));
+        command.Parameters.Add(new NpgsqlParameter("lease", NpgsqlDbType.Interval) { Value = lease });
         await command.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>
+    /// Takes back the jobs of this lane whose runner was lost — Running with a lease that has run
+    /// out, or with none at all — and answers the ids of those it failed. A lost job with attempts
+    /// left goes back to the queue; one that has had <paramref name="maxAttempts"/> already is
+    /// failed with <paramref name="error"/>, because a job that keeps taking its runner down with
+    /// it would otherwise be taken again, and take it down again, for ever.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The claim counts the attempt before the job starts, so an attempt that never finished is
+    /// counted like any other, and the ceiling reads the same number the passing-failure retry
+    /// reads. A row with no lease is one left Running from before leases existed, or by a caller
+    /// that claimed it some other way; nothing will ever renew it, so it is as lost as an expired
+    /// one.
+    /// </para>
+    /// <para>
+    /// Filtered by the same lane as the claim, and for the same reason. Unfiltered, a worker would
+    /// take back whatever the other lane's worker held — and with the lease alone deciding, never a
+    /// job its runner is still renewing, so a second process starting up leaves the first one's
+    /// work alone. The lease is compared with the database's clock, the clock that wrote it.
+    /// </para>
+    /// </remarks>
+    public static async Task<IReadOnlyList<long>> ReturnStaleAsync(
+        SilexGisDbContext db, JobLane lane, int maxAttempts, string error, CancellationToken ct)
+    {
+        await using var fail = await CommandAsync(db, ct);
+        fail.CommandText = $"""
+            UPDATE processing_jobs
+            SET status = 3, completed_at = now(), error = @error, lease_expires_at = NULL
+            WHERE status = 1 AND {LanePredicate(lane)}
+              AND (lease_expires_at IS NULL OR lease_expires_at < now())
+              AND attempts >= @max
+            RETURNING id
+            """;
+        fail.Parameters.Add(KindsParameter(lane));
+        fail.Parameters.Add(new NpgsqlParameter("max", maxAttempts));
+        fail.Parameters.Add(new NpgsqlParameter("error", error));
+        var failed = new List<long>();
+        await using (var reader = await fail.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                failed.Add(reader.GetInt64(0));
+            }
+        }
+
+        await using var requeue = await CommandAsync(db, ct);
+        requeue.CommandText = $"""
+            UPDATE processing_jobs
+            SET status = 0, started_at = NULL, lease_expires_at = NULL,
+                progress_done = NULL, progress_total = NULL
+            WHERE status = 1 AND {LanePredicate(lane)}
+              AND (lease_expires_at IS NULL OR lease_expires_at < now())
+            """;
+        requeue.Parameters.Add(KindsParameter(lane));
+        await requeue.ExecuteNonQueryAsync(ct);
+        return failed;
     }
 
     /// <summary>
     /// Puts a job that failed in passing back in the queue, to be taken again no sooner than
     /// <paramref name="delay"/> from now, with the failure kept as its error meanwhile so a screen
-    /// waiting on it can say why it is not done yet. Only a job still running is put back.
+    /// waiting on it can say why it is not done yet. Only a job still running on the caller's
+    /// <paramref name="attempt"/> is put back — one taken back and claimed again since belongs to
+    /// another runner — and the answer says whether it was.
     /// </summary>
     /// <remarks>
     /// The delay is added to the database's own clock, the clock the claim compares it with, so the
     /// two cannot disagree about when it has passed. The attempt's progress goes with it: a job
     /// waiting for its next turn has done nothing of that turn yet.
     /// </remarks>
-    public static async Task PutBackAsync(
-        SilexGisDbContext db, long jobId, TimeSpan delay, string error, CancellationToken ct)
+    public static async Task<bool> PutBackAsync(
+        SilexGisDbContext db, long jobId, int attempt, TimeSpan delay, string error, CancellationToken ct)
     {
         await using var command = await CommandAsync(db, ct);
         command.CommandText = """
             UPDATE processing_jobs
             SET status = 0, started_at = NULL, not_before = now() + @delay, error = @error,
-                progress_done = NULL, progress_total = NULL
-            WHERE id = @id AND status = 1
+                progress_done = NULL, progress_total = NULL, lease_expires_at = NULL
+            WHERE id = @id AND status = 1 AND attempts = @attempt
             """;
         command.Parameters.Add(new NpgsqlParameter("id", jobId));
+        command.Parameters.Add(new NpgsqlParameter("attempt", attempt));
         command.Parameters.Add(new NpgsqlParameter("delay", NpgsqlDbType.Interval) { Value = delay });
         command.Parameters.Add(new NpgsqlParameter("error", error));
-        await command.ExecuteNonQueryAsync(ct);
+        return await command.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    /// <summary>
+    /// Locks a job's row for the rest of the caller's transaction if the job is still running on
+    /// the caller's <paramref name="attempt"/>, and says whether it is. What a worker writes about
+    /// how its attempt ended is written behind this, so it lands only on the attempt it ran: the
+    /// row stays the caller's until the commit, and a sweep or another runner waits for it.
+    /// </summary>
+    /// <remarks>
+    /// Must be called inside a transaction — outside one the lock ends with the statement.
+    /// </remarks>
+    public static async Task<bool> HoldIfStillOursAsync(
+        SilexGisDbContext db, long jobId, int attempt, CancellationToken ct)
+    {
+        await using var command = await CommandAsync(db, ct);
+        command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction()
+            ?? throw new InvalidOperationException("Holding a job's row needs a transaction.");
+        command.CommandText = """
+            SELECT 1 FROM processing_jobs
+            WHERE id = @id AND status = 1 AND attempts = @attempt
+            FOR UPDATE
+            """;
+        command.Parameters.Add(new NpgsqlParameter("id", jobId));
+        command.Parameters.Add(new NpgsqlParameter("attempt", attempt));
+        return await command.ExecuteScalarAsync(ct) is not null;
     }
 
     /// <summary>Records how far a running job has got. A job no longer running is left alone.</summary>

@@ -305,7 +305,7 @@ public sealed class SpeleolocTripImportCommitService(
 
         if (held is not { Continues: true })
         {
-            items.Add(await AdoptRecordingAsync(read.Trip, read.Points, held, trip, cave, ctx, ct));
+            items.Add(await AdoptRecordingAsync(read.Trip, read.Points, held, trip, createdTrip, cave, ctx, ct));
             into?.Extra.Add(items[^1]);
         }
 
@@ -626,6 +626,7 @@ public sealed class SpeleolocTripImportCommitService(
         IReadOnlyList<SpeleolocArchivePoint> points,
         HeldRecording? held,
         TripLog trip,
+        bool createdTrip,
         Feature cave,
         AccessContext ctx,
         CancellationToken ct)
@@ -713,10 +714,19 @@ public sealed class SpeleolocTripImportCommitService(
         var heldPoints = await db.TripRecordingPoints.IgnoreQueryFilters().AsNoTracking()
             .Where(p => p.RecordingId == recording.Id && p.DeletedAt == null)
             .ToListAsync(ct);
-        await TripRecordingPhotos.CopyToTripAsync(db, heldRecording, heldPoints, trip, cave, ct);
+        var copied = await TripRecordingPhotos.CopyToTripAsync(db, heldRecording, heldPoints, trip, cave, ct);
         await db.SaveChangesAsync(ct);
 
-        return RecordingLine(recording.Id, ImportDecisionAction.Attach, held.Deleted);
+        // The copies are hung on a trip this import did not create, so undoing it would not take
+        // them down with the trip: the line names them, as a photo import's line names what it
+        // hung on somebody's existing cave. A trip the import created takes them with it.
+        var line = RecordingLine(recording.Id, ImportDecisionAction.Attach, held.Deleted);
+        if (!createdTrip && copied.Count > 0)
+        {
+            line.AttachmentIds = ImportBatchAttachments.Write(copied);
+        }
+
+        return line;
     }
 
     /// <summary>
@@ -747,6 +757,13 @@ public sealed class SpeleolocTripImportCommitService(
         var title = string.IsNullOrWhiteSpace(recording.Title)
             ? recording.StartedAt.UtcDateTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
             : recording.Title.Trim();
+
+        // Cut to the trip title's width, as the recording row's copy of the same title is: a
+        // device title past it would otherwise fail the confirmation at its save.
+        if (title.Length > 255)
+        {
+            title = title[..255];
+        }
 
         var input = new TripWriteInput
         {

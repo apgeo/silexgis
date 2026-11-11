@@ -177,6 +177,36 @@ describe('the version an answer carries', () => {
     expect(lastReadETag('/api/v1/trip-logs/')).toBeUndefined();
   });
 
+  it("is filed under the resource it versions when a write is made on a route of that resource's", () => {
+    // An entrance's own path has no read that hands a version out. Its edit answers the entrance's
+    // version under the feature, whose read does, so the edit route keeps nothing that no read
+    // would ever replace.
+    answered('PUT', '/api/v1/cave-entrances/en-1', {
+      status: 200,
+      headers: { ETag: '"20"', 'Content-Location': '/api/v1/features/en-1' },
+    });
+    expect(lastReadETag('/api/v1/features/en-1')).toBe('"20"');
+    expect(lastReadETag('/api/v1/cave-entrances/en-1')).toBeUndefined();
+
+    // Somebody else's change moves the entrance's version: an altitude fill answers under the
+    // feature too. The next edit of the entrance carries nothing stale, so it is not refused for
+    // a change this client was never shown a version of.
+    answered('POST', '/api/v1/cave-entrances/en-1/fill-altitude', {
+      status: 200,
+      headers: { ETag: '"21"', 'Content-Location': '/api/v1/features/en-1' },
+    });
+    expect(carriedOn('PUT', '/api/v1/cave-entrances/en-1')).toBeNull();
+    expect(carriedOn('PUT', '/api/v1/features/en-1')).toBe('"21"');
+
+    // The same for a feature's links and parents.
+    answered('PUT', '/api/v1/features/f-2/links', {
+      status: 200,
+      headers: { ETag: '"30"', 'Content-Location': '/api/v1/features/f-2' },
+    });
+    expect(carriedOn('PUT', '/api/v1/features/f-2/links')).toBeNull();
+    expect(carriedOn('PUT', '/api/v1/features/f-2')).toBe('"30"');
+  });
+
   it('is filed where an action says it belongs, and nowhere when the action does not say', () => {
     answered('GET', '/api/v1/trip-logs/t-act', { status: 200, headers: { ETag: '"4"' } });
     answered('POST', '/api/v1/trip-logs/t-act/state', {

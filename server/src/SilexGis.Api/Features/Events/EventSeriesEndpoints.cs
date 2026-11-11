@@ -6,6 +6,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Events;
+using SilexGis.Domain.Import.TrackingCsv;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
@@ -283,6 +284,59 @@ public static class EventSeriesEndpoints
 
                 moved.Add((row, DateOnly.FromDayNumber((int)number)));
             }
+
+            // The rule the generator holds a create and a re-spacing to: an occurrence still
+            // running on the day the next begins. A move keeps the gaps between the rows, so what
+            // can make two run into each other is the length the edit gives every one of them.
+            // A pair that already ran into each other before the edit — somebody moved one
+            // occurrence onto its neighbour by hand — is left to be, so that a run in that state
+            // can still be retitled; the edit is refused only for a collision it would create.
+            for (var i = 1; i < moved.Count; i++)
+            {
+                var (previous, previousStart) = moved[i - 1];
+                var (next, nextStart) = moved[i];
+                var collides = previousStart.DayNumber + span >= nextStart.DayNumber;
+                var collidedBefore = (previous.EndDate ?? previous.StartDate) >= next.StartDate;
+                if (collides && !collidedBefore)
+                {
+                    return ApiProblems.BadRequest(
+                        EventRecurrence.OverlappingCode,
+                        $"Each occurrence would run {span + 1} days, so the one beginning on "
+                        + $"{previousStart:yyyy-MM-dd} would still be running when the next begins on "
+                        + $"{nextStart:yyyy-MM-dd}. Nothing was moved. Make the event shorter.");
+                }
+            }
+        }
+
+        // The occurrences before the anchor are not moved, and a move backwards, or a longer
+        // span, can carry the run onto them: the anchor shifted onto the last evening of the
+        // camp before it is the same collision the rule above refuses between moved rows. Only
+        // the earlier occurrences still running on or after the first new day can be reached.
+        // As above, a pair that already ran into each other before the edit is left to be.
+        var firstNewStart = moved.Min(x => x.Start);
+        var earlier = await db.Events.AsNoTracking()
+            .Where(x => x.SeriesId == seriesId
+                && x.StartDate < anchor.StartDate
+                && (x.EndDate ?? x.StartDate) >= firstNewStart)
+            .OrderBy(x => x.StartDate).ThenBy(x => x.Id)
+            .ToListAsync(ct);
+        foreach (var before in earlier)
+        {
+            var beforeEnd = before.EndDate ?? before.StartDate;
+            foreach (var (row, start) in moved)
+            {
+                var collides = start <= beforeEnd && before.StartDate.DayNumber <= start.DayNumber + span;
+                var collidedBefore = row.StartDate <= beforeEnd
+                    && before.StartDate <= (row.EndDate ?? row.StartDate);
+                if (collides && !collidedBefore)
+                {
+                    return ApiProblems.BadRequest(
+                        EventRecurrence.OverlappingCode,
+                        $"The occurrence beginning on {before.StartDate:yyyy-MM-dd}, which this edit "
+                        + $"does not move, would still be running when a moved one begins on "
+                        + $"{start:yyyy-MM-dd}. Nothing was moved. Pick another day or make the event shorter.");
+                }
+            }
         }
 
         foreach (var (row, start) in moved)
@@ -305,7 +359,18 @@ public static class EventSeriesEndpoints
         // One save for the whole set, so the change is one act in the trail as it is to the person
         // who asked for it, and a failure anywhere in it leaves the series exactly as it was.
         await db.SaveChangesAsync(ct);
+
+        // The versions the edit produced, read inside its own transaction so that they cannot be a
+        // later writer's: the anchor's own and its run's, the pair the event's read hands out, filed
+        // under the event's path because that is where its next write looks for them.
+        var anchorVersion = await ConcurrencySql.VersionAsync(db, VersionedTable.Events, anchor.Id, ct);
+        await EmitSeriesVersionAsync(http, db, access, ctx, anchor, ct);
         await transaction.CommitAsync(ct);
+        if (anchorVersion is not null)
+        {
+            http.Response.Headers.ETag = $"\"{anchorVersion}\"";
+            http.Response.Headers.ContentLocation = $"/api/v1/events/{anchor.Id}";
+        }
 
         return TypedResults.Ok(new EventSeriesEditResultDto
         {
@@ -342,6 +407,7 @@ public static class EventSeriesEndpoints
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         TimeProvider clock,
+        IConfiguration configuration,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -368,12 +434,21 @@ public static class EventSeriesEndpoints
 
         // Offered but not required, the way it is on every delete here: a list deletes a row it
         // never loaded a version of.
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Events, anchor.Id, ct) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Events, anchor.Id, ct);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
 
-        var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+        // The club's calendar day, not Greenwich's: east of UTC, between local midnight and the
+        // offset, last evening's occurrence has already happened where the club is while its day
+        // is still "today" in UTC, and would be deleted with every answer given to it. The zone
+        // is the installation's own, the one named for members who never said where they are; an
+        // installation that named none, or a name that is no zone, keeps UTC.
+        var houseZone = TrackingCsvZones.TryFind(configuration["Notifications:TimeZone"], out var named)
+            ? named
+            : TimeZoneInfo.Utc;
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), houseZone).DateTime);
         var from = anchor.StartDate > today ? anchor.StartDate : today;
 
         // Deliberately not visibility-filtered: this is the set the act would reach, and an
@@ -407,6 +482,7 @@ public static class EventSeriesEndpoints
 
         db.Events.RemoveRange(doomed);
         await db.SaveChangesAsync(ct);
+        await hold.CommitAsync(ct);
 
         return TypedResults.Ok(new EventSeriesDeleteResultDto
         {

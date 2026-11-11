@@ -88,6 +88,7 @@ public sealed class UploadSessionConfiguration : IEntityTypeConfiguration<Upload
         builder.Property(x => x.StoragePath).HasMaxLength(500);
         builder.Property(x => x.RelativePath).HasMaxLength(2000);
         builder.Property(x => x.AttachEntityType).HasConversion<short>();
+        builder.Property(x => x.AttachRole).HasConversion<short>();
         builder.Property(x => x.Sha256).HasMaxLength(64);
         builder.Property(x => x.MimeType).HasMaxLength(FileFormats.MaxMediaTypeLength);
         builder.Property(x => x.Kind).HasConversion<short>();
@@ -99,6 +100,17 @@ public sealed class UploadSessionConfiguration : IEntityTypeConfiguration<Upload
             .OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<UploadBatch>().WithMany().HasForeignKey(x => x.UploadBatchId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        // Deliberately no foreign key to the club. The club is part of what the opening request
+        // asked for, and completion asks the create rules again over it exactly as a
+        // single-request upload would. A key that set it to null when the club was deleted
+        // mid-transfer would turn "the named club is gone" into "no club was named": the
+        // document would be filed without the club, under the cabinet's own visibility default,
+        // where the single-request route refuses the missing club. Kept as it was named, a
+        // vanished club is refused at completion as not found.
+        builder.HasIndex(x => x.CavingGroupId)
+            .HasDatabaseName("ix_upload_sessions_caving_group_id")
+            .HasFilter("caving_group_id is not null");
 
         // The sweep that collects sessions nobody came back to, and their partial bytes.
         builder.HasIndex(x => x.ExpiresAt);

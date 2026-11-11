@@ -5,7 +5,6 @@ import Button from '../Button.tsx';
 import { LinkOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { type SurveyModelInfo } from '../../api/hooks.ts';
-import { viewerFileName } from '../../caveview/viewerFileName.ts';
 import type { PickedModelPart } from '../../caveview/modelParts.ts';
 import { useCompareOffer } from '../../caveview/useCompareOffer.ts';
 import { useStationMedia } from '../../caveview/useStationMedia.ts';
@@ -17,19 +16,13 @@ import { rasterMapsFromLinks, type RasterMapDeclaration } from '../../rastermap/
 import { useRasterMapLinks } from '../../rastermap/useRasterMapLinks.ts';
 import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import AddMemberModal from '../reslinks/AddMemberModal.tsx';
-import CaveViewPanel from './CaveViewPanel.tsx';
-import DankezCaveViewPane from './DankezCaveViewPane.tsx';
+import { surveyModelTabItems, TAB_3D, TAB_DANKEZ } from './surveyModelTabItems.tsx';
 
 interface SurveyModelViewerModalProps {
   /** The model to show, or null for a closed modal. */
   model: SurveyModelInfo | null;
   onClose(): void;
 }
-
-/** The key of the embedded viewer's tab. */
-const TAB_3D = '3d';
-/** The key of the tab trying the same file in dankez-caveview (LochViewer), a second viewer on trial. */
-const TAB_DANKEZ = 'dankez-caveview';
 
 /**
  * A survey model over the whole window, mounted by whichever page the viewer asked from.
@@ -271,34 +264,24 @@ export default function SurveyModelViewerModal({ model, onClose }: SurveyModelVi
               </Tooltip>
             }
             items={[
-              {
-                key: TAB_3D,
-                label: t('rastermap.tab3d'),
-                children: (
-                  <CaveViewPanel
-                    fileUrl={model.modelUrl}
-                    fileName={viewerFileName(model)}
-                    height="70vh"
-                    surveyModelId={model.id}
-                    onPartPick={handlePick}
-                    onStationsLoaded={setStationIndex}
-                    // The window given over to the model is where the viewer's own controls
-                    // belong; the docked panels elsewhere have chrome of their own competing
-                    // for the same corner.
-                    toolbar
-                    stationMedia={stationMedia}
-                    compare={compare}
-                  />
-                ),
-              },
-              {
-                key: TAB_DANKEZ,
-                label: t('caveview.dankezCaveView.tab'),
-                // Mounted only while shown, unlike every other pane here: it is a whole second
-                // viewer with a drawing context of its own, and loading it is the reader's choice.
-                children:
-                  activeTab === TAB_DANKEZ ? <DankezCaveViewPane model={model} height="70vh" /> : null,
-              },
+              ...surveyModelTabItems({
+                model,
+                activeTab,
+                height: '70vh',
+                label3d: t('rastermap.tab3d'),
+                labelDankez: t('caveview.dankezCaveView.tab'),
+                panel: {
+                  surveyModelId: model.id,
+                  onPartPick: handlePick,
+                  onStationsLoaded: setStationIndex,
+                  // The window given over to the model is where the viewer's own controls
+                  // belong; the docked panels elsewhere have chrome of their own competing
+                  // for the same corner.
+                  toolbar: true,
+                  stationMedia,
+                  compare,
+                },
+              }),
               ...maps.map((declaration) => ({
                 key: declaration.linkId,
                 label: (

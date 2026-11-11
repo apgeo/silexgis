@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login, confirmOk } from './helpers.ts';
+import { login, confirmOk, searchFindsNoFeature } from './helpers.ts';
 
 /**
  * A GPX from the field becomes caves and features in the registry — reviewed, not blindly
@@ -76,10 +76,7 @@ test.describe('vector import', () => {
     await expect(page.getByText('The import was undone.')).toBeVisible({ timeout: 20_000 });
 
     await page.goto('/features');
-    await page.getByPlaceholder('Search by name').fill(springName);
-    await expect(page.getByRole('row', { name: new RegExp(springName) })).toHaveCount(0, {
-      timeout: 20_000,
-    });
+    await searchFindsNoFeature(page, springName);
 
     // Cleanup: the dev database persists between runs, so the upload goes too. Undoing the
     // import took back what it created; the file it was created from is a separate thing.
@@ -93,16 +90,39 @@ test.describe('vector import', () => {
     }
   });
 
-  test('the rules page offers a copy of the shipped set rather than editing it in place', async ({
+  test('the rules page never offers to delete the shipped set, and does offer it for a set of ones own', async ({
     page,
   }) => {
     await page.goto('/admin/term-rules');
 
-    const shipped = page.getByRole('row', { name: /Default detection rules/ });
+    const shipped = page.getByRole('row').filter({ hasText: 'Default detection rules' });
     await expect(shipped).toBeVisible({ timeout: 20_000 });
 
     // The shipped set is the last fallback when no other set applies, so nothing offers to
     // delete it — not even to an administrator.
     await expect(shipped.getByRole('button', { name: 'delete' })).toHaveCount(0);
+
+    // A set somebody made is offered for deletion on the same page, so the missing button above
+    // is about the shipped set rather than about the action column failing to draw.
+    const ownName = `e2e-own-${Date.now()}`;
+    await page.getByRole('button', { name: 'New set' }).click();
+    const editor = page.getByRole('dialog').filter({ hasText: 'New set' });
+    await expect(editor).toBeVisible({ timeout: 20_000 });
+    await editor.getByRole('textbox').first().fill(ownName);
+    // A new set opens with one blank rule to fill in; this one needs none.
+    await editor.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(editor.getByPlaceholder('Rule name')).toHaveCount(0);
+    await editor.getByTestId('term-rules-save').click();
+    await expect(editor).toBeHidden({ timeout: 20_000 });
+
+    const own = page.getByRole('row').filter({ hasText: ownName });
+    await expect(own).toBeVisible({ timeout: 20_000 });
+    await expect(own.getByRole('button', { name: 'delete' })).toBeVisible();
+    await expect(shipped.getByRole('button', { name: 'delete' })).toHaveCount(0);
+
+    // Cleanup: the dev database persists between runs.
+    await own.getByRole('button', { name: 'delete' }).click();
+    await confirmOk(page);
+    await expect(own).toHaveCount(0, { timeout: 20_000 });
   });
 });

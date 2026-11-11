@@ -708,7 +708,113 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
         after.Single(r => r.SubjectId == strangerId).GrantedViaExpeditionId.ShouldBeNull();
     }
 
+    /// <summary>
+    /// Re-applying is "the camp's sharing, again": the rules the organiser applied last. A trip
+    /// skipped by a later apply keeps what an earlier one wrote, so the rows of one rule can
+    /// disagree, and which of them is the camp's decision cannot be read off the row ids — a
+    /// restated row keeps its id, so the highest one is simply the trip that came last when the
+    /// rule was first written.
+    /// </summary>
+    [Fact]
+    public async Task A_re_apply_keeps_a_widened_sharing_that_skipped_a_trip()
+    {
+        var camp = await CreateCampAsync();
+        var (first, last, delegations) = await TwoLentTripsAsync(camp);
+
+        // Widened while the trip whose row came last is out of the organiser's hands: it keeps
+        // reading only, the other is restated in place.
+        await RemoveRuleAsync(delegations[last]);
+        await ApplyAsync(camp, "read, write");
+        (await CampRuleOnAsync(last, camp)).Actions.ShouldBe(AccessAction.Read);
+        (await CampRuleOnAsync(first, camp)).Actions.ShouldBe(AccessAction.Read | AccessAction.Write);
+
+        // A trip joining since is what the organiser re-applies for. It takes the widened rule,
+        // and the trip that already carries it keeps it.
+        var late = await CreateTripAsync(organiser, "Joined after the widening");
+        await JoinAsync(camp, late);
+        await ReapplyAsync(camp);
+        (await CampRuleOnAsync(late, camp)).Actions.ShouldBe(AccessAction.Read | AccessAction.Write);
+        (await CampRuleOnAsync(first, camp)).Actions.ShouldBe(
+            AccessAction.Read | AccessAction.Write, "a re-apply never narrows back what was applied last");
+        (await CampRuleOnAsync(last, camp)).Actions.ShouldBe(AccessAction.Read, "still out of the organiser's hands");
+    }
+
+    /// <summary>
+    /// The same question the other way round, and the reason the time a row last changed does
+    /// not answer it either: an apply that finds a trip already carrying what it asks changes
+    /// nothing there, while the trip it skipped holds a row an earlier apply changed later.
+    /// </summary>
+    [Fact]
+    public async Task A_re_apply_keeps_a_narrowed_sharing_that_changed_nothing_where_it_was_taken()
+    {
+        var camp = await CreateCampAsync();
+        var (first, last, delegations) = await TwoLentTripsAsync(camp);
+
+        // Widened on the trip whose row came last only; the other, skipped, keeps reading.
+        await RemoveRuleAsync(delegations[first]);
+        await ApplyAsync(camp, "read, write");
+        (await CampRuleOnAsync(first, camp)).Actions.ShouldBe(AccessAction.Read);
+        (await CampRuleOnAsync(last, camp)).Actions.ShouldBe(AccessAction.Read | AccessAction.Write);
+
+        // Narrowed while it is the other trip that is out of the organiser's hands. The trip in
+        // their hands already reads only, so nothing changes there; the skipped one keeps the
+        // wider row, which is the more recently changed of the two.
+        delegations[first] = await GrantOnTripAsync(first, organiserId, AccessAction.ManagePermissions);
+        await RemoveRuleAsync(delegations[last]);
+        await ApplyAsync(camp, "read");
+        (await CampRuleOnAsync(first, camp)).Actions.ShouldBe(AccessAction.Read);
+        (await CampRuleOnAsync(last, camp)).Actions.ShouldBe(AccessAction.Read | AccessAction.Write);
+
+        // Handed back and re-applied: the camp's sharing is what was applied last, so the
+        // re-apply narrows that trip too and widens nothing.
+        delegations[last] = await GrantOnTripAsync(last, organiserId, AccessAction.ManagePermissions);
+        await ReapplyAsync(camp);
+        (await CampRuleOnAsync(last, camp)).Actions.ShouldBe(AccessAction.Read);
+        (await CampRuleOnAsync(first, camp)).Actions.ShouldBe(
+            AccessAction.Read, "a re-apply never widens past what was applied last");
+    }
+
     // ---- helpers -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Two trips somebody else owns, both delegated to the organiser, gathered by the camp and
+    /// shared with the reader for reading. Which of the two carries the later row is decided by
+    /// the order the trips were listed in, so it is read back rather than assumed.
+    /// </summary>
+    private async Task<(Guid First, Guid Last, Dictionary<Guid, long> Delegations)> TwoLentTripsAsync(Guid campId)
+    {
+        var one = await CreateTripAsync(stranger, "Lent to the camp, one");
+        var two = await CreateTripAsync(stranger, "Lent to the camp, two");
+        await JoinAsync(campId, one);
+        await JoinAsync(campId, two);
+        var delegations = new Dictionary<Guid, long>
+        {
+            [one] = await GrantOnTripAsync(one, organiserId, AccessAction.ManagePermissions),
+            [two] = await GrantOnTripAsync(two, organiserId, AccessAction.ManagePermissions),
+        };
+
+        await ApplyAsync(campId, "read");
+        var oneIsLast = (await CampRuleOnAsync(one, campId)).Id > (await CampRuleOnAsync(two, campId)).Id;
+        return oneIsLast ? (two, one, delegations) : (one, two, delegations);
+    }
+
+    private async Task ApplyAsync(Guid campId, string actions)
+    {
+        var response = await organiser.PostAsJsonAsync($"/api/v1/expeditions/{campId}/sharing", new
+        {
+            entries = new[] { new { subjectKind = "user", subjectId = readerId, effect = "allow", actions } },
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    private async Task ReapplyAsync(Guid campId)
+    {
+        var response = await organiser.PostAsync($"/api/v1/expeditions/{campId}/sharing/re-apply", null);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    private async Task<AccessEntry> CampRuleOnAsync(Guid tripId, Guid campId) =>
+        (await RulesOnAsync(tripId)).Single(r => r.GrantedViaExpeditionId == campId);
 
     /// <summary>The rules a trip's own permissions page shows, as it shows them.</summary>
     private async Task<List<JsonElement>> ObjectRulesAsync(Guid tripId)

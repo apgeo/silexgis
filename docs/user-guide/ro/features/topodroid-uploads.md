@@ -172,6 +172,48 @@ topografice* ale peșterii.
 
 ---
 
+## Pagina de rezultate
+
+După ce o rulare s-a încheiat, **Vezi rezultatele** de pe pagina de stare — și de pe pagina linkului
+public — deschide o singură pagină cu tot ce a produs ridicarea, la aceeași adresă cu `/view` adăugat.
+Merge și pe lățimea unui telefon.
+
+- **Sus**, titlul ridicării și peștera, **Copiază linkul** și drumul către SilexGIS. *Copiază linkul*
+  copiază linkul public al încărcării când are unul — oricine îl are poate deschide rezultatele — și
+  altfel adresa acestei pagini, care se deschide doar pentru conturile care au voie să vadă
+  încărcarea. Pe pagina din aplicație butonul deschide peștera; pe pagina unui link public, un cititor
+  autentificat care are voie să vadă încărcarea primește **Deschide în SilexGIS**, iar oricui altcuiva
+  i se oferă autentificarea.
+- **Modelul 3D**, în două file: vizualizatorul integrat și același fișier în LochViewer (în probă).
+- **Hartă și date geospațiale**: când topografia a fost așezată în lume (are un punct fix sau un
+  sistem de coordonate), linia centrală de descărcat ca **KML**, **GeoJSON** sau **GPX** și o hartă cu
+  linia centrală — pe pagina din aplicație peste fundalul implicit al instalării (OpenTopoMap când nu
+  există unul), pe pagina unui link public peste OpenTopoMap. O topografie care nu a putut fi așezată
+  spune asta.
+- **Cifre de la compilator**: lungimea topografiată, lungimea după compensarea buclelor, lungimea în
+  plan și cea verticală, denivelarea, extinderea nord–sud și est–vest cu stația de la fiecare capăt și
+  altitudinea, nordul sau estul ei, stațiile, vizele, buclele și eroarea medie de închidere, sistemul de
+  coordonate și declinațiile magnetice folosite, un grafic al erorii fiecărei bucle și un tabel al
+  buclelor cu stațiile prin care trec. Când topografia nu are niciun punct fix, pagina spune că
+  altitudinile și coordonatele ei sunt relative.
+- **Analiza topografiei din această încărcare**: statisticile, rețeaua, orientarea și profilul de
+  adâncime, măsurate pe topografia din această încărcare — nu pe cea după care este desenată acum
+  peștera, care poate fi altă încărcare. O topografie care nu a putut fi așezată pe hartă, sau a cărei
+  citire nu s-a încheiat, nu are ce analiza, iar pagina spune asta.
+
+**Ce arată un link public.** Pagina unui link public arată tot ce e mai sus: harta, descărcările și
+cifrele cu numele stațiilor, altitudinile și coordonatele. Cine are linkul poate deja descărca modelul
+compilat și jurnalul compilatorului, care le conțin pe toate. Arată doar ce provine din fișierele
+acestei încărcări — niciodată poziția înregistrată a intrării peșterii sau altceva din fișa peșterii,
+care rămân protejate ca peste tot în SilexGIS. Retragerea linkului, sau protejarea peșterii când
+linkul a fost făcut fără confirmarea protecției, le închide pe toate deodată. În SilexGIS e la fel:
+oricine are voie să deschidă și să descarce fișierele trimise în această încărcare vede harta,
+descărcările și cifrele. Analizele nu sunt comparate niciodată cu lungimea și adâncimea înregistrate
+pentru peșteră: o încărcare poate acoperi doar o parte a peșterii sau poate fi o topografie parțială
+mai veche ori mai nouă.
+
+---
+
 ## Linkul public
 
 Când comutatorul din **Setări → Încărcări de topografii** e pornit și instalarea permite, o încărcare
@@ -187,13 +229,21 @@ Cine îl deschide vede:
 
 - titlul topografiei, **numele** peșterii și momentul trimiterii;
 - aceeași bară de progres și aceleași etape;
-- rezultatele care pot fi deschise sau descărcate.
+- rezultatele care pot fi deschise sau descărcate;
+- **jurnalul compilatorului**: ultimele lui rânduri pe pagină și tot jurnalul de descărcat — după o
+  compilare eșuată, unde spune ce nu a mers, ca și după una reușită.
+
+**Pagina se deschide în limba celui care a trimis topografia** — limba interfeței contului său —
+dacă vizitatorul nu și-a ales deja o limbă în acel browser. Comutatorul de limbă de pe pagină
+funcționează ca peste tot în rest.
 
 ### Ce nu arată niciodată linkul public
 
 - **Arhiva TopoDroid sau fișierele sursă Therion.**
-- **Jurnalul**, echipa, numele stațiilor.
-- **Unde se află peștera.** Pagina numește peștera și nu spune nimic despre poziția ei.
+- Echipa.
+- **Unde se află peștera.** Pagina numește peștera și nu dă nicio poziție a ei. Rezultatele
+  însele — modelul și desenele — și jurnalul compilatorului, care poate numi stații și poate repeta
+  punctul fix al topografiei, sunt pentru cine are linkul: pentru asta există linkul.
 
 ### Ce este linkul și ce nu este
 

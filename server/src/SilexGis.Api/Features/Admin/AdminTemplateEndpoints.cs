@@ -179,6 +179,13 @@ public static class AdminTemplateEndpoints
             return ApiProblems.NotFound("admin.template_unknown");
         }
 
+        // Checked here as the save does: the store files an unknown language under the one it
+        // falls back to, so an unchecked "de" would reset the English rewrite.
+        if (!MessageTemplateCatalog.Locales.Contains(locale, StringComparer.OrdinalIgnoreCase))
+        {
+            return ApiProblems.NotFound("admin.template_locale_unknown");
+        }
+
         return await store.ResetAsync(key, locale, ct)
             ? TypedResults.NoContent()
             : ApiProblems.NotFound("admin.template_not_customised");

@@ -94,4 +94,12 @@ public static class AuditActions
     /// whoever still remembers.
     /// </summary>
     public const string Exported = "exported";
+
+    /// <summary>
+    /// An administrator deleted one group of what the storage report offers — superseded scan
+    /// products, leftover work directories, older survey versions' outputs, expired transfers —
+    /// in one confirmed act. Its own name because the rows it removes are many and of several
+    /// kinds, and the question later is "who decided to give that room back, and how much was it".
+    /// </summary>
+    public const string StorageReclaimed = "storage_reclaimed";
 }

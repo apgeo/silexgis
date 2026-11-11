@@ -58,6 +58,29 @@ public sealed class AccessKeyTests(PostgresFixture postgres) : IDisposable, ICla
             (await CodeAsync(answer)).ShouldBe("auth.access_key_not_accepted", path);
         }
 
+        // The refusal follows the route and its method, not the path: the cave search the key
+        // opens refuses it a create on the same path, and the phone-sync and staging routes a
+        // signed-in phone uses refuse it although the web sign-in reaches them.
+        (await web.GetAsync("/api/v1/sync/capabilities")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var written = new (string Method, string Path, object? Body)[]
+        {
+            ("POST", "/api/v1/caves", new { name = "Made with a key" }),
+            ("GET", "/api/v1/sync/capabilities", null),
+            ("POST", "/api/v1/files/uploads", new { fileName = "plan.jpg", sizeBytes = 10, stageForSync = true }),
+        };
+        foreach (var (method, path, body) in written)
+        {
+            using var request = new HttpRequestMessage(new HttpMethod(method), path);
+            if (body is not null)
+            {
+                request.Content = JsonContent.Create(body);
+            }
+
+            var answer = await device.SendAsync(request);
+            answer.StatusCode.ShouldBe(HttpStatusCode.Forbidden, $"{method} {path}");
+            (await CodeAsync(answer)).ShouldBe("auth.access_key_not_accepted", $"{method} {path}");
+        }
+
         // The sign-in server's own user-information route validates the bearer value itself,
         // before any route runs, and a key is not one of its tokens.
         (await web.GetAsync("/connect/userinfo")).StatusCode.ShouldBe(HttpStatusCode.OK);

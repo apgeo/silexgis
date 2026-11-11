@@ -134,15 +134,75 @@ public class TopoDroidArchiveTests
 public class SurveyPipelineProgressTests
 {
     [Fact]
-    public void Each_stage_owns_its_band_of_the_run_in_order()
+    public void Every_stage_has_a_band_and_belongs_to_a_run()
     {
-        var stages = Enum.GetValues<SurveyUploadStage>();
+        var inSomeRun = Enum.GetValues<SurveyOrigin>().SelectMany(SurveyPipelineProgress.Order).ToHashSet();
+        foreach (var stage in Enum.GetValues<SurveyUploadStage>())
+        {
+            if (stage == SurveyUploadStage.AwaitingExternal)
+            {
+                // Not work but a pause between two stages, written only when a run stops: it owns
+                // no share of the bar and is in no run's list of stages, which show the stages on
+                // either side of it.
+                inSomeRun.ShouldNotContain(stage);
+                Should.Throw<ArgumentOutOfRangeException>(() => SurveyPipelineProgress.Band(stage));
+                continue;
+            }
+
+            var (start, end) = SurveyPipelineProgress.Band(stage);
+            start.ShouldBeInRange(0, 100, stage.ToString());
+            end.ShouldBeInRange(start + 1, 100, stage.ToString());
+            inSomeRun.ShouldContain(stage);
+        }
+    }
+
+    [Theory]
+    [InlineData(SurveyOrigin.TopoDroid, 100)]
+    [InlineData(SurveyOrigin.PointCloud, 95)]
+    public void Each_stage_of_a_run_owns_its_band_in_order(SurveyOrigin origin, int lastEnd)
+    {
+        // A run's bands follow one another without a gap or an overlap. The survey run's last
+        // stage reaches 100; the point-cloud run's does not, since succeeding is what writes 100
+        // and nothing is read after tiles are stored.
+        var stages = SurveyPipelineProgress.Order(origin);
         SurveyPipelineProgress.Band(stages[0]).Start.ShouldBe(0);
-        SurveyPipelineProgress.Band(stages[^1]).End.ShouldBe(100);
-        for (var i = 1; i < stages.Length; i++)
+        SurveyPipelineProgress.Band(stages[^1]).End.ShouldBe(lastEnd);
+        for (var i = 1; i < stages.Count; i++)
         {
             SurveyPipelineProgress.Band(stages[i]).Start.ShouldBe(SurveyPipelineProgress.Band(stages[i - 1]).End);
         }
+    }
+
+    [Fact]
+    public void A_recording_run_owns_its_bands_in_order_with_odometry_between_inspect_and_tiling()
+    {
+        var stages = SurveyPipelineProgress.Order(SurveyOrigin.Mandeye);
+        stages.ShouldBe(
+        [
+            SurveyUploadStage.Archive, SurveyUploadStage.Inspect, SurveyUploadStage.Odometry, SurveyUploadStage.Export,
+            SurveyUploadStage.Check, SurveyUploadStage.Downsample, SurveyUploadStage.Tile, SurveyUploadStage.Store,
+        ]);
+        SurveyPipelineProgress.Band(stages[0], SurveyOrigin.Mandeye).Start.ShouldBe(0);
+        SurveyPipelineProgress.Band(stages[^1], SurveyOrigin.Mandeye).End.ShouldBe(95);
+        for (var i = 1; i < stages.Count; i++)
+        {
+            SurveyPipelineProgress.Band(stages[i], SurveyOrigin.Mandeye).Start
+                .ShouldBe(SurveyPipelineProgress.Band(stages[i - 1], SurveyOrigin.Mandeye).End);
+        }
+
+        // The other runs keep the bands they always had.
+        SurveyPipelineProgress.Band(SurveyUploadStage.Tile, SurveyOrigin.PointCloud).ShouldBe(SurveyPipelineProgress.Band(SurveyUploadStage.Tile));
+        SurveyPipelineProgress.Overall(SurveyUploadStage.Odometry, 50, SurveyOrigin.Mandeye).ShouldBe(30);
+    }
+
+    [Fact]
+    public void A_point_cloud_run_inspects_and_tiles_where_a_survey_run_unpacks_and_compiles()
+    {
+        SurveyPipelineProgress.Order(SurveyOrigin.PointCloud).ShouldBe(
+            [SurveyUploadStage.Archive, SurveyUploadStage.Inspect, SurveyUploadStage.Downsample, SurveyUploadStage.Tile, SurveyUploadStage.Store]);
+        SurveyPipelineProgress.Order(SurveyOrigin.TopoDroid).ShouldBe(
+            [SurveyUploadStage.Archive, SurveyUploadStage.Unpack, SurveyUploadStage.Scaffold, SurveyUploadStage.Compile, SurveyUploadStage.Store, SurveyUploadStage.Read]);
+        SurveyPipelineProgress.Order(SurveyOrigin.Therion).ShouldBe(SurveyPipelineProgress.Order(SurveyOrigin.TopoDroid));
     }
 
     [Fact]

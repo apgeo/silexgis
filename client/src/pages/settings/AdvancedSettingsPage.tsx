@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Card, Flex, InputNumber, Typography } from 'antd';
+import { Card, Flex, InputNumber, Radio, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useMapConfig } from '../../api/hooks.ts';
@@ -12,7 +12,21 @@ import {
   MESHES_IN_VIEW_MIN_BYTES,
   MESHES_IN_VIEW_ZOOM_RANGE,
 } from '../../scene3d/surveyMeshesInView3d.ts';
+import { SCANS_IN_VIEW_MIN_BYTES, SCANS_IN_VIEW_ZOOM_RANGE } from '../../scene3d/scansInView3d.ts';
+import { coarsePointer } from '../../map/pointer.ts';
+import {
+  defaultPointDetailLevel,
+  POINT_DETAIL_LEVELS,
+  type PointDetailLevel,
+} from '../../scene3d/pointCloudDetail.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+
+/** The word for each level, as a literal key so the key-parity checks can see every one. */
+const POINT_DETAIL_LABEL_KEYS: Record<PointDetailLevel, string> = {
+  low: 'settings.advanced.pointDetailLow',
+  normal: 'settings.advanced.pointDetailNormal',
+  high: 'settings.advanced.pointDetailHigh',
+};
 
 const MEGABYTE = 1024 * 1024;
 
@@ -55,6 +69,16 @@ export default function AdvancedSettingsPage() {
   const detailZoom = useUiPrefsStore((s) => s.centerlineDetailZoom);
   const maxPaths = useUiPrefsStore((s) => s.centerlineMaxPaths);
   const setCenterlineLimits = useUiPrefsStore((s) => s.setCenterlineLimits);
+  const pointDetail = useUiPrefsStore((s) => s.pointDetail);
+  const setPointDetail = useUiPrefsStore((s) => s.setPointDetail);
+  const scansMinZoom = useUiPrefsStore((s) => s.scansInViewMinZoom);
+  const scansMaxCaves = useUiPrefsStore((s) => s.scansInViewMaxCaves);
+  const scansMaxBytes = useUiPrefsStore((s) => s.scansInViewMaxBytes);
+  const setScansLimits = useUiPrefsStore((s) => s.setScansInViewLimits);
+  const scansMegabytesCeiling = mapConfig
+    ? Math.max(1, Math.floor(mapConfig.scansInViewMaxBytesLimit / MEGABYTE))
+    : undefined;
+  const scansUntouched = scansMinZoom === undefined && scansMaxCaves === undefined && scansMaxBytes === undefined;
 
   // Rounded down: a megabyte figure that rounded up would offer a number the ceiling refuses.
   const megabytesCeiling = mapConfig
@@ -239,6 +263,124 @@ export default function AdvancedSettingsPage() {
 
           <Flex>
             <Button disabled={centerlinesUntouched} onClick={() => setCenterlineLimits({})}>
+              {t('settings.advanced.useDefaults')}
+            </Button>
+          </Flex>
+        </Flex>
+      </Card>
+
+      <Card
+        size="small"
+        role="group"
+        aria-label={t('settings.advanced.scansHeading')}
+        title={t('settings.advanced.scansHeading')}
+        data-testid="advanced-scans-card"
+      >
+        <Flex vertical gap={16}>
+          <Typography.Text type="secondary">{t('settings.advanced.scansIntro')}</Typography.Text>
+          <Flex gap={12} align="center" wrap>
+            <Typography.Text style={{ minWidth: 160 }}>{t('settings.advanced.wallsMinZoom')}</Typography.Text>
+            <InputNumber
+              min={SCANS_IN_VIEW_ZOOM_RANGE.min}
+              max={SCANS_IN_VIEW_ZOOM_RANGE.max}
+              precision={0}
+              aria-label={t('settings.advanced.scansMinZoom')}
+              value={scansMinZoom ?? null}
+              placeholder={String(mapConfig?.scansInViewMinZoom ?? '')}
+              onChange={(value) =>
+                setScansLimits({ minZoom: value ?? undefined, maxCaves: scansMaxCaves, maxBytes: scansMaxBytes })
+              }
+            />
+          </Flex>
+          <Flex gap={12} align="center" wrap>
+            <Typography.Text style={{ minWidth: 160 }}>{t('settings.advanced.wallsMaxCaves')}</Typography.Text>
+            <InputNumber
+              min={1}
+              max={mapConfig?.scansInViewMaxCavesLimit}
+              precision={0}
+              aria-label={t('settings.advanced.scansMaxCaves')}
+              value={scansMaxCaves ?? null}
+              placeholder={String(mapConfig?.scansInViewMaxCaves ?? '')}
+              onChange={(value) =>
+                setScansLimits({ minZoom: scansMinZoom, maxCaves: value ?? undefined, maxBytes: scansMaxBytes })
+              }
+            />
+          </Flex>
+          <Flex gap={12} align="center" wrap>
+            <Typography.Text style={{ minWidth: 160 }}>{t('settings.advanced.wallsMaxMegabytes')}</Typography.Text>
+            <InputNumber
+              min={SCANS_IN_VIEW_MIN_BYTES / MEGABYTE}
+              max={scansMegabytesCeiling}
+              precision={0}
+              aria-label={t('settings.advanced.scansMaxMegabytes')}
+              value={scansMaxBytes === undefined ? null : megabytes(scansMaxBytes)}
+              placeholder={mapConfig ? String(megabytes(mapConfig.scansInViewMaxBytes)) : ''}
+              onChange={(value) =>
+                setScansLimits({
+                  minZoom: scansMinZoom,
+                  maxCaves: scansMaxCaves,
+                  maxBytes: value === null ? undefined : value * MEGABYTE,
+                })
+              }
+            />
+          </Flex>
+          <Typography.Text type="secondary">
+            {t('settings.advanced.emptyHint')}
+            {mapConfig && scansMegabytesCeiling !== undefined && (
+              <>
+                {' '}
+                {t('settings.advanced.wallsCeilings', {
+                  caves: mapConfig.scansInViewMaxCavesLimit,
+                  megabytes: scansMegabytesCeiling,
+                })}
+              </>
+            )}
+          </Typography.Text>
+          <Flex>
+            <Button disabled={scansUntouched} onClick={() => setScansLimits({})}>
+              {t('settings.advanced.useDefaults')}
+            </Button>
+          </Flex>
+        </Flex>
+      </Card>
+
+      <Card
+        size="small"
+        role="group"
+        aria-label={t('settings.advanced.pointDetailHeading')}
+        title={t('settings.advanced.pointDetailHeading')}
+      >
+        <Flex vertical gap={16}>
+          <Typography.Text type="secondary">{t('settings.advanced.pointDetailIntro')}</Typography.Text>
+
+          <Flex gap={12} align="center" wrap>
+            <Typography.Text style={{ minWidth: 160 }}>
+              {t('settings.advanced.pointDetailLevel')}
+            </Typography.Text>
+            {/* Three words rather than two numbers: each level is a pair of the engine's dials, and
+                the pairs are chosen once, in code, so nobody has to know what a screen-space error
+                is. No level selected means the device's own default, said in the hint below. */}
+            <Radio.Group
+              optionType="button"
+              aria-label={t('settings.advanced.pointDetailLevel')}
+              value={pointDetail ?? null}
+              onChange={(event) => setPointDetail(event.target.value as PointDetailLevel)}
+              options={POINT_DETAIL_LEVELS.map((level) => ({
+                value: level,
+                label: t(POINT_DETAIL_LABEL_KEYS[level]),
+              }))}
+              data-testid="advanced-point-detail"
+            />
+          </Flex>
+
+          <Typography.Text type="secondary" data-testid="advanced-point-detail-hint">
+            {t('settings.advanced.pointDetailDefault', {
+              level: t(POINT_DETAIL_LABEL_KEYS[defaultPointDetailLevel(coarsePointer())]),
+            })}
+          </Typography.Text>
+
+          <Flex>
+            <Button disabled={pointDetail === undefined} onClick={() => setPointDetail(undefined)}>
               {t('settings.advanced.useDefaults')}
             </Button>
           </Flex>

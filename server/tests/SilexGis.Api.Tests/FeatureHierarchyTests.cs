@@ -529,6 +529,101 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable, IClassF
             .Where(p => p.FeatureId == child).ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// A parents replace answers for the parents its caller was shown. An edge to a parent they
+    /// cannot read was never in what they edited and survives the replace; a feature whose primary
+    /// parent is hidden from them cannot have its parents replaced by them at all, since its one
+    /// primary edge is not theirs to demote.
+    /// </summary>
+    [Fact]
+    public async Task A_parents_replace_keeps_the_edges_to_parents_the_caller_cannot_read()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var shown = await CreateAreaAsync(owner, $"Shown parent {marker}");
+        var hidden = await CreateAreaAsync(owner, $"Hidden parent {marker}");
+        var added = await CreateAreaAsync(owner, $"Added parent {marker}");
+        await DenyReadAsync(outsiderId, hidden);
+
+        var child = await CreateFeatureAsync(owner, new
+        {
+            kind = "generic",
+            name = $"Two parents {marker}",
+            featureTypeId = sinkholeTypeId,
+            geometry = Point(25.53, 45.63),
+            visibility = "authenticated",
+            parents = new[]
+            {
+                new { parentId = shown, isPrimary = true },
+                new { parentId = hidden, isPrimary = false },
+            },
+        });
+
+        // The outsider is shown one parent, not the hidden one; the owner sees both.
+        (await outsider.GetFromJsonAsync<JsonArray>($"/api/v1/features/{child}/parents"))!
+            .Select(p => p!["id"]!.GetValue<Guid>()).ShouldBe([shown]);
+        (await owner.GetFromJsonAsync<JsonArray>($"/api/v1/features/{child}/parents"))!
+            .Select(p => p!["id"]!.GetValue<Guid>()).ShouldBe([shown, hidden], ignoreOrder: true);
+
+        // They add a parent to what they were shown and save it back.
+        var replaced = await outsider.PutAsJsonAsync($"/api/v1/features/{child}/parents", new
+        {
+            parents = new[]
+            {
+                new { parentId = shown, isPrimary = true },
+                new { parentId = added, isPrimary = false },
+            },
+        });
+        replaced.StatusCode.ShouldBe(HttpStatusCode.OK, await replaced.Content.ReadAsStringAsync());
+        (await replaced.Content.ReadFromJsonAsync<JsonArray>())!
+            .Select(p => p!["id"]!.GetValue<Guid>()).ShouldBe([shown, added], ignoreOrder: true);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var edges = await db.FeatureHierarchyEdges.AsNoTracking()
+                .Where(e => e.ChildId == child).Select(e => new { e.ParentId, e.IsPrimary }).ToListAsync();
+            edges.Select(e => e.ParentId).ShouldBe([shown, hidden, added], ignoreOrder: true);
+            edges.Single(e => e.IsPrimary).ParentId.ShouldBe(shown);
+            (await db.Features.Where(f => f.Id == child).Select(f => f.AncestorIds).SingleAsync())
+                .ShouldContain(hidden);
+            (await scope.ServiceProvider.GetRequiredService<FeatureIntegrityVerifier>().VerifyAsync())
+                .Where(p => p.FeatureId == child).ShouldBeEmpty();
+        }
+
+        // Under a hidden PRIMARY parent the outsider's replace is refused and changes nothing; the
+        // owner, who can read it, replaces the same parents.
+        var underHidden = await CreateFeatureAsync(owner, new
+        {
+            kind = "generic",
+            name = $"Hidden primary {marker}",
+            featureTypeId = sinkholeTypeId,
+            geometry = Point(25.54, 45.64),
+            visibility = "authenticated",
+            parents = new[]
+            {
+                new { parentId = hidden, isPrimary = true },
+                new { parentId = shown, isPrimary = false },
+            },
+        });
+        var refused = await outsider.PutAsJsonAsync($"/api/v1/features/{underHidden}/parents", new
+        {
+            parents = new[] { new { parentId = shown, isPrimary = true } },
+        });
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict, await refused.Content.ReadAsStringAsync());
+        (await refused.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+            .ShouldBe("feature.parent_primary_hidden");
+        (await owner.GetFromJsonAsync<JsonArray>($"/api/v1/features/{underHidden}/parents"))!
+            .Select(p => p!["id"]!.GetValue<Guid>()).ShouldBe([hidden, shown]);
+
+        var ownersReplace = await owner.PutAsJsonAsync($"/api/v1/features/{underHidden}/parents", new
+        {
+            parents = new[] { new { parentId = shown, isPrimary = true } },
+        });
+        ownersReplace.StatusCode.ShouldBe(HttpStatusCode.OK, await ownersReplace.Content.ReadAsStringAsync());
+        (await ownersReplace.Content.ReadFromJsonAsync<JsonArray>())!
+            .Select(p => p!["id"]!.GetValue<Guid>()).ShouldBe([shown]);
+    }
+
     private static object Point(double lon, double lat) =>
         new { type = "Point", coordinates = new[] { lon, lat } };
 

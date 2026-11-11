@@ -248,6 +248,13 @@ internal sealed class SyncTripRecordingsSection(IAccessService access)
 
         if (item.BaseRevision is null)
         {
+            // A removal with no revision is not a resent create: answered "unchanged" the phone
+            // would drop a row that stays here. It is told the revision to remove against instead.
+            if (item.Deleted)
+            {
+                return Answer(SyncTripAnswers.Conflict(item.Id, existing.UpdatedAt));
+            }
+
             // Sent as new and already here: the phone did not hear the first answer.
             return Answer(SyncTripAnswers.Ok(item.Id, SyncRowStatus.Unchanged, existing.UpdatedAt));
         }
@@ -284,13 +291,13 @@ internal sealed class SyncTripRecordingsSection(IAccessService access)
                 Title = item.Title ?? string.Empty,
                 Description = item.Description,
                 Log = item.Log,
-                StartedAt = item.StartedAt!.Value,
-                EndedAt = item.EndedAt,
+                StartedAt = SyncTimes.Utc(item.StartedAt!.Value),
+                EndedAt = SyncTimes.Utc(item.EndedAt),
                 CreatedByDeviceUserId = item.CreatedByDeviceUserId,
                 OwnerUserId = run.Access.UserId,
                 CavingGroupId = group,
                 Visibility = group is null ? Visibility.Private : Visibility.CavingGroup,
-                ClientUpdatedAt = item.ClientUpdatedAt,
+                ClientUpdatedAt = SyncTimes.Utc(item.ClientUpdatedAt),
             });
             await SyncPhoneUsers.NamedAsync(run, item.CreatedByDeviceUserId, ct);
             return new SyncApplied(SyncTripAnswers.Ok(item.Id, SyncRowStatus.Created), Line(item.Id, ImportDecisionAction.Create));
@@ -298,12 +305,19 @@ internal sealed class SyncTripRecordingsSection(IAccessService access)
 
         // Read again by id and written only while still at the revision it was arbitrated
         // against, so a proposal applied later cannot overwrite a change made in between.
-        var existing = await run.Db.TripRecordings.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.Id == item.Id, ct);
-        if (existing is null
-            || existing.DeletedAt is not null
-            || !SyncRevisions.Same(existing.UpdatedAt, proposal.BaseRevision!.Value))
+        // Locked before it is compared, and compared on what the locking statement read: another
+        // upload that has written this row and not yet committed is waited for here, and its
+        // committed revision is what this one is arbitrated against.
+        var standing = await SyncRevisionSql.HoldAsync(run.Db, SyncRevisionTable.TripRecordings, item.Id, proposal.BaseRevision!.Value, ct);
+        if (!standing.Holds)
         {
-            return new SyncApplied(SyncTripAnswers.Conflict(item.Id, existing?.UpdatedAt), null);
+            return new SyncApplied(SyncTripAnswers.Conflict(item.Id, standing.Revision), null);
+        }
+
+        var existing = await run.Db.TripRecordings.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.Id == item.Id, ct);
+        if (existing is null)
+        {
+            return new SyncApplied(SyncTripAnswers.Conflict(item.Id, null), null);
         }
 
         if (proposal.Act == SyncTripAct.Delete)
@@ -316,9 +330,9 @@ internal sealed class SyncTripRecordingsSection(IAccessService access)
         existing.Title = item.Title ?? string.Empty;
         existing.Description = item.Description;
         existing.Log = item.Log;
-        existing.StartedAt = item.StartedAt!.Value;
-        existing.EndedAt = item.EndedAt;
-        existing.ClientUpdatedAt = item.ClientUpdatedAt;
+        existing.StartedAt = SyncTimes.Utc(item.StartedAt!.Value);
+        existing.EndedAt = SyncTimes.Utc(item.EndedAt);
+        existing.ClientUpdatedAt = SyncTimes.Utc(item.ClientUpdatedAt);
         return new SyncApplied(SyncTripAnswers.Ok(item.Id, SyncRowStatus.Updated), Line(item.Id, ImportDecisionAction.Attach));
     }
 
@@ -526,6 +540,13 @@ internal sealed class SyncTripPointsSection(IAccessService access)
 
         if (item.BaseRevision is null)
         {
+            // A removal with no revision is not a resent create: answered "unchanged" the phone
+            // would drop a row that stays here. It is told the revision to remove against instead.
+            if (item.Deleted)
+            {
+                return Answer(SyncTripAnswers.Conflict(item.Id, existing.UpdatedAt));
+            }
+
             return Answer(SyncTripAnswers.Ok(item.Id, SyncRowStatus.Unchanged, existing.UpdatedAt));
         }
 
@@ -558,7 +579,7 @@ internal sealed class SyncTripPointsSection(IAccessService access)
                 Id = item.Id,
                 RecordingId = item.RecordingId,
                 PlaceFeatureId = item.PlaceId,
-                ScannedAt = item.ScannedAt!.Value,
+                ScannedAt = SyncTimes.Utc(item.ScannedAt!.Value),
                 Notes = item.Notes,
                 CreatedByDeviceUserId = item.CreatedByDeviceUserId,
             });
@@ -566,12 +587,19 @@ internal sealed class SyncTripPointsSection(IAccessService access)
             return new SyncApplied(SyncTripAnswers.Ok(item.Id, SyncRowStatus.Created), Line(item.Id, ImportDecisionAction.Create));
         }
 
-        var existing = await run.Db.TripRecordingPoints.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == item.Id, ct);
-        if (existing is null
-            || existing.DeletedAt is not null
-            || !SyncRevisions.Same(existing.UpdatedAt, proposal.BaseRevision!.Value))
+        // Locked before it is compared, and compared on what the locking statement read: another
+        // upload that has written this row and not yet committed is waited for here, and its
+        // committed revision is what this one is arbitrated against.
+        var standing = await SyncRevisionSql.HoldAsync(run.Db, SyncRevisionTable.TripRecordingPoints, item.Id, proposal.BaseRevision!.Value, ct);
+        if (!standing.Holds)
         {
-            return new SyncApplied(SyncTripAnswers.Conflict(item.Id, existing?.UpdatedAt), null);
+            return new SyncApplied(SyncTripAnswers.Conflict(item.Id, standing.Revision), null);
+        }
+
+        var existing = await run.Db.TripRecordingPoints.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == item.Id, ct);
+        if (existing is null)
+        {
+            return new SyncApplied(SyncTripAnswers.Conflict(item.Id, null), null);
         }
 
         if (proposal.Act == SyncTripAct.Delete)
@@ -581,7 +609,7 @@ internal sealed class SyncTripPointsSection(IAccessService access)
         }
 
         existing.PlaceFeatureId = item.PlaceId;
-        existing.ScannedAt = item.ScannedAt!.Value;
+        existing.ScannedAt = SyncTimes.Utc(item.ScannedAt!.Value);
         existing.Notes = item.Notes;
         return new SyncApplied(SyncTripAnswers.Ok(item.Id, SyncRowStatus.Updated), Line(item.Id, ImportDecisionAction.Attach));
     }

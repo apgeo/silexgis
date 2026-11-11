@@ -34,6 +34,14 @@ public sealed class CavingGroupAnnouncementHandler(
 {
     public string Kind => ProcessingJobKinds.CavingGroupAnnouncement;
 
+    /// <summary>
+    /// Safe to run twice for the reason the single save gives: an attempt that failed wrote
+    /// nothing, and one that got as far as saving stamped the announcement expanded, which the
+    /// next attempt reads and stops at. Not retrying lost a large club's announcement for good to
+    /// a dropped connection.
+    /// </summary>
+    public bool RetriesPassingFailures => true;
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var payload = JsonSerializer.Deserialize<CavingGroupAnnouncementPayload>(
@@ -59,6 +67,34 @@ public sealed class CavingGroupAnnouncementHandler(
             return;
         }
 
+        try
+        {
+            await ExpandAsync(announcement, ct);
+        }
+        catch (Exception e) when (!ct.IsCancellationRequested && !JobRetry.WillBeRetried(job, e, ct))
+        {
+            // The last word on it: nothing will hand it out now, so it stops being headroom the
+            // day has promised. Written straight to the row — the notifications this attempt
+            // added are still on the context and must not be saved with it.
+            await GiveUpAsync(announcement.Id, CancellationToken.None);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// The queue gave the job up after its runner was lost on every attempt it was allowed: the
+    /// notice will not be handed out, and stops counting against the day's paid ceiling.
+    /// </summary>
+    public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
+    {
+        if (AbandonedJob.PayloadOf<CavingGroupAnnouncementPayload>(job) is { } payload)
+        {
+            await MarkGivenUpAsync(payload.AnnouncementId, ct);
+        }
+    }
+
+    private async Task ExpandAsync(CavingGroupAnnouncement announcement, CancellationToken ct)
+    {
         var recipients = await db.AnnouncementRecipientsAsync(
             announcement.CavingGroupId, announcement.SenderUserId, ct);
 
@@ -90,5 +126,28 @@ public sealed class CavingGroupAnnouncementHandler(
 
         announcement.ExpandedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+    }
+
+    private async Task GiveUpAsync(Guid announcementId, CancellationToken ct)
+    {
+        try
+        {
+            await MarkGivenUpAsync(announcementId, ct);
+        }
+        catch (Exception e)
+        {
+            // The database that ended the attempt may be refusing this too. The job still fails,
+            // and the notice goes on counting until the day is over — the outcome before this
+            // existed, never a worse one.
+            logger.LogError(e, "Announcement {AnnouncementId} could not be marked given up", announcementId);
+        }
+    }
+
+    private Task MarkGivenUpAsync(Guid announcementId, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return db.CavingGroupAnnouncements
+            .Where(a => a.Id == announcementId && a.ExpandedAt == null && a.FailedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.FailedAt, now), ct);
     }
 }

@@ -83,6 +83,18 @@ internal sealed class SyncPeopleSection(SyncSettings settings) : SyncUploadSecti
                 new SyncPersonProposal(person, Known: false, Changes: true, Relink: person.CaverId is not null));
         }
 
+        // A phone user's identifier is no secret — the trips and documents streams name the phone
+        // user behind what other members recorded — so knowing one says nothing about owning it.
+        // Only an account whose phone has sent this user may rename or relink it; anybody else
+        // would be able to take over the credit for another member's photos and the trips their
+        // recordings become. Another account's phone user is answered as it stands and left as it
+        // is, its sender included, so a later upload cannot claim it by having named it once.
+        if (!await SyncPeopleDirectory.SentBy(run.Db, run.Access.UserId)
+                .AnyAsync(p => p.DeviceUserId == person.DeviceUserId, ct))
+        {
+            return SyncResolution<SyncPersonProposal>.Answer(Ok(person.DeviceUserId, SyncRowStatus.Unchanged));
+        }
+
         var relink = person.CaverId is { } wanted
             && existing.CaverId != wanted
             && DevicePersonLinks.MayReplace(existing.CaverId, existing.LinkSource, DevicePersonLinkSource.Device);

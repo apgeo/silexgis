@@ -40,6 +40,24 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
 
     public string Kind => ProcessingJobKinds.AccountDataExport;
 
+    /// <summary>An export given up by the queue stops reading "running".</summary>
+    public async Task AbandonedAsync(ProcessingJob job, CancellationToken ct)
+    {
+        if (AbandonedJob.PayloadOf<AccountDataExportPayload>(job) is not { } payload)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        await db.AccountDataExports
+            .Where(e => e.Id == payload.ExportId
+                && (e.Status == AccountExportStatus.Running || e.Status == AccountExportStatus.Queued))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(e => e.Status, AccountExportStatus.Failed)
+                .SetProperty(e => e.Error, AbandonedJob.Reason)
+                .SetProperty(e => e.CompletedAt, now), ct);
+    }
+
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
     {
         var payload = JsonSerializer.Deserialize<AccountDataExportPayload>(job.Payload, JsonSerializerOptions.Web)

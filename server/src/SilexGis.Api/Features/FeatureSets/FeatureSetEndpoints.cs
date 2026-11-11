@@ -26,6 +26,9 @@ public static class FeatureSetEndpoints
     public const string NameTakenCode = "feature_set.name_taken";
     public const string InUseCode = "feature_set.in_use";
 
+    /// <summary>The unique indexes a set's name and its slug are held to.</summary>
+    private static readonly string[] NameIndexes = ["ix_feature_sets_name", "ix_feature_sets_slug"];
+
     public static RouteGroupBuilder MapFeatureSetEndpoints(this RouteGroupBuilder api)
     {
         var sets = api.MapGroup("/feature-sets").WithTags("FeatureSets");
@@ -136,21 +139,22 @@ public static class FeatureSetEndpoints
             return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
-        var slug = Tag.Slugify(request.Name);
-        if (slug.Length == 0)
+        var (slug, refusal) = await CheckNameAsync(db, request.Name, null, ct);
+        if (refusal is not null)
         {
-            return ApiProblems.BadRequest("feature_set.name_invalid",
-                "The name must contain letters or digits.");
-        }
-
-        if (await db.FeatureSets.AnyAsync(s => s.Slug == slug || s.Name == request.Name.Trim(), ct))
-        {
-            return ApiProblems.BadRequest(NameTakenCode, "A feature set with this name already exists.");
+            return refusal;
         }
 
         var set = new FeatureSet { Name = request.Name.Trim(), Slug = slug, Description = request.Description };
         db.FeatureSets.Add(set);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (IsNameRace(e))
+        {
+            return NameTaken();
+        }
 
         return TypedResults.Created($"/api/v1/feature-sets/{set.Id}",
             new FeatureSetDto(set.Id, set.Name, set.Slug, set.Description, 0));
@@ -180,9 +184,26 @@ public static class FeatureSetEndpoints
             return ApiProblems.Forbidden();
         }
 
+        var (slug, refusal) = await CheckNameAsync(db, request.Name, id, ct);
+        if (refusal is not null)
+        {
+            return refusal;
+        }
+
+        // The slug moves with the name. Left behind, it would keep the old name's place: a new
+        // set given the name this one gave up would be refused as taken by a set no longer
+        // called that. Nothing addresses a set by its slug — rules and members hold its id.
         set.Name = request.Name.Trim();
+        set.Slug = slug;
         set.Description = request.Description;
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (IsNameRace(e))
+        {
+            return NameTaken();
+        }
 
         return TypedResults.Ok(await Project(db.FeatureSets.AsNoTracking().Where(s => s.Id == id), db).FirstAsync(ct));
     }
@@ -264,7 +285,10 @@ public static class FeatureSetEndpoints
                     ["Members"] = new()
                     {
                         ["old"] = currentIds.OrderBy(x => x).ToList(),
-                        ["new"] = requested.OrderBy(x => x).ToList(),
+                        // What the set holds afterwards, not what was asked: the members the
+                        // caller could not see were kept, and a trail that left them out would
+                        // read as their removal.
+                        ["new"] = currentIds.Except(removed).Concat(added).OrderBy(x => x).ToList(),
                     },
                 }),
         });
@@ -306,6 +330,37 @@ public static class FeatureSetEndpoints
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }
+
+    /// <summary>
+    /// The name rule a create and a rename share: the name must yield a slug, and neither the
+    /// name nor its slug may be another set's. <paramref name="self"/> is the set being renamed,
+    /// whose own name and slug are no collision with itself.
+    /// </summary>
+    private static async Task<(string Slug, ProblemHttpResult? Refusal)> CheckNameAsync(
+        SilexGisDbContext db, string requested, Guid? self, CancellationToken ct)
+    {
+        var slug = Tag.Slugify(requested);
+        if (slug.Length == 0)
+        {
+            return (slug, ApiProblems.BadRequest("feature_set.name_invalid",
+                "The name must contain letters or digits."));
+        }
+
+        var name = requested.Trim();
+        var taken = await db.FeatureSets.AnyAsync(
+            s => (self == null || s.Id != self) && (s.Slug == slug || s.Name == name), ct);
+        return (slug, taken ? NameTaken() : null);
+    }
+
+    private static ProblemHttpResult NameTaken() =>
+        ApiProblems.BadRequest(NameTakenCode, "A feature set with this name already exists.");
+
+    /// <summary>
+    /// Whether a save lost to another writer taking the same name or slug between the check and
+    /// the insert. Matched on the two indexes by name, so an unrelated unique violation still
+    /// surfaces as the defect it is.
+    /// </summary>
+    private static bool IsNameRace(DbUpdateException e) => UniqueViolations.IsOn(e, NameIndexes);
 
     private static bool Holds(AccessContext ctx, AccessAction action, Guid? featureSetId = null) =>
         AccessEvaluator.Decide(

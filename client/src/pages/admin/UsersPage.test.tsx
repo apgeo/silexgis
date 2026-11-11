@@ -339,7 +339,7 @@ describe('UsersPage', () => {
       blocking: [{ kind: 'trips', count: 3 }, { kind: 'albums', count: 1 }],
     });
     expect(userAdminProblem(refusal, i18n.getFixedT('en'))).toContain('trips (3), photo albums (1)');
-    expect(userAdminProblem(refusal, i18n.getFixedT('ro'))).toContain('ieșiri (3), albume foto (1)');
+    expect(userAdminProblem(refusal, i18n.getFixedT('ro'))).toContain('ture (3), albume foto (1)');
     // Without the list the refusal is still a refusal, not a blank.
     const bare = new ApiError(409, 'user.delete_blocked');
     expect(userAdminProblem(bare, i18n.getFixedT('en'))).toBe(i18n.getFixedT('en')('common.saveFailed'));
@@ -351,7 +351,7 @@ describe('UsersPage', () => {
       'permission_group.last_full_admin', 'user.cannot_lock_self', 'user.cannot_delete_self',
       'user.email_taken', 'user.already_enterable', 'user.not_found', 'validation.failed',
       'access.create_forbidden', 'user.cannot_reset_own_two_factor', 'user.two_factor_not_enabled',
-      'access_entry.exceeds_own_rights',
+      'access_entry.exceeds_own_rights', 'user.cannot_change_own_review_mark',
     ];
     const generic = t('common.saveFailed');
     for (const code of codes) {

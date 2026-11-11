@@ -108,7 +108,8 @@ public static class TrackingRosterTimesEndpoints
             : await TripTrackingEndpoints.WriteGuardAsync(access, ctx, trip, ct);
         if (refusal is not null) return refusal;
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.TripLogs, tripLogId, ct, required: true) is { } stale)
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.TripLogs, tripLogId, ct, required: true);
+        if (hold.Refusal is { } stale)
         {
             return stale;
         }
@@ -191,15 +192,17 @@ public static class TrackingRosterTimesEndpoints
                     }),
             });
 
-            // One transaction for the times and the stamp: times written under a version that
-            // did not move are exactly the state the stamp exists to prevent.
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            // The times and the stamp share the transaction the trip's hold opened: times written
+            // under a version that did not move are exactly the state the stamp exists to prevent.
             await db.SaveChangesAsync(ct);
             await db.TripLogs
                 .Where(x => x.Id == tripLogId)
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.UpdatedAt, DateTimeOffset.UtcNow), ct);
-            await transaction.CommitAsync(ct);
         }
+
+        // The trip's version after the times were taken, filed against the trip's own path, which
+        // is where the next write on the trip will look for it.
+        await hold.AnswerAsync(ct, $"/api/v1/trip-logs/{tripLogId}");
 
         var after = await PlanAsync(db, trip!, zone, tracked: false, ct);
         return TypedResults.Ok(new TrackingRosterTimesTakenDto(

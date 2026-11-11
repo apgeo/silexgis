@@ -128,6 +128,21 @@ existența.
 
 ---
 
+## Exporturile în formate de hartă
+
+Fiecare export de peșteri, de fenomene de suprafață, al fișierelor de geodate din listă sau al unui
+singur fișier de geodate — GeoJSON, GPX, KML, CSV sau shapefile arhivat — este înregistrat în
+istoricul de modificări înainte ca fișierul să fie predat: cine a exportat, ce strat, în ce format,
+câte rânduri și dacă un filtru l-a restrâns. **Rândurile ale căror poziții au fost mutate sau
+reținute pentru protecție sunt numite prin identificatorii lor**; celelalte sunt doar numărate, ca
+un fișier mare să nu-și pună întreaga listă în înregistrare. Nicio poziție nu este înregistrată
+vreodată. Un export refuzat nu înregistrează nimic.
+
+Exporturile de peșteri și de obiecte au întâi o coloană **id**, ca un rând dintr-un fișier să
+poată fi urmărit înapoi până la înregistrarea din care provine.
+
+---
+
 ## Ce se înregistrează despre acțiunile făcute în numele altora
 
 Acolo unde cineva acționează pentru altcineva — un administrator care repune manual o notificare

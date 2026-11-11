@@ -2,7 +2,9 @@
 import { useState } from 'react';
 import {
   CheckCircleOutlined,
+  ColumnWidthOutlined,
   DeleteOutlined,
+  EnvironmentOutlined,
   ExportOutlined,
   EyeOutlined,
   PictureOutlined,
@@ -15,6 +17,7 @@ import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
+  isPointCloudModel,
   surveyModelReadableByViewer,
   surveyModelUnsettled,
   surveyModelWorkOutstanding,
@@ -29,6 +32,11 @@ import SurveyModelViewerModal from '../../components/caveview/SurveyModelViewerM
 import LazyTrackingMovieDialog from '../../components/caveview/movie/LazyTrackingMovieDialog.tsx';
 import { openModelWindow } from '../../caveview/openModelWindow.ts';
 import SurveyModelUploadModal from './SurveyModelUploadModal.tsx';
+import PointCloudUploadModal from './PointCloudUploadModal.tsx';
+import ScanPlacementControl from './ScanPlacementControl.tsx';
+import SurveyModelPlacementModal, { type PlacementChange } from './SurveyModelPlacementModal.tsx';
+import SurveyModelEstimatedPassagesModal from './SurveyModelEstimatedPassagesModal.tsx';
+import { formatKm, formatPassageLength, hasPlacementSuggestion } from './surveyPlacement.ts';
 import { surveyModelProblemMessage } from './surveyModelProblems.ts';
 
 /**
@@ -40,6 +48,8 @@ const FORMAT_LABEL_KEYS: Record<SurveyModelInfo['format'], string> = {
   lox: 'surveyModels.formats.lox',
   survex3d: 'surveyModels.formats.survex3d',
   stl: 'surveyModels.formats.stl',
+  laz: 'surveyModels.formats.laz',
+  las: 'surveyModels.formats.las',
 };
 
 /**
@@ -63,12 +73,117 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
   /** The model a movie is being made on, or null while the movie dialog is closed. */
   const [movieModelId, setMovieModelId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadingCloud, setUploadingCloud] = useState(false);
+  /** The model whose placement is being said again, or null while that dialog is closed. */
+  const [placing, setPlacing] = useState<PlacementChange | null>(null);
+  /** The line plot whose estimated passages are being set, or null while that dialog is closed. */
+  const [estimating, setEstimating] = useState<SurveyModelInfo | null>(null);
+
+  // The passage a reading found no size for, and what was done about it. Drawn at an estimated
+  // size, the warning is the louder of the two: those tubes look like measured passages on screen,
+  // and this row is where anybody who might trust them is told that they are not.
+  const estimateNote = (model: SurveyModelInfo) => {
+    const drawn = typeof model.estimatedLegCount === 'number' ? model.estimatedLegCount : 0;
+    const unsizedLegs = typeof model.unsizedLegCount === 'number' ? model.unsizedLegCount : 0;
+    if (drawn === 0 && unsizedLegs === 0) {
+      return null;
+    }
+    const length =
+      typeof model.unsizedPassageM === 'number' ? formatPassageLength(model.unsizedPassageM) : '';
+    const buttonLabel =
+      drawn > 0 ? t('surveyModels.estimated.change') : t('surveyModels.estimated.offer');
+    return (
+      <Flex vertical gap={2} align="flex-start" data-testid={`survey-model-estimated-note-${model.id}`}>
+        {drawn > 0 ? (
+          <Typography.Text type="warning" style={{ fontSize: 12 }}>
+            <span
+              aria-hidden
+              style={{
+                display: 'inline-block',
+                width: 10,
+                height: 10,
+                marginInlineEnd: 4,
+                borderRadius: 2,
+                // The colour is the datum: it is what these passages are drawn in.
+                background: model.estimatedPassageColor,
+              }}
+            />
+            {t('surveyModels.estimated.drawn', {
+              count: drawn,
+              diameter: model.estimatedPassageDiameterM,
+            })}
+          </Typography.Text>
+        ) : (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t('surveyModels.estimated.unsized', { length, count: unsizedLegs })}
+          </Typography.Text>
+        )}
+        {canEdit && !surveyModelWorkOutstanding(model) && (
+          <Button
+            size="small"
+            icon={<ColumnWidthOutlined />}
+            onClick={() => setEstimating(model)}
+            data-testid={`survey-model-estimate-${model.id}`}
+          >
+            {buttonLabel}
+          </Button>
+        )}
+      </Flex>
+    );
+  };
+
+  // What a reading found about where the survey was declared to sit: how far from its cave it
+  // landed, and the declaration that would put it there. Shown on a failed model and on a ready
+  // one alike — a survey placed in the wrong zone reads perfectly well and is drawn hundreds of
+  // kilometres away, which nothing else on this page would say. The fix is offered, never applied:
+  // the person who knows the survey confirms it.
+  const placementNote = (model: SurveyModelInfo) => {
+    if (!hasPlacementSuggestion(model)) {
+      return null;
+    }
+    const epsg = typeof model.suggestedSourceEpsg === 'number' ? model.suggestedSourceEpsg : null;
+    const useLabel =
+      epsg === null
+        ? t('surveyModels.placement.useLocal')
+        : t('surveyModels.placement.useEpsg', { epsg });
+    return (
+      <Flex vertical gap={2} align="flex-start" data-testid={`survey-model-placement-note-${model.id}`}>
+        {typeof model.placementOffByKm === 'number' && (
+          <Typography.Text type="warning" style={{ fontSize: 12 }}>
+            {t('surveyModels.placement.far', { km: formatKm(model.placementOffByKm) })}
+          </Typography.Text>
+        )}
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {epsg === null
+            ? t('surveyModels.placement.suggestLocal')
+            : typeof model.suggestedOffByKm !== 'number'
+              ? t('surveyModels.placement.suggestEpsgUnmeasured', { epsg })
+              : t('surveyModels.placement.suggestEpsg', {
+                  epsg,
+                  km: formatKm(model.suggestedOffByKm),
+                })}
+        </Typography.Text>
+        {canEdit && !surveyModelWorkOutstanding(model) && (
+          <Button
+            size="small"
+            icon={<EnvironmentOutlined />}
+            onClick={() => setPlacing({ model, fromSuggestion: true })}
+            data-testid={`survey-model-use-suggestion-${model.id}`}
+          >
+            {useLabel}
+          </Button>
+        )}
+      </Flex>
+    );
+  };
 
   const stateCell = (model: SurveyModelInfo) => {
-    // Both kinds of upload now have work waiting on them, and it is not the same work: walls are
-    // converted into something the 3D scene can draw, while a line plot is read into its stations
-    // and shots. The state names fit both; the sentence under them has to say which.
+    // Three kinds of upload have work waiting on them, and it is not the same work: walls are
+    // converted into something the 3D scene can draw, a line plot is read into its stations and
+    // shots, and a point cloud is tiled by a worker. The state names fit all three; the sentence
+    // under them has to say which.
     const walls = model.format === 'stl';
+    const scan = isPointCloudModel(model);
     if (model.status === 'failed') {
       return (
         <Flex vertical gap={2}>
@@ -77,8 +192,9 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
               written here in advance could say it as precisely. */}
           <Typography.Text type="danger" style={{ fontSize: 12 }}>
             {model.processingError ??
-              t(walls ? 'surveyModels.conversionFailed' : 'surveyModels.readingFailed')}
+              t(scan ? 'surveyModels.scanFailed' : walls ? 'surveyModels.conversionFailed' : 'surveyModels.readingFailed')}
           </Typography.Text>
+          {placementNote(model)}
         </Flex>
       );
     }
@@ -87,7 +203,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
         <Flex vertical gap={2}>
           <Tag color="processing">{t(`surveyModels.statusValues.${model.status}`)}</Tag>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {t(walls ? 'surveyModels.converting' : 'surveyModels.reading')}
+            {t(scan ? 'surveyModels.scanProcessing' : walls ? 'surveyModels.converting' : 'surveyModels.reading')}
           </Typography.Text>
         </Flex>
       );
@@ -132,6 +248,8 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
             </Typography.Text>
           </Tooltip>
         )}
+        {placementNote(model)}
+        {!walls && !scan && estimateNote(model)}
       </Flex>
     );
   };
@@ -142,9 +260,21 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
       style={{ marginTop: 16 }}
       extra={
         canEdit && (
-          <Button size="small" icon={<UploadOutlined />} onClick={() => setUploading(true)}>
-            {t('surveyModels.upload')}
-          </Button>
+          <Flex gap={8} wrap>
+            <Button size="small" icon={<UploadOutlined />} onClick={() => setUploading(true)}>
+              {t('surveyModels.upload')}
+            </Button>
+            {/* A point cloud goes through the survey-upload protocol, not the model upload: it is
+                archived as a survey's original and tiled by a job with a progress page of its own. */}
+            <Button
+              size="small"
+              icon={<UploadOutlined />}
+              onClick={() => setUploadingCloud(true)}
+              data-testid="survey-model-upload-point-cloud"
+            >
+              {t('surveyModels.uploadPointCloud')}
+            </Button>
+          </Flex>
         )
       }
     >
@@ -187,7 +317,12 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
             key: 'actions',
             width: 320,
             render: (_, model) => (
-              <Flex gap={4}>
+              <Flex gap={4} wrap align="center">
+                {/* Where a scan sits on the earth, and the way to say so. Only for a point cloud:
+                    a line plot carries its own coordinates and a wall mesh is declared on upload. */}
+                {isPointCloudModel(model) && (
+                  <ScanPlacementControl model={model} caveId={caveId} canEdit={canEdit} />
+                )}
                 {surveyModelReadableByViewer(model) && (
                   <>
                     <Button size="small" icon={<EyeOutlined />} onClick={() => setViewing(model)}>
@@ -230,7 +365,9 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
                 )}
                 {/* Only a model that has finished can be chosen: for a line plot the choice hands
                     the map its centerline, and a model still being read has none to hand over. */}
-                {canEdit && !model.isCurrent && model.status === 'ready' && (
+                {/* Not for a scan: the current model is the one the cave's centreline and
+                    stations are read from, and a point cloud has neither. */}
+                {canEdit && !isPointCloudModel(model) && !model.isCurrent && model.status === 'ready' && (
                   <Button
                     size="small"
                     type="text"
@@ -253,8 +390,9 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
                     the first one, or another one of a model that stays ready meanwhile: the
                     server would refuse it, and a second reading of the same bytes behind the
                     first would tell nobody anything. Asked about first, because it replaces
-                    what the last reading produced. */}
-                {canEdit && !surveyModelWorkOutstanding(model) && (
+                    what the last reading produced. Not for a scan either: a point cloud is not
+                    read, it is tiled by its upload's run, and the server refuses the request. */}
+                {canEdit && !isPointCloudModel(model) && !surveyModelWorkOutstanding(model) && (
                   <Popconfirm
                     title={t('surveyModels.readAgainConfirm')}
                     description={
@@ -281,6 +419,22 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
                       />
                     </Tooltip>
                   </Popconfirm>
+                )}
+                {/* Where the file sits, said again, for a model that is not being read: the file
+                    is read again under the new answer, so the same rule applies as to reading it
+                    again. Offered on every model, not only on one a reading found fault with —
+                    nothing can notice a wrong declaration on a cave with no position. */}
+                {canEdit && !surveyModelWorkOutstanding(model) && (
+                  <Tooltip title={t('surveyModels.placement.change')}>
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<EnvironmentOutlined />}
+                      aria-label={t('surveyModels.placement.change')}
+                      onClick={() => setPlacing({ model, fromSuggestion: false })}
+                      data-testid={`survey-model-change-placement-${model.id}`}
+                    />
+                  </Tooltip>
                 )}
                 {canEdit && (
                   <Popconfirm
@@ -321,6 +475,27 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
           caveId={caveId}
           open={uploading}
           onClose={() => setUploading(false)}
+        />
+      )}
+      {canEdit && (
+        <PointCloudUploadModal
+          caveId={caveId}
+          open={uploadingCloud}
+          onClose={() => setUploadingCloud(false)}
+        />
+      )}
+      {canEdit && (
+        <SurveyModelEstimatedPassagesModal
+          caveId={caveId}
+          model={estimating}
+          onClose={() => setEstimating(null)}
+        />
+      )}
+      {canEdit && (
+        <SurveyModelPlacementModal
+          caveId={caveId}
+          change={placing}
+          onClose={() => setPlacing(null)}
         />
       )}
 

@@ -145,6 +145,36 @@ public static class SurveySegments
         segments.Where(s => !s.IsDuplicate).Sum(s => s.PlanLengthM);
 
     /// <summary>
+    /// Which way and how steeply a set's passage runs, weighted by length. Dip is null — refused,
+    /// not reported as level — for line work that carries no altitudes.
+    /// </summary>
+    /// <remarks>
+    /// A leg the file marks as passage already surveyed on another trip is the same piece of cave
+    /// measured a second time. Its length is excluded from every total for that reason, and its
+    /// bearing is excluded here for the same one: leaving it in would weight one trend twice over
+    /// because two teams walked it, which is a fact about the surveying and not about the cave.
+    /// The reduction that produces a drawn centerline's segments substitutes zero for a missing
+    /// altitude so the result can be stored and drawn, so summarising its dip would describe a plan
+    /// drawing as a cave that is flat everywhere, with nothing in the answer to say otherwise.
+    /// </remarks>
+    public static (OrientationSummary Orientation, DipSummary? Dip) Orientation(SurveySegmentSet set)
+    {
+        var measurable = set.Segments.Where(s => !s.IsDuplicate).ToList();
+
+        var orientation = OrientationStatistics.Summarize(measurable
+            .Where(s => s.AzimuthDegrees is not null)
+            .Select(s => new OrientationSample(s.AzimuthDegrees!.Value, s.SlopeLengthM ?? s.PlanLengthM)));
+
+        var dip = set.HasZ
+            ? DipStatistics.Summarize(measurable
+                .Where(s => s.DipDegrees is not null)
+                .Select(s => new DipSample(s.DipDegrees!.Value, s.SlopeLengthM ?? s.PlanLengthM)))
+            : null;
+
+        return (orientation, dip);
+    }
+
+    /// <summary>
     /// The measured rows as the index arithmetic wants them. A straight translation — every field
     /// is carried over unchanged, and no measurement is made here — so that the arithmetic can live
     /// where it has no database under it and there is still only one place that decides what a
