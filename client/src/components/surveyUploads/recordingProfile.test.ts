@@ -68,4 +68,11 @@ describe('the profile an upload pre-selects', () => {
     // Without the schema nothing can be said to change nothing.
     expect(preferredProfileId('hdmapping.odometry', offered, undefined, undefined)).toBeNull();
   });
+
+  it('passes over a built-in that names a setting the installed version does not have', () => {
+    // Every key unknown, so nothing it names is counted as a change; the server refuses it all the same.
+    const otherVersion = profile('other-version', { values: { in_out_params_indoor: { resolution_X: 0.2 } } }, true);
+    expect(preferredProfileId('hdmapping.odometry', [otherVersion, builtInDefaults], undefined, defaults)).toBe('defaults');
+    expect(preferredProfileId('hdmapping.odometry', [otherVersion], undefined, defaults)).toBeNull();
+  });
 });

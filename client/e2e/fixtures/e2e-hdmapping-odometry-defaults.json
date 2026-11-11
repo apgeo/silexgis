@@ -10,7 +10,8 @@
     "paths": { "current_output_dir": "/work" },
     "misc": { "clear_color": [0.1, 0.2, 0.3] },
     "odometry_control": { "iterations": 30, "step_motion": true, "resolution": 0.3 },
-    "filtering": { "min_distance": 0.5, "max_distance": 70.0 }
+    "filtering": { "min_distance": 0.5, "max_distance": 70.0 },
+    "filter_points": { "filter_threshold_xy_inner": 0.3 }
   },
-  "toml": "[odometry_control]\niterations = 30\nstep_motion = true\nresolution = 0.3\n\n[filtering]\nmin_distance = 0.5\nmax_distance = 70.0\n"
+  "toml": "[odometry_control]\niterations = 30\nstep_motion = true\nresolution = 0.3\n\n[filtering]\nmin_distance = 0.5\nmax_distance = 70.0\n\n[filter_points]\nfilter_threshold_xy_inner = 0.3\n"
 }
