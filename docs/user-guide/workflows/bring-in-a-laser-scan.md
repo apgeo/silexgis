@@ -20,8 +20,9 @@ and it stands in the 3D view where the cave really is, lined up with the survey'
 - You know, or have written down, **two or more stations the scanner passed close to** — a
   survey station marked in the cave, a fixed point painted on the wall. Points that are far
   apart, and not all in one straight line, give the best fit.
-- For a raw recording, the installation must run the optional HDMapping worker. If it does not,
-  the upload ends with a note saying so; process the recording elsewhere and upload the cloud.
+- For a raw recording, the installation runs the optional HDMapping worker — or you tick **Run
+  the odometry on another computer** in step 1 and run HDMapping yourself; see
+  [Odometry on another computer](../features/point-clouds.md#odometry-on-another-computer).
 
 ---
 

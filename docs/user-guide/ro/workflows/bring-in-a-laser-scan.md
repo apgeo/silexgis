@@ -21,9 +21,9 @@ stătător și apare în vizualizarea 3D acolo unde este peștera de fapt, alini
 - Știi, sau ai notat, **cel puțin două stații pe lângă care a trecut scanerul** — o stație
   topografică marcată în peșteră, un punct fix vopsit pe perete. Punctele depărtate între ele, și
   nu toate pe aceeași linie dreaptă, dau cea mai bună potrivire.
-- Pentru o înregistrare brută, instalarea trebuie să ruleze procesorul opțional HDMapping. Dacă nu
-  îl rulează, încărcarea se încheie cu o notă care spune asta; procesează înregistrarea în altă
-  parte și încarcă norul.
+- Pentru o înregistrare brută, instalarea rulează procesorul opțional HDMapping — sau bifezi
+  **Rulează odometria pe alt calculator** la pasul 1 și rulezi tu HDMapping; vezi
+  [Odometria pe alt calculator](../features/point-clouds.md#odometria-pe-alt-calculator).
 
 ---
 

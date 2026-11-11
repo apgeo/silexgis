@@ -95,7 +95,8 @@ for an uploaded cloud: estimating, thinning if needed, tiling.
   quietly starting it again.
 
 Processing a raw recording needs the installation's HDMapping worker, which is optional. Where it is
-not running, the upload is kept and ends with a note saying that processing is not available here.
+not running, the upload is kept and ends with a note saying that processing is not available here —
+unless you chose to [run the odometry on another computer](#odometry-on-another-computer).
 
 ## Processing profiles
 
@@ -120,6 +121,23 @@ the HDMapping odometry, and the estimating, thinning and tiling of a cloud.
 
 The profile used for each run is written into that run's record, so a scan can always say which
 settings made it.
+
+### Odometry on another computer
+
+The odometry is the heavy step. Where the installation has no HDMapping worker, or you would rather
+run it on your own machine, tick **Run the odometry on another computer** in the upload dialog.
+The run then stops before the odometry — *Waiting for a step done elsewhere* — and the scan card
+offers **Download the inputs**: the recording, the parameters of the chosen profile and a README
+with the command to run. Run HDMapping yourself, then send each product back with **Choose the
+file…**; whatever the file is called, it is stored under the name the card shows. Once the last
+one is received the processing carries on from the export. Only somebody who may edit the cave
+sees the panel; anybody else sees one line saying the run waits.
+
+**Refining a finished scan.** HDMapping's desktop programme can improve a session by hand. A
+finished scan offers **Download the session** to whoever may see the cave's exact location; refine
+it, zip the session folder's contents and use **Send the refined session…**. It arrives as the
+scan's **next version** and is processed from the export on, so the earlier version stays as it
+was.
 
 ### Centreline, plan and profile
 
@@ -221,9 +239,6 @@ are warned as the store fills; see [Storage](../admin/storage.md).
 
 ## Not yet
 
-- Processing a recording **on another computer** (for instance in HDMapping's own desktop
-  programme) and bringing the result back.
-- A **centreline** and **plan and profile pictures** drawn from the trajectory.
 - Joining several recordings into one scan.
 
 ---

@@ -101,7 +101,8 @@ pentru un nor încărcat: estimare, rărire dacă e nevoie, împărțire în dal
 
 Procesarea unei înregistrări brute are nevoie de serviciul HDMapping al instalării, care este
 opțional. Acolo unde nu rulează, încărcarea este păstrată și se încheie cu o notă care spune că
-procesarea nu este disponibilă aici.
+procesarea nu este disponibilă aici — doar dacă nu ai ales să
+[rulezi odometria pe alt calculator](#odometria-pe-alt-calculator).
 
 ## Profiluri de procesare
 
@@ -129,6 +130,23 @@ ale unui nor.
 
 Profilul folosit la fiecare rulare este scris în evidența acelei rulări, așa că o scanare poate
 spune oricând ce setări au produs-o.
+
+### Odometria pe alt calculator
+
+Odometria este pasul greu. Acolo unde instalarea nu are procesorul HDMapping, sau dacă preferi să
+o rulezi pe calculatorul tău, bifează **Rulează odometria pe alt calculator** în dialogul de
+încărcare. Rularea se oprește atunci înainte de odometrie — *Așteaptă un pas făcut pe alt
+calculator* — iar cardul scanării oferă **Descarcă fișierele de intrare**: înregistrarea,
+parametrii profilului ales și un README cu comanda de rulat. Rulezi tu HDMapping, apoi trimiți
+înapoi fiecare produs cu **Alege fișierul…**; oricum s-ar numi fișierul, este păstrat sub numele
+afișat pe card. După ce ultimul a fost primit, procesarea continuă de la export. Doar cine poate
+modifica peștera vede panoul; ceilalți văd un singur rând care spune că rularea așteaptă.
+
+**Rafinarea unei scanări terminate.** Programul HDMapping pentru calculator poate îmbunătăți de mână
+o sesiune. O scanare terminată oferă **Descarcă sesiunea** celui care poate vedea locația exactă a
+peșterii; rafineaz-o, arhivează conținutul dosarului sesiunii și folosește **Trimite sesiunea
+rafinată…**. Sosește ca **următoarea versiune** a scanării și este procesată de la export încolo,
+așa că versiunea anterioară rămâne cum era.
 
 ### Linia centrală, planul și profilul
 
@@ -237,9 +255,6 @@ Administratorii sunt avertizați pe măsură ce depozitul se umple; vezi
 
 ## Încă nu
 
-- Procesarea unei înregistrări **pe alt calculator** (de exemplu în programul desktop propriu
-  HDMapping) și aducerea înapoi a rezultatului.
-- O **drumuire** și **imagini de plan și profil** desenate din traiectorie.
 - Unirea mai multor înregistrări într-o singură scanare.
 
 ---
