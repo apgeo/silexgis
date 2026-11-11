@@ -1023,28 +1023,12 @@ public sealed class PointCloudProcessing(
                     return null;
 
                 case ScanArtifactKind.HdmSession:
-                    using (var archive = System.IO.Compression.ZipFile.OpenRead(path))
-                    {
-                        if (archive.Entries.Any(e => !ScanExternalOutputs.IsContainedMember(e.FullName)))
-                        {
-                            return "The session archive names a file outside itself.";
-                        }
-
-                        return archive.Entries.Any(e => e.FullName.Replace('\\', '/') == "session.mjs")
-                            ? null
-                            : "The session archive holds no session.mjs at its root: zip the contents of the session folder, not the folder.";
-                    }
+                    return await SessionProblemAsync(path, ct);
 
                 case ScanArtifactKind.Trajectory:
-                    using (var reader = new StreamReader(path))
-                    {
-                        var line = await reader.ReadLineAsync(ct);
-                        // HDMapping writes its trajectory with spaces between the columns; other
-                        // tools use commas, tabs or semicolons. Any of them is a table of numbers.
-                        return line is { Length: > 0 and < 65_536 } && line.IndexOfAny([',', ' ', '\t', ';']) > 0
-                            ? null
-                            : "The trajectory is not a text table of columns.";
-                    }
+                    return await TrajectoryProblemAsync(path, ct)
+                        ? "The trajectory is not a text table of columns."
+                        : null;
 
                 case ScanArtifactKind.Report:
                     if (new FileInfo(path).Length > MaxReportBytes)
@@ -1078,6 +1062,100 @@ public sealed class PointCloudProcessing(
     }
 
     private const long MaxReportBytes = 16L * 1024 * 1024;
+
+    /// <summary>The most of a trajectory read to find its first line: 64 KiB, far past any header row of numbers.</summary>
+    private const int TrajectoryHeadBytes = 64 * 1024;
+
+    /// <summary>
+    /// Why a session archive may not be handed to the export: a member outside the archive, more
+    /// unpacked than the archive could honestly hold, no <c>session.mjs</c> at the root, or one
+    /// that names a file outside the session folder.
+    /// </summary>
+    private static async Task<string?> SessionProblemAsync(string path, CancellationToken ct)
+    {
+        using var archive = await System.IO.Compression.ZipFile.OpenReadAsync(path, ct);
+        if (archive.Entries.Any(e => !ScanExternalOutputs.IsContainedMember(e.FullName)))
+        {
+            return "The session archive names a file outside itself.";
+        }
+
+        // The sizes the archive declares are what unpacking it writes: the worker stops each member
+        // at its declared size, so their sum bounds the folder it unpacks to.
+        long unpacked = 0;
+        foreach (var entry in archive.Entries)
+        {
+            unpacked = entry.Length > long.MaxValue - unpacked ? long.MaxValue : unpacked + entry.Length;
+        }
+
+        if (!HdmappingSessionRules.UnpackedFits(new FileInfo(path).Length, unpacked))
+        {
+            return $"The session archive unpacks to more than {HdmappingSessionRules.MaxUnpackedFactor} times its own size; a session is mostly point files that do not compress.";
+        }
+
+        var description = archive.Entries.FirstOrDefault(e => e.FullName.Replace('\\', '/') == HdmappingSessionRules.SessionFile);
+        if (description is null)
+        {
+            return "The session archive holds no session.mjs at its root: zip the contents of the session folder, not the folder.";
+        }
+
+        if (description.Length > HdmappingSessionRules.MaxSessionFileBytes)
+        {
+            return "The session's session.mjs is too large to be a session description.";
+        }
+
+        // Read to one byte past the limit, whatever the entry declares: what is read is what counts.
+        using var text = new MemoryStream();
+        await using (var stream = await description.OpenAsync(ct))
+        {
+            var buffer = new byte[81_920];
+            int got;
+            while ((got = await stream.ReadAsync(buffer, ct)) > 0)
+            {
+                text.Write(buffer, 0, got);
+                if (text.Length > HdmappingSessionRules.MaxSessionFileBytes)
+                {
+                    return "The session's session.mjs is too large to be a session description.";
+                }
+            }
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(text.GetBuffer().AsMemory(0, (int)text.Length));
+            return HdmappingSessionRules.SessionProblem(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return "The session's session.mjs does not read as JSON.";
+        }
+    }
+
+    /// <summary>
+    /// Whether a trajectory is not a text table: its first line, looked for within the first
+    /// block only, is empty, longer than the block, or has no separator between columns.
+    /// </summary>
+    private static async Task<bool> TrajectoryProblemAsync(string path, CancellationToken ct)
+    {
+        var block = new byte[TrajectoryHeadBytes];
+        int read;
+        await using (var stream = File.OpenRead(path))
+        {
+            read = await stream.ReadAtLeastAsync(block, block.Length, throwOnEndOfStream: false, ct);
+        }
+
+        var head = block.AsSpan(0, read);
+        var end = head.IndexOfAny((byte)'\n', (byte)'\r');
+        if (end < 0 && read == block.Length)
+        {
+            // No line ends inside the block: not the first line of a table.
+            return true;
+        }
+
+        var line = end < 0 ? head : head[..end];
+        // HDMapping writes its trajectory with spaces between the columns; other tools use
+        // commas, tabs or semicolons. Any of them is a table of numbers.
+        return line.Length == 0 || line.IndexOfAny([(byte)',', (byte)' ', (byte)'\t', (byte)';']) <= 0;
+    }
 
     /// <summary>
     /// Records a file sent back for a step done elsewhere as that step's product: a file of the

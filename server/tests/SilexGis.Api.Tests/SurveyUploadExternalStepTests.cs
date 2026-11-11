@@ -168,6 +168,16 @@ public sealed class SurveyUploadExternalStepTests : IAsyncLifetime, IDisposable,
         (await folderZipped.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString().ShouldBe("survey_upload.external_output_invalid");
         var escaping = await PutAsync(owner, id, "session.zip", Zip(("session.mjs", "{}"), ("../outside.laz", "x")));
         (await escaping.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString().ShouldBe("survey_upload.external_output_invalid");
+        // A session whose own description points the export at another job's cloud.
+        var pointing = await PutAsync(owner, id, "session.zip", Zip(
+            ("session.mjs", """{"laz_file_names": [{"file_name": "../0000-hdmapping-export/pointCloudLaz.laz"}]}"""), ("scan_lio_0.laz", "x")));
+        pointing.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var pointingProblem = await pointing.Content.ReadFromJsonAsync<JsonElement>();
+        pointingProblem.GetProperty("code").GetString().ShouldBe("survey_upload.external_output_invalid");
+        pointingProblem.GetProperty("detail").GetString().ShouldNotBeNull().ShouldContain("file_name");
+        // An archive that unpacks to far more than it holds.
+        var swelling = await PutAsync(owner, id, "session.zip", Zip(("session.mjs", "{}"), ("scan_lio_0.laz", new string('0', 8 * 1024 * 1024))));
+        (await swelling.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString().ShouldBe("survey_upload.external_output_invalid");
         (await ArtefactsAsync(id)).ShouldNotContain(a => a.Kind == ScanArtifactKind.HdmSession);
 
         // The session: the run is queued again, and goes on from the export.
