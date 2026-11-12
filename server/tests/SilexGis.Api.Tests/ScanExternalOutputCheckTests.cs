@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text;
 using Shouldly;
+using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Scans;
 using SilexGis.Infrastructure.Scans;
 
@@ -12,7 +13,7 @@ namespace SilexGis.Api.Tests;
 /// </summary>
 public sealed class ScanExternalOutputCheckTests : IDisposable
 {
-    private readonly string directory = Path.Combine(Path.GetTempPath(), $"silexgis-external-check-{Guid.NewGuid():N}");
+    private readonly string directory = Path.Combine(TestScratch.Root, $"silexgis-external-check-{Guid.NewGuid():N}");
 
     public ScanExternalOutputCheckTests() => Directory.CreateDirectory(directory);
 
