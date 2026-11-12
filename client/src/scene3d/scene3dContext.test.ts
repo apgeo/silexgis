@@ -2783,6 +2783,34 @@ describe('models the scene loads', () => {
     session.release();
   });
 
+  it('tints every loaded model for a recording, and takes the tint off again', async () => {
+    const session = acquire();
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL);
+    await loading;
+    const [model] = loadedModels();
+    const scene3d = session.engine as unknown as {
+      setModelTint(tint: { red: number; green: number; blue: number; amount: number } | undefined): void;
+    };
+
+    scene3d.setModelTint({ red: 1, green: 0.5, blue: 0, amount: 0.8 });
+    expect(model.color).toMatchObject({ css: 'rgb(255, 128, 0)', alpha: 1 });
+    // Mixed into the model's own colour, so its shading still shows.
+    expect(model.colorBlendMode).toBe(engine.ColorBlendMode.MIX);
+    expect(model.colorBlendAmount).toBe(0.8);
+
+    scene3d.setModelTint({ red: 1, green: 0.5, blue: 0, amount: 0 });
+    expect(model.color).toBeUndefined();
+    scene3d.setModelTint({ red: 1, green: 0.5, blue: 0, amount: 0.4 });
+    scene3d.setModelTint(undefined);
+    expect(model.color).toBeUndefined();
+    session.release();
+  });
+
   it('hides and recolours the passages drawn at an estimated size, and nothing else', async () => {
     const session = acquire();
     const loading = session.engine.loadModel('cave-mesh', {

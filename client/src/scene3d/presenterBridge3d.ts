@@ -13,8 +13,8 @@ import type { Scene3DCameraState, Scene3DPosition } from './scene3dEngine.ts';
 //
 // Present only when the browser is driven by automation (`navigator.webdriver`, which every driver
 // sets and no ordinary browser does). It hands out nothing a signed-in person could not already do
-// from the browser's console, and no data: a camera position, the ground's height, and where the
-// loaded models are.
+// from the browser's console, and no data: a camera position, the ground's height, where the
+// loaded models are, and a tint for them that lasts only as long as the page.
 
 /** The parts of the scene the handle needs; the real scene provides them, a test a plain object. */
 export interface Scene3DPresenterTarget {
@@ -29,6 +29,16 @@ export interface Scene3DPresenterTarget {
   groundHeight(longitude: number, latitude: number): number;
   /** The sphere around every loaded, visible model, or undefined when none is drawn. */
   modelSphere(): Scene3DPresenterSphere | undefined;
+  /** Tints every loaded model; undefined takes the tint off. */
+  setModelTint(tint: Scene3DPresenterTint | undefined): void;
+}
+
+/** A colour (each channel 0–1) mixed into a model's own by `amount` (0–1). */
+export interface Scene3DPresenterTint {
+  red: number;
+  green: number;
+  blue: number;
+  amount: number;
 }
 
 export interface Scene3DPresenterSphere extends Scene3DPosition {
@@ -43,6 +53,8 @@ export interface Scene3DPresenterBridge {
   getCameraTarget(): Scene3DPosition | undefined;
   groundHeight(longitude: number, latitude: number): number;
   modelSphere(): Scene3DPresenterSphere | undefined;
+  /** Recolours the cave's walls for the movie: undefined gives them back their own colours. */
+  setModelTint(tint: Scene3DPresenterTint | undefined): void;
   /**
    * Resolves true once the scene has drawn and stayed settled for `settledFrames` frames in a row,
    * or false when `timeoutMs` passes first. A single settled frame is not enough: a tile that
@@ -71,6 +83,7 @@ export function createPresenterBridge(target: Scene3DPresenterTarget): Scene3DPr
     getCameraTarget: () => target.getCameraTarget(),
     groundHeight: (longitude, latitude) => target.groundHeight(longitude, latitude),
     modelSphere: () => target.modelSphere(),
+    setModelTint: (tint) => target.setModelTint(tint),
     async whenSettled(timeoutMs = 60_000, settledFrames = 3) {
       const deadline = performance.now() + timeoutMs;
       let run = 0;

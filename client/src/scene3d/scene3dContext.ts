@@ -16,6 +16,7 @@ import {
   ClippingPolygon,
   ClippingPolygonCollection,
   Color,
+  ColorBlendMode,
   ColorGeometryInstanceAttribute,
   Credit,
   CustomShader,
@@ -992,6 +993,34 @@ class CesiumScene3D implements Scene3DCore {
       height: centre.height,
       radius: sphere.radius,
     };
+  }
+
+  /**
+   * Tints every loaded model: `amount` 0 leaves its own colours, 1 paints it in `color` alone, the
+   * shading kept either way. Only a scripted recording asks for this, to recolour a cave's walls in
+   * front of the camera; nothing in the interface does, so nothing there has to agree with it.
+   */
+  setModelTint(tint: { red: number; green: number; blue: number; amount: number } | undefined): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    for (const entry of this.models.values()) {
+      const model = entry.model;
+      if (!model) {
+        continue;
+      }
+      if (!tint || tint.amount <= 0) {
+        // No colour is the library's own default and its documented way to draw a model untinted;
+        // its type declaration just does not say so.
+        model.color = undefined as unknown as Color;
+      } else {
+        const byte = (channel: number) => Math.round(Math.min(1, Math.max(0, channel)) * 255);
+        model.color = Color.fromCssColorString(`rgb(${byte(tint.red)}, ${byte(tint.green)}, ${byte(tint.blue)})`);
+        model.colorBlendMode = ColorBlendMode.MIX;
+        model.colorBlendAmount = Math.min(1, tint.amount);
+      }
+    }
+    this.widget.scene.requestRender();
   }
 
   // ---- a picture of the scene ----

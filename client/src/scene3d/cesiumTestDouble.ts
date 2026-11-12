@@ -1282,6 +1282,25 @@ export interface FakeModelRequest {
 /** The library's axis names, with its own values. */
 export const Axis = { X: 0, Y: 1, Z: 2 } as const;
 
+/** A model's bounding sphere; only the scene's recording handle combines them. */
+export class BoundingSphere {
+  center: unknown;
+  radius: number;
+
+  constructor(center: unknown = undefined, radius = 0) {
+    this.center = center;
+    this.radius = radius;
+  }
+
+  /** Not the library's smallest enclosing sphere: the first centre, and the largest radius. */
+  static fromBoundingSpheres(spheres: BoundingSphere[]) {
+    return new BoundingSphere(spheres[0]?.center, Math.max(0, ...spheres.map((sphere) => sphere.radius)));
+  }
+}
+
+/** How a model's colour is combined with its own, with the library's values. */
+export const ColorBlendMode = { HIGHLIGHT: 0, REPLACE: 1, MIX: 2 } as const;
+
 /**
  * A loaded model.
  *
@@ -1316,6 +1335,9 @@ export class Model {
   /** False until {@link becomeReady}: the real library knows a model's nodes only once it is drawn. */
   ready = false;
   customShader: CustomShader | undefined;
+  color: Color | undefined;
+  colorBlendMode: number = ColorBlendMode.HIGHLIGHT;
+  colorBlendAmount = 0.5;
   readonly readyEvent = {
     listeners: [] as (() => void)[],
     addEventListener(listener: () => void) {
