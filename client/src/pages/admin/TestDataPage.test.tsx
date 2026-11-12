@@ -57,13 +57,17 @@ const remove = vi.fn();
 const cancel = vi.fn();
 
 class FakeApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code?: string,
-    readonly detail?: string,
-    readonly problem?: Record<string, unknown>,
-  ) {
+  readonly status: number;
+  readonly code?: string;
+  readonly detail?: string;
+  readonly problem?: Record<string, unknown>;
+
+  constructor(status: number, code?: string, detail?: string, problem?: Record<string, unknown>) {
     super(code);
+    this.status = status;
+    this.code = code;
+    this.detail = detail;
+    this.problem = problem;
   }
 }
 
