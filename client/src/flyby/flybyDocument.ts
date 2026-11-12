@@ -116,6 +116,161 @@ export const FLYBY_PRESETS: readonly FlybyPresetId[] = [
   'planToProfile',
 ];
 
+// ---- how the scene looks, and what is written over it ----
+
+/** A colour, written `#rrggbb`: the one form a file can carry that every reader agrees on. */
+export type FlybyColour = string;
+
+/** How the ground is drawn over a cave: on top of it, or cut away above it. */
+export type FlybySurface = 'overlay' | 'cutaway';
+
+export const FLYBY_SURFACES: readonly FlybySurface[] = ['overlay', 'cutaway'];
+
+/**
+ * The layers a flyby can show, hide and fade, by keys that mean the same thing in a file opened on
+ * another day: the scene's own layers by name, and the ones an installation lists by the kind of
+ * list and the id in it.
+ */
+export const FLYBY_NAMED_LAYERS = ['centerlines', 'entrances', 'surface-features', 'walls', 'scans', 'photos'] as const;
+export type FlybyNamedLayer = (typeof FLYBY_NAMED_LAYERS)[number];
+
+/** A tile overlay of the catalogue, a georeferenced map, an imported file, a layer drawn from a saved filter. */
+export const FLYBY_LAYER_KINDS = ['overlay', 'raster', 'file', 'filter'] as const;
+export type FlybyListedLayerKind = (typeof FLYBY_LAYER_KINDS)[number];
+
+/** `centerlines`, `walls`… or `overlay:12`, `raster:<id>`, `file:<id>`, `filter:<savedFilterId>`. */
+export type FlybyLayerKey = string;
+
+const LAYER_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+export function isFlybyLayerKey(value: unknown): value is FlybyLayerKey {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  if ((FLYBY_NAMED_LAYERS as readonly string[]).includes(value)) {
+    return true;
+  }
+  const colon = value.indexOf(':');
+  const kind = value.slice(0, colon);
+  const id = value.slice(colon + 1);
+  if (colon < 0 || !(FLYBY_LAYER_KINDS as readonly string[]).includes(kind) || !LAYER_ID_PATTERN.test(id)) {
+    return false;
+  }
+  // A catalogue entry is numbered; the others are named by the ids their own lists give them.
+  return kind !== 'overlay' || /^\d+$/.test(id);
+}
+
+/** The key of a layer an installation lists. */
+export function flybyLayerKey(kind: FlybyListedLayerKind, id: string | number): FlybyLayerKey {
+  return `${kind}:${id}`;
+}
+
+const COLOUR_PATTERN = /^#[0-9a-f]{6}$/;
+
+export function isFlybyColour(value: unknown): value is FlybyColour {
+  return typeof value === 'string' && COLOUR_PATTERN.test(value);
+}
+
+/** How a layer is shown: on or off, and how strongly, 0–1. A value left out is the viewer's own. */
+export interface FlybyLayerLook {
+  visible?: boolean;
+  opacity?: number;
+}
+
+/**
+ * How the scene looks when a flyby starts. Every member is optional, and one left out is whatever
+ * the viewer has: a flyby that names only a background leaves every layer as the viewer set it.
+ */
+export interface FlybyLook {
+  /** The background map, by its id in the installation's catalogue. */
+  background?: number;
+  /** How strongly the background is drawn, 0–1: below 1 the ground shows the caves under it. */
+  backgroundOpacity?: number;
+  layers?: Record<FlybyLayerKey, FlybyLayerLook>;
+  /** The caves' walls mixed with one colour, by `strength` 0–1; their shading is kept. */
+  walls?: { colour: FlybyColour; strength: number };
+  /** The survey lines in one colour instead of their colours by depth. */
+  lines?: FlybyColour;
+  surface?: FlybySurface;
+  /** What is drawn above the horizon; left out, nothing — the scene draws no sky of its own. */
+  sky?: FlybyColour;
+}
+
+/** What a change changes, and what to. */
+export type FlybyChangeWhat =
+  /** Another background: cut, or crossed into over the change's length. */
+  | { kind: 'background'; background: number }
+  | { kind: 'backgroundOpacity'; opacity: number }
+  /** A layer shown or hidden: one shown rises from nothing, one hidden fades away and is then put off. */
+  | { kind: 'layer'; layer: FlybyLayerKey; visible: boolean }
+  | { kind: 'layerOpacity'; layer: FlybyLayerKey; opacity: number }
+  /** The walls' colour; a strength of 0 gives them back their own. */
+  | { kind: 'walls'; colour: FlybyColour; strength: number }
+  /** The survey lines in one colour, or (null) by depth again. Always a cut: the lines are rebuilt. */
+  | { kind: 'lines'; colour: FlybyColour | null }
+  /** Always a cut. */
+  | { kind: 'surface'; surface: FlybySurface }
+  /** The sky's colour, or (null) none. */
+  | { kind: 'sky'; colour: FlybyColour | null };
+
+export type FlybyChangeKind = FlybyChangeWhat['kind'];
+
+export const FLYBY_CHANGE_KINDS: readonly FlybyChangeKind[] = [
+  'background',
+  'backgroundOpacity',
+  'layer',
+  'layerOpacity',
+  'walls',
+  'lines',
+  'surface',
+  'sky',
+];
+
+/** The kinds that happen at one moment whatever length they are given. */
+export const FLYBY_CUT_CHANGES: readonly FlybyChangeKind[] = ['lines', 'surface'];
+
+/**
+ * A change of the scene's look, tied to a section: it starts `at` seconds into the section and
+ * lasts `seconds`, both counted at a speed of 1 and played at the section's speed — so a section
+ * made slower carries its changes with it, stretched as it is.
+ */
+export type FlybyChange = FlybyChangeWhat & {
+  /** Stable within the document, so a change can be named, edited and removed. */
+  id: string;
+  /** The section it belongs to, by its id. */
+  section: string;
+  at: number;
+  /** 0 is a cut. */
+  seconds: number;
+};
+
+/** A card over the whole picture: a title at the start, an end card at the end. */
+export interface FlybyCard {
+  text: string;
+  subtitle?: string;
+  /** Real seconds, whatever the speed: a card is there to be read. */
+  seconds: number;
+}
+
+/** A line of text along the bottom of the picture during part of a section. */
+export interface FlybyCaption {
+  section: string;
+  text: string;
+  /** Seconds into the section and how long, counted like a change's. */
+  at: number;
+  seconds: number;
+}
+
+export interface FlybyTexts {
+  title?: FlybyCard;
+  captions?: FlybyCaption[];
+  end?: FlybyCard;
+  /** Seconds the picture rises out of black at the start; left out, none. */
+  fadeIn?: number;
+  /** Seconds it sinks to black at the end. */
+  fadeOut?: number;
+}
+
 export interface FlybyDocument {
   version: typeof FLYBY_VERSION;
   name: string;
@@ -129,6 +284,11 @@ export interface FlybyDocument {
   /** Where the camera is at the very start. */
   start: { subject: FlybySubjectRef; pose: FlybyFullPose };
   sections: FlybySection[];
+  /** How the scene looks at the start; left out, as the viewer has it. */
+  look?: FlybyLook;
+  /** Timed changes of the look. */
+  changes?: FlybyChange[];
+  texts?: FlybyTexts;
 }
 
 export const FLYBY_SPEED_RANGE = { min: 0.25, max: 4 } as const;
@@ -138,6 +298,11 @@ export const FLYBY_MIN_RANGE = 0.02;
 export const FLYBY_MAX_RANGE = 5000;
 export const FLYBY_MAX_SUBJECTS = 40;
 export const FLYBY_MAX_SECTIONS = 200;
+export const FLYBY_MAX_CHANGES = 400;
+export const FLYBY_MAX_LAYERS = 60;
+/** The longest any change or card lasts, in seconds. */
+export const FLYBY_MAX_CHANGE_SECONDS = 600;
+export const FLYBY_MAX_TEXT = 200;
 
 /** Why a document cannot be played, in a form the interface can put into words. */
 export type FlybyProblem =
@@ -148,7 +313,18 @@ export type FlybyProblem =
   | { code: 'badSpeed'; section?: string }
   | { code: 'badRange'; section?: string }
   | { code: 'badPitch'; section?: string }
-  | { code: 'duplicateSection'; section: string };
+  | { code: 'duplicateSection'; section: string }
+  /** The opening look has a value outside what it may be. */
+  | { code: 'badLook' }
+  /** A change names a section the flyby does not have. */
+  | { code: 'unknownChangeSection'; change: string; section: string }
+  /** A change starts outside its section, lasts a negative time, or asks for a value outside its range. */
+  | { code: 'badChange'; change: string; section: string }
+  | { code: 'duplicateChange'; change: string; section: string }
+  /** Two changes steer the same thing at the same time. */
+  | { code: 'overlappingChanges'; change: string; section: string; other: string }
+  /** A caption names a section the flyby does not have, or a card or caption has no time to be seen. */
+  | { code: 'badText'; section?: string };
 
 function subjectExists(document: FlybyDocument, ref: FlybySubjectRef): boolean {
   return ref === 'all' || (Number.isInteger(ref) && ref >= 0 && ref < document.subjects.length);
@@ -198,6 +374,183 @@ export function flybyProblems(document: FlybyDocument): FlybyProblem[] {
       problems.push({ code: 'badSpeed', section: section.id });
     }
     problems.push(...poseProblems(section.to, section.id));
+  }
+  if (document.look && !lookIsSound(document.look)) {
+    problems.push({ code: 'badLook' });
+  }
+  problems.push(...changeProblems(document), ...textProblems(document));
+  return problems;
+}
+
+const isShare = (value: number) => value >= 0 && value <= 1;
+
+function lookIsSound(look: FlybyLook): boolean {
+  if (look.backgroundOpacity !== undefined && !isShare(look.backgroundOpacity)) {
+    return false;
+  }
+  if (look.walls && !(isFlybyColour(look.walls.colour) && isShare(look.walls.strength))) {
+    return false;
+  }
+  if ((look.lines !== undefined && !isFlybyColour(look.lines)) || (look.sky !== undefined && !isFlybyColour(look.sky))) {
+    return false;
+  }
+  return Object.entries(look.layers ?? {}).every(
+    ([key, layer]) => isFlybyLayerKey(key) && (layer.opacity === undefined || isShare(layer.opacity)),
+  );
+}
+
+/** Whether what a change asks for is within range. */
+function changeIsSound(change: FlybyChange): boolean {
+  switch (change.kind) {
+    case 'background':
+      return Number.isInteger(change.background);
+    case 'backgroundOpacity':
+      return isShare(change.opacity);
+    case 'layer':
+      return isFlybyLayerKey(change.layer);
+    case 'layerOpacity':
+      return isFlybyLayerKey(change.layer) && isShare(change.opacity);
+    case 'walls':
+      return isFlybyColour(change.colour) && isShare(change.strength);
+    case 'lines':
+    case 'sky':
+      return change.colour === null || isFlybyColour(change.colour);
+    case 'surface':
+      return FLYBY_SURFACES.includes(change.surface);
+  }
+}
+
+/**
+ * What a change steers. Two changes of one member must not overlap in time, because the look at a
+ * moment would then depend on which of them was applied last — which is the one thing a moment of
+ * a flyby must never depend on. A layer's being shown and its strength are two members: a layer
+ * can fade in while its strength is being changed by another change.
+ */
+export function flybyChangeMember(change: FlybyChangeWhat): string {
+  switch (change.kind) {
+    case 'layer':
+      return `layer:${change.layer}`;
+    case 'layerOpacity':
+      return `layerOpacity:${change.layer}`;
+    default:
+      return change.kind;
+  }
+}
+
+/** Where each section starts on the flyby's clock, in real seconds, by section id. */
+export function flybySectionStarts(document: Pick<FlybyDocument, 'speed' | 'sections'>): Map<string, number> {
+  const starts = new Map<string, number>();
+  let t = 0;
+  for (const section of document.sections) {
+    if (!starts.has(section.id)) {
+      starts.set(section.id, t);
+    }
+    t += sectionLength(document, section);
+  }
+  return starts;
+}
+
+/**
+ * When something tied to a section happens on the flyby's clock: its offset and length are
+ * counted at a speed of 1 and played at the section's speed, as the section itself is. Undefined
+ * when the section is not in the document.
+ */
+export function flybyTimeIn(
+  document: Pick<FlybyDocument, 'speed' | 'sections'>,
+  starts: ReadonlyMap<string, number>,
+  item: { section: string; at: number; seconds: number },
+): { start: number; end: number } | undefined {
+  const section = document.sections.find((candidate) => candidate.id === item.section);
+  const sectionStart = starts.get(item.section);
+  if (!section || sectionStart === undefined) {
+    return undefined;
+  }
+  const rate = document.speed * (section.speed ?? 1);
+  const start = sectionStart + item.at / rate;
+  return { start, end: start + item.seconds / rate };
+}
+
+/** A change's length on the flyby's clock is nothing for the kinds that are always cuts. */
+export function flybyChangeSeconds(change: Pick<FlybyChange, 'kind' | 'seconds'>): number {
+  return FLYBY_CUT_CHANGES.includes(change.kind) ? 0 : change.seconds;
+}
+
+function changeProblems(document: FlybyDocument): FlybyProblem[] {
+  const problems: FlybyProblem[] = [];
+  const starts = flybySectionStarts(document);
+  const seen = new Set<string>();
+  const timed: { change: FlybyChange; member: string; start: number; end: number }[] = [];
+  for (const change of document.changes ?? []) {
+    const section = document.sections.find((candidate) => candidate.id === change.section);
+    if (seen.has(change.id)) {
+      problems.push({ code: 'duplicateChange', change: change.id, section: change.section });
+    }
+    seen.add(change.id);
+    if (!section) {
+      problems.push({ code: 'unknownChangeSection', change: change.id, section: change.section });
+      continue;
+    }
+    if (
+      !changeIsSound(change) ||
+      !(change.at >= 0 && change.at <= section.seconds) ||
+      !(change.seconds >= 0 && change.seconds <= FLYBY_MAX_CHANGE_SECONDS)
+    ) {
+      problems.push({ code: 'badChange', change: change.id, section: change.section });
+      continue;
+    }
+    const time = flybyTimeIn(document, starts, { ...change, seconds: flybyChangeSeconds(change) });
+    if (time) {
+      timed.push({ change, member: flybyChangeMember(change), ...time });
+    }
+  }
+  // Ordered by start; a change overlaps the one before it of the same member when it starts
+  // before that one has ended — or at the same moment, which for two cuts is the same thing.
+  timed.sort((a, b) => a.start - b.start);
+  const last = new Map<string, (typeof timed)[number]>();
+  for (const entry of timed) {
+    const before = last.get(entry.member);
+    if (before && (entry.start < before.end - 1e-9 || Math.abs(entry.start - before.start) < 1e-9)) {
+      problems.push({
+        code: 'overlappingChanges',
+        change: entry.change.id,
+        section: entry.change.section,
+        other: before.change.id,
+      });
+    }
+    if (!before || entry.end > before.end) {
+      last.set(entry.member, entry);
+    }
+  }
+  return problems;
+}
+
+function cardIsSound(card: FlybyCard | undefined): boolean {
+  return !card || (card.seconds > 0 && card.seconds <= FLYBY_MAX_CHANGE_SECONDS);
+}
+
+function textProblems(document: FlybyDocument): FlybyProblem[] {
+  const texts = document.texts;
+  if (!texts) {
+    return [];
+  }
+  const problems: FlybyProblem[] = [];
+  if (
+    !cardIsSound(texts.title) ||
+    !cardIsSound(texts.end) ||
+    !((texts.fadeIn ?? 0) >= 0 && (texts.fadeIn ?? 0) <= FLYBY_MAX_CHANGE_SECONDS) ||
+    !((texts.fadeOut ?? 0) >= 0 && (texts.fadeOut ?? 0) <= FLYBY_MAX_CHANGE_SECONDS)
+  ) {
+    problems.push({ code: 'badText' });
+  }
+  for (const caption of texts.captions ?? []) {
+    const section = document.sections.find((candidate) => candidate.id === caption.section);
+    if (
+      !section ||
+      !(caption.at >= 0 && caption.at <= section.seconds) ||
+      !(caption.seconds > 0 && caption.seconds <= FLYBY_MAX_CHANGE_SECONDS)
+    ) {
+      problems.push({ code: 'badText', section: caption.section });
+    }
   }
   return problems;
 }
@@ -330,6 +683,216 @@ function readSection(value: unknown): FlybySection | null {
   return section;
 }
 
+function bagOf(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+/** The text of a card or caption: trimmed of nothing, refused when empty or too long. */
+function plainText(value: unknown): string | undefined {
+  return text(value, FLYBY_MAX_TEXT);
+}
+
+/**
+ * Reads the opening look, or null when something in it is not what it should be. Values are
+ * checked for their form here and for their range by {@link flybyProblems}, so a look with an
+ * opacity of 3 is reported as such rather than vanishing.
+ */
+function readLook(value: unknown): FlybyLook | null {
+  const bag = bagOf(value);
+  if (!bag) {
+    return null;
+  }
+  const look: FlybyLook = {};
+  if (bag.background !== undefined) {
+    const background = finite(bag.background);
+    if (background === undefined || !Number.isInteger(background)) {
+      return null;
+    }
+    look.background = background;
+  }
+  if (bag.backgroundOpacity !== undefined) {
+    const opacity = finite(bag.backgroundOpacity);
+    if (opacity === undefined) {
+      return null;
+    }
+    look.backgroundOpacity = opacity;
+  }
+  if (bag.layers !== undefined) {
+    const layers = bagOf(bag.layers);
+    if (!layers || Object.keys(layers).length > FLYBY_MAX_LAYERS) {
+      return null;
+    }
+    look.layers = {};
+    for (const [key, entry] of Object.entries(layers)) {
+      const layer = bagOf(entry);
+      if (!isFlybyLayerKey(key) || !layer) {
+        return null;
+      }
+      const read: FlybyLayerLook = {};
+      if (layer.visible !== undefined) {
+        if (typeof layer.visible !== 'boolean') {
+          return null;
+        }
+        read.visible = layer.visible;
+      }
+      if (layer.opacity !== undefined) {
+        const opacity = finite(layer.opacity);
+        if (opacity === undefined) {
+          return null;
+        }
+        read.opacity = opacity;
+      }
+      look.layers[key] = read;
+    }
+  }
+  if (bag.walls !== undefined) {
+    const walls = bagOf(bag.walls);
+    const strength = finite(walls?.strength);
+    if (!walls || !isFlybyColour(walls.colour) || strength === undefined) {
+      return null;
+    }
+    look.walls = { colour: walls.colour, strength };
+  }
+  for (const key of ['lines', 'sky'] as const) {
+    if (bag[key] !== undefined) {
+      if (!isFlybyColour(bag[key])) {
+        return null;
+      }
+      look[key] = bag[key];
+    }
+  }
+  if (bag.surface !== undefined) {
+    const surface = FLYBY_SURFACES.find((candidate) => candidate === bag.surface);
+    if (!surface) {
+      return null;
+    }
+    look.surface = surface;
+  }
+  return look;
+}
+
+function readColourOrNull(value: unknown): FlybyColour | null | undefined {
+  return value === null ? null : isFlybyColour(value) ? value : undefined;
+}
+
+function readChange(value: unknown): FlybyChange | null {
+  const bag = bagOf(value);
+  if (!bag) {
+    return null;
+  }
+  const id = text(bag.id, 64);
+  const section = text(bag.section, 64);
+  const at = finite(bag.at);
+  const seconds = finite(bag.seconds) ?? 0;
+  if (!id || !section || at === undefined) {
+    return null;
+  }
+  const timing = { id, section, at, seconds };
+  switch (bag.kind) {
+    case 'background': {
+      const background = finite(bag.background);
+      return background !== undefined && Number.isInteger(background) ? { kind: 'background', background, ...timing } : null;
+    }
+    case 'backgroundOpacity': {
+      const opacity = finite(bag.opacity);
+      return opacity !== undefined ? { kind: 'backgroundOpacity', opacity, ...timing } : null;
+    }
+    case 'layer':
+      return isFlybyLayerKey(bag.layer) && typeof bag.visible === 'boolean'
+        ? { kind: 'layer', layer: bag.layer, visible: bag.visible, ...timing }
+        : null;
+    case 'layerOpacity': {
+      const opacity = finite(bag.opacity);
+      return isFlybyLayerKey(bag.layer) && opacity !== undefined
+        ? { kind: 'layerOpacity', layer: bag.layer, opacity, ...timing }
+        : null;
+    }
+    case 'walls': {
+      const strength = finite(bag.strength);
+      return isFlybyColour(bag.colour) && strength !== undefined
+        ? { kind: 'walls', colour: bag.colour, strength, ...timing }
+        : null;
+    }
+    case 'lines':
+    case 'sky': {
+      const colour = readColourOrNull(bag.colour);
+      return colour === undefined ? null : { kind: bag.kind, colour, ...timing };
+    }
+    case 'surface': {
+      const surface = FLYBY_SURFACES.find((candidate) => candidate === bag.surface);
+      return surface ? { kind: 'surface', surface, ...timing } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+function readCard(value: unknown): FlybyCard | null {
+  const bag = bagOf(value);
+  const textValue = plainText(bag?.text);
+  const seconds = finite(bag?.seconds);
+  if (!bag || !textValue || seconds === undefined) {
+    return null;
+  }
+  const card: FlybyCard = { text: textValue, seconds };
+  if (bag.subtitle !== undefined) {
+    const subtitle = plainText(bag.subtitle);
+    if (!subtitle) {
+      return null;
+    }
+    card.subtitle = subtitle;
+  }
+  return card;
+}
+
+function readCaption(value: unknown): FlybyCaption | null {
+  const bag = bagOf(value);
+  const section = text(bag?.section, 64);
+  const textValue = plainText(bag?.text);
+  const at = finite(bag?.at);
+  const seconds = finite(bag?.seconds);
+  return section && textValue && at !== undefined && seconds !== undefined
+    ? { section, text: textValue, at, seconds }
+    : null;
+}
+
+function readTexts(value: unknown): FlybyTexts | null {
+  const bag = bagOf(value);
+  if (!bag) {
+    return null;
+  }
+  const texts: FlybyTexts = {};
+  for (const key of ['title', 'end'] as const) {
+    if (bag[key] !== undefined) {
+      const card = readCard(bag[key]);
+      if (!card) {
+        return null;
+      }
+      texts[key] = card;
+    }
+  }
+  if (bag.captions !== undefined) {
+    if (!Array.isArray(bag.captions) || bag.captions.length > FLYBY_MAX_SECTIONS) {
+      return null;
+    }
+    const captions = bag.captions.map(readCaption);
+    if (captions.some((caption) => caption === null)) {
+      return null;
+    }
+    texts.captions = captions as FlybyCaption[];
+  }
+  for (const key of ['fadeIn', 'fadeOut'] as const) {
+    if (bag[key] !== undefined) {
+      const seconds = finite(bag[key]);
+      if (seconds === undefined) {
+        return null;
+      }
+      texts[key] = seconds;
+    }
+  }
+  return texts;
+}
+
 /**
  * Reads a flyby out of something stored — a file a person chose, an entry in the browser's storage
  * — or returns null when it is not one that can be played.
@@ -391,6 +954,32 @@ export function normalizeFlybyDocument(value: unknown): FlybyDocument | null {
   const preset = FLYBY_PRESETS.find((candidate) => candidate === bag.preset);
   if (preset) {
     document.preset = preset;
+  }
+  // What a flyby does to the scene's look and says over it. Each is optional, so a flyby written
+  // before they existed opens as it was; one that is there and cannot be read refuses the whole.
+  if (bag.look !== undefined) {
+    const look = readLook(bag.look);
+    if (!look) {
+      return null;
+    }
+    document.look = look;
+  }
+  if (bag.changes !== undefined) {
+    if (!Array.isArray(bag.changes) || bag.changes.length > FLYBY_MAX_CHANGES) {
+      return null;
+    }
+    const changes = bag.changes.map(readChange);
+    if (changes.some((change) => change === null)) {
+      return null;
+    }
+    document.changes = changes as FlybyChange[];
+  }
+  if (bag.texts !== undefined) {
+    const texts = readTexts(bag.texts);
+    if (!texts) {
+      return null;
+    }
+    document.texts = texts;
   }
   return flybyProblems(document).length === 0 ? document : null;
 }
