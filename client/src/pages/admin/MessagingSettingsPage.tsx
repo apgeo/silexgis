@@ -6,6 +6,7 @@ import {
   CameraOutlined,
   CloudUploadOutlined,
   EnvironmentOutlined,
+  ExperimentOutlined,
   FileImageOutlined,
   GlobalOutlined,
   ImportOutlined,
@@ -33,6 +34,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import MapBackgroundsForm from './MapBackgroundsForm.tsx';
 import WorkspaceDefaultForm from './WorkspaceDefaultForm.tsx';
 import SurveyUploadsSettingsForm from './SurveyUploadsSettingsForm.tsx';
+import TestDataSettingsForm from './TestDataSettingsForm.tsx';
 import SelfHostedBasemapPanel from './SelfHostedBasemapPanel.tsx';
 import SyncSettingsForm from './SyncSettingsForm.tsx';
 import { useTranslation } from 'react-i18next';
@@ -186,6 +188,15 @@ export default function MessagingSettingsPage() {
                 </span>
               ),
               children: <SurveyUploadsSettingsForm settings={settings} onSaved={onSaved} />,
+            },
+            {
+              key: 'test-data',
+              label: (
+                <span>
+                  <ExperimentOutlined /> {t('admin.messaging.testDataTab')}
+                </span>
+              ),
+              children: <TestDataSettingsForm settings={settings} onSaved={onSaved} />,
             },
             {
               key: 'workspace',

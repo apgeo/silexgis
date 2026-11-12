@@ -123,6 +123,7 @@ function AppShell() {
       (photoLibraries?.mayRead ?? false)
       && (photoLibraries?.providers.some((library) => !library.suspended) ?? false),
     isFullAdmin,
+    testDataGenerator: capabilities?.testDataGenerator ?? false,
   });
 
 

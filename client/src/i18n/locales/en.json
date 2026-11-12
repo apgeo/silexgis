@@ -65,7 +65,8 @@
     "speleolocImport": "Import a recording",
     "registryRegions": "Regions",
     "registryCategories": "Categories",
-    "publishedTrips": "Published trips"
+    "publishedTrips": "Published trips",
+    "testData": "Test data"
   },
   "terrain": {
     "title": "Terrain",
@@ -3097,7 +3098,8 @@
       "undo": "Undo",
       "reviewDecision": "Review decision",
       "job": "Background job",
-      "tripConversion": "Trip converted from a recording"
+      "tripConversion": "Trip converted from a recording",
+      "generated": "Generated test data"
     },
     "skipReason": {
       "not_restorable": "history cannot put this one back",
@@ -5137,6 +5139,11 @@
       "dailyPaidMessageCapHint": "A carrier bills a text message by the segment, not by the message: 160 characters of the plain Latin alphabet travel in one segment, but a single accented letter re-encodes the whole message into segments of 70, so the same wording costs twice as much in Romanian as in English. An announcement that would take the day past this is refused outright rather than sent to half the roster. Segments already committed today count, including ones still waiting to go out.",
       "photoLibrariesTab": "Photo libraries",
       "surveyUploadsTab": "Survey uploads",
+      "testDataTab": "Test data",
+      "testDataIntro": "The test-data generator fills this installation with invented, realistic test data and removes it again. It is offered to full administrators while this switch is on and the deployment allows it.",
+      "testDataNotAllowed": "This deployment does not allow the test-data generator (SILEXGIS__TestData__Allowed=false), so this switch changes nothing.",
+      "testDataEnabled": "Offer the test-data generator",
+      "testDataEnabledHint": "Off hides the page from full administrators and refuses its routes. Data already generated stays until it is removed.",
       "surveyUploadsIntro": "Choices about surveys sent from a field device, such as TopoDroid.",
       "firstModelOfCreatedCave": "A cave made by an upload takes its first model",
       "firstModelOfCreatedCaveHint": "When an upload creates a cave, the first model it brings becomes the cave's current model and its centreline the cave's shape. Off: a model from an upload never becomes current on its own; somebody chooses on the web.",
@@ -9409,5 +9416,86 @@
       "note": "Measured over the survey in this upload's own files, not the survey the cave is currently drawn from.",
       "none": "This upload's survey was not read into shots: it could not be placed on a map, or its reading has not finished."
     }
+  },
+  "testData": {
+    "title": "Test data",
+    "intro": "Generate invented, realistic test data — caves, their entrances and the karst areas around them — and remove it again. Every generated object carries the tag named in the profile; removal takes away exactly what a run wrote and nothing else.",
+    "disabled": "The test-data generator is switched off on this installation.",
+    "loadFailed": "The test-data generator could not be read.",
+    "newRun": "New run",
+    "profile": "Profile",
+    "profiles": {
+      "small": "Small (25 caves)",
+      "default": "Default (500 caves)",
+      "large": "Large (5,000 caves)"
+    },
+    "caveCount": "Caves",
+    "seed": "Seed",
+    "json": "Profile (JSON)",
+    "jsonHelp": "The whole profile. The same profile and seed generate the same data; a section this version does not know yet is ignored.",
+    "jsonInvalid": "The profile is not valid JSON.",
+    "start": "Generate",
+    "started": "The run is queued.",
+    "existingNote": "This installation already holds {{caves}} caves, {{trips}} trips and {{documents}} documents that no test-data run created. A run beside them needs confirming.",
+    "existingTitle": "Generate beside existing data?",
+    "existingBody": "This installation already holds {{caves}} caves, {{trips}} trips and {{documents}} documents that no test-data run created. The generated data will sit beside them; removing the run later takes away only what it generated.",
+    "existingOk": "Generate anyway",
+    "runInProgress": "A run or a removal is already going.",
+    "profileInvalid": "The profile cannot run: {{problems}}",
+    "startFailed": "The run could not be started.",
+    "runs": "Runs",
+    "noRuns": "No runs yet.",
+    "created": "Started",
+    "statusLabel": "Status",
+    "status": {
+      "queued": "Waiting",
+      "running": "Generating",
+      "succeeded": "Done",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "removing": "Removing",
+      "removed": "Removed"
+    },
+    "alongside": "Beside existing data",
+    "progress": "Progress",
+    "countsLabel": "Written",
+    "counts": {
+      "massifs": "massifs",
+      "karstAreas": "karst areas",
+      "caves": "caves",
+      "entrances": "entrances",
+      "protectedCaves": "protected caves",
+      "tags": "tags"
+    },
+    "cancel": "Cancel",
+    "cancelFailed": "The run could not be cancelled.",
+    "remove": "Remove",
+    "removeTitle": "Remove this run's data?",
+    "removeBody": "Everything the run generated is deleted for good. Data the run did not create is left alone, and so is a generated area somebody has since put data of their own in.",
+    "removeFailed": "The removal could not be started.",
+    "notes": "Notes",
+    "coverage": "What the run wrote, table by table",
+    "table": "Table",
+    "rows": "Rows",
+    "emptyColumns": "Columns left empty",
+    "noEmptyColumns": "none",
+    "tables": "Every table, and how test data reaches it",
+    "roleLabel": "How",
+    "role": {
+      "generated": "Generated",
+      "derived": "Follows from generated data",
+      "planned": "Planned",
+      "exempt": "Never generated"
+    },
+    "part": {
+      "geography": "with the geography",
+      "people": "with people, clubs and access",
+      "underground": "with surveys and the underground",
+      "activity": "with trips, camps and events",
+      "documents": "with documents and media",
+      "geodata": "with geodata, imports and devices",
+      "accounts": "with account exports"
+    },
+    "note": "Note"
   }
 }

@@ -29,7 +29,7 @@ export const NAV_SECTIONS = [
   'tools/coordinates',
   'review',
   'admin/audit', 'admin/notification-health', 'admin/storage', 'admin/messaging', 'admin/message-templates',
-  'admin/published-trips',
+  'admin/published-trips', 'admin/test-data',
   'admin/permission-groups', 'admin/users',
   'admin/feature-sets', 'admin/document-types', 'admin/feature-types', 'admin/relation-types', 'admin/term-rules',
   'admin/terrain',

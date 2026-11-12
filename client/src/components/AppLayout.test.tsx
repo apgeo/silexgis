@@ -218,6 +218,7 @@ describe('AppLayout selected destination', () => {
       tripLogCreate: true,
       photoLibrary: true,
       isFullAdmin: true,
+      testDataGenerator: true,
     });
     const leaves = items.flatMap((entry) =>
       isNavGroup(entry) ? entry.children.map((child) => String(child.key)) : [String(entry.key)],
@@ -412,6 +413,7 @@ describe('AppLayout nav destinations', () => {
     tripLogCreate: true,
     photoLibrary: true,
     isFullAdmin: true,
+    testDataGenerator: true,
   };
 
   /** Every key the rail can offer, groups flattened into the destinations they hold. */
@@ -469,6 +471,7 @@ describe('AppLayout nav destinations', () => {
       tripLogCreate: false,
       photoLibrary: false,
       isFullAdmin: false,
+      testDataGenerator: false,
     });
     const keys = items.map((item) => item.key);
 
@@ -521,6 +524,17 @@ describe('AppLayout nav destinations', () => {
     // The control: this installation's own gallery is still offered, so what disappeared is the
     // neighbouring library and not the group around it.
     expect(libraryOf(without)).toContain('gallery');
+  });
+
+  it('offers the test-data generator only when the server says this account may use it', () => {
+    // The server's answer already folds in the rank and both halves of the switch, so the rail
+    // follows it alone: a full administrator on a deployment that does not offer the generator is
+    // not sent to a page that would answer "not here".
+    const adminKeys = (gates: Parameters<typeof buildNavItems>[1]) =>
+      buildNavItems(i18n.t, gates).flatMap((item) => (isNavGroup(item) ? item.children.map((c) => c.key) : [item.key]));
+
+    expect(adminKeys(everything)).toContain('admin/test-data');
+    expect(adminKeys({ ...everything, testDataGenerator: false })).not.toContain('admin/test-data');
   });
 
   it('offers the page of everything published to full administrators and to nobody else', () => {

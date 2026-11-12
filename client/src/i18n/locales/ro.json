@@ -65,7 +65,8 @@
     "speleolocImport": "Importă o înregistrare",
     "registryRegions": "Regiuni",
     "registryCategories": "Categorii",
-    "publishedTrips": "Ture publicate"
+    "publishedTrips": "Ture publicate",
+    "testData": "Date de test"
   },
   "terrain": {
     "title": "Relief",
@@ -3097,7 +3098,8 @@
       "undo": "Anulare",
       "reviewDecision": "Decizie de revizuire",
       "job": "Sarcină în fundal",
-      "tripConversion": "Tură convertită dintr-o înregistrare"
+      "tripConversion": "Tură convertită dintr-o înregistrare",
+      "generated": "Date de test generate"
     },
     "skipReason": {
       "not_restorable": "istoricul nu poate restaura această valoare",
@@ -5150,6 +5152,11 @@
       "dailyPaidMessageCapHint": "Un operator taxează un mesaj SMS pe segmente, nu pe mesaj: 160 de caractere din alfabetul latin simplu încap într-un singur segment, dar o singură literă cu diacritice recodifică tot mesajul în segmente de 70, așa că aceeași formulare costă de două ori mai mult în română decât în engleză. Un anunț care ar depăși această limită este refuzat în întregime, nu trimis către jumătate din listă. Segmentele deja angajate azi contează, inclusiv cele care încă așteaptă să plece.",
       "photoLibrariesTab": "Fototeci",
       "surveyUploadsTab": "Încărcări de topografii",
+      "testDataTab": "Date de test",
+      "testDataIntro": "Generatorul de date de test umple această instalare cu date inventate, realiste, și le șterge din nou. Este oferit administratorilor deplini cât timp acest comutator este pornit și implementarea îl permite.",
+      "testDataNotAllowed": "Această implementare nu permite generatorul de date de test (SILEXGIS__TestData__Allowed=false), așa că acest comutator nu schimbă nimic.",
+      "testDataEnabled": "Oferă generatorul de date de test",
+      "testDataEnabledHint": "Oprit, pagina este ascunsă administratorilor deplini și rutele ei sunt refuzate. Datele deja generate rămân până sunt șterse.",
       "surveyUploadsIntro": "Alegeri despre topografiile trimise de pe un dispozitiv de teren, cum ar fi TopoDroid.",
       "firstModelOfCreatedCave": "O peșteră creată de o încărcare primește primul ei model",
       "firstModelOfCreatedCaveHint": "Când o încărcare creează o peșteră, primul model adus devine modelul curent al peșterii, iar drumuirea lui forma peșterii. Oprit: un model dintr-o încărcare nu devine niciodată curent singur; cineva alege pe web.",
@@ -9422,5 +9429,86 @@
       "note": "Măsurată pe topografia din fișierele acestei încărcări, nu pe cea după care este desenată acum peștera.",
       "none": "Topografia acestei încărcări nu a fost citită în vize: nu a putut fi plasată pe hartă sau citirea ei nu s-a încheiat."
     }
+  },
+  "testData": {
+    "title": "Date de test",
+    "intro": "Generează date de test inventate, realiste — peșteri, intrările lor și zonele carstice din jur — și șterge-le din nou. Fiecare obiect generat poartă eticheta numită în profil; ștergerea ia exact ce a scris o rulare și nimic altceva.",
+    "disabled": "Generatorul de date de test este oprit pe această instalare.",
+    "loadFailed": "Generatorul de date de test nu a putut fi citit.",
+    "newRun": "Rulare nouă",
+    "profile": "Profil",
+    "profiles": {
+      "small": "Mic (25 de peșteri)",
+      "default": "Implicit (500 de peșteri)",
+      "large": "Mare (5.000 de peșteri)"
+    },
+    "caveCount": "Peșteri",
+    "seed": "Sămânță",
+    "json": "Profil (JSON)",
+    "jsonHelp": "Profilul întreg. Același profil și aceeași sămânță generează aceleași date; o secțiune pe care această versiune nu o cunoaște încă este ignorată.",
+    "jsonInvalid": "Profilul nu este JSON valid.",
+    "start": "Generează",
+    "started": "Rularea a fost pusă în coadă.",
+    "existingNote": "Această instalare conține deja {{caves}} peșteri, {{trips}} ture și {{documents}} documente pe care nicio rulare de date de test nu le-a creat. O rulare alături de ele trebuie confirmată.",
+    "existingTitle": "Generezi alături de datele existente?",
+    "existingBody": "Această instalare conține deja {{caves}} peșteri, {{trips}} ture și {{documents}} documente pe care nicio rulare de date de test nu le-a creat. Datele generate vor sta alături de ele; ștergerea ulterioară a rulării ia doar ce a generat.",
+    "existingOk": "Generează oricum",
+    "runInProgress": "O rulare sau o ștergere este deja în desfășurare.",
+    "profileInvalid": "Profilul nu poate rula: {{problems}}",
+    "startFailed": "Rularea nu a putut fi pornită.",
+    "runs": "Rulări",
+    "noRuns": "Nicio rulare încă.",
+    "created": "Pornită",
+    "statusLabel": "Stare",
+    "status": {
+      "queued": "În așteptare",
+      "running": "Se generează",
+      "succeeded": "Gata",
+      "failed": "Eșuată",
+      "cancelled": "Anulată",
+      "removing": "Se șterge",
+      "removed": "Ștearsă"
+    },
+    "alongside": "Alături de date existente",
+    "progress": "Progres",
+    "countsLabel": "Scrise",
+    "counts": {
+      "massifs": "masive",
+      "karstAreas": "zone carstice",
+      "caves": "peșteri",
+      "entrances": "intrări",
+      "protectedCaves": "peșteri protejate",
+      "tags": "etichete"
+    },
+    "cancel": "Anulează",
+    "cancelFailed": "Rularea nu a putut fi anulată.",
+    "remove": "Șterge",
+    "removeTitle": "Ștergi datele acestei rulări?",
+    "removeBody": "Tot ce a generat rularea este șters definitiv. Datele pe care rularea nu le-a creat rămân neatinse, la fel și o zonă generată în care cineva a pus între timp date proprii.",
+    "removeFailed": "Ștergerea nu a putut fi pornită.",
+    "notes": "Note",
+    "coverage": "Ce a scris rularea, tabel cu tabel",
+    "table": "Tabel",
+    "rows": "Rânduri",
+    "emptyColumns": "Coloane rămase goale",
+    "noEmptyColumns": "niciuna",
+    "tables": "Fiecare tabel și cum ajung datele de test în el",
+    "roleLabel": "Cum",
+    "role": {
+      "generated": "Generat",
+      "derived": "Urmează din datele generate",
+      "planned": "Planificat",
+      "exempt": "Niciodată generat"
+    },
+    "part": {
+      "geography": "cu geografia",
+      "people": "cu oamenii, cluburile și accesul",
+      "underground": "cu topografiile și subteranul",
+      "activity": "cu turele, taberele și evenimentele",
+      "documents": "cu documentele și fișierele media",
+      "geodata": "cu datele geografice, importurile și dispozitivele",
+      "accounts": "cu exporturile de cont"
+    },
+    "note": "Notă"
   }
 }

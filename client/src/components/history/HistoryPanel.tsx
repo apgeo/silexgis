@@ -127,6 +127,7 @@ const SOURCE_COLOR: Record<string, string> = {
   restore: 'orange',
   undo: 'orange',
   reviewDecision: 'gold',
+  generated: 'magenta',
 };
 
 /** Where a change came from, and — when it belongs to an import — a way to the import it is part of. */
