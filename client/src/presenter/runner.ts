@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { eyeLookingAt } from '../scene3d/camera3d.ts';
-import type { Scene3DPresenterBridge, Scene3DPresenterSphere } from '../scene3d/presenterBridge3d.ts';
+import type {
+  Scene3DPresenterBridge,
+  Scene3DPresenterSphere,
+  Scene3DPresenterTint,
+} from '../scene3d/presenterBridge3d.ts';
 import { PresenterOverlay } from './overlay.ts';
 import { centreOf, dragValue, mouse, NotReadyError, stepsFor, type PointerStep } from './pointer.ts';
 import {
@@ -44,7 +48,7 @@ export interface PresenterRunner {
   destroy(): void;
 }
 
-interface Pose {
+export interface Pose {
   heading: number;
   pitch: number;
   range: number;
@@ -52,7 +56,7 @@ interface Pose {
   aboveGround: number | null;
 }
 
-interface CameraLeg {
+export interface CameraLeg {
   at: number;
   duration: number;
   from: Pose;
@@ -84,6 +88,100 @@ function lerp(a: number, b: number, p: number): number {
   return a + (b - a) * p;
 }
 
+/** The parts of a pose that are interpolated: heading, pitch, the range's logarithm, lift. */
+type PoseVector = [number, number, number, number];
+
+function vectorOf(pose: Pose): PoseVector {
+  return [pose.heading, pose.pitch, Math.log(pose.range), pose.lift];
+}
+
+/** Two `smooth` moves back to back, flown as one curve. */
+function joined(a: CameraLeg | undefined, b: CameraLeg | undefined): boolean {
+  return Boolean(
+    a &&
+      b &&
+      a.ease === 'smooth' &&
+      b.ease === 'smooth' &&
+      a.duration > 0 &&
+      b.duration > 0 &&
+      Math.abs(a.at + a.duration - b.at) < 1e-6,
+  );
+}
+
+/**
+ * How fast each part of the pose changes where move `a` hands over to move `b`: the average rate
+ * from a's start to b's end (a Catmull-Rom curve over uneven times). Both moves use the same rate
+ * there, so the camera neither stops nor jerks at the join.
+ */
+function rateAtJoin(a: CameraLeg, b: CameraLeg): PoseVector {
+  const span = b.at + b.duration - a.at;
+  const from = vectorOf(a.from);
+  const to = vectorOf(b.to);
+  return from.map((value, i) => (to[i] - value) / span) as PoseVector;
+}
+
+/**
+ * Where camera move `index` has got to at time `t`, and how far through it the move is (0–1, for
+ * what is blended rather than flown, such as the limit above ground).
+ */
+export function cameraPoseAt(legs: readonly CameraLeg[], index: number, t: number): { vector: PoseVector; p: number } {
+  const leg = legs[index];
+  const s = leg.duration > 0 ? Math.min(1, Math.max(0, (t - leg.at) / leg.duration)) : 1;
+  const from = vectorOf(leg.from);
+  const to = vectorOf(leg.to);
+  if (leg.ease !== 'smooth' || leg.duration <= 0) {
+    const p = ease(leg.ease, s);
+    return { vector: from.map((value, i) => lerp(value, to[i], p)) as PoseVector, p };
+  }
+  const still: PoseVector = [0, 0, 0, 0];
+  const start = joined(legs[index - 1], leg) ? rateAtJoin(legs[index - 1], leg) : still;
+  const end = joined(leg, legs[index + 1]) ? rateAtJoin(leg, legs[index + 1]) : still;
+  // Cubic Hermite: the two poses, and the rates at either end, scaled to the move's length.
+  const s2 = s * s;
+  const s3 = s2 * s;
+  const h00 = 2 * s3 - 3 * s2 + 1;
+  const h10 = s3 - 2 * s2 + s;
+  const h01 = -2 * s3 + 3 * s2;
+  const h11 = s3 - s2;
+  const vector = from.map(
+    (value, i) => h00 * value + h10 * leg.duration * start[i] + h01 * to[i] + h11 * leg.duration * end[i],
+  ) as PoseVector;
+  return { vector, p: ease('inOut', s) };
+}
+
+function colourOf(hex: string): { red: number; green: number; blue: number } {
+  const value = Number.parseInt(hex.slice(1), 16);
+  return { red: ((value >> 16) & 255) / 255, green: ((value >> 8) & 255) / 255, blue: (value & 255) / 255 };
+}
+
+/** The tint the walls have at `t`, after every colour change begun by then; undefined is their own. */
+export function modelTintAt(items: readonly ScenarioItem[], t: number): Scene3DPresenterTint | undefined {
+  let current: Scene3DPresenterTint | undefined;
+  for (const item of items) {
+    if (item.kind !== 'modelColor' || item.at > t) {
+      continue;
+    }
+    const target: Scene3DPresenterTint | undefined =
+      item.to === null
+        ? current && { ...current, amount: 0 }
+        : { ...colourOf(item.to), amount: Math.min(1, Math.max(0, item.strength ?? 0.8)) };
+    if (!target) {
+      continue;
+    }
+    // From the walls' own colours, the new colour fades in rather than sweeping from black.
+    const from = current ?? { ...target, amount: 0 };
+    const duration = durationOf(item);
+    const p = duration > 0 ? ease(item.ease, (t - item.at) / duration) : 1;
+    current = {
+      red: lerp(from.red, target.red, p),
+      green: lerp(from.green, target.green, p),
+      blue: lerp(from.blue, target.blue, p),
+      amount: lerp(from.amount, target.amount, p),
+    };
+  }
+  return current && current.amount > 0 ? current : undefined;
+}
+
 function poseAfter(previous: Pose, to: OrbitPose): Pose {
   return {
     heading: to.heading ?? previous.heading + (to.headingBy ?? 0),
@@ -102,12 +200,15 @@ function bridge(): Scene3DPresenterBridge {
   return found;
 }
 
-/** 0→1 over `fade` seconds at the start of [start, end) and 1→0 over the same at its end. */
+/**
+ * 0→1 over `fade` seconds at the start of [start, end) and 1→0 over the same at its end. Something
+ * shown from the very first frame is there at once: fading it in would flash what is behind it.
+ */
 function envelope(t: number, start: number, end: number, fade: number): number {
   if (t < start || t >= end) {
     return 0;
   }
-  return Math.min(1, (t - start) / fade, (end - t) / fade);
+  return Math.min(1, start === 0 ? 1 : (t - start) / fade, (end - t) / fade);
 }
 
 export function createRunner(scenario: Scenario, options: PresenterRunnerOptions): PresenterRunner {
@@ -149,15 +250,17 @@ export function createRunner(scenario: Scenario, options: PresenterRunnerOptions
     if (!sphere) {
       return;
     }
-    const leg = legs.findLast((candidate) => candidate.at <= t);
-    if (!leg) {
+    const index = legs.findLastIndex((candidate) => candidate.at <= t);
+    if (index < 0) {
       return;
     }
-    const p = leg.duration > 0 ? ease(leg.ease, (t - leg.at) / leg.duration) : 1;
-    const heading = lerp(leg.from.heading, leg.to.heading, p);
-    let pitch = lerp(leg.from.pitch, leg.to.pitch, p);
-    const range = lerp(leg.from.range, leg.to.range, p);
-    const lift = lerp(leg.from.lift, leg.to.lift, p);
+    const leg = legs[index];
+    const {
+      vector: [heading, flownPitch, logRange, lift],
+      p,
+    } = cameraPoseAt(legs, index, t);
+    let pitch = flownPitch;
+    const range = Math.exp(logRange);
     const pivot = {
       lon: sphere.longitude,
       lat: sphere.latitude,
@@ -181,6 +284,21 @@ export function createRunner(scenario: Scenario, options: PresenterRunnerOptions
       pitch,
       roll: 0,
     });
+  }
+
+  const colourItems = items.filter((item) => item.kind === 'modelColor');
+  let lastTint: string | undefined;
+
+  function applyTint(t: number) {
+    if (colourItems.length === 0) {
+      return;
+    }
+    const tint = modelTintAt(colourItems, t);
+    const key = JSON.stringify(tint ?? null);
+    if (key !== lastTint) {
+      bridge().setModelTint(tint);
+      lastTint = key;
+    }
   }
 
   function stepLength(step: PointerStep): number {
@@ -374,6 +492,9 @@ export function createRunner(scenario: Scenario, options: PresenterRunnerOptions
       if (!sphere) {
         throw new Error('presenter: no cave model is drawn in the 3D view, so there is nothing to move around');
       }
+      if (colourItems.length > 0 && typeof bridge().setModelTint !== 'function') {
+        throw new Error('presenter: this build of the application cannot recolour a model; record against a newer one');
+      }
       buildLegs();
       overlay = new PresenterOverlay();
     },
@@ -385,6 +506,7 @@ export function createRunner(scenario: Scenario, options: PresenterRunnerOptions
         driveAnimations(t);
       }
       applyCamera(t);
+      applyTint(t);
       advancePointer(t);
       drawOverlay(t);
       lastT = t;
@@ -431,6 +553,9 @@ export function createRunner(scenario: Scenario, options: PresenterRunnerOptions
       });
     },
     destroy() {
+      if (lastTint !== undefined && lastTint !== 'null') {
+        window.__silexgisPresenter?.scene3d?.setModelTint(undefined);
+      }
       overlay?.destroy();
       overlay = undefined;
     },
