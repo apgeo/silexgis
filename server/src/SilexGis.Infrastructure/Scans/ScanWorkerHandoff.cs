@@ -116,21 +116,72 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
     /// <summary>How long a called-off job is given to confirm it stopped before its directory is removed anyway.</summary>
     public TimeSpan WithdrawalWait { get; set; } = TimeSpan.FromSeconds(15);
 
+    /// <summary>The tiler's hand-off directory, and the only one when the HDMapping worker has none of its own.</summary>
     public string Root { get; } = Path.GetFullPath(options.Value.HandoffRoot, AppContext.BaseDirectory);
+
+    /// <summary>
+    /// The HDMapping worker's hand-off directory: its own when one is set, otherwise the same as
+    /// <see cref="Root"/>.
+    /// </summary>
+    public string HdmappingRoot { get; } = Path.GetFullPath(
+        string.IsNullOrWhiteSpace(options.Value.HdmappingHandoffRoot) ? options.Value.HandoffRoot : options.Value.HdmappingHandoffRoot,
+        AppContext.BaseDirectory);
+
+    /// <summary>Every hand-off directory, each once.</summary>
+    public IReadOnlyList<string> Roots => HdmappingSeparate ? [Root, HdmappingRoot] : [Root];
+
+    private bool HdmappingSeparate => !string.Equals(Root, HdmappingRoot, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The steps the HDMapping worker runs. With a directory of its own, their jobs go there and
+    /// only there, and only these steps are believed when that directory's announcement names
+    /// them — a worker given raw uploads to parse does not get to claim the tiler's work, nor the
+    /// tiler its.
+    /// </summary>
+    public static readonly IReadOnlySet<string> HdmappingWorkerSteps = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "hdmapping.preflight",
+        Domain.Scans.HdmappingOdometryStep.StepId,
+        Domain.Scans.HdmappingExportStep.StepId,
+        Domain.Scans.PointCloudCheckStep.StepId,
+    };
+
+    /// <summary>The hand-off directory of the worker that runs <paramref name="stepId"/>.</summary>
+    public string RootFor(string stepId) => HdmappingWorkerSteps.Contains(stepId) ? HdmappingRoot : Root;
 
     /// <summary>Whether this installation says it has a worker at all.</summary>
     public bool Enabled => options.Value.ProcessingEnabled;
 
     /// <summary>
-    /// What the worker last announced, or null when nothing has: no file, or one that does not
-    /// read, which from here looks the same as no worker.
+    /// What the workers last announced, or null when nothing has: no file, or one that does not
+    /// read, which from here looks the same as no worker. With a directory for each worker, each
+    /// announcement is read from its own, and only for the steps that worker runs.
     /// </summary>
     public ScanWorkerCapabilities? ReadCapabilities()
     {
-        var path = Path.Combine(Root, CapabilitiesFile);
+        if (!HdmappingSeparate)
+        {
+            return ReadCapabilitiesAt(Root, _ => true);
+        }
+
+        var tiler = ReadCapabilitiesAt(Root, id => !HdmappingWorkerSteps.Contains(id));
+        var hdmapping = ReadCapabilitiesAt(HdmappingRoot, HdmappingWorkerSteps.Contains);
+        if (tiler is null && hdmapping is null)
+        {
+            return null;
+        }
+
+        return new ScanWorkerCapabilities(
+            string.Join(" + ", new[] { tiler?.Worker, hdmapping?.Worker }.Where(w => !string.IsNullOrEmpty(w))),
+            [.. tiler?.Steps ?? [], .. hdmapping?.Steps ?? []]);
+    }
+
+    private ScanWorkerCapabilities? ReadCapabilitiesAt(string directory, Func<string, bool> runsHere)
+    {
+        var path = Path.Combine(directory, CapabilitiesFile);
         try
         {
-            if (ScanHandoffFiles.ReadBounded(Root, CapabilitiesFile, MaxCapabilitiesBytes) is not { } bytes)
+            if (ScanHandoffFiles.ReadBounded(directory, CapabilitiesFile, MaxCapabilitiesBytes) is not { } bytes)
             {
                 return null;
             }
@@ -143,7 +194,7 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
                 foreach (var step in announced.EnumerateArray())
                 {
                     var id = Text(step, "id");
-                    if (!string.IsNullOrEmpty(id))
+                    if (!string.IsNullOrEmpty(id) && runsHere(id))
                     {
                         steps.Add(new ScanWorkerStep(id, Text(step, "tool") ?? "", Text(step, "version") ?? ""));
                     }
@@ -166,10 +217,10 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
     /// </summary>
     public JsonElement? ReadOdometryDefaults()
     {
-        var path = Path.Combine(Root, DefaultsDirectory, OdometryDefaultsFile);
+        var path = Path.Combine(HdmappingRoot, DefaultsDirectory, OdometryDefaultsFile);
         try
         {
-            if (ScanHandoffFiles.ReadBounded(Path.Combine(Root, DefaultsDirectory), OdometryDefaultsFile, MaxDefaultsBytes) is not { } bytes)
+            if (ScanHandoffFiles.ReadBounded(Path.Combine(HdmappingRoot, DefaultsDirectory), OdometryDefaultsFile, MaxDefaultsBytes) is not { } bytes)
             {
                 return null;
             }
@@ -195,10 +246,10 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
     /// </summary>
     public ScanWorkerDefaults? ReadOdometryDefaultsDocument()
     {
-        var path = Path.Combine(Root, DefaultsDirectory, OdometryDefaultsFile);
+        var path = Path.Combine(HdmappingRoot, DefaultsDirectory, OdometryDefaultsFile);
         try
         {
-            if (ScanHandoffFiles.ReadBounded(Path.Combine(Root, DefaultsDirectory), OdometryDefaultsFile, MaxDefaultsBytes) is not { } bytes)
+            if (ScanHandoffFiles.ReadBounded(Path.Combine(HdmappingRoot, DefaultsDirectory), OdometryDefaultsFile, MaxDefaultsBytes) is not { } bytes)
             {
                 return null;
             }
@@ -259,17 +310,17 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
         }
     }
 
-    /// <summary>The directory a job of this name runs in.</summary>
-    public string JobDirectory(string jobName) => Path.Combine(Root, JobsDirectory, jobName);
+    /// <summary>The directory a job of this name runs in, in the hand-off directory of the worker that runs <paramref name="stepId"/>.</summary>
+    public string JobDirectory(string stepId, string jobName) => Path.Combine(RootFor(stepId), JobsDirectory, jobName);
 
     /// <summary>
     /// Makes the job directory afresh. A directory left by an earlier attempt is cleared first;
     /// if the worker is still on it, the job is called off and the worker given a moment to
     /// confirm, so the directory is not pulled out from under a running tool.
     /// </summary>
-    public async Task<string> BeginAsync(string jobName, CancellationToken ct)
+    public async Task<string> BeginAsync(string stepId, string jobName, CancellationToken ct)
     {
-        var directory = JobDirectory(jobName);
+        var directory = JobDirectory(stepId, jobName);
         if (Directory.Exists(directory))
         {
             if (InFlight(directory))

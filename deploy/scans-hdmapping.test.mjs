@@ -175,12 +175,13 @@ except Exception as error:
 }
 
 describe('the HDMapping worker in the overlay', () => {
-  it('is a second service on the same volume, isolated as the tiler is, behind a profile', () => {
+  it('is a second service on a volume of its own, isolated as the tiler is, behind a profile', () => {
     const service = overlay.slice(overlay.indexOf('  scans-hdmapping:'));
     assert.match(service, /^    profiles: \["hdmapping"\]$/m);
     assert.match(service, /^      target: hdmapping$/m);
     assert.match(service, /^    network_mode: none$/m);
-    assert.match(service, /^      - silexgis-scans:\/data\/scans$/m);
+    assert.match(service, /^      - silexgis-scans-hdmapping:\/data\/scans$/m);
+    assert.ok(!/^      - silexgis-scans:/m.test(service), 'the HDMapping worker does not mount the tiler\'s volume');
     assert.match(service, /^    read_only: true$/m);
     assert.match(service, /^    cap_drop:\n      - ALL$/m);
     assert.match(service, /^      - no-new-privileges:true$/m);
@@ -190,6 +191,18 @@ describe('the HDMapping worker in the overlay', () => {
     assert.match(service, /- \/tmp:size=256m/);
     assert.match(service, /SILEXGIS_SCANS_WORKER_ROLE: hdmapping/);
     assert.ok(!/ports:/.test(service));
+  });
+
+  it('is reached by the application through a directory of its own on that volume', () => {
+    const base = readFileSync(join(deployDir, 'docker-compose.yml'), 'utf8');
+    const tiler = overlay.slice(overlay.indexOf('  scans-worker:'), overlay.indexOf('  scans-hdmapping:'));
+    assert.match(tiler, /^      - silexgis-scans:\/data\/scans$/m);
+    assert.ok(!/silexgis-scans-hdmapping/.test(tiler), 'the tiler does not mount the HDMapping worker\'s volume');
+    assert.match(base, /^      SILEXGIS__Scans__HdmappingHandoffRoot: \/data\/scans-hdmapping$/m);
+    assert.match(base, /^      - silexgis-scans-hdmapping:\/data\/scans-hdmapping$/m);
+    assert.match(base, /^  silexgis-scans-hdmapping:$/m);
+    const apiImage = readFileSync(join(deployDir, '..', 'server', 'Dockerfile'), 'utf8');
+    assert.match(apiImage, /\/data\/scans-hdmapping\/jobs/, 'the api image creates the path, so a fresh volume is seeded writable');
   });
 
   it('runs the same loop in the image, in the HDMapping role', () => {

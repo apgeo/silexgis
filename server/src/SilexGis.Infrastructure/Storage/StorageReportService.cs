@@ -350,25 +350,28 @@ public sealed class StorageReportService(
     /// </summary>
     private List<WorkDirectory> WorkDirectories()
     {
-        var root = Path.Combine(handoff.Root, ScanWorkerHandoff.JobsDirectory);
         var found = new List<WorkDirectory>();
-        try
+        foreach (var handoffRoot in handoff.Roots)
         {
-            if (!Directory.Exists(root))
+            var root = Path.Combine(handoffRoot, ScanWorkerHandoff.JobsDirectory);
+            try
             {
-                return found;
-            }
+                if (!Directory.Exists(root))
+                {
+                    continue;
+                }
 
-            foreach (var directory in Directory.EnumerateDirectories(root))
-            {
-                var name = Path.GetFileName(directory);
-                Guid? upload = name.Length >= 32 && Guid.TryParseExact(name[..32], "N", out var id) ? id : null;
-                found.Add(new WorkDirectory(directory, upload, SizeOf(directory)));
+                foreach (var directory in Directory.EnumerateDirectories(root))
+                {
+                    var name = Path.GetFileName(directory);
+                    Guid? upload = name.Length >= 32 && Guid.TryParseExact(name[..32], "N", out var id) ? id : null;
+                    found.Add(new WorkDirectory(directory, upload, SizeOf(directory)));
+                }
             }
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            logger.LogWarning(e, "The processing worker's job directories could not be read");
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(e, "The processing worker's job directories under {Root} could not be read", root);
+            }
         }
 
         return found;

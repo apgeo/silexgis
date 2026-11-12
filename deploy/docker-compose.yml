@@ -118,6 +118,11 @@ services:
       # terrain spool above, and set here whether or not a worker is running, for the same
       # reason: it costs an empty directory, and both halves of one handover belong in one place.
       SILEXGIS__Scans__HandoffRoot: /data/scans
+      # The HDMapping worker's own hand-off directory, on a volume of its own. It runs C++ parsers
+      # over raw uploads, so it is given only the jobs it runs: it never sees the tiler's jobs, nor
+      # the tiler's announcement of what it can do. The application routes each step to the
+      # directory of the worker that runs it.
+      SILEXGIS__Scans__HdmappingHandoffRoot: /data/scans-hdmapping
       # The installation's own vector basemap: where a region an administrator downloads is kept,
       # the directory its tile server reads. Off in this file, because the tile server is not part
       # of it: the basemap overlay (docker-compose.basemap.yml, named in COMPOSE_FILE in the sample
@@ -141,6 +146,8 @@ services:
       # job's directory removed once the application has stored the products. A named volume
       # because one job can hold several gigabytes while it runs.
       - silexgis-scans:/data/scans
+      # The HDMapping worker's jobs, apart from the tiler's (see HdmappingHandoffRoot above).
+      - silexgis-scans-hdmapping:/data/scans-hdmapping
     # Answers "is the application up and its database reachable", which is what the web service
     # waits for below. The runtime image carries bash but neither curl nor wget, and installing a
     # tool only for this would grow the image, so the probe is a plain HTTP/1.0 request written to
@@ -230,3 +237,4 @@ volumes:
   silexgis-terrain:
   silexgis-basemap:
   silexgis-scans:
+  silexgis-scans-hdmapping:

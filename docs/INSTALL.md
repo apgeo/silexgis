@@ -1515,13 +1515,15 @@ docker compose -f docker-compose.yml -f docker-compose.scans.yml up -d --build
 
 It is behind the `hdmapping` profile because building it compiles HDMapping, which takes most of an
 hour. It is isolated exactly as the tiler is (no network, read-only, no capabilities, bounded
-processes) and shares the `silexgis-scans` volume with it; each worker announces its own steps in the
-volume's `capabilities.json` and keeps the other's, so **rebuild both images together** after an
-update — an older tiler image rewrites that file without the HDMapping steps. Its limits are
+processes), and works on a volume of its own, `silexgis-scans-hdmapping`, rather than the tiler's
+`silexgis-scans`: it runs C++ programs over raw uploads, so it is given only its own jobs and never
+sees the tiler's jobs or its announcement. The application mounts both volumes and leaves each step's
+job in the directory of the worker that runs it (`SILEXGIS__Scans__HdmappingHandoffRoot`), and reads
+each worker's `capabilities.json` from its own directory. Its limits are
 `SILEXGIS_SCANS_HDM_MEMORY` (16 GB; odometry peaked at 11.9 GB on a 15-minute two-sensor recording
 and 5.7 GB on a 6-minute one) and `SILEXGIS_SCANS_HDM_CPUS` (8; odometry runs about 1.4 times as
 long as the recording on 12 processors). **Disk:** while odometry runs its cache grows to about
-twenty times the recording inside the job's directory on the scans volume, and the worker refuses a
+twenty times the recording inside the job's directory on its volume, and the worker refuses a
 recording the volume has no room for (it wants 22 times the recording free) rather than fill it.
 The cache is removed when the step ends. Without this worker a recording is archived and inspected,
 and its run ends saying it was not processed; *Rerun* processes it once the worker is there.
@@ -2626,6 +2628,7 @@ the reasoning beside each one.
 | `SILEXGIS__Scans__MaxTotalBytes` | `0` (no separate cap) | the most everything kept for point clouds may take together — uploaded originals (always kept) and every product made from them. Checked beside the installation and account caps when a point-cloud upload opens, as each file arrives, and before each processing step, which is refused before it starts with the missing amount (code `storage.insufficient` for an upload, `survey_pipeline.storage_insufficient` for a run) |
 | `SILEXGIS__Scans__ProcessingEnabled` | `false` | whether this installation has a worker that can tile a point cloud. Set by the same deployment that starts the scans worker (see *Point-cloud worker (optional)*); switched on with no worker running, every point-cloud upload fails at the first worker step, saying so, once `PickupSeconds` have passed — the same wait whether the worker never announced itself or announced itself and takes nothing |
 | `SILEXGIS__Scans__HandoffRoot` | `data/scans` (the compose stack sets `/data/scans`) | the directory the application and the scans worker leave jobs and answers for each other in. Both sides must name the same directory, on a volume they share, and both compose files already do |
+| `SILEXGIS__Scans__HdmappingHandoffRoot` | empty (the compose stack sets `/data/scans-hdmapping`) | the HDMapping worker's own hand-off directory, on a volume only it and the application mount. The steps that worker runs (odometry, export and the exported cloud's check) are left here, and its announcement and default parameters are read from here, so it never sees the tiler's jobs. Empty, both workers share `HandoffRoot` |
 | `SILEXGIS__Scans__PickupSeconds` | `300` | how long a job may wait in the hand-off directory before something takes it. Past this the run fails saying no worker is running, rather than waiting for an answer nothing will write |
 | `SILEXGIS__Scans__JobTimeoutSeconds` | `14400` | the most one worker step (estimate, thin, tile) may run before it is called off and the run fails. Four hours: tiling was measured at about a minute per 40 million points |
 | `SILEXGIS__Scans__DisplayWarnPoints` | `50000000` | above this many points, the upload is shown the estimate table and a thinned display copy is suggested |

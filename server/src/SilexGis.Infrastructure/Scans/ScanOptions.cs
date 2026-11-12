@@ -68,6 +68,15 @@ public sealed class ScanOptions
     public string HandoffRoot { get; set; } = "data/scans";
 
     /// <summary>
+    /// The HDMapping worker's own hand-off directory, on a volume only it and the application
+    /// mount. The steps that worker runs are left here and its announcement and default parameters
+    /// read from here, so a worker that parses raw uploads with native programs never sees the
+    /// tiler's jobs or its announcement. Empty, both workers share <see cref="HandoffRoot"/>.
+    /// Relative paths are resolved against the application's own directory.
+    /// </summary>
+    public string HdmappingHandoffRoot { get; set; } = "";
+
+    /// <summary>
     /// How long a job may wait in the hand-off directory before something takes it, in seconds.
     /// Past this, the worker is judged absent and the run fails saying so, rather than waiting
     /// for an answer nothing will write.

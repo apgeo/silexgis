@@ -27,12 +27,15 @@
 #                                             # two-sensor recording, 5.7 GB on a 6-minute one
 #   SILEXGIS_SCANS_HDM_CPUS=8                 # processors; odometry runs about 1.4 times as long
 #                                             # as the recording on 12
-# Odometry also writes a cache of about twenty times the recording into the scans volume while it
+# Odometry also writes a cache of about twenty times the recording into its volume while it
 # runs; the worker refuses a recording the volume has no room for. Without this worker a recording
 # is still archived and inspected, and its run ends saying it was not processed.
 #
 # The worker publishes no port and answers nothing: it watches a directory on the scans volume
-# that the application writes jobs into, and writes its answer back beside each request. It is
+# that the application writes jobs into, and writes its answer back beside each request. The
+# HDMapping worker has a volume of its own, silexgis-scans-hdmapping, and sees nothing of the
+# tiler's: it parses raw uploads with C++ programs, and were one of them subverted it could
+# otherwise read the tiler's jobs and forge its answers and its announcement. It is
 # given no database credentials, no network at all (not even to the application), a read-only
 # filesystem, no capabilities, and limits on memory, processors and processes — it runs tools over
 # files somebody uploaded, so it runs where there is nothing to read and nowhere to go.
@@ -81,7 +84,7 @@ services:
     # No published ports and no network at all, on purpose — see the note above. The application
     # never talks to it; the directory is the whole conversation.
     network_mode: none
-    # The whole of the scans volume, writable: the application copies a cloud into a job directory
+    # The tiler's scans volume, writable: the application copies a cloud into a job directory
     # there and this worker writes its products beside it. Both containers run as the same user and
     # both create this path in their own image, so neither cares which of them a fresh volume is
     # seeded from.
@@ -120,10 +123,13 @@ services:
       context: ./scans
       target: hdmapping
     restart: unless-stopped
-    # Isolated exactly as the tiler is: no network, the scans volume and nothing else writable.
+    # Isolated exactly as the tiler is: no network, its own volume and nothing else writable. Its
+    # own volume, not the tiler's: the application mounts this one at the path it names in
+    # SILEXGIS__Scans__HdmappingHandoffRoot and leaves the HDMapping steps' jobs there, so this
+    # worker never sees a tiler job, the tiler's capabilities.json or anything else of the tiler's.
     network_mode: none
     volumes:
-      - silexgis-scans:/data/scans
+      - silexgis-scans-hdmapping:/data/scans
     environment:
       SILEXGIS_SCANS_ROOT: /data/scans
       SILEXGIS_SCANS_WORKER_ROLE: hdmapping

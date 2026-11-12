@@ -777,7 +777,7 @@ public sealed class PointCloudProcessing(
         SurveyUpload upload, ScanRecipeStep step, IScanStep definition, ScanArtifact[] inputs, SurveyUploadStage stage, JsonElement parameters, CancellationToken ct)
     {
         var jobName = $"{upload.Id:N}-{step.StepId.Replace('.', '-')}";
-        var directory = await handoff.BeginAsync(jobName, ct);
+        var directory = await handoff.BeginAsync(step.StepId, jobName, ct);
         var named = new Dictionary<string, string>(StringComparer.Ordinal);
         if (step.StepId == HdmappingOdometryStep.StepId)
         {

@@ -50,7 +50,7 @@ public sealed class ScanWorkerHandoffFilesTests : IDisposable
     [Fact]
     public async Task An_input_is_not_copied_through_a_link_left_at_its_name()
     {
-        var job = await handoff.BeginAsync("job-link", TestContext.Current.CancellationToken);
+        var job = await handoff.BeginAsync("pointcloud.estimate", "job-link", TestContext.Current.CancellationToken);
         var target = Path.Combine(outside, "keys.json");
         File.WriteAllText(target, "kept as it was");
         File.CreateSymbolicLink(Path.Combine(job, "pointCloudLaz.laz"), target);
@@ -65,7 +65,7 @@ public sealed class ScanWorkerHandoffFilesTests : IDisposable
     [Fact]
     public async Task Nothing_is_written_into_a_job_directory_that_has_become_a_link()
     {
-        var job = await handoff.BeginAsync("job-swapped", TestContext.Current.CancellationToken);
+        var job = await handoff.BeginAsync("pointcloud.estimate", "job-swapped", TestContext.Current.CancellationToken);
         Directory.Delete(job);
         Directory.CreateSymbolicLink(job, outside);
         var source = Path.Combine(scratch, "source.laz");
@@ -81,7 +81,7 @@ public sealed class ScanWorkerHandoffFilesTests : IDisposable
     [Fact]
     public async Task A_result_that_is_a_link_or_too_large_reads_as_unreadable()
     {
-        var linked = await handoff.BeginAsync("job-linked-result", TestContext.Current.CancellationToken);
+        var linked = await handoff.BeginAsync("pointcloud.estimate", "job-linked-result", TestContext.Current.CancellationToken);
         var target = Path.Combine(outside, "settings.json");
         File.WriteAllText(target, """{"status":"ok","outputs":[],"reason":"read from the application's own disk"}""");
         File.CreateSymbolicLink(Path.Combine(linked, ScanWorkerHandoff.ResultFile), target);
@@ -89,7 +89,7 @@ public sealed class ScanWorkerHandoffFilesTests : IDisposable
         fromLink.Status.ShouldBe(ScanJobStatus.Unreadable);
         fromLink.Reason.ShouldNotContain("own disk");
 
-        var swollen = await handoff.BeginAsync("job-large-result", TestContext.Current.CancellationToken);
+        var swollen = await handoff.BeginAsync("pointcloud.estimate", "job-large-result", TestContext.Current.CancellationToken);
         var padding = new string(' ', 2 * 1024 * 1024);
         File.WriteAllText(Path.Combine(swollen, ScanWorkerHandoff.ResultFile), "{\"status\":\"ok\"," + padding + "\"outputs\":[]}");
         var large = await handoff.WaitAsync(swollen, (_, _, _) => Task.CompletedTask, TestContext.Current.CancellationToken);
