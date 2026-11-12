@@ -391,6 +391,16 @@ public static partial class SurveyUploadEndpoints
             return TooLarge(cap);
         }
 
+        // Asked again of what actually arrived: a body sent in chunks announces no length, and the
+        // check above never saw it. The file is in the store but not yet recorded, so the figures
+        // do not count it, and it is judged exactly as an announced one would have been.
+        var roomNow = await storage.ForAsync(ctx.UserId, ct: ct);
+        if (StorageRules.Shortfall(roomNow.Limits(scan: true), content.SizeBytes) is { } afterIntake)
+        {
+            await fileStore.DeleteAsync(content.StoragePath, CancellationToken.None);
+            return StorageProblems.Insufficient(afterIntake);
+        }
+
         if (await PointCloudProcessing.ExternalOutputProblemAsync(kind, fileStore.GetAbsolutePath(content.StoragePath), ct) is { } problem)
         {
             await fileStore.DeleteAsync(content.StoragePath, CancellationToken.None);

@@ -253,6 +253,45 @@ public sealed class SurveyUploadExternalStepTests : IAsyncLifetime, IDisposable,
     }
 
     [Fact]
+    public async Task A_product_sent_without_a_length_is_still_refused_when_the_senders_room_is_gone()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var id = await SendAsync(owner, "Full laptop scan", caveId, Recording(), externalSteps: [HdmappingOdometryStep.StepId]);
+        await RunPipelineAsync(id);
+        await SetOwnerQuotaAsync(1);
+        var storedBefore = StoredFileCount();
+
+        // Sent chunked: no Content-Length, so nothing about its size is known before it arrives.
+        var content = new ByteArrayContent(Zip(("session.mjs", "{}"), ("scan_lio_0.laz", "x")));
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/survey-uploads/{id}/external/session.zip") { Content = content };
+        request.Headers.TransferEncodingChunked = true;
+        var refused = await owner.SendAsync(request);
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict, await refused.Content.ReadAsStringAsync());
+        (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString().ShouldBe("storage.insufficient");
+        (await ArtefactsAsync(id)).ShouldNotContain(a => a.Kind == ScanArtifactKind.HdmSession);
+        // What arrived was removed from the store again.
+        StoredFileCount().ShouldBe(storedBefore);
+
+        // With the room back, the same file is taken.
+        await SetOwnerQuotaAsync(null);
+        (await PutAsync(owner, id, "session.zip", Zip(("session.mjs", "{}"), ("scan_lio_0.laz", "x")))).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+    }
+
+    private async Task SetOwnerQuotaAsync(long? bytes)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.Users.Where(u => u.Email == $"suext-own-{suffix}@t.local")
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.StorageQuotaBytes, bytes));
+    }
+
+    private int StoredFileCount() =>
+        Directory.EnumerateFiles(filesRoot, "*", SearchOption.AllDirectories)
+            .Count(f => !f.StartsWith(handoffRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+
+    [Fact]
     public async Task An_upload_that_waits_for_nothing_offers_no_download()
     {
         var caveId = await CreateCaveAsync(locationProtected: false);
