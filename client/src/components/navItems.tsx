@@ -23,6 +23,7 @@ import {
   DashboardOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
+  ExperimentOutlined,
   FieldTimeOutlined,
   FileTextOutlined,
   FileWordOutlined,
@@ -93,6 +94,12 @@ export type NavGates = {
    */
   photoLibrary: boolean;
   isFullAdmin: boolean;
+  /**
+   * Whether the test-data generator is offered: the caller is a full administrator and both halves
+   * of its switch are on. The server states it whole, so the rail never offers a page that would
+   * answer "not here".
+   */
+  testDataGenerator: boolean;
 };
 
 export function isNavGroup(entry: NavEntry): entry is NavGroup {
@@ -185,6 +192,9 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
     // entry leading most of its holders to a refusal.
     ...(gates.isFullAdmin
       ? [{ key: 'admin/published-trips', icon: <ShareAltOutlined />, label: t('nav.publishedTrips') }]
+      : []),
+    ...(gates.testDataGenerator
+      ? [{ key: 'admin/test-data', icon: <ExperimentOutlined />, label: t('nav.testData') }]
       : []),
   ];
 

@@ -8474,6 +8474,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/test-data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Switches the test-data generator on or off for full administrators. Works only where the deployment allows the generator at all (TestData:Allowed). */
+        put: operations["adminSettingsSaveTestData"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/photo-libraries": {
         parameters: {
             query?: never;
@@ -9212,6 +9229,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/test-data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The generator's state: its switch, the shipped profiles, the runs, and what the database already holds. */
+        get: operations["testDataOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/test-data/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queues a run that generates invented test data from a profile.
+         * @description Refused with testdata.existing_data_confirm_required (and the counts) when the database holds caves, trips or documents no run created, until confirmAlongsideExistingData is true; with testdata.run_in_progress while another run or removal is going; with testdata.profile_invalid and the problems for a profile that cannot run.
+         */
+        post: operations["testDataStart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/test-data/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One run: its progress, what it wrote (counts), and what it could not do. */
+        get: operations["testDataRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/test-data/runs/{id}/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many rows of each table the run accounts for, and how many of them fill each column. Counts only. */
+        get: operations["testDataCoverage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/test-data/runs/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Asks a waiting or running run to stop between two items. What it wrote stays listed and can be removed. */
+        post: operations["testDataCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/test-data/runs/{id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queues the removal of everything a finished run wrote, by its registry. Needs confirm=true. */
+        post: operations["testDataRemove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -9362,6 +9484,7 @@ export interface components {
             photoLibraries: components["schemas"]["PhotoLibrarySuspensionDto"];
             sync: components["schemas"]["SyncSettingsDto"];
             surveyUploads: components["schemas"]["SurveyUploadSettingsDto"];
+            testData: components["schemas"]["TestDataSettingsDto"];
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
@@ -9904,6 +10027,7 @@ export interface components {
             createInCavingGroups: {
                 [key: string]: components["schemas"]["CreatableCavingGroupDto"][];
             };
+            testDataGenerator: boolean;
         };
         /** @enum {unknown} */
         CascadeSkipReason: "notAdministered" | "beyondHolding";
@@ -10614,7 +10738,7 @@ export interface components {
             isDefault: boolean;
         };
         /** @enum {unknown} */
-        ChangeSource: "web" | "fileImport" | "deviceSync" | "speleolocArchive" | "restore" | "undo" | "reviewDecision" | "job" | "tripConversion";
+        ChangeSource: "web" | "fileImport" | "deviceSync" | "speleolocArchive" | "restore" | "undo" | "reviewDecision" | "job" | "tripConversion" | "generated";
         ChecklistDto: {
             /** Format: uuid */
             id: string;
@@ -17851,6 +17975,140 @@ export interface components {
         TerrainSourceOrigin: "configured" | "build";
         /** @enum {unknown} */
         TerrainSurfaceFit: "horn" | "zevenbergenThorne";
+        TestDataAccessProfile: {
+            visibilityPercent?: components["schemas"]["TestDataVisibilityPercent"];
+            /** Format: double */
+            locationProtectedCavesPercent?: number;
+            /** Format: double */
+            exactLocationGrantAccountsPercent?: number;
+            /** Format: double */
+            denyOrObjectGrantPercent?: number;
+        };
+        TestDataCaveProfile: {
+            /** Format: int32 */
+            count?: number;
+            typeWeights?: {
+                [key: string]: number;
+            };
+            /** Format: double */
+            lengthMedianM?: number;
+            /** Format: double */
+            lengthSigma?: number;
+            /** Format: double */
+            maxLengthM?: number;
+            /** Format: double */
+            multiEntrancePercent?: number;
+        };
+        TestDataColumnCoverageDto: {
+            column: string;
+            /** Format: int64 */
+            nonNull: number;
+        };
+        TestDataExistingDataDto: {
+            /** Format: int32 */
+            caves: number;
+            /** Format: int32 */
+            trips: number;
+            /** Format: int32 */
+            documents: number;
+        };
+        TestDataMarkingProfile: {
+            tag?: string;
+            descriptionFooter?: boolean;
+        };
+        TestDataOverviewDto: {
+            deploymentAllows: boolean;
+            enabled: boolean;
+            /** Format: int32 */
+            maxCaves: number;
+            profiles: {
+                [key: string]: components["schemas"]["TestDataProfile"];
+            };
+            existing: components["schemas"]["TestDataExistingDataDto"];
+            runs: components["schemas"]["TestDataRunDto"][];
+            tables: components["schemas"]["TestDataTableDto"][];
+        };
+        TestDataProfile: {
+            /** Format: int64 */
+            seed?: number;
+            locale?: string;
+            regions?: null | string[];
+            caves?: components["schemas"]["TestDataCaveProfile"];
+            access?: components["schemas"]["TestDataAccessProfile"];
+            marking?: components["schemas"]["TestDataMarkingProfile"];
+        };
+        TestDataRemoveRequest: {
+            confirm: boolean;
+        };
+        TestDataRunDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["TestDataRunStatus"];
+            phase: null | string;
+            /** Format: int32 */
+            progressDone: number;
+            /** Format: int32 */
+            progressTotal: number;
+            /** Format: int64 */
+            seed: number;
+            counts: {
+                [key: string]: number;
+            };
+            notes: string[];
+            error: null | string;
+            alongsideExistingData: boolean;
+            /** Format: uuid */
+            requestedBy: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            startedAt: null | string;
+            /** Format: date-time */
+            finishedAt: null | string;
+            /** Format: date-time */
+            cancelRequestedAt: null | string;
+            /** Format: date-time */
+            removedAt: null | string;
+            profile: components["schemas"]["TestDataProfile"];
+        };
+        /** @enum {unknown} */
+        TestDataRunStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "removing" | "removed";
+        TestDataSettingsDto: {
+            enabled: boolean;
+            deploymentAllows: boolean;
+        };
+        TestDataSettingsWriteRequest: {
+            enabled: boolean;
+        };
+        TestDataStartRequest: {
+            profile: null | components["schemas"]["TestDataProfile"];
+            profileName: null | string;
+            confirmAlongsideExistingData: boolean;
+        };
+        TestDataTableCoverageDto: {
+            table: string;
+            /** Format: int64 */
+            rows: number;
+            columns: components["schemas"]["TestDataColumnCoverageDto"][];
+        };
+        TestDataTableDto: {
+            table: string;
+            role: components["schemas"]["TestDataTableRole"];
+            part: null | string;
+            note: string;
+        };
+        /** @enum {unknown} */
+        TestDataTableRole: "generated" | "derived" | "planned" | "exempt";
+        TestDataVisibilityPercent: {
+            /** Format: double */
+            public?: number;
+            /** Format: double */
+            authenticated?: number;
+            /** Format: double */
+            cavingGroup?: number;
+            /** Format: double */
+            private?: number;
+        };
         TestLoginInfo: {
             email: string;
             password: string;
@@ -42816,6 +43074,48 @@ export interface operations {
             };
         };
     };
+    adminSettingsSaveTestData: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestDataSettingsWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSettingsDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     adminSettingsSavePhotoLibraries: {
         parameters: {
             query?: never;
@@ -45436,6 +45736,214 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StorageReclaimResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    testDataOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestDataOverviewDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    testDataStart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestDataStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestDataRunDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    testDataRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestDataRunDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    testDataCoverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestDataTableCoverageDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    testDataCancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestDataRunDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    testDataRemove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestDataRemoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestDataRunDto"];
                 };
             };
             /** @description Bad Request */

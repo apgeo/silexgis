@@ -450,6 +450,11 @@ export const groups = {
     'StorageRoomTests', 'StorageAlertTests', 'StorageReportTests', 'SurveyUploadPointCloudTests',
     'SurveyUploadPointCloudWorkerTests', 'UploadLimitsAndResumeTests', 'SyncStagedUploadTests', 'OptionsDocumentationTests',
   ],
+  // The administrators' test-data generator: its switch, its runs and their removal, and the
+  // guards that hold it to the schema and to the job and option registries it joins.
+  testData: [
+    'TestDataGeneratorTests', 'OptionsDocumentationTests', 'JobFailureRecordingTests', 'EnumBindingTests',
+  ],
   // Processing profiles: the named parameter sets a scan step runs with, who sees and changes
   // them, and the parameter schema they are checked against.
   scanProfiles: [
@@ -529,6 +534,7 @@ export const areas = {
   'server/src/SilexGis.Api/Features/Statistics/': 'statistics',
   'server/src/SilexGis.Api/Features/Tags/': 'tags',
   'server/src/SilexGis.Api/Features/Taxonomies/': 'taxonomies',
+  'server/src/SilexGis.Api/Features/TestData/': 'testData',
   'server/src/SilexGis.Api/Features/Diagnostics/': 'diagnostics',
   'server/src/SilexGis.Api/Features/TripLogs/': 'trips',
   'server/src/SilexGis.Api/Features/TripTracking/': 'trips',
@@ -558,6 +564,7 @@ export const areas = {
   // Point clouds: the header reader, the step model and the facts — the survey upload's run reads them.
   'server/src/SilexGis.Domain/Scans/': 'surveys',
   'server/src/SilexGis.Domain/Storage/': 'storage',
+  'server/src/SilexGis.Domain/TestData/': 'testData',
   'server/src/SilexGis.Domain/Terrain/': 'terrain',
   'server/src/SilexGis.Domain/Statistics/': 'statistics',
   'server/src/SilexGis.Domain/Trips/': 'trips',
@@ -601,6 +608,7 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Storage/': 'storage',
   // The survey compiler service, which runs beside the application in a container of its own.
   'server/src/SilexGis.TherionService/': 'surveyUploads',
+  'server/src/SilexGis.Infrastructure/TestData/': 'testData',
   'server/src/SilexGis.Infrastructure/Terrain/': 'terrain',
   'server/src/SilexGis.Infrastructure/Statistics/': 'statistics',
   'server/src/SilexGis.Infrastructure/Trips/': 'trips',
@@ -694,7 +702,7 @@ export const crossCutting = {
     'SyncStagedUploadTests', 'SyncTripRecordingTests', 'SyncUploadHoldTests',
     'TagEndpointTests', 'TermRuleSetTests', 'TerrainActivationTests', 'TerrainBuildApiTests',
     'TerrainBuildCancelRetryTests', 'TerrainBuildPipelineTests', 'TerrainDerivativeApiTests',
-    'TerrainProbeTests', 'TerrainProfileTests', 'TerrainSourceTests',
+    'TerrainProbeTests', 'TerrainProfileTests', 'TerrainSourceTests', 'TestDataGeneratorTests',
     'TextExtractionPipelineTests', 'TrackingCsvImportTests', 'TripAndTagTests',
     'TripAttendanceLimitTests', 'TripCalloutStandDownTests', 'TripChecklistTickTests',
     'TripImportCommitTests', 'TripImportSessionTests', 'TripInvitationTests',

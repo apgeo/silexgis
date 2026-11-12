@@ -586,6 +586,15 @@ public static class DependencyInjection
             configuration.GetSection(TripRetentionOptions.SectionName));
         services.AddScoped<IProcessingJobHandler, TripPurgeHandler>();
         services.AddScoped<IProcessingJobHandler, TripRecordingConvertHandler>();
+
+        // The administrators' test-data generator: both halves of its switch, the run and its removal.
+        services.AddOptions<TestData.TestDataOptions>().BindConfiguration(TestData.TestDataOptions.SectionName);
+        services.AddScoped<TestData.TestDataAvailability>();
+        services.AddScoped<TestData.TestDataService>();
+        services.AddSingleton<TestData.TestDataRunner>();
+        services.AddSingleton<TestData.TestDataRemoval>();
+        services.AddScoped<IProcessingJobHandler, TestDataGenerateHandler>();
+        services.AddScoped<IProcessingJobHandler, TestDataRemoveHandler>();
         services.AddHostedService<TripPurgeScheduler>();
         return services;
     }

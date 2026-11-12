@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Extensions.Options;
 using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.TestData;
 
 namespace SilexGis.Api.Features.Admin;
 
@@ -64,6 +66,11 @@ public static class AdminSettingsEndpoints
         admin.MapPut("/survey-uploads", SaveSurveyUploadsAsync)
             .WithValidation<SurveyUploadSettingsDto>()
             .WithSummary("Saves what the installation decides about surveys sent from a field device: whether a cave an upload created takes that upload's first model as its shape.");
+        admin.MapPut("/test-data", SaveTestDataAsync)
+            .WithValidation<TestDataSettingsWriteRequest>()
+            .WithSummary(
+                "Switches the test-data generator on or off for full administrators. "
+                + "Works only where the deployment allows the generator at all (TestData:Allowed).");
         admin.MapPut("/photo-libraries", SavePhotoLibrariesAsync)
             .WithValidation<PhotoLibrarySuspensionDto>()
             .WithSummary(
@@ -91,6 +98,7 @@ public static class AdminSettingsEndpoints
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -104,7 +112,7 @@ public static class AdminSettingsEndpoints
             return ApiProblems.Forbidden("access.forbidden");
         }
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveMailAsync(
@@ -113,6 +121,7 @@ public static class AdminSettingsEndpoints
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -145,7 +154,7 @@ public static class AdminSettingsEndpoints
             },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveSmsAsync(
@@ -154,6 +163,7 @@ public static class AdminSettingsEndpoints
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -186,7 +196,7 @@ public static class AdminSettingsEndpoints
             },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveSecurityAsync(
@@ -195,6 +205,7 @@ public static class AdminSettingsEndpoints
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -222,7 +233,7 @@ public static class AdminSettingsEndpoints
             },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveSyncAsync(
@@ -231,6 +242,7 @@ public static class AdminSettingsEndpoints
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -256,7 +268,7 @@ public static class AdminSettingsEndpoints
             },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveSurveyUploadsAsync(
@@ -265,6 +277,7 @@ public static class AdminSettingsEndpoints
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -283,7 +296,7 @@ public static class AdminSettingsEndpoints
             new SurveyUploadSettings { FirstModelOfCreatedCave = request.FirstModelOfCreatedCave },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveProtectionAsync(
@@ -292,6 +305,7 @@ public static class AdminSettingsEndpoints
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -317,7 +331,7 @@ public static class AdminSettingsEndpoints
             },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
     /// <summary>
@@ -331,6 +345,7 @@ public static class AdminSettingsEndpoints
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -349,7 +364,7 @@ public static class AdminSettingsEndpoints
             new NotificationSettings { RetentionDays = request.RetentionDays },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveAnnouncementsAsync(
@@ -358,6 +373,7 @@ public static class AdminSettingsEndpoints
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -380,7 +396,7 @@ public static class AdminSettingsEndpoints
             },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
     /// <summary>
@@ -412,6 +428,7 @@ public static class AdminSettingsEndpoints
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -434,7 +451,7 @@ public static class AdminSettingsEndpoints
             },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveImportAsync(
@@ -443,6 +460,7 @@ public static class AdminSettingsEndpoints
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -468,7 +486,7 @@ public static class AdminSettingsEndpoints
             },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveInterfaceAsync(
@@ -477,6 +495,7 @@ public static class AdminSettingsEndpoints
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -495,7 +514,7 @@ public static class AdminSettingsEndpoints
             new InterfaceSettings { PanelDefaults = request.PanelDefaults },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
     /// <summary>
@@ -593,8 +612,32 @@ public static class AdminSettingsEndpoints
         }
     }
 
+    private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveTestDataAsync(
+        TestDataSettingsWriteRequest request,
+        IAccessContextAccessor accessAccessor,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        await settings.SaveAsync(AppSettingSections.TestData, new TestDataSettings { Enabled = request.Enabled }, ct);
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
+    }
+
     private static async Task<AdminSettingsDto> SnapshotAsync(
-        IAppSettingsService settings, IEmailDelivery emailDelivery, ISmsDelivery smsDelivery, CancellationToken ct)
+        IAppSettingsService settings, IEmailDelivery emailDelivery, ISmsDelivery smsDelivery, TestDataOptions testData, CancellationToken ct)
     {
         var mail = await settings.GetMailAsync(ct);
         var sms = await settings.GetSmsAsync(ct);
@@ -607,6 +650,7 @@ public static class AdminSettingsEndpoints
         var photoLibraries = await settings.GetPhotoLibrarySuspensionAsync(ct);
         var sync = await settings.GetSyncAsync(ct);
         var surveyUploads = await settings.GetSurveyUploadsAsync(ct);
+        var generator = await settings.GetTestDataAsync(ct);
 
         return new AdminSettingsDto(
             new MailSettingsDto(
@@ -664,6 +708,7 @@ public static class AdminSettingsEndpoints
                 sync.StagedUploadRetentionDays,
                 sync.RejectedHeldBytesRetentionDays),
             new SurveyUploadSettingsDto(surveyUploads.FirstModelOfCreatedCave),
+            new TestDataSettingsDto(generator.Enabled, testData.Allowed),
             await emailDelivery.IsConfiguredAsync(ct),
             await smsDelivery.IsConfiguredAsync(ct));
     }

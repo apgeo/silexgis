@@ -38,6 +38,7 @@ export * from './hooks/sync.ts';
 export * from './hooks/review.ts';
 export * from './hooks/phoneUsers.ts';
 export * from './hooks/recordings.ts';
+export * from './hooks/testData.ts';
 export * from './hooks/accessKeys.ts';
 export * from './hooks/scanProfiles.ts';
 export * from './hooks/scanRecordings.ts';

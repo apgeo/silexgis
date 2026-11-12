@@ -102,6 +102,7 @@ public sealed record AdminSettingsDto(
     PhotoLibrarySuspensionDto PhotoLibraries,
     SyncSettingsDto Sync,
     SurveyUploadSettingsDto SurveyUploads,
+    TestDataSettingsDto TestData,
     bool MailConfigured,
     bool SmsConfigured);
 
@@ -110,6 +111,21 @@ public sealed record AdminSettingsDto(
 /// upload created takes that upload's first model as its shape.
 /// </summary>
 public sealed record SurveyUploadSettingsDto(bool FirstModelOfCreatedCave);
+
+/// <summary>
+/// The test-data generator's switch. <paramref name="Enabled"/> is the administrators' half;
+/// <paramref name="DeploymentAllows"/> is the deployment's (TestData:Allowed), which the page
+/// shows and cannot change. The generator works only when both are true.
+/// </summary>
+public sealed record TestDataSettingsDto(bool Enabled, bool DeploymentAllows);
+
+/// <summary>Switches the generator on or off for full administrators.</summary>
+public sealed record TestDataSettingsWriteRequest(bool Enabled);
+
+public sealed class TestDataSettingsWriteRequestValidator : AbstractValidator<TestDataSettingsWriteRequest>
+{
+    public TestDataSettingsWriteRequestValidator() => RuleFor(x => x).NotNull();
+}
 
 /// <summary>
 /// What the installation has decided about the mobile contract: whether phones get the people

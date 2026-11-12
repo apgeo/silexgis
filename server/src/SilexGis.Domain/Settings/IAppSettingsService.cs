@@ -42,6 +42,8 @@ public interface IAppSettingsService
 
     ValueTask<SurveyUploadSettings> GetSurveyUploadsAsync(CancellationToken ct = default);
 
+    ValueTask<TestDataSettings> GetTestDataAsync(CancellationToken ct = default);
+
     /// <summary>Replaces a section and drops the cached copy across the process.</summary>
     Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class;
