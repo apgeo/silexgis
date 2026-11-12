@@ -58,6 +58,7 @@ using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.Statistics;
 using SilexGis.Api.Features.Sync;
 using SilexGis.Api.Features.Storage;
+using SilexGis.Api.Features.TestData;
 using SilexGis.Api.Features.SurveyUploads;
 using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
@@ -718,6 +719,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapProcessingProfileEndpoints();
     api.MapStorageEndpoints();
     api.MapStorageReportEndpoints();
+    api.MapTestDataEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {
@@ -883,6 +885,18 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
             scope.ServiceProvider.GetRequiredService<DocumentWriteService>(),
             scope.ServiceProvider.GetRequiredService<IFileStore>());
         Log.Information("Demo data seeded (owner: {Email})", admins[0].Email);
+        return;
+    }
+
+    // `dotnet run -- generate-test-data [--profile small|default|large|<file.json>] [--seed <n>]
+    // [--alongside-existing-data]`: runs the administrators' test-data generator in this process
+    // for the bootstrap admin and exits; `remove-test-data <run id>` removes what a run wrote.
+    if (args.Contains("generate-test-data") || args.Contains("remove-test-data"))
+    {
+        using var scope = app.Services.CreateScope();
+        var admins = await scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>()
+            .GetUsersInRoleAsync(GlobalRoles.Admin);
+        Environment.ExitCode = await TestDataCommand.RunAsync(app.Services, args, admins.FirstOrDefault()?.Id);
         return;
     }
 

@@ -175,6 +175,8 @@ export const specs = {
   ],
   // Room in storage: the administrators' report, and the scans whose uploads and runs it caps.
   storage: ['storage-admin.spec.ts', 'point-clouds.spec.ts'],
+  // The test-data generator has no browser spec of its own yet; its page is covered by unit tests.
+  testData: [],
   surveys: [
     'survey-compare.spec.ts', 'survey-extraction.spec.ts', 'survey-photos.spec.ts', 'survey-quality.spec.ts',
     'survey-sources.spec.ts', 'cave-statistics.spec.ts', 'cave-topology.spec.ts',

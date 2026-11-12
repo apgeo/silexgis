@@ -246,6 +246,10 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
     public DbSet<StorageAlertState> StorageAlertStates => Set<StorageAlertState>();
     public DbSet<StorageReportSnapshot> StorageReportSnapshots => Set<StorageReportSnapshot>();
 
+    public DbSet<TestDataRun> TestDataRuns => Set<TestDataRun>();
+
+    public DbSet<TestDataRow> TestDataRows => Set<TestDataRow>();
+
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
 
     public DbSet<CavingGroupAnnouncement> CavingGroupAnnouncements => Set<CavingGroupAnnouncement>();

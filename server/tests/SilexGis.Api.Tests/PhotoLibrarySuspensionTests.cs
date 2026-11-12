@@ -485,6 +485,8 @@ public sealed class PhotoLibrarySuspensionTests
         public ValueTask<SyncSettings> GetSyncAsync(CancellationToken ct = default) => throw NotAsked();
         public ValueTask<SurveyUploadSettings> GetSurveyUploadsAsync(CancellationToken ct = default) => throw NotAsked();
 
+        public ValueTask<TestDataSettings> GetTestDataAsync(CancellationToken ct = default) => throw NotAsked();
+
         public Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
             where T : class => throw NotAsked();
 

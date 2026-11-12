@@ -38,4 +38,7 @@ public enum ChangeSource : short
 
     /// <summary>A trip made automatically from a recording.</summary>
     TripConversion = 8,
+
+    /// <summary>Invented test data written by the administrators' test-data generator.</summary>
+    Generated = 9,
 }

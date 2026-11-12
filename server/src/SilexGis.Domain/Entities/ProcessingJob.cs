@@ -269,6 +269,19 @@ public static class ProcessingJobKinds
     public const string StorageReport = "storage-report";
 
     /// <summary>
+    /// Generates a test-data run: invented caves, people, trips, documents and files, written
+    /// through the ordinary write services and listed against the run. Payload:
+    /// <c>{"runId":"…"}</c>.
+    /// </summary>
+    public const string TestDataGenerate = "testdata-generate";
+
+    /// <summary>
+    /// Removes everything a test-data run listed, in the reverse of the order it was written.
+    /// Payload: <c>{"runId":"…"}</c>.
+    /// </summary>
+    public const string TestDataRemove = "testdata-remove";
+
+    /// <summary>
     /// The kinds that run on a worker of their own rather than on the general one.
     /// </summary>
     /// <remarks>
@@ -300,8 +313,14 @@ public static class ProcessingJobKinds
     /// A point cloud's run is here for the first reason as well: it waits on a worker that takes
     /// minutes to hours over one cloud.
     /// </para>
+    /// <para>
+    /// A test-data run and its removal are here for the first reason, and for one of their own:
+    /// a run queues hundreds of ordinary jobs (readings, conversions) that must be able to run on
+    /// the general lane while it is still generating, instead of waiting behind it.
+    /// </para>
     /// </remarks>
-    public static readonly IReadOnlyList<string> TerrainLane = [TerrainBuild, TerrainDerivative, BasemapExtract, PointCloudPipeline];
+    public static readonly IReadOnlyList<string> TerrainLane =
+        [TerrainBuild, TerrainDerivative, BasemapExtract, PointCloudPipeline, TestDataGenerate, TestDataRemove];
 
     /// <summary>
     /// The kinds nobody is waiting on, which a worker takes only when no other job of its lane is

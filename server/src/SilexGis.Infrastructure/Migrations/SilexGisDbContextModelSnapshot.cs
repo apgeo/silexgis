@@ -8000,6 +8000,126 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("terrain_derivative_rasters", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.TestDataRow", b =>
+                {
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.Property<string>("TableName")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("table_name");
+
+                    b.Property<string>("RowId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("row_id");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sequence");
+
+                    b.HasKey("RunId", "TableName", "RowId")
+                        .HasName("pk_test_data_rows");
+
+                    b.HasIndex("RunId", "Sequence")
+                        .HasDatabaseName("ix_test_data_rows_run_id_sequence");
+
+                    b.HasIndex("TableName", "RowId")
+                        .HasDatabaseName("ix_test_data_rows_table_name_row_id");
+
+                    b.ToTable("test_data_rows", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TestDataRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AlongsideExistingData")
+                        .HasColumnType("boolean")
+                        .HasColumnName("alongside_existing_data");
+
+                    b.Property<DateTimeOffset?>("CancelRequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancel_requested_at");
+
+                    b.Property<string>("Counts")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("counts");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text")
+                        .HasColumnName("error");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("Phase")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("phase");
+
+                    b.Property<long?>("ProcessingJobId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("processing_job_id");
+
+                    b.Property<string>("Profile")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("profile");
+
+                    b.Property<int>("ProgressDone")
+                        .HasColumnType("integer")
+                        .HasColumnName("progress_done");
+
+                    b.Property<int>("ProgressTotal")
+                        .HasColumnType("integer")
+                        .HasColumnName("progress_total");
+
+                    b.Property<DateTimeOffset?>("RemovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("removed_at");
+
+                    b.Property<Guid?>("RequestedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by");
+
+                    b.Property<long>("Seed")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seed");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_test_data_runs");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_test_data_runs_created_at");
+
+                    b.ToTable("test_data_runs", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.TextSearchLanguage", b =>
                 {
                     b.Property<string>("Code")
@@ -11463,6 +11583,16 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_terrain_derivative_rasters_terrain_derivative_layers_terrai");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TestDataRow", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.TestDataRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_test_data_rows_test_data_runs_run_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripAttention", b =>

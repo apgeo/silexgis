@@ -130,6 +130,31 @@ The account holds the Viewer role and belongs to Demo Caving Club, so it can rea
 public, everything visible to signed-in accounts, and everything that club may see. Treat it as
 what it is: a second party that exists so location protection can be watched working.
 
+## Generating test data
+
+A full administrator can fill an installation with invented, realistic test data from
+**Administration → Test data**: caves with every register field, their entrances and the karst
+areas around them, placed in real Romanian karst massifs with real village, valley and river names
+around them — the caves themselves are invented. A run is repeatable (the same profile and seed give
+the same data), listed row by row, and removable from the same page; removal never touches data the
+run did not create, and keeps a generated area that somebody has since put a cave of their own in.
+
+Every generated object carries the tag `testgenerated`, and every generated description ends with a
+line saying it is test data. When the database already holds caves, trips or documents that no run
+created, the page asks for a confirmation before generating beside them.
+
+The same is available from the command line, for the bootstrap administrator:
+
+```bash
+docker compose exec api dotnet SilexGis.Api.dll generate-test-data --profile small
+docker compose exec api dotnet SilexGis.Api.dll generate-test-data --profile default --seed 7 --alongside-existing-data
+docker compose exec api dotnet SilexGis.Api.dll remove-test-data <run id>
+```
+
+`--profile` takes `small` (25 caves), `default` (500) or `large` (5,000), or the path of a profile
+file (JSON, as shown on the page). The generator is on by default; `SILEXGIS__TestData__Allowed=false`
+removes it from a deployment altogether.
+
 ## Running a test installation (public demo logins)
 
 An installation meant for strangers to try — a public demo, a place to show the application
@@ -2677,6 +2702,9 @@ the reasoning beside each one.
 | `SILEXGIS__TripPastTracks__CompactReplayBarInFrame` | `true` | whether a replay's controls split into a single line, with the rest on a sheet opened from it, when the page is drawn inside a frame too small for the whole strip. **On unless you switch it off:** the frame a club's article gives this page is often the width of a phone, and the whole strip in that width either takes the height the drawing needed or wraps into something nobody can press. Set it to `false` and every frame gets the whole strip, as every frame did before the split existed. The controls are the same ones either way; this decides only how they are laid out in a small frame |
 | `SILEXGIS__SpeleoLocDev__Allow` | `false` | permits `seed-speleoloc-dev` on a host that is not in development. That command creates a login, so it is refused without this |
 | `SILEXGIS__SpeleoLocDev__MemberPassword` | `dev-member-pass-1` | the password `member@dev.local` is created with. The default is printed in this guide, so set your own if you allow the command at all |
+| `SILEXGIS__TestData__Allowed` | `true` | whether this deployment offers the **test-data generator**: a page for full administrators (*Administration → Test data*) that fills the database with invented but realistic caves, entrances and areas — and, as it grows, people, trips, documents and files — and removes them again. `false` hides the page, refuses its routes as if they did not exist, and refuses the `generate-test-data` command |
+| `SILEXGIS__TestData__Enabled` | `true` | the administrators' half of the generator's switch. **A default only:** the administrator settings page (tab *Test data*) changes it while the application runs, and a saved value wins over this one. The generator works only while this and `Allowed` are both on |
+| `SILEXGIS__TestData__MaxCaves` | `20000` | the most caves one run may ask for on this deployment (never more than 50,000) |
 | `SILEXGIS__TestLogins__Enabled` | `false` | seeds three demo accounts (full administrator, editor, viewer) and prints their credentials on the sign-in page for anyone who reaches it. For throwaway test installations only — see "Running a test installation" above |
 | `SILEXGIS__TestLogins__Password` | `test-login-pass-1` | the one password all three demo accounts share. A change is applied to existing accounts at the next start, so the page never advertises a credential that does not work |
 | `SILEXGIS__Mail__Enabled` / `__Host` / `__Port` | `false` / — / `587` | SMTP server; unset means messages go to the log |

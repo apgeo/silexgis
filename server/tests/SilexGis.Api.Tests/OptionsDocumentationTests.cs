@@ -95,6 +95,7 @@ public class OptionsDocumentationTests
         ("PhotoLibrarySuspension", typeof(PhotoLibrarySuspensionSettings)),
         ("Sync", typeof(SyncSettings)),
         ("SurveyUploads", typeof(SurveyUploadSettings)),
+        ("TestData", typeof(TestDataSettings)),
     ];
 
     public static TheoryData<string> Documents() => new()

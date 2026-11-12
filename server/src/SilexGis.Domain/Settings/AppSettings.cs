@@ -484,6 +484,16 @@ public sealed record SurveyUploadSettings
     public bool FirstModelOfCreatedCave { get; init; } = true;
 }
 
+/// <summary>
+/// Whether the administrators' test-data generator is switched on. It works only where the
+/// deployment also allows it (<c>TestData:Allowed</c>); this is the administrators' half of the
+/// switch, on by default so that a deployment which allows the generator offers it at once.
+/// </summary>
+public sealed record TestDataSettings
+{
+    public bool Enabled { get; init; } = true;
+}
+
 public static class AppSettingSections
 {
     public const string Mail = "mail";
@@ -515,6 +525,9 @@ public static class AppSettingSections
     /// <summary>What the installation has decided about surveys sent from a field device.</summary>
     public const string SurveyUploads = "surveyUploads";
 
+    /// <summary>The administrators' half of the test-data generator's switch.</summary>
+    public const string TestData = "testData";
+
     public static IReadOnlyList<string> All { get; } =
-        [Mail, Sms, Security, Protection, Import, Interface, Notifications, Announcements, PhotoLibrarySuspension, Sync, SurveyUploads];
+        [Mail, Sms, Security, Protection, Import, Interface, Notifications, Announcements, PhotoLibrarySuspension, Sync, SurveyUploads, TestData];
 }
