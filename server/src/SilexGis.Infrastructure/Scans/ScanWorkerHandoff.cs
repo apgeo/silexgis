@@ -96,6 +96,14 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
     public const string OdometryDefaultsFile = "hdmapping.odometry.json";
     private const string PartialSuffix = ".part";
 
+    // The most of each worker-written file the application reads. A worker's honest files are a
+    // few kilobytes; a bound keeps one that is not from costing the application its memory.
+    private const int MaxCapabilitiesBytes = 1024 * 1024;
+    private const int MaxDefaultsBytes = 4 * 1024 * 1024;
+    private const int MaxProgressBytes = 64 * 1024;
+    private const int MaxResultBytes = 1024 * 1024;
+    private const int MaxLogTailBytes = 64 * 1024;
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -122,12 +130,12 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
         var path = Path.Combine(Root, CapabilitiesFile);
         try
         {
-            if (!File.Exists(path))
+            if (ScanHandoffFiles.ReadBounded(Root, CapabilitiesFile, MaxCapabilitiesBytes) is not { } bytes)
             {
                 return null;
             }
 
-            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+            using var document = JsonDocument.Parse(bytes);
             var root = document.RootElement;
             var steps = new List<ScanWorkerStep>();
             if (root.TryGetProperty("steps", out var announced) && announced.ValueKind == JsonValueKind.Array)
@@ -161,12 +169,12 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
         var path = Path.Combine(Root, DefaultsDirectory, OdometryDefaultsFile);
         try
         {
-            if (!File.Exists(path))
+            if (ScanHandoffFiles.ReadBounded(Path.Combine(Root, DefaultsDirectory), OdometryDefaultsFile, MaxDefaultsBytes) is not { } bytes)
             {
                 return null;
             }
 
-            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+            using var document = JsonDocument.Parse(bytes);
             return document.RootElement.TryGetProperty("values", out var values)
                 && values.ValueKind == JsonValueKind.Object
                 && values.EnumerateObject().Any()
@@ -190,12 +198,12 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
         var path = Path.Combine(Root, DefaultsDirectory, OdometryDefaultsFile);
         try
         {
-            if (!File.Exists(path))
+            if (ScanHandoffFiles.ReadBounded(Path.Combine(Root, DefaultsDirectory), OdometryDefaultsFile, MaxDefaultsBytes) is not { } bytes)
             {
                 return null;
             }
 
-            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+            using var document = JsonDocument.Parse(bytes);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object
                 || !root.TryGetProperty("values", out var values)
@@ -276,12 +284,23 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
         return directory;
     }
 
-    /// <summary>Copies an input file into the job directory under a plain name.</summary>
+    /// <summary>
+    /// Copies an input file into the job directory under a plain name. The file is created new:
+    /// anything already at the name, a link the worker left included, refuses the copy rather than
+    /// be written through.
+    /// </summary>
     public static async Task CopyInAsync(string directory, string absoluteSource, string fileName, CancellationToken ct)
     {
         await using var source = File.OpenRead(absoluteSource);
-        await using var target = File.Create(Path.Combine(directory, fileName));
+        await using var target = ScanHandoffFiles.CreateNew(directory, fileName);
         await source.CopyToAsync(target, ct);
+    }
+
+    /// <summary>Writes a small file the application makes into the job directory, created new as <see cref="CopyInAsync"/> creates its copies.</summary>
+    public static async Task WriteNewAsync(string directory, string fileName, byte[] bytes, CancellationToken ct)
+    {
+        await using var target = ScanHandoffFiles.CreateNew(directory, fileName);
+        await target.WriteAsync(bytes, ct);
     }
 
     /// <summary>Writes the request last, under a temporary name and then renamed into place, which is what makes the job visible to the worker.</summary>
@@ -295,9 +314,9 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
             ["inputs"] = inputs,
             ["timeoutSeconds"] = (int)timeout.TotalSeconds,
         };
-        var part = Path.Combine(directory, RequestFile + PartialSuffix);
-        await File.WriteAllBytesAsync(part, JsonSerializer.SerializeToUtf8Bytes(request, Json), ct);
-        File.Move(part, Path.Combine(directory, RequestFile), overwrite: true);
+        // Renaming replaces whatever is at the final name, a link included, without following it.
+        await WriteNewAsync(directory, RequestFile + PartialSuffix, JsonSerializer.SerializeToUtf8Bytes(request, Json), ct);
+        File.Move(Path.Combine(directory, RequestFile + PartialSuffix), Path.Combine(directory, RequestFile), overwrite: true);
     }
 
     /// <summary>
@@ -364,7 +383,13 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
 
         try
         {
-            await File.WriteAllTextAsync(Path.Combine(directory, CancelFile), clock.GetUtcNow().ToString("O"), ct);
+            // Called off once already (the time limit, then a fresh attempt at the same job): the
+            // marker stands, and is not written again through whatever may be at its name now.
+            var marker = new FileInfo(Path.Combine(directory, CancelFile));
+            if (!(marker.Exists && marker.LinkTarget is null))
+            {
+                await WriteNewAsync(directory, CancelFile, System.Text.Encoding.UTF8.GetBytes(clock.GetUtcNow().ToString("O")), ct);
+            }
         }
         catch (IOException e)
         {
@@ -407,15 +432,14 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
 
     private static (double Fraction, string? Message)? ReadProgress(string directory)
     {
-        var path = Path.Combine(directory, ProgressFile);
         try
         {
-            if (!File.Exists(path))
+            if (ScanHandoffFiles.ReadBounded(directory, ProgressFile, MaxProgressBytes) is not { } bytes)
             {
                 return null;
             }
 
-            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+            using var document = JsonDocument.Parse(bytes);
             var root = document.RootElement;
             var fraction = root.TryGetProperty("fraction", out var f) && f.ValueKind == JsonValueKind.Number ? f.GetDouble() : 0;
             return (Math.Clamp(fraction, 0, 1), Text(root, "message"));
@@ -427,25 +451,24 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
         }
     }
 
-    private static IReadOnlyList<string> LogTailOf(string directory)
-    {
-        try
-        {
-            var path = Path.Combine(directory, LogFile);
-            return File.Exists(path) ? File.ReadAllLines(path).TakeLast(15).ToList() : [];
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return [];
-        }
-    }
+    // The end of the worker's log only: a log can run to gigabytes over a long job.
+    private static IReadOnlyList<string> LogTailOf(string directory) =>
+        ScanHandoffFiles.TailLines(directory, LogFile, MaxLogTailBytes, 15);
 
     private static async Task<ScanJobResult> ReadResultAsync(string directory, CancellationToken ct)
     {
         byte[] bytes;
         try
         {
-            bytes = await File.ReadAllBytesAsync(Path.Combine(directory, ResultFile), ct);
+            await using var stream = ScanHandoffFiles.OpenPlain(directory, ResultFile)
+                ?? throw new FileNotFoundException("the result file is gone");
+            if (stream.Length > MaxResultBytes)
+            {
+                return Unreadable($"the result file is larger than the {MaxResultBytes} bytes a result may be");
+            }
+
+            bytes = new byte[stream.Length];
+            await stream.ReadExactlyAsync(bytes, ct);
         }
         catch (IOException e)
         {

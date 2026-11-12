@@ -389,6 +389,87 @@ public sealed class SurveyUploadPointCloudWorkerTests : IAsyncLifetime, IDisposa
     }
 
     [Fact]
+    public async Task A_product_the_worker_links_to_a_file_outside_its_job_is_not_stored()
+    {
+        // A file of the application's own, which a link in the job directory would otherwise read.
+        var elsewhere = Path.Combine(filesRoot, "not-a-product.json");
+        File.WriteAllText(elsewhere, """{"invented": true}""");
+        worker.Answer = (directory, request) =>
+        {
+            File.CreateSymbolicLink(Path.Combine(directory, "estimate.json"), elsewhere);
+            CannedScanWorker.Finish(directory, "ok", [new { kind = "estimate", file = "estimate.json", sizeBytes = 18L, sha256 = "" }], new { pointCount = 3 });
+            return Task.CompletedTask;
+        };
+        var caveId = await CreateCaveAsync();
+        var id = await SendAsync(owner, "Linked product", caveId, ("scan.laz", SyntheticLas.Las(points: 3, compressed: true)));
+        await Should.ThrowAsync<InvalidOperationException>(RunPipelineAsync(id));
+
+        var shown = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        shown.GetProperty("status").GetString().ShouldBe("failed");
+        shown.GetProperty("error").GetProperty("code").GetString().ShouldBe(SurveyPipelineFailures.StoreFailed);
+        (await ArtefactIdsAsync(id)).ShouldNotContain(a => a.Step == PointCloudEstimateStep.StepId);
+    }
+
+    [Fact]
+    public async Task A_worker_naming_one_kind_twice_fails_the_run_and_a_products_format_comes_from_its_kind()
+    {
+        worker.Answer = (directory, request) =>
+        {
+            var first = CannedScanWorker.Output(directory, "estimate", "estimate.json", """{"pointCount":3}"""u8.ToArray());
+            var second = CannedScanWorker.Output(directory, "estimate", "other.json", """{"pointCount":4}"""u8.ToArray());
+            CannedScanWorker.Finish(directory, "ok", [first, second], new { pointCount = 3 });
+            return Task.CompletedTask;
+        };
+        var caveId = await CreateCaveAsync();
+        var twice = await SendAsync(owner, "Twice", caveId, ("scan.laz", SyntheticLas.Las(points: 3, compressed: true)));
+        await Should.ThrowAsync<InvalidOperationException>(RunPipelineAsync(twice));
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{twice}"))
+            .GetProperty("error").GetProperty("code").GetString().ShouldBe(SurveyPipelineFailures.StoreFailed);
+
+        // A report the worker wrote under a name of its choosing is stored as the JSON it must be.
+        worker.Answer = async (directory, request) =>
+        {
+            if (request.GetProperty("step").GetString() == PointCloudEstimateStep.StepId)
+            {
+                var data = new { pointCount = 30, hasRgb = false, hasIntensity = true, full = new { points = 30, estimatedTileBytes = 510, estimatedSeconds = 17 }, voxels = Array.Empty<object>() };
+                var output = CannedScanWorker.Output(directory, "estimate", "estimate.html", JsonSerializer.SerializeToUtf8Bytes(data));
+                CannedScanWorker.Finish(directory, "ok", [output], data);
+                return;
+            }
+
+            await Tiling(fullPoints: 30, voxelPoints: [(1, 20)])(directory, request);
+        };
+        var renamed = await SendAsync(owner, "Renamed", caveId, ("scan.laz", SyntheticLas.Las(points: 3, compressed: true)));
+        await RunPipelineAsync(renamed);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var estimate = await db.ScanArtifacts.AsNoTracking().SingleAsync(a => a.SurveyUploadId == renamed && a.StepId == PointCloudEstimateStep.StepId);
+        estimate.Format.ShouldBe("json");
+        var file = await db.StoredFiles.AsNoTracking().SingleAsync(f => f.Id == estimate.FileId);
+        file.OriginalName.ShouldEndWith(".json");
+        file.MimeType.ShouldBe("application/json");
+        file.StoragePath.ShouldEndWith(".json");
+    }
+
+    [Fact]
+    public async Task A_report_larger_than_any_report_could_be_is_not_stored()
+    {
+        worker.Answer = (directory, request) =>
+        {
+            var output = CannedScanWorker.Output(directory, "estimate", "estimate.json", new byte[17 * 1024 * 1024]);
+            CannedScanWorker.Finish(directory, "ok", [output], new { pointCount = 3 });
+            return Task.CompletedTask;
+        };
+        var caveId = await CreateCaveAsync();
+        var id = await SendAsync(owner, "Swollen", caveId, ("scan.laz", SyntheticLas.Las(points: 3, compressed: true)));
+        await Should.ThrowAsync<InvalidOperationException>(RunPipelineAsync(id));
+
+        var shown = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}");
+        shown.GetProperty("error").GetProperty("code").GetString().ShouldBe(SurveyPipelineFailures.StoreFailed);
+        (await ArtefactIdsAsync(id)).ShouldNotContain(a => a.Step == PointCloudEstimateStep.StepId);
+    }
+
+    [Fact]
     public async Task With_no_worker_announced_the_run_fails_saying_so_before_leaving_any_job()
     {
         File.Delete(Path.Combine(handoffRoot, "capabilities.json"));

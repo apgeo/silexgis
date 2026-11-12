@@ -268,11 +268,11 @@ public sealed class PointCloudProcessing(
                         $"The point-cloud worker could not {definition.DisplayName.ToLowerInvariant()}: {Words(result)}");
                 }
 
-                var made = await StoreOutputsAsync(upload, model, versionId, step, definition, result, inputs, directory, ct);
+                var made = await StoreOutputsAsync(upload, model, versionId, step, definition, result, inputs, directory, stepNeed, ct);
                 Take(made, kept: false);
                 if (step.StepId == MeshSurfaceStep.StepId)
                 {
-                    await surfaces.SaveAsync(upload, model, recipe, made, directory, ct);
+                    await surfaces.SaveAsync(upload, model, recipe, made, ct);
                 }
                 facts = step.StepId switch
                 {
@@ -854,8 +854,9 @@ public sealed class PointCloudProcessing(
             names.Add(found.OriginalName);
         }
 
-        await File.WriteAllBytesAsync(
-            Path.Combine(directory, RecordingManifest),
+        await ScanWorkerHandoff.WriteNewAsync(
+            directory,
+            RecordingManifest,
             JsonSerializer.SerializeToUtf8Bytes(new Dictionary<string, object> { ["files"] = names }),
             ct);
         named[InputName(ScanArtifactKind.RawRecording)] = RecordingManifest;
@@ -867,6 +868,13 @@ public sealed class PointCloudProcessing(
     /// is removed after the new one is in — the worker's answer is checked (a product it did not
     /// write, a digest that does not match) before anything of the earlier run is touched.
     /// </summary>
+    /// <remarks>
+    /// The worker's answer is taken as a claim, not as the truth: it may name each kind the step
+    /// makes once, a product must be a plain file in the job directory (never a link, which would
+    /// resolve inside the application's own container), no product may be larger than the whole
+    /// room the step was allowed on the worker's volume, and the stored file's format is the one
+    /// its kind is made in, whatever name the worker gave it.
+    /// </remarks>
     private async Task<List<ScanArtifact>> StoreOutputsAsync(
         SurveyUpload upload,
         SurveyModel model,
@@ -876,12 +884,15 @@ public sealed class PointCloudProcessing(
         ScanJobResult result,
         ScanArtifact[] inputs,
         string directory,
+        ScanStepNeed need,
         CancellationToken ct)
     {
         var made = new List<ScanArtifact>();
         var now = DateTimeOffset.UtcNow;
+        var largest = Math.Max(need.WorkerBytes, MinOutputBoundBytes);
 
         var earlier = await db.ScanArtifacts.Where(a => a.SurveyUploadId == upload.Id && a.StepId == step.StepId).ToListAsync(ct);
+        var named = new HashSet<ScanArtifactKind>();
 
         foreach (var output in result.Outputs)
         {
@@ -893,35 +904,49 @@ public sealed class PointCloudProcessing(
                 continue;
             }
 
-            var path = Path.Combine(directory, output.File);
-            if (!File.Exists(path))
+            if (!named.Add(kind.Value))
             {
                 throw new SurveyPipelineException(
-                    SurveyPipelineFailures.StoreFailed, $"The point-cloud worker named a product it did not write: {output.File}.");
+                    SurveyPipelineFailures.StoreFailed, $"The point-cloud worker named more than one product of the kind {output.Kind}.");
             }
 
             string sha256;
             long size;
-            await using (var read = File.OpenRead(path))
+            string storagePath;
+            var format = StoredFormatOf(kind.Value);
+            try
             {
+                await using var read = ScanHandoffFiles.OpenPlain(directory, output.File, requireContent: true)
+                    ?? throw new SurveyPipelineException(
+                        SurveyPipelineFailures.StoreFailed, $"The point-cloud worker named a product it did not write: {output.File}.");
                 size = read.Length;
-                sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(read, ct));
-            }
+                var bound = kind == ScanArtifactKind.Report ? Math.Min(largest, MaxReportBytes) : largest;
+                if (size > bound)
+                {
+                    throw new SurveyPipelineException(
+                        SurveyPipelineFailures.StoreFailed,
+                        $"The point-cloud worker's product {output.File} is {size} bytes, more than the {bound} this step could have written.");
+                }
 
-            if (!string.IsNullOrEmpty(output.Sha256) && !string.Equals(output.Sha256, sha256, StringComparison.OrdinalIgnoreCase))
+                sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(read, ct));
+                if (!string.IsNullOrEmpty(output.Sha256) && !string.Equals(output.Sha256, sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new SurveyPipelineException(
+                        SurveyPipelineFailures.StoreFailed, $"The point-cloud worker's product {output.File} does not match the digest it reported.");
+                }
+
+                // Stored from the same open file that was measured and digested, so nothing put at
+                // the name in between is what gets kept.
+                read.Position = 0;
+                storagePath = await fileStore.SaveAsync(read, "." + format, ct);
+            }
+            catch (ScanHandoffTamperedException e)
             {
                 throw new SurveyPipelineException(
-                    SurveyPipelineFailures.StoreFailed, $"The point-cloud worker's product {output.File} does not match the digest it reported.");
+                    SurveyPipelineFailures.StoreFailed, $"The point-cloud worker's product {output.File} is not a plain file in its job directory: {e.Message}");
             }
 
-            var extension = Path.GetExtension(output.File);
-            string storagePath;
-            await using (var read = File.OpenRead(path))
-            {
-                storagePath = await fileStore.SaveAsync(read, extension, ct);
-            }
-
-            var format = extension.TrimStart('.').ToLowerInvariant();
+            var extension = "." + format;
             var stored = documents.AddFile(
                 versionId,
                 new StoredContent(
@@ -1062,6 +1087,26 @@ public sealed class PointCloudProcessing(
     }
 
     private const long MaxReportBytes = 16L * 1024 * 1024;
+
+    /// <summary>
+    /// The least a product may be bounded to, whatever the step's estimated room: 64 MiB, so an
+    /// estimate for a small job, which can be out by the size of a header or two, never refuses an
+    /// honest product. The bound is there to stop a product the size of a disk.
+    /// </summary>
+    private const long MinOutputBoundBytes = 64L * 1024 * 1024;
+
+    /// <summary>The format a worker's product of each kind is made in, and stored as.</summary>
+    private static string StoredFormatOf(ScanArtifactKind kind) => kind switch
+    {
+        ScanArtifactKind.PointCloudLaz or ScanArtifactKind.PointCloudLazDisplay => "laz",
+        ScanArtifactKind.PointCloudTiles or ScanArtifactKind.HdmSession => "zip",
+        ScanArtifactKind.Trajectory => "csv",
+        ScanArtifactKind.Report => "json",
+        ScanArtifactKind.Centreline => "geojson",
+        ScanArtifactKind.PlanImage or ScanArtifactKind.ProfileImage => "png",
+        ScanArtifactKind.MeshStl => "stl",
+        _ => "bin",
+    };
 
     /// <summary>The most of a trajectory read to find its first line: 64 KiB, far past any header row of numbers.</summary>
     private const int TrajectoryHeadBytes = 64 * 1024;
