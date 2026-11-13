@@ -163,6 +163,8 @@ export const specs = {
     'point-clouds.spec.ts',
     // A flyby played in the scene: the camera flown, the address left alone, the camera handed back.
     'scene3d-flyby.spec.ts',
+    // A flyby written to a movie file: the capture session, the boxed scene, the file read back.
+    'scene3d-flyby-movie.spec.ts',
   ],
   search: ['documents.spec.ts'],
   settings: [
@@ -243,7 +245,7 @@ export const clientAreas = {
   'client/src/imagelink/': 'resLinks',
   'client/src/map/': 'map',
   // The movie encoders and the file a long movie is written to, shared by the movies made here.
-  'client/src/movie/': ['surveys', 'trips'],
+  'client/src/movie/': ['scene', 'surveys', 'trips'],
   'client/src/notifications/': 'notifications',
   'client/src/pdf/': 'documents',
   'client/src/photolibrary/': 'photoLibraries',
