@@ -2283,8 +2283,10 @@ describe('Scene3DView relief', () => {
     fireEvent.click(await screen.findByTestId('scene3d-layers-trigger'));
     fireEvent.click(await screen.findByRole('button', { name: 'True height' }));
 
-    // Chosen here, it is the person's own: kept for the browser, and the view's is let go.
-    await waitFor(() => expect(scene().verticalExaggeration).toBe(1));
+    // Chosen here, it is the person's own: kept for the browser, and the view's is let go. (The
+    // library is handed a hair over one once a scene has been stretched: true height to a
+    // millimetre in a thousand metres.)
+    await waitFor(() => expect(scene().verticalExaggeration).toBeCloseTo(1, 5));
     expect(useUiPrefsStore.getState().scene3dExaggeration).toBeUndefined();
     expect(useWorkspaceStore.getState().scene3dExaggerationOfView).toBeUndefined();
     expect(screen.queryByText(/^Relief ×/)).not.toBeInTheDocument();
