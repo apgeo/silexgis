@@ -9718,8 +9718,8 @@
         },
         "features": {
           "name": "Obiecte pe rând",
-          "filters": "Straturi din filtre, în ordine",
-          "none": "Lista hărții nu are niciun strat din filtru. Adaugă unul mai întâi în straturile hărții plane."
+          "filters": "Straturi de obiecte, în ordine",
+          "none": "Nu există niciun strat de obiecte de arătat. Adaugă unul la „Obiecte arătate de survol” sau un strat din filtru în straturile hărții plane."
         }
       },
       "changesTitle_one": "{{count}} schimbare",
@@ -9894,6 +9894,20 @@
       "empty": "Filtrul salvat al acestui survol nu selectează nicio peșteră pe care o poți vedea sau nu mai poate fi rulat.",
       "search": "Adaugă o peșteră după nume",
       "searchNone": "Nicio peșteră cu acest nume"
+    },
+    "features": {
+      "title_one": "Obiecte arătate de survol ({{count}})",
+      "title": "Obiecte arătate de survol ({{count}})",
+      "hint": "Straturi de obiecte pe care survolul le desenează singur, după tip sau după un filtru salvat: doar în vizualizarea 3D și doar cât timp rulează. Lista ta de straturi nu se schimbă. Fiecare e arătat de la început, dacă aspectul de la început nu îl ascunde.",
+      "add": "Încă un strat",
+      "by": "Ales după",
+      "byTypes": "Tip",
+      "byFilter": "Filtru salvat",
+      "types": "Tipuri de obiecte",
+      "ofTypes": "Obiecte: {{names}}",
+      "colour": "Culoarea pentru {{name}}",
+      "symbol": "Simbolul pentru {{name}}",
+      "remove": "Elimină stratul {{name}}"
     }
   },
   "mapSymbols": {

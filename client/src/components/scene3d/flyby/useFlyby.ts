@@ -16,6 +16,7 @@ import {
   flybyProblems,
   type FlybyChange,
   type FlybyDocument,
+  type FlybyFeatureLayer,
   type FlybyLook,
   type FlybyPresetId,
   type FlybyProblem,
@@ -170,6 +171,7 @@ function pathKey(document: FlybyDocument): string {
     document.look,
     document.changes,
     document.texts,
+    document.features,
   ]);
 }
 
@@ -206,6 +208,8 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
   const [look, setLook] = useState<FlybyLook>({ sky: FLYBY_PRESET_SKY });
   const [changes, setChanges] = useState<FlybyChange[]>([]);
   const [texts, setTexts] = useState<FlybyTexts>({});
+  /** The layers of features the flyby draws itself. */
+  const [features, setFeatures] = useState<FlybyFeatureLayer[]>([]);
   /** The camera views captured for a flyby through them, in the order they are flown. */
   const [views, setViewsState] = useState<FlybyCapturedView[]>([]);
 
@@ -244,13 +248,15 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     delete built.look;
     delete built.changes;
     delete built.texts;
+    delete built.features;
     return {
       ...built,
       ...(Object.keys(look).length > 0 ? { look } : {}),
       ...(changes.length > 0 ? { changes } : {}),
       ...(Object.keys(texts).length > 0 ? { texts } : {}),
+      ...(features.length > 0 ? { features } : {}),
     };
-  }, [edited, subjects, preset, options, speed, loop, name, look, changes, texts, views]);
+  }, [edited, subjects, preset, options, speed, loop, name, look, changes, texts, features, views]);
 
   const refreshCaves = useCallback(() => setCaves(scene.cavesInView()), [scene]);
 
@@ -358,6 +364,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     setLook(opened.look ?? {});
     setChanges(opened.changes ?? []);
     setTexts(opened.texts ?? {});
+    setFeatures(opened.features ?? []);
   }, []);
 
   // ---- the world the subjects are found in ----
@@ -742,6 +749,8 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     setChanges,
     texts,
     setTexts,
+    features,
+    setFeatures,
     // playing
     playerState,
     length,

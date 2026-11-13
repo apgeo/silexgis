@@ -9705,8 +9705,8 @@
         },
         "features": {
           "name": "Features in turn",
-          "filters": "Filter layers, in order",
-          "none": "There is no filter layer on the map's list. Add one in the flat map's layers first."
+          "filters": "Layers of features, in order",
+          "none": "There is no layer of features to show. Add one under “Features the flyby shows”, or a filter layer in the flat map's layers."
         }
       },
       "changesTitle_one": "{{count}} change",
@@ -9881,6 +9881,20 @@
       "empty": "The saved filter this flyby is about selects no cave you may see, or can no longer be run.",
       "search": "Add a cave by name",
       "searchNone": "No cave by that name"
+    },
+    "features": {
+      "title_one": "Features the flyby shows ({{count}})",
+      "title": "Features the flyby shows ({{count}})",
+      "hint": "Layers of features this flyby draws itself, by kind or by a saved filter: only in the 3D view and only while it plays. Your own list of layers is not changed. Each is shown from the start unless the look at the start hides it.",
+      "add": "Another layer",
+      "by": "Chosen by",
+      "byTypes": "Kind",
+      "byFilter": "Saved filter",
+      "types": "Kinds of feature",
+      "ofTypes": "Features: {{names}}",
+      "colour": "Colour of {{name}}",
+      "symbol": "Symbol of {{name}}",
+      "remove": "Remove the layer {{name}}"
     }
   },
   "mapSymbols": {

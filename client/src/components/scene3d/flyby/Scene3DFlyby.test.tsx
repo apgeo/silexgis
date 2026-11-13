@@ -54,6 +54,8 @@ vi.mock('../../../api/hooks.ts', () => ({
     ],
   }),
   useRasterMaps: () => ({ data: { items: [] } }),
+  // Two kinds of feature from the catalogue, which a flyby's own layer can show.
+  useFeatureTypes: () => ({ data: [{ id: 3, name: 'Spring' }, { id: 9, name: 'Sinkhole' }] }),
   // One imported file, which a flyby along a line can follow.
   useGeofiles: () => ({ data: { items: [{ id: 'walk', name: 'Ridge walk', importStatus: 'imported' }] } }),
   // One saved filter that can be run and one that no longer can; the first keeps caves b and a.
@@ -420,6 +422,7 @@ function lookingScene() {
     }),
     showBackground: record('background'),
     showLayer: (key, state) => record(`layer:${key}`)(state),
+    showFeatureLayers: record('features'),
     showWalls: record('walls'),
     showLines: record('lines'),
     showSurface: record('surface'),
@@ -913,6 +916,50 @@ describe('what a flyby is about, found by a saved filter or by name', () => {
     // Two caves ticked: a tour of both, the one found by name last.
     fireEvent.click(screen.getByText('5 sections'));
     expect(screen.getByTestId('flyby-sections')).toHaveTextContent('Over to · Cave FAR');
+  });
+});
+
+describe('layers of features the flyby draws itself', () => {
+  it('adds one by kind and one by a saved filter, shows them in turn, and leaves none behind', async () => {
+    const scene = lookingScene();
+    renderFlyby(scene);
+    fireEvent.click(screen.getByText('Features the flyby shows (0)'));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Kinds of feature' }));
+    fireEvent.click(screen.getByTitle('Spring'));
+    fireEvent.click(screen.getByTestId('flyby-features-add'));
+    fireEvent.click(screen.getByText('Saved filter'));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'The saved filter' }));
+    // Only a filter that can be run is offered.
+    expect(screen.queryByTitle('Broken')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Deep caves'));
+    fireEvent.click(screen.getByTestId('flyby-features-add'));
+    expect(screen.getByTestId('flyby-features-f1')).toHaveTextContent('Features: Spring');
+    expect(screen.getByTestId('flyby-features-f2')).toHaveTextContent('Deep caves');
+    expect(screen.getByRole('combobox', { name: 'Colour of Features: Spring' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove the layer Deep caves' })).toBeInTheDocument();
+
+    // In turn, by the ready-made set that shows layers of features one after another.
+    fireEvent.click(screen.getByText('Ready-made changes'));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Layers of features, in order' }));
+    // The last of each name is the option in the list just opened; a list closed before keeps its own.
+    fireEvent.click(screen.getAllByTitle('Features: Spring').at(-1)!);
+    fireEvent.click(screen.getAllByTitle('Deep caves').at(-1)!);
+    fireEvent.click(screen.getByTestId('flyby-recipe-features-add'));
+    expect(screen.getByText('3 changes')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(3000);
+    // Both are the scene's to draw; the first is in, the second not yet.
+    expect((scene.shown.features as { id: string }[]).map((layer) => layer.id)).toEqual(['f1', 'f2']);
+    expect(scene.shown['layer:features:f1']).toMatchObject({ visible: true });
+    expect(scene.shown['layer:features:f2']).toMatchObject({ visible: false });
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+    expect(Object.keys(scene.shown).filter((member) => member.includes('features'))).toEqual([]);
+
+    // Removed, a layer takes its changes with it.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove the layer Features: Spring' }));
+    expect(screen.queryByTestId('flyby-features-f1')).not.toBeInTheDocument();
+    expect(screen.getByText('1 change')).toBeInTheDocument();
   });
 });
 

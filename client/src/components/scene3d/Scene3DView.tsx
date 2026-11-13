@@ -130,6 +130,7 @@ import {
   createScene3DLookTarget,
   drawBackground,
   drawCaveDataLayers,
+  drawFeatureLayers,
   drawFilterLayers,
   drawHeldImagery,
   drawTracks,
@@ -523,6 +524,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
 
   const dataRef = useRef<CaveData3DHandle | null>(null);
   const filterLayersRef = useRef<FilterLayers3DHandle | null>(null);
+  /** The layers of features a flyby draws itself: a loader of their own, so the viewer's list never holds them. */
+  const flybyFeatureLayersRef = useRef<FilterLayers3DHandle | null>(null);
   // Where two caves come closest, if a pair has been measured. Held apart from the loader above
   // for the same reason the walls are: nothing about it is camera-driven — it is drawn because
   // somebody asked a question on a cave's page, and it stays until they ask a different one.
@@ -594,6 +597,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       refreshData: () => {
         dataRef.current?.reload();
         filterLayersRef.current?.reload();
+        flybyFeatureLayersRef.current?.reload();
         tracksRef.current?.reload();
         meshesInViewRef.current?.reload();
         scansInViewRef.current?.reload();
@@ -620,6 +624,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           engine: () => engineRef.current,
           data: () => dataRef.current,
           filterLayers: () => filterLayersRef.current,
+          featureLayers: () => flybyFeatureLayersRef.current,
           tracks: () => tracksRef.current,
           mesh: () => meshRef.current,
           meshesInView: () => meshesInViewRef.current,
@@ -651,6 +656,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     dataRef.current = data;
     const filterLayers3d = attachFilterLayers3d(engine);
     filterLayersRef.current = filterLayers3d;
+    const flybyFeatureLayers3d = attachFilterLayers3d(engine);
+    flybyFeatureLayersRef.current = flybyFeatureLayers3d;
     const mesh = attachSurveyMesh3d(engine);
     meshRef.current = mesh;
     // Each cave's top is read through the loader at the moment its walls are placed, for the
@@ -848,6 +855,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       dataRef.current = null;
       filterLayers3d.detach();
       filterLayersRef.current = null;
+      flybyFeatureLayers3d.detach();
+      flybyFeatureLayersRef.current = null;
       // Releases the graphics memory the walls hold; a scene handed back with a mesh still on it
       // would keep tens of megabytes for a view nobody is looking at.
       mesh.detach();
@@ -1425,6 +1434,14 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       drawFilterLayers(handle, lookSettingsRef.current, lookHeldRef.current);
     }
   }, [filterLayers, unreadableFilterLayers, overlayOpacity, engineVersion, showingHere]);
+
+  // A flyby's own layers, drawn again into a rebuilt scene for as long as the flyby holds them.
+  useEffect(() => {
+    const handle = flybyFeatureLayersRef.current;
+    if (handle) {
+      drawFeatureLayers(handle, lookHeldRef.current);
+    }
+  }, [engineVersion, showingHere]);
 
   // Which files are drawn, keyed on the same counters the loader is attached on, so a rebuilt
   // scene — or a mount that takes the surface back — comes up with the viewer's files on it.

@@ -9,6 +9,7 @@ import {
   type FlybyChangeWhat,
   type FlybyColour,
   type FlybyDocument,
+  type FlybyLayerKey,
   type FlybyLook,
 } from './flybyDocument.ts';
 
@@ -160,14 +161,15 @@ export function oldMapNewMap(document: FlybyDocument, options: { raster: string;
 }
 
 /**
- * Layers drawn from saved filters, shown one after another: each fades in, stays its time and
- * fades out as the next fades in. All of them are off when the flyby opens.
+ * Layers of features shown one after another — the viewer's layers from saved filters, and the
+ * flyby's own by kind or by filter, by their keys: each fades in, stays its time and fades out as
+ * the next fades in. All of them are off when the flyby opens.
  */
 export function featuresInTurn(
   document: FlybyDocument,
-  options: { filters: string[]; secondsEach: number },
+  options: { layers: FlybyLayerKey[]; secondsEach: number },
 ): FlybyRecipeResult {
-  const keys = options.filters.map((id) => flybyLayerKey('filter', id));
+  const keys = [...options.layers];
   const layers = { ...document.look?.layers };
   for (const key of keys) {
     layers[key] = { visible: false };

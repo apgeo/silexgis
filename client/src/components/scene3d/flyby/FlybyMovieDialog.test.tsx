@@ -30,6 +30,8 @@ vi.mock('../../../api/hooks.ts', () => ({
   useRasterMaps: () => ({ data: { items: [] } }),
   useGeofiles: () => ({ data: { items: [] } }),
   useSavedFilters: () => ({ data: [] }),
+  useFeatureTypes: () => ({ data: [] }),
+  useSearch: () => ({ data: undefined }),
 }));
 vi.mock('../../../viewlinks/geoTargets.ts', () => ({
   APPROXIMATE_SPAN_DEGREES: 0.05,

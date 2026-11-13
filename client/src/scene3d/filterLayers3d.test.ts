@@ -141,6 +141,28 @@ describe('the layers drawn from saved filters, in the scene', () => {
     expect(markers[0].removed).toBe(true);
   });
 
+  it('draws a layer asked for with a filter document of its own, under its own id, at its own strength', async () => {
+    const { engine, markers } = fakeEngine();
+    const handle = attachFilterLayers3d(engine);
+    const params = { filter: 'encoded-document' };
+    handle.setDrawnLayers([{ id: 'flyby-features:f1', params, color: 'green', symbol: 'square', visible: true, opacity: 0.5 }]);
+    await settle();
+    await vi.waitFor(() => expect(markers[0].items.length).toBe(3));
+    expect(calls.entrances[0][2]).toEqual(params);
+    expect(calls.features[0][1]).toEqual(params);
+    expect(markers[0].id).toBe('flyby-features:f1');
+    expect(markers[0].opacity).toBe(0.5);
+    // A cluster of a layer with no saved filter behind it names none.
+    const cluster = markers[0].items.map((item) => selectionFromPick({ id: item.id })).find((picked) => picked?.kind === 'cluster');
+    expect(cluster).not.toHaveProperty('savedFilterId');
+    // Asked again with another document, it is drawn again; with none, it is gone.
+    handle.setDrawnLayers([{ id: 'flyby-features:f1', params: { filter: 'other' }, color: 'green', symbol: 'square', visible: true, opacity: 1 }]);
+    await vi.waitFor(() => expect(calls.entrances.at(-1)?.[2]).toEqual({ filter: 'other' }));
+    handle.setDrawnLayers([]);
+    expect(markers[0].removed).toBe(true);
+    handle.detach();
+  });
+
   it('selects through the main payloads, and a cluster lists the members of its own filter', async () => {
     const { engine, markers } = fakeEngine();
     const handle = attachFilterLayers3d(engine);

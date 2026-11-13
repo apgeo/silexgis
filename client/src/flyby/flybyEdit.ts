@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { FILTER_LAYER_COLORS, FILTER_LAYER_SYMBOLS } from '../map/filterLayerList.ts';
 import {
+  flybyFeatureLayerKey,
   FLYBY_MAX_SECTIONS,
   type FlybyChange,
   type FlybyChangeKind,
   type FlybyDocument,
+  type FlybyFeatureLayer,
   type FlybyLayerKey,
   type FlybyLayerLook,
   type FlybyLook,
@@ -214,4 +217,42 @@ export function withLayerLook(look: FlybyLook, key: FlybyLayerKey, patch: { visi
     delete next.layers;
   }
   return next;
+}
+
+// ---- the flyby's own layers of features ----
+
+/**
+ * A new layer of the flyby's own showing `source`: the next free id, and the first colour and
+ * symbol no other of its layers has together — colours first, so the first six differ by colour.
+ */
+export function newFeatureLayer(
+  features: readonly FlybyFeatureLayer[],
+  source: FlybyFeatureLayer['source'],
+): FlybyFeatureLayer {
+  const taken = new Set(features.map((layer) => layer.id));
+  let number = features.length + 1;
+  while (taken.has(`f${number}`)) {
+    number += 1;
+  }
+  const styles = FILTER_LAYER_SYMBOLS.flatMap((symbol) => FILTER_LAYER_COLORS.map((colour) => ({ colour, symbol })));
+  const style =
+    styles.find((candidate) => !features.some((layer) => layer.colour === candidate.colour && layer.symbol === candidate.symbol)) ??
+    styles[features.length % styles.length];
+  return { id: `f${number}`, source, ...style };
+}
+
+/**
+ * The flyby without one of its own layers: out of the list, out of the opening look, and every
+ * change that showed, hid or faded it taken out with it — none of them would have anything to change.
+ */
+export function withoutFeatureLayer(
+  parts: { look: FlybyLook; changes: readonly FlybyChange[]; features: readonly FlybyFeatureLayer[] },
+  id: string,
+): { look: FlybyLook; changes: FlybyChange[]; features: FlybyFeatureLayer[] } {
+  const key = flybyFeatureLayerKey(id);
+  return {
+    look: withLayerLook(parts.look, key, { visible: undefined, opacity: undefined }),
+    changes: parts.changes.filter((change) => !((change.kind === 'layer' || change.kind === 'layerOpacity') && change.layer === key)),
+    features: parts.features.filter((layer) => layer.id !== id),
+  };
 }

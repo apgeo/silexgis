@@ -12,6 +12,7 @@ import type { Scene3DCore, Scene3DModelTint, Scene3DSurfaceMode } from '../../sc
 import type { StationPhotos3DHandle } from '../../scene3d/stationPhotos3d.ts';
 import type { SurveyMesh3DHandle } from '../../scene3d/surveyMesh3d.ts';
 import type { SurveyMeshesInView3DHandle } from '../../scene3d/surveyMeshesInView3d.ts';
+import { decodeFilter } from '../../filters/url.ts';
 import {
   createScene3DLookTarget,
   drawBackground,
@@ -74,6 +75,7 @@ function world() {
     scansActive: undefined as boolean | undefined,
     photosVisible: undefined as boolean | undefined,
     lens: undefined as number | undefined,
+    featureSpecs: undefined as unknown,
   };
   const engine = {
     hasImageryLayer: (id: string) => imagery.has(id),
@@ -114,6 +116,11 @@ function world() {
     setLayers: (specs: unknown, _unreadable: unknown, opacity: ReadonlyMap<string, number>) => {
       state.filterSpecs = structuredClone(specs);
       state.filterOpacity = Object.fromEntries(opacity);
+    },
+  } as unknown as FilterLayers3DHandle;
+  const featureLayers = {
+    setDrawnLayers: (specs: unknown) => {
+      state.featureSpecs = structuredClone(specs);
     },
   } as unknown as FilterLayers3DHandle;
   const tracks = {
@@ -166,6 +173,7 @@ function world() {
       engine: () => engine,
       data: () => data,
       filterLayers: () => filterLayers,
+      featureLayers: () => featureLayers,
       tracks: () => tracks,
       mesh: () => mesh,
       meshesInView: () => meshesInView,
@@ -194,6 +202,39 @@ function flyby(changes: FlybyChange[]): FlybyDocument {
 }
 
 const at = (id: string, seconds = 4) => ({ id, section: 'orbit-1', at: 2, seconds });
+
+describe('the layers of features a flyby draws itself', () => {
+  it('asks for them as the viewer\'s layers from filters are asked, shows and hides them, and takes them all away', () => {
+    const { state, target } = world();
+    const stage = createFlybyLookStage(target);
+    const document: FlybyDocument = {
+      ...flyby([{ kind: 'layer', layer: 'features:f2', visible: true, ...at('on', 2) }]),
+      look: { layers: { 'features:f2': { visible: false } } },
+      features: [
+        { id: 'f1', source: { kind: 'filter', savedFilterId: 'saved-1' }, colour: 'magenta', symbol: 'square' },
+        { id: 'f2', source: { kind: 'types', typeIds: [9, 3] }, colour: 'green', symbol: 'diamond' },
+      ],
+    };
+    const plan = flybyLookPlan(document);
+    stage.show(plan, 0);
+    const before = state.featureSpecs as { id: string; params: Record<string, string>; visible: boolean; opacity: number }[];
+    expect(before.map((spec) => [spec.id, spec.visible, spec.opacity])).toEqual([
+      ['flyby-features:f1', true, 1],
+      ['flyby-features:f2', false, 0],
+    ]);
+    expect(before[0].params).toEqual({ savedFilterId: 'saved-1' });
+    // The kinds go as a filter document, in the address form every map route reads.
+    expect(decodeFilter(before[1].params.filter)?.scope[0]).toEqual({
+      world: 'feature',
+      where: { node: 'condition', field: 'typeId', op: 'in', values: [{ type: 'id', value: '3' }, { type: 'id', value: '9' }] },
+    });
+    stage.show(plan, 5);
+    expect((state.featureSpecs as { visible: boolean }[]).map((spec) => spec.visible)).toEqual([true, true]);
+    // Stopped: nothing of the flyby's own is left in the scene.
+    stage.restore();
+    expect(state.featureSpecs).toEqual([]);
+  });
+});
 
 /** Every member a flyby can change, at once. */
 const EVERYTHING: FlybyChange[] = [

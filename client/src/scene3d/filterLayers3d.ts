@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { fetchEntranceFeatures, fetchMapFeatures } from '../api/hooks.ts';
+import { fetchEntranceFeatures, fetchMapFeatures, type MapFilterParams } from '../api/hooks.ts';
 import { clusterCellOf } from '../geo/cluster.ts';
 import { entranceLabel, surfaceFeatureLabel } from '../map/featureLabels.ts';
 import { filterLayerId, type FilterLayerSpec } from '../map/filterLayerList.ts';
@@ -41,6 +41,22 @@ export interface FilterLayers3DEngine
   extends Pick<Scene3DCamera, 'getVisibleBounds' | 'getPseudoZoom' | 'onViewChanged'>,
     Pick<Scene3DVectorSources, 'createMarkerSource' | 'createPolylineSource'> {}
 
+/**
+ * A layer as this loader draws it: the filter it asks the routes with — a saved filter by id, or a
+ * filter document of its own —, its colour, its symbol, and how it is shown.
+ */
+export interface FilterLayer3DSpec {
+  /** Unique among one loader's layers, and the scene source the layer is drawn into. */
+  id: string;
+  params: MapFilterParams;
+  color: FilterLayerSpec['color'];
+  symbol: FilterLayerSpec['symbol'];
+  visible: boolean;
+  opacity: number;
+  /** The saved filter whose members a cluster of this layer lists; a layer drawn from a document has none. */
+  savedFilterId?: string;
+}
+
 export interface FilterLayers3DHandle {
   /**
    * Draws exactly these layers: one is added, removed, restyled, switched on or off, faded or
@@ -51,6 +67,11 @@ export interface FilterLayers3DHandle {
     unreadable: ReadonlySet<string>,
     opacity: ReadonlyMap<string, number>,
   ): void;
+  /**
+   * Draws exactly these layers, each asked for with its own parameters: for layers that are not in
+   * the viewer's list — a flyby's own — and so are never known to be unreadable before they are asked.
+   */
+  setDrawnLayers(specs: readonly FilterLayer3DSpec[]): void;
   /** Loads every drawn layer for the current view now. */
   reload(): void;
   /** The payload now drawn for the same thing, if one of these layers still draws it. */
@@ -64,7 +85,7 @@ const SETTLE_MILLISECONDS = 250;
 const LINE_WIDTH_PIXELS = 3;
 
 interface Drawn {
-  spec: FilterLayerSpec;
+  spec: FilterLayer3DSpec;
   markers: Scene3DVectorSource<Scene3DMarker>;
   lines: Scene3DVectorSource<Scene3DPolyline>;
   drawnMarkers: readonly Scene3DMarker[];
@@ -78,7 +99,6 @@ export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers
   let settleTimer: number | undefined;
   let detached = false;
 
-  const key = (savedFilterId: string) => savedFilterId.toLowerCase();
 
   const empty = (layer: Drawn) => {
     layer.drawnMarkers = [];
@@ -92,12 +112,12 @@ export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers
       return;
     }
     const seq = ++layer.requestSeq;
-    const params = { savedFilterId: layer.spec.savedFilterId };
+    const { params } = layer.spec;
     const [entrances, features] = await Promise.allSettled([
       fetchEntranceFeatures(bbox, zoom, params),
       fetchMapFeatures(bbox, params),
     ]);
-    if (detached || seq !== layer.requestSeq || layers.get(key(layer.spec.savedFilterId)) !== layer) {
+    if (detached || seq !== layer.requestSeq || layers.get(layer.spec.id) !== layer) {
       return;
     }
     if ([entrances, features].some((answer) => answer.status === 'rejected' && isMapFilterRefusal(answer.reason))) {
@@ -149,58 +169,85 @@ export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers
     }
   };
 
+  /** Draws exactly these layers; `blockedIds` names those whose filter this reader may not run. */
+  const draw = (specs: readonly FilterLayer3DSpec[], blockedIds: ReadonlySet<string>) => {
+    if (detached) {
+      return;
+    }
+    const wanted = new Set(specs.map((spec) => spec.id));
+    for (const id of [...layers.keys()]) {
+      if (!wanted.has(id)) {
+        remove(id);
+      }
+    }
+    const toLoad: Drawn[] = [];
+    for (const spec of specs) {
+      const { id } = spec;
+      const blocked = blockedIds.has(id);
+      let layer = layers.get(id);
+      if (!layer) {
+        // Lines first so a layer's markers are added on top of its own lines.
+        const lines = engine.createPolylineSource(`${id}:lines`);
+        const markers = engine.createMarkerSource(id);
+        layer = { spec, markers, lines, drawnMarkers: [], drawnLines: [], requestSeq: 0, blocked };
+        layers.set(id, layer);
+        toLoad.push(layer);
+      }
+      const previous = layer.spec;
+      layer.spec = spec;
+      const restyled =
+        previous.color !== spec.color ||
+        previous.symbol !== spec.symbol ||
+        previous.params.savedFilterId !== spec.params.savedFilterId ||
+        previous.params.filter !== spec.params.filter;
+      const unblocked = layer.blocked && !blocked;
+      layer.blocked = blocked;
+      layer.markers.setVisible(spec.visible);
+      layer.lines.setVisible(spec.visible);
+      layer.markers.setOpacity(spec.opacity);
+      layer.lines.setOpacity(spec.opacity);
+      if (blocked) {
+        layer.requestSeq++;
+        empty(layer);
+      } else if ((restyled || unblocked || (spec.visible && !previous.visible)) && !toLoad.includes(layer)) {
+        toLoad.push(layer);
+      }
+    }
+    if (toLoad.length > 0) {
+      const bounds = engine.getVisibleBounds();
+      if (bounds) {
+        const bbox = boundsToBbox(bounds);
+        const zoom = mapZoomFor(engine.getPseudoZoom());
+        for (const layer of toLoad) {
+          void loadOne(layer, bbox, zoom);
+        }
+      }
+    }
+  };
+
   return {
     setLayers(specs, unreadable, opacity) {
-      if (detached) {
-        return;
-      }
-      const wanted = new Set(specs.map((spec) => key(spec.savedFilterId)));
-      for (const id of [...layers.keys()]) {
-        if (!wanted.has(id)) {
-          remove(id);
+      // A layer of the viewer's list is known by its saved filter, written in small letters.
+      const blocked = new Set<string>();
+      const drawn = specs.map((spec): FilterLayer3DSpec => {
+        const id = filterLayerId(spec.savedFilterId.toLowerCase());
+        if (unreadable.has(spec.savedFilterId.toLowerCase())) {
+          blocked.add(id);
         }
-      }
-      const toLoad: Drawn[] = [];
-      for (const spec of specs) {
-        const id = key(spec.savedFilterId);
-        const blocked = unreadable.has(id);
-        let layer = layers.get(id);
-        if (!layer) {
-          // Lines first so a layer's markers are added on top of its own lines.
-          const sourceId = filterLayerId(id);
-          const lines = engine.createPolylineSource(`${sourceId}:lines`);
-          const markers = engine.createMarkerSource(sourceId);
-          layer = { spec, markers, lines, drawnMarkers: [], drawnLines: [], requestSeq: 0, blocked };
-          layers.set(id, layer);
-          toLoad.push(layer);
-        }
-        const previous = layer.spec;
-        layer.spec = spec;
-        const restyled = previous.color !== spec.color || previous.symbol !== spec.symbol;
-        const unblocked = layer.blocked && !blocked;
-        layer.blocked = blocked;
-        layer.markers.setVisible(spec.visible);
-        layer.lines.setVisible(spec.visible);
-        const fade = opacity.get(filterLayerId(spec.savedFilterId)) ?? 1;
-        layer.markers.setOpacity(fade);
-        layer.lines.setOpacity(fade);
-        if (blocked) {
-          layer.requestSeq++;
-          empty(layer);
-        } else if ((restyled || unblocked || (spec.visible && !previous.visible)) && !toLoad.includes(layer)) {
-          toLoad.push(layer);
-        }
-      }
-      if (toLoad.length > 0) {
-        const bounds = engine.getVisibleBounds();
-        if (bounds) {
-          const bbox = boundsToBbox(bounds);
-          const zoom = mapZoomFor(engine.getPseudoZoom());
-          for (const layer of toLoad) {
-            void loadOne(layer, bbox, zoom);
-          }
-        }
-      }
+        return {
+          id,
+          params: { savedFilterId: spec.savedFilterId },
+          color: spec.color,
+          symbol: spec.symbol,
+          visible: spec.visible,
+          opacity: opacity.get(filterLayerId(spec.savedFilterId)) ?? 1,
+          savedFilterId: spec.savedFilterId,
+        };
+      });
+      draw(drawn, blocked);
+    },
+    setDrawnLayers(specs) {
+      draw(specs, new Set());
     },
     reload: load,
     currentPick(payload) {
@@ -239,7 +286,7 @@ export function filterLayerEntranceMarkers(
   zoom: number,
   color: FilterLayerSpec['color'],
   symbol: FilterLayerSpec['symbol'],
-  savedFilterId: string,
+  savedFilterId?: string,
 ): Scene3DMarker[] {
   const fill = filterLayerPalette[color];
   const markers: Scene3DMarker[] = [];
@@ -261,7 +308,7 @@ export function filterLayerEntranceMarkers(
           count,
           zoom,
           cell,
-          savedFilterId,
+          ...(savedFilterId !== undefined ? { savedFilterId } : {}),
           anchor: onTheGround(position),
         };
         markers.push({ position, clampToGround: true, image: icon.image, scale: icon.scale, id });

@@ -87,7 +87,7 @@ describe('ready-made changes', () => {
   });
 
   it('shows filter layers one after another, the last to the end', () => {
-    const document = withRecipe(flyby(), featuresInTurn(flyby(), { filters: ['a', 'b', 'c'], secondsEach: 8 }));
+    const document = withRecipe(flyby(), featuresInTurn(flyby(), { layers: ['filter:a', 'filter:b', 'filter:c'], secondsEach: 8 }));
     expect(flybyProblems(document)).toEqual([]);
     const base = { ...BASE, layers: { 'filter:a': { visible: true, opacity: 1 } } };
     const plan = flybyLookPlan(document);

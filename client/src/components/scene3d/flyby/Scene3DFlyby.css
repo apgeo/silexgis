@@ -373,3 +373,21 @@
   grid-column: 1 / -1;
   overflow-wrap: anywhere;
 }
+
+/* One of the flyby's own layers of features: its swatch and name on a line, then colour, symbol and removal. */
+.scene3d-flyby-features-list li {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+.scene3d-flyby-features-list .scene3d-flyby-layer-name {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.scene3d-flyby-feature-swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}

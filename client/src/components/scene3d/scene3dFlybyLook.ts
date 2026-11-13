@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { MapLayerInfo, RasterMapInfo } from '../../api/hooks.ts';
-import type { FlybyLayerKey } from '../../flyby/flybyDocument.ts';
+import { flybyFeatureLayerKey, type FlybyFeatureLayer, type FlybyLayerKey } from '../../flyby/flybyDocument.ts';
+import { featuresOfTypesDocument } from '../../flyby/flybyFilters.ts';
+import { encodeFilter } from '../../filters/url.ts';
 import type { FlybyLayerState, FlybyLookBase } from '../../flyby/flybyLook.ts';
 import type { FlybyBackgroundShown, FlybyLookTarget } from '../../flyby/flybyLookApply.ts';
 import { filterLayerId, type FilterLayerSpec } from '../../map/filterLayerList.ts';
 import { baseImageryLayerId, tileOverlayImageryLayerId } from '../../scene3d/baseImagery3d.ts';
 import { CAVE_DATA_3D_LAYERS, type CaveData3DHandle } from '../../scene3d/caveData3d.ts';
-import type { FilterLayers3DHandle } from '../../scene3d/filterLayers3d.ts';
+import type { FilterLayer3DSpec, FilterLayers3DHandle } from '../../scene3d/filterLayers3d.ts';
 import type { GeofileTrack3DFile, GeofileTracks3DHandle } from '../../scene3d/geofileTracks3d.ts';
 import { prepareRasterImagery, rasterImageryLayerId } from '../../scene3d/rasterOverlay3d.ts';
 import { SCANS_IN_VIEW_LAYER_ID, type ScansInView3DHandle } from '../../scene3d/scansInView3d.ts';
@@ -33,6 +35,8 @@ export interface Scene3DLookHeld {
   background?: FlybyBackgroundShown;
   layers: Map<FlybyLayerKey, FlybyLayerState>;
   surface?: Scene3DSurfaceMode;
+  /** The layers of features the flyby draws itself; none when it draws none, or has stopped. */
+  features?: readonly FlybyFeatureLayer[];
 }
 
 export function emptyLookHeld(): Scene3DLookHeld {
@@ -90,6 +94,9 @@ export function viewerLayer(settings: Scene3DLookSettings, key: FlybyLayerKey): 
       const spec = settings.filterLayers.find((candidate) => filterLayerId(candidate.savedFilterId) === key);
       return { visible: spec?.visible ?? false, opacity: settings.overlayOpacity[key] ?? 1 };
     }
+    case 'features':
+      // The flyby's own: the viewer has no setting for it, and it is the flyby's to show.
+      return { visible: true, opacity: 1 };
     default: {
       const switchKey = NAMED_SWITCHES[key] ?? key;
       return { visible: settings.overlayVisible[switchKey] ?? true, opacity: settings.overlayOpacity[key] ?? 1 };
@@ -186,6 +193,35 @@ export function drawFilterLayers(
   handle.setLayers(specs, new Set(settings.unreadableFilterLayers), opacity);
 }
 
+/** The scene source a layer of the flyby's own is drawn into; apart from every layer of the viewer's. */
+export function flybyFeatureSourceId(id: string): string {
+  return `flyby-features:${id}`;
+}
+
+/**
+ * The flyby's own layers of features, as the flyby holds them now: each asked for with a saved
+ * filter's id or with a document of feature types, exactly the parameters the viewer's layers from
+ * saved filters send, and none at all once the flyby has let the scene go.
+ */
+export function drawFeatureLayers(handle: FilterLayers3DHandle, held: Scene3DLookHeld): void {
+  const specs = (held.features ?? []).map((layer): FilterLayer3DSpec => {
+    const state = held.layers.get(flybyFeatureLayerKey(layer.id));
+    return {
+      id: flybyFeatureSourceId(layer.id),
+      params:
+        layer.source.kind === 'filter'
+          ? { savedFilterId: layer.source.savedFilterId }
+          : { filter: encodeFilter(featuresOfTypesDocument(layer.source.typeIds)) },
+      color: layer.colour,
+      symbol: layer.symbol,
+      visible: state?.visible ?? false,
+      opacity: state?.opacity ?? 0,
+      ...(layer.source.kind === 'filter' ? { savedFilterId: layer.source.savedFilterId } : {}),
+    };
+  });
+  handle.setDrawnLayers(specs);
+}
+
 export function drawTracks(handle: GeofileTracks3DHandle, settings: Scene3DLookSettings, held: Scene3DLookHeld): void {
   const visible = new Set(settings.visibleGeofileIds);
   for (const file of settings.geofiles) {
@@ -229,6 +265,8 @@ export interface Scene3DLookHandles {
   engine(): Scene3DCore | null;
   data(): CaveData3DHandle | null;
   filterLayers(): FilterLayers3DHandle | null;
+  /** The loader a flyby's own layers of features are drawn by, apart from the viewer's layers. */
+  featureLayers?(): FilterLayers3DHandle | null;
   tracks(): GeofileTracks3DHandle | null;
   mesh(): SurveyMesh3DHandle | null;
   meshesInView(): SurveyMeshesInView3DHandle | null;
@@ -264,6 +302,13 @@ export function createScene3DLookTarget(handles: Scene3DLookHandles, held: Scene
       const filterLayers = handles.filterLayers();
       if (filterLayers) {
         drawFilterLayers(filterLayers, settings, held);
+      }
+      return;
+    }
+    if (key.startsWith('features:')) {
+      const featureLayers = handles.featureLayers?.();
+      if (featureLayers) {
+        drawFeatureLayers(featureLayers, held);
       }
       return;
     }
@@ -331,6 +376,13 @@ export function createScene3DLookTarget(handles: Scene3DLookHandles, held: Scene
         held.layers.delete(key);
       }
       drawLayer(key);
+    },
+    showFeatureLayers(layers) {
+      held.features = layers;
+      const featureLayers = handles.featureLayers?.();
+      if (featureLayers) {
+        drawFeatureLayers(featureLayers, held);
+      }
     },
     showWalls(tint) {
       handles

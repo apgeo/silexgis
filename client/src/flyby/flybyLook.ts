@@ -2,11 +2,13 @@
 import {
   flybyChangeMember,
   flybyChangeSeconds,
+  flybyFeatureLayerKey,
   flybySectionStarts,
   flybyTimeIn,
   type FlybyChange,
   type FlybyColour,
   type FlybyDocument,
+  type FlybyFeatureLayer,
   type FlybyLayerKey,
   type FlybyLook,
   type FlybySurface,
@@ -35,8 +37,13 @@ export interface FlybyLookPlan {
   look: FlybyLook;
   /** In the order they start. */
   changes: FlybyTimedChange[];
-  /** The layers the opening look or a change names, which are the only ones the flyby touches. */
+  /**
+   * The layers the opening look or a change names, which are the only ones the flyby touches —
+   * and the flyby's own layers of features, which are its to draw from start to end.
+   */
   layers: FlybyLayerKey[];
+  /** The layers of features the flyby draws itself, for as long as it has the scene. */
+  features: FlybyFeatureLayer[];
 }
 
 /**
@@ -101,18 +108,19 @@ export function flybyLookPlan(document: FlybyDocument): FlybyLookPlan {
   }
   changes.sort((a, b) => a.start - b.start);
   const look = document.look ?? {};
-  const layers = new Set(Object.keys(look.layers ?? {}));
+  const features = document.features ?? [];
+  const layers = new Set([...features.map((layer) => flybyFeatureLayerKey(layer.id)), ...Object.keys(look.layers ?? {})]);
   for (const { change } of changes) {
     if (change.kind === 'layer' || change.kind === 'layerOpacity') {
       layers.add(change.layer);
     }
   }
-  return { look, changes, layers: [...layers] };
+  return { look, changes, layers: [...layers], features };
 }
 
 /** True when the plan changes nothing: then nothing of the scene is touched at all. */
 export function flybyLookIsEmpty(plan: FlybyLookPlan): boolean {
-  return plan.changes.length === 0 && Object.keys(plan.look).length === 0;
+  return plan.changes.length === 0 && Object.keys(plan.look).length === 0 && plan.features.length === 0;
 }
 
 /** Eased so a change starts and ends gently rather than at a jolt. */
@@ -206,7 +214,8 @@ function numberAt(
 }
 
 function layerAt(plan: FlybyLookPlan, base: FlybyLookBase, key: FlybyLayerKey, t: number): FlybyLayerState {
-  const own = base.layers[key] ?? { visible: true, opacity: 1 };
+  // A layer of the flyby's own has no setting of the viewer's: it is shown unless the flyby says not.
+  const own = key.startsWith('features:') ? { visible: true, opacity: 1 } : (base.layers[key] ?? { visible: true, opacity: 1 });
   const opening = plan.look.layers?.[key] ?? {};
   // How far the layer has faded in, 0–1, and whether it is drawn at all: a layer fading out is
   // drawn until it has gone, a layer fading in is drawn from the moment it starts to.

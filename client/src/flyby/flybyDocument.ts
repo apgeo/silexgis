@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { FILTER_LAYER_COLORS, FILTER_LAYER_SYMBOLS, type FilterLayerSymbol } from '../map/filterLayerList.ts';
+import type { FilterLayerColor } from '../map/markerPalette.ts';
 
 // A flyby, written down: what the camera of the 3D scene does, around what, and for how long.
 //
@@ -214,11 +216,17 @@ export const FLYBY_SURFACES: readonly FlybySurface[] = ['overlay', 'cutaway'];
 export const FLYBY_NAMED_LAYERS = ['centerlines', 'entrances', 'surface-features', 'walls', 'scans', 'photos'] as const;
 export type FlybyNamedLayer = (typeof FLYBY_NAMED_LAYERS)[number];
 
-/** A tile overlay of the catalogue, a georeferenced map, an imported file, a layer drawn from a saved filter. */
-export const FLYBY_LAYER_KINDS = ['overlay', 'raster', 'file', 'filter'] as const;
+/**
+ * A tile overlay of the catalogue, a georeferenced map, an imported file, a layer the viewer drew
+ * from a saved filter, and a layer of features the flyby draws itself.
+ */
+export const FLYBY_LAYER_KINDS = ['overlay', 'raster', 'file', 'filter', 'features'] as const;
 export type FlybyListedLayerKind = (typeof FLYBY_LAYER_KINDS)[number];
 
-/** `centerlines`, `walls`… or `overlay:12`, `raster:<id>`, `file:<id>`, `filter:<savedFilterId>`. */
+/**
+ * `centerlines`, `walls`… or `overlay:12`, `raster:<id>`, `file:<id>`, `filter:<savedFilterId>`, and
+ * `features:<id>` for one of the flyby's own layers of features.
+ */
 export type FlybyLayerKey = string;
 
 const LAYER_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -279,6 +287,33 @@ export interface FlybyLook {
    * a mountain stands like a wall behind the cave —, wide takes in a valley from close by.
    */
   lens?: number;
+}
+
+/**
+ * A layer of features a flyby draws itself: in the 3D scene only, only while the flyby has the
+ * camera, and never in the viewer's own list of layers. What it shows is a question put to the same
+ * routes the viewer's layers from saved filters ask — the features a saved filter keeps, or the
+ * features of some types of the catalogue — so the server rules on it exactly as on those, for
+ * whoever plays the flyby. Shown from the start unless the opening look says otherwise, and shown,
+ * hidden and faded like any other layer under its key `features:<id>`.
+ */
+export interface FlybyFeatureLayer {
+  /** Stable within the document: what the look and the changes name it by. */
+  id: string;
+  source: { kind: 'filter'; savedFilterId: string } | { kind: 'types'; typeIds: number[] };
+  /** The colour and the symbol, from the palette the viewer's own layers from filters use. */
+  colour: FilterLayerColor;
+  symbol: FilterLayerSymbol;
+}
+
+/** How many layers of its own a flyby draws: as many as the viewer's own list holds. */
+export const FLYBY_MAX_FEATURE_LAYERS = 12;
+/** How many feature types one layer of a flyby's own may show. */
+export const FLYBY_MAX_FEATURE_TYPES = 50;
+
+/** The key a layer of the flyby's own is shown, hidden and faded by. */
+export function flybyFeatureLayerKey(id: string): FlybyLayerKey {
+  return flybyLayerKey('features', id);
 }
 
 /** The narrowest and the widest lens, in degrees across the wider side of the picture; the scene's own is 60. */
@@ -384,6 +419,8 @@ export interface FlybyDocument {
   /** Timed changes of the look. */
   changes?: FlybyChange[];
   texts?: FlybyTexts;
+  /** The layers of features the flyby draws itself. */
+  features?: FlybyFeatureLayer[];
 }
 
 export const FLYBY_SPEED_RANGE = { min: 0.25, max: 4 } as const;
@@ -433,7 +470,12 @@ export type FlybyProblem =
   /** Two changes steer the same thing at the same time. */
   | { code: 'overlappingChanges'; change: string; section: string; other: string }
   /** A caption names a section the flyby does not have, or a card or caption has no time to be seen. */
-  | { code: 'badText'; section?: string };
+  | { code: 'badText'; section?: string }
+  /**
+   * A layer of the flyby's own shows nothing, has a colour or a symbol the palette does not have,
+   * shares its id with another; or the look or a change names one the flyby does not have.
+   */
+  | { code: 'badFeatures'; layer?: string };
 
 function subjectExists(document: FlybyDocument, ref: FlybySubjectRef): boolean {
   return ref === 'all' || (Number.isInteger(ref) && ref >= 0 && ref < document.subjects.length);
@@ -510,7 +552,47 @@ export function flybyProblems(document: FlybyDocument): FlybyProblem[] {
   if (document.look && !lookIsSound(document.look)) {
     problems.push({ code: 'badLook' });
   }
-  problems.push(...changeProblems(document), ...textProblems(document));
+  problems.push(...changeProblems(document), ...textProblems(document), ...featureProblems(document));
+  return problems;
+}
+
+function featureProblems(document: FlybyDocument): FlybyProblem[] {
+  const problems: FlybyProblem[] = [];
+  const layers = document.features ?? [];
+  if (layers.length > FLYBY_MAX_FEATURE_LAYERS) {
+    problems.push({ code: 'badFeatures' });
+  }
+  const ids = new Set<string>();
+  for (const layer of layers) {
+    const shows =
+      layer.source.kind === 'filter'
+        ? LAYER_ID_PATTERN.test(layer.source.savedFilterId)
+        : layer.source.typeIds.length > 0 &&
+          layer.source.typeIds.length <= FLYBY_MAX_FEATURE_TYPES &&
+          layer.source.typeIds.every((typeId) => Number.isSafeInteger(typeId) && typeId > 0);
+    if (
+      ids.has(layer.id) ||
+      !LAYER_ID_PATTERN.test(layer.id) ||
+      !shows ||
+      !FILTER_LAYER_COLORS.includes(layer.colour) ||
+      !FILTER_LAYER_SYMBOLS.includes(layer.symbol)
+    ) {
+      problems.push({ code: 'badFeatures', layer: layer.id });
+    }
+    ids.add(layer.id);
+  }
+  // A layer named by the look or a change and not drawn by the flyby would show nothing at all.
+  const named = [
+    ...Object.keys(document.look?.layers ?? {}),
+    ...(document.changes ?? []).flatMap((change) =>
+      change.kind === 'layer' || change.kind === 'layerOpacity' ? [change.layer] : [],
+    ),
+  ];
+  for (const key of new Set(named)) {
+    if (key.startsWith('features:') && !ids.has(key.slice('features:'.length))) {
+      problems.push({ code: 'badFeatures', layer: key.slice('features:'.length) });
+    }
+  }
   return problems;
 }
 
@@ -940,6 +1022,28 @@ function readLook(value: unknown): FlybyLook | null {
   return look;
 }
 
+function readFeatureLayer(value: unknown): FlybyFeatureLayer | null {
+  const bag = bagOf(value);
+  const source = bagOf(bag?.source);
+  const id = text(bag?.id, 64);
+  const colour = FILTER_LAYER_COLORS.find((candidate) => candidate === bag?.colour);
+  const symbol = FILTER_LAYER_SYMBOLS.find((candidate) => candidate === bag?.symbol);
+  if (!bag || !source || !id || !colour || !symbol) {
+    return null;
+  }
+  if (source.kind === 'filter') {
+    const savedFilterId = text(source.savedFilterId, 100);
+    return savedFilterId ? { id, source: { kind: 'filter', savedFilterId }, colour, symbol } : null;
+  }
+  if (source.kind === 'types' && Array.isArray(source.typeIds) && source.typeIds.length <= FLYBY_MAX_FEATURE_TYPES) {
+    const typeIds = source.typeIds.map(finite);
+    return typeIds.every((typeId) => typeId !== undefined)
+      ? { id, source: { kind: 'types', typeIds: typeIds as number[] }, colour, symbol }
+      : null;
+  }
+  return null;
+}
+
 function readColourOrNull(value: unknown): FlybyColour | null | undefined {
   return value === null ? null : isFlybyColour(value) ? value : undefined;
 }
@@ -1169,6 +1273,16 @@ export function normalizeFlybyDocument(value: unknown): FlybyDocument | null {
       return null;
     }
     document.texts = texts;
+  }
+  if (bag.features !== undefined) {
+    if (!Array.isArray(bag.features) || bag.features.length > FLYBY_MAX_FEATURE_LAYERS) {
+      return null;
+    }
+    const features = bag.features.map(readFeatureLayer);
+    if (features.some((layer) => layer === null)) {
+      return null;
+    }
+    document.features = features as FlybyFeatureLayer[];
   }
   return flybyProblems(document).length === 0 ? document : null;
 }

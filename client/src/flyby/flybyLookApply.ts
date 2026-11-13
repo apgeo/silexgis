@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { FlybyColour, FlybyLayerKey, FlybySurface } from './flybyDocument.ts';
+import type { FlybyColour, FlybyFeatureLayer, FlybyLayerKey, FlybySurface } from './flybyDocument.ts';
 import {
   flybyLookAt,
   flybyLookIsEmpty,
@@ -34,6 +34,11 @@ export interface FlybyLookTarget {
   viewerLook(layers: readonly FlybyLayerKey[]): FlybyLookBase;
   showBackground(shown: FlybyBackgroundShown | undefined): void;
   showLayer(key: FlybyLayerKey, state: FlybyLayerState | undefined): void;
+  /**
+   * The layers of features the flyby draws itself, before any of them is shown; undefined takes
+   * them all out of the scene. Left out by a view that cannot draw them, and they are then not drawn.
+   */
+  showFeatureLayers?(layers: readonly FlybyFeatureLayer[] | undefined): void;
   showWalls(tint: { colour: FlybyColour; strength: number } | undefined): void;
   /** Undefined: the lines in their colours by depth. */
   showLines(colour: FlybyColour | undefined): void;
@@ -86,7 +91,9 @@ export function createFlybyLookStage(target: FlybyLookTarget): FlybyLookStage {
 
   const restore = () => {
     for (const member of applied.keys()) {
-      if (member === 'background') {
+      if (member === 'features') {
+        target.showFeatureLayers?.(undefined);
+      } else if (member === 'background') {
         target.showBackground(undefined);
       } else if (member.startsWith('layer:')) {
         target.showLayer(member.slice('layer:'.length), undefined);
@@ -125,6 +132,10 @@ export function createFlybyLookStage(target: FlybyLookTarget): FlybyLookStage {
       base ??= target.viewerLook(next.layers);
       const state = flybyLookAt(next, base, t);
       let changed = false;
+      // What the flyby's own layers are, first: whether each is shown comes with the other layers.
+      if (next.features.length > 0 && target.showFeatureLayers) {
+        changed = put('features', next.features, () => target.showFeatureLayers!(next.features)) || changed;
+      }
       const background = backgroundShown(state);
       if (background) {
         changed = put('background', background, () => target.showBackground(background)) || changed;

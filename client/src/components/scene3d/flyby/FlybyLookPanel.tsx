@@ -3,11 +3,13 @@ import { useMemo, useState } from 'react';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { Checkbox, Collapse, Input, InputNumber, Segmented, Select, Slider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useGeofiles, useMapLayers, useRasterMaps, useSavedFilters } from '../../../api/hooks.ts';
+import { useFeatureTypes, useGeofiles, useMapLayers, useRasterMaps, useSavedFilters } from '../../../api/hooks.ts';
 import {
   FLYBY_CHANGE_KINDS,
   FLYBY_CUT_CHANGES,
+  flybyFeatureLayerKey,
   FLYBY_LENS_RANGE,
+  FLYBY_MAX_FEATURE_LAYERS,
   FLYBY_NAMED_LAYERS,
   flybyLayerKey,
   FLYBY_MAX_CHANGE_SECONDS,
@@ -18,6 +20,7 @@ import {
   type FlybyChangeWhat,
   type FlybyColour,
   type FlybyDocument,
+  type FlybyFeatureLayer,
   type FlybyLayerKey,
   type FlybyLook,
   type FlybySurface,
@@ -31,7 +34,9 @@ import {
   seeThroughGround,
   type FlybyRecipeResult,
 } from '../../../flyby/flybyRecipes.ts';
-import { newChangeId, withLayerLook } from '../../../flyby/flybyEdit.ts';
+import { newChangeId, newFeatureLayer, withLayerLook, withoutFeatureLayer } from '../../../flyby/flybyEdit.ts';
+import { FILTER_LAYER_COLORS, FILTER_LAYER_SYMBOLS } from '../../../map/filterLayerList.ts';
+import { filterLayerPalette } from '../../../map/markerPalette.ts';
 import { FLYBY_OWN_LENS } from '../../../flyby/flybyLook.ts';
 import { isDrawableIn3d } from '../../../scene3d/baseImagery3d.ts';
 import { useWorkspaceStore } from '../../../stores/workspaceStore.ts';
@@ -53,9 +58,10 @@ const percent = (share: number) => Math.round(share * 100);
 /** The choice that leaves a setting as the viewer has it; a drop-down list takes no empty value. */
 const OWN = 'own';
 
-/** Names for everything a flyby can name by id, from the lists the installation keeps. */
-function useLayerNames() {
+/** Names for everything a flyby can name by id, from the lists the installation keeps and its own layers. */
+function useLayerNames(features: readonly FlybyFeatureLayer[]) {
   const { t } = useTranslation();
+  const { data: featureTypes } = useFeatureTypes();
   const { data: catalog } = useMapLayers();
   const { data: rasterPage } = useRasterMaps({ pageSize: 100 });
   const { data: geofilePage } = useGeofiles({ pageSize: 100 });
@@ -67,6 +73,19 @@ function useLayerNames() {
     const rasters = rasterPage?.items ?? [];
     const filterName = (savedFilterId: string) =>
       savedFilters?.find((filter) => filter.id.toLowerCase() === savedFilterId.toLowerCase())?.name;
+    /** One of the flyby's own layers, called by what it shows. */
+    const featureName = (layer: FlybyFeatureLayer | undefined): string => {
+      if (!layer) {
+        return t('flyby.look.layer.unknown');
+      }
+      if (layer.source.kind === 'filter') {
+        return filterName(layer.source.savedFilterId) ?? t('flyby.byFilter.unknown');
+      }
+      const typeNames = layer.source.typeIds.map(
+        (typeId) => featureTypes?.find((type) => type.id === typeId)?.name ?? t('flyby.look.layer.unknown'),
+      );
+      return t('flyby.features.ofTypes', { names: typeNames.join(', ') });
+    };
     const backgroundName = (id: number) =>
       layers.find((entry) => Number(entry.id) === id)?.name ?? t('flyby.look.layer.unknown');
     const layerName = (key: FlybyLayerKey): string => {
@@ -82,6 +101,8 @@ function useLayerNames() {
           return rasters.find((raster) => raster.id === id)?.name ?? t('flyby.look.layer.unknown');
         case 'file':
           return geofilePage?.items.find((file) => file.id === id)?.name ?? t('flyby.look.layer.unknown');
+        case 'features':
+          return featureName(features.find((layer) => layer.id === id));
         default:
           return filterName(id) ?? t('flyby.look.layer.unknown');
       }
@@ -100,19 +121,29 @@ function useLayerNames() {
         value: flybyLayerKey('filter', spec.savedFilterId),
         label: filterName(spec.savedFilterId) ?? t('flyby.look.layer.unknown'),
       })),
+      ...features.map((layer) => ({ value: flybyFeatureLayerKey(layer.id), label: featureName(layer) })),
     ];
     return {
       layers: layerList,
       backgrounds: backgrounds.map((entry) => ({ value: Number(entry.id), label: entry.name })),
       rasters: rasters.filter((raster) => raster.cogUrl).map((raster) => ({ value: raster.id, label: raster.name })),
-      filters: filterLayers.map((spec) => ({
-        value: spec.savedFilterId,
-        label: filterName(spec.savedFilterId) ?? t('flyby.look.layer.unknown'),
-      })),
+      // The layers of features that can be shown in turn: the viewer's from saved filters, and the flyby's own.
+      featureLayers: [
+        ...filterLayers.map((spec) => ({
+          value: flybyLayerKey('filter', spec.savedFilterId),
+          label: filterName(spec.savedFilterId) ?? t('flyby.look.layer.unknown'),
+        })),
+        ...features.map((layer) => ({ value: flybyFeatureLayerKey(layer.id), label: featureName(layer) })),
+      ],
+      runnableFilters: (savedFilters ?? [])
+        .filter((filter) => filter.state === 'ready')
+        .map((filter) => ({ value: filter.id, label: filter.name })),
+      featureTypes: (featureTypes ?? []).map((type) => ({ value: type.id, label: type.name })),
+      featureName,
       backgroundName,
       layerName,
     };
-  }, [catalog, rasterPage, geofilePage, savedFilters, filterLayers, t]);
+  }, [catalog, rasterPage, geofilePage, savedFilters, filterLayers, featureTypes, features, t]);
 }
 
 /** A colour well with a name, which a keyboard reaches and a test can fill in. */
@@ -150,7 +181,7 @@ export interface FlybyLookPanelProps {
  */
 export default function FlybyLookPanel({ flyby }: FlybyLookPanelProps) {
   const { t } = useTranslation();
-  const names = useLayerNames();
+  const names = useLayerNames(flyby.features);
   const { document, look, changes, texts } = flyby;
   const busy = flyby.active;
   if (!document) {
@@ -172,6 +203,27 @@ export default function FlybyLookPanel({ flyby }: FlybyLookPanelProps) {
           key: 'look',
           label: t('flyby.look.openingTitle'),
           children: <OpeningLook look={look} setLook={flyby.setLook} backgrounds={names.backgrounds} layers={names.layers} busy={busy} />,
+        },
+        {
+          key: 'features',
+          label: t('flyby.features.title', { count: flyby.features.length }),
+          children: (
+            <FeatureLayers
+              features={flyby.features}
+              names={names}
+              busy={busy}
+              add={(source) => flyby.setFeatures([...flyby.features, newFeatureLayer(flyby.features, source)])}
+              restyle={(id, patch) =>
+                flyby.setFeatures(flyby.features.map((layer) => (layer.id === id ? { ...layer, ...patch } : layer)))
+              }
+              remove={(id) => {
+                const next = withoutFeatureLayer({ look, changes, features: flyby.features }, id);
+                flyby.setLook(next.look);
+                flyby.setChanges(next.changes);
+                flyby.setFeatures(next.features);
+              }}
+            />
+          ),
         },
         {
           key: 'recipes',
@@ -444,6 +496,142 @@ function OpeningLayers({
   );
 }
 
+/**
+ * The layers of features the flyby draws itself, by kind or by a saved filter: each with its colour
+ * and symbol from the palette the viewer's own layers use, and a way to add another.
+ */
+function FeatureLayers({
+  features,
+  names,
+  busy,
+  add,
+  restyle,
+  remove,
+}: {
+  features: readonly FlybyFeatureLayer[];
+  names: Names;
+  busy: boolean;
+  add(source: FlybyFeatureLayer['source']): void;
+  restyle(id: string, patch: Partial<Pick<FlybyFeatureLayer, 'colour' | 'symbol'>>): void;
+  remove(id: string): void;
+}) {
+  const { t } = useTranslation();
+  const [by, setBy] = useState<'types' | 'filter'>('types');
+  const [typeIds, setTypeIds] = useState<number[]>([]);
+  const [savedFilterId, setSavedFilterId] = useState<string>();
+  const full = features.length >= FLYBY_MAX_FEATURE_LAYERS;
+  return (
+    <div className="scene3d-flyby-group" data-testid="flyby-features">
+      <Typography.Text type="secondary">{t('flyby.features.hint')}</Typography.Text>
+      {features.length > 0 && (
+        <ul className="scene3d-flyby-layers scene3d-flyby-features-list">
+          {features.map((layer) => {
+            const name = names.featureName(layer);
+            return (
+              <li key={layer.id} data-testid={`flyby-features-${layer.id}`}>
+                <span className="scene3d-flyby-layer-name">
+                  <span className="scene3d-flyby-feature-swatch" style={{ background: filterLayerPalette[layer.colour] }} aria-hidden />
+                  {name}
+                </span>
+                <Select
+                  size="small"
+                  value={layer.colour}
+                  onChange={(colour) => restyle(layer.id, { colour })}
+                  disabled={busy}
+                  aria-label={t('flyby.features.colour', { name })}
+                  data-testid={`flyby-features-${layer.id}-colour`}
+                  options={FILTER_LAYER_COLORS.map((colour) => ({ value: colour, label: t(`filterLayers.colors.${colour}`) }))}
+                />
+                <Select
+                  size="small"
+                  value={layer.symbol}
+                  onChange={(symbol) => restyle(layer.id, { symbol })}
+                  disabled={busy}
+                  aria-label={t('flyby.features.symbol', { name })}
+                  data-testid={`flyby-features-${layer.id}-symbol`}
+                  options={FILTER_LAYER_SYMBOLS.map((symbol) => ({ value: symbol, label: t(`filterLayers.symbols.${symbol}`) }))}
+                />
+                <Button
+                  size="small"
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  disabled={busy}
+                  onClick={() => remove(layer.id)}
+                  aria-label={t('flyby.features.remove', { name })}
+                  data-testid={`flyby-features-${layer.id}-remove`}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <fieldset className="scene3d-flyby-recipe" data-testid="flyby-features-new">
+        <legend>{t('flyby.features.add')}</legend>
+        <Segmented
+          block
+          size="small"
+          value={by}
+          onChange={(value) => setBy(value as 'types' | 'filter')}
+          disabled={busy || full}
+          aria-label={t('flyby.features.by')}
+          data-testid="flyby-features-by"
+          options={[
+            { value: 'types', label: t('flyby.features.byTypes') },
+            { value: 'filter', label: t('flyby.features.byFilter') },
+          ]}
+        />
+        {by === 'types' ? (
+          <Select
+            size="small"
+            mode="multiple"
+            value={typeIds}
+            onChange={setTypeIds}
+            disabled={busy || full}
+            placeholder={t('flyby.features.types')}
+            aria-label={t('flyby.features.types')}
+            data-testid="flyby-features-types"
+            optionFilterProp="label"
+            options={names.featureTypes}
+          />
+        ) : names.runnableFilters.length === 0 ? (
+          <Typography.Text type="secondary">{t('flyby.byFilter.none')}</Typography.Text>
+        ) : (
+          <Select
+            size="small"
+            value={savedFilterId}
+            onChange={setSavedFilterId}
+            disabled={busy || full}
+            placeholder={t('flyby.byFilter.pick')}
+            aria-label={t('flyby.byFilter.pick')}
+            data-testid="flyby-features-filter"
+            showSearch
+            optionFilterProp="label"
+            options={names.runnableFilters}
+          />
+        )}
+        <Button
+          size="small"
+          icon={<PlusOutlined />}
+          disabled={busy || full || (by === 'types' ? typeIds.length === 0 : !savedFilterId)}
+          onClick={() => {
+            if (by === 'types') {
+              add({ kind: 'types', typeIds });
+              setTypeIds([]);
+            } else if (savedFilterId) {
+              add({ kind: 'filter', savedFilterId });
+              setSavedFilterId(undefined);
+            }
+          }}
+          data-testid="flyby-features-add"
+        >
+          {t('flyby.look.recipe.add')}
+        </Button>
+      </fieldset>
+    </div>
+  );
+}
+
 function Recipes({
   document,
   names,
@@ -609,7 +797,7 @@ function Recipes({
 
       <fieldset className="scene3d-flyby-recipe" data-testid="flyby-recipe-features">
         <legend>{t('flyby.look.recipe.features.name')}</legend>
-        {names.filters.length === 0 ? (
+        {names.featureLayers.length === 0 ? (
           <Typography.Text type="secondary">{t('flyby.look.recipe.features.none')}</Typography.Text>
         ) : (
           <>
@@ -624,7 +812,7 @@ function Recipes({
               data-testid="flyby-recipe-features-filters"
               // Searched by what a person reads, not by the ids underneath.
               optionFilterProp="label"
-              options={names.filters}
+              options={names.featureLayers}
             />
             <div className="scene3d-flyby-row">
               <InputNumber
@@ -642,7 +830,15 @@ function Recipes({
                 size="small"
                 icon={<PlusOutlined />}
                 disabled={busy || filters.length === 0}
-                onClick={() => apply(featuresInTurn(document, { filters, secondsEach: filterSeconds }))}
+                onClick={() =>
+                  apply(
+                    featuresInTurn(document, {
+                      // Only those still offered: a layer of the flyby's own may have been removed since.
+                      layers: filters.filter((key) => names.featureLayers.some((option) => option.value === key)),
+                      secondsEach: filterSeconds,
+                    }),
+                  )
+                }
                 data-testid="flyby-recipe-features-add"
               >
                 {t('flyby.look.recipe.add')}
