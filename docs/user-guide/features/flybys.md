@@ -14,10 +14,11 @@ is about and which ready-made flight to use, press **Play**, and watch.
 It is offered wherever the 3D view is — the **3D view** page, the scene beside the map, and the
 scene in a window of its own — to anybody who is signed in.
 
-> **What a flyby can do today.** Play in the view, play on a clean screen for you to record
-> with another program, be written to a movie file by SilexGIS itself, and be kept and
-> exchanged as a file. Changing the background maps and the caves' colours during the flight is
-> not built yet.
+> **What a flyby can do today.** Play in the view; change the background maps, the layers and
+> the caves' colours during the flight; write a title, captions and an end card over it; play on
+> a clean screen for you to record with another program; be written to a movie file by SilexGIS
+> itself; and be kept and exchanged as a file. Not built yet: stretching the relief during a
+> flight, and more ready-made flights.
 
 ---
 
@@ -74,6 +75,51 @@ flown is highlighted while the flyby plays.
 
 Changing what the flyby is about, its preset or its options builds the sections again, and the
 panel says when the sections on screen are ones you opened or changed by hand.
+
+## How the scene looks, and what is written over it
+
+Below the sections, four more parts of the panel. None of them changes your own layer settings:
+what a flyby shows is shown in the scene alone, the flat map beside it is not touched, and when
+the flyby stops the scene is exactly as you had it.
+
+**Look at the start** — how the scene looks when the flyby begins. Each setting is either set
+here or left **as you have it**.
+
+| Setting | Does |
+|---|---|
+| **Background map** | The background the flyby opens on; only those the 3D view can draw are offered |
+| **Set how strongly the background is drawn** | Below 100 % the ground fades and the caves under it show through |
+| **Sky colour** | The scene draws no sky of its own — above the horizon is black. A flyby built from a preset opens with a soft blue sky; untick it for black |
+| **Colour the cave walls** | The walls mixed with one colour, by a strength; their shading is kept |
+| **Survey lines in one colour** | Instead of their colours by depth |
+| **Ground over the caves** | Drawn over the caves, or cut away above the cave |
+
+**Ready-made changes** — sets of timed changes written in one press. Adding a set again replaces
+the one added before rather than doubling it.
+
+| Set | Does |
+|---|---|
+| **Cycle the backgrounds** | The backgrounds you pick, one after another for so many seconds each, cut or cross-faded, starting again from the first until the flyby ends |
+| **See through the ground while circling** | During each circle the background fades to the strength you give and back |
+| **Colour the caves** | From the start of the section you pick, the walls and the survey lines in one colour |
+| **Old map, new map** | A georeferenced map fades in over the background during a section and out again |
+| **Features in turn** | The filter layers you pick, shown one after another; all of them are hidden when the flyby opens. Only layers already on the map's list of filter layers are offered |
+
+**Changes** — every change as a line in words: what it does, the section it belongs to, the
+seconds into that section it starts, and how long it lasts. Correct the numbers or remove a
+change. A change belongs to its section, so making a section slower or faster moves its changes
+with it. Survey lines and the ground over the caves change at a single moment, not gradually. Two
+changes of the same thing at the same time are marked, and the flyby will not play until one is
+moved.
+
+**Texts over the picture** — a **title** (with a second line) shown from the first moment, a
+**caption** for any section, shown along the bottom while it is flown, an **end card** shown to
+the last moment, and the picture rising out of black at the start and sinking into it at the
+end. They are drawn over the scene in proportion to its size, and they are part of what the
+clean screen shows.
+
+Dragging the position backwards undoes what the flyby changed after that moment, exactly as
+playing forwards made it.
 
 ## Playing
 
@@ -162,7 +208,7 @@ in browsers that allow it (Chrome, Edge); elsewhere it is made in memory and the
 | Control | Does |
 |---|---|
 | **Name** and **Save** | Keeps the flyby in this browser under that name; saving under a name already used replaces it. Up to 50 are kept |
-| **Open a saved flyby** | Brings one back, with its sections, speed and repeat setting |
+| **Open a saved flyby** | Brings one back, with its sections, speed, repeat setting, look, changes and texts |
 | **Delete** | Removes the kept flyby whose name is in the name field |
 | **Save to file** / **Open from file** | Writes the flyby as a small `.flyby.json` file, and reads one — to move a flyby to another browser or send it to somebody |
 
@@ -176,7 +222,10 @@ site removes them, which is what the file is for.
 
 - **Walls.** The walls shown are the ones the scene would show anyway: of the selected cave,
   or of every cave in view if that is switched on in the layers. A tour of caves you have not
-  selected shows their survey lines.
+  selected shows their survey lines. A flyby can show or hide the walls, the scans and the
+  station photographs, but not fade them: they appear and go at once.
+- **A colour for every cave.** *Colour the caves* gives all the caves in the scene one colour. A
+  colour for each cave of a tour is not built yet.
 - **A slow machine.** A flyby plays in real time. On a machine without a graphics card the
   scene draws only a few frames a second and the flight looks like it — the camera is always in
   the right place for the moment, it is just seen less often.

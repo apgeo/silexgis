@@ -14,10 +14,12 @@ despre ce este și ce zbor gata făcut să folosească, apeși **Redă** și pri
 Este oferit oriunde se află vizualizarea 3D — pagina **Vizualizare 3D**, scena de lângă hartă și
 scena dintr-o fereastră proprie — oricui este autentificat.
 
-> **Ce poate face un survol astăzi.** Poate fi redat în vizualizare, redat pe un ecran curat ca
-> să îl înregistrezi cu alt program, scris într-un fișier film chiar de SilexGIS și păstrat sau
-> transmis ca fișier. Schimbarea hărților de bază și a culorilor peșterilor în timpul zborului nu
-> este încă făcută.
+> **Ce poate face un survol astăzi.** Poate fi redat în vizualizare; poate schimba în timpul
+> zborului hărțile de bază, straturile și culorile peșterilor; poate scrie peste imagine un titlu,
+> legende și un carton de final; poate fi redat pe un ecran curat ca să îl înregistrezi cu alt
+> program; poate fi scris într-un fișier film chiar de SilexGIS; și poate fi păstrat sau transmis
+> ca fișier. Încă nefăcute: exagerarea reliefului în timpul zborului și mai multe zboruri gata
+> făcute.
 
 ---
 
@@ -76,6 +78,51 @@ Secțiunea zburată este evidențiată cât timp survolul este redat.
 
 Schimbarea subiectului survolului, a presetării sau a opțiunilor construiește secțiunile din
 nou, iar panoul spune când secțiunile de pe ecran sunt unele deschise sau modificate de tine.
+
+## Cum arată scena și ce se scrie peste ea
+
+Sub secțiuni, încă patru părți ale panoului. Niciuna nu îți schimbă setările straturilor: ce arată
+un survol este arătat doar în scenă, harta plană de lângă ea nu este atinsă, iar când survolul se
+oprește scena este exact cum o aveai.
+
+**Aspectul la început** — cum arată scena când începe survolul. Fiecare setare este fie aleasă
+aici, fie lăsată **cum o ai**.
+
+| Setare | Face |
+|---|---|
+| **Harta de bază** | Harta de bază cu care începe survolul; sunt oferite doar cele pe care vizualizarea 3D le poate desena |
+| **Alege cât de puternic se desenează harta de bază** | Sub 100 % terenul se estompează și peșterile de sub el se văd prin el |
+| **Culoarea cerului** | Scena nu desenează un cer al ei — deasupra orizontului este negru. Un survol construit dintr-o presetare începe cu un cer albastru deschis; debifează ca să fie negru |
+| **Colorează pereții peșterii** | Pereții amestecați cu o culoare, cu o intensitate; umbrirea lor rămâne |
+| **Drumuirile într-o singură culoare** | În locul culorilor după adâncime |
+| **Terenul peste peșteri** | Desenat peste peșteri sau decupat deasupra peșterii |
+
+**Schimbări gata făcute** — seturi de schimbări în timp, scrise dintr-o apăsare. Adăugat din nou,
+un set îl înlocuiește pe cel adăugat înainte, nu îl dublează.
+
+| Set | Face |
+|---|---|
+| **Hărțile de bază pe rând** | Hărțile de bază pe care le alegi, una după alta, câte atâtea secunde fiecare, cu tăietură sau cu trecere treptată, reluate de la prima până la sfârșitul survolului |
+| **Prin teren în timpul ocolului** | În timpul fiecărui ocol harta de bază se estompează până la intensitatea aleasă și revine |
+| **Colorează peșterile** | De la începutul secțiunii alese, pereții și drumuirile într-o singură culoare |
+| **Hartă veche, hartă nouă** | O hartă georeferențiată apare treptat peste harta de bază în timpul unei secțiuni și dispare din nou |
+| **Obiecte pe rând** | Straturile din filtre pe care le alegi, arătate unul după altul; toate sunt ascunse când începe survolul. Sunt oferite doar straturile aflate deja în lista de straturi din filtre a hărții |
+
+**Schimbări** — fiecare schimbare pe câte un rând, în cuvinte: ce face, secțiunea căreia îi
+aparține, la câte secunde de la începutul secțiunii pornește și cât durează. Corectează numerele
+sau șterge o schimbare. O schimbare aparține secțiunii ei, așa că o secțiune făcută mai lentă sau
+mai rapidă își mută schimbările cu ea. Drumuirile și terenul peste peșteri se schimbă dintr-o dată,
+nu treptat. Două schimbări ale aceluiași lucru în același timp sunt semnalate, iar survolul nu
+poate fi redat până când una nu este mutată.
+
+**Texte peste imagine** — un **titlu** (cu un al doilea rând) arătat din primul moment, o
+**legendă** pentru orice secțiune, arătată jos cât timp secțiunea este zburată, un **carton de
+final** arătat până în ultimul moment, iar imaginea poate apărea din negru la început și se poate
+stinge în negru la final. Sunt desenate peste scenă proporțional cu mărimea ei și fac parte din ce
+arată ecranul curat.
+
+Trasă înapoi, poziția anulează ce a schimbat survolul după acel moment, exact cum redarea înainte
+a schimbat.
 
 ## Redarea
 
@@ -167,7 +214,7 @@ memorie și apoi descărcat.
 | Control | Face |
 |---|---|
 | **Nume** și **Salvează** | Păstrează survolul în acest browser sub acel nume; salvarea sub un nume deja folosit îl înlocuiește. Se păstrează cel mult 50 |
-| **Deschide un survol salvat** | Îl aduce înapoi, cu secțiunile, viteza și repetarea lui |
+| **Deschide un survol salvat** | Îl aduce înapoi, cu secțiunile, viteza, repetarea, aspectul, schimbările și textele lui |
 | **Șterge** | Elimină survolul păstrat al cărui nume este în câmpul de nume |
 | **Salvează în fișier** / **Deschide din fișier** | Scrie survolul ca un fișier mic `.flyby.json` și citește unul — ca să muți un survol în alt browser sau să îl trimiți cuiva |
 
@@ -181,7 +228,10 @@ datelor browserului pentru acest site le elimină — pentru asta există fișie
 
 - **Pereții.** Pereții arătați sunt cei pe care scena i-ar arăta oricum: ai peșterii selectate
   sau ai fiecărei peșteri din vedere, dacă asta este aprins în straturi. Un tur al unor peșteri
-  pe care nu le-ai selectat le arată drumuirile.
+  pe care nu le-ai selectat le arată drumuirile. Un survol poate arăta sau ascunde pereții,
+  scanările și fotografiile din stații, dar nu le poate estompa: apar și dispar dintr-o dată.
+- **O culoare pentru fiecare peșteră.** *Colorează peșterile* dă tuturor peșterilor din scenă o
+  singură culoare. O culoare pentru fiecare peșteră a unui tur nu este încă făcută.
 - **Un calculator lent.** Un survol este redat în timp real. Pe un calculator fără placă grafică
   scena desenează doar câteva cadre pe secundă, iar zborul arată ca atare — camera este mereu în
   locul potrivit pentru acel moment, doar că este văzută mai rar.
