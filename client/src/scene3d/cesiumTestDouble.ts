@@ -221,6 +221,14 @@ export class Cartesian3 {
     return { longitudeDegrees, latitudeDegrees, height };
   }
 
+  static fromRadians(longitude: number, latitude: number, height = 0): FakeCartesian3 {
+    return {
+      longitudeDegrees: CesiumMath.toDegrees(longitude),
+      latitudeDegrees: CesiumMath.toDegrees(latitude),
+      height,
+    };
+  }
+
   static normalize(value: Cartesian3, result: Cartesian3): Cartesian3 {
     const length = Math.hypot(value.x, value.y, value.z) || 1;
     result.x = value.x / length;

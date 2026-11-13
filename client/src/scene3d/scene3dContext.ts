@@ -1763,11 +1763,15 @@ class CesiumScene3D implements Scene3DCore {
       return;
     }
     const { scene } = this.widget;
+    const { camera } = scene;
     // A flight under way would land where it was aimed under the old factor, which is a different
-    // true height under the new one; it is called off where it is. The camera is then read at the
-    // factor it was placed with, to be put back at the same true height over the same ground.
-    scene.camera.cancelFlight();
-    const camera = this.getCamera();
+    // true height under the new one; it is called off where it is. The camera is then read as it
+    // stands — radians and the factor it was placed at, nothing rounded through degrees — to be
+    // put back over the same ground, facing the same way, at the same true height.
+    camera.cancelFlight();
+    const standing = Cartographic.fromCartesian(camera.positionWC);
+    const trueCameraHeight = standing ? this.trueHeight(standing.height) : undefined;
+    const orientation = { heading: camera.heading, pitch: camera.pitch, roll: camera.roll };
 
     this.exaggeration = next;
     // The ground, models and the tiles of point clouds the library stretches itself, about the
@@ -1777,7 +1781,16 @@ class CesiumScene3D implements Scene3DCore {
     scene.verticalExaggerationRelativeHeight = 0;
     this.forgetGroundUnderMarkers();
 
-    this.setCamera(camera);
+    if (standing && trueCameraHeight !== undefined) {
+      camera.setView({
+        destination: Cartesian3.fromRadians(
+          standing.longitude,
+          standing.latitude,
+          this.drawnHeight(trueCameraHeight),
+        ),
+        orientation,
+      });
+    }
     for (const entry of this.models.values()) {
       if (entry.model) {
         this.cullAtTrueHeightOnly(entry.model);
