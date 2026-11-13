@@ -44,7 +44,7 @@ function settings(): Scene3DLookSettings {
     rasterOpacity: {},
     geofiles: [{ id: 'g1', name: 'Track', style: null, importStatus: 'imported' }] as unknown as Scene3DLookSettings['geofiles'],
     visibleGeofileIds: [],
-    filterLayers: [{ savedFilterId: 'f1', color: 'red', symbol: 'circle', visible: false }] as Scene3DLookSettings['filterLayers'],
+    filterLayers: [{ savedFilterId: 'f1', color: 'red', symbol: 'circle', visible: false }] as unknown as Scene3DLookSettings['filterLayers'],
     unreadableFilterLayers: [],
     surfaceMode: 'overlay',
     wallsMode: 'selected',

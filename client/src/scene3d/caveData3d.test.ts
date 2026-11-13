@@ -201,6 +201,7 @@ class FakeEngine implements CaveData3DEngine {
   onSurfaceStateChanged() {
     return () => {};
   }
+  setBackgroundColor() {}
   setCutawayFootprint(footprint: Scene3DCutawayFootprint | undefined) {
     this.footprint = footprint;
     this.footprintCalls += 1;
