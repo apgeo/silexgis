@@ -195,6 +195,7 @@ See [Filters on the map](search-and-filters.md#filters-on-the-map).
 | **View from the north / south / east / west** | Fixed elevations |
 | **Remove perspective** | Orthographic projection, so distances read the same near and far |
 | **Save image** | Downloads what the scene is showing as a picture |
+| **Flyby** | Opens the tool that flies the camera for you — see [Flybys in the 3D view](flybys.md) |
 
 **Save image** downloads the view as a PNG named with the date and time it was taken
 (`silexgis-3d-20261006-140509.png`), at the full resolution of your screen. The credits of the

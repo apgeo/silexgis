@@ -17,6 +17,7 @@ detail those walkthroughs link into.
 | [Map workspace](map-workspace.md) | The main map: layers, selection, drawing, measuring, the details panel |
 | [Map services (WMS and WMTS)](map-services.md) | Agencies' maps drawn from their own servers: where they are, what is different about them |
 | [3D view](3d-view.md) | The globe, surveys in place, cutaway, camera, walls |
+| [Flybys in the 3D view](flybys.md) | The camera flown for you around a cave, several caves or a mountain: ready-made flights, sections and speeds, playing, the clean screen for recording, keeping a flyby as a file |
 | [Terrain](terrain.md) | Real relief under the 3D scene, and what an installation must do for it |
 | [Work areas](work-areas.md) | The ground your club actually works, as a browsable tree |
 | [Saved views, panels and multi-window](saved-views-and-windows.md) | Saving and sharing a map, popping panels into their own windows, arrangements that follow your account |

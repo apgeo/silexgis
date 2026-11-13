@@ -206,6 +206,7 @@ picioare. Vezi [Filtre pe hartă](search-and-filters.md#filtre-pe-hartă).
 | **Vedere dinspre nord / sud / est / vest** | Elevații fixe |
 | **Elimină perspectiva** | Proiecție ortografică, ca distanțele să se citească la fel aproape și departe |
 | **Salvează imaginea** | Descarcă ceea ce arată scena, ca imagine |
+| **Survol** | Deschide unealta care zboară camera în locul tău — vezi [Survoluri în vizualizarea 3D](flybys.md) |
 
 **Salvează imaginea** descarcă vederea ca PNG, cu numele format din data și ora la care a fost
 făcută (`silexgis-3d-20261006-140509.png`), la rezoluția întreagă a ecranului. Mențiunile de

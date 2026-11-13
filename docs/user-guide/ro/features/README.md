@@ -17,6 +17,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | [Spațiul de lucru al hărții](map-workspace.md) | Harta principală: straturi, selecție, desenare, măsurare, panoul de detalii |
 | [Servicii de hărți (WMS și WMTS)](map-services.md) | Hărțile agențiilor, desenate de pe serverele lor: unde sunt și ce e diferit la ele |
 | [Vizualizarea 3D](3d-view.md) | Globul, topografiile la locul lor, decuparea, camera, pereții |
+| [Survoluri în vizualizarea 3D](flybys.md) | Camera zburată în locul tău în jurul unei peșteri, al mai multor peșteri sau al unui munte: zboruri gata făcute, secțiuni și viteze, redarea, ecranul curat pentru înregistrare, păstrarea unui survol ca fișier |
 | [Relief](terrain.md) | Relieful real sub scena 3D și ce trebuie să facă o instalare pentru el |
 | [Zone de lucru](work-areas.md) | Terenul pe care lucrează efectiv clubul, ca arbore navigabil |
 | [Vederi salvate, panouri și ferestre multiple](saved-views-and-windows.md) | Salvarea și partajarea unei hărți, desprinderea panourilor în ferestre proprii, aranjări care îți urmează contul |
