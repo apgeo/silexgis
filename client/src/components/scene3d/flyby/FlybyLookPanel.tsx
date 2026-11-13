@@ -374,6 +374,8 @@ function Recipes({
           placeholder={t('flyby.look.recipe.cycle.backgrounds')}
           aria-label={t('flyby.look.recipe.cycle.backgrounds')}
           data-testid="flyby-recipe-cycle-backgrounds"
+          // Searched by what a person reads, not by the ids underneath.
+          optionFilterProp="label"
           options={names.backgrounds}
         />
         <div className="scene3d-flyby-row">
@@ -510,6 +512,8 @@ function Recipes({
               placeholder={t('flyby.look.recipe.features.filters')}
               aria-label={t('flyby.look.recipe.features.filters')}
               data-testid="flyby-recipe-features-filters"
+              // Searched by what a person reads, not by the ids underneath.
+              optionFilterProp="label"
               options={names.filters}
             />
             <div className="scene3d-flyby-row">
