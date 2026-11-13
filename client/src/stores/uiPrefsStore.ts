@@ -131,6 +131,16 @@ interface UiPrefsState {
   pointDetail?: PointDetailLevel;
   setPointDetail: (level: PointDetailLevel | undefined) => void;
   /**
+   * How many times taller than true this person likes the 3D scene drawn — relief and the depth of
+   * caves read more clearly stretched, or less. Per browser, as a way of looking rather than
+   * anything about a cave. Undefined is true height. Read back only through the setting's own
+   * repair, which clamps a stored value into the range and refuses anything that is not a number.
+   *
+   * A saved view that carries a factor sets one for the session instead, and leaves this alone.
+   */
+  scene3dExaggeration?: number;
+  setScene3dExaggeration: (factor: number | undefined) => void;
+  /**
    * Local mirror of the appearance settings the server also holds. The mirror is what paints —
    * it rehydrates synchronously, so the first render already has the right theme — while the
    * server copy is what carries the choice to another machine.
@@ -391,6 +401,8 @@ export const useUiPrefsStore = create<UiPrefsState>()(
         set({ scansInViewMinZoom: minZoom, scansInViewMaxCaves: maxCaves, scansInViewMaxBytes: maxBytes }),
       pointDetail: undefined,
       setPointDetail: (level) => set({ pointDetail: level }),
+      scene3dExaggeration: undefined,
+      setScene3dExaggeration: (factor) => set({ scene3dExaggeration: factor }),
       setAppearance: (patch) => set((state) => ({ appearance: { ...state.appearance, ...patch } })),
       setKarstLinkTreatment: (treatment) => set({ karstLinkTreatment: treatment }),
       setSavedFilterAudience: (audience) => set({ savedFilterAudience: audience }),

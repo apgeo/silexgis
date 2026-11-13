@@ -253,6 +253,33 @@ describe('uiPrefsStore appearance', () => {
     expect(useUiPrefsStore.getState().movieGifCalibration).toEqual({ turning: 0.03 });
   });
 
+  it('keeps the factor the 3D scene is drawn at in this browser, and has none before one was chosen', () => {
+    // An optional field of the current shape, as the GIF figures above are: a blob written before
+    // it existed is read as it is, at true height, and the version stays where it was.
+    localStorage.setItem('silexgis.uiPrefs', JSON.stringify({ version: 10, state: { pinnedTypeIds: [4] } }));
+    useUiPrefsStore.persist.rehydrate();
+    expect(useUiPrefsStore.getState().scene3dExaggeration).toBeUndefined();
+
+    useUiPrefsStore.getState().setScene3dExaggeration(2.5);
+    const stored = JSON.parse(localStorage.getItem('silexgis.uiPrefs')!) as {
+      version: number;
+      state: { scene3dExaggeration?: number };
+    };
+    expect(stored.version).toBe(10);
+    expect(stored.state.scene3dExaggeration).toBe(2.5);
+
+    useUiPrefsStore.setState({ scene3dExaggeration: undefined });
+    localStorage.setItem('silexgis.uiPrefs', JSON.stringify(stored));
+    useUiPrefsStore.persist.rehydrate();
+    expect(useUiPrefsStore.getState().scene3dExaggeration).toBe(2.5);
+
+    // The browser's own, not the account's: a member signing in on a shared laptop does not take
+    // it away, any more than they take the point detail.
+    useUiPrefsStore.getState().adoptAccount('someone-else');
+    expect(useUiPrefsStore.getState().scene3dExaggeration).toBe(2.5);
+    useUiPrefsStore.setState({ scene3dExaggeration: undefined });
+  });
+
   it('keeps the centerline budgets when the limits for the walls in view arrive beside them', () => {
     // One version on again, and the nearest neighbour of the new fields: a budget somebody tuned
     // for the flat map must survive, and the walls must come back following the installation

@@ -205,6 +205,14 @@ interface WorkspaceState {
   scene3dEstimatedPassages: EstimatedPassagesDisplay;
   setScene3dEstimatedPassages: (display: EstimatedPassagesDisplay) => void;
   /**
+   * The vertical exaggeration a saved view brought into this session, which the 3D scene is drawn
+   * at in place of the person's own preference until they choose a factor themselves. Undefined
+   * while no view has set one. Session state, so opening somebody's view does not change how this
+   * browser draws the scene the next time it is opened.
+   */
+  scene3dExaggerationOfView: number | undefined;
+  setScene3dExaggerationOfView: (factor: number | undefined) => void;
+  /**
    * Whether the 3D scene's camera and the flat map's view move together. On by default: two views
    * showing different places is the surprising state, not the useful one.
    *
@@ -389,6 +397,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setScene3dWallsMode: (scene3dWallsMode) => set({ scene3dWallsMode }),
   scene3dEstimatedPassages: DEFAULT_ESTIMATED_PASSAGES_DISPLAY,
   setScene3dEstimatedPassages: (scene3dEstimatedPassages) => set({ scene3dEstimatedPassages }),
+  scene3dExaggerationOfView: undefined,
+  setScene3dExaggerationOfView: (scene3dExaggerationOfView) => set({ scene3dExaggerationOfView }),
   scene3dCoupledToMap: true,
   setScene3dCoupledToMap: (scene3dCoupledToMap) => set({ scene3dCoupledToMap }),
   baseOpacity: {},

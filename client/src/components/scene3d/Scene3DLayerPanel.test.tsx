@@ -120,6 +120,8 @@ function renderPanel(overrides: Partial<Scene3DLayerPanelProps> = {}) {
       cutawayAvailable: true,
       hasFootprint: true,
     },
+    exaggeration: 1,
+    onExaggerationChange: vi.fn(),
     ...overrides,
   };
   // Inside a router, as it always is in the application: the walls row links to a settings page.
@@ -157,6 +159,41 @@ describe('Scene3DLayerPanel', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Cave centerlines' }));
 
     expect(props.onOverlayVisibleChange).toHaveBeenCalledWith('centerlines', false);
+  });
+
+  describe('the relief', () => {
+    const relief = () => screen.getByRole('slider', { name: 'Vertical exaggeration' });
+    const reset = () => screen.getByRole('button', { name: 'True height' });
+
+    it('offers a named factor at true height, with nothing to reset', () => {
+      renderPanel();
+
+      expect(relief()).toHaveAttribute('aria-valuenow', '1');
+      expect(relief()).toHaveAttribute('aria-valuemin', '0.5');
+      expect(relief()).toHaveAttribute('aria-valuemax', '5');
+      // Read out as the factor rather than as a bare number.
+      expect(relief()).toHaveAttribute('aria-valuetext', '×1');
+      expect(screen.getByTestId('scene3d-relief-value')).toHaveTextContent('×1');
+      expect(reset()).toBeDisabled();
+    });
+
+    it('reports a step of the slider as the factor it reaches', () => {
+      const props = renderPanel();
+
+      fireEvent.keyDown(relief(), { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39 });
+
+      expect(props.onExaggerationChange).toHaveBeenCalledWith(1.1);
+    });
+
+    it('says the factor in force and goes back to true height when asked', () => {
+      const props = renderPanel({ exaggeration: 2.5 });
+
+      expect(screen.getByTestId('scene3d-relief-value')).toHaveTextContent('×2.5');
+      expect(relief()).toHaveAttribute('aria-valuetext', '×2.5');
+      fireEvent.click(reset());
+
+      expect(props.onExaggerationChange).toHaveBeenCalledWith(1);
+    });
   });
 
   it('shows the fade of a hidden layer as unusable rather than as something that still acts', () => {

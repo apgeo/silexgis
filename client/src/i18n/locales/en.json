@@ -3953,6 +3953,14 @@
       "vector_unreadable": "This background's style or data could not be loaded, so the 3D view does not draw it.",
       "vector_stand_in": "Drawn in 3D as {{name}}."
     },
+    "relief": {
+      "title": "Relief",
+      "label": "Vertical exaggeration",
+      "value": "×{{factor}}",
+      "reset": "True height",
+      "hint": "Draws every height taller or flatter — the ground, the caves, the camera — all together, so entrances stay on the ground. Altitudes and depths shown stay true.",
+      "notice": "Relief ×{{factor}}"
+    },
     "terrainTitle": "Ground",
     "terrainBuildsHint": "Each build covers one area to one level of detail. Switching re-reads the ground and moves the surveys onto the new surface.",
     "terrainConfiguredEntry": "The configured elevation model",

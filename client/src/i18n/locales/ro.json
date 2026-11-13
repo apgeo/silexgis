@@ -3953,6 +3953,14 @@
       "vector_unreadable": "Stilul sau datele acestui fundal nu au putut fi încărcate, așa că vederea 3D nu îl desenează.",
       "vector_stand_in": "Desenat în 3D ca {{name}}."
     },
+    "relief": {
+      "title": "Relief",
+      "label": "Exagerare verticală",
+      "value": "×{{factor}}",
+      "reset": "Înălțimea reală",
+      "hint": "Desenează toate înălțimile mai înalte sau mai turtite — terenul, peșterile, camera — împreună, astfel încât intrările rămân pe teren. Altitudinile și adâncimile afișate rămân cele reale.",
+      "notice": "Relief ×{{factor}}"
+    },
     "terrainTitle": "Terenul",
     "terrainBuildsHint": "Fiecare generare acoperă o zonă la un nivel de detaliu. Schimbarea recitește terenul și mută topografiile pe noua suprafață.",
     "terrainConfiguredEntry": "Modelul de altitudine configurat",

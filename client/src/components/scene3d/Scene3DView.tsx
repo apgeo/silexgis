@@ -118,6 +118,7 @@ import {
   type ScansInView3DState,
 } from '../../scene3d/scansInView3d.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
+import { exaggerationInForce, formatExaggeration, readExaggeration } from '../../scene3d/exaggeration3d.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
 import { APPROXIMATE_SPAN_DEGREES, geometryFor, isGeographic } from '../../viewlinks/geoTargets.ts';
@@ -840,6 +841,15 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
         applyCamera3D(engine, state);
         setCamera(readCamera3D(engine));
       },
+      // The factor travels beside the camera. A view being opened sets it for this session and
+      // leaves this browser's own preference alone; it is put on the scene at once as well, so a
+      // camera restored straight after it is restored at the factor it was written down at.
+      getExaggeration3D: () => engine.getVerticalExaggeration(),
+      setExaggeration3D: (factor) => {
+        const carried = readExaggeration(factor) ?? 1;
+        useWorkspaceStore.getState().setScene3dExaggerationOfView(carried);
+        engine.setVerticalExaggeration(carried);
+      },
     });
 
     const refreshCamera = () => setCamera(readCamera3D(engine));
@@ -1111,6 +1121,23 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   useEffect(() => {
     engineRef.current?.setPointCloudDetail(pointCloudDetailInForce(pointDetail, coarsePointer()));
   }, [pointDetail, engineVersion, showingHere]);
+
+  // How many times taller than true the scene is drawn: the factor a saved view brought into this
+  // session, else this browser's own. Applied again to a scene rebuilt after a lost context, which
+  // starts at true height.
+  const ownExaggeration = useUiPrefsStore((s) => s.scene3dExaggeration);
+  const viewExaggeration = useWorkspaceStore((s) => s.scene3dExaggerationOfView);
+  const exaggeration = exaggerationInForce(viewExaggeration, ownExaggeration);
+  useEffect(() => {
+    engineRef.current?.setVerticalExaggeration(exaggeration);
+  }, [exaggeration, engineVersion]);
+  // A factor chosen in the panel is this person's own: kept for this browser, and in place of
+  // whatever a saved view set for the session. True height is kept as no preference at all.
+  const setExaggeration = useCallback((factor: number) => {
+    const chosen = readExaggeration(factor) ?? 1;
+    useUiPrefsStore.getState().setScene3dExaggeration(chosen === 1 ? undefined : chosen);
+    useWorkspaceStore.getState().setScene3dExaggerationOfView(undefined);
+  }, []);
 
   // Above what size a selected cave's walls wait for a yes: this person's own number where they
   // set one, else the installation's, else the default it ships with. Declared after the effect
@@ -1584,6 +1611,11 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       ? t(terrainProblemMessage(terrainProblem.problem, terrainProblem.fellBack))
       : undefined,
     imageProblem ? t('scene3d.saveImageFailed') : undefined,
+    // Said for as long as heights are not drawn true, because a stretched hillside looks like a
+    // real one: somebody judging a slope off the screen has to know.
+    exaggeration !== 1
+      ? t('scene3d.relief.notice', { factor: formatExaggeration(exaggeration, i18n.language) })
+      : undefined,
   ].filter((notice): notice is string => notice !== undefined);
 
   return (
@@ -1718,6 +1750,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
                 surfaceMode={surfaceMode}
                 onSurfaceModeChange={setSurfaceMode}
                 surfaceState={surfaceState}
+                exaggeration={exaggeration}
+                onExaggerationChange={setExaggeration}
               />
             }
           >

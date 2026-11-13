@@ -12,7 +12,12 @@ import {
 import type { FeatureType } from '../../api/hooks.ts';
 import { requestReveal3d, takePendingReveal3d } from '../../scene3d/pendingReveal3d.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
-import { setActiveViewCamera, viewFlyTo } from '../../workspace/viewCamera.ts';
+import {
+  applyViewExaggeration3d,
+  setActiveViewCamera,
+  viewExaggeration3d,
+  viewFlyTo,
+} from '../../workspace/viewCamera.ts';
 
 // The engine library is replaced by the same double the scene module's own suite uses; the test
 // runner has no graphics context to give it.
@@ -2233,5 +2238,87 @@ describe('tracks from imported files', () => {
       expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false'),
     );
     expect(trackLines()).toHaveLength(1);
+  });
+});
+
+describe('Scene3DView relief', () => {
+  // The factor itself is the engine's business and is proven there; what is proven here is which
+  // factor the view hands it, where the choice is kept, and that the view says it is on.
+  const scene = () => engine.engineState.widgets[0].scene;
+
+  beforeEach(() => {
+    useUiPrefsStore.setState({ scene3dExaggeration: undefined });
+    useWorkspaceStore.setState({ scene3dExaggerationOfView: undefined });
+  });
+
+  it('draws the scene at true height, and says nothing about it', async () => {
+    withWebGl2(true);
+    renderView();
+
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByTestId('scene3d-loading')).not.toBeInTheDocument());
+    expect(scene().verticalExaggeration).toBe(1);
+    expect(screen.queryByText(/^Relief ×/)).not.toBeInTheDocument();
+  });
+
+  it('draws the scene at this browser’s factor, and says so over the scene', async () => {
+    withWebGl2(true);
+    useUiPrefsStore.setState({ scene3dExaggeration: 2 });
+    renderView();
+
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    await waitFor(() => expect(scene().verticalExaggeration).toBe(2));
+    expect(screen.getByText('Relief ×2')).toBeInTheDocument();
+  });
+
+  it('draws a saved view’s factor for the session, until the person chooses one of their own', async () => {
+    withWebGl2(true);
+    useUiPrefsStore.setState({ scene3dExaggeration: 2 });
+    useWorkspaceStore.setState({ scene3dExaggerationOfView: 3 });
+    renderView();
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    await waitFor(() => expect(scene().verticalExaggeration).toBe(3));
+    expect(screen.getByText('Relief ×3')).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByTestId('scene3d-layers-trigger'));
+    fireEvent.click(await screen.findByRole('button', { name: 'True height' }));
+
+    // Chosen here, it is the person's own: kept for the browser, and the view's is let go.
+    await waitFor(() => expect(scene().verticalExaggeration).toBe(1));
+    expect(useUiPrefsStore.getState().scene3dExaggeration).toBeUndefined();
+    expect(useWorkspaceStore.getState().scene3dExaggerationOfView).toBeUndefined();
+    expect(screen.queryByText(/^Relief ×/)).not.toBeInTheDocument();
+  });
+
+  it('keeps a factor chosen in the panel for this browser', async () => {
+    withWebGl2(true);
+    renderView();
+    fireEvent.click(await screen.findByTestId('scene3d-layers-trigger'));
+
+    fireEvent.keyDown(await screen.findByRole('slider', { name: 'Vertical exaggeration' }), {
+      key: 'ArrowRight',
+      code: 'ArrowRight',
+      keyCode: 39,
+    });
+
+    expect(useUiPrefsStore.getState().scene3dExaggeration).toBe(1.1);
+    await waitFor(() => expect(scene().verticalExaggeration).toBe(1.1));
+  });
+
+  it('takes a saved view’s factor through the view on screen, and gives the one in force to a view being saved', async () => {
+    withWebGl2(true);
+    useUiPrefsStore.setState({ scene3dExaggeration: 2 });
+    renderView();
+    await waitFor(() => expect(scene().verticalExaggeration).toBe(2));
+    expect(viewExaggeration3d()).toBe(2);
+
+    act(() => applyViewExaggeration3d(4));
+
+    // On the scene at once, before whatever camera the view restores next.
+    expect(scene().verticalExaggeration).toBe(4);
+    expect(useWorkspaceStore.getState().scene3dExaggerationOfView).toBe(4);
+    // The person's own is left as it was.
+    expect(useUiPrefsStore.getState().scene3dExaggeration).toBe(2);
+    expect(viewExaggeration3d()).toBe(4);
   });
 });
