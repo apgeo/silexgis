@@ -85,6 +85,14 @@ describe('boundsToBbox', () => {
   it('sends west,south,east,north at the precision the flat map sends', () => {
     expect(boundsToBbox([25.1234567, 45.1, 25.2, 45.2])).toBe('25.12346,45.10000,25.20000,45.20000');
   });
+
+  it('never sends a box whose sides are equal, which every map endpoint refuses', () => {
+    // A camera a few metres from a passage wall sees a box narrower than the rounding.
+    expect(boundsToBbox([25.447361, 45.531212, 25.447363, 45.531216])).toBe('25.44736,45.53121,25.44737,45.53122');
+    expect(boundsToBbox([25.4, 45.5, 25.4, 45.5])).toBe('25.40000,45.50000,25.40001,45.50001');
+    // At the edge of the world it widens inwards.
+    expect(boundsToBbox([180, 90, 180, 90])).toBe('179.99999,89.99999,180.00000,90.00000');
+  });
 });
 
 describe('cameraFramingBounds', () => {
