@@ -1542,6 +1542,79 @@ export class EllipsoidTerrainProvider {
   readonly kind = 'ellipsoid';
 }
 
+class FakeTerrainPickerNode {
+  intersectingTriangles = new Uint32Array(0);
+  children: FakeTerrainPickerNode[] = [];
+  buildingChildren = false;
+}
+
+/**
+ * The library's index of one surface tile's triangles, which every height read off the ground and
+ * every marker laid on it goes through. Exported by the library though left out of its type
+ * declarations. Modelled as far as the scene mends it, which is how it behaves when it is rebuilt —
+ * after the tile is stretched again — while a split of it is still away on a worker:
+ *
+ *   - a rebuild hands every triangle back to the root and drops its children, but keeps the root
+ *     itself, the same object the split in flight belongs to;
+ *   - a pick tests the triangles of the nodes it reaches, and sends a root with no children off to
+ *     be split one level down;
+ *   - a split that comes back gives its children whatever triangles fell in them — none, for
+ *     children a rebuild has dropped — and empties the node it split.
+ *
+ * So a split that left before a rebuild and lands after it empties a root the rebuild had just
+ * filled: no node left holds a triangle, and every pick misses until the next rebuild.
+ * `finishSplits` lands the splits in flight.
+ */
+export class TerrainPicker {
+  _needsRebuild = true;
+  _rootNode = new FakeTerrainPickerNode();
+  private readonly splits: (() => void)[] = [];
+  private readonly triangleCount: number;
+
+  constructor(triangleCount: number) {
+    this.triangleCount = triangleCount;
+  }
+
+  get needsRebuild(): boolean {
+    return this._needsRebuild;
+  }
+
+  set needsRebuild(value: boolean) {
+    this._needsRebuild = value;
+  }
+
+  /** Whether a pick through the tile finds any triangle to hit. */
+  rayIntersect(): boolean {
+    if (this._needsRebuild) {
+      this._needsRebuild = false;
+      this._rootNode.intersectingTriangles = Uint32Array.from({ length: this.triangleCount }, (_, index) => index);
+      this._rootNode.children.length = 0;
+    }
+    const node = this._rootNode;
+    const reached = node.children.length > 0 && !node.buildingChildren ? node.children : [node];
+    const hit = reached.some((leaf) => leaf.intersectingTriangles.length > 0);
+    if (node.children.length === 0 && !node.buildingChildren) {
+      node.buildingChildren = true;
+      const triangles = node.intersectingTriangles;
+      node.children = [0, 1, 2, 3].map(() => new FakeTerrainPickerNode());
+      this.splits.push(() => {
+        node.children.forEach((child, index) => {
+          child.intersectingTriangles = index === 0 ? triangles : new Uint32Array(0);
+        });
+        node.intersectingTriangles = new Uint32Array(0);
+        node.buildingChildren = false;
+      });
+    }
+    return hit;
+  }
+
+  finishSplits(): void {
+    for (const land of this.splits.splice(0)) {
+      land();
+    }
+  }
+}
+
 /**
  * A read of a pre-baked tile pyramid. Only the static factory is modelled, because that is the
  * whole of the surface the scene uses — and it is asynchronous in the real library, which is the

@@ -62,6 +62,8 @@ import {
   WebMapTileServiceImageryProvider,
   WebMercatorTilingScheme,
 } from 'cesium';
+// @ts-expect-error The library exports this class but leaves it out of its type declarations.
+import { TerrainPicker as UntypedTerrainPicker } from 'cesium';
 import { coarsePointer } from '../map/pointer.ts';
 import { drawnAltitude, samePlacement } from './altitude3d.ts';
 import {
@@ -252,6 +254,54 @@ const CUTAWAY_RIM_REFRESH_METERS = 1;
  * nothing at all and is drawn exactly as it always was.
  */
 const TRUE_HEIGHT_ONCE_STRETCHED = 1 + 1e-6;
+
+/** The part of the library's per-tile triangle index that `mendTerrainPickerRebuilds` touches. */
+interface TerrainPickerInternals {
+  _needsRebuild: boolean;
+  _rootNode: object;
+}
+interface TerrainPickerPrototype {
+  rayIntersect(this: TerrainPickerInternals, ...args: unknown[]): unknown;
+  /** Marks a prototype already mended, so a second scene does not wrap it twice. */
+  silexgisMended?: true;
+}
+
+/**
+ * Keeps the ground under a point findable when the vertical exaggeration changes twice in quick
+ * succession — a slider stepped by its arrow keys, a flyby ramping the factor frame by frame.
+ *
+ * Every surface tile indexes its triangles in a tree, built lazily: a pick tests the triangles of
+ * the node it reaches and sends that node off to a worker to be split into four. When the tile is
+ * stretched to a new factor the tree is rebuilt at its next pick — every triangle handed back to
+ * the root, the children dropped — but the root is the same object as before. A split of that root
+ * which left before the rebuild and comes back after it finds no children to fill and then, as
+ * every split does, empties the node it split: the rebuilt root. From then on the tile holds no
+ * triangle anywhere in its tree, every pick through it misses until the factor changes again, the
+ * ground there has no height, and a marker laid on it is not moved onto it. Seen in a browser: with the factor at ×2 and every tile drawn, the
+ * ground under an entrance read as no ground at all (so zero), for as long as the factor stayed.
+ *
+ * Giving the rebuild a fresh root leaves the stale split to empty a node nothing reaches any more.
+ * The rebuild is the library's own, run straight after; this changes only which object it fills.
+ * The flag tested is the one the library's own pick sets just before, when the tile was stretched
+ * since its last pick. Not on the library's published surface — the class is exported but left out
+ * of its type declarations — so it is reached here, in the one module that speaks to the library,
+ * and a library that no longer has it is left alone.
+ */
+function mendTerrainPickerRebuilds(picker: { prototype: TerrainPickerPrototype } | undefined): void {
+  const prototype = picker?.prototype;
+  if (!prototype || typeof prototype.rayIntersect !== 'function' || prototype.silexgisMended) {
+    return;
+  }
+  const rayIntersect = prototype.rayIntersect;
+  prototype.rayIntersect = function (this: TerrainPickerInternals, ...args: unknown[]) {
+    if (this._needsRebuild && this._rootNode) {
+      const Node = this._rootNode.constructor as new () => object;
+      this._rootNode = new Node();
+    }
+    return rayIntersect.apply(this, args);
+  };
+  prototype.silexgisMended = true;
+}
 
 /**
  * The excavation is drawn in earth colours rather than left as the hole it is. Cutting the ground
@@ -846,6 +896,8 @@ class CesiumScene3D implements Scene3DCore {
     const onPostRender = () => {
       this.lastFrameExaggeration = scene.verticalExaggeration;
     };
+    // Before any tile is stretched, and through every one; see the function.
+    mendTerrainPickerRebuilds(UntypedTerrainPicker as { prototype: TerrainPickerPrototype } | undefined);
     scene.postRender.addEventListener(onPostRender);
     this.removePostRenderHandler = () => scene.postRender.removeEventListener(onPostRender);
 

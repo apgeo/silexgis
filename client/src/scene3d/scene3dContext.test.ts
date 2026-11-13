@@ -4080,6 +4080,34 @@ describe('vertical exaggeration', () => {
     session.release();
   });
 
+  it('keeps a surface tile pickable when it is stretched again while its triangles are being sorted', () => {
+    // Two factor changes a frame apart: the first stretch's pick sends the tile's root off to be
+    // split, the second stretch rebuilds the tree before the split is back, and the split lands on
+    // the rebuilt tree. Unmended, the tile's every pick misses from then on, and the ground under
+    // it reads as no ground at all.
+    const session = acquire();
+    const picker = new engine.TerrainPicker(8);
+    const mended = engine.TerrainPicker.prototype.rayIntersect;
+    expect(picker.rayIntersect()).toBe(true);
+
+    picker.needsRebuild = true;
+    expect(picker.rayIntersect()).toBe(true);
+    picker.finishSplits();
+    expect(picker.rayIntersect()).toBe(true);
+    picker.finishSplits();
+    expect(picker.rayIntersect()).toBe(true);
+
+    // A scene made after this one does not wrap the library's picker a second time.
+    session.release();
+    const later = acquire(container());
+    picker.needsRebuild = true;
+    expect(picker.rayIntersect()).toBe(true);
+    picker.finishSplits();
+    expect(picker.rayIntersect()).toBe(true);
+    expect(engine.TerrainPicker.prototype.rayIntersect).toBe(mended);
+    later.release();
+  });
+
   it('does not put a removed batch back when the factor changes', () => {
     const session = acquire();
     const source = session.engine.createPolylineSource('lines');
