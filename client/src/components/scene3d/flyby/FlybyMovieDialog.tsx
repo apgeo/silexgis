@@ -270,7 +270,6 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         return now;
       };
       const stage: FlybyRecorderStage = {
-        getCamera: flyby.stage.getCamera,
         setCamera: flyby.stage.setCamera,
         groundHeight: flyby.stage.groundHeight,
         refreshData: flyby.stage.refreshData,
@@ -468,6 +467,8 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
             size="small"
             value={settings.size}
             disabled={exporting}
+            // Two dozen sizes: all of them in the list, so each can be reached by scrolling it.
+            virtual={false}
             style={{ minWidth: 150 }}
             onChange={(size: string) => change({ size })}
             aria-label={t('caveview.movie.size')}

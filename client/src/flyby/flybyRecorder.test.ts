@@ -56,7 +56,6 @@ function fakeStage(log: Log, options: { settles?: (call: number) => boolean; cap
   let capturing: { width: number; height: number } | null = null;
   const surface = { width: 0, height: 0 } as HTMLCanvasElement;
   const stage: FlybyRecorderStage & { camera(): Scene3DCameraState; capturing(): typeof capturing } = {
-    getCamera: () => camera,
     setCamera: (next) => {
       camera = next;
       log.push('place');
