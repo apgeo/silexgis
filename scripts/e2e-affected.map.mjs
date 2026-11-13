@@ -169,6 +169,8 @@ export const specs = {
     'scene3d-flyby-look.spec.ts',
     // A flyby built by hand: views captured, sections added and moved, a change written, flown as edited.
     'scene3d-flyby-edit.spec.ts',
+    // A flyby about what a saved filter selects, with features of a kind drawn while it flies and gone after.
+    'scene3d-flyby-features.spec.ts',
   ],
   search: ['documents.spec.ts'],
   settings: [
