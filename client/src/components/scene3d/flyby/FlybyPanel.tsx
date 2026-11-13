@@ -26,6 +26,7 @@ import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import Button from '../../Button.tsx';
 import FlybyLookPanel from './FlybyLookPanel.tsx';
 import FlybySections from './FlybySections.tsx';
+import FlybyViews from './FlybyViews.tsx';
 import type { FlybyController, FlybySource, FlybyTrouble } from './useFlyby.ts';
 
 /** The problems that are about the look, the changes and the texts rather than the camera. */
@@ -98,7 +99,8 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
       case 'view':
         return t('flyby.subject.view');
       case 'place':
-        return t('flyby.subject.place');
+        // A view captured from the camera is called by its place in the list of views.
+        return subject.height !== undefined ? t('flyby.views.name', { number: ref + 1 }) : t('flyby.subject.place');
       default:
         return '';
     }
@@ -217,7 +219,9 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
         <Select
           value={flyby.preset}
           onChange={flyby.setPreset}
-          disabled={busy || !document}
+          // Not held for want of a document: a flyby through captured views has none until a view
+          // is added, and the list is how one gets there and back.
+          disabled={busy}
           aria-label={t('flyby.presetTitle')}
           data-testid="flyby-preset"
           options={FLYBY_PRESETS.map((preset) => ({
@@ -227,6 +231,9 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
           }))}
         />
         <Typography.Text type="secondary">{t(`flyby.preset.${flyby.preset}.hint`)}</Typography.Text>
+        {flyby.preset === 'myViews' && (
+          <FlybyViews views={flyby.views} setViews={flyby.setViews} capture={flyby.captureView} busy={busy} />
+        )}
         {flyby.edited && (
           <Typography.Text type="secondary" data-testid="flyby-edited">
             {t('flyby.editedNote')}

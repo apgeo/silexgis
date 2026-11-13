@@ -7,6 +7,7 @@ import en from '../../../i18n/locales/en.json';
 import ro from '../../../i18n/locales/ro.json';
 import { FLYBY_PRESETS, FLYBY_SECTION_KINDS, FLYBY_VERSION, type FlybyDocument } from '../../../flyby/flybyDocument.ts';
 import { flybyFileText } from '../../../flyby/flybyLibrary.ts';
+import { eyeLookingAt } from '../../../scene3d/camera3d.ts';
 import type { CaveInView3D } from '../../../scene3d/centerlines3d.ts';
 import type { Scene3DCameraState, Scene3DCore } from '../../../scene3d/scene3dEngine.ts';
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
@@ -593,6 +594,60 @@ describe('changes of the look by hand', () => {
     fireEvent.click(screen.getByTestId('flyby-save'));
     const [kept] = useFlybyStore.getState().library;
     expect(kept.look?.layers).toEqual({ entrances: { visible: false }, centerlines: { opacity: 0.4 } });
+  });
+});
+
+describe('a flyby through views captured from the scene', () => {
+  it('captures views, edits their list, and flies through them in order', async () => {
+    const scene = fakeScene();
+    const engine = scene.engine() as unknown as {
+      setCamera(camera: Scene3DCameraState): void;
+      getCameraTarget(): { longitude: number; latitude: number; height: number } | undefined;
+    };
+    renderFlyby(scene);
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Preset' }));
+    fireEvent.click(screen.getByTitle('My own views'));
+    expect(screen.getByTestId('flyby-views')).toHaveTextContent('Add this view');
+
+    // Pointed at the sky, there is nothing to fly to.
+    engine.getCameraTarget = () => undefined;
+    fireEvent.click(screen.getByTestId('flyby-view-add'));
+    expect(screen.getByTestId('flyby-view-no-ground')).toBeInTheDocument();
+
+    engine.getCameraTarget = () => ({ longitude: 25, latitude: 45.5, height: 900 });
+    fireEvent.click(screen.getByTestId('flyby-view-add'));
+    expect(screen.queryByTestId('flyby-view-no-ground')).not.toBeInTheDocument();
+    engine.setCamera({ longitude: 25.01, latitude: 45.49, height: 2500, heading: 30, pitch: -30, roll: 0 });
+    engine.getCameraTarget = () => ({ longitude: 25.02, latitude: 45.5, height: 950 });
+    fireEvent.click(screen.getByTestId('flyby-view-add'));
+    // A camera that really looks at its target: two kilometres west of it and up.
+    const third = eyeLookingAt({ lon: 25.05, lat: 45.49, height: 1000 }, 90, -20, 2000);
+    engine.setCamera({ longitude: third.lon, latitude: third.lat, height: third.height, heading: 90, pitch: -20, roll: 0 });
+    engine.getCameraTarget = () => ({ longitude: 25.05, latitude: 45.49, height: 1000 });
+    fireEvent.click(screen.getByTestId('flyby-view-add'));
+    expect(screen.getByTestId('flyby-view-list').querySelectorAll('li')).toHaveLength(3);
+    expect(screen.getByText('2 sections')).toBeInTheDocument();
+    expect(screen.getByTestId('flyby-holds-place')).toBeInTheDocument();
+
+    // The third becomes the second, the leg into it shorter; the old second is taken out.
+    fireEvent.click(screen.getByRole('button', { name: 'Move View 3 up' }));
+    const seconds = screen.getByRole('spinbutton', { name: 'Seconds to fly to View 2' });
+    fireEvent.change(seconds, { target: { value: '4' } });
+    fireEvent.blur(seconds);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove View 3' }));
+    expect(screen.getByText('1 section')).toBeInTheDocument();
+    // Taken again from where the camera is now: the first view becomes this one.
+    fireEvent.click(screen.getByRole('button', { name: 'Take View 1 again from the camera as it is now' }));
+
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(5000);
+    expect(status()).toBe('ended');
+    // Where the third camera stood, which is now the second view.
+    const end = scene.camera();
+    expect(end.longitude).toBeCloseTo(third.lon, 6);
+    expect(end.latitude).toBeCloseTo(third.lat, 6);
+    expect(end.height).toBeCloseTo(third.height, 1);
+    expect(end.heading).toBeCloseTo(90, 3);
   });
 });
 

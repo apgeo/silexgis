@@ -27,8 +27,12 @@ export type FlybySubject =
   | { kind: 'feature'; featureId: string }
   /** Whatever the 3D view is centred on at the moment the flyby is prepared. */
   | { kind: 'view' }
-  /** A place its author pinned. The one subject that holds coordinates. */
-  | { kind: 'place'; longitude: number; latitude: number; radiusM: number };
+  /**
+   * A place its author put into the flyby: a point pinned on the ground, or the point a camera view
+   * they captured was looking at, which is where `height` comes from — a view can look at a cave
+   * under the ground. The one subject that holds coordinates.
+   */
+  | { kind: 'place'; longitude: number; latitude: number; radiusM: number; height?: number };
 
 /** One of the document's subjects by position in its list, or all of them taken as one. */
 export type FlybySubjectRef = number | 'all';
@@ -79,7 +83,7 @@ export type FlybyFullPose = Required<Omit<FlybyPose, 'headingBy' | 'aim'>> & Pic
  * kind is what the section is called, which defaults it is given, and — for a hop — the arc it is
  * flown in.
  */
-export type FlybySectionKind = 'approach' | 'orbit' | 'hop' | 'dive' | 'rise' | 'hold' | 'tilt';
+export type FlybySectionKind = 'approach' | 'orbit' | 'hop' | 'dive' | 'rise' | 'hold' | 'tilt' | 'keyframe';
 
 export const FLYBY_SECTION_KINDS: readonly FlybySectionKind[] = [
   'approach',
@@ -89,6 +93,8 @@ export const FLYBY_SECTION_KINDS: readonly FlybySectionKind[] = [
   'rise',
   'hold',
   'tilt',
+  /** To a camera view its author captured. */
+  'keyframe',
 ];
 
 /** One shot: the camera moves from where the section before left it to `to`. */
@@ -106,7 +112,7 @@ export interface FlybySection {
   rest?: boolean;
 }
 
-export type FlybyPresetId = 'aroundArea' | 'aroundCave' | 'aroundSeveral' | 'tour' | 'planToProfile';
+export type FlybyPresetId = 'aroundArea' | 'aroundCave' | 'aroundSeveral' | 'tour' | 'planToProfile' | 'myViews';
 
 export const FLYBY_PRESETS: readonly FlybyPresetId[] = [
   'aroundCave',
@@ -114,6 +120,7 @@ export const FLYBY_PRESETS: readonly FlybyPresetId[] = [
   'aroundSeveral',
   'aroundArea',
   'planToProfile',
+  'myViews',
 ];
 
 // ---- how the scene looks, and what is written over it ----
@@ -618,17 +625,19 @@ function readSubject(value: unknown): FlybySubject | null {
       const longitude = finite(bag.longitude);
       const latitude = finite(bag.latitude);
       const radiusM = finite(bag.radiusM);
+      const height = bag.height === undefined ? undefined : finite(bag.height);
       if (
         longitude === undefined ||
         latitude === undefined ||
         radiusM === undefined ||
         Math.abs(longitude) > 180 ||
         Math.abs(latitude) > 90 ||
-        !(radiusM > 0)
+        !(radiusM > 0) ||
+        (bag.height !== undefined && height === undefined)
       ) {
         return null;
       }
-      return { kind: 'place', longitude, latitude, radiusM };
+      return { kind: 'place', longitude, latitude, radiusM, ...(height !== undefined ? { height } : {}) };
     }
     default:
       return null;

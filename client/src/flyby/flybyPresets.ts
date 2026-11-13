@@ -56,9 +56,121 @@ const OPENING_PITCH = -26;
  */
 export const FLYBY_PRESET_SKY = '#b4c8dc';
 
+/**
+ * A camera view its author captured: the point the middle of the picture showed, how far the eye
+ * stood from it and which way it looked, and how many seconds the flight into it takes.
+ */
+export interface FlybyCapturedView {
+  target: { longitude: number; latitude: number; height: number };
+  /** Metres from the eye to the point looked at. */
+  distance: number;
+  heading: number;
+  pitch: number;
+  /** The eye was under the ground: the flight to it may go there too. */
+  underground: boolean;
+  /** Seconds the flight into this view takes, at a speed of 1; nothing for the first. */
+  seconds: number;
+}
+
+/** Seconds a newly captured view is flown into. */
+export const FLYBY_VIEW_SECONDS = 6;
+/** Metres the eye is kept above the ground between two views captured above it. */
+const VIEW_CLEARANCE = 10;
+/** Seconds the camera holds a single view, which is all a flyby of one view can do. */
+const SINGLE_VIEW_SECONDS = 3;
+
+/** The turn from one heading to another the short way round, in degrees, between -180 and 180. */
+function shortTurn(from: number, to: number): number {
+  const turn = (((to - from) % 360) + 540) % 360 - 180;
+  return turn === -180 ? 180 : turn;
+}
+
+/** The pose a view is seen from, around the place it looked at. */
+function viewPose(view: FlybyCapturedView, heading: number): FlybyFullPose {
+  return {
+    aim: 'centre',
+    heading,
+    pitch: view.pitch,
+    range: 1,
+    lift: 0,
+    clearance: view.underground ? null : VIEW_CLEARANCE,
+  };
+}
+
+/** The subject a captured view is kept as: the place it looked at, as far off as the eye stood. */
+export function viewSubject(view: FlybyCapturedView): FlybySubject {
+  return {
+    kind: 'place',
+    longitude: view.target.longitude,
+    latitude: view.target.latitude,
+    height: view.target.height,
+    radiusM: view.distance,
+  };
+}
+
+/**
+ * Through the views in order, one leg each, flown as one curve and coming to rest on the last.
+ * Headings are written unwrapped, each the short way round from the one before, so a view facing
+ * 350° after one facing 10° is a turn of twenty degrees and not of three hundred and forty.
+ */
+function myViews(views: readonly FlybyCapturedView[]): Built {
+  const id = numbered();
+  let heading = views[0].heading;
+  const sections: FlybySection[] = views.slice(1).map((view, index) => {
+    heading += shortTurn(heading, view.heading);
+    const pose = viewPose(view, heading);
+    return {
+      id: id('keyframe'),
+      kind: 'keyframe',
+      subject: index + 1,
+      seconds: view.seconds,
+      to: { aim: pose.aim, heading: pose.heading, pitch: pose.pitch, range: pose.range, lift: pose.lift, clearance: pose.clearance },
+    };
+  });
+  if (sections.length === 0) {
+    sections.push({ id: id('hold'), kind: 'hold', subject: 0, seconds: SINGLE_VIEW_SECONDS, to: {} });
+  }
+  return { start: { subject: 0, pose: viewPose(views[0], views[0].heading) }, sections };
+}
+
+/**
+ * The views a flyby made of captured views was made from, read back out of it so they can be
+ * edited again; undefined for any other flyby, or one whose sections were changed so far that it
+ * is no longer a flight through its views.
+ */
+export function viewsOfDocument(document: FlybyDocument): FlybyCapturedView[] | undefined {
+  if (document.preset !== 'myViews' || document.subjects.length === 0) {
+    return undefined;
+  }
+  const places = document.subjects.map((subject) =>
+    subject.kind === 'place' && subject.height !== undefined ? subject : undefined,
+  );
+  const legs = document.sections.filter((section) => section.kind === 'keyframe');
+  const poses = [document.start.pose, ...legs.map((section) => section.to)];
+  if (
+    places.some((place) => !place) ||
+    legs.length !== places.length - 1 ||
+    legs.some((section, index) => section.subject !== index + 1) ||
+    document.start.subject !== 0
+  ) {
+    return undefined;
+  }
+  return places.map((place, index) => ({
+    target: { longitude: place!.longitude, latitude: place!.latitude, height: place!.height! },
+    distance: place!.radiusM,
+    heading: ((poses[index].heading ?? 0) % 360 + 360) % 360,
+    pitch: poses[index].pitch ?? -30,
+    underground: poses[index].clearance === null,
+    seconds: index === 0 ? FLYBY_VIEW_SECONDS : legs[index - 1].seconds,
+  }));
+}
+
 /** Whether a preset can be built from these subjects at all. */
 export function presetFits(preset: FlybyPresetId, subjects: readonly FlybySubject[]): boolean {
   switch (preset) {
+    case 'myViews':
+      // Built from the views captured, not from what the flyby is about.
+      return true;
     case 'aroundCave':
     case 'aroundArea':
     case 'planToProfile':
@@ -227,13 +339,31 @@ function planToProfile(options: FlybyPresetOptions): Built {
   };
 }
 
-/** A document for these subjects, built the preset's way. */
+/**
+ * A document for these subjects, built the preset's way. A flyby through captured views is built
+ * from `views` instead, and its subjects are the places those views looked at.
+ */
 export function buildPreset(
   preset: FlybyPresetId,
   subjects: readonly FlybySubject[],
   options: FlybyPresetOptions = DEFAULT_FLYBY_PRESET_OPTIONS,
   name = '',
+  views: readonly FlybyCapturedView[] = [],
 ): FlybyDocument {
+  if (preset === 'myViews') {
+    return {
+      version: FLYBY_VERSION,
+      name,
+      preset,
+      speed: 1,
+      loop: false,
+      subjects: views.map(viewSubject),
+      ...(views.length > 0
+        ? myViews(views)
+        : { start: { subject: 0, pose: { heading: 0, pitch: OPENING_PITCH, range: 1, lift: 0, clearance: null } }, sections: [] }),
+      look: { sky: FLYBY_PRESET_SKY },
+    };
+  }
   const built = (() => {
     switch (preset) {
       case 'aroundCave':

@@ -217,6 +217,16 @@ export async function resolveSubject(
       return sized(view.target, view.distance * VIEW_RADIUS_RATIO, 0, false);
     }
     case 'place': {
+      if (subject.height !== undefined) {
+        // A captured view: the point it looked at and how far the eye stood from it, exactly — a
+        // view taken a few metres from a passage wall is not to be stood back from like a cave.
+        return {
+          centre: { lon: subject.longitude, lat: subject.latitude, height: subject.height },
+          radius: subject.radiusM,
+          halfHeight: subject.radiusM * MIN_HALF_HEIGHT_RATIO,
+          coarse: false,
+        };
+      }
       const ground = world.groundHeight(subject.longitude, subject.latitude);
       return sized({ lon: subject.longitude, lat: subject.latitude, height: ground }, subject.radiusM, 0, false);
     }

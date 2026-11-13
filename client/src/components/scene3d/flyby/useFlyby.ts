@@ -27,8 +27,11 @@ import {
   buildPreset,
   DEFAULT_FLYBY_PRESET_OPTIONS,
   FLYBY_PRESET_SKY,
+  FLYBY_VIEW_SECONDS,
   presetFits,
   presetFor,
+  viewsOfDocument,
+  type FlybyCapturedView,
   type FlybyPresetOptions,
 } from '../../../flyby/flybyPresets.ts';
 import {
@@ -140,6 +143,8 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
   const [look, setLook] = useState<FlybyLook>({ sky: FLYBY_PRESET_SKY });
   const [changes, setChanges] = useState<FlybyChange[]>([]);
   const [texts, setTexts] = useState<FlybyTexts>({});
+  /** The camera views captured for a flyby through them, in the order they are flown. */
+  const [views, setViewsState] = useState<FlybyCapturedView[]>([]);
 
   const subjects = useMemo<FlybySubject[]>(() => {
     switch (source) {
@@ -155,7 +160,15 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
   const preset = presetChoice && presetFits(presetChoice, subjects) ? presetChoice : presetFor(subjects);
 
   const document = useMemo<FlybyDocument | null>(() => {
-    const base = edited ?? (subjects.length > 0 ? buildPreset(preset, subjects, options) : null);
+    const base =
+      edited ??
+      (preset === 'myViews'
+        ? views.length > 0
+          ? buildPreset(preset, [], options, '', views)
+          : null
+        : subjects.length > 0
+          ? buildPreset(preset, subjects, options)
+          : null);
     if (!base) {
       return null;
     }
@@ -170,7 +183,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
       ...(changes.length > 0 ? { changes } : {}),
       ...(Object.keys(texts).length > 0 ? { texts } : {}),
     };
-  }, [edited, subjects, preset, options, speed, loop, name, look, changes, texts]);
+  }, [edited, subjects, preset, options, speed, loop, name, look, changes, texts, views]);
 
   const refreshCaves = useCallback(() => setCaves(scene.cavesInView()), [scene]);
 
@@ -218,7 +231,42 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     [document, edit],
   );
 
+  /** The views of a flyby through captured views, changed: the flyby is built from them again. */
+  const setViews = useCallback((next: FlybyCapturedView[]) => {
+    setEdited(null);
+    setViewsState(next);
+  }, []);
+
+  /**
+   * The scene's camera as a view to fly through: the point the middle of the picture shows, how far
+   * the eye is from it and which way it looks. Undefined when the middle of the picture is sky, which
+   * has no point to fly to.
+   */
+  const captureView = useCallback((): FlybyCapturedView | undefined => {
+    const engine = scene.engine();
+    if (!engine) {
+      return undefined;
+    }
+    const camera = readCamera3D(engine);
+    if (!camera.target) {
+      return undefined;
+    }
+    return {
+      target: { longitude: camera.target.lon, latitude: camera.target.lat, height: camera.target.height },
+      distance: Math.max(metersBetween(camera.eye, camera.target), 1),
+      heading: camera.heading,
+      pitch: camera.pitch,
+      underground: camera.eye.height < engine.groundHeight(camera.eye.lon, camera.eye.lat),
+      seconds: FLYBY_VIEW_SECONDS,
+    };
+  }, [scene]);
+
   const open = useCallback((opened: FlybyDocument) => {
+    const openedViews = viewsOfDocument(opened);
+    if (openedViews) {
+      setViewsState(openedViews);
+      setPresetChoice('myViews');
+    }
     setEdited(opened);
     setSpeed(opened.speed);
     setLoop(opened.loop);
@@ -519,6 +567,9 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     document,
     edited: edited !== null,
     edit,
+    views,
+    setViews,
+    captureView,
     changeSection,
     open,
     // how it looks, and what it says

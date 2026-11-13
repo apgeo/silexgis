@@ -9588,6 +9588,10 @@
       "planToProfile": {
         "name": "Plan to profile",
         "hint": "Starts straight above, as on the survey's plan, tilts down to the side view and turns."
+      },
+      "myViews": {
+        "name": "My own views",
+        "hint": "Flies through views you capture from the scene, in the order you list them, as one smooth flight."
       }
     },
     "editedNote": "These sections were opened or changed by hand. Changing what the flyby is about, its preset or its options builds them again.",
@@ -9610,7 +9614,8 @@
       "dive": "Down into",
       "rise": "Back up",
       "hold": "Hold",
-      "tilt": "Tilt"
+      "tilt": "Tilt",
+      "keyframe": "To a view"
     },
     "secondsUnit": "s",
     "sectionSeconds": "Seconds — {{section}}",
@@ -9809,6 +9814,19 @@
         "scans": "Scans",
         "photos": "Station photographs"
       }
+    },
+    "views": {
+      "hint": "Move the scene to a picture you want, then press Add this view. Add as many as you like; the flyby flies from each to the next.",
+      "add": "Add this view",
+      "noGround": "The middle of the picture shows no ground. Turn the camera towards the ground and try again.",
+      "name": "View {{number}}",
+      "distance": "{{metres}} m from what it looks at",
+      "underground": "under the ground, {{metres}} m from what it looks at",
+      "seconds": "Seconds to fly to {{view}}",
+      "recapture": "Take {{view}} again from the camera as it is now",
+      "up": "Move {{view}} up",
+      "down": "Move {{view}} down",
+      "remove": "Remove {{view}}"
     }
   },
   "mapSymbols": {

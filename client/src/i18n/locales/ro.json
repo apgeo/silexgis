@@ -9601,6 +9601,10 @@
       "planToProfile": {
         "name": "Din plan în profil",
         "hint": "Pornește de deasupra, ca în planul topografiei, se înclină până la vederea din lateral și se rotește."
+      },
+      "myViews": {
+        "name": "Vederile mele",
+        "hint": "Zboară prin vederile pe care le salvezi din scenă, în ordinea din listă, ca un singur zbor lin."
       }
     },
     "editedNote": "Aceste secțiuni au fost deschise sau modificate de mână. Schimbarea subiectului, a presetării sau a opțiunilor le construiește din nou.",
@@ -9623,7 +9627,8 @@
       "dive": "Coborâre în",
       "rise": "Urcare înapoi",
       "hold": "Oprire",
-      "tilt": "Înclinare"
+      "tilt": "Înclinare",
+      "keyframe": "Spre o vedere"
     },
     "secondsUnit": "s",
     "sectionSeconds": "Secunde — {{section}}",
@@ -9822,6 +9827,19 @@
         "scans": "Scanări",
         "photos": "Fotografii din stații"
       }
+    },
+    "views": {
+      "hint": "Adu scena la imaginea dorită, apoi apasă Adaugă această vedere. Adaugă câte vrei; survolul zboară de la una la următoarea.",
+      "add": "Adaugă această vedere",
+      "noGround": "Mijlocul imaginii nu arată terenul. Întoarce camera spre teren și încearcă din nou.",
+      "name": "Vederea {{number}}",
+      "distance": "la {{metres}} m de ce privește",
+      "underground": "sub teren, la {{metres}} m de ce privește",
+      "seconds": "Secunde de zbor până la {{view}}",
+      "recapture": "Ia din nou {{view}} din camera de acum",
+      "up": "Mută {{view}} mai sus",
+      "down": "Mută {{view}} mai jos",
+      "remove": "Elimină {{view}}"
     }
   },
   "mapSymbols": {
