@@ -42,6 +42,9 @@ const CAPTION_SECONDS = 6;
 
 const percent = (share: number) => Math.round(share * 100);
 
+/** The choice that leaves a setting as the viewer has it; a drop-down list takes no empty value. */
+const OWN = 'own';
+
 /** Names for everything a flyby can name by id, from the lists the installation keeps. */
 function useLayerNames() {
   const { t } = useTranslation();
@@ -216,12 +219,12 @@ function OpeningLook({
         <span>{t('flyby.look.background')}</span>
         <Select
           size="small"
-          value={look.background ?? null}
-          onChange={(value: number | null) => set('background', value ?? undefined)}
+          value={look.background ?? OWN}
+          onChange={(value: number | typeof OWN) => set('background', value === OWN ? undefined : value)}
           disabled={busy}
           aria-label={t('flyby.look.background')}
           data-testid="flyby-look-background"
-          options={[{ value: null, label: t('flyby.look.own') }, ...backgrounds]}
+          options={[{ value: OWN, label: t('flyby.look.own') }, ...backgrounds]}
         />
       </label>
       <Checkbox
@@ -315,13 +318,13 @@ function OpeningLook({
         <span>{t('flyby.look.surface')}</span>
         <Select
           size="small"
-          value={look.surface ?? null}
-          onChange={(value: FlybySurface | null) => set('surface', value ?? undefined)}
+          value={look.surface ?? OWN}
+          onChange={(value: FlybySurface | typeof OWN) => set('surface', value === OWN ? undefined : value)}
           disabled={busy}
           aria-label={t('flyby.look.surface')}
           data-testid="flyby-look-surface"
           options={[
-            { value: null, label: t('flyby.look.own') },
+            { value: OWN, label: t('flyby.look.own') },
             { value: 'overlay', label: t('flyby.look.surfaceOverlay') },
             { value: 'cutaway', label: t('flyby.look.surfaceCutaway') },
           ]}
