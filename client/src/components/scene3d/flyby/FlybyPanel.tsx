@@ -153,6 +153,11 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
         />
       )}
 
+      {document && flyby.lineFallbacks.some((id) => document.sections.some((section) => section.id === id)) && (
+        // Said once the flyby has been prepared, which is when the way down was looked for.
+        <Alert type="info" showIcon title={t('flyby.routes.fallback')} data-testid="flyby-line-fallback" />
+      )}
+
       <div className="scene3d-flyby-group">
         <Typography.Text strong>{t('flyby.aboutTitle')}</Typography.Text>
         <Radio.Group

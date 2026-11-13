@@ -31,6 +31,7 @@ import type {
   Scene3DCamera,
   Scene3DMarker,
   Scene3DPolyline,
+  Scene3DPosition,
   Scene3DSurface,
   Scene3DVectorSource,
   Scene3DVectorSources,
@@ -174,6 +175,13 @@ export interface CaveData3DHandle {
    * this reader was given only roughly is listed where it was drawn, which is that rough place.
    */
   cavesInView(): CaveInView3D[];
+  /**
+   * The survey lines of one cave as they are drawn now, each component's positions at the heights
+   * they are drawn at — what a camera following a cave's survey down follows. Lines laid on the
+   * ground are left out: they carry no heights, and a way down them would be a way along the
+   * surface. Empty when nothing of the cave is drawn.
+   */
+  caveLines(caveId: string): Scene3DPosition[][];
   /**
    * The payload now drawn for the same thing this one named, if it is still in the scene.
    *
@@ -491,6 +499,11 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
     },
     caveSurveyTop(caveId) {
       return surveyTops.get(caveId);
+    },
+    caveLines(caveId) {
+      return caveCenterlines(drawnCenterlines, caveId)
+        .filter((polyline) => !polyline.clampToGround)
+        .map((polyline) => polyline.positions);
     },
     cavesInView() {
       const caves = cavesDrawn(drawnCenterlines);

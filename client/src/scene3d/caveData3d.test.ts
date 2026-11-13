@@ -577,6 +577,37 @@ describe('the caves a view is drawing', () => {
     handle.detach();
   });
 
+  it('gives one cave\'s survey lines at the heights they are drawn at, for a camera to follow down', async () => {
+    responses.centerlines = () => Promise.resolve(twoCaveCollection());
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(2));
+
+    const lines = handle.caveLines('cave-2');
+    expect(lines).toHaveLength(1);
+    expect(lines[0].map((position) => [position.longitude, position.latitude])).toEqual([
+      [26.44, 45.53],
+      [26.441, 45.53],
+    ]);
+    // The heights the scene draws, which is what cavesInView reports as the top and bottom.
+    const cave = handle.cavesInView().find((candidate) => candidate.caveId === 'cave-2')!;
+    expect(lines[0].map((position) => position.height)).toEqual([cave.top, cave.bottom]);
+    expect(handle.caveLines('cave-9')).toEqual([]);
+    handle.detach();
+  });
+
+  it('gives no lines to follow for a survey laid on the ground', async () => {
+    const flat = twoCaveCollection();
+    flat.features[0].properties.hasZ = false;
+    responses.centerlines = () => Promise.resolve(flat);
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(2));
+    expect(handle.caveLines('cave-1')).toEqual([]);
+    expect(handle.caveLines('cave-2')).toHaveLength(1);
+    handle.detach();
+  });
+
   it('lists nothing once the survey and entrance layers are off', async () => {
     const engine = new FakeEngine();
     const handle = attachCaveData3d(engine);

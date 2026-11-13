@@ -11,6 +11,7 @@ import {
   type FlybyProblem,
   type FlybySection,
   type FlybySubject,
+  type FlybySubjectRef,
   type FlybyTexts,
 } from '../../../flyby/flybyDocument.ts';
 import { updateSection } from '../../../flyby/flybyEdit.ts';
@@ -41,7 +42,12 @@ import {
   type FlybyWorld,
 } from '../../../flyby/flybySubjects.ts';
 import type { FlybyTextPlan } from '../../../flyby/flybyTexts.ts';
-import { compileFlyby, FlybySubjectMissing, type FlybyTimeline } from '../../../flyby/flybyTimeline.ts';
+import {
+  compileFlyby,
+  flybyLineFallbacks,
+  FlybySubjectMissing,
+  type FlybyTimeline,
+} from '../../../flyby/flybyTimeline.ts';
 import { metersBetween, readCamera3D } from '../../../scene3d/camera3d.ts';
 import type { CaveInView3D } from '../../../scene3d/centerlines3d.ts';
 import { geoJsonBounds } from '../../../scene3d/geoJson3d.ts';
@@ -64,6 +70,8 @@ export interface FlybyScene {
   surface(): HTMLElement | null;
   /** What a flyby's look is put on the scene through; left out, a flyby moves the camera only. */
   look?: FlybyLookTarget;
+  /** One cave's survey lines as drawn now, at their drawn heights; what a descent follows. */
+  caveLines?(caveId: string): { longitude: number; latitude: number; height: number }[][];
 }
 
 /** Where the subjects of a flyby being put together come from. */
@@ -102,6 +110,11 @@ export function subjectOfSelection(selection: WorkspaceSelection | null): FlybyS
     default:
       return undefined;
   }
+}
+
+/** The subjects a section of the document follows a line of, which are found when it is prepared. */
+function followedSubjects(document: FlybyDocument): FlybySubjectRef[] {
+  return [...new Set(document.sections.filter((section) => section.kind === 'descent').map((section) => section.subject))].sort();
 }
 
 /** What of a document decides what is played: everything but what it is called and whether it repeats. */
@@ -309,6 +322,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
         return [bounds[0] - pad, bounds[1] - pad, bounds[2] + pad, bounds[3] + pad];
       },
       groundHeight: (longitude, latitude) => scene.engine()?.groundHeight(longitude, latitude) ?? 0,
+      ...(scene.caveLines ? { caveLines: (caveId: string) => scene.caveLines!(caveId) } : {}),
       viewTarget: () => {
         const engine = scene.engine();
         if (!engine) {
@@ -368,6 +382,8 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
   const [preparing, setPreparing] = useState<FlybyPrepareProgress | true | null>(null);
   const [trouble, setTrouble] = useState<FlybyTrouble>();
   const [unsettled, setUnsettled] = useState(0);
+  /** Sections that were to follow a line and had none to follow, as last prepared. */
+  const [lineFallbacks, setLineFallbacks] = useState<string[]>([]);
   // Told of every moment, unthrottled and outside React state: what is drawn over the scene must
   // keep step with the scene frame by frame, which the throttled state above does not.
   const momentListeners = useRef(new Set<(moment: FlybyMoment | null) => void>());
@@ -418,7 +434,9 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     dropPlayer();
     setTrouble(undefined);
     const home = engine.getCamera();
-    const subjectsKey = JSON.stringify(document.subjects);
+    // The subjects, and which of them a section follows the survey of: a way down a cave is found
+    // when the flyby is prepared, so a descent added since is a reason to prepare it again.
+    const subjectsKey = JSON.stringify([document.subjects, followedSubjects(document)]);
     const controller = new AbortController();
     abortRef.current = controller;
     setPreparing(true);
@@ -437,6 +455,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
         timeline = prepared.timeline;
         setUnsettled(prepared.unsettled);
       }
+      setLineFallbacks(flybyLineFallbacks(document, foundRef.current?.resolved ?? []));
       const player = createFlybyPlayer(timeline, stage, { loop: document.loop, home });
       let shown = Number.NEGATIVE_INFINITY;
       const texts = timeline.texts;
@@ -586,6 +605,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     trouble,
     setTrouble,
     unsettled,
+    lineFallbacks,
     ensurePlayer,
     ensureTimeline,
     stage,

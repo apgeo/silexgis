@@ -651,6 +651,47 @@ describe('a flyby through views captured from the scene', () => {
   });
 });
 
+describe('a descent down a cave\'s survey', () => {
+  const chooseDescent = () => {
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Preset' }));
+    fireEvent.click(screen.getByTitle('Descent'));
+  };
+
+  it('follows the survey the scene draws, found when the flyby is prepared', async () => {
+    const scene = Object.assign(fakeScene(), {
+      caveLines: () => [
+        [
+          { longitude: 25, latitude: 45.5, height: 990 },
+          { longitude: 25.002, latitude: 45.502, height: 900 },
+          { longitude: 25.004, latitude: 45.504, height: 800 },
+        ],
+      ],
+    });
+    renderFlyby(scene);
+    chooseDescent();
+    fireEvent.click(screen.getByText('4 sections'));
+    expect(screen.getByTestId('flyby-sections')).toHaveTextContent('Down the survey · Cave A');
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(15_000);
+    expect(status()).toBe('playing');
+    expect(screen.queryByTestId('flyby-line-fallback')).not.toBeInTheDocument();
+    // Half-way down the survey the camera is under the ground, between the entrance and the bottom.
+    expect(scene.camera().height).toBeLessThan(1000);
+    expect(scene.camera().longitude).toBeGreaterThan(24.999);
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+  });
+
+  it('says so, and dives instead, when the scene draws no survey to follow', async () => {
+    renderFlyby(Object.assign(fakeScene(), { caveLines: () => [] }));
+    chooseDescent();
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    // The camera goes to look at the cave first, so the scene draws its survey, and waits on it.
+    await pass(1000);
+    expect(status()).toBe('playing');
+    expect(screen.getByTestId('flyby-line-fallback')).toHaveTextContent('dives straight down');
+  });
+});
+
 describe('the words for every preset and every kind of section', () => {
   it('exist in both languages', () => {
     for (const locale of [en, ro]) {

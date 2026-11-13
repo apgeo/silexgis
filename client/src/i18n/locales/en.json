@@ -9592,6 +9592,10 @@
       "myViews": {
         "name": "My own views",
         "hint": "Flies through views you capture from the scene, in the order you list them, as one smooth flight."
+      },
+      "descent": {
+        "name": "Descent",
+        "hint": "From the cave's highest drawn point down its survey to the deepest, the camera a little behind and above, looking along the passage. A cave whose survey is not drawn, or does not join the two, is dived into instead."
       }
     },
     "editedNote": "These sections were opened or changed by hand. Changing what the flyby is about, its preset or its options builds them again.",
@@ -9615,7 +9619,8 @@
       "rise": "Back up",
       "hold": "Hold",
       "tilt": "Tilt",
-      "keyframe": "To a view"
+      "keyframe": "To a view",
+      "descent": "Down the survey"
     },
     "secondsUnit": "s",
     "sectionSeconds": "Seconds — {{section}}",
@@ -9827,6 +9832,9 @@
       "up": "Move {{view}} up",
       "down": "Move {{view}} down",
       "remove": "Remove {{view}}"
+    },
+    "routes": {
+      "fallback": "The survey is not drawn, or its lines do not join the cave's highest point to its deepest: the camera dives straight down instead of following it."
     }
   },
   "mapSymbols": {

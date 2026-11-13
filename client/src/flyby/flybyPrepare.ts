@@ -2,6 +2,7 @@
 import { eyeLookingAt } from '../scene3d/camera3d.ts';
 import type { FlybyDocument } from './flybyDocument.ts';
 import { placeFlybyMoment, type FlybyStage } from './flybyPlayer.ts';
+import { surveyRoute } from './flybyRoutes.ts';
 import { resolveSubject, type FlybyResolvedSubject, type FlybyWorld } from './flybySubjects.ts';
 import { compileFlyby, type FlybyTimeline } from './flybyTimeline.ts';
 
@@ -127,6 +128,34 @@ export async function prepareFlyby(
     resolved[index] = (await resolveSubject(document.subjects[index], world)) ?? guess;
     visited += 1;
     options.onProgress?.({ step: 'subjects', done: visited, total: rough.length });
+  }
+
+  // The way down each cave a section follows the survey of. Read from what the scene draws with the
+  // camera close over the cave, which is when the scene draws all of its survey; a way that cannot
+  // be found leaves the section to dive instead.
+  const descended = [
+    ...new Set(
+      document.sections.flatMap((section) =>
+        section.kind === 'descent' && typeof section.subject === 'number' ? [section.subject] : [],
+      ),
+    ),
+  ];
+  for (const index of descended) {
+    const subject = document.subjects[index];
+    const found = resolved[index];
+    if (subject?.kind !== 'cave' || !found || !world.caveLines) {
+      continue;
+    }
+    check();
+    const eye = eyeLookingAt(found.centre, 0, -60, Math.max(found.radius * 2.5, 300));
+    stage.setCamera({ longitude: eye.lon, latitude: eye.lat, height: eye.height, heading: 0, pitch: -60, roll: 0 });
+    stage.refreshData();
+    await stage.settle(SUBJECT_SETTLE_MILLISECONDS);
+    check();
+    const route = surveyRoute(world.caveLines(subject.caveId));
+    if (route) {
+      resolved[index] = { ...found, route };
+    }
   }
 
   const timeline = compileFlyby(document, resolved);

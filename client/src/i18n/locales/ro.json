@@ -9605,6 +9605,10 @@
       "myViews": {
         "name": "Vederile mele",
         "hint": "Zboară prin vederile pe care le salvezi din scenă, în ordinea din listă, ca un singur zbor lin."
+      },
+      "descent": {
+        "name": "Coborâre",
+        "hint": "De la cel mai înalt punct desenat al peșterii, pe drumuire în jos, până la cel mai adânc, cu camera puțin în urmă și deasupra, privind de-a lungul galeriei. Într-o peșteră a cărei drumuire nu este desenată sau nu le leagă pe cele două, camera coboară direct."
       }
     },
     "editedNote": "Aceste secțiuni au fost deschise sau modificate de mână. Schimbarea subiectului, a presetării sau a opțiunilor le construiește din nou.",
@@ -9628,7 +9632,8 @@
       "rise": "Urcare înapoi",
       "hold": "Oprire",
       "tilt": "Înclinare",
-      "keyframe": "Spre o vedere"
+      "keyframe": "Spre o vedere",
+      "descent": "Pe drumuire în jos"
     },
     "secondsUnit": "s",
     "sectionSeconds": "Secunde — {{section}}",
@@ -9840,6 +9845,9 @@
       "up": "Mută {{view}} mai sus",
       "down": "Mută {{view}} mai jos",
       "remove": "Elimină {{view}}"
+    },
+    "routes": {
+      "fallback": "Drumuirea nu este desenată sau liniile ei nu leagă cel mai înalt punct al peșterii de cel mai adânc: camera coboară direct, în loc să o urmeze."
     }
   },
   "mapSymbols": {

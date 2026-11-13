@@ -31,6 +31,12 @@ export interface FlybyResolvedSubject {
    * known only by where the server says it is and how long and deep it is said to be.
    */
   coarse: boolean;
+  /**
+   * A line the camera can follow along it: for a cave, the way down its drawn survey from its
+   * highest point to its deepest; for an imported file, its track. Found when the flyby is
+   * prepared and never stored in it.
+   */
+  route?: Camera3DEye[];
 }
 
 /** What is drawn of a cave in the view now. */
@@ -68,6 +74,11 @@ export interface FlybyWorld {
   groundHeight(longitude: number, latitude: number): number;
   /** The point the view is centred on and how far the eye is from it; undefined when it shows sky. */
   viewTarget(): { target: Camera3DEye; distance: number } | undefined;
+  /**
+   * The survey lines the scene draws of a cave now, at the heights they are drawn at; lines laid on
+   * the ground, which carry no heights, are left out. Left out of a world that cannot say.
+   */
+  caveLines?(caveId: string): { longitude: number; latitude: number; height: number }[][];
 }
 
 /** The smallest subject a camera is asked to circle: a short cave is still stood back from. */

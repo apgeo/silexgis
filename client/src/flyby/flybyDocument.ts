@@ -83,7 +83,16 @@ export type FlybyFullPose = Required<Omit<FlybyPose, 'headingBy' | 'aim'>> & Pic
  * kind is what the section is called, which defaults it is given, and — for a hop — the arc it is
  * flown in.
  */
-export type FlybySectionKind = 'approach' | 'orbit' | 'hop' | 'dive' | 'rise' | 'hold' | 'tilt' | 'keyframe';
+export type FlybySectionKind =
+  | 'approach'
+  | 'orbit'
+  | 'hop'
+  | 'dive'
+  | 'rise'
+  | 'hold'
+  | 'tilt'
+  | 'keyframe'
+  | 'descent';
 
 export const FLYBY_SECTION_KINDS: readonly FlybySectionKind[] = [
   'approach',
@@ -95,6 +104,11 @@ export const FLYBY_SECTION_KINDS: readonly FlybySectionKind[] = [
   'tilt',
   /** To a camera view its author captured. */
   'keyframe',
+  /**
+   * Down a cave's survey from its highest point to its deepest, a little behind and above the point
+   * followed; a cave whose survey gives no such way is dived into instead, to its `to` pose.
+   */
+  'descent',
 ];
 
 /** One shot: the camera moves from where the section before left it to `to`. */
@@ -112,7 +126,14 @@ export interface FlybySection {
   rest?: boolean;
 }
 
-export type FlybyPresetId = 'aroundArea' | 'aroundCave' | 'aroundSeveral' | 'tour' | 'planToProfile' | 'myViews';
+export type FlybyPresetId =
+  | 'aroundArea'
+  | 'aroundCave'
+  | 'aroundSeveral'
+  | 'tour'
+  | 'planToProfile'
+  | 'myViews'
+  | 'descent';
 
 export const FLYBY_PRESETS: readonly FlybyPresetId[] = [
   'aroundCave',
@@ -120,6 +141,7 @@ export const FLYBY_PRESETS: readonly FlybyPresetId[] = [
   'aroundSeveral',
   'aroundArea',
   'planToProfile',
+  'descent',
   'myViews',
 ];
 

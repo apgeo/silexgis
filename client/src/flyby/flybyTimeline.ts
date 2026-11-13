@@ -64,6 +64,25 @@ export interface FlybySpan {
   end: number;
 }
 
+/**
+ * A stretch of the path that follows a line — down a cave's survey, along a file's track — instead
+ * of flying from one knot to the next. Two knots bound it, the camera at rest at each, and between
+ * them the camera's moment is read off the line rather than off the curve through the knots.
+ */
+export interface FlybyStretch {
+  start: number;
+  end: number;
+  /** Points of the line, evenly spaced along it and smoothed, in metres from the timeline's origin. */
+  points: Camera3DOffset[];
+  /** The compass direction faced at each point, unwrapped: along the line, a little ahead. */
+  headings: number[];
+  distance: number;
+  pitch: number;
+  clearance: number | null;
+  /** The share of the stretch spent gathering speed at its start, and losing it again at its end. */
+  ramp: number;
+}
+
 export interface FlybyTimeline {
   /** Seconds. */
   length: number;
@@ -71,6 +90,8 @@ export interface FlybyTimeline {
   origin: Camera3DEye;
   knots: FlybyKnot[];
   spans: FlybySpan[];
+  /** The stretches that follow a line, in order. */
+  stretches: FlybyStretch[];
   /** What the flyby does to the scene's look, placed on the same clock. */
   look: FlybyLookPlan;
   /** What it writes over the scene, placed on the same clock. */
@@ -96,6 +117,12 @@ const HOP_DISTANCE_RATIO = 0.9;
 const HOP_PITCH_DEGREES = -40;
 const MIN_PITCH = -89.9;
 const MAX_PITCH = 60;
+/** Seconds a section that follows a line takes to fly to the line's start before it sets off along it. */
+const LINE_LEAD_SECONDS = 3;
+/** Seconds the camera takes to gather speed along a line, and to lose it again at the line's end. */
+const LINE_RAMP_SECONDS = 2.5;
+/** Most points a line is followed through, however long it is. */
+const LINE_MAX_POINTS = 500;
 
 interface Stance {
   subject: FlybySubjectRef;
@@ -183,6 +210,7 @@ export function compileFlyby(
   const origin = first.centre;
   const knots: FlybyKnot[] = [];
   const spans: FlybySpan[] = [];
+  const stretches: FlybyStretch[] = [];
   let stance: Stance = { subject: document.start.subject, pose: document.start.pose };
   let t = 0;
   knots.push(knotOf(stance, resolved, origin, t, true));
@@ -193,6 +221,23 @@ export function compileFlyby(
     const next: Stance = { subject: section.subject, pose: poseAfter(stance.pose, section.to) };
     const last = index === document.sections.length - 1;
     const end = knotOf(next, resolved, origin, t + length, last || section.rest === true || section.kind === 'hold');
+
+    const line =
+      section.kind === 'descent'
+        ? lineStretch(subjectFor(next.subject, resolved)?.route, end, previous.heading, origin, t, length)
+        : undefined;
+    if (line) {
+      // Along the line: a short flight to where it begins, the line itself, and at rest at its end
+      // — so the stretch joins the curve before and after it with the camera still at both joins.
+      const [into, outOf] = line.bounds;
+      knots.push(into, outOf);
+      stretches.push(line.stretch);
+      spans.push({ id: section.id, start: t, end: t + length });
+      // What comes next turns from the way the line left the camera facing.
+      stance = { ...next, pose: { ...next.pose, heading: outOf.heading } };
+      t += length;
+      return;
+    }
 
     if (section.kind === 'hop' && next.subject !== stance.subject) {
       // Up and over: half-way, the camera stands back far enough to hold both ends and looks down
@@ -223,7 +268,192 @@ export function compileFlyby(
     t += length;
   });
 
-  return { length: t, origin, knots, spans, look: flybyLookPlan(document), texts: flybyTextPlan(document) };
+  return { length: t, origin, knots, spans, stretches, look: flybyLookPlan(document), texts: flybyTextPlan(document) };
+}
+
+// ---- following a line ----
+
+/** The turn from one heading to another the short way round, in degrees. */
+function shortTurn(from: number, to: number): number {
+  const turn = ((((to - from) % 360) + 540) % 360) - 180;
+  return turn === -180 ? 180 : turn;
+}
+
+function offsetLerp(a: Camera3DOffset, b: Camera3DOffset, p: number): Camera3DOffset {
+  return { east: lerp(a.east, b.east, p), north: lerp(a.north, b.north, p), up: lerp(a.up, b.up, p) };
+}
+
+function offsetLength(a: Camera3DOffset, b: Camera3DOffset): number {
+  return Math.hypot(b.east - a.east, b.north - a.north, b.up - a.up);
+}
+
+/** A line cut into `count` points evenly spaced along it, its two ends kept. */
+function resampled(line: readonly Camera3DOffset[], count: number): Camera3DOffset[] {
+  const along = [0];
+  for (let i = 1; i < line.length; i += 1) {
+    along.push(along[i - 1] + offsetLength(line[i - 1], line[i]));
+  }
+  const total = along[along.length - 1];
+  const points: Camera3DOffset[] = [];
+  let leg = 1;
+  for (let k = 0; k < count; k += 1) {
+    const at = (total * k) / (count - 1);
+    while (leg < line.length - 1 && along[leg] < at) {
+      leg += 1;
+    }
+    const span = along[leg] - along[leg - 1];
+    points.push(offsetLerp(line[leg - 1], line[leg], span > 0 ? (at - along[leg - 1]) / span : 0));
+  }
+  return points;
+}
+
+/**
+ * Each value the mean of the `half` on either side of it, the window narrowing towards the ends so
+ * the first and the last values stay exactly where they were. Twice over, which is a triangle of
+ * weights rather than a box: a corner of the line is rounded off instead of cut.
+ */
+function smoothed<T>(values: readonly T[], half: number, mean: (picked: readonly T[]) => T): T[] {
+  let result = [...values];
+  for (let pass = 0; pass < 2; pass += 1) {
+    const from = result;
+    result = from.map((value, i) => {
+      const reach = Math.min(half, i, from.length - 1 - i);
+      return reach > 0 ? mean(from.slice(i - reach, i + reach + 1)) : value;
+    });
+  }
+  return result;
+}
+
+const meanOffset = (picked: readonly Camera3DOffset[]): Camera3DOffset => ({
+  east: picked.reduce((sum, point) => sum + point.east, 0) / picked.length,
+  north: picked.reduce((sum, point) => sum + point.north, 0) / picked.length,
+  up: picked.reduce((sum, point) => sum + point.up, 0) / picked.length,
+});
+
+const meanNumber = (picked: readonly number[]): number => picked.reduce((sum, value) => sum + value, 0) / picked.length;
+
+/**
+ * The stretch that follows `route`, with the camera stood off it as `pose` says, and the two knots
+ * at rest that bound it; undefined when there is no line to follow, and the section is then flown
+ * as an ordinary move to its pose.
+ *
+ * The line is cut into points evenly spaced along it and smoothed over about the camera's own
+ * distance from it, so a survey's zigzag or a track's GPS jitter is not flown leg by leg. The
+ * camera faces where the line goes a camera-distance ahead — along the passage, down the path — and
+ * where the line goes straight up or down, and so points nowhere on the compass, it keeps the way it
+ * was facing.
+ */
+function lineStretch(
+  route: readonly Camera3DEye[] | undefined,
+  pose: FlybyKnot,
+  facing: number,
+  origin: Camera3DEye,
+  start: number,
+  length: number,
+): { stretch: FlybyStretch; bounds: [FlybyKnot, FlybyKnot] } | undefined {
+  if (!route || route.length < 2 || !(length > 0)) {
+    return undefined;
+  }
+  const line = route.map((point) => offsetBetween(origin, point));
+  let total = 0;
+  for (let i = 1; i < line.length; i += 1) {
+    total += offsetLength(line[i - 1], line[i]);
+  }
+  if (!(total > 0.5)) {
+    return undefined;
+  }
+  const count = Math.min(LINE_MAX_POINTS, Math.max(8, Math.ceil(total / Math.max(pose.distance / 3, 0.5)))) + 1;
+  const spacing = total / (count - 1);
+  const reach = Math.max(1, Math.round(pose.distance / spacing));
+  const points = smoothed(resampled(line, count), reach, meanOffset);
+
+  const bearings: (number | undefined)[] = points.map((point, i) => {
+    const from = i + reach < count ? point : points[Math.max(0, count - 1 - reach)];
+    const to = points[Math.min(i + reach, count - 1)];
+    const east = to.east - from.east;
+    const north = to.north - from.north;
+    return Math.hypot(east, north) > 0.05 * reach * spacing ? (Math.atan2(east, north) * 180) / Math.PI : undefined;
+  });
+  const firstKnown = bearings.find((bearing) => bearing !== undefined) ?? facing;
+  let heading = facing + shortTurn(facing, firstKnown);
+  const headings = bearings.map((bearing) => {
+    if (bearing !== undefined) {
+      heading += shortTurn(heading, bearing);
+    }
+    return heading;
+  });
+  const turned = smoothed(headings, reach, meanNumber);
+
+  const lead = Math.min(LINE_LEAD_SECONDS, length * 0.25);
+  const stretch: FlybyStretch = {
+    start: start + lead,
+    end: start + length,
+    points,
+    headings: turned,
+    distance: pose.distance,
+    pitch: pose.pitch,
+    clearance: pose.clearance,
+    ramp: Math.min(0.5, LINE_RAMP_SECONDS / (length - lead)),
+  };
+  const bound = (t: number, index: number): FlybyKnot => ({
+    t,
+    target: points[index],
+    distance: pose.distance,
+    heading: turned[index],
+    pitch: pose.pitch,
+    clearance: pose.clearance,
+    rest: true,
+  });
+  return { stretch, bounds: [bound(stretch.start, 0), bound(stretch.end, count - 1)] };
+}
+
+/**
+ * How far along its line the camera is, 0–1, at share `p` of the stretch's time: speeding up evenly
+ * over the first `ramp` of it, at one speed through the middle, slowing evenly over the last — so
+ * it leaves the first knot and reaches the second with no speed at all, as the curve on the other
+ * side of each knot does.
+ */
+export function flybyLineProgress(p: number, ramp: number): number {
+  const clamped = Math.min(1, Math.max(0, p));
+  const r = Math.min(0.5, Math.max(1e-6, ramp));
+  const top = 1 / (1 - r);
+  if (clamped < r) {
+    return (top * clamped * clamped) / (2 * r);
+  }
+  if (clamped <= 1 - r) {
+    return top * (r / 2 + clamped - r);
+  }
+  const left = 1 - clamped;
+  return 1 - (top * left * left) / (2 * r);
+}
+
+/** Catmull–Rom through the points either side, so the camera's course has no corner at any of them. */
+function catmullRom(a: number, b: number, c: number, d: number, f: number): number {
+  const f2 = f * f;
+  const f3 = f2 * f;
+  return 0.5 * (2 * b + (c - a) * f + (2 * a - 5 * b + 4 * c - d) * f2 + (3 * b - a - 3 * c + d) * f3);
+}
+
+function stretchKnotAt(stretch: FlybyStretch, t: number): FlybyKnot {
+  const { points, headings } = stretch;
+  const x = flybyLineProgress((t - stretch.start) / (stretch.end - stretch.start), stretch.ramp) * (points.length - 1);
+  const i = Math.min(Math.floor(x), points.length - 2);
+  const f = x - i;
+  const at = (k: number) => points[Math.min(Math.max(k, 0), points.length - 1)];
+  const [a, b, c, d] = [at(i - 1), at(i), at(i + 1), at(i + 2)];
+  return {
+    t,
+    target: {
+      east: catmullRom(a.east, b.east, c.east, d.east, f),
+      north: catmullRom(a.north, b.north, c.north, d.north, f),
+      up: catmullRom(a.up, b.up, c.up, d.up, f),
+    },
+    distance: stretch.distance,
+    heading: lerp(headings[i], headings[i + 1], f),
+    pitch: stretch.pitch,
+    clearance: stretch.clearance,
+    rest: false,
+  };
 }
 
 // ---- the curve through the knots ----
@@ -271,6 +501,13 @@ function rateAt(knots: readonly FlybyKnot[], index: number): KnotVector {
 export function flybyKnotAt(timeline: FlybyTimeline, t: number): FlybyKnot {
   const { knots } = timeline;
   const clamped = Math.min(Math.max(t, 0), timeline.length);
+  // Inside a stretch that follows a line, the line says where the camera is; at its two ends the
+  // knots do, and they say the same.
+  for (const stretch of timeline.stretches) {
+    if (clamped > stretch.start && clamped < stretch.end) {
+      return stretchKnotAt(stretch, clamped);
+    }
+  }
   // The last knot that has begun; the stretch flown is from it to the one after.
   let index = 0;
   for (let i = 0; i < knots.length; i += 1) {
@@ -367,6 +604,19 @@ export function flybyCameraAt(
     pitch: Math.min(MAX_PITCH, Math.max(-90, pitch)),
     roll: 0,
   };
+}
+
+/**
+ * The sections that were to follow a line and found none to follow — a cave whose survey is not
+ * drawn, or does not join its highest point to its deepest — and are flown as plain moves instead.
+ */
+export function flybyLineFallbacks(
+  document: Pick<FlybyDocument, 'sections'>,
+  resolved: readonly (FlybyResolvedSubject | undefined)[],
+): string[] {
+  return document.sections
+    .filter((section) => section.kind === 'descent' && (subjectFor(section.subject, resolved)?.route?.length ?? 0) < 2)
+    .map((section) => section.id);
 }
 
 /** The section being flown at `t`, by its place in the document; the last one once the end is reached. */

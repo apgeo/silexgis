@@ -171,6 +171,8 @@ export function presetFits(preset: FlybyPresetId, subjects: readonly FlybySubjec
     case 'myViews':
       // Built from the views captured, not from what the flyby is about.
       return true;
+    case 'descent':
+      return subjects[0]?.kind === 'cave';
     case 'aroundCave':
     case 'aroundArea':
     case 'planToProfile':
@@ -323,6 +325,41 @@ function tour(subjects: readonly FlybySubject[], options: FlybyPresetOptions): B
   };
 }
 
+/**
+ * Down a cave's survey: in over its highest point, down the way its survey goes to its deepest
+ * point — the camera a little behind and above the point it follows, looking along the passage —,
+ * a moment there, and back up and out to circling height.
+ *
+ * The way down is not written here: it is found when the flyby is prepared, from the survey the
+ * scene draws, and a cave whose survey gives no way from top to bottom is dived into instead.
+ */
+function descent(options: FlybyPresetOptions): Built {
+  const sign = options.clockwise ? 1 : -1;
+  const id = numbered();
+  return {
+    start: { subject: 0, pose: { aim: 'top', heading: 0, pitch: -40, range: 3, lift: 0, clearance: CAVE_CLEARANCE } },
+    sections: [
+      { id: id('approach'), kind: 'approach', subject: 0, seconds: 6, to: { aim: 'top', headingBy: sign * 45, pitch: -35, range: 0.5 } },
+      {
+        id: id('descent'),
+        kind: 'descent',
+        subject: 0,
+        seconds: 30,
+        to: { aim: 'bottom', pitch: -30, range: 0.15, clearance: null },
+      },
+      { id: id('hold'), kind: 'hold', subject: 0, seconds: 3, to: {} },
+      {
+        id: id('rise'),
+        kind: 'rise',
+        subject: 0,
+        seconds: 8,
+        to: { aim: 'centre', headingBy: sign * 90, pitch: -32, range: 2.8, lift: 0, clearance: CAVE_CLEARANCE },
+        rest: true,
+      },
+    ],
+  };
+}
+
 function planToProfile(options: FlybyPresetOptions): Built {
   const sign = options.clockwise ? 1 : -1;
   const id = numbered();
@@ -376,6 +413,8 @@ export function buildPreset(
         return tour(subjects, options);
       case 'planToProfile':
         return planToProfile(options);
+      case 'descent':
+        return descent(options);
     }
   })();
   return {

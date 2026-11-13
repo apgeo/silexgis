@@ -29,6 +29,7 @@ export const FLYBY_ADDABLE_KINDS: readonly FlybySectionKind[] = [
   'tilt',
   'hold',
   'dive',
+  'descent',
   'rise',
 ];
 
@@ -42,6 +43,7 @@ const DEFAULTS: Record<FlybySectionKind, { seconds: number; to: FlybyPose }> = {
   hold: { seconds: 3, to: {} },
   tilt: { seconds: 7, to: { pitch: -8 } },
   keyframe: { seconds: 6, to: { range: 1, lift: 0, aim: 'centre' } },
+  descent: { seconds: 30, to: { aim: 'bottom', pitch: -30, range: 0.15, clearance: null } },
 };
 
 /** The defaults a new section of `kind` starts from. */

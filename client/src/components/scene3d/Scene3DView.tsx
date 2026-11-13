@@ -589,6 +589,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     () => ({
       engine: () => engineRef.current,
       cavesInView: () => dataRef.current?.cavesInView() ?? [],
+      caveLines: (caveId) => dataRef.current?.caveLines(caveId) ?? [],
       // The loaders reload when the camera comes to rest, and a camera in flight never does.
       refreshData: () => {
         dataRef.current?.reload();
