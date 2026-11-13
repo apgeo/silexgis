@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
-  lazy,
   Suspense,
   useEffect,
   useLayoutEffect,
@@ -10,6 +9,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react';
+import { lazyRetrying } from '../../codeLoading.ts';
 import {
   CloseOutlined,
   EyeInvisibleOutlined,
@@ -79,7 +79,7 @@ import './PublicTripPage.css';
  * OpenLayers, which nothing else on the public bundle needs, and the ordinary published trip
  * has no maps — its readers should not download a map engine to watch a party on a 3D drawing.
  */
-const PublicTripSheetPane = lazy(() => import('./PublicTripSheetPane.tsx'));
+const PublicTripSheetPane = lazyRetrying(() => import('./PublicTripSheetPane.tsx'));
 
 /** The 3D pane's tab key — every sheet's key is derived from a URL and cannot collide with it. */
 const TAB_3D = '3d';

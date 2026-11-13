@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
-  lazy,
   Suspense,
   useCallback,
   useEffect,
@@ -10,6 +9,7 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
+import { lazyRetrying } from '../../codeLoading.ts';
 import { CloseOutlined, EyeOutlined, HistoryOutlined } from '@ant-design/icons';
 import { Alert, Drawer, Flex, Skeleton, Spin, Tabs, Typography, theme } from 'antd';
 import Button from '../../components/Button.tsx';
@@ -62,7 +62,7 @@ import './PublicTripPage.css';
  * pulls in OpenLayers, and an article's iframe about a mapless trip should not download a
  * map engine to show a 3D drawing.
  */
-const PublicTripSheetPane = lazy(() => import('./PublicTripSheetPane.tsx'));
+const PublicTripSheetPane = lazyRetrying(() => import('./PublicTripSheetPane.tsx'));
 
 /** The 3D pane's tab key — every sheet's key is derived from a URL and cannot collide with it. */
 const TAB_3D = '3d';

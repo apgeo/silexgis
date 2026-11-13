@@ -6,6 +6,7 @@ import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { capturedQuoteFrom, type CapturedQuote } from './textSelection.ts';
 import type { LoadedPdf } from './pdfEngine.ts';
+import { importWithRetry } from '../codeLoading.ts';
 
 /**
  * A PDF read in the browser, one page at a time, with its words where the words are.
@@ -63,7 +64,7 @@ export default function PdfView({
 
     void (async () => {
       try {
-        const { loadPdf } = await import('./pdfEngine.ts');
+        const { loadPdf } = await importWithRetry(() => import('./pdfEngine.ts'));
         loaded = await loadPdf({ url, signal: controller.signal });
         if (!controller.signal.aborted) {
           setPdf(loaded);

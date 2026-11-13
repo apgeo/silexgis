@@ -22,6 +22,24 @@ import {
 // The engine library is replaced by the same double the scene module's own suite uses; the test
 // runner has no graphics context to give it.
 vi.mock('cesium', () => import('../../scene3d/cesiumTestDouble.ts'));
+// How many of the next downloads of the engine's code fail the way a dropped connection makes them
+// fail — after the retrying, which has its own tests. Zero leaves the real loading alone.
+const codeDownload = vi.hoisted(() => ({ failures: 0 }));
+vi.mock('../../codeLoading.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../codeLoading.ts')>();
+  return {
+    ...actual,
+    importWithRetry: <T,>(load: () => Promise<T>): Promise<T> => {
+      if (codeDownload.failures > 0) {
+        codeDownload.failures -= 1;
+        return Promise.reject(
+          new TypeError('error loading dynamically imported module: https://example.test/assets/scene3dContext-x.js'),
+        );
+      }
+      return actual.importWithRetry(load);
+    },
+  };
+});
 // The browser's own save, and the 2D canvas the credits are written with: the runner has neither,
 // and what is under test here is what each of them is handed.
 vi.mock('../../api/download.ts', () => ({
@@ -245,6 +263,7 @@ function renderView() {
 
 beforeEach(() => {
   engine.engineState.reset();
+  codeDownload.failures = 0;
   mapLayers = undefined;
   savedFiles = [];
   composited = [];
@@ -703,6 +722,22 @@ describe('Scene3DView', () => {
     expect(await screen.findByText('The 3D view could not be started')).toBeInTheDocument();
     expect(await screen.findByText(/different container/)).toBeInTheDocument();
     other.release();
+  });
+
+  it('says the view did not finish downloading, not that it broke, and starts it when asked again', async () => {
+    withWebGl2(true);
+    codeDownload.failures = 1;
+
+    renderView();
+
+    expect(await screen.findByText('The 3D view did not finish downloading')).toBeInTheDocument();
+    expect(screen.queryByText('The 3D view could not be started')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reload the page' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('scene3d-download-retry'));
+
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    expect(screen.queryByTestId('scene3d-download-failed')).not.toBeInTheDocument();
   });
 });
 

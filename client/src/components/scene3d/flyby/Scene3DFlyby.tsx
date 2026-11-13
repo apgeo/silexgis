@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Modal, Spin } from 'antd';
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatSize } from '../../attachments/fileFormat.ts';
+import { lazyRetrying } from '../../../codeLoading.ts';
 import { flybyMovieFrameSize } from '../../../flyby/flybyMovie.ts';
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import type { WorkspaceSelection } from '../../../stores/workspaceStore.ts';
@@ -14,7 +15,7 @@ import { useFlybyFrameBox } from './useFlybyFrameBox.ts';
 import './Scene3DFlyby.css';
 
 // Its own chunk: the movie encoders are only fetched by somebody who makes a movie.
-const FlybyMovieDialog = lazy(() => import('./FlybyMovieDialog.tsx'));
+const FlybyMovieDialog = lazyRetrying(() => import('./FlybyMovieDialog.tsx'));
 
 export interface Scene3DFlybyProps {
   scene: FlybyScene;

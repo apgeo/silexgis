@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutOutlined } from '@ant-design/icons';
 import { Alert, Popover, Result, Spin, Typography } from 'antd';
 import Button from '../Button.tsx';
+import { importWithRetry, isCodeDownloadFailure } from '../../codeLoading.ts';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -230,6 +231,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error' | 'contextLost'>('loading');
   const [errorDetail, setErrorDetail] = useState<string>();
+  // The engine's code did not arrive (a slow or dropped connection, or an installation updated
+  // since the page was opened) — told apart because it is not a fault of the view and asks for a
+  // different answer from the person: try again, or reload.
+  const [downloadFailed, setDownloadFailed] = useState(false);
   // Incremented to build the scene again after the browser has taken its graphics context away.
   // It is a dependency of the effect that owns the scene, so changing it is the rebuild.
   const [rebuildToken, setRebuildToken] = useState(0);
@@ -306,6 +311,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     let unsubscribeContextLoss: (() => void) | undefined;
     setStatus('loading');
     setErrorDetail(undefined);
+    setDownloadFailed(false);
 
     // The scene is built inside the window's one drawing surface, which this borrows for as long
     // as it is mounted. Borrowing rather than supplying an element is what makes a second view of
@@ -317,8 +323,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
 
     (async () => {
       // Imported here rather than at the top of the file so the engine and its runtime assets
-      // are fetched by the sessions that open a 3D view and by no others.
-      const { acquireScene3D } = await import('../../scene3d/scene3dContext.ts');
+      // are fetched by the sessions that open a 3D view and by no others. It is the largest download
+      // of the application, so it is the one a slow connection is likeliest to drop: asked for again
+      // before anybody is told.
+      const { acquireScene3D } = await importWithRetry(() => import('../../scene3d/scene3dContext.ts'));
       if (disposed) {
         return;
       }
@@ -357,6 +365,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
         return;
       }
       setStatus('error');
+      setDownloadFailed(isCodeDownloadFailure(error));
       setErrorDetail(error instanceof Error ? error.message : String(error));
     });
 
@@ -1628,8 +1637,42 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       {status === 'loading' && (
         <Spin style={{ position: 'absolute', inset: 0, marginTop: 48 }} data-testid="scene3d-loading" />
       )}
-      {status === 'error' && (
+      {status === 'error' && !downloadFailed && (
         <Alert type="error" showIcon title={t('scene3d.startFailed')} description={errorDetail} />
+      )}
+      {/* Not an error of the view: its code did not arrive. Trying again starts the view afresh and
+          asks for the code once more; reloading is the answer when the installation was updated
+          meanwhile. The browser's own words stay, small, for whoever is asked about it. */}
+      {status === 'error' && downloadFailed && (
+        <Alert
+          type="warning"
+          showIcon
+          data-testid="scene3d-download-failed"
+          title={t('scene3d.downloadFailedTitle')}
+          description={
+            <>
+              <Typography.Paragraph style={{ marginBottom: 4 }}>{t('scene3d.downloadFailedHint')}</Typography.Paragraph>
+              <Typography.Text type="secondary" code style={{ fontSize: 12 }}>
+                {errorDetail}
+              </Typography.Text>
+            </>
+          }
+          action={
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Button
+                size="small"
+                type="primary"
+                data-testid="scene3d-download-retry"
+                onClick={() => setRebuildToken((token) => token + 1)}
+              >
+                {t('scene3d.downloadFailedRetry')}
+              </Button>
+              <Button size="small" onClick={() => window.location.reload()}>
+                {t('errorBoundary.reload')}
+              </Button>
+            </div>
+          }
+        />
       )}
       {/* The scene has already been rebuilt once for this and lost the context again, so the view
           stops rather than flickering: a rebuild loop looks like a frozen application and empties

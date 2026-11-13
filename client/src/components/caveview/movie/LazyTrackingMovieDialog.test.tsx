@@ -67,10 +67,10 @@ describe('LazyTrackingMovieDialog', () => {
     expect(screen.getByTestId('trip-page')).toBeInTheDocument();
   });
 
-  it('says a page opened before an update has to be reloaded, rather than quoting the browser', async () => {
+  it('says the code did not arrive and the page has to be reloaded, rather than quoting the browser', async () => {
     dialog.behaviour = 'stale';
     render(<Page surveyModelId="model-1" />);
-    expect(await screen.findByText(/The application was updated after this page was opened/)).toBeInTheDocument();
+    expect(await screen.findByText(/The movie maker did not finish downloading/)).toBeInTheDocument();
     expect(screen.queryByText(/Failed to fetch dynamically imported module/)).not.toBeInTheDocument();
   });
 
