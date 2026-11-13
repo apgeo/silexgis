@@ -167,6 +167,8 @@ export const specs = {
     'scene3d-flyby-movie.spec.ts',
     // A flyby that crosses backgrounds and colours the caves: the look changed, scrubbed back, handed back.
     'scene3d-flyby-look.spec.ts',
+    // A flyby built by hand: views captured, sections added and moved, a change written, flown as edited.
+    'scene3d-flyby-edit.spec.ts',
   ],
   search: ['documents.spec.ts'],
   settings: [
