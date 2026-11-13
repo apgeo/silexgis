@@ -117,6 +117,11 @@ export const engineState = {
    */
   captures: [] as FakeCapture[],
   captureFails: false,
+  /**
+   * The largest a drawing surface can be made, each way; a graphics card has such a number. Asked
+   * for more, the surface is silently made this size while its element keeps the size it was told.
+   */
+  surfaceLimit: 16384,
   reset() {
     engineState.widgets = [];
     engineState.widgetOptions = [];
@@ -134,6 +139,7 @@ export const engineState = {
     Cesium3DTileset.forget();
     engineState.captures = [];
     engineState.captureFails = false;
+    engineState.surfaceLimit = 16384;
   },
 };
 
@@ -1614,6 +1620,9 @@ class FakeScene {
   renderRequests = 0;
   /** Frames actually drawn, as opposed to frames asked for. */
   framesDrawn = 0;
+  /** The size of the surface actually drawn into, which a graphics card may hold below what was asked. */
+  drawingBufferWidth = 1200;
+  drawingBufferHeight = 800;
   /**
    * Whether the drawing surface still holds the frame last drawn into it.
    *
@@ -1720,6 +1729,21 @@ export class CesiumWidget {
   readonly container: Element;
   destroyCount = 0;
   private destroyed = false;
+  /** Pixels drawn for each pixel of the element. The real widget takes it in force at its next resize. */
+  resolutionScale = 1;
+
+  /**
+   * Sizes the surface from its element, as the real widget does: the element's size times the
+   * scale, truncated — which is the arithmetic a caller asking for an exact size has to allow for.
+   */
+  resize() {
+    const canvas = this.canvas as { clientWidth: number; clientHeight: number; width: number; height: number };
+    canvas.width = Math.trunc(canvas.clientWidth * this.resolutionScale);
+    canvas.height = Math.trunc(canvas.clientHeight * this.resolutionScale);
+    const scene = this.scene;
+    scene.drawingBufferWidth = Math.min(canvas.width, engineState.surfaceLimit);
+    scene.drawingBufferHeight = Math.min(canvas.height, engineState.surfaceLimit);
+  }
 
   constructor(container: Element, options: FakeWidgetOptions = {}) {
     this.container = container;

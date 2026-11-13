@@ -959,6 +959,47 @@ export interface Scene3DCapture {
    * a layer that is hidden, or was given no attribution, contributes nothing.
    */
   getVisibleCredits(): string[];
+  /**
+   * True when nothing the present view needs is still on its way: every ground tile in view with
+   * its imagery, every model, every point cloud's tiles. Something that failed to arrive counts as
+   * settled — it will not arrive, and whoever is waiting would wait for ever.
+   *
+   * A frame taken while this is false shows a scene still filling itself in, so whatever takes
+   * frames one at a time — or loads a camera path before flying it — asks this first. It describes
+   * the frame last drawn: a caller that has just moved the camera asks for a frame, lets it be
+   * drawn, and only then asks.
+   */
+  isSettled(): boolean;
+  /**
+   * Fixes the drawing surface at exactly this many pixels, for a run of frames taken one by one.
+   *
+   * The surface is otherwise as large as its element, a pixel of the page to a pixel drawn. A
+   * movie's frame has a size of its own — often larger than the window it is made in — so while a
+   * capture is open each pixel of the element is drawn as however many frame pixels it takes.
+   * Nothing on the page changes size; only what is drawn into the surface does, and with it how
+   * long a frame takes to draw.
+   *
+   * The element must already have the frame's shape, because a surface is drawn at its element's
+   * shape and a frame taken off any other would be a stretched picture. Throws when it has not,
+   * when a capture is already open, when the scene has been closed, or when the surface cannot be
+   * made that large; nothing is changed when it throws.
+   */
+  beginCapture(size: { width: number; height: number }): void;
+  /**
+   * Draws a frame now and hands back the drawing surface holding it.
+   *
+   * To be read — drawn into another canvas, handed to an encoder — before anything is awaited:
+   * the surface is not kept between frames, and a read in any later task finds it blank and
+   * reports nothing wrong. Throws when no capture is open, and when the surface is no longer the
+   * size the capture fixed, which is what a window resized half-way through a movie looks like —
+   * better a movie that stops than one whose frames change size.
+   */
+  captureFrame(): HTMLCanvasElement;
+  /**
+   * Puts the surface back to its element's own size and asks for a frame at it. Safe to call when
+   * no capture is open, so whoever opened one can always call it on the way out.
+   */
+  endCapture(): void;
 }
 
 // ---- the whole surface, and the part that exists today -----------------------

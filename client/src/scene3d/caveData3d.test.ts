@@ -523,6 +523,70 @@ describe('the ground the survey is under', () => {
   });
 });
 
+describe('the caves a view is drawing', () => {
+  it('lists each cave with the ground box and the heights its survey lines fill', async () => {
+    responses.centerlines = () => Promise.resolve(twoCaveCollection());
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(2));
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+
+    const caves = handle.cavesInView();
+    expect(caves.map((cave) => cave.caveId)).toEqual(['cave-1', 'cave-2']);
+    expect(caves[0].bounds).toEqual([25.44, 45.53, 25.441, 45.53]);
+    // Hung from its own top with no relief under it: ten metres from its highest point to its lowest.
+    expect(caves[0].top! - caves[0].bottom!).toBe(10);
+    expect(caves[1].top! - caves[1].bottom!).toBe(20);
+    // And where those two points are, so a camera can be pointed at the survey rather than at its box.
+    expect([caves[0].topAt?.longitude, caves[0].bottomAt?.longitude]).toEqual([25.44, 25.441]);
+    expect(caves[0].topAt?.height).toBe(caves[0].top);
+    expect(caves[0].bottomAt?.height).toBe(caves[0].bottom);
+    handle.detach();
+  });
+
+  it('lists a cave by its entrances when none of its lines are drawn', async () => {
+    responses.centerlines = () => Promise.resolve({ type: 'FeatureCollection', features: [], withheldCount: 0, detail: true, flatCount: 0 });
+    responses.entrances = () =>
+      Promise.resolve({
+        type: 'FeatureCollection',
+        features: [
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [25.4472, 45.5312] }, properties: { id: 'e-1', caveId: 'cave-9', approximate: false } },
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [25.4492, 45.5302] }, properties: { id: 'e-2', caveId: 'cave-9', approximate: false } },
+        ],
+      });
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(ENTRANCE_SOURCE_ID)!.items).toHaveLength(2));
+
+    const caves = handle.cavesInView();
+    expect(caves).toHaveLength(1);
+    expect(caves[0].caveId).toBe('cave-9');
+    // The box of its two entrances, and no heights: an entrance says where a cave is, not how deep.
+    expect(caves[0].bounds).toEqual([25.4472, 45.5302, 25.4492, 45.5312]);
+    expect(caves[0].top).toBeUndefined();
+    handle.detach();
+  });
+
+  it('does not list a cave twice when both its lines and its entrance are drawn', async () => {
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(ENTRANCE_SOURCE_ID)!.items).toHaveLength(1));
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(1));
+    expect(handle.cavesInView().map((cave) => cave.caveId)).toEqual(['cave-1']);
+    handle.detach();
+  });
+
+  it('lists nothing once the survey and entrance layers are off', async () => {
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(1));
+    handle.setLayerVisible(CENTERLINE_SOURCE_ID, false);
+    handle.setLayerVisible(ENTRANCE_SOURCE_ID, false);
+    expect(handle.cavesInView()).toEqual([]);
+    handle.detach();
+  });
+});
+
 describe('layers a viewer turns off and fades', () => {
   it('stops fetching a layer that is turned off, because the requests are the cost of it', async () => {
     const engine = new FakeEngine();

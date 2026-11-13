@@ -168,12 +168,19 @@ export function useCaves(params: CaveListParams) {
   });
 }
 
+/**
+ * One cave's read as a query object rather than as a hook, for code that is told about a cave
+ * outside React's render and still has to go through the same cache under the same key.
+ */
+export function caveQuery(id: string) {
+  return {
+    queryKey: queryKeys.cave(id),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id } } })),
+  };
+}
+
 export function useCave(id: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.cave(id ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id: id! } } })),
-    enabled: !!id,
-  });
+  return useQuery({ ...caveQuery(id ?? ''), enabled: !!id });
 }
 
 /**

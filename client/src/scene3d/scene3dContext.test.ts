@@ -3102,6 +3102,109 @@ describe('a picture of the scene', () => {
     expect(engine.engineState.captures).toEqual([]);
   });
 
+  describe('a run of frames at a size of their own', () => {
+    const widget = () => engine.engineState.widgets[0];
+    const surface = () => widget().canvas as unknown as { clientWidth: number; clientHeight: number; width: number; height: number };
+
+    it('draws the surface at exactly the frame\'s size while frames are taken, and puts it back after', () => {
+      const session = acquire();
+      // The element is 1200 by 800; a frame of that shape, and larger than it.
+      session.engine.beginCapture({ width: 1920, height: 1280 });
+      expect([surface().width, surface().height]).toEqual([1920, 1280]);
+      // Nothing on the page changed size: only what is drawn into it.
+      expect([surface().clientWidth, surface().clientHeight]).toEqual([1200, 800]);
+
+      const drawn = scene().framesDrawn;
+      const frame = session.engine.captureFrame();
+      expect(frame).toBe(widget().canvas);
+      // Drawn within the call, so the caller can read it before anything is awaited.
+      expect(scene().framesDrawn).toBe(drawn + 1);
+      expect(scene().surfaceHoldsFrame).toBe(true);
+      session.engine.captureFrame();
+      expect(scene().framesDrawn).toBe(drawn + 2);
+
+      const asked = scene().renderRequests;
+      session.engine.endCapture();
+      expect([surface().width, surface().height]).toEqual([1200, 800]);
+      expect(widget().resolutionScale).toBe(1);
+      // The page is shown a frame at its own size again without waiting for the camera to move.
+      expect(scene().renderRequests).toBeGreaterThan(asked);
+    });
+
+    it('lands on the size asked for whatever the element\'s own size', () => {
+      const session = acquire();
+      // Sizes whose quotient does not multiply back exactly are where a pixel goes missing.
+      for (const [clientWidth, clientHeight, width, height] of [
+        [896, 504, 1920, 1080],
+        [333, 592, 1080, 1920],
+        [1168, 657, 3840, 2160],
+        [1280, 720, 320, 180],
+        [546, 728, 810, 1080],
+      ]) {
+        surface().clientWidth = clientWidth;
+        surface().clientHeight = clientHeight;
+        session.engine.beginCapture({ width, height });
+        expect([surface().width, surface().height]).toEqual([width, height]);
+        session.engine.endCapture();
+      }
+    });
+
+    it('refuses a frame of another shape than the scene\'s element, and changes nothing', () => {
+      const session = acquire();
+      expect(() => session.engine.beginCapture({ width: 1920, height: 1080 })).toThrow(/not the shape/);
+      expect(() => session.engine.beginCapture({ width: 0, height: 800 })).toThrow(/whole number/);
+      expect(() => session.engine.beginCapture({ width: 1200.5, height: 800 })).toThrow(/whole number/);
+      expect(widget().resolutionScale).toBe(1);
+      expect([surface().width, surface().height]).toEqual([1200, 800]);
+      // And is still ready to take one of the right shape.
+      session.engine.beginCapture({ width: 600, height: 400 });
+      expect([surface().width, surface().height]).toEqual([600, 400]);
+    });
+
+    it('refuses a size the graphics card cannot draw, rather than hand back smaller frames unsaid', () => {
+      const session = acquire();
+      engine.engineState.surfaceLimit = 4096;
+      expect(() => session.engine.beginCapture({ width: 6000, height: 4000 })).toThrow(/could not be made/);
+      expect(widget().resolutionScale).toBe(1);
+      expect([surface().width, surface().height]).toEqual([1200, 800]);
+      expect(() => session.engine.captureFrame()).toThrow(/No frames/);
+    });
+
+    it('takes no frame outside a capture, and only one capture at a time', () => {
+      const session = acquire();
+      expect(() => session.engine.captureFrame()).toThrow(/No frames/);
+      session.engine.beginCapture({ width: 1200, height: 800 });
+      expect(() => session.engine.beginCapture({ width: 1200, height: 800 })).toThrow(/already/);
+      session.engine.endCapture();
+      // Ending one that is not open is what a caller does on its way out of every failure.
+      expect(() => session.engine.endCapture()).not.toThrow();
+    });
+
+    it('stops rather than take frames of a new size when the scene is resized under it', () => {
+      const session = acquire();
+      session.engine.beginCapture({ width: 1920, height: 1280 });
+      session.engine.captureFrame();
+      // The window was resized: the element is another size, and the surface follows it.
+      surface().clientWidth = 900;
+      surface().clientHeight = 600;
+      const drawn = scene().framesDrawn;
+      expect(() => session.engine.captureFrame()).toThrow(/changed size/);
+      expect(scene().framesDrawn).toBe(drawn);
+      session.engine.endCapture();
+      expect([surface().width, surface().height]).toEqual([900, 600]);
+    });
+
+    it('refuses once the scene has been closed, and ends quietly', () => {
+      const session = acquire();
+      const closed = session.engine;
+      closed.beginCapture({ width: 1200, height: 800 });
+      session.release();
+      expect(() => closed.captureFrame()).toThrow(/closed/);
+      expect(() => closed.beginCapture({ width: 1200, height: 800 })).toThrow(/closed/);
+      expect(() => closed.endCapture()).not.toThrow();
+    });
+  });
+
   it('names the credits of the layers being drawn, bottom first, and of no others', async () => {
     const session = acquire();
     session.engine.addImageryLayer('base:1', {

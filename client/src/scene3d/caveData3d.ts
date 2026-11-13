@@ -13,12 +13,14 @@ import { cameraFloorFor, caveFootprint } from './caveFootprint3d.ts';
 import { featuresOf, propertiesOf } from './geoJson3d.ts';
 import {
   caveCenterlines,
+  cavesDrawn,
   centerlineBounds,
   centerlineLoadState,
   centerlinePolylines,
   centerlineTopAltitudes,
   EMPTY_CENTERLINE_LOAD_STATE,
   nearestCaveCenterlines,
+  type CaveInView3D,
   type CenterlineLoad3DState,
 } from './centerlines3d.ts';
 import { mapZoomFor } from './pseudoZoom.ts';
@@ -166,6 +168,12 @@ export interface CaveData3DHandle {
    * the view, or the compact representation served for it carries no altitudes at all.
    */
   caveSurveyTop(caveId: string): number | undefined;
+  /**
+   * The caves the view is drawing now: each one's survey lines, or its entrances when it has no
+   * lines here. What a camera path around "the caves in view" is built from. A cave whose place
+   * this reader was given only roughly is listed where it was drawn, which is that rough place.
+   */
+  cavesInView(): CaveInView3D[];
   /**
    * The payload now drawn for the same thing this one named, if it is still in the scene.
    *
@@ -473,6 +481,37 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
     },
     caveSurveyTop(caveId) {
       return surveyTops.get(caveId);
+    },
+    cavesInView() {
+      const caves = cavesDrawn(drawnCenterlines);
+      const listed = new Set(caves.map((cave) => cave.caveId));
+      // An entrance of a cave that has no lines here still says where that cave is — while the
+      // entrances are shown. Turned off they are only hidden, not let go of, and a cave whose one
+      // mark the viewer has taken off the screen is not a cave the view is drawing.
+      const byEntrance = new Map<string, CaveInView3D>();
+      for (const marker of layerVisible[ENTRANCE_SOURCE_ID] ? drawnEntrances : []) {
+        const pick = pickPayload({ id: marker.id });
+        if (pick?.kind !== 'entrance' || listed.has(pick.caveId)) {
+          continue;
+        }
+        const { longitude, latitude } = marker.position;
+        const cave = byEntrance.get(pick.caveId);
+        if (cave) {
+          cave.bounds = [
+            Math.min(cave.bounds[0], longitude),
+            Math.min(cave.bounds[1], latitude),
+            Math.max(cave.bounds[2], longitude),
+            Math.max(cave.bounds[3], latitude),
+          ];
+        } else {
+          byEntrance.set(pick.caveId, {
+            caveId: pick.caveId,
+            ...(pick.label ? { label: pick.label } : {}),
+            bounds: [longitude, latitude, longitude, latitude],
+          });
+        }
+      }
+      return [...caves, ...byEntrance.values()];
     },
     currentPick(payload) {
       for (const batch of [drawnEntrances, drawnFeatures, drawnFeatureLines, drawnCenterlines]) {

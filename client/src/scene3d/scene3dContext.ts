@@ -1025,6 +1025,92 @@ class CesiumScene3D implements Scene3DCore {
 
   // ---- a picture of the scene ----
 
+  /** The frame size an open capture fixed, and the scale the surface was drawn at before it. */
+  private capture: { width: number; height: number; scaleBefore: number } | undefined;
+
+  beginCapture(size: { width: number; height: number }): void {
+    if (this.widget.isDestroyed()) {
+      throw new Error('The scene has been closed.');
+    }
+    if (this.capture) {
+      throw new Error('Frames are already being taken from this scene.');
+    }
+    const { width, height } = size;
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+      throw new Error('A frame is a whole number of pixels each way.');
+    }
+    const { canvas } = this.widget;
+    const { clientWidth, clientHeight } = canvas;
+    if (!(clientWidth > 0) || !(clientHeight > 0)) {
+      throw new Error('The scene is not on the screen.');
+    }
+    // The engine sizes the surface as the element's size times this scale, truncated. The quarter
+    // of a pixel is what lands the width on the number asked for: the product of a size and the
+    // quotient that should give it back can come out a hair under, and truncates to one less.
+    const scale = (width + 0.25) / clientWidth;
+    if (Math.floor(clientHeight * scale) !== height) {
+      throw new Error(
+        `The scene is drawn ${clientWidth} by ${clientHeight}, which is not the shape of a frame ${width} by ${height}.`,
+      );
+    }
+    const scaleBefore = this.widget.resolutionScale;
+    this.widget.resolutionScale = scale;
+    // Otherwise done by the engine's own loop on the next refresh of the screen; a caller about
+    // to take a frame in this same task cannot wait for one.
+    this.widget.resize();
+    // Asked of the surface rather than assumed: past what the graphics card allows the element
+    // keeps the size it was told while the surface behind it is silently made smaller.
+    const { scene } = this.widget;
+    if (
+      canvas.width !== width ||
+      canvas.height !== height ||
+      scene.drawingBufferWidth !== width ||
+      scene.drawingBufferHeight !== height
+    ) {
+      this.widget.resolutionScale = scaleBefore;
+      this.widget.resize();
+      throw new Error(`The drawing surface could not be made ${width} by ${height}.`);
+    }
+    this.capture = { width, height, scaleBefore };
+  }
+
+  captureFrame(): HTMLCanvasElement {
+    if (this.widget.isDestroyed()) {
+      throw new Error('The scene has been closed.');
+    }
+    const capture = this.capture;
+    if (!capture) {
+      throw new Error('No frames are being taken from this scene.');
+    }
+    const { scene, canvas } = this.widget;
+    // The engine follows its element whenever the element changes size. Brought up to date here,
+    // so that a frame is never taken off a surface a resize has not reached yet — and so that a
+    // surface that has changed is seen to have.
+    this.widget.resize();
+    if (canvas.width !== capture.width || canvas.height !== capture.height) {
+      throw new Error('The scene changed size while frames were being taken from it.');
+    }
+    // Asked for before it is drawn, as for a single picture: told to render with nothing having
+    // changed, this scene would decide there was nothing to do.
+    scene.requestRender();
+    scene.render();
+    return canvas;
+  }
+
+  endCapture(): void {
+    const capture = this.capture;
+    if (!capture) {
+      return;
+    }
+    this.capture = undefined;
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    this.widget.resolutionScale = capture.scaleBefore;
+    this.widget.resize();
+    this.widget.scene.requestRender();
+  }
+
   captureImage(): Promise<Blob> {
     if (this.widget.isDestroyed()) {
       return Promise.reject(new Error('The scene has been closed.'));

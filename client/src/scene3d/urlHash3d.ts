@@ -101,7 +101,10 @@ export type Scene3DHashCamera = Pick<Scene3DCamera, 'getCamera' | 'setCamera' | 
  *   * It replaces the history entry instead of adding one, and only when the text would change,
  *     so panning does not fill the back button with a hundred near-identical positions.
  */
-export function attachScene3dHash(engine: Scene3DHashCamera): () => void {
+export function attachScene3dHash(
+  engine: Scene3DHashCamera,
+  options: { paused?: () => boolean } = {},
+): () => void {
   const initial = parseScene3dHash();
   if (initial) {
     engine.setCamera(toSceneCamera(cameraFromHash(initial)), { animate: false });
@@ -109,6 +112,11 @@ export function attachScene3dHash(engine: Scene3DHashCamera): () => void {
 
   let timer: number | undefined;
   const write = () => {
+    // A camera being flown by a script is not where its viewer chose to stand: an address written
+    // from the middle of a flight would bookmark a moment of it.
+    if (options.paused?.()) {
+      return;
+    }
     const camera = engine.getCamera();
     const next = formatScene3dHash({
       lat: camera.latitude,

@@ -179,6 +179,22 @@ describe('attachScene3dHash', () => {
 
     expect(window.location.hash).toBe('');
   });
+
+  it('writes nothing while it is told the camera is not the viewer\'s own, and resumes after', () => {
+    // A camera being flown by a script is somewhere its viewer did not choose to stand.
+    let flown = true;
+    const detach = attachScene3dHash(engine, { paused: () => flown });
+    camera = { longitude: 25.4, latitude: 45.6, height: -300, heading: 12, pitch: -40, roll: 0 };
+    viewListener?.();
+    vi.advanceTimersByTime(300);
+    expect(window.location.hash).toBe('');
+
+    flown = false;
+    viewListener?.();
+    vi.advanceTimersByTime(300);
+    expect(parseScene3dHash(window.location.hash)?.height).toBe(-300);
+    detach();
+  });
 });
 
 describe('hasScene3dHash', () => {

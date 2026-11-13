@@ -350,6 +350,73 @@ export function nearestCaveCenterlines(
   return nearest;
 }
 
+/** What is drawn of one cave: where on the ground, how high and how low, and what it is called. */
+export interface CaveInView3D {
+  caveId: string;
+  /** The name its survey lines or its entrance carry, when they carry one. */
+  label?: string;
+  /** The ground box of what is drawn of it. */
+  bounds: Scene3DBounds;
+  /**
+   * The drawn heights of its highest and lowest survey point, in metres above the ellipsoid.
+   * Absent when no line of it carries heights: a plan laid on the ground, or an entrance alone.
+   */
+  top?: number;
+  bottom?: number;
+  /** Where those two points are: usually an entrance, and the deepest station. */
+  topAt?: Scene3DPosition;
+  bottomAt?: Scene3DPosition;
+}
+
+/**
+ * Every cave a response drew lines of, with the box and the heights those lines fill.
+ *
+ * The heights are the drawn ones — where the lines are in the scene under the placement they were
+ * built with — because whoever asks wants to point a camera at them. Lines laid on the ground are
+ * counted in the box and left out of the heights: their own are zeroes that mean "none".
+ */
+export function cavesDrawn(polylines: readonly Scene3DPolyline[]): CaveInView3D[] {
+  const byCave = new Map<string, CaveInView3D>();
+  for (const polyline of polylines) {
+    const caveId = caveIdOf(polyline);
+    if (!caveId || polyline.positions.length === 0) {
+      continue;
+    }
+    let cave = byCave.get(caveId);
+    if (!cave) {
+      const label = (polyline.id as Partial<CenterlinePick>).label;
+      cave = {
+        caveId,
+        ...(label ? { label } : {}),
+        bounds: [
+          Number.POSITIVE_INFINITY,
+          Number.POSITIVE_INFINITY,
+          Number.NEGATIVE_INFINITY,
+          Number.NEGATIVE_INFINITY,
+        ],
+      };
+      byCave.set(caveId, cave);
+    }
+    for (const position of polyline.positions) {
+      cave.bounds[0] = Math.min(cave.bounds[0], position.longitude);
+      cave.bounds[1] = Math.min(cave.bounds[1], position.latitude);
+      cave.bounds[2] = Math.max(cave.bounds[2], position.longitude);
+      cave.bounds[3] = Math.max(cave.bounds[3], position.latitude);
+      if (!polyline.clampToGround) {
+        if (cave.top === undefined || position.height > cave.top) {
+          cave.top = position.height;
+          cave.topAt = position;
+        }
+        if (cave.bottom === undefined || position.height < cave.bottom) {
+          cave.bottom = position.height;
+          cave.bottomAt = position;
+        }
+      }
+    }
+  }
+  return [...byCave.values()];
+}
+
 /** Just the lines belonging to one cave, out of everything a response drew. */
 export function caveCenterlines(
   polylines: readonly Scene3DPolyline[],
