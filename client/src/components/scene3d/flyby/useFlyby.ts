@@ -13,6 +13,7 @@ import {
   type FlybySubject,
   type FlybyTexts,
 } from '../../../flyby/flybyDocument.ts';
+import { updateSection } from '../../../flyby/flybyEdit.ts';
 import { createFlybyLookStage, type FlybyLookTarget } from '../../../flyby/flybyLookApply.ts';
 import { createFlybyPlayer, type FlybyPlayer, type FlybyPlayerState, type FlybyStage } from '../../../flyby/flybyPlayer.ts';
 import {
@@ -198,17 +199,23 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     setOptionsState((current) => ({ ...current, ...next }));
   }, []);
 
+  /**
+   * Makes an edited document the flyby: its sections as they now are, and the changes and the
+   * texts that went with them — an edit that takes a section out takes its changes and captions too.
+   */
+  const edit = useCallback((next: FlybyDocument) => {
+    setEdited(next);
+    setChanges(next.changes ?? []);
+    setTexts(next.texts ?? {});
+  }, []);
+
   const changeSection = useCallback(
     (id: string, change: Partial<Pick<FlybySection, 'seconds' | 'speed'>>) => {
-      if (!document) {
-        return;
+      if (document) {
+        edit(updateSection(document, id, change));
       }
-      setEdited({
-        ...document,
-        sections: document.sections.map((section) => (section.id === id ? { ...section, ...change } : section)),
-      });
     },
-    [document],
+    [document, edit],
   );
 
   const open = useCallback((opened: FlybyDocument) => {
@@ -511,6 +518,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     setName,
     document,
     edited: edited !== null,
+    edit,
     changeSection,
     open,
     // how it looks, and what it says

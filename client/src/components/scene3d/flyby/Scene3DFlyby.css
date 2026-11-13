@@ -307,3 +307,47 @@
   display: block;
   overflow-wrap: anywhere;
 }
+
+/* Editing a section: its buttons on a line of their own under its numbers, and what it does opened
+   under that, across the whole width of the list. */
+.scene3d-flyby-section-actions,
+.scene3d-flyby-section-wide {
+  grid-column: 1 / -1;
+}
+
+.scene3d-flyby-section-actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+  margin-top: -4px;
+}
+
+.scene3d-flyby-section-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 6px 8px 8px;
+  border: 1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.08));
+  border-radius: 6px;
+}
+
+.scene3d-flyby-section-editor legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.scene3d-flyby-section-editor .ant-select,
+.scene3d-flyby-section-editor .ant-input-number {
+  width: 132px;
+}
+
+.scene3d-flyby-grow {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.scene3d-flyby-section-editor .scene3d-flyby-row .ant-input-number {
+  width: 96px;
+}

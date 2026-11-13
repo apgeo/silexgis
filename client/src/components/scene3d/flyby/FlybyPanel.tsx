@@ -15,10 +15,8 @@ import { useCaveNames } from '../../../api/hooks.ts';
 import { saveBlob } from '../../../api/download.ts';
 import {
   FLYBY_PRESETS,
-  FLYBY_SECONDS_RANGE,
   FLYBY_SPEED_RANGE,
   flybyHoldsPlace,
-  sectionLength,
   type FlybyDocument,
   type FlybySubjectRef,
 } from '../../../flyby/flybyDocument.ts';
@@ -26,15 +24,12 @@ import { FLYBY_FILE_MAX_BYTES, flybyFileName, flybyFileText, parseFlybyFile } fr
 import { FLYBY_SECONDS_PER_TURN_RANGE, FLYBY_TURNS_RANGE, presetFits } from '../../../flyby/flybyPresets.ts';
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import Button from '../../Button.tsx';
-import { flybyClock } from './flybyClock.ts';
 import FlybyLookPanel from './FlybyLookPanel.tsx';
+import FlybySections from './FlybySections.tsx';
 import type { FlybyController, FlybySource, FlybyTrouble } from './useFlyby.ts';
 
 /** The problems that are about the look, the changes and the texts rather than the camera. */
 const LOOK_PROBLEMS = new Set(['badLook', 'unknownChangeSection', 'badChange', 'duplicateChange', 'overlappingChanges', 'badText']);
-
-/** The speeds offered for one section; the whole flyby's speed is a slider. */
-const SECTION_SPEEDS = [0.25, 0.5, 1, 2, 4];
 
 export interface FlybyPanelProps {
   flyby: FlybyController;
@@ -322,43 +317,13 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
               key: 'sections',
               label: t('flyby.sectionsTitle', { count: document.sections.length }),
               children: (
-                <ol className="scene3d-flyby-sections" data-testid="flyby-sections">
-                  {document.sections.map((section, index) => (
-                    <li
-                      key={section.id}
-                      className={flyby.playerState.status !== 'idle' && flyby.playerState.section === index ? 'scene3d-flyby-section-current' : undefined}
-                    >
-                      <span className="scene3d-flyby-section-name">
-                        {t(`flyby.section.${section.kind}`)}
-                        <Typography.Text type="secondary"> · {subjectLabel(section.subject)}</Typography.Text>
-                      </span>
-                      <InputNumber
-                        size="small"
-                        min={FLYBY_SECONDS_RANGE.min}
-                        max={FLYBY_SECONDS_RANGE.max}
-                        step={1}
-                        value={section.seconds}
-                        onChange={(value) => value !== null && flyby.changeSection(section.id, { seconds: value })}
-                        disabled={busy}
-                        suffix={t('flyby.secondsUnit')}
-                        aria-label={t('flyby.sectionSeconds', { section: t(`flyby.section.${section.kind}`) })}
-                        data-testid={`flyby-section-${section.id}-seconds`}
-                      />
-                      <Select
-                        size="small"
-                        value={section.speed ?? 1}
-                        onChange={(value) => flyby.changeSection(section.id, { speed: value })}
-                        disabled={busy}
-                        aria-label={t('flyby.sectionSpeed', { section: t(`flyby.section.${section.kind}`) })}
-                        data-testid={`flyby-section-${section.id}-speed`}
-                        options={SECTION_SPEEDS.map((value) => ({ value, label: `×${value}` }))}
-                      />
-                      <Typography.Text type="secondary" className="scene3d-flyby-section-length">
-                        {flybyClock(sectionLength(document, section))}
-                      </Typography.Text>
-                    </li>
-                  ))}
-                </ol>
+                <FlybySections
+                  document={document}
+                  current={flyby.playerState.status !== 'idle' ? flyby.playerState.section : undefined}
+                  busy={busy}
+                  subjectLabel={subjectLabel}
+                  onEdit={flyby.edit}
+                />
               ),
             },
           ]}

@@ -11,6 +11,7 @@ import type { CaveInView3D } from '../../../scene3d/centerlines3d.ts';
 import type { Scene3DCameraState, Scene3DCore } from '../../../scene3d/scene3dEngine.ts';
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import type { WorkspaceSelection } from '../../../stores/workspaceStore.ts';
+import FlybySections from './FlybySections.tsx';
 import Scene3DFlyby from './Scene3DFlyby.tsx';
 import type { FlybyScene } from './useFlyby.ts';
 import type { FlybyLookTarget } from '../../../flyby/flybyLookApply.ts';
@@ -453,6 +454,95 @@ describe('the look of a flyby and the texts over it', () => {
     const [kept] = useFlybyStore.getState().library;
     expect(kept.look).toEqual({ sky: '#b4c8dc' });
     expect(kept.texts).toEqual({ end: { text: 'Club', seconds: 4 } });
+  });
+});
+
+describe('editing the sections by hand', () => {
+  const sectionNames = () =>
+    Array.from(screen.getByTestId('flyby-sections').querySelectorAll('.scene3d-flyby-section-name'), (node) => node.textContent);
+
+  it('adds, duplicates, moves and removes sections, each button named for the section', () => {
+    renderFlyby();
+    fireEvent.click(screen.getByText('2 sections'));
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate 2. Circle' }));
+    expect(sectionNames()).toEqual(['Approach · Cave A', 'Circle · Cave A', 'Circle · Cave A']);
+    expect(screen.getByTestId('flyby-edited')).toBeInTheDocument();
+    // The last can only go up; the first only down.
+    expect(screen.getByRole('button', { name: 'Move 3. Circle down' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move 1. Approach up' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Move 1. Approach down' }));
+    expect(sectionNames()[0]).toBe('Circle · Cave A');
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Kind of section to add' }));
+    fireEvent.click(screen.getByTitle('Tilt'));
+    fireEvent.click(screen.getByTestId('flyby-section-add'));
+    expect(screen.getByText('4 sections')).toBeInTheDocument();
+    expect(sectionNames()[3]).toBe('Tilt · Cave A');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove 4. Tilt' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove 3. Circle' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove 2. Approach' }));
+    // One section is a flyby; none is not, so the last cannot be taken out.
+    expect(screen.getByRole('button', { name: 'Remove 1. Circle' })).toBeDisabled();
+  });
+
+  it('edits what a section does, every field named, and says inline what is wrong', async () => {
+    const { scene } = renderFlyby();
+    fireEvent.click(screen.getByText('2 sections'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit what 2. Circle does' }));
+    const editor = screen.getByTestId('flyby-section-orbit-2-editor');
+    expect(editor).toHaveTextContent('What 2. Circle does');
+    // A circle turns by a whole turn, shown in turns.
+    expect(screen.getByRole('spinbutton', { name: 'Turn by, in turns — 2. Circle' })).toHaveValue('1.00');
+    expect(screen.getByRole('spinbutton', { name: 'Angle below the horizon — 2. Circle' })).toHaveValue('');
+    for (const name of [
+      'Kind — 2. Circle',
+      'About — 2. Circle',
+      'Distance, in sizes of what it is about — 2. Circle',
+      'Looks at — 2. Circle',
+      'Raised by, in half-heights — 2. Circle',
+      'Above the ground — 2. Circle',
+    ]) {
+      expect(screen.getByLabelText(name)).toBeInTheDocument();
+    }
+
+    const range = screen.getByRole('spinbutton', { name: 'Distance, in sizes of what it is about — 2. Circle' });
+    fireEvent.change(range, { target: { value: '6' } });
+    fireEvent.blur(range);
+    fireEvent.click(screen.getByTestId('flyby-section-orbit-2-rest'));
+    fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'Edited' } });
+    fireEvent.click(screen.getByTestId('flyby-save'));
+    const [kept] = useFlybyStore.getState().library;
+    expect(kept.sections[1]).toMatchObject({ id: 'orbit-2', rest: true, to: { headingBy: 360, range: 6 } });
+
+    // The camera goes where the edit says: further out than the preset's circle.
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(31_000);
+    expect(status()).toBe('ended');
+    const end = scene.camera();
+    const distance = Math.hypot((end.longitude - 25.002) * 78_000, (end.latitude - 45.502) * 111_000);
+    expect(distance).toBeGreaterThan(800);
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+
+  });
+
+  it('says beside a section what is wrong with it', () => {
+    const document: FlybyDocument = {
+      version: FLYBY_VERSION,
+      name: '',
+      speed: 1,
+      loop: false,
+      subjects: [{ kind: 'cave', caveId: 'a' }],
+      start: { subject: 0, pose: { heading: 0, pitch: -30, range: 4, lift: 0, clearance: 60 } },
+      sections: [
+        { id: 'o', kind: 'orbit', subject: 3, seconds: 12, to: { headingBy: 360, lift: 40 } },
+        { id: 'h', kind: 'hold', subject: 0, seconds: 2, to: {} },
+      ],
+    };
+    render(<FlybySections document={document} busy={false} subjectLabel={() => 'Cave A'} onEdit={() => {}} />);
+    expect(screen.getByTestId('flyby-section-o-trouble')).toHaveTextContent('What it is about is not in this flyby.');
+    expect(screen.getByTestId('flyby-section-o-trouble')).toHaveTextContent('A turn, a lift or a height above the ground');
+    expect(screen.queryByTestId('flyby-section-h-trouble')).not.toBeInTheDocument();
   });
 });
 

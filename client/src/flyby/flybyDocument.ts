@@ -303,6 +303,12 @@ export const FLYBY_MAX_LAYERS = 60;
 /** The longest any change or card lasts, in seconds. */
 export const FLYBY_MAX_CHANGE_SECONDS = 600;
 export const FLYBY_MAX_TEXT = 200;
+/** A lift beyond this many half-heights looks at nothing of the subject at all. */
+export const FLYBY_LIFT_LIMIT = 10;
+/** Metres: a camera held further above the ground than this is not following the ground any more. */
+export const FLYBY_MAX_CLEARANCE = 5000;
+/** Ten turns, in degrees: more is a spin, not a flight. A heading is unwrapped, so it is held to the same. */
+export const FLYBY_MAX_TURN_DEGREES = 3600;
 
 /** Why a document cannot be played, in a form the interface can put into words. */
 export type FlybyProblem =
@@ -313,6 +319,8 @@ export type FlybyProblem =
   | { code: 'badSpeed'; section?: string }
   | { code: 'badRange'; section?: string }
   | { code: 'badPitch'; section?: string }
+  /** A lift, a clearance or a turn outside what it may be. */
+  | { code: 'badPose'; section?: string }
   | { code: 'duplicateSection'; section: string }
   /** The opening look has a value outside what it may be. */
   | { code: 'badLook' }
@@ -337,6 +345,16 @@ function poseProblems(pose: FlybyPose, section: string | undefined): FlybyProble
   }
   if (pose.pitch !== undefined && !(pose.pitch >= -90 && pose.pitch <= 90)) {
     problems.push({ code: 'badPitch', section });
+  }
+  if (
+    (pose.lift !== undefined && !(Math.abs(pose.lift) <= FLYBY_LIFT_LIMIT)) ||
+    (pose.clearance !== undefined &&
+      pose.clearance !== null &&
+      !(pose.clearance >= 0 && pose.clearance <= FLYBY_MAX_CLEARANCE)) ||
+    (pose.headingBy !== undefined && !(Math.abs(pose.headingBy) <= FLYBY_MAX_TURN_DEGREES)) ||
+    (pose.heading !== undefined && !(Math.abs(pose.heading) <= FLYBY_MAX_TURN_DEGREES))
+  ) {
+    problems.push({ code: 'badPose', section });
   }
   return problems;
 }
