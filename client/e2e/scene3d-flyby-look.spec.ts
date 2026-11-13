@@ -206,7 +206,18 @@ test('a flyby crosses into another background and colours the caves, scrubs back
   const before = await colourIn(page, LINE_GREEN, 'whole', 60);
   await page.getByTestId('flyby-play').click();
   await expect(status(page)).toHaveAttribute('data-status', 'playing', { timeout: 180_000 });
+  // The title lasts a few real seconds, and a busy machine can take longer than that to report
+  // that the flyby is playing. So the title is looked for at a moment the test puts the flyby at,
+  // not at whichever moment the clock has reached.
+  await page.getByTestId('flyby-pause').click();
+  await page.getByTestId('flyby-position').getByRole('slider').focus();
+  await page.keyboard.press('Home');
+  for (let step = 0; step < 8; step += 1) {
+    await page.keyboard.press('ArrowRight');
+  }
   await expect(page.getByTestId('flyby-texts')).toHaveAttribute('data-shown', /title/);
+  await page.getByTestId('flyby-play').click();
+  await expect(status(page)).toHaveAttribute('data-status', 'playing');
   // The look is the flyby's while it flies; at its end, the GeoTIFF and green survey lines.
   await expect(status(page)).toHaveAttribute('data-status', 'ended', { timeout: 120_000 });
   await expectMostly(page, GEOTIFF_MAGENTA, 'the GeoTIFF the flyby crossed into');
