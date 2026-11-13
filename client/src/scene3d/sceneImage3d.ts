@@ -83,11 +83,44 @@ function wrapWords(context: CanvasRenderingContext2D, text: string, room: number
 }
 
 /**
- * The same picture with the credits written along its bottom edge, over a translucent strip.
+ * Writes credit lines (as {@link creditLines} answers them) along the bottom edge of a picture
+ * `width` by `height` that is already drawn on `context`, over a translucent strip. Nothing is drawn
+ * for no lines.
  *
  * A strip rather than bare text, because the picture underneath can be anything — snow, forest,
  * the black of a cutaway — and text in any one colour disappears against some of them. Translucent
  * rather than solid, so the ground under it can still be made out.
+ *
+ * Synchronous and handed the context rather than a picture, so that the frames of a movie, composed
+ * one after another on one canvas, carry exactly the strip a saved picture does.
+ */
+export function drawCreditStrip(
+  context: CanvasRenderingContext2D,
+  lines: readonly string[],
+  width: number,
+  height: number,
+): void {
+  if (lines.length === 0) {
+    return;
+  }
+  const { fontPixels, padding, lineHeight } = stripMetrics(height);
+  context.font = `${fontPixels}px sans-serif`;
+  const wrapped = wrapWords(context, lines.join(' · '), width - padding * 2);
+  const stripHeight = wrapped.length * lineHeight + padding;
+  const stripTop = height - stripHeight;
+
+  context.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  context.fillRect(0, stripTop, width, stripHeight);
+
+  context.fillStyle = '#ffffff';
+  context.textBaseline = 'middle';
+  wrapped.forEach((line, index) => {
+    context.fillText(line, padding, stripTop + padding / 2 + lineHeight * (index + 0.5));
+  });
+}
+
+/**
+ * The same picture with the credits written along its bottom edge (see {@link drawCreditStrip}).
  *
  * With no credits to carry the frame is handed back untouched: there is nothing to add, and
  * re-encoding a picture to change nothing costs a second or two on a large surface.
@@ -108,21 +141,7 @@ export async function imageWithCredits(frame: Blob, credits: readonly string[]):
       throw new Error('This browser cannot draw onto a 2D canvas.');
     }
     context.drawImage(bitmap, 0, 0);
-
-    const { fontPixels, padding, lineHeight } = stripMetrics(canvas.height);
-    context.font = `${fontPixels}px sans-serif`;
-    const wrapped = wrapWords(context, lines.join(' · '), canvas.width - padding * 2);
-    const stripHeight = wrapped.length * lineHeight + padding;
-    const stripTop = canvas.height - stripHeight;
-
-    context.fillStyle = 'rgba(0, 0, 0, 0.55)';
-    context.fillRect(0, stripTop, canvas.width, stripHeight);
-
-    context.fillStyle = '#ffffff';
-    context.textBaseline = 'middle';
-    wrapped.forEach((line, index) => {
-      context.fillText(line, padding, stripTop + padding / 2 + lineHeight * (index + 0.5));
-    });
+    drawCreditStrip(context, lines, canvas.width, canvas.height);
 
     return await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((blob) => {
