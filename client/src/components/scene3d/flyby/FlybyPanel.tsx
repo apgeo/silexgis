@@ -21,7 +21,13 @@ import {
   type FlybySubjectRef,
 } from '../../../flyby/flybyDocument.ts';
 import { FLYBY_FILE_MAX_BYTES, flybyFileName, flybyFileText, parseFlybyFile } from '../../../flyby/flybyLibrary.ts';
-import { FLYBY_SECONDS_PER_TURN_RANGE, FLYBY_TURNS_RANGE, presetFits } from '../../../flyby/flybyPresets.ts';
+import {
+  FLYBY_PAUSE_SECONDS_RANGE,
+  FLYBY_SECONDS_PER_TURN_RANGE,
+  FLYBY_TURNS_RANGE,
+  presetFits,
+  type FlybyPresetOptions,
+} from '../../../flyby/flybyPresets.ts';
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import Button from '../../Button.tsx';
 import FlybyLookPanel from './FlybyLookPanel.tsx';
@@ -331,6 +337,39 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
         >
           {t('flyby.underground')}
         </Checkbox>
+        <label className="scene3d-flyby-field">
+          <span>{t('flyby.atCave.seconds')}</span>
+          <InputNumber
+            size="small"
+            min={FLYBY_PAUSE_SECONDS_RANGE.min}
+            max={FLYBY_PAUSE_SECONDS_RANGE.max}
+            step={1}
+            value={flyby.options.pauseSeconds}
+            onChange={(value) => value !== null && flyby.setOptions({ pauseSeconds: value })}
+            disabled={busy || flyby.preset !== 'tour'}
+            suffix={t('flyby.secondsUnit')}
+            aria-label={t('flyby.atCave.seconds')}
+            data-testid="flyby-pause-seconds"
+          />
+        </label>
+        {flyby.preset === 'tour' && flyby.options.pauseSeconds > 0 && (
+          <label className="scene3d-flyby-field scene3d-flyby-field-wide">
+            <span>{t('flyby.atCave.say')}</span>
+            <Select
+              size="small"
+              value={flyby.options.pauseSay}
+              onChange={(value: FlybyPresetOptions['pauseSay']) => flyby.setOptions({ pauseSay: value })}
+              disabled={busy}
+              aria-label={t('flyby.atCave.say')}
+              data-testid="flyby-pause-say"
+              options={[
+                { value: 'none', label: t('flyby.atCave.sayNone') },
+                { value: 'name', label: t('flyby.atCave.sayName') },
+                { value: 'nameAndSize', label: t('flyby.atCave.sayNameAndSize') },
+              ]}
+            />
+          </label>
+        )}
         <Checkbox
           checked={flyby.options.fromFar}
           onChange={(event) => flyby.setOptions({ fromFar: event.target.checked })}

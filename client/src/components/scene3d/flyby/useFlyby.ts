@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { caveQuery, fetchGeofileFeatureCollection, geofileQuery } from '../../../api/hooks.ts';
 import {
   flybyProblems,
@@ -11,7 +12,6 @@ import {
   type FlybyProblem,
   type FlybySection,
   type FlybySubject,
-  type FlybySubjectRef,
   type FlybyTexts,
 } from '../../../flyby/flybyDocument.ts';
 import { updateSection } from '../../../flyby/flybyEdit.ts';
@@ -46,6 +46,7 @@ import {
   compileFlyby,
   flybyLineFallbacks,
   FlybySubjectMissing,
+  type FlybySayWords,
   type FlybyTimeline,
 } from '../../../flyby/flybyTimeline.ts';
 import { metersBetween, readCamera3D } from '../../../scene3d/camera3d.ts';
@@ -113,9 +114,35 @@ export function subjectOfSelection(selection: WorkspaceSelection | null): FlybyS
   }
 }
 
-/** The subjects a section of the document follows a line of, which are found when it is prepared. */
-function followedSubjects(document: FlybyDocument): FlybySubjectRef[] {
-  return [...new Set(document.sections.filter((section) => section.kind === 'descent').map((section) => section.subject))].sort();
+/** A cave's name, and its length and depth when they are asked for and known, in the reader's words. */
+export function flybySayWords(t: (key: string, values?: Record<string, unknown>) => string, language: string): FlybySayWords {
+  const metres = (value: number) => new Intl.NumberFormat(language).format(Math.round(value));
+  return (about, what) => {
+    if (!about.name) {
+      return undefined;
+    }
+    if (what === 'name') {
+      return about.name;
+    }
+    const size = [
+      ...(about.lengthM ? [t('flyby.atCave.length', { metres: metres(about.lengthM) })] : []),
+      ...(about.depthM ? [t('flyby.atCave.depth', { metres: metres(about.depthM) })] : []),
+    ];
+    return size.length > 0 ? `${about.name} — ${size.join(', ')}` : about.name;
+  };
+}
+
+/** What is found of the subjects only when a flyby is prepared: the lines a section follows, and what a section says of one. */
+function followedSubjects(document: FlybyDocument): string[] {
+  return [
+    ...new Set(
+      document.sections.flatMap((section) => [
+        ...(section.kind === 'descent' ? [`line:${section.subject}`] : []),
+        // What a section says about its subject is read when the flyby is prepared, too.
+        ...(section.say ? [`about:${section.subject}`] : []),
+      ]),
+    ),
+  ].sort();
 }
 
 /** What of a document decides what is played: everything but what it is called and whether it repeats. */
@@ -133,6 +160,8 @@ function pathKey(document: FlybyDocument): string {
 
 export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null, loadRoute: boolean) {
   const queryClient = useQueryClient();
+  const { t, i18n } = useTranslation();
+  const say = useMemo(() => flybySayWords(t, i18n.language), [t, i18n.language]);
 
   // ---- what the flyby is about, and how it is built ----
 
@@ -313,6 +342,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
         return {
           longitude: Number(point[0]),
           latitude: Number(point[1]),
+          name: cave.name,
           depthM: cave.depth ?? undefined,
           lengthM: cave.surveyedLength ?? undefined,
         };
@@ -472,10 +502,11 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
       let timeline;
       if (foundRef.current?.key === subjectsKey) {
         // Same subjects, different timing: the path is rebuilt from where they were found.
-        timeline = compileFlyby(document, foundRef.current.resolved);
+        timeline = compileFlyby(document, foundRef.current.resolved, say);
       } else {
         const prepared = await prepareFlyby(document, world, stage, {
           loadRoute,
+          say,
           signal: controller.signal,
           onProgress: setPreparing,
         });
@@ -526,7 +557,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
       abortRef.current = null;
       setPreparing(null);
     }
-  }, [document, scene, world, stage, loadRoute, dropPlayer, tellMoment]);
+  }, [document, scene, world, stage, loadRoute, say, dropPlayer, tellMoment]);
 
   /** The path of the document as it stands, prepared if it has to be, for whatever films it. */
   const ensureTimeline = useCallback(async (): Promise<FlybyTimeline | undefined> => {

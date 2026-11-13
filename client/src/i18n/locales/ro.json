@@ -9861,7 +9861,16 @@
       "fallback": "Drumuirea nu este desenată sau liniile ei nu leagă cel mai înalt punct al peșterii de cel mai adânc: camera coboară direct, în loc să o urmeze.",
       "noLine": "Fișierul nu are nicio linie de urmat: camera zboară direct spre el."
     },
-    "fromFar": "Pornește de departe, la scara țării"
+    "fromFar": "Pornește de departe, la scara țării",
+    "atCave": {
+      "seconds": "Oprire la fiecare peșteră timp de",
+      "say": "Scrie peste imagine",
+      "sayNone": "Nimic",
+      "sayName": "Numele peșterii",
+      "sayNameAndSize": "Numele, lungimea și adâncimea ei",
+      "length": "{{metres}} m lungime",
+      "depth": "{{metres}} m adâncime"
+    }
   },
   "mapSymbols": {
     "names": {

@@ -4,7 +4,7 @@ import type { FlybyDocument } from './flybyDocument.ts';
 import { placeFlybyMoment, type FlybyStage } from './flybyPlayer.ts';
 import { surveyRoute } from './flybyRoutes.ts';
 import { resolveSubject, type FlybyResolvedSubject, type FlybyWorld } from './flybySubjects.ts';
-import { compileFlyby, type FlybyTimeline } from './flybyTimeline.ts';
+import { compileFlyby, type FlybySayWords, type FlybyTimeline } from './flybyTimeline.ts';
 
 // Getting a flyby ready to be played: finding its subjects, and loading its route.
 //
@@ -37,6 +37,8 @@ export interface FlybyPrepareProgress {
 export interface FlybyPrepareOptions {
   /** Whether the route is visited beforehand so the flight finds its tiles and caves loaded. */
   loadRoute: boolean;
+  /** The words for what a section says about its subject; left out, its name alone. */
+  say?: FlybySayWords;
   signal?: AbortSignal;
   onProgress?(progress: FlybyPrepareProgress): void;
 }
@@ -158,7 +160,25 @@ export async function prepareFlyby(
     }
   }
 
-  const timeline = compileFlyby(document, resolved);
+  // What the server says of each cave a section names, read now and kept only for this playing.
+  const named = [
+    ...new Set(
+      document.sections.flatMap((section) => (section.say && typeof section.subject === 'number' ? [section.subject] : [])),
+    ),
+  ];
+  for (const index of named) {
+    const subject = document.subjects[index];
+    const found = resolved[index];
+    if (subject?.kind === 'cave' && found) {
+      check();
+      const facts = await world.caveFacts(subject.caveId);
+      if (facts) {
+        resolved[index] = { ...found, about: { name: facts.name, lengthM: facts.lengthM, depthM: facts.depthM } };
+      }
+    }
+  }
+
+  const timeline = compileFlyby(document, resolved, options.say);
   let unsettled = 0;
   if (options.loadRoute) {
     const stops = routeStops(timeline);

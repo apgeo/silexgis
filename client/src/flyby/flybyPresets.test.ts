@@ -5,6 +5,7 @@ import type { Scene3DCameraState } from '../scene3d/scene3dEngine.ts';
 import { flybyHoldsPlace, flybyProblems, normalizeFlybyDocument, type FlybyDocument } from './flybyDocument.ts';
 import { buildPreset, DEFAULT_FLYBY_PRESET_OPTIONS, viewsOfDocument, type FlybyCapturedView } from './flybyPresets.ts';
 import { resolveSubject, type FlybyResolvedSubject, type FlybyWorld } from './flybySubjects.ts';
+import { flybyTextsAt } from './flybyTexts.ts';
 import { compileFlyby, flybyCameraAt, flybyKnotAt, flybyLineFallbacks, type FlybyTimeline } from './flybyTimeline.ts';
 
 // The ready-made flights added on top of the first five, proved the way the path arithmetic is
@@ -407,5 +408,54 @@ describe('a flight from far away', () => {
         expect(steps[i - 1] / steps[i]).toBeLessThan(1.3);
       }
     }
+  });
+});
+
+describe('a tour that stops at each cave', () => {
+  const caves = [
+    { kind: 'cave' as const, caveId: 'a' },
+    { kind: 'cave' as const, caveId: 'b' },
+  ];
+  const resolved: FlybyResolvedSubject[] = [
+    { centre: { lon: 25, lat: 45.5, height: 900 }, radius: 200, halfHeight: 50, coarse: false, about: { name: 'Peștera A', lengthM: 1200, depthM: 85 } },
+    { centre: { lon: 25.05, lat: 45.52, height: 1000 }, radius: 300, halfHeight: 60, coarse: false, about: { name: 'Peștera B' } },
+  ];
+
+  it('stops nowhere and says nothing unless asked', () => {
+    const plain = buildPreset('tour', caves);
+    expect(plain.sections.some((section) => section.say !== undefined)).toBe(false);
+    expect(plain.sections.filter((section) => section.kind === 'hold')).toEqual([]);
+    expect(compileFlyby(plain, resolved).texts.captions).toEqual([]);
+  });
+
+  it('holds still over each cave for the time given, the circle slowing into it', () => {
+    const document = buildPreset('tour', caves, { ...DEFAULT_FLYBY_PRESET_OPTIONS, pauseSeconds: 5 });
+    expect(document.sections.map((section) => section.kind)).toEqual(['approach', 'orbit', 'hold', 'hop', 'orbit', 'hold', 'rise']);
+    const timeline = compileFlyby(document, resolved);
+    const pause = timeline.spans[2];
+    expect(pause.end - pause.start).toBe(5);
+    const held = flybyCameraAt(timeline, pause.start, flat);
+    expect(flybyCameraAt(timeline, pause.start + 2.5, flat)).toEqual({ ...held });
+    expect(flybyCameraAt(timeline, pause.end, flat)).toEqual({ ...held });
+    expectNoJump(frameSteps(timeline));
+  });
+
+  it('writes the cave\'s name, and its size when asked, over the pause — from what was read, not from the document', () => {
+    const named = buildPreset('tour', caves, { ...DEFAULT_FLYBY_PRESET_OPTIONS, pauseSeconds: 5, pauseSay: 'nameAndSize' });
+    // The document says what to say, never the name itself.
+    expect(JSON.stringify(named)).not.toContain('Peștera');
+    expect(normalizeFlybyDocument(JSON.parse(JSON.stringify(named)))).toEqual(named);
+    const words = (about: { name?: string; lengthM?: number; depthM?: number }, say: string) =>
+      about.name && (say === 'name' ? about.name : `${about.name} (${about.lengthM ?? '?'} m, ${about.depthM ?? '?'} m)`);
+    const timeline = compileFlyby(named, resolved, words);
+    const pause = timeline.spans[2];
+    expect(timeline.texts.captions).toEqual([
+      { text: 'Peștera A (1200 m, 85 m)', start: pause.start, end: pause.end },
+      { text: 'Peștera B (? m, ? m)', start: timeline.spans[5].start, end: timeline.spans[5].end },
+    ]);
+    expect(flybyTextsAt(timeline.texts, pause.start + 2.5).caption?.text).toBe('Peștera A (1200 m, 85 m)');
+    // A cave whose name could not be read says nothing.
+    const unnamed = compileFlyby(named, [{ ...resolved[0], about: undefined }, resolved[1]], words);
+    expect(unnamed.texts.captions.map((caption) => caption.text)).toEqual(['Peștera B (? m, ? m)']);
   });
 });

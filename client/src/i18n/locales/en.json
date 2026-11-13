@@ -9848,7 +9848,16 @@
       "fallback": "The survey is not drawn, or its lines do not join the cave's highest point to its deepest: the camera dives straight down instead of following it.",
       "noLine": "The file holds no line to follow: the camera flies straight to it instead."
     },
-    "fromFar": "Start from far away, at the scale of the country"
+    "fromFar": "Start from far away, at the scale of the country",
+    "atCave": {
+      "seconds": "Stop at each cave for",
+      "say": "Write over the picture",
+      "sayNone": "Nothing",
+      "sayName": "The cave's name",
+      "sayNameAndSize": "Its name, length and depth",
+      "length": "{{metres}} m long",
+      "depth": "{{metres}} m deep"
+    }
   },
   "mapSymbols": {
     "names": {

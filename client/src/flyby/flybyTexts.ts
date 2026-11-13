@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { flybyLength, flybySectionStarts, flybyTimeIn, type FlybyDocument } from './flybyDocument.ts';
+import { flybyLength, flybySectionStarts, flybyTimeIn, type FlybyCaption, type FlybyDocument } from './flybyDocument.ts';
 
 // What a flyby writes over the scene: a title card at the start, captions during sections, an end
 // card, and the picture rising out of black and sinking back into it.
@@ -55,7 +55,11 @@ export interface FlybyTextState {
 const CARD_FADE_SECONDS = 0.8;
 const CAPTION_FADE_SECONDS = 0.5;
 
-export function flybyTextPlan(document: FlybyDocument): FlybyTextPlan {
+/**
+ * The texts of a document placed on its clock. `found` are captions worked out when the flyby was
+ * prepared — a cave's name over the section that pauses at it — placed with the document's own.
+ */
+export function flybyTextPlan(document: FlybyDocument, found: readonly FlybyCaption[] = []): FlybyTextPlan {
   const length = flybyLength(document);
   const texts = document.texts ?? {};
   const starts = flybySectionStarts(document);
@@ -81,7 +85,7 @@ export function flybyTextPlan(document: FlybyDocument): FlybyTextPlan {
       end: length,
     };
   }
-  for (const caption of texts.captions ?? []) {
+  for (const caption of [...(texts.captions ?? []), ...found]) {
     const time = flybyTimeIn(document, starts, caption);
     if (time) {
       plan.captions.push({ text: caption.text, start: time.start, end: Math.min(time.end, length) });

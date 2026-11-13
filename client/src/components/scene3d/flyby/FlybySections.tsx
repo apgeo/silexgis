@@ -23,6 +23,7 @@ import {
   sectionLength,
   type FlybyAim,
   type FlybyDocument,
+  type FlybySay,
   type FlybySection,
   type FlybySectionKind,
   type FlybySubjectRef,
@@ -429,6 +430,22 @@ function SectionEditor({ document, section, name, busy, subjectLabel, change }: 
           )}
         </div>
       </div>
+      <label className="scene3d-flyby-field">
+        <span>{t('flyby.atCave.say')}</span>
+        <Select
+          size="small"
+          value={section.say ?? 'none'}
+          onChange={(value: FlybySay | 'none') => change({ say: value === 'none' ? undefined : value })}
+          disabled={busy}
+          aria-label={named(t('flyby.atCave.say'))}
+          data-testid={id('say')}
+          options={[
+            { value: 'none', label: t('flyby.atCave.sayNone') },
+            { value: 'name', label: t('flyby.atCave.sayName') },
+            { value: 'nameAndSize', label: t('flyby.atCave.sayNameAndSize') },
+          ]}
+        />
+      </label>
       <Checkbox
         checked={section.rest === true}
         onChange={(event) => change({ rest: event.target.checked })}

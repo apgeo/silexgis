@@ -38,6 +38,20 @@ export interface FlybyResolvedSubject {
    * prepared and never stored in it.
    */
   route?: Camera3DEye[];
+  /**
+   * What the server says of it, for a caption that names it: read when the flyby is prepared, only
+   * for a subject a section says something about.
+   */
+  about?: FlybySubjectAbout;
+}
+
+/** A subject's name and size as the server gives them to the person playing the flyby. */
+export interface FlybySubjectAbout {
+  name?: string;
+  /** Metres of surveyed passage. */
+  lengthM?: number;
+  /** Metres from its highest to its lowest point. */
+  depthM?: number;
 }
 
 /** What is drawn of a cave in the view now. */
@@ -57,6 +71,7 @@ export interface FlybyCaveInView {
 export interface FlybyCaveFacts {
   longitude: number;
   latitude: number;
+  name?: string;
   /** Metres from its highest to its lowest point, when recorded. */
   depthM?: number;
   /** Metres of surveyed passage, when recorded. */

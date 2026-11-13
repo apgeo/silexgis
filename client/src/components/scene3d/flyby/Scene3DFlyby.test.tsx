@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../../i18n';
+import i18n from '../../../i18n';
 import en from '../../../i18n/locales/en.json';
 import ro from '../../../i18n/locales/ro.json';
 import { FLYBY_PRESETS, FLYBY_SECTION_KINDS, FLYBY_VERSION, type FlybyDocument } from '../../../flyby/flybyDocument.ts';
@@ -14,7 +14,7 @@ import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import type { WorkspaceSelection } from '../../../stores/workspaceStore.ts';
 import FlybySections from './FlybySections.tsx';
 import Scene3DFlyby from './Scene3DFlyby.tsx';
-import type { FlybyScene } from './useFlyby.ts';
+import { flybySayWords, type FlybyScene } from './useFlyby.ts';
 import type { FlybyLookTarget } from '../../../flyby/flybyLookApply.ts';
 
 // The two reads the tool makes of the server: a cave's name for the panel, and where a cave is
@@ -28,7 +28,7 @@ vi.mock('../../../api/hooks.ts', () => ({
       if (id === 'forbidden') {
         throw new Error('403');
       }
-      return { geom: { type: 'Point', coordinates: [25, 45.5] }, depth: 120, surveyedLength: 800 };
+      return { name: `Cave ${id.toUpperCase()}`, geom: { type: 'Point', coordinates: [25, 45.5] }, depth: 120, surveyedLength: 800 };
     },
   }),
   // The lists the look panel names things from: two backgrounds, nothing else.
@@ -740,6 +740,45 @@ describe('a flight from far away', () => {
     expect(scene.camera().height).toBeGreaterThan(300_000);
     expect(scene.camera().pitch).toBeLessThan(-89);
     fireEvent.click(screen.getByTestId('flyby-stop'));
+  });
+});
+
+describe('a tour that stops at each cave', () => {
+  it('stops for the time given and writes the cave\'s name and size over the picture, only when asked', async () => {
+    const caves: CaveInView3D[] = [drawnCave, { caveId: 'b', bounds: [25.1, 45.5, 25.104, 45.504], top: 900, bottom: 850 }];
+    renderFlyby(fakeScene(caves), null);
+    fireEvent.click(screen.getByRole('radio', { name: 'Caves in view' }));
+    expect(screen.queryByTestId('flyby-pause-say')).not.toBeInTheDocument();
+    const pause = screen.getByRole('spinbutton', { name: 'Stop at each cave for' });
+    fireEvent.change(pause, { target: { value: '4' } });
+    fireEvent.blur(pause);
+    // Nothing is written until asked for.
+    expect(screen.getByTestId('flyby-pause-say')).toHaveTextContent('Nothing');
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Write over the picture' }));
+    fireEvent.click(screen.getByTitle('Its name, length and depth'));
+    fireEvent.click(screen.getByText('7 sections'));
+    expect(screen.getByTestId('flyby-sections')).toHaveTextContent('Hold · Cave A');
+    // The turns are shortened so the test reaches the first stop quickly.
+    fireEvent.change(screen.getByTestId('flyby-turns'), { target: { value: '0.25' } });
+    fireEvent.blur(screen.getByTestId('flyby-turns'));
+
+    const overlay = screen.getByTestId('flyby-texts');
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    // Approach 6 s, a quarter turn 6 s, then the stop.
+    await pass(14_000);
+    expect(status()).toBe('playing');
+    expect(overlay.dataset.shown).toBe('caption');
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+  });
+
+  it('says a cave\'s name and size in the reader\'s words', () => {
+    const english = flybySayWords(i18n.getFixedT('en'), 'en');
+    expect(english({ name: 'Cave A', lengthM: 1234.4, depthM: 85 }, 'nameAndSize')).toBe('Cave A — 1,234 m long, 85 m deep');
+    expect(english({ name: 'Cave A', lengthM: 1234.4 }, 'name')).toBe('Cave A');
+    expect(english({ name: 'Cave A' }, 'nameAndSize')).toBe('Cave A');
+    expect(english({}, 'name')).toBeUndefined();
+    const romanian = flybySayWords(i18n.getFixedT('ro'), 'ro');
+    expect(romanian({ name: 'Peștera A', lengthM: 1234, depthM: 85 }, 'nameAndSize')).toBe('Peștera A — 1.234 m lungime, 85 m adâncime');
   });
 });
 

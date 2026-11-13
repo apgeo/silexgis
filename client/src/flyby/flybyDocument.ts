@@ -132,6 +132,15 @@ export const FLYBY_SECTION_KINDS: readonly FlybySectionKind[] = [
   'fromFar',
 ];
 
+/**
+ * What a section writes over the picture about its subject, for as long as it lasts: the name, or
+ * the name with its length and depth. Read from the server when the flyby is prepared, never
+ * written into the document, so a flyby kept in a file names its caves by id alone.
+ */
+export type FlybySay = 'name' | 'nameAndSize';
+
+export const FLYBY_SAYINGS: readonly FlybySay[] = ['name', 'nameAndSize'];
+
 /** One shot: the camera moves from where the section before left it to `to`. */
 export interface FlybySection {
   /** Stable within the document, so a timed change can be tied to a section that is later moved. */
@@ -145,6 +154,8 @@ export interface FlybySection {
   to: FlybyPose;
   /** The camera comes to a stop at the end of this section instead of flying on into the next. */
   rest?: boolean;
+  /** Writes the subject's name — and, if asked, its size — along the bottom while the section lasts. */
+  say?: FlybySay;
 }
 
 export type FlybyPresetId =
@@ -760,6 +771,13 @@ function readSection(value: unknown): FlybySection | null {
   }
   if (bag.rest === true) {
     section.rest = true;
+  }
+  if (bag.say !== undefined) {
+    const say = FLYBY_SAYINGS.find((candidate) => candidate === bag.say);
+    if (!say) {
+      return null;
+    }
+    section.say = say;
   }
   return section;
 }

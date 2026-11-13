@@ -10,13 +10,15 @@ import {
 import type { Scene3DCameraState } from '../scene3d/scene3dEngine.ts';
 import {
   sectionLength,
+  type FlybyCaption,
   type FlybyDocument,
+  type FlybySay,
   type FlybyFullPose,
   type FlybyPose,
   type FlybySubjectRef,
 } from './flybyDocument.ts';
 import { flybyLookPlan, type FlybyLookPlan } from './flybyLook.ts';
-import { subjectFor, type FlybyResolvedSubject } from './flybySubjects.ts';
+import { subjectFor, type FlybyResolvedSubject, type FlybySubjectAbout } from './flybySubjects.ts';
 import { flybyTextPlan, type FlybyTextPlan } from './flybyTexts.ts';
 
 // A flyby turned into a path: where the camera is at every moment.
@@ -218,6 +220,7 @@ function between(a: FlybyKnot, b: FlybyKnot, p: number): FlybyKnot {
 export function compileFlyby(
   document: FlybyDocument,
   resolved: readonly (FlybyResolvedSubject | undefined)[],
+  say: FlybySayWords = sayName,
 ): FlybyTimeline {
   const first = subjectFor(document.start.subject, resolved);
   if (!first) {
@@ -297,8 +300,27 @@ export function compileFlyby(
     t += length;
   });
 
-  return { length: t, origin, knots, spans, stretches, look: flybyLookPlan(document), texts: flybyTextPlan(document) };
+  // What the sections say about their subjects, over the whole of each section that says it.
+  const found: FlybyCaption[] = document.sections.flatMap((section) => {
+    const text = section.say ? say(subjectFor(section.subject, resolved)?.about ?? {}, section.say) : undefined;
+    return text ? [{ section: section.id, text, at: 0, seconds: section.seconds }] : [];
+  });
+  return {
+    length: t,
+    origin,
+    knots,
+    spans,
+    stretches,
+    look: flybyLookPlan(document),
+    texts: flybyTextPlan(document, found),
+  };
 }
+
+/** Puts what a section says about its subject into words; undefined when there is nothing to say. */
+export type FlybySayWords = (about: FlybySubjectAbout, say: FlybySay) => string | undefined;
+
+/** The plain name, in any language: what a section says when nobody gave it better words. */
+export const sayName: FlybySayWords = (about) => about.name;
 
 // ---- following a line ----
 

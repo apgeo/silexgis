@@ -217,6 +217,7 @@ describe('the ready-made flybys', () => {
 
   it('turn as many times, as fast and the way they were asked', () => {
     const document = buildPreset('aroundCave', one, {
+      ...DEFAULT_FLYBY_PRESET_OPTIONS,
       turns: 2,
       clockwise: false,
       underground: false,

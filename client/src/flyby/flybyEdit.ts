@@ -128,7 +128,7 @@ export function moveSection(document: FlybyDocument, id: string, by: number): Fl
 }
 
 /** What can be changed of a section from the panel. */
-export type FlybySectionPatch = Partial<Pick<FlybySection, 'kind' | 'subject' | 'seconds' | 'speed' | 'rest'>> & {
+export type FlybySectionPatch = Partial<Pick<FlybySection, 'kind' | 'subject' | 'seconds' | 'speed' | 'rest' | 'say'>> & {
   /** Members of the pose to set; a member given as undefined is taken out, so it carries over from before. */
   to?: { [K in keyof FlybyPose]?: FlybyPose[K] | undefined };
 };
@@ -166,6 +166,9 @@ export function updateSection(document: FlybyDocument, id: string, patch: FlybyS
       }
       if (!next.rest) {
         delete next.rest;
+      }
+      if (!next.say) {
+        delete next.say;
       }
       return next;
     }),

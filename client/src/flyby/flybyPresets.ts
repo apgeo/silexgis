@@ -4,6 +4,7 @@ import {
   type FlybyDocument,
   type FlybyFullPose,
   type FlybyPresetId,
+  type FlybySay,
   type FlybySection,
   type FlybySubject,
   type FlybySubjectRef,
@@ -27,6 +28,10 @@ export interface FlybyPresetOptions {
   secondsPerTurn: number;
   /** Whether the flight opens far above — at the scale of the country — and comes down into the preset. */
   fromFar: boolean;
+  /** Seconds a tour stops at each cave, after circling it; 0 does not stop. */
+  pauseSeconds: number;
+  /** What is written over the picture while a tour stops at a cave; nothing unless asked. */
+  pauseSay: FlybySay | 'none';
 }
 
 export const DEFAULT_FLYBY_PRESET_OPTIONS: FlybyPresetOptions = {
@@ -35,7 +40,11 @@ export const DEFAULT_FLYBY_PRESET_OPTIONS: FlybyPresetOptions = {
   underground: false,
   secondsPerTurn: 24,
   fromFar: false,
+  pauseSeconds: 0,
+  pauseSay: 'none',
 };
+
+export const FLYBY_PAUSE_SECONDS_RANGE = { min: 0, max: 60 } as const;
 
 /** Metres above its subject a flight from far away starts: a country fills the picture. */
 export const FLYBY_FAR_DISTANCE = 350_000;
@@ -362,6 +371,17 @@ function tour(subjects: readonly FlybySubject[], options: FlybyPresetOptions): B
     });
     if (options.underground) {
       sections.push(...dive(index, sign, id, circling));
+    }
+    if (options.pauseSeconds > 0) {
+      // Still over the cave for a moment, saying what it is if that was asked for.
+      sections.push({
+        id: id('hold'),
+        kind: 'hold',
+        subject: index,
+        seconds: options.pauseSeconds,
+        to: {},
+        ...(options.pauseSay !== 'none' ? { say: options.pauseSay } : {}),
+      });
     }
   });
   // And back out to all of them at once, which is the picture a tour is remembered by.
